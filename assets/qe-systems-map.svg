@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="610" viewBox="0 0 1600 610" role="img" aria-labelledby="title desc">
+  <title id="title">Ƴunior Ƥortal — Quality Engineering Systems Portfolio</title>
+  <desc id="desc">A pure-vector portfolio constellation connecting quality engineering domains to representative repositories across AI, browser, API, mobile, performance, accessibility, and Python foundations.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#03040b"/><stop offset=".56" stop-color="#060918"/><stop offset="1" stop-color="#020817"/>
+    </linearGradient>
+    <linearGradient id="s" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff3df2"/><stop offset=".35" stop-color="#b64cff"/><stop offset=".72" stop-color="#4a85ff"/><stop offset="1" stop-color="#00e5ff"/>
+    </linearGradient>
+    <filter id="g"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28 0H0V28" fill="none" stroke="#6e9dff" stroke-opacity=".04"/></pattern>
+  </defs>
+  <rect x="4" y="4" width="1592" height="602" rx="24" fill="url(#bg)" stroke="url(#s)" stroke-opacity=".42" stroke-width="2"/>
+  <rect x="4" y="4" width="1592" height="602" rx="24" fill="url(#grid)"/>
+  <path d="M52 74 H458 L477 93 H718" fill="none" stroke="#bc43ff" stroke-opacity=".4"/>
+  <path d="M1548 70 H1280 L1258 92 H1070" fill="none" stroke="#00d9ff" stroke-opacity=".4"/>
+  <circle cx="52" cy="74" r="3.4" fill="#ff3df2" filter="url(#g)"/><circle cx="1548" cy="70" r="3.4" fill="#00e5ff" filter="url(#g)"/>
+  <text x="72" y="74" fill="#d5c8ff" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="19" font-weight="700" letter-spacing="6">SYSTEMS PORTFOLIO // PROOF BY DOMAIN</text>
+  <text x="72" y="119" fill="#f2f7ff" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="19" font-weight="500">Independent quality signals. Purpose-built frameworks. One engineering thesis: confidence must be attributable.</text>
+
+  <!-- connective fabric -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M800 312 C665 312 628 220 510 220" stroke="#b54bff" stroke-opacity=".48" stroke-width="2"/>
+    <path d="M800 312 C665 312 628 374 510 374" stroke="#704fff" stroke-opacity=".48" stroke-width="2"/>
+    <path d="M800 312 C665 312 628 503 510 503" stroke="#315fff" stroke-opacity=".48" stroke-width="2"/>
+    <path d="M800 312 C935 312 972 220 1090 220" stroke="#5b67ff" stroke-opacity=".48" stroke-width="2"/>
+    <path d="M800 312 C935 312 972 374 1090 374" stroke="#159dff" stroke-opacity=".48" stroke-width="2"/>
+    <path d="M800 312 C935 312 972 503 1090 503" stroke="#00d9ff" stroke-opacity=".48" stroke-width="2"/>
+    <path d="M800 312 V470" stroke="#8b56ff" stroke-opacity=".32" stroke-width="1.5" stroke-dasharray="4 8"/>
+  </g>
+
+  <!-- center -->
+  <g transform="translate(800 312)" font-family="Inter,Segoe UI,system-ui,sans-serif">
+    <circle r="122" fill="#060b1c" stroke="url(#s)" stroke-width="2.5"/>
+    <circle r="104" fill="none" stroke="#6477ff" stroke-opacity=".24"/>
+    <circle r="82" fill="none" stroke="#00d9ff" stroke-opacity=".22" stroke-dasharray="3 8"/>
+    <polygon points="0,-55 48,-28 48,28 0,55 -48,28 -48,-28" fill="#070d20" stroke="url(#s)" stroke-width="2.5" filter="url(#g)"/>
+    <text y="-9" text-anchor="middle" fill="#f7fbff" font-size="22" font-weight="800" letter-spacing="3">ENGINEERED</text>
+    <text y="24" text-anchor="middle" fill="#8defff" font-size="22" font-weight="800" letter-spacing="3">CONFIDENCE</text>
+    <text y="78" text-anchor="middle" fill="#aabbd0" font-size="10" font-weight="650" letter-spacing="3">EVIDENCE • CONTROL • ATTRIBUTION</text>
+  </g>
+
+  <!-- domain cards -->
+  <g font-family="Inter,Segoe UI,system-ui,sans-serif">
+    <g transform="translate(74 164)">
+      <path d="M0 0 H405 L425 20 V110 L405 130 H0 L-20 110 V20 Z" fill="#050816" stroke="#d646ff" stroke-opacity=".58"/>
+      <circle cx="34" cy="42" r="18" fill="#2b0b38" stroke="#ff51f1"/><text x="34" y="49" text-anchor="middle" fill="#ff7af5" font-size="18" font-weight="800">AI</text>
+      <text x="68" y="37" fill="#f6f9ff" font-size="19" font-weight="800" letter-spacing="2">AGENTIC QUALITY</text>
+      <text x="68" y="65" fill="#b7c7dc" font-size="13">Evidence-first reasoning with deterministic authority</text>
+      <text x="34" y="103" fill="#eeb8ff" font-size="12.5" font-weight="650">ai-qa-automation</text>
+    </g>
+
+    <g transform="translate(74 318)">
+      <path d="M0 0 H405 L425 20 V110 L405 130 H0 L-20 110 V20 Z" fill="#050816" stroke="#8b55ff" stroke-opacity=".58"/>
+      <circle cx="34" cy="42" r="18" fill="#17113f" stroke="#9d77ff"/><text x="34" y="49" text-anchor="middle" fill="#b9a1ff" font-size="15" font-weight="800">WEB</text>
+      <text x="68" y="37" fill="#f6f9ff" font-size="19" font-weight="800" letter-spacing="2">BROWSER SYSTEMS</text>
+      <text x="68" y="65" fill="#b7c7dc" font-size="13">Native runner semantics, isolation, observability, CI</text>
+      <text x="34" y="96" fill="#d7caff" font-size="11.5" font-weight="650">node-playwright • ui-cypress • dotnet-selenium</text>
+    </g>
+
+    <g transform="translate(74 472)">
+      <path d="M0 0 H405 L425 20 V84 L405 104 H0 L-20 84 V20 Z" fill="#050816" stroke="#4e71ff" stroke-opacity=".58"/>
+      <circle cx="34" cy="40" r="18" fill="#0b1b45" stroke="#6f92ff"/><text x="34" y="46" text-anchor="middle" fill="#9fb8ff" font-size="14" font-weight="800">PY</text>
+      <text x="68" y="35" fill="#f6f9ff" font-size="18" font-weight="800" letter-spacing="2">TEST FOUNDATIONS</text>
+      <text x="68" y="62" fill="#b7c7dc" font-size="13">Deterministic Python quality-engineering contracts</text>
+      <text x="34" y="88" fill="#c8d7ff" font-size="12.5" font-weight="650">qa-automation-python-pytest</text>
+    </g>
+
+    <g transform="translate(1121 164)">
+      <path d="M0 0 H405 L425 20 V110 L405 130 H0 L-20 110 V20 Z" fill="#050816" stroke="#6570ff" stroke-opacity=".58"/>
+      <circle cx="34" cy="42" r="18" fill="#14193f" stroke="#7f8bff"/><text x="34" y="48" text-anchor="middle" fill="#aab2ff" font-size="13" font-weight="800">{ }</text>
+      <text x="68" y="37" fill="#f6f9ff" font-size="19" font-weight="800" letter-spacing="2">API &amp; GRAPHQL</text>
+      <text x="68" y="65" fill="#b7c7dc" font-size="13">Contracts, transport semantics, governance, evidence</text>
+      <text x="34" y="94" fill="#c9ceff" font-size="10.8" font-weight="650">postman-newman • restassured • supertest • graphql</text>
+    </g>
+
+    <g transform="translate(1121 318)">
+      <path d="M0 0 H405 L425 20 V110 L405 130 H0 L-20 110 V20 Z" fill="#050816" stroke="#198fff" stroke-opacity=".58"/>
+      <circle cx="34" cy="42" r="18" fill="#071f3b" stroke="#36a9ff"/><rect x="27" y="28" width="14" height="27" rx="2.5" fill="none" stroke="#6ac6ff" stroke-width="1.8"/>
+      <text x="68" y="37" fill="#f6f9ff" font-size="19" font-weight="800" letter-spacing="2">MOBILE SYSTEMS</text>
+      <text x="68" y="65" fill="#b7c7dc" font-size="13">W3C capabilities, lifecycle, platform policy, evidence</text>
+      <text x="34" y="103" fill="#9fddff" font-size="12.5" font-weight="650">qa-automation-mobile-appium</text>
+    </g>
+
+    <g transform="translate(1121 472)">
+      <path d="M0 0 H405 L425 20 V84 L405 104 H0 L-20 84 V20 Z" fill="#050816" stroke="#00d5ff" stroke-opacity=".58"/>
+      <circle cx="34" cy="40" r="18" fill="#042439" stroke="#23e1ff"/><path d="M23 45 A13 13 0 0 1 45 45 M34 43 L41 34" fill="none" stroke="#70efff" stroke-width="1.8"/>
+      <text x="68" y="35" fill="#f6f9ff" font-size="18" font-weight="800" letter-spacing="2">PERFORMANCE + A11Y</text>
+      <text x="68" y="62" fill="#b7c7dc" font-size="13">Controlled load; governed visual &amp; accessibility signals</text>
+      <text x="34" y="88" fill="#aaf4ff" font-size="10.8" font-weight="650">load-k6 • visual-and-accessibility-playwright-axe</text>
+    </g>
+  </g>
+
+  <text x="800" y="594" text-anchor="middle" fill="#7f91aa" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="11" font-weight="650" letter-spacing="2.2">
+    TEST AT THE LOWEST LAYER THAT CAN CONCLUSIVELY PROVE THE REQUIREMENT.
+  </text>
+</svg>
