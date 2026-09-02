@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
+<title id="title">Ƴunior Ƥortal — Glass Console</title>
+<desc id="desc">Wide pure-vector profile banner using a restrained glass-console composition with four large proof principles.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#02030A"/><stop offset=".55" stop-color="#06091A"/><stop offset="1" stop-color="#021227"/></linearGradient>
+  <linearGradient id="spectral" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF3DF2"/><stop offset=".34" stop-color="#B64CFF"/><stop offset=".68" stop-color="#4B86FF"/><stop offset="1" stop-color="#00E5FF"/></linearGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#6E9DFF" stroke-opacity=".045"/></pattern>
+</defs>
+<rect width="1600" height="520" rx="28" fill="url(#bg)"/><rect width="1600" height="520" rx="28" fill="url(#grid)"/>
+<rect x="4" y="4" width="1592" height="512" rx="26" fill="none" stroke="url(#spectral)" stroke-opacity=".45" stroke-width="2"/>
+<rect x="48" y="52" width="1504" height="416" rx="28" fill="#071020" fill-opacity=".66" stroke="#6684E8" stroke-opacity=".28"/>
+<path d="M84 88H500l24 24h260" fill="none" stroke="#D34CFF" stroke-opacity=".48" stroke-width="2"/><circle cx="84" cy="88" r="4" fill="#FF3DF2" filter="url(#glow)"/>
+<g font-family="Inter,Segoe UI,Arial,sans-serif">
+  <text x="88" y="128" fill="#D9CAFF" font-size="23" font-weight="760" letter-spacing="4">QUALITY ENGINEERING // GLASS CONSOLE</text>
+  <text x="86" y="210" fill="url(#spectral)" font-size="66" font-weight="850">Ƴunior Ƥortal</text>
+  <text x="88" y="260" fill="#F5F8FF" font-size="28" font-weight="790">Evidence architecture for complex software change.</text>
+  <text x="88" y="305" fill="#AFC2D9" font-size="22" font-weight="620">AI-assisted reasoning. Deterministic execution. Explicit oracles.</text>
+  <text x="88" y="350" fill="#AFC2D9" font-size="22" font-weight="620">Failure attribution before automation volume.</text>
+  <text x="88" y="420" fill="#8AA0BC" font-size="20" font-weight="650">AI  •  WEB  •  API  •  GRAPHQL  •  MOBILE  •  PERFORMANCE  •  ACCESSIBILITY</text>
+</g>
+<g font-family="Inter,Segoe UI,Arial,sans-serif">
+  <g transform="translate(940 105)"><rect width="250" height="118" rx="22" fill="#09152A" stroke="#D14CFF" stroke-opacity=".52"/><text x="28" y="46" fill="#B9C9DD" font-size="20" font-weight="700" letter-spacing="2">EVIDENCE</text><text x="28" y="86" fill="#F2C9FF" font-size="30" font-weight="850">TRACEABLE</text></g>
+  <g transform="translate(1220 105)"><rect width="250" height="118" rx="22" fill="#09152A" stroke="#6979FF" stroke-opacity=".52"/><text x="28" y="46" fill="#B9C9DD" font-size="20" font-weight="700" letter-spacing="2">ORACLES</text><text x="28" y="86" fill="#D3D7FF" font-size="30" font-weight="850">EXPLICIT</text></g>
+  <g transform="translate(940 250)"><rect width="250" height="118" rx="22" fill="#09152A" stroke="#368FFF" stroke-opacity=".52"/><text x="28" y="46" fill="#B9C9DD" font-size="20" font-weight="700" letter-spacing="2">FAILURE</text><text x="28" y="86" fill="#C7E5FF" font-size="27" font-weight="850">ATTRIBUTABLE</text></g>
+  <g transform="translate(1220 250)"><rect width="250" height="118" rx="22" fill="#09152A" stroke="#00DFFF" stroke-opacity=".52"/><text x="28" y="46" fill="#B9C9DD" font-size="20" font-weight="700" letter-spacing="2">CONFIDENCE</text><text x="28" y="86" fill="#AEF6FF" font-size="30" font-weight="850">EARNED</text></g>
+</g>
+</svg>
