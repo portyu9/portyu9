@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="820" viewBox="0 0 1600 820" role="img" aria-labelledby="title desc">
+  <title id="title">Ƴunior Ƥortal — Quality Engineering Systems Intelligence</title>
+  <desc id="desc">A custom neon quality engineering command-center banner in magenta, violet, cyan, and electric blue. It presents an evidence-driven engineering thesis, quality capability domains, and a systems-control motif.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#02030a"/>
+      <stop offset=".48" stop-color="#050714"/>
+      <stop offset="1" stop-color="#020817"/>
+    </linearGradient>
+    <linearGradient id="spectral" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff3df2"/>
+      <stop offset=".32" stop-color="#bd4cff"/>
+      <stop offset=".66" stop-color="#4b8cff"/>
+      <stop offset="1" stop-color="#00e5ff"/>
+    </linearGradient>
+    <linearGradient id="spectralSoft" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff3df2" stop-opacity=".42"/>
+      <stop offset=".5" stop-color="#7c4dff" stop-opacity=".26"/>
+      <stop offset="1" stop-color="#00e5ff" stop-opacity=".38"/>
+    </linearGradient>
+    <radialGradient id="core" cx=".5" cy=".5" r=".62">
+      <stop offset="0" stop-color="#00e5ff" stop-opacity=".38"/>
+      <stop offset=".28" stop-color="#7c4dff" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#02030a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebulaM" cx=".5" cy=".5" r=".7">
+      <stop offset="0" stop-color="#ff00e6" stop-opacity=".30"/>
+      <stop offset=".45" stop-color="#8b2bff" stop-opacity=".11"/>
+      <stop offset="1" stop-color="#02030a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="nebulaC" cx=".5" cy=".5" r=".7">
+      <stop offset="0" stop-color="#008cff" stop-opacity=".28"/>
+      <stop offset=".45" stop-color="#00e5ff" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#02030a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glowM" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowC" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <pattern id="grid" width="34" height="34" patternUnits="userSpaceOnUse">
+      <path d="M34 0H0V34" fill="none" stroke="#6ea8ff" stroke-opacity=".045" stroke-width="1"/>
+    </pattern>
+    <pattern id="micro" width="8" height="8" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r=".7" fill="#73c7ff" opacity=".09"/>
+    </pattern>
+    <clipPath id="round">
+      <rect x="4" y="4" width="1592" height="812" rx="26"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#round)">
+    <rect x="4" y="4" width="1592" height="812" rx="26" fill="url(#bg)"/>
+    <rect x="4" y="4" width="1592" height="812" rx="26" fill="url(#grid)"/>
+    <rect x="4" y="4" width="1592" height="812" rx="26" fill="url(#micro)" opacity=".35"/>
+
+    <!-- Pure-vector atmospheric field -->
+    <ellipse cx="1180" cy="70" rx="470" ry="170" fill="url(#nebulaM)" filter="url(#softGlow)"/>
+    <ellipse cx="1420" cy="145" rx="360" ry="180" fill="url(#nebulaC)" filter="url(#softGlow)"/>
+    <path d="M730 48 C930 18 1050 86 1180 44 S1425 78 1580 34" fill="none" stroke="#c93cff" stroke-opacity=".12" stroke-width="3"/>
+    <path d="M850 74 C1000 25 1170 122 1320 60 S1470 98 1590 72" fill="none" stroke="#00d9ff" stroke-opacity=".15" stroke-width="2"/>
+    <g opacity=".55">
+      <circle cx="1000" cy="63" r="2.4" fill="#f2b6ff"/><circle cx="1068" cy="37" r="1.4" fill="#7ee8ff"/>
+      <circle cx="1134" cy="89" r="1.7" fill="#ff79ef"/><circle cx="1209" cy="30" r="2.0" fill="#b9ccff"/>
+      <circle cx="1281" cy="77" r="1.5" fill="#43e7ff"/><circle cx="1370" cy="45" r="2.3" fill="#d562ff"/>
+      <circle cx="1462" cy="93" r="1.5" fill="#b8f4ff"/><circle cx="1525" cy="41" r="2.1" fill="#6f8cff"/>
+      <circle cx="932" cy="111" r="1.1" fill="#fbe0ff"/><circle cx="1570" cy="134" r="1.2" fill="#e68aff"/>
+    </g>
+
+    <!-- Structural border + circuit traces -->
+    <rect x="4" y="4" width="1592" height="812" rx="26" fill="none" stroke="url(#spectral)" stroke-opacity=".48" stroke-width="2"/>
+    <path d="M34 120 V62 L72 24 H460 L486 50 H714 L742 78 H1008" fill="none" stroke="#a640ff" stroke-opacity=".62" stroke-width="2"/>
+    <path d="M34 145 V95 L86 43 H585" fill="none" stroke="#00d8ff" stroke-opacity=".55" stroke-width="2"/>
+    <circle cx="72" cy="24" r="4" fill="#b642ff" filter="url(#glowM)"/>
+    <circle cx="460" cy="24" r="3" fill="#00e5ff" filter="url(#glowC)"/>
+    <path d="M1548 210 V72 L1514 38 H1320" fill="none" stroke="#00d8ff" stroke-opacity=".52" stroke-width="2"/>
+    <path d="M1566 235 V96 L1537 67 H1414" fill="none" stroke="#8a44ff" stroke-opacity=".45" stroke-width="2"/>
+
+    <!-- Identity rail -->
+    <path d="M82 116 H430 L450 137 L430 158 H82 L62 137 Z" fill="#050817" stroke="url(#spectral)" stroke-opacity=".78" stroke-width="1.5"/>
+    <circle cx="78" cy="137" r="4" fill="#ff3df2" filter="url(#glowM)"/>
+    <text x="102" y="145" fill="#d7caff" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="20" font-weight="650" letter-spacing="7">QUALITY ENGINEERING // SYSTEMS INTELLIGENCE</text>
+
+    <!-- Hero copy -->
+    <text x="72" y="246" fill="url(#spectral)" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="82" font-weight="800" letter-spacing="3">ENGINEERING</text>
+    <text x="72" y="330" fill="url(#spectral)" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="82" font-weight="800" letter-spacing="3">CONFIDENCE</text>
+    <text x="76" y="388" fill="#f7fbff" font-family="DejaVu Sans,Noto Sans,Segoe UI,Arial Unicode MS,sans-serif" font-size="39" font-weight="520" letter-spacing="1">Ƴunior Ƥortal</text>
+    <text x="76" y="430" fill="#b7c8dc" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="17" font-weight="560" letter-spacing="4.4">AI-ENABLED AUTOMATION  •  ARCHITECTURE  •  RELIABILITY</text>
+
+    <path d="M76 463 H838 L855 480 L838 497 H76 L59 480 Z" fill="#050817" stroke="url(#spectral)" stroke-opacity=".52" stroke-width="1.2"/>
+    <text x="92" y="486" fill="#edf6ff" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="18" font-weight="530" letter-spacing="1.7">
+      Reason deliberately. Automate deterministically. Prove with evidence.
+    </text>
+
+    <!-- Capability rail -->
+    <g font-family="Inter,Segoe UI,system-ui,sans-serif">
+      <g transform="translate(82 545)">
+        <path d="M0 28 L28 0 H86 L114 28 L86 56 H28 Z" fill="#060a17" stroke="#ff3df2" stroke-opacity=".65"/>
+        <path d="M39 19 H75 V37 H39 Z M46 25 H68" fill="none" stroke="#ff68f4" stroke-width="2.4"/>
+        <text x="57" y="84" fill="#e8f2ff" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2">WEB</text>
+      </g>
+      <g transform="translate(205 545)">
+        <path d="M0 28 L28 0 H86 L114 28 L86 56 H28 Z" fill="#060a17" stroke="#c347ff" stroke-opacity=".68"/>
+        <text x="57" y="36" fill="#d36cff" text-anchor="middle" font-size="24" font-weight="700">{ }</text>
+        <text x="57" y="84" fill="#e8f2ff" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2">API</text>
+      </g>
+      <g transform="translate(328 545)">
+        <path d="M0 28 L28 0 H86 L114 28 L86 56 H28 Z" fill="#060a17" stroke="#9256ff" stroke-opacity=".72"/>
+        <circle cx="57" cy="28" r="15" fill="none" stroke="#a982ff" stroke-width="2"/>
+        <circle cx="49" cy="23" r="2.7" fill="#a982ff"/><circle cx="64" cy="20" r="2.7" fill="#a982ff"/><circle cx="61" cy="35" r="2.7" fill="#a982ff"/>
+        <path d="M51 24 L62 21 M63 22 L61 32 M59 34 L51 25" stroke="#a982ff" stroke-width="1.5"/>
+        <text x="57" y="84" fill="#e8f2ff" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2">GRAPHQL</text>
+      </g>
+      <g transform="translate(451 545)">
+        <path d="M0 28 L28 0 H86 L114 28 L86 56 H28 Z" fill="#060a17" stroke="#5a78ff" stroke-opacity=".76"/>
+        <rect x="47" y="14" width="20" height="29" rx="3" fill="none" stroke="#7ea0ff" stroke-width="2"/>
+        <circle cx="57" cy="38" r="1.5" fill="#7ea0ff"/>
+        <text x="57" y="84" fill="#e8f2ff" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2">MOBILE</text>
+      </g>
+      <g transform="translate(574 545)">
+        <path d="M0 28 L28 0 H86 L114 28 L86 56 H28 Z" fill="#060a17" stroke="#2b9eff" stroke-opacity=".78"/>
+        <path d="M38 36 A22 22 0 0 1 76 36" fill="none" stroke="#51b8ff" stroke-width="2.3"/>
+        <path d="M57 34 L70 20" stroke="#51b8ff" stroke-width="2.3"/>
+        <circle cx="57" cy="34" r="3" fill="#51b8ff"/>
+        <text x="57" y="84" fill="#e8f2ff" text-anchor="middle" font-size="10.5" font-weight="700" letter-spacing="1.05">PERFORMANCE</text>
+      </g>
+      <g transform="translate(697 545)">
+        <path d="M0 28 L28 0 H86 L114 28 L86 56 H28 Z" fill="#060a17" stroke="#00c8ff" stroke-opacity=".8"/>
+        <circle cx="57" cy="20" r="6" fill="none" stroke="#33dcff" stroke-width="2"/>
+        <path d="M57 27 V43 M45 31 H69 M57 34 L49 44 M57 34 L65 44" stroke="#33dcff" stroke-width="2" stroke-linecap="round"/>
+        <text x="57" y="84" fill="#e8f2ff" text-anchor="middle" font-size="9.6" font-weight="700" letter-spacing=".75">ACCESSIBILITY</text>
+      </g>
+      <g transform="translate(820 545)">
+        <path d="M0 28 L28 0 H86 L114 28 L86 56 H28 Z" fill="#060a17" stroke="#00e5ff" stroke-opacity=".82"/>
+        <path d="M48 18 C42 19 40 25 44 29 C39 33 42 40 48 40 M66 18 C72 19 74 25 70 29 C75 33 72 40 66 40 M52 17 V41 M62 17 V41 M52 23 H62 M52 35 H62" fill="none" stroke="#55f0ff" stroke-width="2" stroke-linecap="round"/>
+        <text x="57" y="84" fill="#e8f2ff" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="2">AI</text>
+      </g>
+    </g>
+
+    <!-- Right-side quality intelligence core -->
+    <g transform="translate(1168 320)">
+      <circle r="230" fill="url(#core)"/>
+      <circle r="192" fill="none" stroke="#2e4da6" stroke-opacity=".38" stroke-width="1"/>
+      <circle r="169" fill="none" stroke="#6e38ff" stroke-opacity=".46" stroke-width="1.2"/>
+      <circle r="143" fill="none" stroke="#00d9ff" stroke-opacity=".40" stroke-width="1.2" stroke-dasharray="3 8"/>
+      <circle r="118" fill="none" stroke="#c13fff" stroke-opacity=".55" stroke-width="1.3"/>
+      <circle r="92" fill="none" stroke="#00d9ff" stroke-opacity=".55" stroke-width="1.4"/>
+      <path d="M0 -190 A190 190 0 0 1 180 -60" fill="none" stroke="#00e5ff" stroke-width="8" stroke-linecap="round" filter="url(#glowC)"/>
+      <path d="M-176 -72 A190 190 0 0 1 -40 -186" fill="none" stroke="#ff3df2" stroke-width="8" stroke-linecap="round" filter="url(#glowM)"/>
+      <path d="M-203 0 H203 M0 -203 V203" stroke="#4d82ff" stroke-opacity=".35" stroke-width="1"/>
+      <path d="M-142 -142 L142 142 M142 -142 L-142 142" stroke="#8f55ff" stroke-opacity=".18" stroke-width="1"/>
+      <polygon points="0,-60 52,-30 52,30 0,60 -52,30 -52,-30" fill="#070c1b" stroke="url(#spectral)" stroke-width="3" filter="url(#glowC)"/>
+      <polygon points="0,-37 32,-18 32,18 0,37 -32,18 -32,-18" fill="none" stroke="#76a2ff" stroke-opacity=".55"/>
+      <text y="-4" fill="#f7fbff" text-anchor="middle" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="31" font-weight="800" letter-spacing="4">QE</text>
+      <text y="27" fill="#8defff" text-anchor="middle" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="11" font-weight="650" letter-spacing="3">CONTROL CORE</text>
+
+      <!-- signal nodes -->
+      <g font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="12" font-weight="650" letter-spacing="2">
+        <circle cx="0" cy="-143" r="5" fill="#c74dff" filter="url(#glowM)"/>
+        <path d="M0 -143 H-137 L-160 -166 H-244" fill="none" stroke="#c74dff" stroke-opacity=".7"/>
+        <text x="-252" y="-162" fill="#efbaff" text-anchor="end">OBSERVE</text>
+
+        <circle cx="118" cy="-82" r="5" fill="#7666ff" filter="url(#glowC)"/>
+        <path d="M118 -82 H210 L230 -102 H286" fill="none" stroke="#7666ff" stroke-opacity=".72"/>
+        <text x="298" y="-98" fill="#c8c7ff">REASON</text>
+
+        <circle cx="142" cy="18" r="5" fill="#00b7ff" filter="url(#glowC)"/>
+        <path d="M142 18 H230 L248 0 H302" fill="none" stroke="#00b7ff" stroke-opacity=".72"/>
+        <text x="314" y="4" fill="#9bdfff">AUTHORIZE</text>
+
+        <circle cx="-117" cy="84" r="5" fill="#b64bff" filter="url(#glowM)"/>
+        <path d="M-117 84 H-210 L-228 103 H-284" fill="none" stroke="#b64bff" stroke-opacity=".72"/>
+        <text x="-296" y="107" fill="#e2b2ff" text-anchor="end">VALIDATE</text>
+
+        <circle cx="74" cy="122" r="5" fill="#00e5ff" filter="url(#glowC)"/>
+        <path d="M74 122 H210 L230 142 H286" fill="none" stroke="#00e5ff" stroke-opacity=".72"/>
+        <text x="298" y="146" fill="#a6f6ff">PROVE</text>
+      </g>
+    </g>
+
+    <!-- Right micro-panels: claims are principles, not fabricated metrics -->
+    <g font-family="Inter,Segoe UI,system-ui,sans-serif">
+      <g transform="translate(1010 574)">
+        <path d="M0 0 H170 L184 14 V78 L170 92 H0 L-14 78 V14 Z" fill="#050917" stroke="#a743ff" stroke-opacity=".42"/>
+        <text x="20" y="31" fill="#a7b8cf" font-size="11" font-weight="650" letter-spacing="2.3">EVIDENCE</text>
+        <text x="20" y="61" fill="#f3c3ff" font-size="22" font-weight="760" letter-spacing="2">FIRST</text>
+      </g>
+      <g transform="translate(1210 574)">
+        <path d="M0 0 H170 L184 14 V78 L170 92 H0 L-14 78 V14 Z" fill="#050917" stroke="#606cff" stroke-opacity=".42"/>
+        <text x="20" y="31" fill="#a7b8cf" font-size="11" font-weight="650" letter-spacing="2.3">AUTHORITY</text>
+        <text x="20" y="61" fill="#c8caff" font-size="22" font-weight="760" letter-spacing="1.8">BOUNDED</text>
+      </g>
+      <g transform="translate(1410 574)">
+        <path d="M0 0 H128 L142 14 V78 L128 92 H0 L-14 78 V14 Z" fill="#050917" stroke="#00d9ff" stroke-opacity=".42"/>
+        <text x="17" y="31" fill="#a7b8cf" font-size="11" font-weight="650" letter-spacing="2.3">CI</text>
+        <text x="17" y="61" fill="#9cf5ff" font-size="18" font-weight="760" letter-spacing="1.3">REPRODUCIBLE</text>
+      </g>
+    </g>
+
+    <!-- Bottom signal field -->
+    <g transform="translate(60 704)">
+      <path d="M0 31 C80 31 88 3 152 3 S236 58 302 58 S390 18 452 18 S548 53 610 53 S706 5 780 5 S876 49 944 49 S1036 15 1102 15 S1202 51 1268 51 S1360 19 1482 19"
+            fill="none" stroke="#263d90" stroke-width="11" stroke-opacity=".11"/>
+      <path d="M0 31 C80 31 88 3 152 3 S236 58 302 58 S390 18 452 18 S548 53 610 53 S706 5 780 5 S876 49 944 49 S1036 15 1102 15 S1202 51 1268 51 S1360 19 1482 19"
+            fill="none" stroke="url(#spectral)" stroke-width="2.2" stroke-opacity=".82" filter="url(#glowC)"/>
+      <path d="M0 74 H1482" stroke="#4669b5" stroke-opacity=".26"/>
+      <g fill="#00d9ff" opacity=".65">
+        <circle cx="152" cy="3" r="3"/><circle cx="302" cy="58" r="3"/><circle cx="610" cy="53" r="3"/>
+        <circle cx="780" cy="5" r="3"/><circle cx="1102" cy="15" r="3"/><circle cx="1268" cy="51" r="3"/>
+      </g>
+    </g>
+
+    <path d="M74 778 H1160 L1178 794 H1450" fill="none" stroke="#733cff" stroke-opacity=".28"/>
+    <text x="78" y="787" fill="#aabbd0" font-family="Inter,Segoe UI,system-ui,sans-serif" font-size="13" font-weight="650" letter-spacing="2.1">
+      QUALITY IS NOT A TEST PHASE. IT IS AN ENGINEERED SYSTEM OF EVIDENCE, CONTROL, AND CONFIDENCE.
+    </text>
+    <text x="1512" y="786" fill="url(#spectral)" text-anchor="end" font-family="DejaVu Sans,Noto Sans,Segoe UI,Arial Unicode MS,sans-serif" font-size="24" font-weight="800" letter-spacing="1">ƳƤ</text>
+  </g>
+</svg>
