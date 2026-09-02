@@ -16,21 +16,26 @@
 
 ---
 
-## Engineering thesis
+## ✦ Engineering thesis
 
-> [!TIP]
-> Quality engineering is the discipline of **reducing uncertainty about change**. I design systems that collect evidence at the narrowest conclusive layer, separate reasoning from authority, and preserve the limits of every oracle. A green state should explain exactly **what was proven, by which evidence, against which subject, and under which execution boundary**.
+<table>
+<tr>
+<td>
+Quality engineering is the discipline of <strong>reducing uncertainty about change</strong>. I design systems that collect evidence at the narrowest conclusive layer, separate reasoning from authority, and preserve the limits of every oracle. A green state should explain exactly <strong>what was proven, by which evidence, against which subject, and under which execution boundary</strong>.
+</td>
+</tr>
+</table>
 
 ***Reason deliberately. Execute deterministically. Prove with attributable evidence.***
 
-| **Principle** | **Engineering contract** |
+| **◆ Principle** | **▤ Engineering contract** |
 | --- | --- |
-| ![Evidence before confidence](https://img.shields.io/badge/-Evidence%20before%20confidence-39FF14?style=flat) | A conclusion should be traceable to the exact subject, revision, environment, execution, oracle, and artifacts that support it. |
-| ![Reasoning without self-authorization](https://img.shields.io/badge/-Reasoning%20without%20self--authorization-00E5FF?style=flat) | AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth. |
-| ![Attribution before abstraction](https://img.shields.io/badge/-Attribution%20before%20abstraction-A855F7?style=flat) | Keep failure domains separable so a broken schema, resolver, transport, browser state, device session, threshold, baseline, dependency, or environment produces the right signal. |
-| ![Oracle discipline](https://img.shields.io/badge/-Oracle%20discipline-FF2BD6?style=flat) | Every oracle has a scope and a limit. A green visual diff, accessibility scan, contract check, or CI job may claim only what its evidence can actually establish. |
-| ![Reproducibility over optics](https://img.shields.io/badge/-Reproducibility%20over%20optics-FACC15?style=flat) | CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove. |
-| ![Safety by architecture](https://img.shields.io/badge/-Safety%20by%20architecture-FF5C5C?style=flat) | Mutation, external integration, sustained load, secrets, and other high-impact capabilities belong behind explicit ownership, authorization, budgets, and fail-closed boundaries. |
+| <big><big><strong>Evidence before confidence</strong></big></big> | A conclusion should be traceable to the exact subject, revision, environment, execution, oracle, and artifacts that support it. |
+| <big><big><strong>Reasoning without self-authorization</strong></big></big> | AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth. |
+| <big><big><strong>Attribution before abstraction</strong></big></big> | Keep failure domains separable so a broken schema, resolver, transport, browser state, device session, threshold, baseline, dependency, or environment produces the right signal. |
+| <big><big><strong>Oracle discipline</strong></big></big> | Every oracle has a scope and a limit. A green visual diff, accessibility scan, contract check, or CI job may claim only what its evidence can actually establish. |
+| <big><big><strong>Reproducibility over optics</strong></big></big> | CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove. |
+| <big><big><strong>Safety by architecture</strong></big></big> | Mutation, external integration, sustained load, secrets, and other high-impact capabilities belong behind explicit ownership, authorization, budgets, and fail-closed boundaries. |
 
 ---
 
