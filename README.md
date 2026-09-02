@@ -8,7 +8,7 @@
 
 <br>
 
-<h3 align="center"><big>◈&nbsp;&nbsp;Engineering Surfaces</big></h3>
+<h3 align="center"><big>◈&nbsp;&nbsp;QE Domains</big></h3>
 
 <p align="center">
 <img alt="AI-Enabled QE" src="https://img.shields.io/badge/-AI--Enabled%20QE-FF2BD6?style=flat-square"> <img alt="Web / UI" src="https://img.shields.io/badge/-Web%20%2F%20UI-7A5CFF?style=flat-square"> <img alt="API" src="https://img.shields.io/badge/-API-00AEEF?style=flat-square"> <img alt="GraphQL" src="https://img.shields.io/badge/-GraphQL-E10098?style=flat-square"> <img alt="Mobile" src="https://img.shields.io/badge/-Mobile-00BFA6?style=flat-square"> <img alt="CI/CD" src="https://img.shields.io/badge/-CI%2FCD-665CFF?style=flat-square">
