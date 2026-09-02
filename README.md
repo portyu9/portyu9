@@ -30,12 +30,12 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 
 | **◆ Principle** | **▤ Engineering contract** |
 | --- | --- |
-| <big><big><strong>Evidence before confidence</strong></big></big> | A conclusion should be traceable to the exact subject, revision, environment, execution, oracle, and artifacts that support it. |
-| <big><big><strong>Reasoning without self-authorization</strong></big></big> | AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth. |
-| <big><big><strong>Attribution before abstraction</strong></big></big> | Keep failure domains separable so a broken schema, resolver, transport, browser state, device session, threshold, baseline, dependency, or environment produces the right signal. |
-| <big><big><strong>Oracle discipline</strong></big></big> | Every oracle has a scope and a limit. A green visual diff, accessibility scan, contract check, or CI job may claim only what its evidence can actually establish. |
-| <big><big><strong>Reproducibility over optics</strong></big></big> | CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove. |
-| <big><big><strong>Safety by architecture</strong></big></big> | Mutation, external integration, sustained load, secrets, and other high-impact capabilities belong behind explicit ownership, authorization, budgets, and fail-closed boundaries. |
+| <img alt="Evidence before" src="https://img.shields.io/badge/Evidence%20before-3B82F6?style=for-the-badge"><br><img alt="Confidence" src="https://img.shields.io/badge/Confidence-3B82F6?style=for-the-badge"> | A conclusion should be traceable to the exact subject, revision, environment, execution, oracle, and artifacts that support it. |
+| <img alt="Reasoning without" src="https://img.shields.io/badge/Reasoning%20without-2A9D8F?style=for-the-badge"><br><img alt="Self-authorization" src="https://img.shields.io/badge/Self--authorization-2A9D8F?style=for-the-badge"> | AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth. |
+| <img alt="Attribution before" src="https://img.shields.io/badge/Attribution%20before-7C3AED?style=for-the-badge"><br><img alt="Abstraction" src="https://img.shields.io/badge/Abstraction-7C3AED?style=for-the-badge"> | Keep failure domains separable so a broken schema, resolver, transport, browser state, device session, threshold, baseline, dependency, or environment produces the right signal. |
+| <img alt="Oracle Discipline" src="https://img.shields.io/badge/Oracle%20Discipline-B7791F?style=for-the-badge"> | Every oracle has a scope and a limit. A green visual diff, accessibility scan, contract check, or CI job may claim only what its evidence can actually establish. |
+| <img alt="Reproducibility over" src="https://img.shields.io/badge/Reproducibility%20over-526D82?style=for-the-badge"><br><img alt="Optics" src="https://img.shields.io/badge/Optics-526D82?style=for-the-badge"> | CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove. |
+| <img alt="Safety by" src="https://img.shields.io/badge/Safety%20by-C65D57?style=for-the-badge"><br><img alt="Architecture" src="https://img.shields.io/badge/Architecture-C65D57?style=for-the-badge"> | Mutation, external integration, sustained load, secrets, and other high-impact capabilities belong behind explicit ownership, authorization, budgets, and fail-closed boundaries. |
 
 ---
 
