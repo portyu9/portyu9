@@ -1,0 +1,54 @@
+name: FHD SVG concepts
+
+on:
+  push:
+    branches:
+      - svg-fhd-outlined-concepts-v1
+    paths:
+      - "scripts/generate-fhd-svg-concepts.py"
+      - "scripts/validate-fhd-svg-concepts.py"
+      - ".github/workflows/fhd-svg-concepts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fhd-svg-concepts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Install deterministic SVG dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-core
+          python3 -m pip install --disable-pip-version-check "matplotlib==3.10.8"
+
+      - name: Generate FHD SVG concepts
+        run: python3 scripts/generate-fhd-svg-concepts.py
+
+      - name: Validate FHD SVG contract
+        run: python3 scripts/validate-fhd-svg-concepts.py
+
+      - name: Commit generated review SVGs
+        shell: bash
+        run: |
+          git add concepts/profile-svg-fhd
+          if git diff --cached --quiet; then
+            echo "Generated SVGs already match the committed review set."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(profile): generate FHD outlined SVG concepts"
+          git push
