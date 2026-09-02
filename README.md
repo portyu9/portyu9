@@ -5,13 +5,13 @@
 <p align="center"><strong>I engineer quality systems that turn software change into attributable evidence — and evidence into decision-grade confidence.</strong></p>
 
 <p align="center">
-  <strong>Engineering surfaces</strong><br>
+  <strong>◈ Engineering surfaces</strong><br>
   <kbd>AI-Enabled QE</kbd> <kbd>Web / UI</kbd> <kbd>API</kbd> <kbd>GraphQL</kbd> <kbd>Mobile</kbd> <kbd>CI/CD</kbd>
 </p>
 
 <p align="center">
-  <strong>Test architecture</strong><br>
-  <kbd>Unit</kbd> <kbd>Component</kbd> <kbd>Integration</kbd> <kbd>Contract</kbd> <kbd>E2E</kbd> <kbd>Database / Persistence</kbd> <kbd>Visual Regression</kbd> <kbd>Accessibility</kbd> <kbd>Security</kbd> <kbd>Smoke</kbd> <kbd>Load</kbd> <kbd>Stress</kbd> <kbd>Soak</kbd>
+  <strong>▦ Test architecture</strong><br>
+  <kbd>Unit</kbd> <kbd>Component</kbd> <kbd>Integration</kbd> <kbd>Contract</kbd> <kbd>E2E</kbd> <kbd>Database / Persistence</kbd> <kbd>Visual Regression</kbd> <kbd>Accessibility</kbd> <kbd>Security</kbd> <kbd>Performance</kbd>
 </p>
 
 <p align="center"><sub>Designed for reproducibility · attribution · evidence-backed decisions</sub></p>
@@ -20,10 +20,9 @@
 
 ## Engineering thesis
 
-> [!IMPORTANT]
-> Quality engineering is the discipline of **reducing uncertainty about change**. I design systems that collect evidence at the narrowest conclusive layer, separate reasoning from authority, and preserve the limits of every oracle. A green state should explain exactly **what was proven, by which evidence, against which subject, and under which execution boundary**.
->
-> **Reason deliberately. Execute deterministically. Prove with attributable evidence.**
+Quality engineering is the discipline of **reducing uncertainty about change**. I design systems that collect evidence at the narrowest conclusive layer, separate reasoning from authority, and preserve the limits of every oracle. A green state should explain exactly **what was proven, by which evidence, against which subject, and under which execution boundary**.
+
+**Reason deliberately. Execute deterministically. Prove with attributable evidence.**
 
 | **Principle** | **Engineering contract** |
 | --- | --- |
