@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
+<title id="title">Ƴunior Ƥortal — Constellation Matrix</title>
+<desc id="desc">Wide pure-vector Quality Engineering profile banner with a connected proof-domain constellation.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#02030A"/><stop offset=".55" stop-color="#06091A"/><stop offset="1" stop-color="#021227"/></linearGradient>
+  <linearGradient id="spectral" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF3DF2"/><stop offset=".34" stop-color="#B64CFF"/><stop offset=".68" stop-color="#4B86FF"/><stop offset="1" stop-color="#00E5FF"/></linearGradient>
+  <radialGradient id="halo"><stop offset="0" stop-color="#00E5FF" stop-opacity=".26"/><stop offset=".55" stop-color="#7C4DFF" stop-opacity=".10"/><stop offset="1" stop-color="#02030A" stop-opacity="0"/></radialGradient>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#6E9DFF" stroke-opacity=".045"/></pattern>
+</defs>
+<rect width="1600" height="520" rx="28" fill="url(#bg)"/><rect width="1600" height="520" rx="28" fill="url(#grid)"/>
+<rect x="4" y="4" width="1592" height="512" rx="26" fill="none" stroke="url(#spectral)" stroke-opacity=".44" stroke-width="2"/>
+<g font-family="Inter,Segoe UI,Arial,sans-serif">
+  <text x="72" y="104" fill="#D1C6FF" font-size="24" font-weight="760" letter-spacing="4">QUALITY ENGINEERING // CONSTELLATION MATRIX</text>
+  <text x="70" y="196" fill="url(#spectral)" font-size="68" font-weight="850">Ƴunior Ƥortal</text>
+  <text x="72" y="250" fill="#F4F8FF" font-size="30" font-weight="800">Designing systems of proof, not collections of tests.</text>
+  <text x="72" y="298" fill="#AEC1D8" font-size="23" font-weight="620">Each domain produces an independent signal.</text>
+  <text x="72" y="336" fill="#AEC1D8" font-size="23" font-weight="620">Together they reduce uncertainty about change.</text>
+  <text x="72" y="420" fill="#859BB7" font-size="20" font-weight="650">AI • WEB • API • GRAPHQL • MOBILE • PERFORMANCE • ACCESSIBILITY</text>
+</g>
+<g transform="translate(1160 262)" stroke-linecap="round">
+  <circle r="186" fill="url(#halo)"/>
+  <g stroke="#4867C8" stroke-opacity=".48" stroke-width="2"><path d="M0 0L-150 -80M0 0L-108 112M0 0L22 -158M0 0L132 -108M0 0L162 58M0 0L76 154"/><path d="M-150 -80L22 -158L132 -108L162 58L76 154L-108 112Z"/></g>
+  <circle r="54" fill="#071326" stroke="url(#spectral)" stroke-width="2.5"/>
+  <text y="-4" text-anchor="middle" fill="#F7FBFF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" font-weight="850">QE</text>
+  <text y="27" text-anchor="middle" fill="#8EEFFF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="760">CORE</text>
+  <g font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="800" text-anchor="middle">
+    <g transform="translate(-150 -80)"><circle r="42" fill="#0A1024" stroke="#D34CFF"/><text y="6" fill="#F1C9FF">AI</text></g>
+    <g transform="translate(22 -158)"><circle r="42" fill="#0A1024" stroke="#A35CFF"/><text y="6" fill="#E3D0FF">WEB</text></g>
+    <g transform="translate(132 -108)"><circle r="42" fill="#0A1024" stroke="#6C75FF"/><text y="6" fill="#D4D8FF">API</text></g>
+    <g transform="translate(162 58)"><circle r="42" fill="#0A1024" stroke="#2D9CFF"/><text y="6" fill="#C4E6FF">MOBILE</text></g>
+    <g transform="translate(76 154)"><circle r="42" fill="#0A1024" stroke="#00DFFF"/><text y="6" fill="#B2F6FF">PERF</text></g>
+    <g transform="translate(-108 112)"><circle r="42" fill="#0A1024" stroke="#4D87FF"/><text y="6" fill="#CBE9FF">A11Y</text></g>
+  </g>
+</g>
+</svg>
