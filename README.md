@@ -8,13 +8,13 @@
 
 <br>
 
-<h3 align="center"><big>◈&nbsp;&nbsp;Test Automation</big></h3>
+<h3 align="center"><big>◈&nbsp;&nbsp;Engineering Surfaces</big></h3>
 
 <p align="center">
 <img alt="AI-Enabled QE" src="https://img.shields.io/badge/-AI--Enabled%20QE-FF2BD6?style=flat-square"> <img alt="Web / UI" src="https://img.shields.io/badge/-Web%20%2F%20UI-7A5CFF?style=flat-square"> <img alt="API" src="https://img.shields.io/badge/-API-00AEEF?style=flat-square"> <img alt="GraphQL" src="https://img.shields.io/badge/-GraphQL-E10098?style=flat-square"> <img alt="Mobile" src="https://img.shields.io/badge/-Mobile-00BFA6?style=flat-square"> <img alt="CI/CD" src="https://img.shields.io/badge/-CI%2FCD-665CFF?style=flat-square">
 </p>
 
-<h3 align="center"><big>▦&nbsp;&nbsp;Test architecture</big></h3>
+<h3 align="center"><big>▦&nbsp;&nbsp;Test Architecture</big></h3>
 
 <p align="center">
 <img alt="Unit" src="https://img.shields.io/badge/-Unit-16A34A?style=flat"> <img alt="Component" src="https://img.shields.io/badge/-Component-00A6C7?style=flat"> <img alt="Integration" src="https://img.shields.io/badge/-Integration-7F5AF0?style=flat"> <img alt="Contract" src="https://img.shields.io/badge/-Contract-FF3CAC?style=flat"> <img alt="E2E" src="https://img.shields.io/badge/-E2E-008CFF?style=flat"> <img alt="Database / Persistence" src="https://img.shields.io/badge/-Database%20%2F%20Persistence-0D9488?style=flat"> <img alt="Visual Regression" src="https://img.shields.io/badge/-Visual%20Regression-A020F0?style=flat"> <img alt="Accessibility" src="https://img.shields.io/badge/-Accessibility-EA580C?style=flat"> <img alt="Security" src="https://img.shields.io/badge/-Security-EA2B2B?style=flat"> <img alt="Performance" src="https://img.shields.io/badge/-Performance-6FAF00?style=flat">
