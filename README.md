@@ -1,20 +1,20 @@
 <h1 align="center">Ƴunior Ƥortal</h1>
 
 <p align="center">
-<img alt="Quality Engineering" height="40" src="https://img.shields.io/badge/Quality%20Engineering-3568D4?style=flat-square"> <img alt="Automation Architecture" height="40" src="https://img.shields.io/badge/Automation%20Architecture-6B5CA5?style=flat-square"> <img alt="AI-Enabled Quality Systems" height="40" src="https://img.shields.io/badge/AI--Enabled%20Quality%20Systems-2A8F7B?style=flat-square">
+<img alt="Quality Engineering" src="assets/profile-badges/identity-quality-engineering.svg"> <img alt="Automation Architecture" src="assets/profile-badges/identity-automation-architecture.svg"> <img alt="AI-Enabled Quality Systems" src="assets/profile-badges/identity-ai-quality-systems.svg">
 </p>
 
-<p align="center"><strong>I engineer quality systems that turn software change into attributable evidence — and evidence into decision-grade confidence.</strong></p>
+<p align="center"><strong>I engineer quality systems that turn software change into attributable evidence —<br>and evidence into decision-grade confidence.</strong></p>
 
 <br>
 
-<h3 align="center">◈&nbsp;&nbsp;Engineering surfaces</h3>
+<h3 align="center"><big><big>◈&nbsp;&nbsp;Engineering surfaces</big></big></h3>
 
 <p align="center">
 <img alt="AI-Enabled QE" src="https://img.shields.io/badge/-AI--Enabled%20QE-FF2BD6?style=flat-square"> <img alt="Web / UI" src="https://img.shields.io/badge/-Web%20%2F%20UI-7A5CFF?style=flat-square"> <img alt="API" src="https://img.shields.io/badge/-API-00AEEF?style=flat-square"> <img alt="GraphQL" src="https://img.shields.io/badge/-GraphQL-E10098?style=flat-square"> <img alt="Mobile" src="https://img.shields.io/badge/-Mobile-00BFA6?style=flat-square"> <img alt="CI/CD" src="https://img.shields.io/badge/-CI%2FCD-665CFF?style=flat-square">
 </p>
 
-<h3 align="center">▦&nbsp;&nbsp;Test architecture</h3>
+<h3 align="center"><big><big>▦&nbsp;&nbsp;Test architecture</big></big></h3>
 
 <p align="center">
 <img alt="Unit" src="https://img.shields.io/badge/-Unit-16A34A?style=flat"> <img alt="Component" src="https://img.shields.io/badge/-Component-00A6C7?style=flat"> <img alt="Integration" src="https://img.shields.io/badge/-Integration-7F5AF0?style=flat"> <img alt="Contract" src="https://img.shields.io/badge/-Contract-FF3CAC?style=flat"> <img alt="E2E" src="https://img.shields.io/badge/-E2E-008CFF?style=flat"> <img alt="Database / Persistence" src="https://img.shields.io/badge/-Database%20%2F%20Persistence-0D9488?style=flat"> <img alt="Visual Regression" src="https://img.shields.io/badge/-Visual%20Regression-A020F0?style=flat"> <img alt="Accessibility" src="https://img.shields.io/badge/-Accessibility-EA580C?style=flat"> <img alt="Security" src="https://img.shields.io/badge/-Security-EA2B2B?style=flat"> <img alt="Performance" src="https://img.shields.io/badge/-Performance-6FAF00?style=flat">
@@ -45,27 +45,27 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 </thead>
 <tbody>
 <tr>
-<td align="center"><img alt="Evidence before" height="48" src="https://img.shields.io/badge/Evidence%20before-3B82F6?style=flat"><br><img alt="Confidence" height="48" src="https://img.shields.io/badge/Confidence-3B82F6?style=flat"></td>
+<td align="center"><img alt="Evidence before / Confidence" src="assets/profile-badges/principle-evidence-confidence.svg"></td>
 <td>A conclusion should be traceable to the exact subject, revision, environment, execution, oracle, and artifacts that support it.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Reasoning without" height="48" src="https://img.shields.io/badge/Reasoning%20without-2A9D8F?style=flat"><br><img alt="Self-authorization" height="48" src="https://img.shields.io/badge/Self--authorization-2A9D8F?style=flat"></td>
+<td align="center"><img alt="Reasoning without / Self-authorization" src="assets/profile-badges/principle-reasoning-authorization.svg"></td>
 <td>AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Attribution before" height="48" src="https://img.shields.io/badge/Attribution%20before-7C3AED?style=flat"><br><img alt="Abstraction" height="48" src="https://img.shields.io/badge/Abstraction-7C3AED?style=flat"></td>
+<td align="center"><img alt="Attribution before / Abstraction" src="assets/profile-badges/principle-attribution-abstraction.svg"></td>
 <td>Keep failure domains separable so a broken schema, resolver, transport, browser state, device session, threshold, baseline, dependency, or environment produces the right signal.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Oracle Discipline" height="48" src="https://img.shields.io/badge/Oracle%20Discipline-B7791F?style=flat"></td>
+<td align="center"><img alt="Oracle Discipline" src="assets/profile-badges/principle-oracle-discipline.svg"></td>
 <td>Every oracle has a scope and a limit. A green visual diff, accessibility scan, contract check, or CI job may claim only what its evidence can actually establish.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Reproducibility over" height="48" src="https://img.shields.io/badge/Reproducibility%20over-526D82?style=flat"><br><img alt="Optics" height="48" src="https://img.shields.io/badge/Optics-526D82?style=flat"></td>
+<td align="center"><img alt="Reproducibility over / Optics" src="assets/profile-badges/principle-reproducibility-optics.svg"></td>
 <td>CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Safety by" height="48" src="https://img.shields.io/badge/Safety%20by-C65D57?style=flat"><br><img alt="Architecture" height="48" src="https://img.shields.io/badge/Architecture-C65D57?style=flat"></td>
+<td align="center"><img alt="Safety by / Architecture" src="assets/profile-badges/principle-safety-architecture.svg"></td>
 <td>Mutation, external integration, sustained load, secrets, and other high-impact capabilities belong behind explicit ownership, authorization, budgets, and fail-closed boundaries.</td>
 </tr>
 </tbody>
