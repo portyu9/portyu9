@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
+<title id="title">Ƴunior Ƥortal — Circuit Blueprint</title>
+<desc id="desc">Wide pure-vector Quality Engineering profile banner using a circuit blueprint from software change through controlled execution to evidence and confidence.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#02030A"/><stop offset=".55" stop-color="#06091A"/><stop offset="1" stop-color="#021227"/></linearGradient>
+  <linearGradient id="spectral" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF3DF2"/><stop offset=".34" stop-color="#B64CFF"/><stop offset=".68" stop-color="#4B86FF"/><stop offset="1" stop-color="#00E5FF"/></linearGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#6E9DFF" stroke-opacity=".045"/></pattern>
+</defs>
+<rect width="1600" height="520" rx="28" fill="url(#bg)"/><rect width="1600" height="520" rx="28" fill="url(#grid)"/>
+<rect x="4" y="4" width="1592" height="512" rx="26" fill="none" stroke="url(#spectral)" stroke-opacity=".44" stroke-width="2"/>
+<path d="M58 70h365l25 25h270M1540 70h-290l-25 25h-180M58 450h365l25-25h270M1540 450h-290l-25-25h-180" fill="none" stroke="#5D78D8" stroke-opacity=".42" stroke-width="2"/>
+<circle cx="58" cy="70" r="4" fill="#FF3DF2" filter="url(#glow)"/><circle cx="1540" cy="450" r="4" fill="#00E5FF" filter="url(#glow)"/>
+<g font-family="Inter,Segoe UI,Arial,sans-serif">
+  <text x="74" y="112" fill="#D4C9FF" font-size="24" font-weight="760" letter-spacing="4">QUALITY ENGINEERING // CIRCUIT BLUEPRINT</text>
+  <text x="72" y="200" fill="url(#spectral)" font-size="68" font-weight="850">Ƴunior Ƥortal</text>
+  <text x="74" y="252" fill="#F4F8FF" font-size="30" font-weight="800">A system for converting change into trustworthy evidence.</text>
+</g>
+<g font-family="Inter,Segoe UI,Arial,sans-serif" text-anchor="middle">
+  <g transform="translate(210 360)"><rect x="-120" y="-50" width="240" height="100" rx="20" fill="#071020" stroke="#C64CFF" stroke-opacity=".58"/><text y="-5" fill="#D7B8FF" font-size="20" font-weight="720" letter-spacing="2">INPUT</text><text y="28" fill="#F7F9FF" font-size="28" font-weight="850">CHANGE</text></g>
+  <path d="M335 360H565" stroke="#A25DFF" stroke-width="3" stroke-opacity=".72"/><path d="M548 348l18 12-18 12" fill="none" stroke="#A25DFF" stroke-width="3"/>
+  <g transform="translate(700 360)"><rect x="-125" y="-56" width="250" height="112" rx="22" fill="#071020" stroke="#6C75FF" stroke-opacity=".62"/><text y="-10" fill="#BFC8FF" font-size="20" font-weight="720" letter-spacing="2">CONTROL</text><text y="28" fill="#F7F9FF" font-size="28" font-weight="850">EXECUTION</text></g>
+  <path d="M830 360H1065" stroke="#448BFF" stroke-width="3" stroke-opacity=".72"/><path d="M1048 348l18 12-18 12" fill="none" stroke="#448BFF" stroke-width="3"/>
+  <g transform="translate(1195 360)"><rect x="-125" y="-56" width="250" height="112" rx="22" fill="#071020" stroke="#00DFFF" stroke-opacity=".62"/><text y="-10" fill="#B8EFFF" font-size="20" font-weight="720" letter-spacing="2">OUTPUT</text><text y="28" fill="#F7F9FF" font-size="28" font-weight="850">EVIDENCE</text></g>
+  <path d="M1325 360H1395" stroke="#00DFFF" stroke-width="3" stroke-opacity=".72"/><path d="M1378 348l18 12-18 12" fill="none" stroke="#00DFFF" stroke-width="3"/>
+  <rect x="1410" y="328" width="146" height="64" rx="18" fill="#071020" stroke="#00DFFF" stroke-opacity=".6"/>
+  <text x="1483" y="369" text-anchor="middle" fill="#B4F7FF" font-size="19" font-weight="820">CONFIDENCE</text>
+</g>
+</svg>
