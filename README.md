@@ -1,7 +1,7 @@
 <h1 align="center">Ƴunior Ƥortal</h1>
 
 <p align="center">
-<img alt="Quality Engineering" height="30" src="https://img.shields.io/badge/Quality%20Engineering-3568D4?style=flat-square"> <img alt="Automation Architecture" height="30" src="https://img.shields.io/badge/Automation%20Architecture-6B5CA5?style=flat-square"> <img alt="AI-Enabled Quality Systems" height="30" src="https://img.shields.io/badge/AI--Enabled%20Quality%20Systems-2A8F7B?style=flat-square">
+<img alt="Quality Engineering" height="40" src="https://img.shields.io/badge/Quality%20Engineering-3568D4?style=flat-square"> <img alt="Automation Architecture" height="40" src="https://img.shields.io/badge/Automation%20Architecture-6B5CA5?style=flat-square"> <img alt="AI-Enabled Quality Systems" height="40" src="https://img.shields.io/badge/AI--Enabled%20Quality%20Systems-2A8F7B?style=flat-square">
 </p>
 
 <p align="center"><strong>I engineer quality systems that turn software change into attributable evidence — and evidence into decision-grade confidence.</strong></p>
@@ -39,33 +39,33 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 <table>
 <thead>
 <tr>
-<th width="340">◆ Principle</th>
+<th width="360">◆ Principle</th>
 <th>▤ Engineering contract</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><img alt="Evidence before" height="40" src="https://img.shields.io/badge/Evidence%20before-3B82F6?style=flat"><br><img alt="Confidence" height="40" src="https://img.shields.io/badge/Confidence-3B82F6?style=flat"></td>
+<td align="center"><img alt="Evidence before" height="48" src="https://img.shields.io/badge/Evidence%20before-3B82F6?style=flat"><br><img alt="Confidence" height="48" src="https://img.shields.io/badge/Confidence-3B82F6?style=flat"></td>
 <td>A conclusion should be traceable to the exact subject, revision, environment, execution, oracle, and artifacts that support it.</td>
 </tr>
 <tr>
-<td><img alt="Reasoning without" height="40" src="https://img.shields.io/badge/Reasoning%20without-2A9D8F?style=flat"><br><img alt="Self-authorization" height="40" src="https://img.shields.io/badge/Self--authorization-2A9D8F?style=flat"></td>
+<td align="center"><img alt="Reasoning without" height="48" src="https://img.shields.io/badge/Reasoning%20without-2A9D8F?style=flat"><br><img alt="Self-authorization" height="48" src="https://img.shields.io/badge/Self--authorization-2A9D8F?style=flat"></td>
 <td>AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth.</td>
 </tr>
 <tr>
-<td><img alt="Attribution before" height="40" src="https://img.shields.io/badge/Attribution%20before-7C3AED?style=flat"><br><img alt="Abstraction" height="40" src="https://img.shields.io/badge/Abstraction-7C3AED?style=flat"></td>
+<td align="center"><img alt="Attribution before" height="48" src="https://img.shields.io/badge/Attribution%20before-7C3AED?style=flat"><br><img alt="Abstraction" height="48" src="https://img.shields.io/badge/Abstraction-7C3AED?style=flat"></td>
 <td>Keep failure domains separable so a broken schema, resolver, transport, browser state, device session, threshold, baseline, dependency, or environment produces the right signal.</td>
 </tr>
 <tr>
-<td><img alt="Oracle Discipline" height="40" src="https://img.shields.io/badge/Oracle%20Discipline-B7791F?style=flat"></td>
+<td align="center"><img alt="Oracle Discipline" height="48" src="https://img.shields.io/badge/Oracle%20Discipline-B7791F?style=flat"></td>
 <td>Every oracle has a scope and a limit. A green visual diff, accessibility scan, contract check, or CI job may claim only what its evidence can actually establish.</td>
 </tr>
 <tr>
-<td><img alt="Reproducibility over" height="40" src="https://img.shields.io/badge/Reproducibility%20over-526D82?style=flat"><br><img alt="Optics" height="40" src="https://img.shields.io/badge/Optics-526D82?style=flat"></td>
+<td align="center"><img alt="Reproducibility over" height="48" src="https://img.shields.io/badge/Reproducibility%20over-526D82?style=flat"><br><img alt="Optics" height="48" src="https://img.shields.io/badge/Optics-526D82?style=flat"></td>
 <td>CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove.</td>
 </tr>
 <tr>
-<td><img alt="Safety by" height="40" src="https://img.shields.io/badge/Safety%20by-C65D57?style=flat"><br><img alt="Architecture" height="40" src="https://img.shields.io/badge/Architecture-C65D57?style=flat"></td>
+<td align="center"><img alt="Safety by" height="48" src="https://img.shields.io/badge/Safety%20by-C65D57?style=flat"><br><img alt="Architecture" height="48" src="https://img.shields.io/badge/Architecture-C65D57?style=flat"></td>
 <td>Mutation, external integration, sustained load, secrets, and other high-impact capabilities belong behind explicit ownership, authorization, budgets, and fail-closed boundaries.</td>
 </tr>
 </tbody>
