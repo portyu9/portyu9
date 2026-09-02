@@ -13,6 +13,8 @@ REQUIRED_SVGS = (
     SVG_DIR / "repository-signal.svg",
 )
 
+RASTER_EXTENSIONS = r"(?:png|jpe?g|gif|webp)"
+
 def fail(message: str) -> None:
     print(f"ERROR: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -26,11 +28,24 @@ if not README.exists():
 readme = README.read_text(encoding="utf-8")
 
 # Branding contract: visible profile artwork is SVG-only.
-raster_ref = re.search(r'''(?:src=|!\[[^\]]*\]\())["']?[^)\s"']+\.(?:png|jpe?g|gif|webp)(?:[?#][^)\s"']*)?''', readme, re.I)
-if raster_ref:
-    fail(f"README references raster artwork: {raster_ref.group(0)}")
+html_raster = re.search(
+    rf'''<img\b[^>]*\bsrc=["'][^"']+\.{RASTER_EXTENSIONS}(?:[?#][^"']*)?["']''',
+    readme,
+    re.I,
+)
+markdown_raster = re.search(
+    rf'''!\[[^\]]*\]\([^)]*\.{RASTER_EXTENSIONS}(?:[?#][^)]*)?\)''',
+    readme,
+    re.I,
+)
+if html_raster or markdown_raster:
+    match = html_raster or markdown_raster
+    fail(f"README references raster artwork: {match.group(0)}")
 
-svg_refs = set(re.findall(r'''(?:src=["']|!\[[^\]]*\]\()([^)"']+\.svg)(?:["']|\))''', readme, re.I))
+svg_refs = set(
+    re.findall(r'''<img\b[^>]*\bsrc=["']([^"']+\.svg)["']''', readme, re.I)
+    + re.findall(r'''!\[[^\]]*\]\(([^)]+\.svg)\)''', readme, re.I)
+)
 if not svg_refs:
     fail("README contains no SVG artwork references")
 
@@ -71,4 +86,7 @@ for path in REQUIRED_SVGS:
     if any(local_name(node.tag) == "image" for node in root.iter()):
         fail(f"SVG contains an <image> element instead of pure vector primitives: {path.relative_to(ROOT)}")
 
-print(f"Profile validation passed: {len(REQUIRED_SVGS)} pure-vector SVG assets, accessible metadata, and no raster README artwork.")
+print(
+    f"Profile validation passed: {len(REQUIRED_SVGS)} pure-vector SVG assets, "
+    "accessible metadata, and no raster README artwork."
+)
