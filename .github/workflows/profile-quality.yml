@@ -7,7 +7,9 @@ on:
       - main
     paths:
       - "README.md"
+      - "SVG_OPTIONS.md"
       - "assets/**"
+      - "concepts/profile-svg/**"
       - "scripts/**"
       - ".github/workflows/profile-quality.yml"
 
@@ -27,5 +29,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Validate pure-vector profile contract
+      - name: Validate live profile cleanup contract
         run: python3 scripts/validate-profile.py
+
+      - name: Validate SVG concept proportions and vector contract
+        run: python3 scripts/validate-svg-concepts.py
