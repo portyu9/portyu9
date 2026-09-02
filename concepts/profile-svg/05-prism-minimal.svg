@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
+<title id="title">Ƴunior Ƥortal — Prism</title>
+<desc id="desc">Minimal wide pure-vector profile banner using a luminous prism as the transformation metaphor from change to proof to decision.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#02030A"/><stop offset=".55" stop-color="#06091A"/><stop offset="1" stop-color="#021227"/></linearGradient>
+  <linearGradient id="spectral" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FF3DF2"/><stop offset=".34" stop-color="#B64CFF"/><stop offset=".68" stop-color="#4B86FF"/><stop offset="1" stop-color="#00E5FF"/></linearGradient>
+  <radialGradient id="halo"><stop offset="0" stop-color="#00E5FF" stop-opacity=".26"/><stop offset=".55" stop-color="#7C4DFF" stop-opacity=".10"/><stop offset="1" stop-color="#02030A" stop-opacity="0"/></radialGradient>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#6E9DFF" stroke-opacity=".045"/></pattern>
+</defs>
+<rect width="1600" height="520" rx="28" fill="url(#bg)"/><rect width="1600" height="520" rx="28" fill="url(#grid)"/>
+<rect x="4" y="4" width="1592" height="512" rx="26" fill="none" stroke="url(#spectral)" stroke-opacity=".42" stroke-width="2"/>
+<path d="M1010 40L1510 40L1288 260L1510 480L1010 480L1225 260Z" fill="#071225" stroke="url(#spectral)" stroke-width="2.5" stroke-opacity=".9"/>
+<path d="M1105 85L1430 85L1265 260L1430 435L1105 435L1270 260Z" fill="none" stroke="#00DFFF" stroke-opacity=".25" stroke-width="2"/>
+<path d="M1190 128L1370 128L1280 260L1370 392L1190 392L1280 260Z" fill="url(#halo)"/>
+<g font-family="Inter,Segoe UI,Arial,sans-serif">
+  <text x="74" y="106" fill="#CECAFF" font-size="23" font-weight="760" letter-spacing="5">QUALITY ENGINEERING // PRISM</text>
+  <text x="72" y="203" fill="url(#spectral)" font-size="76" font-weight="860">Ƴunior Ƥortal</text>
+  <text x="74" y="265" fill="#F7FAFF" font-size="34" font-weight="820">ENGINEERED CONFIDENCE</text>
+  <text x="74" y="316" fill="#B3C4D9" font-size="24" font-weight="620">Evidence that can be traced. Oracles that can be explained.</text>
+  <text x="74" y="354" fill="#B3C4D9" font-size="24" font-weight="620">Automation that preserves attribution.</text>
+  <path d="M74 392H855" stroke="#4563A8" stroke-opacity=".34"/>
+  <text x="74" y="438" fill="#879CB8" font-size="21" font-weight="680">AI  •  WEB  •  API  •  GRAPHQL  •  MOBILE  •  PERFORMANCE  •  ACCESSIBILITY</text>
+</g>
+<g transform="translate(1280 260)" font-family="Inter,Segoe UI,Arial,sans-serif" text-anchor="middle">
+  <text y="-12" fill="#F5F8FF" font-size="34" font-weight="850">CHANGE</text>
+  <text y="34" fill="#8EEFFF" font-size="26" font-weight="820">→ PROOF →</text>
+  <text y="76" fill="#F2CCFF" font-size="26" font-weight="820">DECISION</text>
+</g>
+</svg>
