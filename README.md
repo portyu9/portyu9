@@ -45,27 +45,27 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 </thead>
 <tbody>
 <tr>
-<td align="center"><img alt="Evidence before / Confidence" height="84" src="assets/profile-badges/principle-evidence-confidence.svg?v=2"></td>
+<td align="center"><img alt="Evidence before / Confidence" height="84" src="assets/profile-badges/principle-evidence-confidence.svg?v=3"></td>
 <td>A conclusion should be traceable to the exact subject, revision, environment, execution, oracle, and artifacts that support it.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Reasoning without / Self-authorization" height="84" src="assets/profile-badges/principle-reasoning-authorization.svg?v=2"></td>
+<td align="center"><img alt="Reasoning without / Self-authorization" height="84" src="assets/profile-badges/principle-reasoning-authorization.svg?v=3"></td>
 <td>AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Attribution before / Abstraction" height="84" src="assets/profile-badges/principle-attribution-abstraction.svg?v=2"></td>
+<td align="center"><img alt="Attribution before / Abstraction" height="84" src="assets/profile-badges/principle-attribution-abstraction.svg?v=3"></td>
 <td>Keep failure domains separable so a broken schema, resolver, transport, browser state, device session, threshold, baseline, dependency, or environment produces the right signal.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Oracle Discipline" height="44" src="assets/profile-badges/principle-oracle-discipline.svg?v=2"></td>
+<td align="center"><img alt="Oracle Discipline" height="44" src="assets/profile-badges/principle-oracle-discipline.svg?v=3"></td>
 <td>Every oracle has a scope and a limit. A green visual diff, accessibility scan, contract check, or CI job may claim only what its evidence can actually establish.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Reproducibility over / Optics" height="84" src="assets/profile-badges/principle-reproducibility-optics.svg?v=2"></td>
+<td align="center"><img alt="Reproducibility over / Optics" height="84" src="assets/profile-badges/principle-reproducibility-optics.svg?v=3"></td>
 <td>CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Safety by / Architecture" height="84" src="assets/profile-badges/principle-safety-architecture.svg?v=2"></td>
+<td align="center"><img alt="Safety by / Architecture" height="84" src="assets/profile-badges/principle-safety-architecture.svg?v=3"></td>
 <td>Mutation, external integration, sustained load, secrets, and other high-impact capabilities belong behind explicit ownership, authorization, budgets, and fail-closed boundaries.</td>
 </tr>
 </tbody>
