@@ -1,0 +1,31 @@
+name: Profile quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    paths:
+      - "README.md"
+      - "assets/**"
+      - "scripts/**"
+      - ".github/workflows/profile-quality.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: profile-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate pure-vector profile contract
+        run: python3 scripts/validate-profile.py
