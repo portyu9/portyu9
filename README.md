@@ -4,17 +4,17 @@
 
 <p align="center"><strong>I engineer quality systems that turn software change into attributable evidence — and evidence into decision-grade confidence.</strong></p>
 
-<h3 align="center">◈ Engineering surfaces</h3>
+<div align="center">
 
-<p align="center">
-  <kbd>AI-Enabled QE</kbd> <kbd>Web / UI</kbd> <kbd>API</kbd> <kbd>GraphQL</kbd> <kbd>Mobile</kbd> <kbd>CI/CD</kbd>
-</p>
+<h2>◈</h2>
+<strong>Engineering surfaces</strong><br><br>
+<kbd>AI-Enabled QE</kbd> <kbd>Web / UI</kbd> <kbd>API</kbd> <kbd>GraphQL</kbd> <kbd>Mobile</kbd> <kbd>CI/CD</kbd>
 
-<h3 align="center">▦ Test architecture</h3>
+<h2>▦</h2>
+<strong>Test architecture</strong><br><br>
+<kbd>Unit</kbd> <kbd>Component</kbd> <kbd>Integration</kbd> <kbd>Contract</kbd> <kbd>E2E</kbd> <kbd>Database / Persistence</kbd> <kbd>Visual Regression</kbd> <kbd>Accessibility</kbd> <kbd>Security</kbd> <kbd>Performance</kbd>
 
-<p align="center">
-  <kbd>Unit</kbd> <kbd>Component</kbd> <kbd>Integration</kbd> <kbd>Contract</kbd> <kbd>E2E</kbd> <kbd>Database / Persistence</kbd> <kbd>Visual Regression</kbd> <kbd>Accessibility</kbd> <kbd>Security</kbd> <kbd>Performance</kbd>
-</p>
+</div>
 
 <p align="center"><sub>Designed for reproducibility · attribution · evidence-backed decisions</sub></p>
 
