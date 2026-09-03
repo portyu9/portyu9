@@ -31,6 +31,14 @@ ALLOWED_SVGS = (
     "assets/profile-badges/principle-reproducibility-optics.svg",
     "assets/profile-badges/principle-safety-architecture.svg",
 )
+PRINCIPLE_BADGES = (
+    "assets/profile-badges/principle-evidence-confidence.svg",
+    "assets/profile-badges/principle-reasoning-authorization.svg",
+    "assets/profile-badges/principle-attribution-abstraction.svg",
+    "assets/profile-badges/principle-oracle-discipline.svg",
+    "assets/profile-badges/principle-reproducibility-optics.svg",
+    "assets/profile-badges/principle-safety-architecture.svg",
+)
 GENERATED_SVG_REFERENCES = (
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg",
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg",
@@ -80,16 +88,16 @@ for heading in REMOVED_SECTIONS:
 # Principle side constrained while allowing Engineering contract to take all remaining room.
 if readme.count('<table width="100%">') != 1:
     fail("Principle table must render at 100% README width")
-if readme.count('<th width="28%" align="center"><h3>◆&nbsp;Principle</h3></th>') != 1:
-    fail("Principle table must keep the 28% column with a matching native h3 header")
-if readme.count('<th width="72%" align="center"><h3>▤&nbsp;Engineering contract</h3></th>') != 1:
-    fail("Engineering contract table must keep the 72% column with a wrapping-safe native h3 header")
+if readme.count('<th width="28%" align="center"><big><strong>◆&nbsp;Principle</strong></big></th>') != 1:
+    fail("Principle table must keep the 28% anchor-free native header")
+if readme.count('<th width="72%" align="center"><big><strong>▤&nbsp;Engineering contract</strong></big></th>') != 1:
+    fail("Engineering contract table must keep the 72% anchor-free wrapping-safe header")
+if "<h3>◆" in readme or "<h3>▤" in readme:
+    fail("Thesis table headers must not use heading elements because GitHub injects anchor links")
 if "Engineering&nbsp;contract" in readme:
     fail("Engineering contract must remain wrappable on narrow mobile viewports")
 if "table-header-principle" in readme or "table-header-engineering-contract" in readme:
     fail("Table headers must use native GitHub text, not theme-sensitive SVG images")
-if '<big><strong>◆ Principle</strong></big>' in readme or '<big><strong>▤ Engineering contract</strong></big>' in readme:
-    fail("Legacy smaller thesis headers must not return")
 
 svg_pattern = re.compile(
     r'''(?:<img\b[^>]*\bsrc=["']([^"']+\.svg(?:[?#][^"']*)?)["']|<source\b[^>]*\bsrcset=["']([^"']+\.svg(?:[?#][^"']*)?)["']|!\[[^\]]*\]\(([^)]+\.svg(?:[?#][^)]*)?)\))''',
@@ -121,6 +129,11 @@ for relative in ALLOWED_SVGS:
         if forbidden in lowered:
             fail(f"Profile badge SVG contains forbidden content {forbidden!r}: {relative}")
 
+for relative in PRINCIPLE_BADGES:
+    content = (ROOT / relative).read_text(encoding="utf-8")
+    if 'font-size="20"' in content or 'font-size="21"' not in content:
+        fail(f"Principle badge labels must use the reviewed 21px type size: {relative}")
+
 repro = (ROOT / "assets/profile-badges/principle-reproducibility-optics.svg").read_text(encoding="utf-8")
 if ">Reproducibility</text>" not in repro or ">over Optics</text>" not in repro:
     fail("Reproducibility principle must render as 'Reproducibility' over 'over Optics'")
@@ -128,7 +141,7 @@ if ">Reproducibility</text>" not in repro or ">over Optics</text>" not in repro:
 print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
     "stays absent, approved local badge SVGs are present, the Principle table spans the README at a "
-    "responsive 28/72 split with equal native h3 theme-safe headers and a mobile-wrappable Engineering "
-    "contract label, responsive Signal Field artifact-branch SVG URLs are explicit, and README SVG "
+    "responsive 28/72 split with anchor-free theme-safe native headers, Principle badge labels use the "
+    "reviewed 21px size, responsive Signal Field artifact-branch SVG URLs are explicit, and README SVG "
     "references remain restricted to the reviewed profile set."
 )
