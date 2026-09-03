@@ -99,11 +99,13 @@ for heading in REMOVED_SECTIONS:
 
 if readme.count("## ✦ Engineering Thesis") != 1:
     fail("Engineering Thesis must remain a level-2 profile heading")
-if readme.count("## ◉ Activity Metrics") != 1:
-    fail("Activity Metrics must use the reviewed ◉ glyph at the same level-2 size as Engineering Thesis")
+if readme.count('<h2 align="center">◉ Activity Metrics</h2>') != 1:
+    fail("Activity Metrics must use the reviewed centered ◉ H2 treatment")
+if "## ◉ Activity Metrics" in readme:
+    fail("Activity Metrics must remain centered instead of using the left-aligned Markdown H2 treatment")
 if '<h3 align="center"><big>&nbsp;&nbsp;Activity Metrics</big></h3>' in readme:
     fail("Activity Metrics must not fall back to the smaller centered h3 treatment")
-activity_heading_position = readme.find("## ◉ Activity Metrics")
+activity_heading_position = readme.find('<h2 align="center">◉ Activity Metrics</h2>')
 signal_field_position = readme.find('alt="GitHub activity signal field"')
 if signal_field_position < 0 or activity_heading_position > signal_field_position:
     fail("Activity Metrics heading must appear immediately before the Signal Field section")
@@ -207,7 +209,7 @@ for relative in (
 
 print(
     "Profile validation passed: the thesis table keeps its responsive 37/63 split; Activity Metrics uses "
-    "the reviewed ◉ level-2 heading treatment; Principle badges use the restored fitted 23px typography; "
+    "the reviewed centered ◉ H2 treatment; Principle badges use the restored fitted 23px typography; "
     "Oracle retains its wider canvas; anchor-free responsive thesis header SVGs use reviewed 21px desktop "
     "and 23px mobile sizing; the mobile Principle header keeps its stabilized 136px intrinsic canvas; the "
     "mobile Engineering Contract header keeps its stabilized 299.5px intrinsic canvas; and all Signal Field "
