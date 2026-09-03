@@ -33,11 +33,6 @@ ALLOWED_SVGS = (
     "assets/profile-badges/principle-reproducibility-optics.svg",
     "assets/profile-badges/principle-safety-architecture.svg",
 )
-GENERATED_SVG_REFERENCES = (
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/github-metrics/profile/github-metrics-modern.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg",
-)
 
 
 def fail(message: str) -> None:
@@ -78,16 +73,16 @@ for heading in REMOVED_SECTIONS:
         fail(f"Removed profile section is still present: {heading}")
 
 svg_pattern = re.compile(
-    r'''(?:<img\b[^>]*\bsrc=["']([^"']+\.svg(?:[?#][^"']*)?)["']|<source\b[^>]*\bsrcset=["']([^"']+\.svg(?:[?#][^"']*)?)["']|!\[[^\]]*\]\(([^)]+\.svg(?:[?#][^)]*)?)\))''',
+    r'''(?:<img\b[^>]*\bsrc=["']([^"']+\.svg(?:[?#][^"']*)?)["']|!\[[^\]]*\]\(([^)]+\.svg(?:[?#][^)]*)?)\))''',
     re.I,
 )
 references = []
 for match in svg_pattern.finditer(readme):
-    reference = match.group(1) or match.group(2) or match.group(3)
+    reference = match.group(1) or match.group(2)
     reference = reference.split("?", 1)[0].split("#", 1)[0].lstrip("./")
     references.append(reference)
 
-allowed = set(ALLOWED_SVGS) | set(GENERATED_SVG_REFERENCES)
+allowed = set(ALLOWED_SVGS)
 unexpected = sorted(set(references) - allowed)
 missing_refs = sorted(allowed - set(references))
 if unexpected:
@@ -109,6 +104,6 @@ for relative in ALLOWED_SVGS:
 
 print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
-    "stays absent, approved local badge SVGs are present, generated artifact-branch SVG URLs are explicit, "
-    "and README SVG references remain restricted to the reviewed profile set."
+    "stays absent, approved local badge SVGs are present, and README SVG references are restricted "
+    "to the reviewed badge set."
 )
