@@ -46,7 +46,7 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 <thead>
 <tr>
 <th width="28%" align="center"><h3>◆&nbsp;Principle</h3></th>
-<th width="72%" align="center"><h3>▤&nbsp;Engineering&nbsp;contract</h3></th>
+<th width="72%" align="center"><h3>▤&nbsp;Engineering contract</h3></th>
 </tr>
 </thead>
 <tbody>
