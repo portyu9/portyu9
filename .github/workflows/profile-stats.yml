@@ -14,6 +14,7 @@ on:
       - "scripts/portal-signal-field-v2.py"
       - "scripts/align-signal-field-v2.py"
       - "scripts/phosphor-signal-field-v2.py"
+      - "scripts/phosphor-activity-signal-field-v2.py"
   schedule:
     - cron: "17 5 * * *"
 
@@ -84,6 +85,11 @@ jobs:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: python3 source/scripts/phosphor-signal-field-v2.py "$READY_DIR"
 
+      - name: Apply Signal Field v2.7 phosphorescent activity telemetry
+        env:
+          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: python3 source/scripts/phosphor-activity-signal-field-v2.py "$READY_DIR"
+
       - name: Stage complete themed artifact set
         env:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
@@ -130,6 +136,15 @@ jobs:
           grep -q 'data-metric-phosphor="stars"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-metric-phosphor="pull_requests"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-metric-phosphor="issues"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-activity-phosphor="signal-field-v2.7"' artifacts/profile-stats/profile/signal-field-wide-light.svg
+          grep -q 'data-activity-phosphor="signal-field-v2.7"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-activity-phosphor="signal-field-v2.7"' artifacts/profile-stats/profile/signal-field-compact-light.svg
+          grep -q 'data-activity-phosphor="signal-field-v2.7"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-telemetry-phosphor="active"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-telemetry-phosphor="streak"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-telemetry-phosphor="peak_date"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-telemetry-phosphor="peak_count"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-telemetry-phosphor="peak_count"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
           grep -q 'data-intensity-scale="github-contribution-levels-0-4"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
           grep -q 'data-count-semantics="raw-github-contribution-counts"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-evidence-footer="true"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
