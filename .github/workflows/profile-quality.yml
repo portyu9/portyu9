@@ -27,5 +27,5 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Validate pure-vector profile contract
+      - name: Validate profile asset contract
         run: python3 scripts/validate-profile.py
