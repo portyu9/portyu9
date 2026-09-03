@@ -102,3 +102,12 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 </picture>
 
 </div>
+
+<br>
+
+<p align="center">
+<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub><br>
+<sub>Original branding, artwork, README design, and custom Signal Field visuals are not licensed for reuse or redistribution.</sub><br>
+<sub>No repository-wide open-source license is granted unless expressly stated for a specific file or component.</sub><br>
+<sub>Code and scripts are governed only by any explicit license attached to that specific component; otherwise no reuse permission is granted.</sub>
+</p>
