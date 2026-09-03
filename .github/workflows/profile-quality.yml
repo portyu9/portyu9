@@ -19,14 +19,25 @@ concurrency:
   group: profile-quality-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHON_VERSION: "3.13"
+
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    name: validate-contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Validate Signal Field customization contract
         run: python3 scripts/customize-signal-field.py --self-test
@@ -55,8 +66,53 @@ jobs:
       - name: Validate Signal Field v2.8 phosphorescent metric lines
         run: python3 scripts/phosphor-lines-signal-field-v2.py --self-test
 
-      - name: Validate Signal Field v2.9 GitHub profile-visible contribution total
+      - name: Validate Signal Field v2.9 profile evidence semantics
         run: python3 scripts/sync-profile-contribution-total.py --self-test
 
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile.py
+
+  integration:
+    name: integration-pinned-upstream
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Generate actual pinned upstream Signal Field
+        id: stats
+        uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
+        with:
+          username: portyu9
+          token: ${{ github.token }}
+          profile: signal-field
+
+      - name: Exercise complete production transformation chain
+        env:
+          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_USERNAME: portyu9
+        run: |
+          set -euo pipefail
+          python3 scripts/customize-signal-field.py "$READY_DIR"
+          python3 scripts/polish-signal-field-v2.py "$READY_DIR"
+          python3 scripts/enhance-signal-field-v2.py "$READY_DIR"
+          python3 scripts/background-signal-field-v2.py "$READY_DIR"
+          python3 scripts/portal-signal-field-v2.py "$READY_DIR"
+          python3 scripts/align-signal-field-v2.py "$READY_DIR"
+          python3 scripts/phosphor-signal-field-v2.py "$READY_DIR"
+          python3 scripts/phosphor-activity-signal-field-v2.py "$READY_DIR"
+          python3 scripts/phosphor-lines-signal-field-v2.py "$READY_DIR"
+          python3 scripts/sync-profile-contribution-total.py "$READY_DIR"
+          python3 scripts/validate-generated-signal-field.py "$READY_DIR"

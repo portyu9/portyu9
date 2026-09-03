@@ -17,34 +17,42 @@ on:
       - "scripts/phosphor-activity-signal-field-v2.py"
       - "scripts/phosphor-lines-signal-field-v2.py"
       - "scripts/sync-profile-contribution-total.py"
+      - "scripts/validate-generated-signal-field.py"
   schedule:
-    - cron: "*/5 * * * *"
+    # Offset from the top of the hour to reduce scheduled-run congestion.
+    - cron: "2-57/5 * * * *"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: update-profile-stats
-  cancel-in-progress: false
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
 
 jobs:
-  update:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  generate:
+    name: generate-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
 
     steps:
-      - name: Checkout workflow source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Checkout trusted source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: source
+          persist-credentials: false
 
-      - name: Checkout generated artifact branch
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          ref: generated
-          path: artifacts
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Generate signal-field cards
+      - name: Generate upstream Signal Field
         id: stats
         uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
         with:
@@ -52,152 +60,86 @@ jobs:
           token: ${{ github.token }}
           profile: signal-field
 
-      - name: Apply profile theme contract
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
-        run: python3 source/scripts/customize-signal-field.py "$READY_DIR"
-
-      - name: Apply Signal Field v2.1 polish contract
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
-        run: python3 source/scripts/polish-signal-field-v2.py "$READY_DIR"
-
-      - name: Apply Signal Field v2.2 evidence contract
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
-        run: python3 source/scripts/enhance-signal-field-v2.py "$READY_DIR"
-
-      - name: Apply Signal Field v2.3 topology background
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
-        run: python3 source/scripts/background-signal-field-v2.py "$READY_DIR"
-
-      - name: Apply Signal Field v2.4 dimensional portal
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
-        run: python3 source/scripts/portal-signal-field-v2.py "$READY_DIR"
-
-      - name: Apply Signal Field v2.5 layout alignment
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
-        run: python3 source/scripts/align-signal-field-v2.py "$READY_DIR"
-
-      - name: Apply Signal Field v2.6 phosphorescent metrics
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
-        run: python3 source/scripts/phosphor-signal-field-v2.py "$READY_DIR"
-
-      - name: Apply Signal Field v2.7 phosphorescent activity telemetry
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
-        run: python3 source/scripts/phosphor-activity-signal-field-v2.py "$READY_DIR"
-
-      - name: Apply Signal Field v2.8 phosphorescent metric lines
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
-        run: python3 source/scripts/phosphor-lines-signal-field-v2.py "$READY_DIR"
-
-      - name: Apply Signal Field v2.9 GitHub profile-visible contribution total
+      - name: Apply Signal Field contracts
         env:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_USERNAME: portyu9
-        run: python3 source/scripts/sync-profile-contribution-total.py "$READY_DIR"
-
-      - name: Stage complete themed artifact set
-        env:
-          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: |
+          set -euo pipefail
+          python3 source/scripts/customize-signal-field.py "$READY_DIR"
+          python3 source/scripts/polish-signal-field-v2.py "$READY_DIR"
+          python3 source/scripts/enhance-signal-field-v2.py "$READY_DIR"
+          python3 source/scripts/background-signal-field-v2.py "$READY_DIR"
+          python3 source/scripts/portal-signal-field-v2.py "$READY_DIR"
+          python3 source/scripts/align-signal-field-v2.py "$READY_DIR"
+          python3 source/scripts/phosphor-signal-field-v2.py "$READY_DIR"
+          python3 source/scripts/phosphor-activity-signal-field-v2.py "$READY_DIR"
+          python3 source/scripts/phosphor-lines-signal-field-v2.py "$READY_DIR"
+          python3 source/scripts/sync-profile-contribution-total.py "$READY_DIR"
+          python3 source/scripts/validate-generated-signal-field.py "$READY_DIR"
+
+      - name: Upload immutable validated artifact set
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signal-field-svg
+          path: ${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: publish-write-only
+    needs: generate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout trusted source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Checkout generated artifact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: generated
+          path: artifacts
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download validated artifact set
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: signal-field-svg
+          path: publish-input
+
+      - name: Revalidate publish boundary
+        run: python3 source/scripts/validate-generated-signal-field.py publish-input
+
+      - name: Stage artifact-only generated branch
+        run: |
+          set -euo pipefail
+          find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           mkdir -p artifacts/profile-stats/profile
-          cp "$READY_DIR"/signal-field-*.svg artifacts/profile-stats/profile/
-          test -s artifacts/profile-stats/profile/signal-field-wide-light.svg
-          test -s artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          test -s artifacts/profile-stats/profile/signal-field-compact-light.svg
-          test -s artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-theme="yunior-portal-neon-v2"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-theme="yunior-portal-neon-v2"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-theme="yunior-portal-neon-v2"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-theme="yunior-portal-neon-v2"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-polish="signal-field-v2.1"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-polish="signal-field-v2.1"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-polish="signal-field-v2.1"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-polish="signal-field-v2.1"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-enhancement="signal-field-v2.2"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-enhancement="signal-field-v2.2"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-enhancement="signal-field-v2.2"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-enhancement="signal-field-v2.2"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-background="signal-field-v2.3"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-background="signal-field-v2.3"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-background="signal-field-v2.3"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-background="signal-field-v2.3"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-background-layer="evidence-topology"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-portal="signal-field-v2.4"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-portal="signal-field-v2.4"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-portal="signal-field-v2.4"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-portal="signal-field-v2.4"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-portal-layer="dimensional-core"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-layout="signal-field-v2.5"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-metric-layout="signal-field-v2.5"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          ! grep -q 'data-metric-layout="signal-field-v2.5"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          ! grep -q 'data-metric-layout="signal-field-v2.5"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-day-alignment="centered-month-boundary"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-day-alignment="centered-month-boundary"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-phosphor="signal-field-v2.6"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-metric-phosphor="signal-field-v2.6"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-phosphor="signal-field-v2.6"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-metric-phosphor="signal-field-v2.6"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-metric-phosphor="contributions"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-phosphor="stars"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-phosphor="pull_requests"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-phosphor="issues"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-activity-phosphor="signal-field-v2.7"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-activity-phosphor="signal-field-v2.7"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-activity-phosphor="signal-field-v2.7"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-activity-phosphor="signal-field-v2.7"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-telemetry-phosphor="active"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-telemetry-phosphor="streak"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-telemetry-phosphor="peak_date"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-telemetry-phosphor="peak_count"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-telemetry-phosphor="peak_count"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-line-phosphor="signal-field-v2.8"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-line-phosphor="signal-field-v2.8"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-line-phosphor="signal-field-v2.8"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-line-phosphor="signal-field-v2.8"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-metric-phosphor-line="contributions"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-phosphor-line="stars"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-phosphor-line="pull_requests"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-phosphor-line="issues"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-metric-phosphor-line="contributions"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-metric-phosphor-line="stars"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-metric-phosphor-line="pull_requests"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-metric-phosphor-line="issues"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-refresh-cadence="5-minutes"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'Refresh cadence: every 5 minutes.' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-contribution-total-sync="signal-field-v2.9"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-contribution-total-sync="signal-field-v2.9"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-contribution-total-sync="signal-field-v2.9"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-contribution-total-sync="signal-field-v2.9"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-contribution-total-source="github-profile-visible"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-profile-visible-contributions="[0-9][0-9]*"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-restricted-contributions="[0-9][0-9]*"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-intensity-scale="github-contribution-levels-0-4"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-count-semantics="raw-github-contribution-counts"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-evidence-footer="true"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-activity-layout="month-calendar-v2"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-activity-layout="month-calendar-v2"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-activity-columns="7"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-activity-columns="7"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-activity-summary="true"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-latest-day="true"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-latest-outline="outer"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          git -C artifacts add profile-stats/profile/signal-field-*.svg
+          cp publish-input/signal-field-*.svg artifacts/profile-stats/profile/
+          python3 source/scripts/validate-generated-signal-field.py artifacts/profile-stats/profile
+          git -C artifacts add -A
 
       - name: Publish changed artifact set
         run: |
+          set -euo pipefail
           if git -C artifacts diff --cached --quiet; then
+            echo "Generated Signal Field is already current."
             exit 0
           fi
           git -C artifacts config user.name github-actions[bot]
           git -C artifacts config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git -C artifacts commit -m "chore: update themed profile stats [skip ci]"
+          git -C artifacts commit -m "chore: publish validated Signal Field [skip ci]"
           git -C artifacts push origin HEAD:generated
