@@ -9,7 +9,7 @@ HERO_IMAGE = ROOT / "assets" / "profile-badges" / "ff16b3b6-41d3-43eb-ad02-34a73
 HERO_REFERENCE = "assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png"
 HERO_SIZE = 2_947_658
 HERO_SHA256 = "f99901f3da31c68441d471a92dcf9c7829681c8ec390286159b78eea97a5bcd0"
-HEADER_ASSET_COMMIT = "d0991a4c78006bb940bf85237fba6acdc783b87f"
+HEADER_ASSET_COMMIT = "0f4e80853fef178f4e9178c2a2f8421133022559"
 
 REMOVED_SVGS = (
     ROOT / "assets" / "qe-command-center.svg",
@@ -99,10 +99,10 @@ for heading in REMOVED_SECTIONS:
 
 if readme.count('<table width="100%">') != 1:
     fail("Principle table must render at 100% README width")
-if readme.count('<th width="35%" align="center"><picture>') != 1:
-    fail("Principle header must use the responsive 35% picture cell")
-if readme.count('<th width="65%" align="center"><picture>') != 1:
-    fail("Engineering Contract header must use the responsive 65% picture cell")
+if readme.count('<th width="37%" align="center"><picture>') != 1:
+    fail("Principle header must use the responsive 37% picture cell")
+if readme.count('<th width="63%" align="center"><picture>') != 1:
+    fail("Engineering Contract header must use the responsive 63% picture cell")
 if '<img alt="◆ Principle"' not in readme:
     fail("Responsive Principle header fallback is missing")
 if '<img alt="▤ Engineering Contract"' not in readme:
@@ -183,13 +183,13 @@ for relative in (
     "assets/profile-badges/thesis-header-principle-mobile-dark.svg",
 ):
     content = (ROOT / relative).read_text(encoding="utf-8")
-    if 'width="129" height="40" viewBox="0 0 129 40"' not in content or 'x="64.5"' not in content:
-        fail(f"Mobile Principle header must retain the stabilized 129px intrinsic canvas: {relative}")
+    if 'width="136" height="40" viewBox="0 0 136 40"' not in content or 'x="68"' not in content:
+        fail(f"Mobile Principle header must retain the stabilized 136px intrinsic canvas: {relative}")
 
 print(
-    "Profile validation passed: the thesis table keeps its responsive 35/65 split; Principle badges use "
+    "Profile validation passed: the thesis table keeps its responsive 37/63 split; Principle badges use "
     "the restored fitted 23px typography; Oracle retains its wider canvas; anchor-free responsive thesis "
     "header SVGs use reviewed 21px desktop and 23px mobile sizing; the mobile Principle header keeps its "
-    "stabilized 129px intrinsic canvas; and all Signal Field and reviewed profile SVG references remain "
+    "stabilized 136px intrinsic canvas; and all Signal Field and reviewed profile SVG references remain "
     "restricted and deterministic."
 )
