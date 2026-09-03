@@ -90,8 +90,11 @@ def set_attr(element: str, name: str, value: str) -> str:
     replacement = f'{name}="{value}"'
     if pattern.search(element):
         return pattern.sub(replacement, element, count=1)
-    close = "/>" if element.endswith("/>") else ">"
-    index = element.rfind(close)
+
+    if element.endswith("/>"):
+        index = element.rfind("/>")
+    else:
+        index = element.find(">")
     if index < 0:
         raise ValueError(f"cannot add attribute {name!r} to malformed element")
     return element[:index] + f' {replacement}' + element[index:]
