@@ -95,10 +95,16 @@ def validate_stats(text: str) -> None:
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in generate, "Pinned upstream generator SHA changed")
     require(f"actions/upload-artifact@{UPLOAD_SHA}" in generate, "Immutable artifact upload action SHA changed")
     require(f"actions/download-artifact@{DOWNLOAD_SHA}" in publish, "Immutable artifact download action SHA changed")
-    require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "Stats checkout action SHA changed")
+    require(
+        text.count(f"actions/checkout@{CHECKOUT_SHA}") == 3,
+        "Stats workflow must retain exactly three reviewed checkout calls: generation source, publish source, and generated branch",
+    )
     require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2, "Stats setup-python action SHA changed")
-    require("persist-credentials: false" in generate, "Generation checkout must not persist credentials")
-    require("persist-credentials: false" in publish, "Trusted source checkout in publish job must not persist credentials")
+    require(generate.count("persist-credentials: false") == 1, "Generation checkout must not persist credentials")
+    require(
+        publish.count("persist-credentials: false") == 1,
+        "Publish job trusted-source checkout must not persist credentials; generated-branch checkout alone retains push credentials",
+    )
     require("needs: generate" in publish, "Publish job must depend on validated generation")
     require(
         "python3 source/scripts/validate-generated-signal-field.py publish-input" in publish,
