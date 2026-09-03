@@ -85,19 +85,25 @@ for heading in REMOVED_SECTIONS:
         fail(f"Removed profile section is still present: {heading}")
 
 # The thesis table must consume the full README width. Percentage columns keep the
-# Principle side constrained while allowing Engineering contract to take all remaining room.
+# Principle side constrained while allowing Engineering Contract to take the balance.
 if readme.count('<table width="100%">') != 1:
     fail("Principle table must render at 100% README width")
-if readme.count('<th width="28%" align="center"><big><strong>◆&nbsp;Principle</strong></big></th>') != 1:
-    fail("Principle table must keep the 28% anchor-free native header")
-if readme.count('<th width="72%" align="center"><big><strong>▤&nbsp;Engineering contract</strong></big></th>') != 1:
-    fail("Engineering contract table must keep the 72% anchor-free wrapping-safe header")
+if readme.count('<th width="28%" align="center"><big><big><strong>◆&nbsp;Principle</strong></big></big></th>') != 1:
+    fail("Principle table must keep the 28% anchor-free enlarged native header")
+if readme.count('<th width="72%" align="center"><big><big><strong>▤&nbsp;Engineering Contract</strong></big></big></th>') != 1:
+    fail("Engineering Contract table must keep the 72% anchor-free enlarged wrapping-safe header")
 if "<h3>◆" in readme or "<h3>▤" in readme:
     fail("Thesis table headers must not use heading elements because GitHub injects anchor links")
-if "Engineering&nbsp;contract" in readme:
-    fail("Engineering contract must remain wrappable on narrow mobile viewports")
+if "Engineering&nbsp;Contract" in readme:
+    fail("Engineering Contract must remain wrappable on narrow mobile viewports")
+if "Engineering contract" in readme:
+    fail("Engineering Contract must use a capital C")
 if "table-header-principle" in readme or "table-header-engineering-contract" in readme:
     fail("Table headers must use native GitHub text, not theme-sensitive SVG images")
+
+for suffix in "abcdef":
+    if f"font24{suffix}" not in readme:
+        fail("README must cache-bust every 24px Principle badge revision")
 
 svg_pattern = re.compile(
     r'''(?:<img\b[^>]*\bsrc=["']([^"']+\.svg(?:[?#][^"']*)?)["']|<source\b[^>]*\bsrcset=["']([^"']+\.svg(?:[?#][^"']*)?)["']|!\[[^\]]*\]\(([^)]+\.svg(?:[?#][^)]*)?)\))''',
@@ -131,8 +137,12 @@ for relative in ALLOWED_SVGS:
 
 for relative in PRINCIPLE_BADGES:
     content = (ROOT / relative).read_text(encoding="utf-8")
-    if 'font-size="23"' not in content:
-        fail(f"Principle badge labels must use the reviewed 23px type size: {relative}")
+    if 'font-size="24"' not in content:
+        fail(f"Principle badge labels must use the reviewed 24px type size: {relative}")
+
+oracle = (ROOT / "assets/profile-badges/principle-oracle-discipline.svg").read_text(encoding="utf-8")
+if 'width="210" height="54" viewBox="0 0 210 54"' not in oracle or '<rect x="4" y="4" width="202" height="46"' not in oracle:
+    fail("Oracle Discipline must retain the reviewed wider 210px canvas")
 
 repro = (ROOT / "assets/profile-badges/principle-reproducibility-optics.svg").read_text(encoding="utf-8")
 if ">Reproducibility</text>" not in repro or ">over Optics</text>" not in repro:
@@ -141,7 +151,7 @@ if ">Reproducibility</text>" not in repro or ">over Optics</text>" not in repro:
 print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
     "stays absent, approved local badge SVGs are present, the Principle table spans the README at a "
-    "responsive 28/72 split with anchor-free theme-safe native headers, Principle badge labels use the "
-    "reviewed 23px size, responsive Signal Field artifact-branch SVG URLs are explicit, and README SVG "
-    "references remain restricted to the reviewed profile set."
+    "responsive 28/72 split with anchor-free enlarged theme-safe native headers, Principle badge labels "
+    "use the reviewed 24px size, Oracle Discipline uses the wider reviewed canvas, responsive Signal Field "
+    "artifact-branch SVG URLs are explicit, and README SVG references remain restricted to the reviewed set."
 )
