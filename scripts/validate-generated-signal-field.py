@@ -37,6 +37,7 @@ REQUIRED_ROOT_ATTRS = {
     "data-activity-phosphor": "signal-field-v2.7",
     "data-line-phosphor": "signal-field-v2.8",
     "data-contribution-total-sync": "signal-field-v2.9",
+    "data-metric-labels": "signal-field-v2.10",
     "data-contribution-total-source": "github-default-contribution-calendar",
     "data-metric-sources": "github-graphql+rest",
     "data-generation-schedule": "5-minutes",
@@ -53,6 +54,7 @@ FORBIDDEN = (
     "REFRESH · DAILY",
     "Refresh cadence: every 5 minutes.",
     "Refresh cadence: daily.",
+    ">ISSUES</text>",
 )
 
 
@@ -118,6 +120,11 @@ def validate_file(path: Path) -> None:
         if text.count(f'data-metric-phosphor-line="{metric}"') != 1:
             fail(f"{path.name}: metric line provenance missing for {metric}")
 
+    if text.count(">BUGS FOUND</text>") != 1:
+        fail(f"{path.name}: visible Bugs Found metric label is missing or duplicated")
+    if "authored public issues reported by GitHub REST Search" not in text:
+        fail(f"{path.name}: accessible Issues source semantics must remain explicit")
+
     for forbidden in FORBIDDEN:
         if forbidden in text:
             fail(f"{path.name}: forbidden stale/sensitive contract remains: {forbidden}")
@@ -149,7 +156,7 @@ def validate_directory(directory: Path) -> None:
         fail(f"generated artifact set changed: {actual}")
     print(
         "Final Signal Field validation passed: four responsive artifacts are complete, attributable, "
-        "source-accurate, privacy-minimized, and scheduled with best-effort five-minute semantics."
+        "source-accurate, privacy-minimized, Bugs Found-labeled, and scheduled with best-effort five-minute semantics."
     )
 
 
