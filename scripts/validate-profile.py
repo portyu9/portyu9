@@ -1,9 +1,14 @@
 from pathlib import Path
+import hashlib
 import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
+HERO_IMAGE = ROOT / "assets" / "profile-badges" / "ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png"
+HERO_REFERENCE = "assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png"
+HERO_SIZE = 2_947_658
+HERO_SHA256 = "f99901f3da31c68441d471a92dcf9c7829681c8ec390286159b78eea97a5bcd0"
 
 REMOVED_SVGS = (
     ROOT / "assets" / "qe-command-center.svg",
@@ -36,6 +41,22 @@ if not README.exists():
     fail("README.md is missing")
 
 readme = README.read_text(encoding="utf-8")
+
+if not HERO_IMAGE.exists():
+    fail(f"Profile hero image is missing: {HERO_REFERENCE}")
+
+hero_bytes = HERO_IMAGE.read_bytes()
+if len(hero_bytes) != HERO_SIZE:
+    fail(f"Profile hero image size changed: expected {HERO_SIZE}, got {len(hero_bytes)}")
+if hashlib.sha256(hero_bytes).hexdigest() != HERO_SHA256:
+    fail("Profile hero image bytes differ from the reviewed original attachment")
+
+hero_position = readme.find(HERO_REFERENCE)
+name_position = readme.find("Ƴunior Ƥortal")
+if hero_position < 0:
+    fail("README does not reference the approved profile hero image")
+if name_position < 0 or hero_position > name_position:
+    fail("Profile hero image must appear before the profile name")
 
 for path in REMOVED_SVGS:
     relative = path.relative_to(ROOT).as_posix()
@@ -79,6 +100,7 @@ for relative in ALLOWED_SVGS:
             fail(f"Profile badge SVG contains forbidden content {forbidden!r}: {relative}")
 
 print(
-    "Profile validation passed: removed artwork stays absent, approved local badge SVGs are present, "
-    "and README SVG references are restricted to the reviewed badge set."
+    "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
+    "stays absent, approved local badge SVGs are present, and README SVG references are restricted "
+    "to the reviewed badge set."
 )
