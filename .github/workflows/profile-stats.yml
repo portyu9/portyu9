@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - feature/signal-field-v2-2-semantics-20260903
     paths:
       - ".github/workflows/profile-stats.yml"
       - "scripts/customize-signal-field.py"
