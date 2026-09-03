@@ -5,7 +5,8 @@ The rolling activity summary is rendered as neutral text by the v2 base layer.
 This deterministic post-processing step keeps every metric value and layout intact
 while splitting the summary into colored SVG tspans. The palette deliberately
 reuses the reviewed v2.6 phosphorescent metric colors so headline metrics and
-activity telemetry read as one visual system.
+activity telemetry read as one visual system. The PEAK date and count are one
+semantic metric and therefore share the same phosphorescent color.
 """
 
 from __future__ import annotations
@@ -27,13 +28,13 @@ COLORS = {
         "active": "#FF4DE1",
         "streak": "#C96BFF",
         "peak_date": "#8C7CFF",
-        "peak_count": "#28D7FF",
+        "peak_count": "#8C7CFF",
     },
     "light": {
         "active": "#C800A8",
         "streak": "#7E22CE",
         "peak_date": "#5B4FE6",
-        "peak_count": "#007EA8",
+        "peak_count": "#5B4FE6",
     },
 }
 
@@ -180,6 +181,9 @@ def validate(text: str, layout: str, scheme: str) -> None:
         raise ValueError(f"expected one colored {layout} activity summary, found {len(summaries)}")
     summary = summaries[0]
     palette = COLORS[scheme]
+    if palette["peak_date"] != palette["peak_count"]:
+        raise ValueError("PEAK date and count must share one phosphorescent color")
+
     content_patterns = {
         "active": r"ACTIVE \d+/30",
         "streak": r"STREAK \d+",
@@ -240,6 +244,7 @@ def fixture(layout: str, scheme: str) -> str:
 
 def self_test() -> None:
     for scheme in COLORS:
+        assert COLORS[scheme]["peak_date"] == COLORS[scheme]["peak_count"]
         for layout in ("wide", "compact"):
             themed = color_activity_summary(fixture(layout, scheme), layout, scheme)
             validate(themed, layout, scheme)
