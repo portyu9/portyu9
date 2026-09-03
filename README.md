@@ -5,7 +5,7 @@
 <h1 align="center">Ƴunior Ƥortal</h1>
 
 <p align="center">
-<img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=5"> <img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=5"> <img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=5">
+<img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering-neon-v2.svg"> <img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture-neon-v2.svg"> <img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems-neon-v2.svg">
 </p>
 
 <p align="center"><strong>I engineer quality systems that turn software change into attributable evidence —<br>and evidence into decision-grade confidence.</strong></p>
@@ -43,33 +43,33 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 <table>
 <thead>
 <tr>
-<th width="360"><big><big><big><big><strong>◆ Principle</strong></big></big></big></big></th>
-<th><big><big><big><big><strong>▤ Engineering contract</strong></big></big></big></big></th>
+<th width="360"><img alt="◆ Principle" height="36" src="assets/profile-badges/header-principle-v2.svg"></th>
+<th><img alt="▤ Engineering contract" height="36" src="assets/profile-badges/header-engineering-contract-v2.svg"></th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td align="center"><img alt="Evidence before / Confidence" height="84" src="assets/profile-badges/principle-evidence-confidence.svg?neon=20260902a"></td>
+<td align="center"><img alt="Evidence before / Confidence" height="84" src="assets/profile-badges/principle-evidence-confidence-neon-v2.svg"></td>
 <td>A conclusion should be traceable to the exact subject, revision, environment, execution, oracle, and artifacts that support it.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Reasoning without / Self-authorization" height="84" src="assets/profile-badges/principle-reasoning-authorization.svg?neon=20260902b"></td>
+<td align="center"><img alt="Reasoning without / Self-authorization" height="84" src="assets/profile-badges/principle-reasoning-authorization-neon-v2.svg"></td>
 <td>AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Attribution before / Abstraction" height="84" src="assets/profile-badges/principle-attribution-abstraction.svg?neon=20260902c"></td>
+<td align="center"><img alt="Attribution before / Abstraction" height="84" src="assets/profile-badges/principle-attribution-abstraction-neon-v2.svg"></td>
 <td>Keep failure domains separable so a broken schema, resolver, transport, browser state, device session, threshold, baseline, dependency, or environment produces the right signal.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Oracle Discipline" height="44" src="assets/profile-badges/principle-oracle-discipline.svg?neon=20260902d"></td>
+<td align="center"><img alt="Oracle Discipline" height="44" src="assets/profile-badges/principle-oracle-discipline-neon-v2.svg"></td>
 <td>Every oracle has a scope and a limit. A green visual diff, accessibility scan, contract check, or CI job may claim only what its evidence can actually establish.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Reproducibility over / Optics" height="84" src="assets/profile-badges/principle-reproducibility-optics.svg?neon=20260902e"></td>
+<td align="center"><img alt="Reproducibility over / Optics" height="84" src="assets/profile-badges/principle-reproducibility-optics-neon-v2.svg"></td>
 <td>CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Safety by / Architecture" height="84" src="assets/profile-badges/principle-safety-architecture.svg?neon=20260902f"></td>
+<td align="center"><img alt="Safety by / Architecture" height="84" src="assets/profile-badges/principle-safety-architecture-neon-v2.svg"></td>
 <td>Mutation, external integration, sustained load, secrets, and other high-impact capabilities belong behind explicit ownership, authorization, budgets, and fail-closed boundaries.</td>
 </tr>
 </tbody>
