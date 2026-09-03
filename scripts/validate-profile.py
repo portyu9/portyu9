@@ -9,7 +9,7 @@ HERO_IMAGE = ROOT / "assets" / "profile-badges" / "ff16b3b6-41d3-43eb-ad02-34a73
 HERO_REFERENCE = "assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png"
 HERO_SIZE = 2_947_658
 HERO_SHA256 = "f99901f3da31c68441d471a92dcf9c7829681c8ec390286159b78eea97a5bcd0"
-HEADER_ASSET_COMMIT = "fdc1c626a28c8645a0a78765a67750d9ed6dfc1c"
+HEADER_ASSET_COMMIT = "728f63099e17078df29db3d660a52ebc49406e9d"
 
 REMOVED_SVGS = (
     ROOT / "assets" / "qe-command-center.svg",
@@ -167,9 +167,8 @@ if ">Reproducibility</text>" not in repro or ">over Optics</text>" not in repro:
 
 for relative in HEADER_SVGS:
     content = (ROOT / relative).read_text(encoding="utf-8")
-    expected_size = 'font-size="24"' if "desktop" in relative else 'font-size="23"'
-    if expected_size not in content:
-        fail(f"Responsive thesis header has the wrong reviewed type size: {relative}")
+    if 'font-size="23"' not in content:
+        fail(f"Responsive thesis header must use the reviewed 23px type size: {relative}")
     expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
     if f'fill="{expected_fill}"' not in content:
         fail(f"Responsive thesis header has the wrong explicit theme color: {relative}")
@@ -181,6 +180,6 @@ for relative in HEADER_SVGS:
 print(
     "Profile validation passed: the thesis table keeps its responsive 28/72 split; Principle badges use "
     "the restored fitted 23px typography; Oracle retains its wider canvas; anchor-free responsive thesis "
-    "header SVGs provide equal mobile sizing and reviewed 24px desktop-only sizing with explicit light/dark colors; "
+    "header SVGs use the reviewed 23px size across desktop/mobile with explicit light/dark colors; "
     "and all Signal Field and reviewed profile SVG references remain restricted and deterministic."
 )
