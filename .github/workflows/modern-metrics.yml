@@ -1,0 +1,48 @@
+name: Update modern GitHub metrics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/modern-metrics.yml"
+  schedule:
+    - cron: "11 4 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: modern-github-metrics
+  cancel-in-progress: false
+
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Generate modern metrics SVG
+        uses: mjun0812/github-metrics@6985679bdb91af47fb2e54446095174bdb8ea152 # v5.0.4
+        with:
+          user: portyu9
+          token: ${{ github.token }}
+          combined: "yes"
+          filename: profile/github-metrics-modern.svg
+          output_action: commit
+          output_condition: data-changed
+          committer_branch: main
+          committer_message: "chore: update modern GitHub metrics [skip ci]"
+          config_timezone: America/New_York
+          config_animations: "yes"
+          config_octicon: "yes"
+          plugin_header: "yes"
+          plugin_isocalendar: "yes"
+          plugin_isocalendar_duration: full-year
+          plugin_languages: "yes"
+          plugin_languages_limit: "8"
+          plugin_activity: "yes"
+          plugin_activity_limit: "6"
+          plugin_stars: "yes"
+          plugin_stars_limit: "4"
