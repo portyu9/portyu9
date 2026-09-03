@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Validate the reviewed GitHub profile presentation contract.
 
-The profile intentionally mixes authored SVG assets, responsive HTML, and generated
-Signal Field artifacts. This validator protects the user-visible contract rather than
-merely checking file existence: exact responsive tiers, mobile-landscape behavior,
-reviewed wording, copyright posture, asset safety, immutable thesis-header refs, and
-repository asset hygiene.
+The profile intentionally mixes reviewed third-party badges, authored SVG assets,
+responsive HTML, and generated Signal Field artifacts. This validator protects the
+user-visible contract: exact badge rendering tiers, mobile-landscape behavior,
+reviewed wording, copyright posture, asset safety, immutable thesis-header refs,
+and repository asset hygiene.
 """
 
 from __future__ import annotations
@@ -23,6 +23,25 @@ HERO_SIZE = 2_947_658
 HERO_SHA256 = "f99901f3da31c68441d471a92dcf9c7829681c8ec390286159b78eea97a5bcd0"
 HEADER_ASSET_COMMIT = "44471c9ba38958e601bc602557dfa0642633f897"
 
+SELF_HOSTED_BADGES = (
+    "assets/profile-badges/badge-ai-enabled-qe.svg",
+    "assets/profile-badges/badge-web-ui.svg",
+    "assets/profile-badges/badge-api.svg",
+    "assets/profile-badges/badge-graphql.svg",
+    "assets/profile-badges/badge-mobile.svg",
+    "assets/profile-badges/badge-ci-cd.svg",
+    "assets/profile-badges/badge-unit.svg",
+    "assets/profile-badges/badge-component.svg",
+    "assets/profile-badges/badge-integration.svg",
+    "assets/profile-badges/badge-contract.svg",
+    "assets/profile-badges/badge-e2e.svg",
+    "assets/profile-badges/badge-database-persistence.svg",
+    "assets/profile-badges/badge-visual-regression.svg",
+    "assets/profile-badges/badge-accessibility.svg",
+    "assets/profile-badges/badge-security.svg",
+    "assets/profile-badges/badge-performance.svg",
+)
+
 RETIRED_ASSETS = (
     "assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png",
     "assets/profile-badges/nameplate-yunior-portal-v1.svg",
@@ -30,25 +49,25 @@ RETIRED_ASSETS = (
     "assets/profile-badges/table-header-engineering-contract-v2.svg",
     "assets/profile-badges/table-header-principle-v1.svg",
     "assets/profile-badges/table-header-principle-v2.svg",
-)
+) + SELF_HOSTED_BADGES
 
-BADGES = (
-    ("badge-ai-enabled-qe.svg", "AI-Enabled QE", 91, "#FF2BD6"),
-    ("badge-web-ui.svg", "Web / UI", 59, "#7A5CFF"),
-    ("badge-api.svg", "API", 29, "#00AEEF"),
-    ("badge-graphql.svg", "GraphQL", 59, "#E10098"),
-    ("badge-mobile.svg", "Mobile", 45, "#00BFA6"),
-    ("badge-ci-cd.svg", "CI/CD", 43, "#665CFF"),
-    ("badge-unit.svg", "Unit", 33, "#16A34A"),
-    ("badge-component.svg", "Component", 73, "#00A6C7"),
-    ("badge-integration.svg", "Integration", 71, "#7F5AF0"),
-    ("badge-contract.svg", "Contract", 57, "#FF3CAC"),
-    ("badge-e2e.svg", "E2E", 31, "#008CFF"),
-    ("badge-database-persistence.svg", "Database / Persistence", 137, "#0D9488"),
-    ("badge-visual-regression.svg", "Visual Regression", 107, "#A020F0"),
-    ("badge-accessibility.svg", "Accessibility", 77, "#EA580C"),
-    ("badge-security.svg", "Security", 55, "#EA2B2B"),
-    ("badge-performance.svg", "Performance", 79, "#6FAF00"),
+SHIELD_BADGES = (
+    ("AI-Enabled QE", 91, "https://img.shields.io/badge/-AI--Enabled%20QE-FF2BD6?style=flat-square"),
+    ("Web / UI", 59, "https://img.shields.io/badge/-Web%20%2F%20UI-7A5CFF?style=flat-square"),
+    ("API", 29, "https://img.shields.io/badge/-API-00AEEF?style=flat-square"),
+    ("GraphQL", 59, "https://img.shields.io/badge/-GraphQL-E10098?style=flat-square"),
+    ("Mobile", 45, "https://img.shields.io/badge/-Mobile-00BFA6?style=flat-square"),
+    ("CI/CD", 43, "https://img.shields.io/badge/-CI%2FCD-665CFF?style=flat-square"),
+    ("Unit", 33, "https://img.shields.io/badge/-Unit-16A34A?style=flat"),
+    ("Component", 73, "https://img.shields.io/badge/-Component-00A6C7?style=flat"),
+    ("Integration", 71, "https://img.shields.io/badge/-Integration-7F5AF0?style=flat"),
+    ("Contract", 57, "https://img.shields.io/badge/-Contract-FF3CAC?style=flat"),
+    ("E2E", 31, "https://img.shields.io/badge/-E2E-008CFF?style=flat"),
+    ("Database / Persistence", 137, "https://img.shields.io/badge/-Database%20%2F%20Persistence-0D9488?style=flat"),
+    ("Visual Regression", 107, "https://img.shields.io/badge/-Visual%20Regression-A020F0?style=flat"),
+    ("Accessibility", 77, "https://img.shields.io/badge/-Accessibility-EA580C?style=flat"),
+    ("Security", 55, "https://img.shields.io/badge/-Security-EA2B2B?style=flat"),
+    ("Performance", 79, "https://img.shields.io/badge/-Performance-6FAF00?style=flat"),
 )
 
 IDENTITY_AND_PRINCIPLE_SVGS = (
@@ -64,7 +83,6 @@ IDENTITY_AND_PRINCIPLE_SVGS = (
     "assets/profile-badges/principle-safety-architecture.svg",
 )
 PRINCIPLE_BADGES = tuple(path for path in IDENTITY_AND_PRINCIPLE_SVGS if "/principle-" in path)
-BADGE_PATHS = tuple(f"assets/profile-badges/{filename}" for filename, _, _, _ in BADGES)
 
 HEADER_SVGS = (
     "assets/profile-badges/thesis-header-principle-mobile-light.svg",
@@ -126,34 +144,17 @@ def safe_svg(path: Path, label: str) -> str:
 
 
 def validate_badges(readme: str) -> None:
-    require("img.shields.io" not in readme, "Profile badges must be self-hosted; Shields.io runtime dependency remains")
-    require(
-        readme.count('media="(min-width: 1025px)"') == 16,
-        "Exactly 16 badge variants must use the reviewed wide-desktop 1025px breakpoint",
-    )
-    require(
-        readme.count('media="(min-width: 641px)" srcset="assets/profile-badges/badge-') == 0,
-        "Badges must not switch to desktop sizing at the phone-landscape 641px breakpoint",
-    )
+    prefix = '<picture><source media="(min-width: 641px)" srcset="https://img.shields.io/badge/'
+    require(readme.count(prefix) == 16, "Exactly 16 badges must use the restored Shields.io responsive contract")
+    require(readme.count('media="(min-width: 1025px)" srcset="assets/profile-badges/badge-') == 0, "Regressed self-hosted wide-desktop badge tier remains")
+    require(readme.count('height="24"><img alt=') == 16, "Every restored badge must render at 24px on the reviewed desktop tier")
+    require(readme.count('height="20"></picture>') == 16, "Every restored badge must retain its 20px mobile fallback")
 
-    for filename, label, width, color in BADGES:
-        relative = f"assets/profile-badges/{filename}"
-        content = safe_svg(ROOT / relative, relative)
-        require(
-            f'width="{width}" height="20" viewBox="0 0 {width} 20"' in content,
-            f"Self-hosted badge geometry changed: {relative}",
-        )
-        require(f'aria-label="{label}"' in content, f"Badge accessible label changed: {relative}")
-        require(f"<title>{label}</title>" in content, f"Badge title changed: {relative}")
-        require(f'fill="{color}"' in content, f"Badge reviewed color changed: {relative}")
-
-        source = (
-            f'<source media="(min-width: 1025px)" srcset="{relative}" '
-            f'width="{width}" height="24">'
-        )
-        fallback = f'<img alt="{label}" src="{relative}" width="{width}" height="20">'
-        require(readme.count(source) == 1, f"Wide-desktop 24px badge source missing: {label}")
-        require(readme.count(fallback) == 1, f"20px mobile/tablet badge fallback missing: {label}")
+    for label, width, url in SHIELD_BADGES:
+        source = f'<source media="(min-width: 641px)" srcset="{url}" width="{width}" height="24">'
+        fallback = f'<img alt="{label}" src="{url}" width="{width}" height="20">'
+        require(readme.count(source) == 1, f"Restored 24px badge source changed: {label}")
+        require(readme.count(fallback) == 1, f"Restored 20px badge fallback changed: {label}")
 
 
 def validate_thesis_headers(readme: str) -> None:
@@ -169,10 +170,7 @@ def validate_thesis_headers(readme: str) -> None:
     for family in ("principle", "engineering-contract"):
         landscape_marker = f"thesis-header-{family}-mobile-dark.svg"
         desktop_marker = f"thesis-header-{family}-desktop-dark.svg"
-        require(
-            readme.find(landscape_marker) < readme.find(desktop_marker),
-            f"{family} landscape source must precede desktop source so phone landscape cannot regress",
-        )
+        require(readme.find(landscape_marker) < readme.find(desktop_marker), f"{family} landscape source must precede desktop source")
 
     for relative in HEADER_SVGS:
         content = safe_svg(ROOT / relative, relative)
@@ -186,19 +184,13 @@ def validate_thesis_headers(readme: str) -> None:
         "assets/profile-badges/thesis-header-principle-mobile-dark.svg",
     ):
         content = (ROOT / relative).read_text(encoding="utf-8")
-        require(
-            'width="136" height="40" viewBox="0 0 136 40"' in content and 'x="68"' in content,
-            f"Mobile Principle header must retain the confirmed 136px canvas: {relative}",
-        )
+        require('width="136" height="40" viewBox="0 0 136 40"' in content and 'x="68"' in content, f"Mobile Principle header canvas changed: {relative}")
     for relative in (
         "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
     ):
         content = (ROOT / relative).read_text(encoding="utf-8")
-        require(
-            'width="276" height="40" viewBox="0 0 276 40"' in content and 'x="138"' in content,
-            f"Mobile Engineering Contract header must retain the confirmed 276px canvas: {relative}",
-        )
+        require('width="276" height="40" viewBox="0 0 276 40"' in content and 'x="138"' in content, f"Mobile Engineering Contract header canvas changed: {relative}")
 
 
 def validate_references(readme: str) -> None:
@@ -211,7 +203,7 @@ def validate_references(readme: str) -> None:
         reference = match.group(1) or match.group(2) or match.group(3)
         references.append(reference.split("?", 1)[0].split("#", 1)[0].lstrip("./"))
 
-    allowed = set(IDENTITY_AND_PRINCIPLE_SVGS) | set(BADGE_PATHS) | set(HEADER_REFERENCES) | set(GENERATED_SVG_REFERENCES)
+    allowed = set(IDENTITY_AND_PRINCIPLE_SVGS) | set(HEADER_REFERENCES) | set(GENERATED_SVG_REFERENCES)
     unexpected = sorted(set(references) - allowed)
     missing = sorted(allowed - set(references))
     require(not unexpected, "README contains unapproved SVG references: " + ", ".join(unexpected))
@@ -262,11 +254,10 @@ def main() -> int:
     require(readme.find('alt="GitHub activity signal field"') < readme.find("© 2026 Ƴunior Ƥortal"), "Copyright notice must remain below Signal Field")
 
     print(
-        "Profile validation passed: the hero uses a stable descriptive path with the exact reviewed bytes; retired "
-        "profile assets remain absent; all 16 badges are self-hosted; 24px sizing is restricted to wide desktop "
-        "viewports >=1025px while mobile/tablet/phone-landscape remains 20px; the 37/63 thesis table preserves "
-        "its explicit landscape overrides and reviewed mobile canvases; centered headings, engineering wording, "
-        "copyright posture, immutable header refs, and all approved SVG safety contracts are locked."
+        "Profile validation passed: the exact reviewed Shields badge contract is restored at 24px desktop / 20px "
+        "mobile with its original font metrics; the regressed self-hosted badge assets remain absent; hero, 37/63 "
+        "thesis layout, mobile-landscape headers, centered headings, engineering wording, copyright posture, immutable "
+        "header refs, and approved SVG safety contracts remain locked."
     )
     return 0
 
