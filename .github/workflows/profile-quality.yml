@@ -49,5 +49,8 @@ jobs:
       - name: Validate Signal Field v2.6 phosphorescent metrics
         run: python3 scripts/phosphor-signal-field-v2.py --self-test
 
+      - name: Validate Signal Field v2.7 phosphorescent activity telemetry
+        run: python3 scripts/phosphor-activity-signal-field-v2.py --self-test
+
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile.py
