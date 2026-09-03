@@ -4,7 +4,8 @@
 The profile intentionally mixes authored SVG assets, responsive HTML, and generated
 Signal Field artifacts. This validator protects the user-visible contract rather than
 merely checking file existence: exact responsive tiers, mobile-landscape behavior,
-reviewed wording, copyright posture, asset safety, and immutable thesis-header refs.
+reviewed wording, copyright posture, asset safety, immutable thesis-header refs, and
+repository asset hygiene.
 """
 
 from __future__ import annotations
@@ -16,11 +17,20 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
-HERO_REFERENCE = "assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png"
+HERO_REFERENCE = "assets/profile-badges/quality-engineering-automation-systems.png"
 HERO_IMAGE = ROOT / HERO_REFERENCE
 HERO_SIZE = 2_947_658
 HERO_SHA256 = "f99901f3da31c68441d471a92dcf9c7829681c8ec390286159b78eea97a5bcd0"
 HEADER_ASSET_COMMIT = "44471c9ba38958e601bc602557dfa0642633f897"
+
+RETIRED_ASSETS = (
+    "assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png",
+    "assets/profile-badges/nameplate-yunior-portal-v1.svg",
+    "assets/profile-badges/table-header-engineering-contract-v1.svg",
+    "assets/profile-badges/table-header-engineering-contract-v2.svg",
+    "assets/profile-badges/table-header-principle-v1.svg",
+    "assets/profile-badges/table-header-principle-v2.svg",
+)
 
 BADGES = (
     ("badge-ai-enabled-qe.svg", "AI-Enabled QE", 91, "#FF2BD6"),
@@ -212,6 +222,10 @@ def main() -> int:
     require(README.is_file(), "README.md is missing")
     readme = README.read_text(encoding="utf-8")
 
+    for retired in RETIRED_ASSETS:
+        require(not (ROOT / retired).exists(), f"Retired asset must remain removed: {retired}")
+        require(retired not in readme, f"README references retired asset: {retired}")
+
     require(HERO_IMAGE.is_file(), f"Profile hero image is missing: {HERO_REFERENCE}")
     hero_bytes = HERO_IMAGE.read_bytes()
     require(len(hero_bytes) == HERO_SIZE, f"Profile hero image size changed: expected {HERO_SIZE}, got {len(hero_bytes)}")
@@ -248,7 +262,8 @@ def main() -> int:
     require(readme.find('alt="GitHub activity signal field"') < readme.find("© 2026 Ƴunior Ƥortal"), "Copyright notice must remain below Signal Field")
 
     print(
-        "Profile validation passed: all 16 badges are self-hosted; 24px sizing is restricted to wide desktop "
+        "Profile validation passed: the hero uses a stable descriptive path with the exact reviewed bytes; retired "
+        "profile assets remain absent; all 16 badges are self-hosted; 24px sizing is restricted to wide desktop "
         "viewports >=1025px while mobile/tablet/phone-landscape remains 20px; the 37/63 thesis table preserves "
         "its explicit landscape overrides and reviewed mobile canvases; centered headings, engineering wording, "
         "copyright posture, immutable header refs, and all approved SVG safety contracts are locked."
