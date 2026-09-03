@@ -128,7 +128,7 @@ def add_provenance(text: str, calendar_total: int, restricted_total: int) -> str
     root = match.group(0)
     for name, value in (
         ("data-contribution-total-sync", SYNC_ID),
-        ("data-contribution-total-source", "github-contribution-calendar-total"),
+        ("data-contribution-total-source", "github-profile-visible"),
         ("data-calendar-contributions", str(calendar_total)),
         ("data-restricted-contributions", str(restricted_total)),
         ("data-profile-visible-contributions", str(calendar_total)),
@@ -161,7 +161,7 @@ def validate(text: str, calendar_total: int, restricted_total: int) -> None:
     formatted = format_count(calendar_total)
     required_root_attrs = (
         f'data-contribution-total-sync="{SYNC_ID}"',
-        'data-contribution-total-source="github-contribution-calendar-total"',
+        'data-contribution-total-source="github-profile-visible"',
         f'data-calendar-contributions="{calendar_total}"',
         f'data-restricted-contributions="{restricted_total}"',
         f'data-profile-visible-contributions="{calendar_total}"',
