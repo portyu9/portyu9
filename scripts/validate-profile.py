@@ -99,10 +99,10 @@ for heading in REMOVED_SECTIONS:
 
 if readme.count('<table width="100%">') != 1:
     fail("Principle table must render at 100% README width")
-if readme.count('<th width="35%" align="center"><picture>') != 1:
-    fail("Principle header must use the responsive 35% picture cell")
-if readme.count('<th width="65%" align="center"><picture>') != 1:
-    fail("Engineering Contract header must use the responsive 65% picture cell")
+if readme.count('<th width="32%" align="center"><picture>') != 1:
+    fail("Principle header must use the responsive 32% picture cell")
+if readme.count('<th width="68%" align="center"><picture>') != 1:
+    fail("Engineering Contract header must use the responsive 68% picture cell")
 if '<img alt="◆ Principle"' not in readme:
     fail("Responsive Principle header fallback is missing")
 if '<img alt="▤ Engineering Contract"' not in readme:
@@ -179,7 +179,7 @@ for relative in HEADER_SVGS:
         fail(f"Engineering Contract header text changed: {relative}")
 
 print(
-    "Profile validation passed: the thesis table keeps its responsive 35/65 split; Principle badges use "
+    "Profile validation passed: the thesis table keeps its responsive 32/68 split; Principle badges use "
     "the restored fitted 23px typography; Oracle retains its wider canvas; anchor-free responsive thesis "
     "header SVGs use reviewed 22px desktop and 23px mobile sizing with explicit light/dark colors; "
     "and all Signal Field and reviewed profile SVG references remain restricted and deterministic."
