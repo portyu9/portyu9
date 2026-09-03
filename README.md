@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-<img alt="Ƴunior Ƥortal" height="68" src="assets/profile-badges/nameplate-yunior-portal-v2.svg">
+<img alt="Ƴunior Ƥortal" height="68" src="assets/profile-badges/nameplate-yunior-portal-v2.svg?text=black">
 </p>
 
 <p align="center">
