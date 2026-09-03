@@ -42,21 +42,11 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 
 <p align="center"><strong><em>Reason deliberately. Execute deterministically. Prove with attributable evidence.</em></strong></p>
 
-<table>
+<table width="100%">
 <thead>
 <tr>
-<th width="210" align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/profile-badges/table-header-principle-v3-dark.svg">
-  <img alt="◆ Principle" height="36" src="assets/profile-badges/table-header-principle-v3-light.svg">
-</picture>
-</th>
-<th width="450" align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/profile-badges/table-header-engineering-contract-v3-dark.svg">
-  <img alt="▤ Engineering contract" height="36" src="assets/profile-badges/table-header-engineering-contract-v3-light.svg">
-</picture>
-</th>
+<th width="28%" align="center"><big><strong>◆ Principle</strong></big></th>
+<th width="72%" align="center"><big><strong>▤ Engineering contract</strong></big></th>
 </tr>
 </thead>
 <tbody>
