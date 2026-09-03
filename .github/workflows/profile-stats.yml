@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - fix/signal-field-only-pr-20260902
     paths:
       - ".github/workflows/profile-stats.yml"
       - "scripts/customize-signal-field.py"
