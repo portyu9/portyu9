@@ -5,12 +5,14 @@ on:
   push:
     branches:
       - main
+      - feature/signal-field-v2-4-portal-20260903
     paths:
       - ".github/workflows/profile-stats.yml"
       - "scripts/customize-signal-field.py"
       - "scripts/polish-signal-field-v2.py"
       - "scripts/enhance-signal-field-v2.py"
       - "scripts/background-signal-field-v2.py"
+      - "scripts/portal-signal-field-v2.py"
   schedule:
     - cron: "17 5 * * *"
 
@@ -66,6 +68,11 @@ jobs:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: python3 source/scripts/background-signal-field-v2.py "$READY_DIR"
 
+      - name: Apply Signal Field v2.4 dimensional portal
+        env:
+          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: python3 source/scripts/portal-signal-field-v2.py "$READY_DIR"
+
       - name: Stage complete themed artifact set
         env:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
@@ -93,6 +100,11 @@ jobs:
           grep -q 'data-background="signal-field-v2.3"' artifacts/profile-stats/profile/signal-field-compact-light.svg
           grep -q 'data-background="signal-field-v2.3"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
           grep -q 'data-background-layer="evidence-topology"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-portal="signal-field-v2.4"' artifacts/profile-stats/profile/signal-field-wide-light.svg
+          grep -q 'data-portal="signal-field-v2.4"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-portal="signal-field-v2.4"' artifacts/profile-stats/profile/signal-field-compact-light.svg
+          grep -q 'data-portal="signal-field-v2.4"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-portal-layer="dimensional-core"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-intensity-scale="github-contribution-levels-0-4"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
           grep -q 'data-count-semantics="raw-github-contribution-counts"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-evidence-footer="true"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
