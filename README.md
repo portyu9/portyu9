@@ -90,7 +90,7 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 
 ---
 
-## ◉ Activity Metrics
+<h2 align="center">◉ Activity Metrics</h2>
 
 <div align="center">
 
