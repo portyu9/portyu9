@@ -37,5 +37,8 @@ jobs:
       - name: Validate Signal Field v2.2 evidence contract
         run: python3 scripts/enhance-signal-field-v2.py --self-test
 
+      - name: Validate Signal Field v2.3 background contract
+        run: python3 scripts/background-signal-field-v2.py --self-test
+
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile.py
