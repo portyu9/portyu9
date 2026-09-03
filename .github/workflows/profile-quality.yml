@@ -43,8 +43,11 @@ jobs:
       - name: Validate Signal Field v2.4 portal contract
         run: python3 scripts/portal-signal-field-v2.py --self-test
 
-      - name: Validate Signal Field v2.5 desktop metric alignment
+      - name: Validate Signal Field v2.5 layout alignment
         run: python3 scripts/align-signal-field-v2.py --self-test
+
+      - name: Validate Signal Field v2.6 phosphorescent metrics
+        run: python3 scripts/phosphor-signal-field-v2.py --self-test
 
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile.py
