@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Sync Signal Field's past-year contribution headline with GitHub profile semantics.
 
-GitHub's public profile can show anonymized private/restricted contributions when the
-user enables private contribution visibility. The contribution calendar total exposed
-to a viewer and ContributionsCollection.restrictedContributionsCount are separate
-GraphQL values, so the profile-visible total is their sum.
+GitHub's ContributionCalendar.totalContributions is the profile-visible contribution
+total for the queried user/time span. ContributionsCollection.restrictedContributionsCount
+is an informational subset of that calendar total when private/restricted contribution
+visibility is enabled; it must not be added again.
 
 This v2.9 post-processing layer queries those canonical GitHub values on every stats
 refresh and rewrites only the past-year headline plus its accessible description.
@@ -62,7 +62,7 @@ def format_count(value: int) -> str:
     return f"{value:,}"
 
 
-def fetch_profile_visible_total(token: str, username: str) -> tuple[int, int, int]:
+def fetch_profile_visible_total(token: str, username: str) -> tuple[int, int]:
     if not token:
         raise ValueError("GITHUB_TOKEN is required for GitHub GraphQL contribution sync")
     payload = json.dumps(
@@ -96,15 +96,18 @@ def fetch_profile_visible_total(token: str, username: str) -> tuple[int, int, in
         raise ValueError(f"GitHub user not found: {username}")
     collection = user.get("contributionsCollection") or {}
     calendar = collection.get("contributionCalendar") or {}
-    public_total = calendar.get("totalContributions")
+    calendar_total = calendar.get("totalContributions")
     restricted_total = collection.get("restrictedContributionsCount")
-    if not isinstance(public_total, int) or not isinstance(restricted_total, int):
+    if not isinstance(calendar_total, int) or not isinstance(restricted_total, int):
         raise ValueError("GitHub GraphQL contribution totals are missing or non-integer")
-    if public_total < 0 or restricted_total < 0:
+    if calendar_total < 0 or restricted_total < 0:
         raise ValueError("GitHub GraphQL returned a negative contribution count")
+    if restricted_total > calendar_total:
+        raise ValueError(
+            "restricted contribution subset exceeds contribution calendar total; GitHub semantics changed"
+        )
 
-    profile_visible_total = public_total + restricted_total
-    return public_total, restricted_total, profile_visible_total
+    return calendar_total, restricted_total
 
 
 def set_attr(element: str, name: str, value: str) -> str:
@@ -118,33 +121,23 @@ def set_attr(element: str, name: str, value: str) -> str:
     return element[:close] + f' {replacement}' + element[close:]
 
 
-def add_provenance(
-    text: str,
-    public_total: int,
-    restricted_total: int,
-    profile_visible_total: int,
-) -> str:
+def add_provenance(text: str, calendar_total: int, restricted_total: int) -> str:
     match = SVG_OPEN.search(text)
     if not match:
         raise ValueError("SVG root element is missing")
     root = match.group(0)
     for name, value in (
         ("data-contribution-total-sync", SYNC_ID),
-        ("data-contribution-total-source", "github-profile-visible"),
-        ("data-public-contributions", str(public_total)),
+        ("data-contribution-total-source", "github-contribution-calendar-total"),
+        ("data-calendar-contributions", str(calendar_total)),
         ("data-restricted-contributions", str(restricted_total)),
-        ("data-profile-visible-contributions", str(profile_visible_total)),
+        ("data-profile-visible-contributions", str(calendar_total)),
     ):
         root = set_attr(root, name, value)
     return text[: match.start()] + root + text[match.end() :]
 
 
-def sync_svg(
-    text: str,
-    public_total: int,
-    restricted_total: int,
-    profile_visible_total: int,
-) -> str:
+def sync_svg(text: str, calendar_total: int, restricted_total: int) -> str:
     headline_matches = HEADLINE.findall(text)
     if len(headline_matches) != 1:
         raise ValueError(
@@ -156,27 +149,22 @@ def sync_svg(
             f"expected exactly one accessible past-year contribution total, found {len(accessible_matches)}"
         )
 
-    formatted = format_count(profile_visible_total)
+    formatted = format_count(calendar_total)
     text = HEADLINE.sub(rf"\g<1>{formatted}\g<3>", text, count=1)
     text = ACCESSIBLE_TOTAL.sub(rf"\g<1>{formatted}\g<3>", text, count=1)
-    text = add_provenance(text, public_total, restricted_total, profile_visible_total)
-    validate(text, public_total, restricted_total, profile_visible_total)
+    text = add_provenance(text, calendar_total, restricted_total)
+    validate(text, calendar_total, restricted_total)
     return text
 
 
-def validate(
-    text: str,
-    public_total: int,
-    restricted_total: int,
-    profile_visible_total: int,
-) -> None:
-    formatted = format_count(profile_visible_total)
+def validate(text: str, calendar_total: int, restricted_total: int) -> None:
+    formatted = format_count(calendar_total)
     required_root_attrs = (
         f'data-contribution-total-sync="{SYNC_ID}"',
-        'data-contribution-total-source="github-profile-visible"',
-        f'data-public-contributions="{public_total}"',
+        'data-contribution-total-source="github-contribution-calendar-total"',
+        f'data-calendar-contributions="{calendar_total}"',
         f'data-restricted-contributions="{restricted_total}"',
-        f'data-profile-visible-contributions="{profile_visible_total}"',
+        f'data-profile-visible-contributions="{calendar_total}"',
     )
     for attr in required_root_attrs:
         if text.count(attr) != 1:
@@ -184,20 +172,17 @@ def validate(
 
     headline_matches = HEADLINE.findall(text)
     if len(headline_matches) != 1 or headline_matches[0][1] != formatted:
-        raise ValueError("visible Contributions headline does not match GitHub profile-visible total")
+        raise ValueError("visible Contributions headline does not match GitHub contribution calendar total")
     accessible_matches = ACCESSIBLE_TOTAL.findall(text)
     if len(accessible_matches) != 1 or accessible_matches[0][1] != formatted:
-        raise ValueError("accessible contribution description does not match GitHub profile-visible total")
+        raise ValueError("accessible contribution description does not match GitHub contribution calendar total")
 
 
 def apply_directory(directory: Path, token: str, username: str) -> None:
-    public_total, restricted_total, profile_visible_total = fetch_profile_visible_total(
-        token, username
-    )
+    calendar_total, restricted_total = fetch_profile_visible_total(token, username)
     print(
         "GitHub profile-visible contributions: "
-        f"calendar={public_total:,} + restricted={restricted_total:,} = "
-        f"profile={profile_visible_total:,}"
+        f"calendar/profile={calendar_total:,}; restricted subset={restricted_total:,}"
     )
     for filename in EXPECTED_FILES:
         path = directory / filename
@@ -205,12 +190,11 @@ def apply_directory(directory: Path, token: str, username: str) -> None:
             raise ValueError(f"missing generated Signal Field artifact: {filename}")
         synced = sync_svg(
             path.read_text(encoding="utf-8"),
-            public_total,
+            calendar_total,
             restricted_total,
-            profile_visible_total,
         )
         path.write_text(synced, encoding="utf-8")
-        print(f"profile-visible contribution total synced {filename} -> {profile_visible_total:,}")
+        print(f"profile-visible contribution total synced {filename} -> {calendar_total:,}")
 
 
 def fixture() -> str:
@@ -223,18 +207,18 @@ def fixture() -> str:
 
 
 def self_test() -> None:
-    public_total = 4_874
+    calendar_total = 5_030
     restricted_total = 156
-    profile_visible_total = 5_030
-    synced = sync_svg(fixture(), public_total, restricted_total, profile_visible_total)
-    validate(synced, public_total, restricted_total, profile_visible_total)
+    synced = sync_svg(fixture(), calendar_total, restricted_total)
+    validate(synced, calendar_total, restricted_total)
     assert ">5,030</text>" in synced
     assert "5,030 contributions in the past year;" in synced
-    assert 'data-public-contributions="4874"' in synced
+    assert 'data-calendar-contributions="5030"' in synced
     assert 'data-restricted-contributions="156"' in synced
+    assert 'data-profile-visible-contributions="5030"' in synced
     print(
         f"Signal Field profile-visible contribution sync self-test passed: {SYNC_ID}; "
-        "4,874 + 156 = 5,030"
+        "calendar/profile=5,030 with restricted subset=156"
     )
 
 
