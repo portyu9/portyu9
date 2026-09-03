@@ -30,7 +30,8 @@
 
 ---
 
-## ✦ Engineering Thesis
+<h2 align="center">✦ Engineering Thesis
+</h2>
 
 <table>
 <tr>
