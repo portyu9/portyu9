@@ -15,8 +15,9 @@ on:
       - "scripts/align-signal-field-v2.py"
       - "scripts/phosphor-signal-field-v2.py"
       - "scripts/phosphor-activity-signal-field-v2.py"
+      - "scripts/phosphor-lines-signal-field-v2.py"
   schedule:
-    - cron: "17 5 * * *"
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: write
@@ -90,6 +91,11 @@ jobs:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: python3 source/scripts/phosphor-activity-signal-field-v2.py "$READY_DIR"
 
+      - name: Apply Signal Field v2.8 phosphorescent metric lines
+        env:
+          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: python3 source/scripts/phosphor-lines-signal-field-v2.py "$READY_DIR"
+
       - name: Stage complete themed artifact set
         env:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
@@ -145,6 +151,20 @@ jobs:
           grep -q 'data-telemetry-phosphor="peak_date"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-telemetry-phosphor="peak_count"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-telemetry-phosphor="peak_count"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-line-phosphor="signal-field-v2.8"' artifacts/profile-stats/profile/signal-field-wide-light.svg
+          grep -q 'data-line-phosphor="signal-field-v2.8"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-line-phosphor="signal-field-v2.8"' artifacts/profile-stats/profile/signal-field-compact-light.svg
+          grep -q 'data-line-phosphor="signal-field-v2.8"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-metric-phosphor-line="contributions"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-metric-phosphor-line="stars"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-metric-phosphor-line="pull_requests"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-metric-phosphor-line="issues"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-metric-phosphor-line="contributions"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-metric-phosphor-line="stars"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-metric-phosphor-line="pull_requests"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-metric-phosphor-line="issues"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-refresh-cadence="5-minutes"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'Refresh cadence: every 5 minutes.' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-intensity-scale="github-contribution-levels-0-4"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
           grep -q 'data-count-semantics="raw-github-contribution-counts"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-evidence-footer="true"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
