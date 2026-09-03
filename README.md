@@ -1,3 +1,7 @@
+<p align="center">
+<img alt="Quality Engineering Automation Systems" src="assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png">
+</p>
+
 <h1 align="center">Ƴunior Ƥortal</h1>
 
 <p align="center">
@@ -39,8 +43,8 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 <table>
 <thead>
 <tr>
-<th width="360">◆ Principle</th>
-<th>▤ Engineering contract</th>
+<th width="360"><big>◆ Principle</big></th>
+<th><big>▤ Engineering contract</big></th>
 </tr>
 </thead>
 <tbody>
