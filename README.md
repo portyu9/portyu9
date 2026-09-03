@@ -85,3 +85,22 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 #### It is earned when evidence is traceable, oracles are explicit, and failure is attributable.
 
 </div>
+
+<br>
+
+<div align="center">
+
+<p><strong>GitHub Activity · Signal Field</strong></p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="profile/signal-field-wide-dark.svg">
+  <img alt="GitHub activity signal field" src="profile/signal-field-wide-light.svg" width="100%">
+</picture>
+
+<br><br>
+
+<p><strong>GitHub Metrics · Modern Rich View</strong></p>
+
+<img alt="GitHub metrics — modern rich view" src="profile/github-metrics-modern.svg" width="100%">
+
+</div>
