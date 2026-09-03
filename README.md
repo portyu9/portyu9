@@ -42,6 +42,8 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 
 <p align="center"><strong><em>Reason deliberately. Execute deterministically. Prove with attributable evidence.</em></strong></p>
 
+<br>
+
 <table width="100%">
 <thead>
 <tr>
