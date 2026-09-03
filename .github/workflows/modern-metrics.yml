@@ -32,7 +32,7 @@ jobs:
           filename: profile/github-metrics-modern.svg
           output_action: commit
           output_condition: data-changed
-          committer_branch: main
+          committer_branch: generated/github-metrics
           committer_message: "chore: update modern GitHub metrics [skip ci]"
           config_timezone: America/New_York
           config_animations: "yes"
