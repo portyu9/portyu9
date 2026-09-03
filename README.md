@@ -30,13 +30,12 @@
 
 ---
 
-<h2 align="center">✦ Engineering Thesis
-</h2>
+<h2 align="center">✦ Engineering Thesis</h2>
 
 <table>
 <tr>
 <td>
-Quality engineering is the discipline of <strong>reducing uncertainty about change</strong>. I design systems that collect evidence at the narrowest conclusive layer, separate reasoning from authority, and preserve the limits of every oracle. A green state should explain exactly <strong>what was proven, by which evidence, against which subject, and under which execution boundary</strong>.
+I treat quality engineering as the discipline of <strong>reducing uncertainty about change</strong>. I design systems that collect evidence at the narrowest layer sufficient to support a conclusion, separate reasoning from authority, and preserve the scope and limits of every oracle. A green state should make explicit <strong>what the evidence establishes, for which subject and revision, in which environment, through which oracle, and under which execution boundary</strong>.
 </td>
 </tr>
 </table>
@@ -59,7 +58,7 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 </tr>
 <tr>
 <td align="center"><img alt="Reasoning without / Self-authorization" height="84" src="assets/profile-badges/principle-reasoning-authorization.svg?fit=20260903-font23r-b"></td>
-<td>AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth.</td>
+<td>AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal pass/fail state.</td>
 </tr>
 <tr>
 <td align="center"><img alt="Attribution before / Abstraction" height="84" src="assets/profile-badges/principle-attribution-abstraction.svg?fit=20260903-font23r-c"></td>
@@ -71,7 +70,7 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 </tr>
 <tr>
 <td align="center"><img alt="Reproducibility over Optics" height="84" src="assets/profile-badges/principle-reproducibility-optics.svg?fit=20260903-font23r-e"></td>
-<td>CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove.</td>
+<td>CI should make runtime, dependency, target, security, and evidence contracts explicit and verifiable; a green workflow should claim no more than those signals establish.</td>
 </tr>
 <tr>
 <td align="center"><img alt="Safety by / Architecture" height="84" src="assets/profile-badges/principle-safety-architecture.svg?fit=20260903-font23r-f"></td>
@@ -84,7 +83,7 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 
 <div align="center">
 
-#### Confidence is not proportional to automation volume.  
+#### Confidence does not scale with automation volume alone.  
 #### It is earned when evidence is traceable, oracles are explicit, and failure is attributable.
 
 </div>
@@ -108,7 +107,6 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 
 <p align="center">
 <sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub><br>
-<sub>Original branding, artwork, README design, and custom Signal Field visuals are not licensed for reuse or redistribution.</sub><br>
-<sub>No repository-wide open-source license is granted unless expressly stated for a specific file or component.</sub><br>
-<sub>Code and scripts are governed only by any explicit license attached to that specific component; otherwise no reuse permission is granted.</sub>
+<sub>Except where a specific file or component expressly states otherwise, no license is granted to copy, modify, redistribute, or reuse original README text and composition, branding, artwork, or custom Signal Field modifications and visual treatment.</sub><br>
+<sub>Third-party components remain subject to their respective licenses and terms.</sub>
 </p>
