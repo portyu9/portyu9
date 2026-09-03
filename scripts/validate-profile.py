@@ -131,8 +131,8 @@ for relative in ALLOWED_SVGS:
 
 for relative in PRINCIPLE_BADGES:
     content = (ROOT / relative).read_text(encoding="utf-8")
-    if 'font-size="20"' in content or 'font-size="21"' not in content:
-        fail(f"Principle badge labels must use the reviewed 21px type size: {relative}")
+    if 'font-size="23"' not in content:
+        fail(f"Principle badge labels must use the reviewed 23px type size: {relative}")
 
 repro = (ROOT / "assets/profile-badges/principle-reproducibility-optics.svg").read_text(encoding="utf-8")
 if ">Reproducibility</text>" not in repro or ">over Optics</text>" not in repro:
@@ -142,6 +142,6 @@ print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
     "stays absent, approved local badge SVGs are present, the Principle table spans the README at a "
     "responsive 28/72 split with anchor-free theme-safe native headers, Principle badge labels use the "
-    "reviewed 21px size, responsive Signal Field artifact-branch SVG URLs are explicit, and README SVG "
+    "reviewed 23px size, responsive Signal Field artifact-branch SVG URLs are explicit, and README SVG "
     "references remain restricted to the reviewed profile set."
 )
