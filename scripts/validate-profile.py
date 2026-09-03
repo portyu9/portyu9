@@ -113,8 +113,8 @@ if signal_field_position < 0 or activity_heading_position > signal_field_positio
 badge_picture_prefix = '<picture><source media="(min-width: 641px)" srcset="https://img.shields.io/badge/'
 if readme.count(badge_picture_prefix) != 16:
     fail("QE Domain and Test Architecture badges must provide exactly 16 desktop-only responsive variants")
-if readme.count('height="22"><img alt=') != 16:
-    fail("Every responsive profile badge must render at 22px on desktop")
+if readme.count('height="24"><img alt=') != 16:
+    fail("Every responsive profile badge must render at 24px on desktop")
 if readme.count('height="20"></picture>') != 16:
     fail("Every responsive profile badge must preserve the 20px mobile fallback")
 
@@ -216,7 +216,7 @@ for relative in (
         fail(f"Mobile Engineering Contract header must retain the stabilized 299.5px intrinsic canvas: {relative}")
 
 print(
-    "Profile validation passed: QE Domain and Test Architecture badges use responsive 22px desktop / 20px "
+    "Profile validation passed: QE Domain and Test Architecture badges use responsive 24px desktop / 20px "
     "mobile sizing; the thesis table keeps its responsive 37/63 split; Activity Metrics uses the reviewed "
     "centered ◉ H2 treatment; Principle badges use the restored fitted 23px typography; Oracle retains its "
     "wider canvas; anchor-free responsive thesis header SVGs use reviewed 21px desktop and 23px mobile sizing; "
