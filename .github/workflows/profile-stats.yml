@@ -9,6 +9,7 @@ on:
       - ".github/workflows/profile-stats.yml"
       - "scripts/customize-signal-field.py"
       - "scripts/polish-signal-field-v2.py"
+      - "scripts/enhance-signal-field-v2.py"
   schedule:
     - cron: "17 5 * * *"
 
@@ -54,6 +55,11 @@ jobs:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: python3 source/scripts/polish-signal-field-v2.py "$READY_DIR"
 
+      - name: Apply Signal Field v2.2 evidence contract
+        env:
+          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: python3 source/scripts/enhance-signal-field-v2.py "$READY_DIR"
+
       - name: Stage complete themed artifact set
         env:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
@@ -72,6 +78,13 @@ jobs:
           grep -q 'data-polish="signal-field-v2.1"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-polish="signal-field-v2.1"' artifacts/profile-stats/profile/signal-field-compact-light.svg
           grep -q 'data-polish="signal-field-v2.1"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-enhancement="signal-field-v2.2"' artifacts/profile-stats/profile/signal-field-wide-light.svg
+          grep -q 'data-enhancement="signal-field-v2.2"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-enhancement="signal-field-v2.2"' artifacts/profile-stats/profile/signal-field-compact-light.svg
+          grep -q 'data-enhancement="signal-field-v2.2"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-intensity-scale="github-contribution-levels-0-4"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-count-semantics="raw-github-contribution-counts"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-evidence-footer="true"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
           grep -q 'data-activity-layout="month-calendar-v2"' artifacts/profile-stats/profile/signal-field-wide-light.svg
           grep -q 'data-activity-layout="month-calendar-v2"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-activity-columns="7"' artifacts/profile-stats/profile/signal-field-wide-light.svg
