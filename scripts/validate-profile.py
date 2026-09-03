@@ -24,10 +24,6 @@ ALLOWED_SVGS = (
     "assets/profile-badges/identity-quality-engineering.svg",
     "assets/profile-badges/identity-automation-architecture.svg",
     "assets/profile-badges/identity-ai-quality-systems.svg",
-    "assets/profile-badges/table-header-principle-v3-light.svg",
-    "assets/profile-badges/table-header-principle-v3-dark.svg",
-    "assets/profile-badges/table-header-engineering-contract-v3-light.svg",
-    "assets/profile-badges/table-header-engineering-contract-v3-dark.svg",
     "assets/profile-badges/principle-evidence-confidence.svg",
     "assets/profile-badges/principle-reasoning-authorization.svg",
     "assets/profile-badges/principle-attribution-abstraction.svg",
@@ -80,12 +76,16 @@ for heading in REMOVED_SECTIONS:
     if heading in readme:
         fail(f"Removed profile section is still present: {heading}")
 
-if readme.count('<th width="210" align="center">') != 1:
-    fail("Principle table must keep the compact 210px Principle column")
-if readme.count('<th width="450" align="center">') != 1:
-    fail("Engineering contract table must keep the expanded 450px contract column")
-if "table-header-principle-v2.svg" in readme or "table-header-engineering-contract-v2.svg" in readme:
-    fail("README must not use theme-sensitive v2 table header SVGs")
+# The thesis table must consume the full README width. Percentage columns keep the
+# Principle side constrained while allowing Engineering contract to take all remaining room.
+if readme.count('<table width="100%">') != 1:
+    fail("Principle table must render at 100% README width")
+if readme.count('<th width="28%" align="center"><big><strong>◆ Principle</strong></big></th>') != 1:
+    fail("Principle table must keep the responsive 28% Principle column and native header")
+if readme.count('<th width="72%" align="center"><big><strong>▤ Engineering contract</strong></big></th>') != 1:
+    fail("Engineering contract table must consume the remaining 72% width with a native header")
+if "table-header-principle" in readme or "table-header-engineering-contract" in readme:
+    fail("Table headers must use native GitHub text, not theme-sensitive SVG images")
 
 svg_pattern = re.compile(
     r'''(?:<img\b[^>]*\bsrc=["']([^"']+\.svg(?:[?#][^"']*)?)["']|<source\b[^>]*\bsrcset=["']([^"']+\.svg(?:[?#][^"']*)?)["']|!\[[^\]]*\]\(([^)]+\.svg(?:[?#][^)]*)?)\))''',
@@ -117,24 +117,13 @@ for relative in ALLOWED_SVGS:
         if forbidden in lowered:
             fail(f"Profile badge SVG contains forbidden content {forbidden!r}: {relative}")
 
-header_contracts = {
-    "assets/profile-badges/table-header-principle-v3-light.svg": 'fill="#24292F"',
-    "assets/profile-badges/table-header-principle-v3-dark.svg": 'fill="#F0F6FC"',
-    "assets/profile-badges/table-header-engineering-contract-v3-light.svg": 'fill="#24292F"',
-    "assets/profile-badges/table-header-engineering-contract-v3-dark.svg": 'fill="#F0F6FC"',
-}
-for relative, required_fill in header_contracts.items():
-    content = (ROOT / relative).read_text(encoding="utf-8")
-    if required_fill not in content or "prefers-color-scheme" in content:
-        fail(f"Table header theme variant is not explicit and deterministic: {relative}")
-
 repro = (ROOT / "assets/profile-badges/principle-reproducibility-optics.svg").read_text(encoding="utf-8")
 if ">Reproducibility</text>" not in repro or ">over Optics</text>" not in repro:
     fail("Reproducibility principle must render as 'Reproducibility' over 'over Optics'")
 
 print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
-    "stays absent, approved local badge SVGs are present, responsive table headers use explicit theme "
-    "variants, the Principle/contract column balance is constrained, responsive Signal Field artifact-branch "
-    "SVG URLs are explicit, and README SVG references remain restricted to the reviewed profile set."
+    "stays absent, approved local badge SVGs are present, the Principle table spans the README at a "
+    "responsive 28/72 split with native theme-safe headers, responsive Signal Field artifact-branch SVG "
+    "URLs are explicit, and README SVG references remain restricted to the reviewed profile set."
 )
