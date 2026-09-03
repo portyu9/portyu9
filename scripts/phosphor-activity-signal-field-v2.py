@@ -47,14 +47,15 @@ COLORED_SUMMARY = re.compile(
     r'(?=[^>]*\bdata-activity-summary-phosphor="true")[^>]*>.*?</text>',
     re.I | re.S,
 )
-WIDE_CONTENT = re.compile(
+ACTIVITY_CONTENT = re.compile(
     r"^ACTIVE (?P<active>\d+)/30 · STREAK (?P<streak>\d+) · "
     r"PEAK (?P<peak_date>[A-Z]{3} \d{2}) · (?P<peak_count>\d+)$"
 )
-COMPACT_CONTENT = re.compile(
-    r"^ACTIVE (?P<active>\d+)/30 · STREAK (?P<streak>\d+) · "
-    r"PEAK (?P<peak_count>\d+)$"
-)
+
+WIDE_FOOTER_DAILY = "SOURCE · GITHUB GRAPHQL · REFRESH · DAILY"
+WIDE_FOOTER_5M = "SOURCE · GITHUB GRAPHQL · REFRESH · 5 MIN"
+COMPACT_FOOTER_DAILY = "30 UTC DAYS · GITHUB GRAPHQL · LEVELS 0–4 · DAILY"
+COMPACT_FOOTER_5M = "30 UTC DAYS · GITHUB GRAPHQL · LEVELS 0–4 · 5 MIN"
 
 
 def scheme_for(path: Path) -> str:
@@ -116,41 +117,43 @@ def separator() -> str:
 
 def render_colored_summary(element: str, layout: str, scheme: str) -> str:
     content = summary_content(element)
+    match = ACTIVITY_CONTENT.fullmatch(content)
+    if not match:
+        raise ValueError(f"unexpected {layout} activity summary: {content!r}")
+
     palette = COLORS[scheme]
-    if layout == "wide":
-        match = WIDE_CONTENT.fullmatch(content)
-        if not match:
-            raise ValueError(f"unexpected wide activity summary: {content!r}")
-        parts = (
-            tspan(f'ACTIVE {match.group("active")}/30', palette["active"], "active"),
-            separator(),
-            tspan(f'STREAK {match.group("streak")}', palette["streak"], "streak"),
-            separator(),
-            tspan(
-                f'PEAK {match.group("peak_date")}',
-                palette["peak_date"],
-                "peak_date",
-            ),
-            separator(),
-            tspan(match.group("peak_count"), palette["peak_count"], "peak_count"),
-        )
-    elif layout == "compact":
-        match = COMPACT_CONTENT.fullmatch(content)
-        if not match:
-            raise ValueError(f"unexpected compact activity summary: {content!r}")
-        parts = (
-            tspan(f'ACTIVE {match.group("active")}/30', palette["active"], "active"),
-            separator(),
-            tspan(f'STREAK {match.group("streak")}', palette["streak"], "streak"),
-            separator(),
-            tspan(f'PEAK {match.group("peak_count")}', palette["peak_count"], "peak_count"),
-        )
-    else:
-        raise ValueError(f"unsupported layout: {layout}")
+    parts = (
+        tspan(f'ACTIVE {match.group("active")}/30', palette["active"], "active"),
+        separator(),
+        tspan(f'STREAK {match.group("streak")}', palette["streak"], "streak"),
+        separator(),
+        tspan(
+            f'PEAK {match.group("peak_date")}',
+            palette["peak_date"],
+            "peak_date",
+        ),
+        separator(),
+        tspan(match.group("peak_count"), palette["peak_count"], "peak_count"),
+    )
 
     opening_end = element.find(">")
     opening = set_attr(element[: opening_end + 1], "data-activity-summary-phosphor", "true")
     return opening + "".join(parts) + "</text>"
+
+
+def update_visible_refresh_footer(text: str, layout: str) -> str:
+    if layout == "wide":
+        old, new = WIDE_FOOTER_DAILY, WIDE_FOOTER_5M
+    elif layout == "compact":
+        old, new = COMPACT_FOOTER_DAILY, COMPACT_FOOTER_5M
+    else:
+        raise ValueError(f"unsupported layout: {layout}")
+
+    if text.count(old) != 1:
+        raise ValueError(
+            f"expected exactly one {layout} daily evidence footer before v2.7"
+        )
+    return text.replace(old, new, 1)
 
 
 def color_activity_summary(text: str, layout: str, scheme: str) -> str:
@@ -162,6 +165,7 @@ def color_activity_summary(text: str, layout: str, scheme: str) -> str:
     original = matches[0]
     colored = render_colored_summary(original, layout, scheme)
     text = text.replace(original, colored, 1)
+    text = update_visible_refresh_footer(text, layout)
     text = add_provenance(text)
     validate(text, layout, scheme)
     return text
@@ -179,15 +183,9 @@ def validate(text: str, layout: str, scheme: str) -> None:
     content_patterns = {
         "active": r"ACTIVE \d+/30",
         "streak": r"STREAK \d+",
-        "peak_count": r"PEAK \d+",
+        "peak_date": r"PEAK [A-Z]{3} \d{2}",
+        "peak_count": r"\d+",
     }
-    if layout == "wide":
-        content_patterns = {
-            "active": r"ACTIVE \d+/30",
-            "streak": r"STREAK \d+",
-            "peak_date": r"PEAK [A-Z]{3} \d{2}",
-            "peak_count": r"\d+",
-        }
 
     for token, content_pattern in content_patterns.items():
         pattern = re.compile(
@@ -199,12 +197,15 @@ def validate(text: str, layout: str, scheme: str) -> None:
         if len(pattern.findall(summary)) != 1:
             raise ValueError(f"{layout} telemetry token {token!r} is not correctly phosphor themed")
 
-    separator_count = summary.count('data-telemetry-separator="true"')
-    expected_separator_count = 3 if layout == "wide" else 2
-    if separator_count != expected_separator_count:
-        raise ValueError(
-            f"{layout} telemetry must retain {expected_separator_count} neutral separators"
-        )
+    if summary.count('data-telemetry-separator="true"') != 3:
+        raise ValueError(f"{layout} telemetry must retain three neutral separators")
+
+    expected_footer = WIDE_FOOTER_5M if layout == "wide" else COMPACT_FOOTER_5M
+    stale_footer = WIDE_FOOTER_DAILY if layout == "wide" else COMPACT_FOOTER_DAILY
+    if text.count(expected_footer) != 1:
+        raise ValueError(f"{layout} evidence footer must show the five-minute cadence")
+    if stale_footer in text:
+        raise ValueError(f"{layout} evidence footer still shows the stale daily cadence")
 
 
 def apply_directory(directory: Path) -> None:
@@ -221,19 +222,20 @@ def apply_directory(directory: Path) -> None:
 
 def fixture(layout: str, scheme: str) -> str:
     fill = "#A7B0C4" if scheme == "dark" else "#5B6475"
+    content = "ACTIVE 26/30 · STREAK 16 · PEAK SEP 02 · 674"
     if layout == "wide":
-        content = "ACTIVE 26/30 · STREAK 16 · PEAK SEP 02 · 674"
         summary = (
             f'<text x="30" y="199" fill="{fill}" font-size="9" font-weight="600" '
             f'data-activity-summary="true">{content}</text>'
         )
+        footer = f'<text>{WIDE_FOOTER_DAILY}</text>'
     else:
-        content = "ACTIVE 26/30 · STREAK 16 · PEAK 674"
         summary = (
             f'<text x="22" y="285" fill="{fill}" font-size="7.5" font-weight="600" '
             f'data-activity-summary="true">{content}</text>'
         )
-    return f'<svg xmlns="http://www.w3.org/2000/svg">{summary}</svg>'
+        footer = f'<text>{COMPACT_FOOTER_DAILY}</text>'
+    return f'<svg xmlns="http://www.w3.org/2000/svg">{summary}{footer}</svg>'
 
 
 def self_test() -> None:
@@ -243,11 +245,10 @@ def self_test() -> None:
             validate(themed, layout, scheme)
             assert f'data-activity-phosphor="{PHOSPHOR_ID}"' in themed
             assert 'data-activity-summary-phosphor="true"' in themed
-            if layout == "wide":
-                assert "PEAK SEP 02" in themed
-                assert ">674</tspan>" in themed
-            else:
-                assert "PEAK 674" in themed
+            assert "PEAK SEP 02" in themed
+            assert ">674</tspan>" in themed
+            expected_footer = WIDE_FOOTER_5M if layout == "wide" else COMPACT_FOOTER_5M
+            assert expected_footer in themed
     print(f"Signal Field activity phosphor self-test passed: {PHOSPHOR_ID}")
 
 
