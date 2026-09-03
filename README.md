@@ -45,33 +45,33 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 <table width="100%">
 <thead>
 <tr>
-<th width="28%" align="center"><h3>◆&nbsp;Principle</h3></th>
-<th width="72%" align="center"><h3>▤&nbsp;Engineering contract</h3></th>
+<th width="28%" align="center"><big><strong>◆&nbsp;Principle</strong></big></th>
+<th width="72%" align="center"><big><strong>▤&nbsp;Engineering contract</strong></big></th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td align="center"><img alt="Evidence before / Confidence" height="84" src="assets/profile-badges/principle-evidence-confidence.svg?fit=20260903a"></td>
+<td align="center"><img alt="Evidence before / Confidence" height="84" src="assets/profile-badges/principle-evidence-confidence.svg?fit=20260903-font21a"></td>
 <td>A conclusion should be traceable to the exact subject, revision, environment, execution, oracle, and artifacts that support it.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Reasoning without / Self-authorization" height="84" src="assets/profile-badges/principle-reasoning-authorization.svg?fit=20260903b"></td>
+<td align="center"><img alt="Reasoning without / Self-authorization" height="84" src="assets/profile-badges/principle-reasoning-authorization.svg?fit=20260903-font21b"></td>
 <td>AI may interpret, diagnose, rank risk, and propose; deterministic policy and validation retain authority over side effects and terminal truth.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Attribution before / Abstraction" height="84" src="assets/profile-badges/principle-attribution-abstraction.svg?fit=20260903c"></td>
+<td align="center"><img alt="Attribution before / Abstraction" height="84" src="assets/profile-badges/principle-attribution-abstraction.svg?fit=20260903-font21c"></td>
 <td>Keep failure domains separable so a broken schema, resolver, transport, browser state, device session, threshold, baseline, dependency, or environment produces the right signal.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Oracle Discipline" height="44" src="assets/profile-badges/principle-oracle-discipline.svg?fit=20260903d"></td>
+<td align="center"><img alt="Oracle Discipline" height="44" src="assets/profile-badges/principle-oracle-discipline.svg?fit=20260903-font21d"></td>
 <td>Every oracle has a scope and a limit. A green visual diff, accessibility scan, contract check, or CI job may claim only what its evidence can actually establish.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Reproducibility over Optics" height="84" src="assets/profile-badges/principle-reproducibility-optics.svg?fit=20260903e"></td>
+<td align="center"><img alt="Reproducibility over Optics" height="84" src="assets/profile-badges/principle-reproducibility-optics.svg?fit=20260903-font21e"></td>
 <td>CI should qualify explicit runtime, dependency, target, security, and evidence contracts; a green workflow should claim no more than those signals prove.</td>
 </tr>
 <tr>
-<td align="center"><img alt="Safety by / Architecture" height="84" src="assets/profile-badges/principle-safety-architecture.svg?fit=20260903f"></td>
+<td align="center"><img alt="Safety by / Architecture" height="84" src="assets/profile-badges/principle-safety-architecture.svg?fit=20260903-font21f"></td>
 <td>Mutation, external integration, sustained load, secrets, and other high-impact capabilities belong behind explicit ownership, authorization, budgets, and fail-closed boundaries.</td>
 </tr>
 </tbody>
