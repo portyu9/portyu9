@@ -9,7 +9,7 @@ HERO_IMAGE = ROOT / "assets" / "profile-badges" / "ff16b3b6-41d3-43eb-ad02-34a73
 HERO_REFERENCE = "assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png"
 HERO_SIZE = 2_947_658
 HERO_SHA256 = "f99901f3da31c68441d471a92dcf9c7829681c8ec390286159b78eea97a5bcd0"
-HEADER_ASSET_COMMIT = "20d8f182c0363b0c849f46eafcc4b6a0c0fe0a6f"
+HEADER_ASSET_COMMIT = "d0991a4c78006bb940bf85237fba6acdc783b87f"
 
 REMOVED_SVGS = (
     ROOT / "assets" / "qe-command-center.svg",
@@ -178,9 +178,18 @@ for relative in HEADER_SVGS:
     if "engineering-contract" in relative and ">▤ Engineering Contract</text>" not in content:
         fail(f"Engineering Contract header text changed: {relative}")
 
+for relative in (
+    "assets/profile-badges/thesis-header-principle-mobile-light.svg",
+    "assets/profile-badges/thesis-header-principle-mobile-dark.svg",
+):
+    content = (ROOT / relative).read_text(encoding="utf-8")
+    if 'width="129" height="40" viewBox="0 0 129 40"' not in content or 'x="64.5"' not in content:
+        fail(f"Mobile Principle header must retain the stabilized 129px intrinsic canvas: {relative}")
+
 print(
     "Profile validation passed: the thesis table keeps its responsive 35/65 split; Principle badges use "
     "the restored fitted 23px typography; Oracle retains its wider canvas; anchor-free responsive thesis "
-    "header SVGs use reviewed 21px desktop and 23px mobile sizing with explicit light/dark colors; "
-    "and all Signal Field and reviewed profile SVG references remain restricted and deterministic."
+    "header SVGs use reviewed 21px desktop and 23px mobile sizing; the mobile Principle header keeps its "
+    "stabilized 129px intrinsic canvas; and all Signal Field and reviewed profile SVG references remain "
+    "restricted and deterministic."
 )
