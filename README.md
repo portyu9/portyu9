@@ -95,10 +95,10 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 <div align="center">
 
 <picture>
-  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg">
-  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg">
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg">
-  <img alt="GitHub activity signal field" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg" width="100%">
+  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg?v=signal-field-v28-5m-20260903">
+  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg?v=signal-field-v28-5m-20260903">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg?v=signal-field-v28-5m-20260903">
+  <img alt="GitHub activity signal field" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg?v=signal-field-v28-5m-20260903" width="100%">
 </picture>
 
 </div>
