@@ -33,6 +33,11 @@ ALLOWED_SVGS = (
     "assets/profile-badges/principle-reproducibility-optics.svg",
     "assets/profile-badges/principle-safety-architecture.svg",
 )
+GENERATED_SVGS = (
+    "profile/github-metrics-modern.svg",
+    "profile/signal-field-wide-light.svg",
+    "profile/signal-field-wide-dark.svg",
+)
 
 
 def fail(message: str) -> None:
@@ -82,7 +87,7 @@ for match in svg_pattern.finditer(readme):
     reference = reference.split("?", 1)[0].split("#", 1)[0].lstrip("./")
     references.append(reference)
 
-allowed = set(ALLOWED_SVGS)
+allowed = set(ALLOWED_SVGS) | set(GENERATED_SVGS)
 unexpected = sorted(set(references) - allowed)
 missing_refs = sorted(allowed - set(references))
 if unexpected:
@@ -102,8 +107,15 @@ for relative in ALLOWED_SVGS:
         if forbidden in lowered:
             fail(f"Profile badge SVG contains forbidden content {forbidden!r}: {relative}")
 
+for relative in GENERATED_SVGS:
+    path = ROOT / relative
+    if not path.exists():
+        fail(f"Generated profile metrics SVG is missing: {relative}")
+    if path.stat().st_size == 0:
+        fail(f"Generated profile metrics SVG is empty: {relative}")
+
 print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
-    "stays absent, approved local badge SVGs are present, and README SVG references are restricted "
-    "to the reviewed badge set."
+    "stays absent, approved local badge SVGs are present, generated metrics SVG references are explicit, "
+    "and README SVG references remain restricted to the reviewed profile set."
 )
