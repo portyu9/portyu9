@@ -20,11 +20,12 @@ REMOVED_SECTIONS = (
     "## Engineering surface",
 )
 ALLOWED_SVGS = (
+    "assets/profile-badges/nameplate-yunior-portal-v2.svg",
     "assets/profile-badges/identity-quality-engineering.svg",
     "assets/profile-badges/identity-automation-architecture.svg",
     "assets/profile-badges/identity-ai-quality-systems.svg",
-    "assets/profile-badges/table-header-principle-v1.svg",
-    "assets/profile-badges/table-header-engineering-contract-v1.svg",
+    "assets/profile-badges/table-header-principle-v2.svg",
+    "assets/profile-badges/table-header-engineering-contract-v2.svg",
     "assets/profile-badges/principle-evidence-confidence.svg",
     "assets/profile-badges/principle-reasoning-authorization.svg",
     "assets/profile-badges/principle-attribution-abstraction.svg",
