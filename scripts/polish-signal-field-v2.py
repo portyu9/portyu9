@@ -6,7 +6,7 @@ refinements that should not be coupled to upstream data extraction:
 - clearer compact LESS/MORE legend spacing
 - attributable compact peak telemetry including the peak date
 - brighter weekday labels
-- quieter month markers
+- maximum-contrast month markers
 - a two-tier latest-day state with a cyan outer hairline
 - tighter five-week compact-card footer geometry
 
@@ -34,12 +34,14 @@ THEME_TOKENS = {
         "secondary": "#5B6475",
         "hairline": "#D9DFF0",
         "latest": "#00AEEF",
+        "month_marker": "#111827",
     },
     "dark": {
         "primary": "#F8FAFC",
         "secondary": "#A7B0C4",
         "hairline": "#28324A",
         "latest": "#00AEEF",
+        "month_marker": "#FFFFFF",
     },
 }
 
@@ -97,7 +99,7 @@ def set_attr(element: str, name: str, value: str) -> str:
         index = element.find(">")
     if index < 0:
         raise ValueError(f"cannot add attribute {name!r} to malformed element")
-    return element[:index] + f' {replacement}' + element[index:]
+    return element[:index] + f" {replacement}" + element[index:]
 
 
 def text_content(element: str, value: str) -> str:
@@ -119,17 +121,17 @@ def polish_weekdays(text: str, scheme: str) -> str:
 
 
 def polish_month_markers(text: str, scheme: str, layout: str) -> str:
-    secondary = THEME_TOKENS[scheme]["secondary"]
+    marker = THEME_TOKENS[scheme]["month_marker"]
     matches = MONTH_LABEL.findall(text)
     if not matches:
         raise ValueError("expected at least one month-boundary label")
     size = "6" if layout == "wide" else "5"
 
     def transform(match: re.Match[str]) -> str:
-        element = set_attr(match.group(0), "fill", secondary)
+        element = set_attr(match.group(0), "fill", marker)
         element = set_attr(element, "font-size", size)
         element = set_attr(element, "font-weight", "700")
-        element = set_attr(element, "opacity", "0.90")
+        element = set_attr(element, "opacity", "1")
         return element
 
     return MONTH_LABEL.sub(transform, text)
@@ -170,7 +172,12 @@ def polish_compact_summary(text: str) -> str:
     if not root:
         raise ValueError("SVG root element is missing")
     root_attrs = attrs_of(root.group(0))
-    for required in ("data-active-days", "data-current-streak", "data-peak-count", "data-peak-date"):
+    for required in (
+        "data-active-days",
+        "data-current-streak",
+        "data-peak-count",
+        "data-peak-date",
+    ):
         if required not in root_attrs:
             raise ValueError(f"compact SVG is missing {required}")
 
@@ -195,8 +202,16 @@ def polish_compact_legend(text: str) -> str:
     if len(less) != 1 or len(more) != 1 or len(rects) != 5:
         raise ValueError("compact legend geometry signature changed")
 
-    text = LEGEND_LESS.sub(lambda m: m.group(0).replace('x="186.4"', 'x="196.4"', 1), text, count=1)
-    text = LEGEND_MORE.sub(lambda m: m.group(0).replace('x="276"', 'x="286"', 1), text, count=1)
+    text = LEGEND_LESS.sub(
+        lambda m: m.group(0).replace('x="186.4"', 'x="196.4"', 1),
+        text,
+        count=1,
+    )
+    text = LEGEND_MORE.sub(
+        lambda m: m.group(0).replace('x="276"', 'x="286"', 1),
+        text,
+        count=1,
+    )
 
     def shift_rect(match: re.Match[str]) -> str:
         old_x = int(match.group(1))
@@ -260,10 +275,17 @@ def validate_polished(text: str, layout: str, scheme: str) -> None:
     month_elements = MONTH_LABEL.findall(text)
     if not month_elements:
         raise ValueError("month markers disappeared after polish")
+    marker = THEME_TOKENS[scheme]["month_marker"]
     for element in month_elements:
         attrs = attrs_of(element)
-        if attrs.get("font-weight") != "700" or attrs.get("opacity") != "0.90":
-            raise ValueError("month-marker hierarchy is not the v2.1 treatment")
+        if (
+            attrs.get("fill") != marker
+            or attrs.get("font-weight") != "700"
+            or attrs.get("opacity") != "1"
+        ):
+            raise ValueError(
+                "month markers must use the maximum-contrast v2.1 treatment"
+            )
 
     latest = LATEST_TILE.findall(text)
     if len(latest) != 1:
@@ -278,7 +300,9 @@ def validate_polished(text: str, layout: str, scheme: str) -> None:
         if 'x="196.4" y="266"' not in text or 'x="286" y="266"' not in text:
             raise ValueError("compact legend was not shifted as one unit")
         summary = ACTIVITY_SUMMARY.findall(text)
-        if len(summary) != 1 or not re.search(r"PEAK [A-Z]{3} \d{2} · \d+", summary[0]):
+        if len(summary) != 1 or not re.search(
+            r"PEAK [A-Z]{3} \d{2} · \d+", summary[0]
+        ):
             raise ValueError("compact peak telemetry must include peak date and count")
 
         root = SVG_OPEN.search(text)
@@ -335,30 +359,40 @@ def fixture(layout: str, scheme: str, week_rows: int = 5) -> str:
     if layout == "compact":
         surface = (
             f'<rect width="320" height="528" fill="#0B1020"/>'
-            f'<rect x="0.5" y="0.5" width="319" height="527" fill="none" stroke="{tokens["hairline"]}"/>'
+            f'<rect x="0.5" y="0.5" width="319" height="527" fill="none" '
+            f'stroke="{tokens["hairline"]}"/>'
             f'<path d="M22 493h276" stroke="{tokens["hairline"]}"/>'
-            f'<text x="160" y="512" fill="{tokens["secondary"]}">GITHUB GRAPHQL CONTRIBUTION CALENDAR</text>'
+            f'<text x="160" y="512" fill="{tokens["secondary"]}">'
+            f'GITHUB GRAPHQL CONTRIBUTION CALENDAR</text>'
             f'<text x="186.4" y="266" fill="{tokens["secondary"]}">LESS</text>'
             + "".join(
-                f'<rect x="{218 + index * 10}" y="259" width="8" height="8" data-legend-level="{index}"/>'
+                f'<rect x="{218 + index * 10}" y="259" width="8" height="8" '
+                f'data-legend-level="{index}"/>'
                 for index in range(5)
             )
             + f'<text x="276" y="266" fill="{tokens["secondary"]}">MORE</text>'
-            f'<text x="22" y="285" fill="{tokens["secondary"]}" font-size="7.5" data-activity-summary="true">ACTIVE 23/30 · STREAK 16 · PEAK 672</text>'
+            f'<text x="22" y="285" fill="{tokens["secondary"]}" font-size="7.5" '
+            f'data-activity-summary="true">ACTIVE 23/30 · STREAK 16 · PEAK 672</text>'
         )
     weekdays = "".join(
-        f'<text x="{20 + index * 20}" y="300" fill="{tokens["secondary"]}" data-weekday-label="{index}">{name}</text>'
+        f'<text x="{20 + index * 20}" y="300" fill="{tokens["secondary"]}" '
+        f'data-weekday-label="{index}">{name}</text>'
         for index, name in enumerate(("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"))
     )
-    month = f'<text x="20" y="320" fill="{tokens["primary"]}" font-size="5.5" font-weight="800" data-month-boundary="AUG">AUG</text>'
+    month = (
+        f'<text x="20" y="320" fill="{tokens["primary"]}" font-size="5.5" '
+        f'font-weight="800" data-month-boundary="AUG">AUG</text>'
+    )
     latest = (
         f'<rect x="186" y="426" width="34" height="24" rx="5" fill="#FF2BD6" '
         f'stroke="#FF2BD6" stroke-width="2" data-date="2026-09-03" data-count="1" '
         f'data-level="1" data-latest-day="true"/>'
     )
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" {geometry} data-theme="yunior-portal-neon-v2" '
-        f'data-activity-layout="month-calendar-v2" data-activity-week-rows="{week_rows}" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" {geometry} '
+        f'data-theme="yunior-portal-neon-v2" '
+        f'data-activity-layout="month-calendar-v2" '
+        f'data-activity-week-rows="{week_rows}" '
         f'data-active-days="23" data-current-streak="16" data-peak-count="672" '
         f'data-peak-date="2026-09-02">{surface}{weekdays}{month}{latest}</svg>'
     )
@@ -370,16 +404,29 @@ def self_test() -> None:
             polished = polish_svg(fixture(layout, scheme), layout, scheme)
             assert f'data-polish="{POLISH_ID}"' in polished
             assert polished.count('data-latest-outline="outer"') == 1
+            assert (
+                f'fill="{THEME_TOKENS[scheme]["month_marker"]}"'
+                in MONTH_LABEL.findall(polished)[0]
+            )
+            assert 'opacity="1"' in MONTH_LABEL.findall(polished)[0]
             if layout == "compact":
                 assert 'x="196.4" y="266"' in polished
                 assert 'x="286" y="266"' in polished
                 assert "PEAK SEP 02 · 672" in polished
                 assert 'viewBox="0 0 320 500"' in polished
 
-        six_week = polish_svg(fixture("compact", scheme, week_rows=6), "compact", scheme)
+        six_week = polish_svg(
+            fixture("compact", scheme, week_rows=6), "compact", scheme
+        )
         assert 'viewBox="0 0 320 528"' in six_week
 
-    print(f"Signal Field polish self-test passed: {POLISH_ID}")
+    dark = polish_svg(fixture("wide", "dark"), "wide", "dark")
+    assert 'fill="#FFFFFF"' in MONTH_LABEL.findall(dark)[0]
+
+    print(
+        f"Signal Field polish self-test passed: {POLISH_ID}; "
+        "month markers use maximum contrast"
+    )
 
 
 def main() -> int:

@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
-"""Apply the Ƴunior Ƥortal Signal Field v2 theme and rolling 30-day calendar.
+"""Apply the Ƴunior Ƥortal Signal Field v2 theme and 30-day evidence calendar.
 
 The pinned upstream generator still collects the complete 365/366-day contribution
-dataset used by the headline metric. This deterministic presentation layer changes
-only the rendered daily-activity field to the newest 30 dated records.
+dataset used by the headline metric. This deterministic presentation layer keeps the
+newest 30 days as the evidence/telemetry window, while displaying real leading
+calendar context back to the Monday that contains the 30-day start.
 
 Signal Field v2 renders a true month calendar:
 - seven weekday columns (Sunday through Saturday)
 - five or six chronological week rows
-- one numbered tile per real day
-- explicit partial-week placeholders
+- one numbered tile per real displayed day
+- Monday-aligned leading context with real GitHub counts/colors
+- explicit partial-week placeholders outside the displayed range
 - derived 30-day active/streak/peak telemetry
-- month-boundary markers
+- month-boundary markers on the first displayed date of each month
 - an explicit latest-day highlight
 
 Unexpected colors, malformed activity data, duplicate/non-consecutive dates, or an
@@ -28,6 +30,7 @@ import sys
 THEME_ID = "yunior-portal-neon-v2"
 ACTIVITY_WINDOW_DAYS = 30
 ACTIVITY_LAYOUT = "month-calendar-v2"
+DISPLAY_ALIGNMENT = "monday"
 WEEKDAYS = ("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT")
 EXPECTED_FILES = (
     "signal-field-wide-light.svg",
@@ -116,10 +119,14 @@ def layout_for(path: Path) -> str:
     raise ValueError(f"unsupported Signal Field layout: {path.name}")
 
 
+def attrs_of(element: str) -> dict[str, str]:
+    return dict(ATTR.findall(element))
+
+
 def parse_activity_cells(text: str) -> list[dict[str, str]]:
     cells: list[dict[str, str]] = []
     for match in ACTIVITY_CELL.finditer(text):
-        attrs = dict(ATTR.findall(match.group(0)))
+        attrs = attrs_of(match.group(0))
         required = {"fill", "data-date", "data-count", "data-level"}
         missing = sorted(required - attrs.keys())
         if missing:
@@ -145,14 +152,19 @@ def sunday_weekday(value: date) -> int:
     return (value.weekday() + 1) % 7
 
 
-def calendar_bounds(recent: list[dict[str, str]]) -> tuple[date, date, int]:
-    first_date = date.fromisoformat(recent[0]["data-date"])
-    last_date = date.fromisoformat(recent[-1]["data-date"])
+def monday_start(value: date) -> date:
+    """Return the Monday at the start of value's ISO week."""
+    return value - timedelta(days=value.weekday())
+
+
+def calendar_bounds(display: list[dict[str, str]]) -> tuple[date, date, int]:
+    first_date = date.fromisoformat(display[0]["data-date"])
+    last_date = date.fromisoformat(display[-1]["data-date"])
     week_origin = first_date - timedelta(days=sunday_weekday(first_date))
     week_rows = ((last_date - week_origin).days // 7) + 1
     if week_rows not in (5, 6):
         raise ValueError(
-            f"30-day rolling calendar must occupy 5 or 6 week rows, found {week_rows}"
+            f"calendar display must occupy 5 or 6 week rows, found {week_rows}"
         )
     return first_date, week_origin, week_rows
 
@@ -191,10 +203,10 @@ def activity_stats(recent: list[dict[str, str]]) -> tuple[int, int, int, str]:
     return active_days, current_streak, peak_count, peak_date
 
 
-def month_boundary_dates(recent: list[dict[str, str]]) -> dict[date, str]:
+def month_boundary_dates(display: list[dict[str, str]]) -> dict[date, str]:
     boundaries: dict[date, str] = {}
     seen: set[tuple[int, int]] = set()
-    for cell in recent:
+    for cell in display:
         current = date.fromisoformat(cell["data-date"])
         key = (current.year, current.month)
         if key not in seen:
@@ -227,16 +239,42 @@ def render_summary(
     )
 
 
+def activity_slices(
+    cells: list[dict[str, str]],
+) -> tuple[list[dict[str, str]], list[dict[str, str]], date, date]:
+    recent = cells[-ACTIVITY_WINDOW_DAYS:]
+    evidence_from = date.fromisoformat(recent[0]["data-date"])
+    evidence_to = date.fromisoformat(recent[-1]["data-date"])
+    display_from = monday_start(evidence_from)
+
+    display = [
+        cell
+        for cell in cells
+        if display_from <= date.fromisoformat(cell["data-date"]) <= evidence_to
+    ]
+    expected_display_days = (evidence_to - display_from).days + 1
+    if len(display) != expected_display_days:
+        raise ValueError(
+            f"expected {expected_display_days} Monday-aligned display days, found {len(display)}"
+        )
+    if not display or date.fromisoformat(display[0]["data-date"]) != display_from:
+        raise ValueError("Monday-aligned display does not begin on the expected date")
+    return recent, display, evidence_from, evidence_to
+
+
 def render_activity_window(
     cells: list[dict[str, str]], layout: str, scheme: str
-) -> tuple[str, int, tuple[int, int, int, str]]:
-    recent = cells[-ACTIVITY_WINDOW_DAYS:]
-    first_date, week_origin, week_rows = calendar_bounds(recent)
-    last_date = date.fromisoformat(recent[-1]["data-date"])
+) -> tuple[str, int, tuple[int, int, int, str], str, int]:
+    recent, display, evidence_from, evidence_to = activity_slices(cells)
+    first_date, week_origin, week_rows = calendar_bounds(display)
     stats = activity_stats(recent)
-    boundaries = month_boundary_dates(recent)
+    boundaries = month_boundary_dates(display)
     cells_by_date = {
         date.fromisoformat(cell["data-date"]): (index, cell)
+        for index, cell in enumerate(display)
+    }
+    window_day_by_date = {
+        date.fromisoformat(cell["data-date"]): index + 1
         for index, cell in enumerate(recent)
     }
 
@@ -276,7 +314,7 @@ def render_activity_window(
             entry = cells_by_date.get(slot_date)
 
             if entry is None:
-                if slot_date < first_date or slot_date > last_date:
+                if slot_date < first_date or slot_date > evidence_to:
                     rendered.append(
                         f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
                         f'rx="{radius}" fill="none" stroke="{hairline}" stroke-width="1" '
@@ -286,12 +324,12 @@ def render_activity_window(
                     )
                     continue
                 raise ValueError(
-                    f"calendar slot unexpectedly missing in-window date: {slot_date}"
+                    f"calendar slot unexpectedly missing displayed date: {slot_date}"
                 )
 
-            index, cell = entry
+            display_index, cell = entry
             level = int(cell["data-level"])
-            is_latest = slot_date == last_date
+            is_latest = slot_date == evidence_to
             month_marker = boundaries.get(slot_date)
 
             stroke = ""
@@ -304,14 +342,19 @@ def render_activity_window(
                 f' data-month-boundary="{month_marker}"' if month_marker else ""
             )
             latest_attr = ' data-latest-day="true"' if is_latest else ""
+            window_day = window_day_by_date.get(slot_date)
+            if window_day is None:
+                window_attr = ' data-window-context="leading"'
+            else:
+                window_attr = f' data-window-day="{window_day}"'
 
             rendered.append(
                 f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
                 f'rx="{radius}" fill="{cell["fill"]}"{stroke} '
                 f'data-date="{cell["data-date"]}" data-count="{cell["data-count"]}" '
-                f'data-level="{cell["data-level"]}" data-window-day="{index + 1}" '
-                f'data-week-row="{week_row}" data-weekday-column="{weekday_column}"'
-                f'{marker_attr}{latest_attr}/>'
+                f'data-level="{cell["data-level"]}" data-display-day="{display_index + 1}"'
+                f'{window_attr} data-week-row="{week_row}" '
+                f'data-weekday-column="{weekday_column}"{marker_attr}{latest_attr}/>'
             )
 
             center_x = x + width / 2
@@ -351,7 +394,13 @@ def render_activity_window(
                     f'data-day-label="{slot_date.isoformat()}">{slot_date.day:02d}</text>'
                 )
 
-    return "".join(rendered), week_rows, stats
+    return (
+        "".join(rendered),
+        week_rows,
+        stats,
+        first_date.isoformat(),
+        len(display),
+    )
 
 
 def resize_wide_card(text: str) -> str:
@@ -389,16 +438,18 @@ def resize_wide_card(text: str) -> str:
 
 def apply_activity_window(text: str, layout: str, scheme: str) -> str:
     cells = parse_activity_cells(text)
-    recent = cells[-ACTIVITY_WINDOW_DAYS:]
-    from_date = recent[0]["data-date"]
-    to_date = recent[-1]["data-date"]
+    recent, _, evidence_from, evidence_to = activity_slices(cells)
+    from_date = evidence_from.isoformat()
+    to_date = evidence_to.isoformat()
 
     matches = list(ACTIVITY_CELL.finditer(text))
     start, end = matches[0].start(), matches[-1].end()
     if len(ACTIVITY_CELL.findall(text[start:end])) != len(cells):
         raise ValueError("activity-cell block is not contiguous")
 
-    rendered, week_rows, stats = render_activity_window(cells, layout, scheme)
+    rendered, week_rows, stats, display_from, display_days = render_activity_window(
+        cells, layout, scheme
+    )
     active_days, current_streak, peak_count, peak_date = stats
     text = text[:start] + rendered + text[end:]
 
@@ -426,7 +477,8 @@ def apply_activity_window(text: str, layout: str, scheme: str) -> str:
         raise ValueError("expected exactly one accessible annual activity description")
     text = ACCESSIBLE_ACTIVITY.sub(
         f"{ACTIVITY_WINDOW_DAYS} daily activity marks from {from_date} through "
-        f"{to_date}, inclusive.",
+        f"{to_date}, inclusive; calendar display includes {display_days} dated marks "
+        f"from {display_from} through {to_date} for Monday-aligned context.",
         text,
         count=1,
     )
@@ -443,6 +495,9 @@ def apply_activity_window(text: str, layout: str, scheme: str) -> str:
     window_attrs = (
         f' data-activity-window-days="{ACTIVITY_WINDOW_DAYS}"'
         f' data-activity-from="{from_date}" data-activity-to="{to_date}"'
+        f' data-activity-display-from="{display_from}"'
+        f' data-activity-display-days="{display_days}"'
+        f' data-activity-display-alignment="{DISPLAY_ALIGNMENT}"'
         f' data-activity-layout="{ACTIVITY_LAYOUT}"'
         f' data-activity-columns="7" data-activity-week-rows="{week_rows}"'
         f' data-active-days="{active_days}" data-current-streak="{current_streak}"'
@@ -499,13 +554,33 @@ def customize_svg(text: str, scheme: str, layout: str) -> str:
             + ", ".join(missing_targets)
         )
 
+    root = SVG_OPEN.search(themed)
+    assert root is not None
+    root_attrs = attrs_of(root.group(0))
+    for required in (
+        "data-activity-window-days",
+        "data-activity-from",
+        "data-activity-to",
+        "data-activity-display-from",
+        "data-activity-display-days",
+        "data-activity-display-alignment",
+    ):
+        if required not in root_attrs:
+            raise ValueError(f"customized SVG is missing activity provenance: {required}")
+
+    if root_attrs["data-activity-window-days"] != str(ACTIVITY_WINDOW_DAYS):
+        raise ValueError("30-day evidence window provenance changed")
+    if root_attrs["data-activity-display-alignment"] != DISPLAY_ALIGNMENT:
+        raise ValueError("calendar display must remain Monday-aligned")
+
     published = ACTIVITY_CELL.findall(themed)
-    if len(published) != ACTIVITY_WINDOW_DAYS:
+    display_days = int(root_attrs["data-activity-display-days"])
+    if len(published) != display_days:
         raise ValueError(
-            f"customized SVG must publish exactly {ACTIVITY_WINDOW_DAYS} activity cells"
+            f"customized SVG declares {display_days} display days but publishes {len(published)}"
         )
-    if f'data-activity-window-days="{ACTIVITY_WINDOW_DAYS}"' not in themed:
-        raise ValueError("customized SVG is missing activity-window provenance")
+    if display_days < ACTIVITY_WINDOW_DAYS or display_days > ACTIVITY_WINDOW_DAYS + 6:
+        raise ValueError("Monday-aligned display must add between 0 and 6 leading context days")
     if f'data-activity-layout="{ACTIVITY_LAYOUT}"' not in themed:
         raise ValueError("customized SVG is missing activity-layout provenance")
     if 'data-activity-columns="7"' not in themed:
@@ -515,7 +590,34 @@ def customize_svg(text: str, scheme: str, layout: str) -> str:
     if themed.count('data-activity-summary="true"') != 1:
         raise ValueError("customized SVG must render one 30-day telemetry summary")
 
-    published_attrs = [dict(ATTR.findall(cell)) for cell in published]
+    published_attrs = [attrs_of(cell) for cell in published]
+    published_dates = [cell["data-date"] for cell in published_attrs]
+    first_display_date = date.fromisoformat(published_dates[0])
+    if first_display_date.weekday() != 0:
+        raise ValueError("first displayed activity date must be Monday")
+    if root_attrs["data-activity-display-from"] != published_dates[0]:
+        raise ValueError("display-from provenance does not match first rendered date")
+    if root_attrs["data-activity-to"] != published_dates[-1]:
+        raise ValueError("activity-to provenance does not match last rendered date")
+
+    leading_context = [
+        cell for cell in published_attrs if cell.get("data-window-context") == "leading"
+    ]
+    expected_context = display_days - ACTIVITY_WINDOW_DAYS
+    if len(leading_context) != expected_context:
+        raise ValueError("leading calendar context count does not match Monday alignment")
+    if any("data-window-day" in cell for cell in leading_context):
+        raise ValueError("leading context tiles must not claim a 30-day evidence index")
+
+    evidence_cells = [cell for cell in published_attrs if "data-window-day" in cell]
+    if len(evidence_cells) != ACTIVITY_WINDOW_DAYS:
+        raise ValueError("exactly 30 displayed tiles must belong to the evidence window")
+    window_indexes = [int(cell["data-window-day"]) for cell in evidence_cells]
+    if window_indexes != list(range(1, ACTIVITY_WINDOW_DAYS + 1)):
+        raise ValueError("evidence window-day indexes must be contiguous 1 through 30")
+    if evidence_cells[0]["data-date"] != root_attrs["data-activity-from"]:
+        raise ValueError("first evidence tile does not match data-activity-from")
+
     weekday_columns = {int(cell["data-weekday-column"]) for cell in published_attrs}
     if weekday_columns != set(range(7)):
         raise ValueError("activity calendar must cover all seven weekday columns")
@@ -541,13 +643,12 @@ def customize_svg(text: str, scheme: str, layout: str) -> str:
         raise ValueError("activity calendar must render ordered SUN-SAT weekday labels")
 
     placeholder_count = len(OUTSIDE_SLOT.findall(themed))
-    if placeholder_count != row_count * 7 - ACTIVITY_WINDOW_DAYS:
+    if placeholder_count != row_count * 7 - display_days:
         raise ValueError(
             "outside-window placeholder count does not complete the calendar matrix"
         )
 
     day_labels = DAY_LABEL.findall(themed)
-    published_dates = [cell["data-date"] for cell in published_attrs]
     if day_labels != published_dates:
         raise ValueError("every published activity date must render exactly one day number")
 
@@ -560,7 +661,15 @@ def customize_svg(text: str, scheme: str, layout: str) -> str:
             seen_months.add(key)
             expected_months.append(current.strftime("%b").upper())
     if MONTH_LABEL.findall(themed) != expected_months:
-        raise ValueError("month-boundary markers do not match the rolling window")
+        raise ValueError("month-boundary markers do not match the displayed calendar")
+
+    month_tiles = [
+        attrs_of(cell)
+        for cell in published
+        if 'data-month-boundary="' in cell
+    ]
+    if not month_tiles or month_tiles[0]["data-date"] != published_dates[0]:
+        raise ValueError("first displayed date must carry the first month marker")
 
     latest = [cell for cell in published_attrs if cell.get("data-latest-day") == "true"]
     if len(latest) != 1 or latest[0]["data-date"] != published_dates[-1]:
@@ -602,13 +711,17 @@ def customize_directory(directory: Path) -> None:
         layout = layout_for(path)
         themed = customize_svg(path.read_text(encoding="utf-8"), scheme, layout)
         path.write_text(themed, encoding="utf-8")
+        root = SVG_OPEN.search(themed)
+        assert root is not None
+        display_days = attrs_of(root.group(0))["data-activity-display-days"]
         print(
             f"themed {filename} -> {THEME_ID}; "
-            f"activity window -> {ACTIVITY_WINDOW_DAYS} days; layout -> {ACTIVITY_LAYOUT}"
+            f"evidence window -> {ACTIVITY_WINDOW_DAYS} days; "
+            f"display -> {display_days} Monday-aligned days; layout -> {ACTIVITY_LAYOUT}"
         )
 
 
-def fixture_svg(scheme: str, layout: str) -> tuple[str, str, str]:
+def fixture_svg(scheme: str, layout: str) -> tuple[str, str, str, str]:
     palette = SOURCE_PALETTES[scheme]
     activity_colors = list(palette.keys())[-5:]
     start = date(2025, 9, 4)
@@ -661,25 +774,34 @@ def fixture_svg(scheme: str, layout: str) -> tuple[str, str, str]:
         f'through {end.isoformat()}, inclusive.</desc>'
         f'<text>{label}</text>{band_labels}{surface}{decorative}{"".join(cells)}</svg>'
     )
-    expected_from = (end - timedelta(days=ACTIVITY_WINDOW_DAYS - 1)).isoformat()
-    return sample, expected_from, end.isoformat()
+    expected_from = end - timedelta(days=ACTIVITY_WINDOW_DAYS - 1)
+    expected_display_from = monday_start(expected_from)
+    return (
+        sample,
+        expected_from.isoformat(),
+        end.isoformat(),
+        expected_display_from.isoformat(),
+    )
 
 
 def self_test() -> None:
     five_week_fixture = [
-        {"data-date": (date(2026, 8, 5) + timedelta(days=index)).isoformat()}
-        for index in range(30)
+        {"data-date": (date(2026, 8, 3) + timedelta(days=index)).isoformat()}
+        for index in range(32)
     ]
     six_week_fixture = [
-        {"data-date": (date(2026, 8, 1) + timedelta(days=index)).isoformat()}
-        for index in range(30)
+        {"data-date": (date(2026, 7, 27) + timedelta(days=index)).isoformat()}
+        for index in range(39)
     ]
     assert calendar_bounds(five_week_fixture)[2] == 5
     assert calendar_bounds(six_week_fixture)[2] == 6
+    assert monday_start(date(2026, 8, 5)) == date(2026, 8, 3)
 
     for scheme in SOURCE_PALETTES:
         for layout in ("wide", "compact"):
-            sample, expected_from, expected_to = fixture_svg(scheme, layout)
+            sample, expected_from, expected_to, expected_display_from = fixture_svg(
+                scheme, layout
+            )
             themed = customize_svg(sample, scheme, layout)
             assert f'data-theme="{THEME_ID}"' in themed
             assert f'data-activity-window-days="{ACTIVITY_WINDOW_DAYS}"' in themed
@@ -687,24 +809,38 @@ def self_test() -> None:
             assert 'data-activity-columns="7"' in themed
             assert f'data-activity-from="{expected_from}"' in themed
             assert f'data-activity-to="{expected_to}"' in themed
+            assert f'data-activity-display-from="{expected_display_from}"' in themed
+            assert 'data-activity-display-alignment="monday"' in themed
 
             published = ACTIVITY_CELL.findall(themed)
-            assert len(published) == ACTIVITY_WINDOW_DAYS
-            published_attrs = [dict(ATTR.findall(cell)) for cell in published]
+            published_attrs = [attrs_of(cell) for cell in published]
+            assert len(published) == 32
+            assert published_attrs[0]["data-date"] == "2026-08-03"
+            assert published_attrs[1]["data-date"] == "2026-08-04"
+            assert published_attrs[0]["data-window-context"] == "leading"
+            assert published_attrs[1]["data-window-context"] == "leading"
+            assert published_attrs[2]["data-window-day"] == "1"
+            assert published_attrs[2]["data-date"] == "2026-08-05"
             assert {
                 int(cell["data-weekday-column"]) for cell in published_attrs
             } == set(range(7))
             assert min(int(cell["data-week-row"]) for cell in published_attrs) == 0
             assert max(int(cell["data-week-row"]) for cell in published_attrs) in (4, 5)
-            assert len(OUTSIDE_SLOT.findall(themed)) in (5, 12)
+            assert len(OUTSIDE_SLOT.findall(themed)) == 3
             assert re.findall(r'data-weekday-label="([0-6])"', themed) == [
                 str(index) for index in range(7)
             ]
             assert DAY_LABEL.findall(themed) == [
                 cell["data-date"] for cell in published_attrs
             ]
+            assert MONTH_LABEL.findall(themed) == ["AUG", "SEP"]
+            assert 'data-date="2026-08-03"' in themed
+            assert 'data-month-boundary="AUG"' in next(
+                cell for cell in published if 'data-date="2026-08-03"' in cell
+            )
             assert themed.count('data-latest-day="true"') == 1
             assert themed.count('data-activity-summary="true"') == 1
+            assert "calendar display includes 32 dated marks from 2026-08-03" in themed
 
             if layout == "wide":
                 assert "DAILY ACTIVITY · LAST 30 DAYS" in themed
@@ -721,7 +857,8 @@ def self_test() -> None:
 
     print(
         f"Signal Field customization self-test passed: {THEME_ID}; "
-        f"activity window={ACTIVITY_WINDOW_DAYS} days; layout={ACTIVITY_LAYOUT}"
+        f"evidence window={ACTIVITY_WINDOW_DAYS} days; "
+        f"display alignment={DISPLAY_ALIGNMENT}; layout={ACTIVITY_LAYOUT}"
     )
 
 
