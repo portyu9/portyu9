@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - ".github/workflows/profile-stats.yml"
+      - "scripts/customize-signal-field.py"
   schedule:
     - cron: "17 5 * * *"
 
@@ -23,10 +24,16 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Checkout workflow source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: source
+
       - name: Checkout generated profile-stats branch
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: generated/profile-stats
+          path: artifacts
 
       - name: Generate signal-field cards
         id: stats
@@ -36,24 +43,33 @@ jobs:
           token: ${{ github.token }}
           profile: signal-field
 
-      - name: Stage complete artifact set
+      - name: Apply profile theme contract
+        env:
+          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: python3 source/scripts/customize-signal-field.py "$READY_DIR"
+
+      - name: Stage complete themed artifact set
         env:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: |
-          mkdir -p profile
-          cp "$READY_DIR"/signal-field-*.svg profile/
-          test -s profile/signal-field-wide-light.svg
-          test -s profile/signal-field-wide-dark.svg
-          test -s profile/signal-field-compact-light.svg
-          test -s profile/signal-field-compact-dark.svg
-          git add profile/signal-field-*.svg
+          mkdir -p artifacts/profile
+          cp "$READY_DIR"/signal-field-*.svg artifacts/profile/
+          test -s artifacts/profile/signal-field-wide-light.svg
+          test -s artifacts/profile/signal-field-wide-dark.svg
+          test -s artifacts/profile/signal-field-compact-light.svg
+          test -s artifacts/profile/signal-field-compact-dark.svg
+          grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile/signal-field-wide-light.svg
+          grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile/signal-field-wide-dark.svg
+          grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile/signal-field-compact-light.svg
+          grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile/signal-field-compact-dark.svg
+          git -C artifacts add profile/signal-field-*.svg
 
       - name: Publish changed artifact set
         run: |
-          if git diff --cached --quiet; then
+          if git -C artifacts diff --cached --quiet; then
             exit 0
           fi
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git commit -m "chore: update profile stats [skip ci]"
-          git push origin HEAD:generated/profile-stats
+          git -C artifacts config user.name github-actions[bot]
+          git -C artifacts config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git -C artifacts commit -m "chore: update themed profile stats [skip ci]"
+          git -C artifacts push origin HEAD:generated/profile-stats
