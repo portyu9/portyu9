@@ -33,10 +33,10 @@ ALLOWED_SVGS = (
     "assets/profile-badges/principle-reproducibility-optics.svg",
     "assets/profile-badges/principle-safety-architecture.svg",
 )
-GENERATED_SVGS = (
-    "profile/github-metrics-modern.svg",
-    "profile/signal-field-wide-light.svg",
-    "profile/signal-field-wide-dark.svg",
+GENERATED_SVG_REFERENCES = (
+    "https://raw.githubusercontent.com/portyu9/portyu9/generated/github-metrics/profile/github-metrics-modern.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg",
 )
 
 
@@ -87,7 +87,7 @@ for match in svg_pattern.finditer(readme):
     reference = reference.split("?", 1)[0].split("#", 1)[0].lstrip("./")
     references.append(reference)
 
-allowed = set(ALLOWED_SVGS) | set(GENERATED_SVGS)
+allowed = set(ALLOWED_SVGS) | set(GENERATED_SVG_REFERENCES)
 unexpected = sorted(set(references) - allowed)
 missing_refs = sorted(allowed - set(references))
 if unexpected:
@@ -107,15 +107,8 @@ for relative in ALLOWED_SVGS:
         if forbidden in lowered:
             fail(f"Profile badge SVG contains forbidden content {forbidden!r}: {relative}")
 
-for relative in GENERATED_SVGS:
-    path = ROOT / relative
-    if not path.exists():
-        fail(f"Generated profile metrics SVG is missing: {relative}")
-    if path.stat().st_size == 0:
-        fail(f"Generated profile metrics SVG is empty: {relative}")
-
 print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
-    "stays absent, approved local badge SVGs are present, generated metrics SVG references are explicit, "
+    "stays absent, approved local badge SVGs are present, generated artifact-branch SVG URLs are explicit, "
     "and README SVG references remain restricted to the reviewed profile set."
 )
