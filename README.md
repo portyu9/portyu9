@@ -2,7 +2,9 @@
 <img alt="Quality Engineering Automation Systems" src="assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png">
 </p>
 
-<h1 align="center">Ƴunior Ƥortal</h1>
+<p align="center">
+<img alt="Ƴunior Ƥortal" height="68" src="assets/profile-badges/nameplate-yunior-portal-v1.svg">
+</p>
 
 <p align="center">
 <img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=5"> <img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=5"> <img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=5">
