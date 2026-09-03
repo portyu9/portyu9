@@ -5,7 +5,7 @@
 <h1 align="center">Ƴunior Ƥortal</h1>
 
 <p align="center">
-<img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=4"> <img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=4"> <img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=4">
+<img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=5"> <img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=5"> <img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=5">
 </p>
 
 <p align="center"><strong>I engineer quality systems that turn software change into attributable evidence —<br>and evidence into decision-grade confidence.</strong></p>
@@ -43,8 +43,8 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 <table>
 <thead>
 <tr>
-<th width="360"><h3 align="center"><big>◆ Principle</big></h3></th>
-<th><h3 align="center"><big>▤ Engineering contract</big></h3></th>
+<th width="360"><big><big><strong>◆ Principle</strong></big></big></th>
+<th><big><big><strong>▤ Engineering contract</strong></big></big></th>
 </tr>
 </thead>
 <tbody>
