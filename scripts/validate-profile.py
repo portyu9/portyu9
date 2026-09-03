@@ -97,8 +97,14 @@ for heading in REMOVED_SECTIONS:
     if heading in readme:
         fail(f"Removed profile section is still present: {heading}")
 
-if readme.count("## ✦ Engineering Thesis") != 1:
-    fail("Engineering Thesis must remain a level-2 profile heading")
+engineering_thesis_heading = re.compile(
+    r'<h2\s+align="center">\s*✦ Engineering Thesis\s*</h2>', re.I
+)
+engineering_thesis_matches = list(engineering_thesis_heading.finditer(readme))
+if len(engineering_thesis_matches) != 1:
+    fail("Engineering Thesis must remain a centered level-2 profile heading")
+if "## ✦ Engineering Thesis" in readme:
+    fail("Engineering Thesis must remain centered instead of using the left-aligned Markdown H2 treatment")
 if readme.count('<h2 align="center">◉ Activity Metrics</h2>') != 1:
     fail("Activity Metrics must use the reviewed centered ◉ H2 treatment")
 if "## ◉ Activity Metrics" in readme:
@@ -217,10 +223,10 @@ for relative in (
 
 print(
     "Profile validation passed: QE Domain and Test Architecture badges use responsive 24px desktop / 20px "
-    "mobile sizing; the thesis table keeps its responsive 37/63 split; Activity Metrics uses the reviewed "
-    "centered ◉ H2 treatment; Principle badges use the restored fitted 23px typography; Oracle retains its "
-    "wider canvas; anchor-free responsive thesis header SVGs use reviewed 21px desktop and 23px mobile sizing; "
-    "the mobile Principle header keeps its stabilized 136px intrinsic canvas; the mobile Engineering Contract "
-    "header uses the enlarged 276px intrinsic canvas; and all Signal Field and reviewed profile SVG references "
-    "remain restricted and deterministic."
+    "mobile sizing; the thesis table keeps its responsive 37/63 split; Engineering Thesis and Activity Metrics "
+    "use the reviewed centered H2 treatments; Principle badges use the restored fitted 23px typography; Oracle "
+    "retains its wider canvas; anchor-free responsive thesis header SVGs use reviewed 21px desktop and 23px "
+    "mobile sizing; the mobile Principle header keeps its stabilized 136px intrinsic canvas; the mobile "
+    "Engineering Contract header uses the enlarged 276px intrinsic canvas; and all Signal Field and reviewed "
+    "profile SVG references remain restricted and deterministic."
 )
