@@ -1,5 +1,5 @@
 <p align="center">
-<img alt="Quality Engineering Automation Systems" src="assets/profile-badges/ff16b3b6-41d3-43eb-ad02-34a7316da6a8.png">
+<img alt="Quality Engineering Automation Systems" src="assets/profile-badges/quality-engineering-automation-systems.png">
 </p>
 
 <p align="center">
