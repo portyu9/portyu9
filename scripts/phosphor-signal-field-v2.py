@@ -22,13 +22,13 @@ EXPECTED_FILES = (
 
 COLORS = {
     "dark": {
-        "contributions": "#FF4DE1",
+        "contributions": "#00FBCC",
         "stars": "#C96BFF",
         "pull_requests": "#8C7CFF",
         "issues": "#28D7FF",
     },
     "light": {
-        "contributions": "#C800A8",
+        "contributions": "#008F72",
         "stars": "#7E22CE",
         "pull_requests": "#5B4FE6",
         "issues": "#007EA8",
