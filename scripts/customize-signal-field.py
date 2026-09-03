@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Apply the Ƴunior Ƥortal theme and rolling 30-day activity view to Signal Field SVGs.
+"""Apply the Ƴunior Ƥortal Signal Field v2 theme and rolling 30-day calendar.
 
 The pinned upstream generator still collects the complete 365/366-day contribution
 dataset used by the headline metric. This deterministic presentation layer changes
 only the rendered daily-activity field to the newest 30 dated records.
 
-The activity field is rendered as a true rolling-month calendar: seven weekday
-columns (Sunday through Saturday) and five or six chronological week rows.
-Out-of-window cells are rendered as faint placeholders so partial weeks remain
-visually explicit instead of appearing to be missing activity.
+Signal Field v2 renders a true month calendar:
+- seven weekday columns (Sunday through Saturday)
+- five or six chronological week rows
+- one numbered tile per real day
+- explicit partial-week placeholders
+- derived 30-day active/streak/peak telemetry
+- month-boundary markers
+- an explicit latest-day highlight
 
 Unexpected colors, malformed activity data, duplicate/non-consecutive dates, or an
 upstream structural change fail closed instead of publishing a partial artifact.
@@ -21,9 +25,9 @@ from pathlib import Path
 import re
 import sys
 
-THEME_ID = "yunior-portal-neon-v1"
+THEME_ID = "yunior-portal-neon-v2"
 ACTIVITY_WINDOW_DAYS = 30
-ACTIVITY_LAYOUT = "month-calendar"
+ACTIVITY_LAYOUT = "month-calendar-v2"
 WEEKDAYS = ("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT")
 EXPECTED_FILES = (
     "signal-field-wide-light.svg",
@@ -76,6 +80,14 @@ OUTSIDE_SLOT = re.compile(
     r'<rect\b[^>]*\bdata-slot-state="outside-window"[^>]*/>',
     re.I,
 )
+DAY_LABEL = re.compile(
+    r'<text\b[^>]*\bdata-day-label="(\d{4}-\d{2}-\d{2})"[^>]*>[^<]+</text>',
+    re.I,
+)
+MONTH_LABEL = re.compile(
+    r'<text\b[^>]*\bdata-month-boundary="([A-Z]{3})"[^>]*>[^<]+</text>',
+    re.I,
+)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 ACCESSIBLE_ACTIVITY = re.compile(
     r"(?:365|366) daily activity marks from (\d{4}-\d{2}-\d{2}) through "
@@ -84,6 +96,8 @@ ACCESSIBLE_ACTIVITY = re.compile(
 COMPACT_BAND_LABEL = re.compile(
     r'<text x="22" y="(?:291|397)"[^>]*>[A-Z]{3} \d{2} — [A-Z]{3} \d{2}</text>'
 )
+
+MONO_FONT = "ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace"
 
 
 def scheme_for(path: Path) -> str:
@@ -127,7 +141,7 @@ def parse_activity_cells(text: str) -> list[dict[str, str]]:
 
 
 def sunday_weekday(value: date) -> int:
-    """Return Sunday=0 ... Saturday=6 to match GitHub calendar semantics."""
+    """Return Sunday=0 ... Saturday=6."""
     return (value.weekday() + 1) % 7
 
 
@@ -145,46 +159,112 @@ def calendar_bounds(recent: list[dict[str, str]]) -> tuple[date, date, int]:
 
 def source_token(scheme: str, key: str) -> str:
     tokens = {
-        "light": {"secondary": "#5E5B63", "hairline": "#D8D2C7"},
-        "dark": {"secondary": "#AAA8B4", "hairline": "#303543"},
+        "light": {
+            "primary": "#17171B",
+            "secondary": "#5E5B63",
+            "hairline": "#D8D2C7",
+            "accent": "#DE4F44",
+        },
+        "dark": {
+            "primary": "#F7F3EA",
+            "secondary": "#AAA8B4",
+            "hairline": "#303543",
+            "accent": "#F9786A",
+        },
     }
     return tokens[scheme][key]
 
 
+def activity_stats(recent: list[dict[str, str]]) -> tuple[int, int, int, str]:
+    counts = [int(cell["data-count"]) for cell in recent]
+    active_days = sum(count > 0 for count in counts)
+
+    current_streak = 0
+    for count in reversed(counts):
+        if count <= 0:
+            break
+        current_streak += 1
+
+    peak_index = max(range(len(counts)), key=counts.__getitem__)
+    peak_count = counts[peak_index]
+    peak_date = recent[peak_index]["data-date"]
+    return active_days, current_streak, peak_count, peak_date
+
+
+def month_boundary_dates(recent: list[dict[str, str]]) -> dict[date, str]:
+    boundaries: dict[date, str] = {}
+    seen: set[tuple[int, int]] = set()
+    for cell in recent:
+        current = date.fromisoformat(cell["data-date"])
+        key = (current.year, current.month)
+        if key not in seen:
+            seen.add(key)
+            boundaries[current] = current.strftime("%b").upper()
+    return boundaries
+
+
+def render_summary(
+    layout: str,
+    scheme: str,
+    active_days: int,
+    current_streak: int,
+    peak_count: int,
+    peak_date: str,
+) -> str:
+    secondary = source_token(scheme, "secondary")
+    peak_short = date.fromisoformat(peak_date).strftime("%b %d").upper()
+    if layout == "wide":
+        return (
+            f'<text x="30" y="199" fill="{secondary}" font-family="{MONO_FONT}" '
+            f'font-size="9" font-weight="600" data-activity-summary="true">'
+            f'ACTIVE {active_days}/30 · STREAK {current_streak} · '
+            f'PEAK {peak_short} · {peak_count}</text>'
+        )
+    return (
+        f'<text x="22" y="285" fill="{secondary}" font-family="{MONO_FONT}" '
+        f'font-size="7.5" font-weight="600" data-activity-summary="true">'
+        f'ACTIVE {active_days}/30 · STREAK {current_streak} · PEAK {peak_count}</text>'
+    )
+
+
 def render_activity_window(
     cells: list[dict[str, str]], layout: str, scheme: str
-) -> tuple[str, int]:
+) -> tuple[str, int, tuple[int, int, int, str]]:
     recent = cells[-ACTIVITY_WINDOW_DAYS:]
     first_date, week_origin, week_rows = calendar_bounds(recent)
     last_date = date.fromisoformat(recent[-1]["data-date"])
+    stats = activity_stats(recent)
+    boundaries = month_boundary_dates(recent)
     cells_by_date = {
         date.fromisoformat(cell["data-date"]): (index, cell)
         for index, cell in enumerate(recent)
     }
 
     if layout == "wide":
-        x0, label_y, grid_y = 52, 195, 202
-        step_x, step_y = 78, 17
-        width, height, radius = 56, 14, 4
-        weekday_font_size = 8
+        x0, label_y, grid_y = 52, 218, 225
+        step_x, step_y = 78, 25
+        width, height, radius = 56, 21, 5
+        weekday_font_size, day_font_size, month_font_size = 8, 9, 6.5
     elif layout == "compact":
-        x0, label_y, grid_y = 18, 291, 300
-        step_x, step_y = 42, 25
-        width, height, radius = 34, 19, 4
-        weekday_font_size = 7
+        x0, label_y, grid_y = 18, 306, 314
+        step_x, step_y = 42, 28
+        width, height, radius = 34, 24, 5
+        weekday_font_size, day_font_size, month_font_size = 7, 8, 5.5
     else:
         raise ValueError(f"unsupported layout: {layout}")
 
+    primary = source_token(scheme, "primary")
     secondary = source_token(scheme, "secondary")
     hairline = source_token(scheme, "hairline")
+    accent = source_token(scheme, "accent")
 
     rendered: list[str] = []
     for weekday_column, weekday in enumerate(WEEKDAYS):
         x = x0 + weekday_column * step_x + width / 2
         rendered.append(
             f'<text x="{x:g}" y="{label_y}" fill="{secondary}" '
-            f'font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" '
-            f'font-size="{weekday_font_size}" font-weight="650" text-anchor="middle" '
+            f'font-family="{MONO_FONT}" font-size="{weekday_font_size}" '
+            f'font-weight="650" text-anchor="middle" '
             f'data-weekday-label="{weekday_column}">{weekday}</text>'
         )
 
@@ -200,7 +280,7 @@ def render_activity_window(
                     rendered.append(
                         f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
                         f'rx="{radius}" fill="none" stroke="{hairline}" stroke-width="1" '
-                        f'stroke-dasharray="2 3" opacity="0.42" '
+                        f'stroke-dasharray="2 3" opacity="0.38" '
                         f'data-slot-state="outside-window" data-calendar-week="{week_row}" '
                         f'data-weekday-column="{weekday_column}"/>'
                     )
@@ -211,18 +291,100 @@ def render_activity_window(
 
             index, cell = entry
             level = int(cell["data-level"])
-            zero_outline = (
-                f' stroke="{hairline}" stroke-width="1"' if level == 0 else ""
+            is_latest = slot_date == last_date
+            month_marker = boundaries.get(slot_date)
+
+            stroke = ""
+            if is_latest:
+                stroke = f' stroke="{accent}" stroke-width="2"'
+            elif level == 0:
+                stroke = f' stroke="{hairline}" stroke-width="1"'
+
+            marker_attr = (
+                f' data-month-boundary="{month_marker}"' if month_marker else ""
             )
+            latest_attr = ' data-latest-day="true"' if is_latest else ""
+
             rendered.append(
                 f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
-                f'rx="{radius}" fill="{cell["fill"]}"{zero_outline} '
+                f'rx="{radius}" fill="{cell["fill"]}"{stroke} '
                 f'data-date="{cell["data-date"]}" data-count="{cell["data-count"]}" '
                 f'data-level="{cell["data-level"]}" data-window-day="{index + 1}" '
-                f'data-week-row="{week_row}" data-weekday-column="{weekday_column}"/>'
+                f'data-week-row="{week_row}" data-weekday-column="{weekday_column}"'
+                f'{marker_attr}{latest_attr}/>'
             )
 
-    return "".join(rendered), week_rows
+            center_x = x + width / 2
+            if month_marker:
+                if layout == "wide":
+                    rendered.append(
+                        f'<text x="{x + 5:g}" y="{y + 8:g}" fill="{primary}" '
+                        f'font-family="{MONO_FONT}" font-size="{month_font_size}" '
+                        f'font-weight="800" data-month-boundary="{month_marker}">'
+                        f'{month_marker}</text>'
+                    )
+                    rendered.append(
+                        f'<text x="{x + width - 5:g}" y="{y + 15:g}" fill="{primary}" '
+                        f'font-family="{MONO_FONT}" font-size="{day_font_size}" '
+                        f'font-weight="800" text-anchor="end" '
+                        f'data-day-label="{slot_date.isoformat()}">{slot_date.day:02d}</text>'
+                    )
+                else:
+                    rendered.append(
+                        f'<text x="{center_x:g}" y="{y + 8:g}" fill="{primary}" '
+                        f'font-family="{MONO_FONT}" font-size="{month_font_size}" '
+                        f'font-weight="800" text-anchor="middle" '
+                        f'data-month-boundary="{month_marker}">{month_marker}</text>'
+                    )
+                    rendered.append(
+                        f'<text x="{center_x:g}" y="{y + 18:g}" fill="{primary}" '
+                        f'font-family="{MONO_FONT}" font-size="{day_font_size}" '
+                        f'font-weight="800" text-anchor="middle" '
+                        f'data-day-label="{slot_date.isoformat()}">{slot_date.day:02d}</text>'
+                    )
+            else:
+                baseline = y + (15 if layout == "wide" else 16)
+                rendered.append(
+                    f'<text x="{center_x:g}" y="{baseline:g}" fill="{primary}" '
+                    f'font-family="{MONO_FONT}" font-size="{day_font_size}" '
+                    f'font-weight="800" text-anchor="middle" '
+                    f'data-day-label="{slot_date.isoformat()}">{slot_date.day:02d}</text>'
+                )
+
+    return "".join(rendered), week_rows, stats
+
+
+def resize_wide_card(text: str) -> str:
+    required = (
+        ('viewBox="0 0 640 360" width="640" height="360"',
+         'viewBox="0 0 640 425" width="640" height="425"'),
+        ('<rect width="640" height="360"',
+         '<rect width="640" height="425"'),
+        ('<rect x="0.5" y="0.5" width="639" height="359"',
+         '<rect x="0.5" y="0.5" width="639" height="424"'),
+        ('<path d="M30 288h580"',
+         '<path d="M30 390h580"'),
+    )
+    for old, new in required:
+        if old not in text:
+            raise ValueError(f"wide Signal Field geometry signature changed: {old}")
+        text = text.replace(old, new, 1)
+
+    text, source_count = re.subn(
+        r'(<text x="30" )y="330"([^>]*>SOURCE · GITHUB GRAPHQL CONTRIBUTION CALENDAR</text>)',
+        r'\1y="410"\2',
+        text,
+        count=1,
+    )
+    text, through_count = re.subn(
+        r'(<text x="610" )y="330"([^>]*>CONTRIBUTIONS THROUGH · [^<]+</text>)',
+        r'\1y="410"\2',
+        text,
+        count=1,
+    )
+    if source_count != 1 or through_count != 1:
+        raise ValueError("wide Signal Field footer geometry signature changed")
+    return text
 
 
 def apply_activity_window(text: str, layout: str, scheme: str) -> str:
@@ -236,7 +398,8 @@ def apply_activity_window(text: str, layout: str, scheme: str) -> str:
     if len(ACTIVITY_CELL.findall(text[start:end])) != len(cells):
         raise ValueError("activity-cell block is not contiguous")
 
-    rendered, week_rows = render_activity_window(cells, layout, scheme)
+    rendered, week_rows, stats = render_activity_window(cells, layout, scheme)
+    active_days, current_streak, peak_count, peak_date = stats
     text = text[:start] + rendered + text[end:]
 
     if layout == "wide":
@@ -251,6 +414,14 @@ def apply_activity_window(text: str, layout: str, scheme: str) -> str:
         raise ValueError(f"expected exactly one activity label {old_label!r}")
     text = text.replace(old_label, new_label, 1)
 
+    summary = render_summary(
+        layout, scheme, active_days, current_streak, peak_count, peak_date
+    )
+    label_close = f">{new_label}</text>"
+    if text.count(label_close) != 1:
+        raise ValueError("could not locate customized activity label element")
+    text = text.replace(label_close, label_close + summary, 1)
+
     if len(ACCESSIBLE_ACTIVITY.findall(text)) != 1:
         raise ValueError("expected exactly one accessible annual activity description")
     text = ACCESSIBLE_ACTIVITY.sub(
@@ -259,6 +430,9 @@ def apply_activity_window(text: str, layout: str, scheme: str) -> str:
         text,
         count=1,
     )
+
+    if layout == "wide":
+        text = resize_wide_card(text)
 
     match = SVG_OPEN.search(text)
     if not match:
@@ -271,6 +445,8 @@ def apply_activity_window(text: str, layout: str, scheme: str) -> str:
         f' data-activity-from="{from_date}" data-activity-to="{to_date}"'
         f' data-activity-layout="{ACTIVITY_LAYOUT}"'
         f' data-activity-columns="7" data-activity-week-rows="{week_rows}"'
+        f' data-active-days="{active_days}" data-current-streak="{current_streak}"'
+        f' data-peak-count="{peak_count}" data-peak-date="{peak_date}"'
     )
     replacement = f"<svg{attrs}{window_attrs}>"
     return text[:match.start()] + replacement + text[match.end():]
@@ -336,6 +512,8 @@ def customize_svg(text: str, scheme: str, layout: str) -> str:
         raise ValueError("customized SVG must declare seven weekday columns")
     if f'data-theme="{THEME_ID}"' not in themed:
         raise ValueError("customized SVG is missing theme provenance")
+    if themed.count('data-activity-summary="true"') != 1:
+        raise ValueError("customized SVG must render one 30-day telemetry summary")
 
     published_attrs = [dict(ATTR.findall(cell)) for cell in published]
     weekday_columns = {int(cell["data-weekday-column"]) for cell in published_attrs}
@@ -368,15 +546,49 @@ def customize_svg(text: str, scheme: str, layout: str) -> str:
             "outside-window placeholder count does not complete the calendar matrix"
         )
 
+    day_labels = DAY_LABEL.findall(themed)
+    published_dates = [cell["data-date"] for cell in published_attrs]
+    if day_labels != published_dates:
+        raise ValueError("every published activity date must render exactly one day number")
+
+    expected_months = []
+    seen_months = set()
+    for value in published_dates:
+        current = date.fromisoformat(value)
+        key = (current.year, current.month)
+        if key not in seen_months:
+            seen_months.add(key)
+            expected_months.append(current.strftime("%b").upper())
+    if MONTH_LABEL.findall(themed) != expected_months:
+        raise ValueError("month-boundary markers do not match the rolling window")
+
+    latest = [cell for cell in published_attrs if cell.get("data-latest-day") == "true"]
+    if len(latest) != 1 or latest[0]["data-date"] != published_dates[-1]:
+        raise ValueError("latest-day highlight must identify the newest displayed date")
+    latest_rect = next(
+        cell for cell in published
+        if 'data-latest-day="true"' in cell
+    )
+    if 'stroke-width="2"' not in latest_rect:
+        raise ValueError("latest-day highlight must use the explicit v2 outline")
+
     zero_cells = [cell for cell in published_attrs if cell["data-level"] == "0"]
     if zero_cells:
         zero_rects = [
             cell
             for cell in published
-            if 'data-level="0"' in cell and 'stroke-width="1"' in cell
+            if 'data-level="0"' in cell
+            and (
+                'stroke-width="1"' in cell
+                or 'data-latest-day="true"' in cell
+            )
         ]
         if len(zero_rects) != len(zero_cells):
             raise ValueError("zero-activity dates must remain visibly outlined")
+
+    for attr in ("data-active-days", "data-current-streak", "data-peak-count", "data-peak-date"):
+        if f"{attr}=" not in themed:
+            raise ValueError(f"customized SVG is missing derived telemetry: {attr}")
 
     return themed
 
@@ -422,21 +634,32 @@ def fixture_svg(scheme: str, layout: str) -> tuple[str, str, str]:
         label = "DAILY ACTIVITY · PAST YEAR"
         band_labels = ""
         geometry = 'viewBox="0 0 640 360" width="640" height="360"'
+        surface = (
+            f'<rect width="640" height="360" fill="{list(palette)[0]}"/>'
+            f'<rect x="0.5" y="0.5" width="639" height="359" fill="none" '
+            f'stroke="{source_token(scheme, "hairline")}"/>'
+            f'<path d="M30 288h580" stroke="{source_token(scheme, "hairline")}"/>'
+            f'<text x="30" y="330" fill="{source_token(scheme, "secondary")}">'
+            f'SOURCE · GITHUB GRAPHQL CONTRIBUTION CALENDAR</text>'
+            f'<text x="610" y="330" fill="{source_token(scheme, "secondary")}">'
+            f'CONTRIBUTIONS THROUGH · SEP 03, 2026</text>'
+        )
     else:
         label = "DAILY ACTIVITY"
-        muted = "#5E5B63" if scheme == "light" else "#AAA8B4"
+        muted = source_token(scheme, "secondary")
         band_labels = (
             f'<text x="22" y="291" fill="{muted}">SEP 04 — MAR 04</text>'
             f'<text x="22" y="397" fill="{muted}">MAR 05 — SEP 03</text>'
         )
         geometry = 'viewBox="0 0 320 528" width="320" height="528"'
+        surface = ""
 
     sample = (
         f'<svg xmlns="http://www.w3.org/2000/svg" {geometry} data-period-days="{days}">'
         f'<title>{scheme}-{layout}</title>'
         f'<desc>fixture; {days} daily activity marks from {start.isoformat()} '
         f'through {end.isoformat()}, inclusive.</desc>'
-        f'<text>{label}</text>{band_labels}{decorative}{"".join(cells)}</svg>'
+        f'<text>{label}</text>{band_labels}{surface}{decorative}{"".join(cells)}</svg>'
     )
     expected_from = (end - timedelta(days=ACTIVITY_WINDOW_DAYS - 1)).isoformat()
     return sample, expected_from, end.isoformat()
@@ -477,9 +700,16 @@ def self_test() -> None:
             assert re.findall(r'data-weekday-label="([0-6])"', themed) == [
                 str(index) for index in range(7)
             ]
+            assert DAY_LABEL.findall(themed) == [
+                cell["data-date"] for cell in published_attrs
+            ]
+            assert themed.count('data-latest-day="true"') == 1
+            assert themed.count('data-activity-summary="true"') == 1
 
             if layout == "wide":
                 assert "DAILY ACTIVITY · LAST 30 DAYS" in themed
+                assert 'viewBox="0 0 640 425"' in themed
+                assert 'height="425"' in themed
             else:
                 assert "DAILY ACTIVITY · 30 DAYS" in themed
                 assert "SEP 04 — MAR 04" not in themed

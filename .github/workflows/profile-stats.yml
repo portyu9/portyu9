@@ -58,14 +58,16 @@ jobs:
           test -s artifacts/profile-stats/profile/signal-field-wide-dark.svg
           test -s artifacts/profile-stats/profile/signal-field-compact-light.svg
           test -s artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
-          grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile-stats/profile/signal-field-compact-light.svg
-          grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
-          grep -q 'data-activity-layout="month-calendar"' artifacts/profile-stats/profile/signal-field-wide-light.svg
-          grep -q 'data-activity-layout="month-calendar"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-theme="yunior-portal-neon-v2"' artifacts/profile-stats/profile/signal-field-wide-light.svg
+          grep -q 'data-theme="yunior-portal-neon-v2"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-theme="yunior-portal-neon-v2"' artifacts/profile-stats/profile/signal-field-compact-light.svg
+          grep -q 'data-theme="yunior-portal-neon-v2"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-activity-layout="month-calendar-v2"' artifacts/profile-stats/profile/signal-field-wide-light.svg
+          grep -q 'data-activity-layout="month-calendar-v2"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-activity-columns="7"' artifacts/profile-stats/profile/signal-field-wide-light.svg
           grep -q 'data-activity-columns="7"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
+          grep -q 'data-activity-summary="true"' artifacts/profile-stats/profile/signal-field-wide-light.svg
+          grep -q 'data-latest-day="true"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           git -C artifacts add profile-stats/profile/signal-field-*.svg
 
       - name: Publish changed artifact set

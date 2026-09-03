@@ -36,6 +36,8 @@ ALLOWED_SVGS = (
 GENERATED_SVG_REFERENCES = (
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg",
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg",
 )
 
 
@@ -108,6 +110,6 @@ for relative in ALLOWED_SVGS:
 
 print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
-    "stays absent, approved local badge SVGs are present, Signal Field artifact-branch SVG URLs are explicit, "
-    "and README SVG references remain restricted to the reviewed profile set."
+    "stays absent, approved local badge SVGs are present, responsive Signal Field artifact-branch SVG URLs "
+    "are explicit, and README SVG references remain restricted to the reviewed profile set."
 )
