@@ -43,8 +43,8 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 <table>
 <thead>
 <tr>
-<th width="360"><big><big><big><big><strong>◆ Principle</strong></big></big></big></big></th>
-<th><big><big><big><big><strong>▤ Engineering contract</strong></big></big></big></big></th>
+<th width="360" align="center"><img alt="◆ Principle" height="38" src="assets/profile-badges/table-header-principle-v1.svg"></th>
+<th align="center"><img alt="▤ Engineering contract" height="38" src="assets/profile-badges/table-header-engineering-contract-v1.svg"></th>
 </tr>
 </thead>
 <tbody>
