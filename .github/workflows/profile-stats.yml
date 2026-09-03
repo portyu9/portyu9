@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - fix/signal-field-only-pr-20260902
     paths:
       - ".github/workflows/profile-stats.yml"
       - "scripts/customize-signal-field.py"
@@ -62,6 +63,8 @@ jobs:
           grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile-stats/profile/signal-field-compact-light.svg
           grep -q 'data-theme="yunior-portal-neon-v1"' artifacts/profile-stats/profile/signal-field-compact-dark.svg
+          grep -q 'data-activity-layout="weeks-by-weekday"' artifacts/profile-stats/profile/signal-field-wide-light.svg
+          grep -q 'data-activity-layout="weeks-by-weekday"' artifacts/profile-stats/profile/signal-field-wide-dark.svg
           git -C artifacts add profile-stats/profile/signal-field-*.svg
 
       - name: Publish changed artifact set
