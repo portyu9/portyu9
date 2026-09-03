@@ -72,6 +72,9 @@ jobs:
       - name: Validate Signal Field v2.9 profile evidence semantics
         run: python3 scripts/sync-profile-contribution-total.py --self-test
 
+      - name: Validate Signal Field v2.10 metric labels
+        run: python3 scripts/relabel-signal-field-metrics.py --self-test
+
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile.py
 
@@ -121,4 +124,5 @@ jobs:
           python3 scripts/phosphor-activity-signal-field-v2.py "$READY_DIR"
           python3 scripts/phosphor-lines-signal-field-v2.py "$READY_DIR"
           python3 scripts/sync-profile-contribution-total.py "$READY_DIR"
+          python3 scripts/relabel-signal-field-metrics.py "$READY_DIR"
           python3 scripts/validate-generated-signal-field.py "$READY_DIR"
