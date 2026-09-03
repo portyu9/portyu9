@@ -9,6 +9,7 @@ on:
       - "README.md"
       - "assets/**"
       - "scripts/**"
+      - ".github/GOVERNANCE.md"
       - ".github/workflows/profile-quality.yml"
       - ".github/workflows/profile-stats.yml"
 
@@ -27,6 +28,8 @@ jobs:
     name: validate-contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 6
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
@@ -71,6 +74,9 @@ jobs:
 
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile.py
+
+      - name: Validate repository governance contract
+        run: python3 scripts/validate-governance-contract.py
 
   integration:
     name: integration-pinned-upstream
