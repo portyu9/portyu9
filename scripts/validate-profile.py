@@ -80,12 +80,14 @@ for heading in REMOVED_SECTIONS:
 # Principle side constrained while allowing Engineering contract to take all remaining room.
 if readme.count('<table width="100%">') != 1:
     fail("Principle table must render at 100% README width")
-if readme.count('<th width="28%" align="center"><big><strong>◆ Principle</strong></big></th>') != 1:
-    fail("Principle table must keep the responsive 28% Principle column and native header")
-if readme.count('<th width="72%" align="center"><big><strong>▤ Engineering contract</strong></big></th>') != 1:
-    fail("Engineering contract table must consume the remaining 72% width with a native header")
+if readme.count('<th width="28%" align="center"><h3>◆&nbsp;Principle</h3></th>') != 1:
+    fail("Principle table must keep the 28% column with a native h3 no-wrap header")
+if readme.count('<th width="72%" align="center"><h3>▤&nbsp;Engineering&nbsp;contract</h3></th>') != 1:
+    fail("Engineering contract table must keep the 72% column with a matching native h3 no-wrap header")
 if "table-header-principle" in readme or "table-header-engineering-contract" in readme:
     fail("Table headers must use native GitHub text, not theme-sensitive SVG images")
+if '<big><strong>◆ Principle</strong></big>' in readme or '<big><strong>▤ Engineering contract</strong></big>' in readme:
+    fail("Legacy smaller thesis headers must not return")
 
 svg_pattern = re.compile(
     r'''(?:<img\b[^>]*\bsrc=["']([^"']+\.svg(?:[?#][^"']*)?)["']|<source\b[^>]*\bsrcset=["']([^"']+\.svg(?:[?#][^"']*)?)["']|!\[[^\]]*\]\(([^)]+\.svg(?:[?#][^)]*)?)\))''',
@@ -124,6 +126,6 @@ if ">Reproducibility</text>" not in repro or ">over Optics</text>" not in repro:
 print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
     "stays absent, approved local badge SVGs are present, the Principle table spans the README at a "
-    "responsive 28/72 split with native theme-safe headers, responsive Signal Field artifact-branch SVG "
-    "URLs are explicit, and README SVG references remain restricted to the reviewed profile set."
+    "responsive 28/72 split with equal native h3 theme-safe no-wrap headers, responsive Signal Field "
+    "artifact-branch SVG URLs are explicit, and README SVG references remain restricted to the reviewed profile set."
 )
