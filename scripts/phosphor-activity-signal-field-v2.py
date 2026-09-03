@@ -47,7 +47,6 @@ COLORED_SUMMARY = re.compile(
     r'(?=[^>]*\bdata-activity-summary-phosphor="true")[^>]*>.*?</text>',
     re.I | re.S,
 )
-ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 WIDE_CONTENT = re.compile(
     r"^ACTIVE (?P<active>\d+)/30 · STREAK (?P<streak>\d+) · "
     r"PEAK (?P<peak_date>[A-Z]{3} \d{2}) · (?P<peak_count>\d+)$"
@@ -177,14 +176,24 @@ def validate(text: str, layout: str, scheme: str) -> None:
         raise ValueError(f"expected one colored {layout} activity summary, found {len(summaries)}")
     summary = summaries[0]
     palette = COLORS[scheme]
-    expected_tokens = ("active", "streak", "peak_count")
+    content_patterns = {
+        "active": r"ACTIVE \d+/30",
+        "streak": r"STREAK \d+",
+        "peak_count": r"PEAK \d+",
+    }
     if layout == "wide":
-        expected_tokens = ("active", "streak", "peak_date", "peak_count")
+        content_patterns = {
+            "active": r"ACTIVE \d+/30",
+            "streak": r"STREAK \d+",
+            "peak_date": r"PEAK [A-Z]{3} \d{2}",
+            "peak_count": r"\d+",
+        }
 
-    for token in expected_tokens:
+    for token, content_pattern in content_patterns.items():
         pattern = re.compile(
             rf'<tspan\b(?=[^>]*\bfill="{re.escape(palette[token])}")'
-            rf'(?=[^>]*\bdata-telemetry-phosphor="{token}")[^>]*>[^<]+</tspan>',
+            rf'(?=[^>]*\bdata-telemetry-phosphor="{token}")[^>]*>'
+            rf'{content_pattern}</tspan>',
             re.I,
         )
         if len(pattern.findall(summary)) != 1:
@@ -196,13 +205,6 @@ def validate(text: str, layout: str, scheme: str) -> None:
         raise ValueError(
             f"{layout} telemetry must retain {expected_separator_count} neutral separators"
         )
-
-    if layout == "wide":
-        if "PEAK SEP 02" not in summary or ">674</tspan>" not in summary:
-            raise ValueError("wide telemetry fixture lost peak date/count semantics")
-    else:
-        if "PEAK 674" not in summary:
-            raise ValueError("compact telemetry fixture lost peak-count semantics")
 
 
 def apply_directory(directory: Path) -> None:
@@ -241,6 +243,11 @@ def self_test() -> None:
             validate(themed, layout, scheme)
             assert f'data-activity-phosphor="{PHOSPHOR_ID}"' in themed
             assert 'data-activity-summary-phosphor="true"' in themed
+            if layout == "wide":
+                assert "PEAK SEP 02" in themed
+                assert ">674</tspan>" in themed
+            else:
+                assert "PEAK 674" in themed
     print(f"Signal Field activity phosphor self-test passed: {PHOSPHOR_ID}")
 
 
