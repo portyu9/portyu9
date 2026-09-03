@@ -20,15 +20,17 @@ REMOVED_SECTIONS = (
     "## Engineering surface",
 )
 ALLOWED_SVGS = (
-    "assets/profile-badges/identity-quality-engineering.svg",
-    "assets/profile-badges/identity-automation-architecture.svg",
-    "assets/profile-badges/identity-ai-quality-systems.svg",
-    "assets/profile-badges/principle-evidence-confidence.svg",
-    "assets/profile-badges/principle-reasoning-authorization.svg",
-    "assets/profile-badges/principle-attribution-abstraction.svg",
-    "assets/profile-badges/principle-oracle-discipline.svg",
-    "assets/profile-badges/principle-reproducibility-optics.svg",
-    "assets/profile-badges/principle-safety-architecture.svg",
+    "assets/profile-badges/identity-quality-engineering-neon-v2.svg",
+    "assets/profile-badges/identity-automation-architecture-neon-v2.svg",
+    "assets/profile-badges/identity-ai-quality-systems-neon-v2.svg",
+    "assets/profile-badges/header-principle-v2.svg",
+    "assets/profile-badges/header-engineering-contract-v2.svg",
+    "assets/profile-badges/principle-evidence-confidence-neon-v2.svg",
+    "assets/profile-badges/principle-reasoning-authorization-neon-v2.svg",
+    "assets/profile-badges/principle-attribution-abstraction-neon-v2.svg",
+    "assets/profile-badges/principle-oracle-discipline-neon-v2.svg",
+    "assets/profile-badges/principle-reproducibility-optics-neon-v2.svg",
+    "assets/profile-badges/principle-safety-architecture-neon-v2.svg",
 )
 
 
@@ -101,6 +103,6 @@ for relative in ALLOWED_SVGS:
 
 print(
     "Profile validation passed: exact hero bytes are preserved above the profile name, removed artwork "
-    "stays absent, approved local badge SVGs are present, and README SVG references are restricted "
-    "to the reviewed badge set."
+    "stays absent, uncached local SVG assets are present, and README SVG references are restricted "
+    "to the reviewed badge and header set."
 )
