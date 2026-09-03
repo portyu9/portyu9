@@ -18,6 +18,7 @@ on:
       - "scripts/phosphor-lines-signal-field-v2.py"
       - "scripts/sync-profile-contribution-total.py"
       - "scripts/relabel-signal-field-metrics.py"
+      - "scripts/glyphs-signal-field-metrics.py"
       - "scripts/validate-generated-signal-field.py"
   schedule:
     # Offset from the top of the hour to reduce scheduled-run congestion.
@@ -79,6 +80,7 @@ jobs:
           python3 source/scripts/phosphor-lines-signal-field-v2.py "$READY_DIR"
           python3 source/scripts/sync-profile-contribution-total.py "$READY_DIR"
           python3 source/scripts/relabel-signal-field-metrics.py "$READY_DIR"
+          python3 source/scripts/glyphs-signal-field-metrics.py "$READY_DIR"
           python3 source/scripts/validate-generated-signal-field.py "$READY_DIR"
 
       - name: Upload immutable validated artifact set

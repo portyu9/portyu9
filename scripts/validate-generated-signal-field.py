@@ -38,6 +38,7 @@ REQUIRED_ROOT_ATTRS = {
     "data-line-phosphor": "signal-field-v2.8",
     "data-contribution-total-sync": "signal-field-v2.9",
     "data-metric-labels": "signal-field-v2.10",
+    "data-metric-glyphs": "signal-field-v2.11",
     "data-contribution-total-source": "github-default-contribution-calendar",
     "data-metric-sources": "github-graphql+rest",
     "data-generation-schedule": "5-minutes",
@@ -120,6 +121,17 @@ def validate_file(path: Path) -> None:
         if text.count(f'data-metric-phosphor-line="{metric}"') != 1:
             fail(f"{path.name}: metric line provenance missing for {metric}")
 
+    for metric in ("stars", "pull_requests", "issues"):
+        if text.count(f'data-metric-glyph="{metric}"') != 1:
+            fail(f"{path.name}: decorative inline-vector metric glyph missing for {metric}")
+    if text.count('data-glyph-rendering="inline-vector"') != 3:
+        fail(f"{path.name}: metric glyph rendering provenance changed")
+    if text.count('aria-hidden="true"') < 3:
+        fail(f"{path.name}: decorative metric glyphs must remain hidden from accessibility APIs")
+    for vector in ("star", "pull-request", "bug"):
+        if text.count(f'data-glyph-vector="{vector}"') != 1:
+            fail(f"{path.name}: expected {vector} vector glyph is missing or duplicated")
+
     if text.count(">BUGS FOUND</text>") != 1:
         fail(f"{path.name}: visible Bugs Found metric label is missing or duplicated")
     if "authored public issues reported by GitHub REST Search" not in text:
@@ -156,7 +168,8 @@ def validate_directory(directory: Path) -> None:
         fail(f"generated artifact set changed: {actual}")
     print(
         "Final Signal Field validation passed: four responsive artifacts are complete, attributable, "
-        "source-accurate, privacy-minimized, Bugs Found-labeled, and scheduled with best-effort five-minute semantics."
+        "source-accurate, privacy-minimized, Bugs Found-labeled, vector-glyph enhanced, and scheduled "
+        "with best-effort five-minute semantics."
     )
 
 
