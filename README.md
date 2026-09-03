@@ -6,13 +6,13 @@
 <img alt="Ƴunior Ƥortal" height="68" src="assets/profile-badges/nameplate-yunior-portal-v2.svg?text=black-v2">
 </p>
 
-<p align="center">
-<img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=5"> <img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=5"> <img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=5">
-</p>
-
 <p align="center"><strong>I engineer quality systems that turn software change into attributable evidence —<br>and evidence into decision-grade confidence.</strong></p>
 
 <br>
+
+<p align="center">
+<img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=5"> <img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=5"> <img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=5">
+</p>
 
 <h3 align="center"><big>◈&nbsp;&nbsp;QE Domains</big></h3>
 
@@ -30,7 +30,7 @@
 
 ---
 
-## ✦ Engineering thesis
+## ✦ Engineering Thesis
 
 <table>
 <tr>
@@ -86,7 +86,9 @@ Quality engineering is the discipline of <strong>reducing uncertainty about chan
 
 </div>
 
-<br>
+---
+
+<h3 align="center"><big>&nbsp;&nbsp;Activity Metrics</big></h3>
 
 <div align="center">
 
