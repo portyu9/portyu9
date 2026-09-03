@@ -39,6 +39,7 @@ REQUIRED_ROOT_ATTRS = {
     "data-contribution-total-sync": "signal-field-v2.9",
     "data-metric-labels": "signal-field-v2.10",
     "data-metric-glyphs": "signal-field-v2.11",
+    "data-secondary-metric-balance": "signal-field-v2.12",
     "data-contribution-total-source": "github-default-contribution-calendar",
     "data-metric-sources": "github-graphql+rest",
     "data-generation-schedule": "5-minutes",
@@ -61,6 +62,36 @@ FORBIDDEN = (
 
 def fail(message: str) -> None:
     raise ValueError(message)
+
+
+def tag_attrs_for_metric(text: str, metric: str) -> dict[str, str]:
+    pattern = re.compile(
+        rf'(?P<tag><text\b(?=[^>]*\bdata-metric-phosphor="{re.escape(metric)}")[^>]*>)',
+        re.I,
+    )
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        fail(f"metric value tag missing or duplicated for {metric}")
+    return dict(ATTR.findall(matches[0].group("tag")))
+
+
+def tag_attrs_for_label(text: str, label: str) -> dict[str, str]:
+    pattern = re.compile(rf'(?P<tag><text\b[^>]*>){re.escape(label)}</text>', re.I)
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        fail(f"metric label tag missing or duplicated for {label}")
+    return dict(ATTR.findall(matches[0].group("tag")))
+
+
+def glyph_attrs(text: str, metric: str) -> dict[str, str]:
+    pattern = re.compile(
+        rf'(?P<tag><g\b(?=[^>]*\bdata-metric-glyph="{re.escape(metric)}")[^>]*>)',
+        re.I,
+    )
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        fail(f"decorative inline-vector metric glyph missing or duplicated for {metric}")
+    return dict(ATTR.findall(matches[0].group("tag")))
 
 
 def validate_file(path: Path) -> None:
@@ -121,16 +152,37 @@ def validate_file(path: Path) -> None:
         if text.count(f'data-metric-phosphor-line="{metric}"') != 1:
             fail(f"{path.name}: metric line provenance missing for {metric}")
 
+    expected_scale = "1.4583" if "wide" in path.name else "1.2083"
     for metric in ("stars", "pull_requests", "issues"):
-        if text.count(f'data-metric-glyph="{metric}"') != 1:
-            fail(f"{path.name}: decorative inline-vector metric glyph missing for {metric}")
-    if text.count('data-glyph-rendering="inline-vector"') != 3:
-        fail(f"{path.name}: metric glyph rendering provenance changed")
-    if text.count('aria-hidden="true"') < 3:
-        fail(f"{path.name}: decorative metric glyphs must remain hidden from accessibility APIs")
+        gattrs = glyph_attrs(text, metric)
+        if gattrs.get("data-glyph-rendering") != "inline-vector":
+            fail(f"{path.name}: metric glyph rendering provenance changed for {metric}")
+        if gattrs.get("aria-hidden") != "true":
+            fail(f"{path.name}: decorative metric glyph must remain accessibility-hidden for {metric}")
+        if f"scale({expected_scale})" not in gattrs.get("transform", ""):
+            fail(f"{path.name}: {metric} glyph is not using the reviewed v2.12 display scale")
     for vector in ("star", "pull-request", "bug"):
         if text.count(f'data-glyph-vector="{vector}"') != 1:
             fail(f"{path.name}: expected {vector} vector glyph is missing or duplicated")
+
+    pull_value = tag_attrs_for_metric(text, "pull_requests")
+    pull_label = tag_attrs_for_label(text, "PULL REQUESTS")
+    if "wide" in path.name:
+        if pull_value.get("x") != "447" or pull_value.get("text-anchor") != "middle":
+            fail(f"{path.name}: Pull Requests value must remain centered between outer metric axes")
+        if pull_label.get("x") != "447" or pull_label.get("text-anchor") != "middle":
+            fail(f"{path.name}: Pull Requests label must remain centered between outer metric axes")
+        line = re.compile(
+            r'(?P<tag><path\b(?=[^>]*\bdata-metric-phosphor-line="pull_requests")[^>]*>)',
+            re.I,
+        ).search(text)
+        if not line or dict(ATTR.findall(line.group("tag"))).get("d") != "M404 73h86":
+            fail(f"{path.name}: Pull Requests phosphor line must remain centered at x=447")
+    else:
+        if pull_value.get("x") != "160" or pull_value.get("text-anchor") != "middle":
+            fail(f"{path.name}: compact Pull Requests value must remain centered at x=160")
+        if pull_label.get("x") != "160" or pull_label.get("text-anchor") != "middle":
+            fail(f"{path.name}: compact Pull Requests label must remain centered at x=160")
 
     if text.count(">BUGS FOUND</text>") != 1:
         fail(f"{path.name}: visible Bugs Found metric label is missing or duplicated")
@@ -168,8 +220,8 @@ def validate_directory(directory: Path) -> None:
         fail(f"generated artifact set changed: {actual}")
     print(
         "Final Signal Field validation passed: four responsive artifacts are complete, attributable, "
-        "source-accurate, privacy-minimized, Bugs Found-labeled, vector-glyph enhanced, and scheduled "
-        "with best-effort five-minute semantics."
+        "source-accurate, privacy-minimized, Bugs Found-labeled, large-glyph balanced, center-aligned, "
+        "and scheduled with best-effort five-minute semantics."
     )
 
 

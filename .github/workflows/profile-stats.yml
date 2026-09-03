@@ -19,6 +19,7 @@ on:
       - "scripts/sync-profile-contribution-total.py"
       - "scripts/relabel-signal-field-metrics.py"
       - "scripts/glyphs-signal-field-metrics.py"
+      - "scripts/balance-signal-field-secondary-metrics.py"
       - "scripts/validate-generated-signal-field.py"
   schedule:
     # Offset from the top of the hour to reduce scheduled-run congestion.
@@ -81,6 +82,7 @@ jobs:
           python3 source/scripts/sync-profile-contribution-total.py "$READY_DIR"
           python3 source/scripts/relabel-signal-field-metrics.py "$READY_DIR"
           python3 source/scripts/glyphs-signal-field-metrics.py "$READY_DIR"
+          python3 source/scripts/balance-signal-field-secondary-metrics.py "$READY_DIR"
           python3 source/scripts/validate-generated-signal-field.py "$READY_DIR"
 
       - name: Upload immutable validated artifact set
