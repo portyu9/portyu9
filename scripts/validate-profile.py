@@ -78,12 +78,12 @@ for heading in REMOVED_SECTIONS:
         fail(f"Removed profile section is still present: {heading}")
 
 svg_pattern = re.compile(
-    r'''(?:<img\b[^>]*\bsrc=["']([^"']+\.svg(?:[?#][^"']*)?)["']|!\[[^\]]*\]\(([^)]+\.svg(?:[?#][^)]*)?)\))''',
+    r'''(?:<img\b[^>]*\bsrc=["']([^"']+\.svg(?:[?#][^"']*)?)["']|<source\b[^>]*\bsrcset=["']([^"']+\.svg(?:[?#][^"']*)?)["']|!\[[^\]]*\]\(([^)]+\.svg(?:[?#][^)]*)?)\))''',
     re.I,
 )
 references = []
 for match in svg_pattern.finditer(readme):
-    reference = match.group(1) or match.group(2)
+    reference = match.group(1) or match.group(2) or match.group(3)
     reference = reference.split("?", 1)[0].split("#", 1)[0].lstrip("./")
     references.append(reference)
 
