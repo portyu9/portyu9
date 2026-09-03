@@ -5,6 +5,11 @@ The pinned upstream generator still collects the complete 365/366-day contributi
 dataset used by the headline metric. This deterministic presentation layer changes
 only the rendered daily-activity field to the newest 30 dated records.
 
+The activity field is rendered as a true rolling-month calendar: seven weekday
+columns (Sunday through Saturday) and five or six chronological week rows.
+Out-of-window cells are rendered as faint placeholders so partial weeks remain
+visually explicit instead of appearing to be missing activity.
+
 Unexpected colors, malformed activity data, duplicate/non-consecutive dates, or an
 upstream structural change fail closed instead of publishing a partial artifact.
 """
@@ -18,7 +23,8 @@ import sys
 
 THEME_ID = "yunior-portal-neon-v1"
 ACTIVITY_WINDOW_DAYS = 30
-ACTIVITY_LAYOUT = "weeks-by-weekday"
+ACTIVITY_LAYOUT = "month-calendar"
+WEEKDAYS = ("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT")
 EXPECTED_FILES = (
     "signal-field-wide-light.svg",
     "signal-field-wide-dark.svg",
@@ -64,6 +70,10 @@ HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}\b")
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ACTIVITY_CELL = re.compile(
     r'<rect\b[^>]*\bdata-date="\d{4}-\d{2}-\d{2}"[^>]*/>',
+    re.I,
+)
+OUTSIDE_SLOT = re.compile(
+    r'<rect\b[^>]*\bdata-slot-state="outside-window"[^>]*/>',
     re.I,
 )
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
@@ -121,37 +131,101 @@ def sunday_weekday(value: date) -> int:
     return (value.weekday() + 1) % 7
 
 
-def render_activity_window(cells: list[dict[str, str]], layout: str) -> str:
-    recent = cells[-ACTIVITY_WINDOW_DAYS:]
-    rendered: list[str] = []
-
+def calendar_bounds(recent: list[dict[str, str]]) -> tuple[date, date, int]:
     first_date = date.fromisoformat(recent[0]["data-date"])
+    last_date = date.fromisoformat(recent[-1]["data-date"])
     week_origin = first_date - timedelta(days=sunday_weekday(first_date))
+    week_rows = ((last_date - week_origin).days // 7) + 1
+    if week_rows not in (5, 6):
+        raise ValueError(
+            f"30-day rolling calendar must occupy 5 or 6 week rows, found {week_rows}"
+        )
+    return first_date, week_origin, week_rows
+
+
+def source_token(scheme: str, key: str) -> str:
+    tokens = {
+        "light": {"secondary": "#5E5B63", "hairline": "#D8D2C7"},
+        "dark": {"secondary": "#AAA8B4", "hairline": "#303543"},
+    }
+    return tokens[scheme][key]
+
+
+def render_activity_window(
+    cells: list[dict[str, str]], layout: str, scheme: str
+) -> tuple[str, int]:
+    recent = cells[-ACTIVITY_WINDOW_DAYS:]
+    first_date, week_origin, week_rows = calendar_bounds(recent)
+    last_date = date.fromisoformat(recent[-1]["data-date"])
+    cells_by_date = {
+        date.fromisoformat(cell["data-date"]): (index, cell)
+        for index, cell in enumerate(recent)
+    }
 
     if layout == "wide":
-        x0, y0, size, step_x, step_y = 30, 191, 12, 20, 13
+        x0, label_y, grid_y = 52, 195, 202
+        step_x, step_y = 78, 17
+        width, height, radius = 56, 14, 4
+        weekday_font_size = 8
     elif layout == "compact":
-        x0, y0, size, step_x, step_y = 22, 291, 11, 18, 13
+        x0, label_y, grid_y = 18, 291, 300
+        step_x, step_y = 42, 25
+        width, height, radius = 34, 19, 4
+        weekday_font_size = 7
     else:
         raise ValueError(f"unsupported layout: {layout}")
 
-    for index, cell in enumerate(recent):
-        current = date.fromisoformat(cell["data-date"])
-        weekday_row = sunday_weekday(current)
-        week_column = (current - week_origin).days // 7
-        x = x0 + week_column * step_x
-        y = y0 + weekday_row * step_y
+    secondary = source_token(scheme, "secondary")
+    hairline = source_token(scheme, "hairline")
+
+    rendered: list[str] = []
+    for weekday_column, weekday in enumerate(WEEKDAYS):
+        x = x0 + weekday_column * step_x + width / 2
         rendered.append(
-            f'<rect x="{x}" y="{y}" width="{size}" height="{size}" rx="3" '
-            f'fill="{cell["fill"]}" data-date="{cell["data-date"]}" '
-            f'data-count="{cell["data-count"]}" data-level="{cell["data-level"]}" '
-            f'data-window-day="{index + 1}" data-week-column="{week_column}" '
-            f'data-weekday-row="{weekday_row}"/>'
+            f'<text x="{x:g}" y="{label_y}" fill="{secondary}" '
+            f'font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" '
+            f'font-size="{weekday_font_size}" font-weight="650" text-anchor="middle" '
+            f'data-weekday-label="{weekday_column}">{weekday}</text>'
         )
-    return "".join(rendered)
+
+    for week_row in range(week_rows):
+        for weekday_column in range(7):
+            slot_date = week_origin + timedelta(days=week_row * 7 + weekday_column)
+            x = x0 + weekday_column * step_x
+            y = grid_y + week_row * step_y
+            entry = cells_by_date.get(slot_date)
+
+            if entry is None:
+                if slot_date < first_date or slot_date > last_date:
+                    rendered.append(
+                        f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
+                        f'rx="{radius}" fill="none" stroke="{hairline}" stroke-width="1" '
+                        f'stroke-dasharray="2 3" opacity="0.42" '
+                        f'data-slot-state="outside-window" data-calendar-week="{week_row}" '
+                        f'data-weekday-column="{weekday_column}"/>'
+                    )
+                    continue
+                raise ValueError(
+                    f"calendar slot unexpectedly missing in-window date: {slot_date}"
+                )
+
+            index, cell = entry
+            level = int(cell["data-level"])
+            zero_outline = (
+                f' stroke="{hairline}" stroke-width="1"' if level == 0 else ""
+            )
+            rendered.append(
+                f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
+                f'rx="{radius}" fill="{cell["fill"]}"{zero_outline} '
+                f'data-date="{cell["data-date"]}" data-count="{cell["data-count"]}" '
+                f'data-level="{cell["data-level"]}" data-window-day="{index + 1}" '
+                f'data-week-row="{week_row}" data-weekday-column="{weekday_column}"/>'
+            )
+
+    return "".join(rendered), week_rows
 
 
-def apply_activity_window(text: str, layout: str) -> str:
+def apply_activity_window(text: str, layout: str, scheme: str) -> str:
     cells = parse_activity_cells(text)
     recent = cells[-ACTIVITY_WINDOW_DAYS:]
     from_date = recent[0]["data-date"]
@@ -162,7 +236,8 @@ def apply_activity_window(text: str, layout: str) -> str:
     if len(ACTIVITY_CELL.findall(text[start:end])) != len(cells):
         raise ValueError("activity-cell block is not contiguous")
 
-    text = text[:start] + render_activity_window(cells, layout) + text[end:]
+    rendered, week_rows = render_activity_window(cells, layout, scheme)
+    text = text[:start] + rendered + text[end:]
 
     if layout == "wide":
         old_label = "DAILY ACTIVITY · PAST YEAR"
@@ -179,7 +254,8 @@ def apply_activity_window(text: str, layout: str) -> str:
     if len(ACCESSIBLE_ACTIVITY.findall(text)) != 1:
         raise ValueError("expected exactly one accessible annual activity description")
     text = ACCESSIBLE_ACTIVITY.sub(
-        f"{ACTIVITY_WINDOW_DAYS} daily activity marks from {from_date} through {to_date}, inclusive.",
+        f"{ACTIVITY_WINDOW_DAYS} daily activity marks from {from_date} through "
+        f"{to_date}, inclusive.",
         text,
         count=1,
     )
@@ -194,6 +270,7 @@ def apply_activity_window(text: str, layout: str) -> str:
         f' data-activity-window-days="{ACTIVITY_WINDOW_DAYS}"'
         f' data-activity-from="{from_date}" data-activity-to="{to_date}"'
         f' data-activity-layout="{ACTIVITY_LAYOUT}"'
+        f' data-activity-columns="7" data-activity-week-rows="{week_rows}"'
     )
     replacement = f"<svg{attrs}{window_attrs}>"
     return text[:match.start()] + replacement + text[match.end():]
@@ -212,9 +289,8 @@ def customize_svg(text: str, scheme: str, layout: str) -> str:
     if "data-period-days=" not in text or "<title" not in text or "<desc" not in text:
         raise ValueError("Signal Field structural signature is missing")
 
-    themed = apply_activity_window(text, layout)
+    themed = apply_activity_window(text, layout, scheme)
 
-    # Validate only the palette tokens that survive this layout and the 30-day crop.
     source_colors_after_crop = {color.upper() for color in HEX_COLOR.findall(themed)}
     expected_targets = {
         target.upper()
@@ -236,7 +312,9 @@ def customize_svg(text: str, scheme: str, layout: str) -> str:
     themed_colors = {color.upper() for color in HEX_COLOR.findall(themed)}
     remaining = sorted(themed_colors & allowed)
     if remaining:
-        raise ValueError("source palette colors remain after customization: " + ", ".join(remaining))
+        raise ValueError(
+            "source palette colors remain after customization: " + ", ".join(remaining)
+        )
 
     missing_targets = sorted(expected_targets - themed_colors)
     if missing_targets:
@@ -247,21 +325,58 @@ def customize_svg(text: str, scheme: str, layout: str) -> str:
 
     published = ACTIVITY_CELL.findall(themed)
     if len(published) != ACTIVITY_WINDOW_DAYS:
-        raise ValueError(f"customized SVG must publish exactly {ACTIVITY_WINDOW_DAYS} activity cells")
+        raise ValueError(
+            f"customized SVG must publish exactly {ACTIVITY_WINDOW_DAYS} activity cells"
+        )
     if f'data-activity-window-days="{ACTIVITY_WINDOW_DAYS}"' not in themed:
         raise ValueError("customized SVG is missing activity-window provenance")
     if f'data-activity-layout="{ACTIVITY_LAYOUT}"' not in themed:
         raise ValueError("customized SVG is missing activity-layout provenance")
+    if 'data-activity-columns="7"' not in themed:
+        raise ValueError("customized SVG must declare seven weekday columns")
     if f'data-theme="{THEME_ID}"' not in themed:
         raise ValueError("customized SVG is missing theme provenance")
 
-    attrs = [dict(ATTR.findall(cell)) for cell in published]
-    weekday_rows = {int(cell["data-weekday-row"]) for cell in attrs}
-    if not weekday_rows.issubset(set(range(7))) or len(weekday_rows) != 7:
-        raise ValueError("activity grid must map the 30-day window across all seven weekday rows")
-    week_columns = [int(cell["data-week-column"]) for cell in attrs]
-    if min(week_columns) != 0 or max(week_columns) > 5:
-        raise ValueError("activity grid week-column mapping is outside the expected rolling-month range")
+    published_attrs = [dict(ATTR.findall(cell)) for cell in published]
+    weekday_columns = {int(cell["data-weekday-column"]) for cell in published_attrs}
+    if weekday_columns != set(range(7)):
+        raise ValueError("activity calendar must cover all seven weekday columns")
+
+    week_rows = [int(cell["data-week-row"]) for cell in published_attrs]
+    row_count = max(week_rows) + 1
+    if min(week_rows) != 0 or row_count not in (5, 6):
+        raise ValueError(
+            "activity calendar must occupy five or six chronological week rows"
+        )
+    if f'data-activity-week-rows="{row_count}"' not in themed:
+        raise ValueError(
+            "activity calendar week-row provenance does not match rendered cells"
+        )
+
+    for cell in published_attrs:
+        current = date.fromisoformat(cell["data-date"])
+        if int(cell["data-weekday-column"]) != sunday_weekday(current):
+            raise ValueError(f"weekday column mismatch for {current.isoformat()}")
+
+    weekday_labels = re.findall(r'data-weekday-label="([0-6])"', themed)
+    if weekday_labels != [str(index) for index in range(7)]:
+        raise ValueError("activity calendar must render ordered SUN-SAT weekday labels")
+
+    placeholder_count = len(OUTSIDE_SLOT.findall(themed))
+    if placeholder_count != row_count * 7 - ACTIVITY_WINDOW_DAYS:
+        raise ValueError(
+            "outside-window placeholder count does not complete the calendar matrix"
+        )
+
+    zero_cells = [cell for cell in published_attrs if cell["data-level"] == "0"]
+    if zero_cells:
+        zero_rects = [
+            cell
+            for cell in published
+            if 'data-level="0"' in cell and 'stroke-width="1"' in cell
+        ]
+        if len(zero_rects) != len(zero_cells):
+            raise ValueError("zero-activity dates must remain visibly outlined")
 
     return themed
 
@@ -298,7 +413,6 @@ def fixture_svg(scheme: str, layout: str) -> tuple[str, str, str]:
             f'data-count="{index}" data-level="{level}"/>'
         )
 
-    # Mirror layout-specific palette usage: compact has no four-segment rail.
     common_sources = list(palette.keys())[:5]
     decorative = "".join(f'<rect fill="{color}"/>' for color in common_sources)
     if layout == "wide":
@@ -329,6 +443,17 @@ def fixture_svg(scheme: str, layout: str) -> tuple[str, str, str]:
 
 
 def self_test() -> None:
+    five_week_fixture = [
+        {"data-date": (date(2026, 8, 5) + timedelta(days=index)).isoformat()}
+        for index in range(30)
+    ]
+    six_week_fixture = [
+        {"data-date": (date(2026, 8, 1) + timedelta(days=index)).isoformat()}
+        for index in range(30)
+    ]
+    assert calendar_bounds(five_week_fixture)[2] == 5
+    assert calendar_bounds(six_week_fixture)[2] == 6
+
     for scheme in SOURCE_PALETTES:
         for layout in ("wide", "compact"):
             sample, expected_from, expected_to = fixture_svg(scheme, layout)
@@ -336,24 +461,34 @@ def self_test() -> None:
             assert f'data-theme="{THEME_ID}"' in themed
             assert f'data-activity-window-days="{ACTIVITY_WINDOW_DAYS}"' in themed
             assert f'data-activity-layout="{ACTIVITY_LAYOUT}"' in themed
+            assert 'data-activity-columns="7"' in themed
             assert f'data-activity-from="{expected_from}"' in themed
             assert f'data-activity-to="{expected_to}"' in themed
+
             published = ACTIVITY_CELL.findall(themed)
             assert len(published) == ACTIVITY_WINDOW_DAYS
-            attrs = [dict(ATTR.findall(cell)) for cell in published]
-            assert {int(cell["data-weekday-row"]) for cell in attrs} == set(range(7))
-            assert min(int(cell["data-week-column"]) for cell in attrs) == 0
-            assert max(int(cell["data-week-column"]) for cell in attrs) <= 5
-            assert expected_from in themed and expected_to in themed
+            published_attrs = [dict(ATTR.findall(cell)) for cell in published]
+            assert {
+                int(cell["data-weekday-column"]) for cell in published_attrs
+            } == set(range(7))
+            assert min(int(cell["data-week-row"]) for cell in published_attrs) == 0
+            assert max(int(cell["data-week-row"]) for cell in published_attrs) in (4, 5)
+            assert len(OUTSIDE_SLOT.findall(themed)) in (5, 12)
+            assert re.findall(r'data-weekday-label="([0-6])"', themed) == [
+                str(index) for index in range(7)
+            ]
+
             if layout == "wide":
                 assert "DAILY ACTIVITY · LAST 30 DAYS" in themed
             else:
                 assert "DAILY ACTIVITY · 30 DAYS" in themed
                 assert "SEP 04 — MAR 04" not in themed
+
             assert not (
                 {color.upper() for color in SOURCE_PALETTES[scheme]}
                 & {color.upper() for color in HEX_COLOR.findall(themed)}
             )
+
     print(
         f"Signal Field customization self-test passed: {THEME_ID}; "
         f"activity window={ACTIVITY_WINDOW_DAYS} days; layout={ACTIVITY_LAYOUT}"
