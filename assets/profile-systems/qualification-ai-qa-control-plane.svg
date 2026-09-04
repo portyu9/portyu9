@@ -1,37 +1,38 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="620" height="164" viewBox="0 0 620 164" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="190" viewBox="0 0 620 190" role="img" aria-labelledby="title desc" data-system-card="selected-engineering-systems-v2">
   <title id="title">AI QA Control Plane</title>
   <desc id="desc">Selected engineering system. Bounded reasoning with deterministic authority, provenance-bound evidence, and fail-closed mutation boundaries.</desc>
   <defs>
     <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#FF2BD6"/>
-      <stop offset="0.52" stop-color="#8C7CFF"/>
+      <stop offset="0.52" stop-color="#665CFF"/>
       <stop offset="1" stop-color="#28D7FF"/>
     </linearGradient>
     <linearGradient id="wash" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#FF2BD6" stop-opacity=".08"/>
-      <stop offset=".5" stop-color="#8C7CFF" stop-opacity=".04"/>
-      <stop offset="1" stop-color="#28D7FF" stop-opacity=".08"/>
+      <stop offset="0" stop-color="#FF2BD6" stop-opacity=".065"/>
+      <stop offset=".52" stop-color="#665CFF" stop-opacity=".035"/>
+      <stop offset="1" stop-color="#28D7FF" stop-opacity=".055"/>
     </linearGradient>
   </defs>
   <style>
-    .surface{fill:#FFFFFF;stroke:#D0D7DE}.ink{fill:#1F2328}.muted{fill:#57606A}.chip{fill:#F6F8FA;stroke:#D8DEE4}.chiptext{fill:#3D444D}.topology{fill:none;stroke-linecap:round;stroke-linejoin:round}.node{fill:#FFFFFF}
-    @media (prefers-color-scheme: dark){.surface{fill:#0D1117;stroke:#30363D}.ink{fill:#F0F6FC}.muted{fill:#8B949E}.chip{fill:#161B22;stroke:#30363D}.chiptext{fill:#C9D1D9}.node{fill:#0D1117}}
+    .surface{fill:#FFFFFF;stroke:#D0D7DE}.ink{fill:#1F2328}.muted{fill:#57606A}.accent{fill:#665CFF}.accentstroke{stroke:#665CFF}.chip{fill:#F6F8FA;stroke:#D8DEE4}.chiptext{fill:#3D444D}.topology{fill:none;stroke-linecap:round;stroke-linejoin:round}.node{fill:#FFFFFF}
+    @media (prefers-color-scheme: dark){.surface{fill:#0D1117;stroke:#30363D}.ink{fill:#F0F6FC}.muted{fill:#8B949E}.accent{fill:#A99BFF}.accentstroke{stroke:#A99BFF}.chip{fill:#161B22;stroke:#30363D}.chiptext{fill:#C9D1D9}.node{fill:#0D1117}}
   </style>
-  <rect x="1" y="1" width="618" height="162" rx="16" class="surface"/>
-  <rect x="2" y="2" width="616" height="160" rx="15" fill="url(#wash)"/>
-  <path d="M354 16h80l22 20h72l18 19h58" class="topology" stroke="#8C7CFF" stroke-opacity=".18"/>
-  <path d="M366 142h66l18-18h60l22-22h72" class="topology" stroke="#28D7FF" stroke-opacity=".16"/>
-  <path d="M482 18c24 14 34 34 25 58s-2 49 25 66" class="topology" stroke="#FF2BD6" stroke-opacity=".12"/>
+  <rect x="1" y="1" width="618" height="188" rx="16" class="surface"/>
+  <rect x="2" y="2" width="616" height="186" rx="15" fill="url(#wash)"/>
+  <path d="M456 18h44l18 18h46l18 18h24" class="topology" stroke="#665CFF" stroke-opacity=".13"/>
+  <path d="M474 169h38l16-17h38l16-18h24" class="topology" stroke="#28D7FF" stroke-opacity=".12"/>
+  <path d="M526 18c18 18 22 37 12 55s-4 41 18 59" class="topology" stroke="#FF2BD6" stroke-opacity=".10"/>
   <g stroke-width="1.5">
-    <circle cx="456" cy="36" r="3.5" class="node" stroke="#8C7CFF"/><circle cx="532" cy="55" r="3.5" class="node" stroke="#FF2BD6"/><circle cx="450" cy="124" r="3.5" class="node" stroke="#28D7FF"/><circle cx="532" cy="102" r="3.5" class="node" stroke="#8C7CFF"/>
+    <circle cx="518" cy="36" r="3.5" class="node" stroke="#665CFF"/><circle cx="582" cy="54" r="3.5" class="node" stroke="#FF2BD6"/><circle cx="528" cy="152" r="3.5" class="node" stroke="#28D7FF"/><circle cx="582" cy="134" r="3.5" class="node" stroke="#665CFF"/>
   </g>
-  <rect x="20" y="20" width="4" height="124" rx="2" fill="url(#edge)"/>
-  <text x="40" y="32" class="muted" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="11" font-weight="700" letter-spacing="1.25">SELECTED ENGINEERING SYSTEM · 01</text>
-  <text x="40" y="66" fill="#8C7CFF" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="27" font-weight="800">◈ AI QA CONTROL PLANE</text>
-  <text x="40" y="92" class="ink" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15" font-weight="550">Bounded reasoning · deterministic authority</text>
-  <g font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="10.5" font-weight="700" letter-spacing=".25">
-    <rect x="40" y="111" width="160" height="26" rx="7" class="chip"/><text x="53" y="128" class="chiptext">AUTHORITY · DETERMINISTIC</text>
-    <rect x="210" y="111" width="170" height="26" rx="7" class="chip"/><text x="223" y="128" class="chiptext">EVIDENCE · PROVENANCE-BOUND</text>
-    <rect x="390" y="111" width="150" height="26" rx="7" class="chip"/><text x="403" y="128" class="chiptext">MUTATION · FAIL-CLOSED</text>
+  <rect x="20" y="20" width="4" height="150" rx="2" fill="url(#edge)"/>
+  <text x="40" y="34" class="muted" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="11" font-weight="700" letter-spacing="1.25">SELECTED ENGINEERING SYSTEM · 01</text>
+  <g fill="none" class="accentstroke" stroke-width="2.1"><path d="M52 56l10 10-10 10-10-10z"/><path d="M52 61l5 5-5 5-5-5z"/></g>
+  <text x="70" y="72" class="accent" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="26" font-weight="800">AI QA CONTROL PLANE</text>
+  <text x="40" y="101" class="ink" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14.5" font-weight="550">Bounded reasoning · deterministic authority</text>
+  <g font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="10" font-weight="700" letter-spacing=".15">
+    <rect x="40" y="128" width="165" height="32" rx="8" class="chip"/><text x="54" y="148" class="chiptext">DETERMINISTIC AUTHORITY</text>
+    <rect x="217" y="128" width="130" height="32" rx="8" class="chip"/><text x="231" y="148" class="chiptext">PROVENANCE-BOUND</text>
+    <rect x="359" y="128" width="150" height="32" rx="8" class="chip"/><text x="373" y="148" class="chiptext">FAIL-CLOSED MUTATION</text>
   </g>
 </svg>
