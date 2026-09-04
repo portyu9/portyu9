@@ -108,9 +108,6 @@ def validate_taxonomy_scale(readme: str) -> None:
 
     for label, base_width, url in legacy.SHIELD_BADGES:
         desktop_width = round(base_width * 28 / 24)
-        # Shields static badges do not expose an independent text-size query;
-        # the mobile text grows with the rendered SVG scale. 29px is the reviewed
-        # mobile target while the desktop tier remains fixed at 28px.
         mobile_width = round(base_width * 29 / 20)
         source = (
             f'<source media="(min-width: 641px)" srcset="{url}" '
@@ -127,7 +124,7 @@ def validate_taxonomy_scale(readme: str) -> None:
 
 
 def validate_thesis_scale(readme: str) -> None:
-    """Lock the desktop-only smaller thesis type while preserving mobile assets."""
+    """Lock the reviewed desktop thesis scale while preserving mobile assets."""
     require(readme.count('<table width="100%">') == 1, "Principle table must render at 100% README width")
     require(readme.count('<th width="37%" align="center"><picture>') == 1, "Principle column must remain 37%")
     require(readme.count('<th width="63%" align="center"><picture>') == 1, "Engineering Contract column must remain 63%")
@@ -179,8 +176,8 @@ def validate_thesis_scale(readme: str) -> None:
         content=legacy.safe_svg(ROOT/desktop_path, desktop_path)
         require(f'width="{width}" height="{height}" viewBox="0 0 {width} {height}"' in content,
                 f"Desktop principle dimensions changed: {desktop_path}")
-        require('font-size="12"' in content,
-                f"Desktop principle typography must retain the reviewed ~5pt reduction: {desktop_path}")
+        require('font-size="19"' in content,
+                f"Desktop principle typography must retain the reviewed restored 19px label scale: {desktop_path}")
         source = f'<source media="(min-width: 1025px)" srcset="{desktop_path}" width="{width}" height="{height}">'
         fallback = f'<img alt="{alt}" height="{mobile_height}" src="{mobile_path}">'
         require(readme.count(source) == 1, f"Desktop-only principle source changed: {alt}")
