@@ -114,6 +114,9 @@ jobs:
       - name: Validate Dependency Review governance contract
         run: python3 scripts/validate-dependency-review-contract.py
 
+      - name: Validate workflow authority firewall
+        run: python3 scripts/validate-workflow-authority-contract.py
+
       - name: Validate CodeQL governance contract
         run: python3 scripts/validate-codeql-contract.py
 
