@@ -13,6 +13,20 @@ These two checks should also be configured as **required status checks** in the 
 
 The integration check intentionally executes the exact SHA-pinned upstream Signal Field generator using read-only repository permissions and runs the complete production transformation chain without publishing.
 
+## Dependency update automation
+
+`.github/dependabot.yml` is the version-controlled Dependabot contract for this repository. Because this repository currently has no application package manifest, scheduled version updates are limited to the `github-actions` ecosystem at repository root. Dependabot runs weekly on Monday morning in `America/New_York`, with a bounded open-pull-request limit of ten. The configuration is intentionally canonical: adding another ecosystem, target branch, ignore/allow rule, registry, grouping rule, or other behavior is a governance change rather than silent configuration drift.
+
+Every external workflow dependency must remain pinned to an **exact commit SHA**. Human-readable release tags in same-line comments are documentation that Dependabot can keep synchronized; execution authority comes only from the immutable commit identifier. The dependency validator discovers every `.github/workflows/*.yml` and `.yaml` file, including future workflows such as CodeQL, and rejects floating tags/branches or unsupported external action forms.
+
+Dependency updates remain individually reviewable: each action is expected in a **separate pull request** rather than a broad owner-level group. Shared ownership does not imply shared blast radius. `actions/attest` executes at the OIDC/attestation boundary, `actions/checkout` also participates in the write-only publication path, upload/download actions transport immutable evidence, setup actions control the execution environment, and the third-party `shinpr/github-profile-stats` generator materially affects generated evidence. Keeping these updates separate preserves attributable review and makes the exact SHA-contract change explicit for one dependency at a time.
+
+Dependabot pull requests are **never auto-merged**. They must pass `Profile quality / validate-contracts` and `Profile quality / integration-pinned-upstream` on the exact proposed head and receive deliberate review. Existing governance validators intentionally pin the currently reviewed trust-boundary SHAs, so an action update should fail closed until the corresponding reviewed SHA contract is deliberately updated in the same pull request. This is intentional friction: the bot discovers an update, but a human authorizes the new executable identity.
+
+Dependabot alerts and Dependabot security updates are repository settings distinct from this scheduled version-update file and should be enabled where supported. GitHub currently does not generate Dependabot vulnerability alerts for **SHA-pinned GitHub Actions** references, so scheduled GitHub Actions version updates remain the primary automated discovery channel for these immutable pins. Security settings still matter for any supported present or future dependency-graph entries and should remain enabled independently of version updates.
+
+Neither scheduled nor security dependency updates may weaken workflow permissions, bypass attestation/generation/publication authority separation, target the `generated` artifact branch, expand the scope of any evidence claim, or introduce an auto-merge workflow with repository-write authority.
+
 ## Generated branch
 
 The `generated` branch is an artifact branch, not a source branch. Its root is expected to contain only the generated Signal Field and Engineering Spotlight artifact trees. Publishing is performed only by the `publish-write-only` GitHub Actions job after a separately executed read-only generation job has succeeded, the immutable artifact set has been revalidated, and the attestation gate has completed.

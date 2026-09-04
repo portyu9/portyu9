@@ -12,8 +12,8 @@ on:
       - ".github/GOVERNANCE.md"
       - ".github/ATTESTATION.md"
       - ".github/attestation/**"
-      - ".github/workflows/profile-quality.yml"
-      - ".github/workflows/profile-stats.yml"
+      - ".github/dependabot.yml"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
@@ -107,6 +107,9 @@ jobs:
 
       - name: Validate capability evidence links
         run: python3 scripts/validate-capability-evidence.py
+
+      - name: Validate Dependabot governance contract
+        run: python3 scripts/validate-dependabot-contract.py
 
       - name: Validate repository governance contract
         run: python3 scripts/validate-governance-contract.py
