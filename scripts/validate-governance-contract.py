@@ -3,11 +3,11 @@
 
 GitHub repository rulesets are settings-level controls and are not writable from every
 integration. This validator therefore protects the executable half of the governance
-contract: named PR checks, explicit runtime, pinned dependencies, closed workflow
-authority, least-privilege profile evidence generation/identity/attestation/publication,
-fresh-run concurrency, and artifact-only publish behavior. The companion
-.github/GOVERNANCE.md records the settings-level controls that must mirror these checks
-in GitHub.
+contract: named PR checks, explicit runtime, pinned dependencies, release provenance,
+closed workflow authority, least-privilege profile evidence generation/identity/
+attestation/publication, fresh-run concurrency, and artifact-only publish behavior. The
+companion .github/GOVERNANCE.md records the settings-level controls that must mirror
+these checks in GitHub.
 """
 from __future__ import annotations
 
@@ -72,6 +72,7 @@ def validate_quality(text: str) -> None:
     require(integration.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1, "PR integration must exercise the reviewed download-artifact SHA exactly once")
     require(integration.count("digest-mismatch: error") == 1, "PR artifact round-trip must fail on digest mismatch")
     require("python3 scripts/validate-generated-signal-field.py roundtrip-signal-field" in integration, "PR integration must revalidate downloaded Signal Field bytes")
+    require("python3 scripts/validate-action-release-provenance.py" in validate, "Profile Quality must execute action release provenance verification")
     require("python3 scripts/validate-dependency-review-contract.py" in validate, "Profile Quality must execute Dependency Review governance validator")
     require("python3 scripts/validate-workflow-authority-contract.py" in validate, "Profile Quality must execute workflow authority firewall")
     require("python3 scripts/validate-governance-contract.py" in validate, "Profile Quality must execute this governance validator")
@@ -140,6 +141,7 @@ def validate_governance_doc(text: str) -> None:
         "Profile quality / integration-pinned-upstream",
         "Dependency review / dependency-review",
         "Protect Main",
+        "Action release provenance",
         "Workflow authority firewall",
         "closed allowlist",
         "generated",
@@ -165,11 +167,11 @@ def main() -> int:
         validate_stats(STATS.read_text(encoding="utf-8"))
         validate_governance_doc(GOVERNANCE.read_text(encoding="utf-8"))
         print(
-            "Repository governance validation passed: PR checks are stable/read-only, Dependency Review governance is mandatory, "
-            "the workflow authority surface is closed and explicit, pinned-upstream integration is mandatory, artifact download "
-            "integrity is fail-closed and round-trip tested, Signal Field Evidence ID is generated/validated before signing, "
-            "third-party generation has neither write nor signing authority, attestation is isolated, and publication revalidates "
-            "the same identity."
+            "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
+            "Dependency Review governance is mandatory, the workflow authority surface is closed and explicit, pinned-upstream "
+            "integration is mandatory, artifact download integrity is fail-closed and round-trip tested, Signal Field Evidence ID "
+            "is generated/validated before signing, third-party generation has neither write nor signing authority, attestation is "
+            "isolated, and publication revalidates the same identity."
         )
         return 0
     except (OSError, ValueError) as exc:
