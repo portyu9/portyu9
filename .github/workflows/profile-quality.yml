@@ -84,6 +84,9 @@ jobs:
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile.py
 
+      - name: Validate capability evidence links
+        run: python3 scripts/validate-capability-evidence.py
+
       - name: Validate repository governance contract
         run: python3 scripts/validate-governance-contract.py
 
