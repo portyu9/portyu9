@@ -105,26 +105,40 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 ---
 
-<h2 align="center">◇ Qualification Matrix</h2>
+<h2 align="center">◇ Selected Engineering Systems</h2>
 
-<p align="center"><sub>Selected engineering systems · live <code>main</code>-branch qualification signals</sub></p>
+<p align="center"><sub>Three flagship systems · scoped live <code>main</code>-branch evidence</sub></p>
 
 <p align="center">
-<a href="https://github.com/portyu9/ai-qa-automation"><img alt="AI QA Control Plane qualification card" src="assets/profile-systems/qualification-ai-qa-control-plane.svg"></a><br>
+<a href="https://github.com/portyu9/ai-qa-automation"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-ai-qa-control-plane-dark.svg"><img alt="AI QA Control Plane engineering system card" src="assets/profile-systems/qualification-ai-qa-control-plane-light.svg"></picture></a><br>
 <a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml"><img alt="AI QA CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/ci.yml?branch=main&style=flat-square&label=CI"></a>
 </p>
 
 <p align="center">
-<a href="https://github.com/portyu9/qa-automation-graphql"><img alt="GraphQL QE qualification card" src="assets/profile-systems/qualification-graphql-qe.svg"></a><br>
+<a href="https://github.com/portyu9/qa-automation-graphql"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-graphql-qe-dark.svg"><img alt="GraphQL Quality Engineering system card" src="assets/profile-systems/qualification-graphql-qe-light.svg"></picture></a><br>
 <a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/ci.yml"><img alt="GraphQL QE CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/security.yml"><img alt="GraphQL QE security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center">
-<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe"><img alt="Visual and Accessibility QE qualification card" src="assets/profile-systems/qualification-visual-accessibility-qe.svg"></a><br>
+<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-visual-accessibility-qe-dark.svg"><img alt="Visual and Accessibility Quality Engineering system card" src="assets/profile-systems/qualification-visual-accessibility-qe-light.svg"></picture></a><br>
 <a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/ci.yml"><img alt="Visual and accessibility QE CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/security.yml"><img alt="Visual and accessibility QE security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center"><sub>Live badges reflect only the named <code>main</code>-branch workflow; they are evidence signals, not universal certification.</sub></p>
+
+<h3 align="center">↻ Evidence Spotlight</h3>
+
+<p align="center"><sub>Two additional systems are selected deterministically each UTC day from a curated pool of substantive public QE frameworks.</sub></p>
+
+<p align="center">
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v1"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v1" width="100%"></picture>
+</p>
+
+<p align="center">
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v1"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v1" width="100%"></picture>
+</p>
+
+<p align="center"><sub>Spotlight workflow states are scoped to the named <code>main</code>-branch CI and Security workflows and refresh through the same generated evidence pipeline as Activity Metrics.</sub></p>
 
 ---
 

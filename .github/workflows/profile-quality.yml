@@ -82,7 +82,14 @@ jobs:
         run: python3 scripts/balance-signal-field-secondary-metrics.py --self-test
 
       - name: Validate profile asset contract
-        run: python3 scripts/validate-profile.py
+        run: python3 scripts/validate-profile-v4.py
+
+      - name: Validate deterministic Engineering Spotlight generation
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          python3 scripts/generate-engineering-spotlight.py "$tmp" --date 2026-09-04 --offline
+          python3 scripts/validate-engineering-spotlight.py "$tmp"
 
       - name: Validate capability evidence links
         run: python3 scripts/validate-capability-evidence.py
@@ -137,3 +144,12 @@ jobs:
           python3 scripts/glyphs-signal-field-metrics.py "$READY_DIR"
           python3 scripts/balance-signal-field-secondary-metrics.py "$READY_DIR"
           python3 scripts/validate-generated-signal-field.py "$READY_DIR"
+
+      - name: Exercise live Engineering Spotlight evidence path
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          python3 scripts/generate-engineering-spotlight.py "$tmp"
+          python3 scripts/validate-engineering-spotlight.py "$tmp" --require-live
