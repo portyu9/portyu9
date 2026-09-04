@@ -3,11 +3,15 @@
 from __future__ import annotations
 import argparse, json, re
 from pathlib import Path
+
 EXPECTED = tuple(f"spotlight-{slot}-{theme}.svg" for slot in (1,2) for theme in ("light","dark"))
 MANIFEST = "spotlight-manifest.json"
 VERSION = "engineering-spotlight-v1"
+
 def require(condition: bool, message: str) -> None:
-    if not condition: raise ValueError(message)
+    if not condition:
+        raise ValueError(message)
+
 def main() -> int:
     parser=argparse.ArgumentParser(); parser.add_argument("directory", type=Path); parser.add_argument("--require-live", action="store_true"); args=parser.parse_args()
     try:
@@ -26,14 +30,20 @@ def main() -> int:
             path=root/name; require(path.is_file(), f"Missing spotlight SVG: {name}"); content=path.read_text(encoding="utf-8")
             require(len(content.encode())<=30000, f"Spotlight SVG exceeds 30 KB: {name}")
             require(f'data-spotlight="{VERSION}"' in content, f"Spotlight provenance missing: {name}")
-            require("DAILY EVIDENCE SPOTLIGHT" in content, f"Spotlight identity missing: {name}")
+            require('data-layout="rich-v2"' in content, f"Rich Spotlight layout provenance missing: {name}")
+            require('width="620" height="170" viewBox="0 0 620 170"' in content, f"Spotlight reviewed geometry changed: {name}")
+            require("ROTATING SYSTEM" in content, f"Spotlight slot identity missing: {name}")
             require("CI · " in content and "SECURITY · " in content, f"Workflow evidence labels missing: {name}")
+            require('fill="url(#edge)"' in content and 'fill="url(#wash)"' in content, f"Spotlight gradient visual system regressed: {name}")
+            require(content.count("<linearGradient") >= 2, f"Spotlight gradient definitions missing: {name}")
+            require(content.count("<circle") >= 6, f"Spotlight node/evidence markers regressed: {name}")
+            require("repo · " in content, f"Spotlight repository provenance row missing: {name}")
             lowered=content.lower()
             for forbidden in ("<image","<foreignobject","<script","javascript:","data:image"):
                 require(forbidden not in lowered, f"Unsafe SVG content {forbidden!r}: {name}")
         require('fill="#FFFFFF"' in (root/"spotlight-1-light.svg").read_text(encoding="utf-8"), "Light spotlight surface changed")
         require('fill="#0D1117"' in (root/"spotlight-1-dark.svg").read_text(encoding="utf-8"), "Dark spotlight surface changed")
-        print("Engineering spotlight validation passed: two distinct daily slots, explicit theme variants, scoped workflow evidence, and safe SVG contracts are intact.")
+        print("Engineering spotlight validation passed: two distinct daily slots, rich explicit-theme visuals, non-overlapping scoped evidence, repository provenance, and safe SVG contracts are intact.")
         return 0
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}"); return 1
