@@ -155,16 +155,18 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Download validated Signal Field for attestation
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: signal-field-svg
           path: profile-stats/profile
+          digest-mismatch: error
 
       - name: Download validated Engineering Spotlight for attestation
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: engineering-spotlight-svg
           path: engineering-spotlight
+          digest-mismatch: error
 
       - name: Revalidate attestation boundary
         run: |
@@ -228,16 +230,18 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Download validated Signal Field
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: signal-field-svg
           path: publish-input
+          digest-mismatch: error
 
       - name: Download validated Engineering Spotlight
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: engineering-spotlight-svg
           path: spotlight-publish-input
+          digest-mismatch: error
 
       - name: Revalidate publish boundary
         run: |
