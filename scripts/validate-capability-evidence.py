@@ -73,7 +73,7 @@ def main() -> int:
             pattern = re.compile(
                 rf'<a\s+href="{re.escape(href)}">\s*'
                 rf'<picture>(?:(?!</picture>).)*?'
-                rf'<img\s+alt="{re.escape(label)}"\b(?:(?!</picture>).)*?'
+                rf'<img\s+alt="{re.escape(label)}"(?:(?!</picture>).)*?'
                 rf'</picture>\s*</a>',
                 re.I | re.S,
             )
