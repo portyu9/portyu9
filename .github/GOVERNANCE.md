@@ -1,6 +1,6 @@
 # Repository governance contract
 
-This profile repository treats its README, reviewed visual assets, generated Signal Field, Engineering Spotlight, and evidence attestations as production artifacts. Version-controlled workflow checks and GitHub repository settings are expected to enforce the same evidence boundary.
+This profile repository treats its README, reviewed visual assets, generated Signal Field, Engineering Spotlight, Signal Field Evidence ID, and evidence attestations as production artifacts. Version-controlled workflow checks and GitHub repository settings are expected to enforce the same evidence boundary.
 
 ## Main branch
 
@@ -18,6 +18,14 @@ The integration check intentionally executes the exact SHA-pinned upstream Signa
 The `generated` branch is an artifact branch, not a source branch. Its root is expected to contain only the generated Signal Field and Engineering Spotlight artifact trees. Publishing is performed only by the `publish-write-only` GitHub Actions job after a separately executed read-only generation job has succeeded, the immutable artifact set has been revalidated, and the attestation gate has completed.
 
 The `generated` branch should have a GitHub ruleset that blocks **deletion** and **non-fast-forward** updates while still permitting the normal fast-forward pushes performed by GitHub Actions. Do not add a pull-request requirement that would break the automated publisher unless GitHub Actions is explicitly configured as an appropriate bypass actor.
+
+## Signal Field Evidence ID
+
+The four Signal Field variants must share one deterministic `signal-field-evidence-v1` identity when they encode the same measured evidence. The human correlation handle is `SF1-` plus the first 64 bits of the canonical evidence SHA-256 digest; the complete digest remains in SVG provenance and in the signed profile-evidence attestation predicate.
+
+The identity is derived from measured evidence semantics, not rendered SVG bytes, so light/dark and wide/compact presentation differences cannot create distinct identities for the same evidence. Conversely, a change to measured profile totals, headline metrics, the 30-day date/count/level sequence, activity telemetry, or source semantics must change the canonical digest.
+
+The short Evidence ID is not itself a cryptographic verification mechanism. Verification depends on the full SHA-256 evidence digest plus the artifact attestation.
 
 ## Authority separation
 
@@ -37,4 +45,4 @@ The engineering attestation establishes artifact provenance and repository-defin
 
 The predicate schema and verification instructions are version controlled in `.github/attestation/profile-evidence-v1.schema.json` and `.github/ATTESTATION.md`.
 
-Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, final artifact validation, attestation gate, or artifact-only generated-branch staging is a governance-contract change and must fail Profile Quality until deliberately reviewed.
+Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, or artifact-only generated-branch staging is a governance-contract change and must fail Profile Quality until deliberately reviewed.
