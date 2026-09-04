@@ -12,8 +12,8 @@ QUALITY = ROOT / ".github/workflows/profile-quality.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
-CODEQL_SHA = "e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81"
-CODEQL_RELEASE = "v4.37.3"
+CODEQL_SHA = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
+CODEQL_RELEASE = "v4.37.9"
 
 
 def fail(message: str) -> None:
@@ -118,7 +118,7 @@ def validate_governance(text: str) -> None:
 def self_test(good: str) -> None:
     validate_codeql(good)
     mutations = (
-        (good.replace(CODEQL_SHA, "v4"), "reviewed v4.37.3 commit SHA"),
+        (good.replace(CODEQL_SHA, "v4"), f"reviewed {CODEQL_RELEASE} commit SHA"),
         (good.replace("languages: python", "languages: javascript-typescript"), "language scope"),
         (good.replace("security-events: write", "security-events: read"), "security-events: write"),
         (good.replace("  pull_request:\n", "  pull_request:\n    paths:\n      - 'scripts/**'\n"), "path filters"),
