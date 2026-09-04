@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """Build the custom predicate used for generated profile-evidence attestations.
 
-The predicate is intentionally small. Subject digests are supplied by actions/attest;
-this file records the source revision, workflow identity, validation scope, published
-paths, and authority separation under which those subjects were accepted.
+Subject digests are supplied by actions/attest. This predicate records source revision,
+workflow identity, published paths, validation/authority boundaries, and the deterministic
+Signal Field Evidence ID shared by the four attested Signal Field variants.
 """
-
 from __future__ import annotations
 
 import json
@@ -13,17 +12,23 @@ import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 
 REPOSITORY = "portyu9/portyu9"
 KIND = "profile-evidence-attestation"
 SCHEMA_VERSION = 1
 BOUNDARY = "attest-validated-evidence"
+EVIDENCE_SCHEMA = "signal-field-evidence-v1"
 CLAIM = (
     "Subjects passed repository-defined validation at sourceRevision before publication; "
     "this attests artifact provenance and contract conformance, not universal certification."
 )
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 DIGITS = re.compile(r"^[0-9]+$")
+EVIDENCE_ID = re.compile(r"^SF1-[0-9A-F]{16}$")
+EVIDENCE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
+ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 
 PUBLISHED_PATHS = (
     "profile-stats/profile/signal-field-wide-light.svg",
@@ -35,9 +40,10 @@ PUBLISHED_PATHS = (
     "engineering-spotlight/spotlight-2-light.svg",
     "engineering-spotlight/spotlight-2-dark.svg",
 )
-
+SIGNAL_FIELD_FILENAMES = tuple(Path(path).name for path in PUBLISHED_PATHS[:4])
 SIGNAL_FIELD_VALIDATORS = (
     "scripts/validate-signal-field-v213.py",
+    "scripts/validate-signal-field-v214.py",
     "scripts/validate-generated-signal-field.py",
 )
 SPOTLIGHT_VALIDATORS = (
@@ -52,7 +58,39 @@ def required_env(name: str, env: dict[str, str]) -> str:
     return value
 
 
-def build_predicate(env: dict[str, str]) -> dict[str, object]:
+def root_attrs(text: str) -> dict[str, str]:
+    match = SVG_OPEN.search(text)
+    if not match:
+        raise ValueError("Signal Field SVG root is missing")
+    return dict(ATTR.findall(match.group(0)))
+
+
+def read_signal_field_evidence(directory: Path) -> dict[str, str]:
+    identities: list[tuple[str, str, str]] = []
+    for filename in SIGNAL_FIELD_FILENAMES:
+        path = directory / filename
+        if not path.is_file() or path.stat().st_size == 0:
+            raise ValueError(f"attestation Signal Field subject is missing: {filename}")
+        attrs = root_attrs(path.read_text(encoding="utf-8"))
+        schema = attrs.get("data-evidence-id-schema", "")
+        evidence_id = attrs.get("data-evidence-id", "")
+        digest = attrs.get("data-evidence-digest", "")
+        if attrs.get("data-evidence-identity") != "signal-field-v2.14":
+            raise ValueError(f"{filename}: v2.14 Evidence ID provenance missing")
+        if schema != EVIDENCE_SCHEMA:
+            raise ValueError(f"{filename}: Signal Field Evidence ID schema changed")
+        if not EVIDENCE_ID.fullmatch(evidence_id):
+            raise ValueError(f"{filename}: Signal Field Evidence ID is malformed")
+        if not EVIDENCE_DIGEST.fullmatch(digest):
+            raise ValueError(f"{filename}: Signal Field evidence digest is malformed")
+        identities.append((schema, evidence_id, digest))
+    if len(set(identities)) != 1:
+        raise ValueError("attested Signal Field variants do not share one Evidence ID")
+    schema, evidence_id, digest = identities[0]
+    return {"schema": schema, "id": evidence_id, "digest": digest}
+
+
+def build_predicate(env: dict[str, str], signal_field_dir: Path) -> dict[str, object]:
     repository = required_env("GITHUB_REPOSITORY", env)
     revision = required_env("GITHUB_SHA", env)
     workflow_ref = required_env("GITHUB_WORKFLOW_REF", env)
@@ -86,6 +124,7 @@ def build_predicate(env: dict[str, str]) -> dict[str, object]:
             "name": "generated-profile-evidence",
             "publishedPaths": list(PUBLISHED_PATHS),
         },
+        "signalFieldEvidence": read_signal_field_evidence(signal_field_dir),
         "validation": {
             "signalField": list(SIGNAL_FIELD_VALIDATORS),
             "engineeringSpotlight": list(SPOTLIGHT_VALIDATORS),
@@ -126,6 +165,16 @@ def validate_predicate(predicate: dict[str, object]) -> None:
     if len(set(PUBLISHED_PATHS)) != 8:
         raise ValueError("published subject paths must be eight unique SVGs")
 
+    evidence = predicate.get("signalFieldEvidence")
+    if not isinstance(evidence, dict):
+        raise ValueError("signalFieldEvidence is missing")
+    if evidence.get("schema") != EVIDENCE_SCHEMA:
+        raise ValueError("Signal Field Evidence ID schema changed")
+    if not isinstance(evidence.get("id"), str) or not EVIDENCE_ID.fullmatch(str(evidence["id"])):
+        raise ValueError("Signal Field Evidence ID is malformed")
+    if not isinstance(evidence.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(str(evidence["digest"])):
+        raise ValueError("Signal Field evidence digest is malformed")
+
     validation = predicate.get("validation")
     if not isinstance(validation, dict) or validation.get("boundary") != BOUNDARY:
         raise ValueError("validation boundary changed")
@@ -147,7 +196,6 @@ def validate_predicate(predicate: dict[str, object]) -> None:
             raise ValueError(f"authority contract changed for {key}")
     if not isinstance(authority.get("separation"), str) or not authority["separation"]:
         raise ValueError("authority separation statement is missing")
-
     if predicate.get("claim") != CLAIM:
         raise ValueError("claim boundary changed")
 
@@ -164,14 +212,26 @@ def fixture_env() -> dict[str, str]:
 
 
 def self_test() -> None:
-    predicate = build_predicate(fixture_env())
-    validate_predicate(predicate)
-    encoded = json.dumps(predicate, sort_keys=True, separators=(",", ":"))
-    reparsed = json.loads(encoded)
-    validate_predicate(reparsed)
-    if reparsed["run"]["url"] != "https://github.com/portyu9/portyu9/actions/runs/123456789":
-        raise AssertionError("workflow run URL changed")
-    print("Profile evidence attestation predicate self-test passed: v1")
+    with tempfile.TemporaryDirectory() as tmp:
+        directory = Path(tmp)
+        for filename in SIGNAL_FIELD_FILENAMES:
+            (directory / filename).write_text(
+                '<svg data-evidence-identity="signal-field-v2.14" '
+                'data-evidence-id-schema="signal-field-evidence-v1" '
+                'data-evidence-id="SF1-0123456789ABCDEF" '
+                f'data-evidence-digest="sha256:{"a" * 64}"></svg>',
+                encoding="utf-8",
+            )
+        predicate = build_predicate(fixture_env(), directory)
+        validate_predicate(predicate)
+        encoded = json.dumps(predicate, sort_keys=True, separators=(",", ":"))
+        reparsed = json.loads(encoded)
+        validate_predicate(reparsed)
+        if reparsed["run"]["url"] != "https://github.com/portyu9/portyu9/actions/runs/123456789":
+            raise AssertionError("workflow run URL changed")
+        if reparsed["signalFieldEvidence"]["id"] != "SF1-0123456789ABCDEF":
+            raise AssertionError("Signal Field Evidence ID was not recorded")
+    print("Profile evidence attestation predicate self-test passed: v1 + Signal Field Evidence ID")
 
 
 def main() -> int:
@@ -179,18 +239,22 @@ def main() -> int:
         if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
             self_test()
             return 0
-        if len(sys.argv) != 2:
+        if len(sys.argv) != 3:
             raise ValueError(
-                "usage: build-profile-evidence-attestation.py <output.json> | --self-test"
+                "usage: build-profile-evidence-attestation.py <signal-field-directory> <output.json> | --self-test"
             )
-        predicate = build_predicate(dict(os.environ))
+        signal_field_dir = Path(sys.argv[1])
+        predicate = build_predicate(dict(os.environ), signal_field_dir)
         validate_predicate(predicate)
-        output = Path(sys.argv[1])
+        output = Path(sys.argv[2])
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(predicate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        print(f"wrote profile evidence attestation predicate: {output}")
+        print(
+            f"wrote profile evidence attestation predicate: {output} · "
+            f"{predicate['signalFieldEvidence']['id']}"
+        )
         return 0
-    except (OSError, ValueError, AssertionError, TypeError) as exc:
+    except (OSError, ValueError, AssertionError, TypeError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
