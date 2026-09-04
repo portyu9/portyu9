@@ -132,7 +132,9 @@ def main() -> int:
     for ref in SPOTLIGHT_REFS:
         require(readme.count(ref)==1, f"Generated spotlight reference must occur exactly once: {ref}")
     require("deterministic daily rotation" in readme, "Daily deterministic spotlight policy must remain explicit")
-    require("curated pool of substantive public QE frameworks" in readme, "Spotlight qualification pool wording changed")
+    require("my curated QE systems portfolio" in readme, "Spotlight ownership wording changed")
+    require("substantive public QE frameworks" not in readme, "Third-party/public framing must not return")
+    require(readme.count('width="620"') >= 2, "Spotlight cards must retain native-width desktop proportions")
     activity=readme.find('<h2 align="center">◉ Activity Metrics</h2>'); signal=readme.find('alt="GitHub activity signal field"'); systems=readme.find('<h2 align="center">◇ Selected Engineering Systems</h2>'); spotlight=readme.find('<h3 align="center">↻ Evidence Spotlight</h3>'); copyright_notice=readme.find("© 2026 Ƴunior Ƥortal")
     require(activity<signal<systems<spotlight<copyright_notice, "Selected systems and spotlight placement changed")
     footer='\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
