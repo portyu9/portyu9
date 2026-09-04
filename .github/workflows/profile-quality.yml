@@ -111,6 +111,9 @@ jobs:
       - name: Validate Dependabot governance contract
         run: python3 scripts/validate-dependabot-contract.py
 
+      - name: Validate action release provenance
+        run: python3 scripts/validate-action-release-provenance.py
+
       - name: Validate Dependency Review governance contract
         run: python3 scripts/validate-dependency-review-contract.py
 

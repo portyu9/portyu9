@@ -20,7 +20,7 @@ The integration check intentionally executes the exact SHA-pinned upstream Signa
 
 `.github/dependabot.yml` is the version-controlled Dependabot contract for this repository. Because this repository currently has no application package manifest, scheduled version updates are limited to the `github-actions` ecosystem at repository root. Dependabot runs weekly on Monday morning in `America/New_York`, with a bounded open-pull-request limit of ten. The configuration is intentionally canonical: adding another ecosystem, target branch, ignore/allow rule, registry, grouping rule, or other behavior is a governance change rather than silent configuration drift.
 
-Every external workflow dependency must remain pinned to an **exact commit SHA**. Human-readable release tags in same-line comments are documentation that Dependabot can keep synchronized; execution authority comes only from the immutable commit identifier. The dependency validator discovers every `.github/workflows/*.yml` and `.yaml` file, including future workflows, and rejects floating tags/branches or unsupported external action forms.
+Every external workflow dependency must remain pinned to an **exact commit SHA**. Human-readable release tags in same-line comments are reviewed release identities that Dependabot can keep synchronized and that Profile Quality independently verifies against the executable commit. Execution authority still comes only from the immutable commit identifier. The dependency validator discovers every `.github/workflows/*.yml` and `.yaml` file, including future workflows, and rejects floating tags/branches or unsupported external action forms.
 
 Dependency updates remain individually reviewable: each action is expected in a **separate pull request** rather than a broad owner-level group. Shared ownership does not imply shared blast radius. `actions/attest` executes at the OIDC/attestation boundary, `actions/checkout` also participates in the write-only publication path, upload/download actions transport immutable evidence, setup actions control the execution environment, the Dependency Review action is a merge-time supply-chain gate, and the third-party `shinpr/github-profile-stats` generator materially affects generated evidence. Keeping these updates separate preserves attributable review and makes the exact SHA-contract change explicit for one dependency at a time.
 
@@ -29,6 +29,16 @@ Dependabot pull requests are **never auto-merged**. They must pass `Profile qual
 Dependabot alerts and Dependabot security updates are repository settings distinct from this scheduled version-update file and should be enabled where supported. GitHub currently does not generate Dependabot vulnerability alerts for **SHA-pinned GitHub Actions** references, so scheduled GitHub Actions version updates remain the primary automated discovery channel for these immutable pins. Security settings still matter for any supported present or future dependency-graph entries and should remain enabled independently of version updates.
 
 Neither scheduled nor security dependency updates may weaken workflow permissions, bypass attestation/generation/publication authority separation, target the `generated` artifact branch, expand the scope of any evidence claim, or introduce an auto-merge workflow with repository-write authority.
+
+## Action release provenance
+
+`scripts/validate-action-release-provenance.py` binds each external action's immutable executable SHA to the reviewed release identity written in its **same-line** comment. Every external `uses:` reference must therefore have both an exact 40-character commit SHA and an **exact semantic-version** annotation such as `# v7.0.1`; floating major labels or undocumented SHAs are not accepted.
+
+The validator discovers all external actions across every workflow, normalizes action subpaths such as `github/codeql-action/init` back to their source repository, and de-duplicates identical repository/tag pairs. Conflicting SHAs for the same repository release fail closed before any network resolution occurs.
+
+Release resolution uses public `git ls-remote` against the action repository and requests both the direct tag and its peeled `^{}` form. This supports lightweight tags and **annotated tags** without adding a token, secret, package dependency, or repository permission. For an annotated tag, the peeled commit is authoritative; for a lightweight tag, the direct tag commit is authoritative. The resolved commit must exactly equal the workflow's executable SHA.
+
+This check is intentionally live because release provenance can drift independently of this repository if an upstream tag is moved or deleted. Such a change should stop a merge until the executable identity and upstream release state are reviewed. The provenance check **does not replace** exact SHA pinning, Dependabot, Dependency Review, the workflow authority firewall, or manual review; it adds independent evidence that the human release label and executable commit describe the same upstream release.
 
 ## Dependency review gate
 
@@ -100,4 +110,4 @@ The engineering attestation establishes artifact provenance and repository-defin
 
 The predicate schema and verification instructions are version controlled in `.github/attestation/profile-evidence-v1.schema.json` and `.github/ATTESTATION.md`.
 
-Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, governed Dependency Review, workflow authority firewall, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.
+Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, action release provenance verification, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, governed Dependency Review, workflow authority firewall, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.
