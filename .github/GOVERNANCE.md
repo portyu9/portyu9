@@ -1,6 +1,6 @@
 # Repository governance contract
 
-This profile repository treats its README, reviewed visual assets, and generated Signal Field as production artifacts. Version-controlled workflow checks and GitHub repository settings are expected to enforce the same evidence boundary.
+This profile repository treats its README, reviewed visual assets, generated Signal Field, Engineering Spotlight, and evidence attestations as production artifacts. Version-controlled workflow checks and GitHub repository settings are expected to enforce the same evidence boundary.
 
 ## Main branch
 
@@ -15,12 +15,26 @@ The integration check intentionally executes the exact SHA-pinned upstream Signa
 
 ## Generated branch
 
-The `generated` branch is an artifact branch, not a source branch. Its root is expected to contain only the generated Signal Field artifact tree. Publishing is performed only by the `publish-write-only` GitHub Actions job after a separately executed read-only generation job has succeeded and the downloaded SVG set has been revalidated.
+The `generated` branch is an artifact branch, not a source branch. Its root is expected to contain only the generated Signal Field and Engineering Spotlight artifact trees. Publishing is performed only by the `publish-write-only` GitHub Actions job after a separately executed read-only generation job has succeeded, the immutable artifact set has been revalidated, and the attestation gate has completed.
 
 The `generated` branch should have a GitHub ruleset that blocks **deletion** and **non-fast-forward** updates while still permitting the normal fast-forward pushes performed by GitHub Actions. Do not add a pull-request requirement that would break the automated publisher unless GitHub Actions is explicitly configured as an appropriate bypass actor.
 
 ## Authority separation
 
-Third-party generation code must not receive repository write authority. `generate-read-only` may read GitHub data and produce candidate artifacts. `publish-write-only` may publish only the immutable artifact set passed from that job and revalidated at its trust boundary.
+Third-party generation code must not receive repository write or attestation authority.
 
-Any workflow edit that removes these job names, pinned runtimes/actions, read/write separation, final artifact validation, or artifact-only generated-branch staging is a governance-contract change and must fail Profile Quality until deliberately reviewed.
+`generate-read-only` may read GitHub data and produce candidate artifacts with `contents: read` only. It has neither `contents: write`, `id-token: write`, nor `attestations: write`.
+
+`attest-validated-evidence` is a separate trust-boundary job. It downloads the immutable generated artifacts into a fresh runner, revalidates both evidence sets, and may mint a short-lived OIDC identity and persist a GitHub artifact attestation. It receives `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission. The reviewed `actions/attest` dependency must remain pinned to an exact commit SHA.
+
+`publish-write-only` may publish only the immutable artifact set passed from generation after the attestation job succeeds. It receives `contents: write` but no OIDC or attestation authority, and revalidates the downloaded artifacts again at the publication boundary.
+
+This separation prevents the third-party generator from signing its own output and prevents the publisher from creating the attestation on which publication depends.
+
+## Attestation claim boundary
+
+The engineering attestation establishes artifact provenance and repository-defined contract conformance for the named generated SVG subjects at the recorded source revision. It does not certify every software behavior represented by the profile, replace underlying CI/security evidence, or expand the scope of any oracle.
+
+The predicate schema and verification instructions are version controlled in `.github/attestation/profile-evidence-v1.schema.json` and `.github/ATTESTATION.md`.
+
+Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, final artifact validation, attestation gate, or artifact-only generated-branch staging is a governance-contract change and must fail Profile Quality until deliberately reviewed.

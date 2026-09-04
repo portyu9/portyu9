@@ -10,6 +10,8 @@ on:
       - "assets/**"
       - "scripts/**"
       - ".github/GOVERNANCE.md"
+      - ".github/ATTESTATION.md"
+      - ".github/attestation/**"
       - ".github/workflows/profile-quality.yml"
       - ".github/workflows/profile-stats.yml"
 
@@ -93,6 +95,12 @@ jobs:
           tmp="$(mktemp -d)"
           python3 scripts/generate-engineering-spotlight.py "$tmp" --date 2026-09-04 --offline
           python3 scripts/validate-engineering-spotlight.py "$tmp"
+
+      - name: Validate engineering attestation predicate builder
+        run: python3 scripts/build-profile-evidence-attestation.py --self-test
+
+      - name: Validate engineering attestation trust boundary
+        run: python3 scripts/validate-profile-attestation-contract.py
 
       - name: Validate capability evidence links
         run: python3 scripts/validate-capability-evidence.py

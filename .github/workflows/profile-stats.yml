@@ -7,6 +7,8 @@ on:
       - main
     paths:
       - ".github/workflows/profile-stats.yml"
+      - ".github/ATTESTATION.md"
+      - ".github/attestation/**"
       - "scripts/customize-signal-field.py"
       - "scripts/polish-signal-field-v2.py"
       - "scripts/enhance-signal-field-v2.py"
@@ -25,6 +27,8 @@ on:
       - "scripts/validate-generated-signal-field.py"
       - "scripts/generate-engineering-spotlight.py"
       - "scripts/validate-engineering-spotlight.py"
+      - "scripts/build-profile-evidence-attestation.py"
+      - "scripts/validate-profile-attestation-contract.py"
   schedule:
     # Offset from the top of the hour to reduce scheduled-run congestion.
     - cron: "2-57/5 * * * *"
@@ -116,9 +120,84 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  attest:
+    name: attest-validated-evidence
+    needs: generate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout trusted source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Checkout current generated evidence without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: generated
+          path: published
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download validated Signal Field for attestation
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: signal-field-svg
+          path: profile-stats/profile
+
+      - name: Download validated Engineering Spotlight for attestation
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: engineering-spotlight-svg
+          path: engineering-spotlight
+
+      - name: Revalidate attestation boundary
+        run: |
+          set -euo pipefail
+          python3 source/scripts/validate-signal-field-v213.py profile-stats/profile
+          python3 source/scripts/validate-generated-signal-field.py profile-stats/profile
+          python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live
+
+      - name: Determine whether scheduled evidence changed
+        id: delta
+        run: |
+          set -euo pipefail
+          if diff -qr profile-stats/profile published/profile-stats/profile >/dev/null \
+            && diff -qr engineering-spotlight published/engineering-spotlight >/dev/null; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build profile evidence attestation predicate
+        if: github.event_name != 'schedule' || steps.delta.outputs.changed == 'true'
+        run: python3 source/scripts/build-profile-evidence-attestation.py attestation-predicate.json
+
+      - name: Attest validated profile evidence
+        if: github.event_name != 'schedule' || steps.delta.outputs.changed == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            profile-stats/profile/signal-field-*.svg
+            engineering-spotlight/*.svg
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json
+          predicate-path: attestation-predicate.json
+          show-summary: true
+
   publish:
     name: publish-write-only
-    needs: generate
+    needs: [generate, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
