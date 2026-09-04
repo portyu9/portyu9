@@ -21,6 +21,8 @@ on:
       - "scripts/glyphs-signal-field-metrics.py"
       - "scripts/balance-signal-field-secondary-metrics.py"
       - "scripts/validate-generated-signal-field.py"
+      - "scripts/generate-engineering-spotlight.py"
+      - "scripts/validate-engineering-spotlight.py"
   schedule:
     # Offset from the top of the hour to reduce scheduled-run congestion.
     - cron: "2-57/5 * * * *"
@@ -85,11 +87,28 @@ jobs:
           python3 source/scripts/balance-signal-field-secondary-metrics.py "$READY_DIR"
           python3 source/scripts/validate-generated-signal-field.py "$READY_DIR"
 
-      - name: Upload immutable validated artifact set
+      - name: Upload immutable validated Signal Field
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: signal-field-svg
           path: ${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Generate deterministic daily Engineering Spotlight
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf spotlight-ready
+          python3 source/scripts/generate-engineering-spotlight.py spotlight-ready
+          python3 source/scripts/validate-engineering-spotlight.py spotlight-ready --require-live
+
+      - name: Upload immutable validated Engineering Spotlight
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: engineering-spotlight-svg
+          path: spotlight-ready/*
           if-no-files-found: error
           retention-days: 1
 
@@ -120,32 +139,43 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Download validated artifact set
+      - name: Download validated Signal Field
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: signal-field-svg
           path: publish-input
 
+      - name: Download validated Engineering Spotlight
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: engineering-spotlight-svg
+          path: spotlight-publish-input
+
       - name: Revalidate publish boundary
-        run: python3 source/scripts/validate-generated-signal-field.py publish-input
+        run: |
+          set -euo pipefail
+          python3 source/scripts/validate-generated-signal-field.py publish-input
+          python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input --require-live
 
       - name: Stage artifact-only generated branch
         run: |
           set -euo pipefail
           find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          mkdir -p artifacts/profile-stats/profile
+          mkdir -p artifacts/profile-stats/profile artifacts/engineering-spotlight
           cp publish-input/signal-field-*.svg artifacts/profile-stats/profile/
+          cp spotlight-publish-input/* artifacts/engineering-spotlight/
           python3 source/scripts/validate-generated-signal-field.py artifacts/profile-stats/profile
+          python3 source/scripts/validate-engineering-spotlight.py artifacts/engineering-spotlight --require-live
           git -C artifacts add -A
 
       - name: Publish changed artifact set
         run: |
           set -euo pipefail
           if git -C artifacts diff --cached --quiet; then
-            echo "Generated Signal Field is already current."
+            echo "Generated profile evidence is already current."
             exit 0
           fi
           git -C artifacts config user.name github-actions[bot]
           git -C artifacts config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git -C artifacts commit -m "chore: publish validated Signal Field [skip ci]"
+          git -C artifacts commit -m "chore: publish validated profile evidence [skip ci]"
           git -C artifacts push origin HEAD:generated

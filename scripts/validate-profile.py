@@ -104,6 +104,11 @@ GENERATED_SVG_REFERENCES = (
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg",
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg",
 )
+QUALIFICATION_CARD_SVGS = (
+    "assets/profile-systems/qualification-ai-qa-control-plane.svg",
+    "assets/profile-systems/qualification-graphql-qe.svg",
+    "assets/profile-systems/qualification-visual-accessibility-qe.svg",
+)
 
 REQUIRED_WORDING = (
     "I engineer quality systems that turn software change into attributable evidence",
@@ -203,7 +208,7 @@ def validate_references(readme: str) -> None:
         reference = match.group(1) or match.group(2) or match.group(3)
         references.append(reference.split("?", 1)[0].split("#", 1)[0].lstrip("./"))
 
-    allowed = set(IDENTITY_AND_PRINCIPLE_SVGS) | set(HEADER_REFERENCES) | set(GENERATED_SVG_REFERENCES)
+    allowed = set(IDENTITY_AND_PRINCIPLE_SVGS) | set(HEADER_REFERENCES) | set(GENERATED_SVG_REFERENCES) | set(QUALIFICATION_CARD_SVGS)
     unexpected = sorted(set(references) - allowed)
     missing = sorted(allowed - set(references))
     require(not unexpected, "README contains unapproved SVG references: " + ", ".join(unexpected))
@@ -227,6 +232,7 @@ def main() -> int:
     engineering_heading = re.compile(r'<h2\s+align="center">\s*✦ Engineering Thesis\s*</h2>', re.I)
     require(len(engineering_heading.findall(readme)) == 1, "Engineering Thesis must remain one centered H2")
     require(readme.count('<h2 align="center">◉ Activity Metrics</h2>') == 1, "Activity Metrics must remain one centered H2")
+    require(readme.count('<h2 align="center">◇ Qualification Matrix</h2>') == 1, "Qualification Matrix must remain one centered H2")
     require("## ✦ Engineering Thesis" not in readme, "Engineering Thesis must not regress to a left-aligned Markdown H2")
 
     for phrase in REQUIRED_WORDING:
@@ -240,6 +246,11 @@ def main() -> int:
 
     for relative in IDENTITY_AND_PRINCIPLE_SVGS:
         safe_svg(ROOT / relative, relative)
+    for relative in QUALIFICATION_CARD_SVGS:
+        content = safe_svg(ROOT / relative, relative)
+        require("SELECTED ENGINEERING SYSTEM" in content, f"Qualification card identity marker missing: {relative}")
+        require("topology" in content.lower(), f"Qualification card topology treatment missing: {relative}")
+        require(readme.count(relative) == 1, f"Qualification card must be referenced exactly once: {relative}")
     for relative in PRINCIPLE_BADGES:
         content = (ROOT / relative).read_text(encoding="utf-8")
         require('font-size="23"' in content and 'font-size="24"' not in content, f"Principle badge typography changed: {relative}")
@@ -250,14 +261,21 @@ def main() -> int:
 
     validate_references(readme)
 
-    require(readme.find('<h2 align="center">◉ Activity Metrics</h2>') < readme.find('alt="GitHub activity signal field"'), "Activity Metrics heading must precede Signal Field")
-    require(readme.find('alt="GitHub activity signal field"') < readme.find("© 2026 Ƴunior Ƥortal"), "Copyright notice must remain below Signal Field")
+    activity_heading = readme.find('<h2 align="center">◉ Activity Metrics</h2>')
+    signal_field = readme.find('alt="GitHub activity signal field"')
+    qualification_heading = readme.find('<h2 align="center">◇ Qualification Matrix</h2>')
+    copyright_notice = readme.find("© 2026 Ƴunior Ƥortal")
+    require(activity_heading < signal_field, "Activity Metrics heading must precede Signal Field")
+    require(signal_field < qualification_heading < copyright_notice, "Qualification Matrix must remain below Signal Field and above copyright")
+    footer_separator = '\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
+    require(readme.count(footer_separator) == 1, "A horizontal rule must exist immediately above the copyright footer")
+    require("release-candidate.yml?branch=main" not in readme, "Qualification Matrix must not present an RC workflow with no current main status")
 
     print(
         "Profile validation passed: the exact reviewed Shields badge contract is restored at 24px desktop / 20px "
         "mobile with its original font metrics; the regressed self-hosted badge assets remain absent; hero, 37/63 "
-        "thesis layout, mobile-landscape headers, centered headings, engineering wording, copyright posture, immutable "
-        "header refs, and approved SVG safety contracts remain locked."
+        "thesis layout, mobile-landscape headers, centered headings, engineering wording, qualification topology cards, "
+        "footer separator, copyright posture, immutable header refs, and approved SVG safety contracts remain locked."
     )
     return 0
 
