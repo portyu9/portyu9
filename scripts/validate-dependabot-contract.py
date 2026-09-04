@@ -42,6 +42,7 @@ REQUIRED_EXTERNAL_ACTIONS = {
 }
 ACTION_NAME = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.\-/]+)?")
 SHA40 = re.compile(r"[0-9a-fA-F]{40}")
+USES_LINE = re.compile(r"^\s*(?:-\s*)?(?:['\"]?uses['\"]?)\s*:\s*(.+?)\s*$")
 
 
 def fail(message: str) -> None:
@@ -64,7 +65,7 @@ def validate_uses_text(text: str, label: str) -> set[str]:
     """Return external action names after rejecting mutable/unsupported references."""
     external: set[str] = set()
     for line_number, line in enumerate(text.splitlines(), start=1):
-        match = re.match(r"^\s*(?:-\s*)?uses:\s*(.+?)\s*$", line)
+        match = USES_LINE.match(line)
         if not match:
             continue
         value = match.group(1).split("#", 1)[0].strip()
@@ -148,15 +149,18 @@ def validate_governance(text: str) -> None:
 def self_test() -> None:
     good_sha = "a" * 40
     observed = validate_uses_text(
-        f"steps:\n  - uses: actions/checkout@{good_sha} # v7\n  - uses: ./.github/actions/local\n",
+        f"steps:\n  - uses: actions/checkout@{good_sha} # v7\n  - uses : ./.github/actions/local\n  - 'uses' : actions/setup-python@{good_sha} # v6\n",
         "self-test-good.yml",
     )
-    require(observed == {"actions/checkout"}, "Action-pin self-test failed to identify immutable external action")
+    require(
+        observed == {"actions/checkout", "actions/setup-python"},
+        "Action-pin self-test failed to identify immutable external actions",
+    )
 
     for bad, expected in (
         ("steps:\n  - uses: actions/checkout@v7\n", "exact 40-character commit SHA"),
-        ("steps:\n  - uses: docker://alpine:3.22\n", "external Docker action"),
-        ("steps:\n  - uses: owner/repo\n", "repository@commit syntax"),
+        ("steps:\n  - uses : docker://alpine:3.22\n", "external Docker action"),
+        ("steps:\n  - \"uses\" : owner/repo\n", "repository@commit syntax"),
     ):
         try:
             validate_uses_text(bad, "self-test-bad.yml")
