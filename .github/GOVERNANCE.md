@@ -4,14 +4,15 @@ This profile repository treats its README, reviewed visual assets, generated Sig
 
 ## Main branch
 
-The active `Protect Main` ruleset must continue to require pull requests and block deletion and non-fast-forward updates. Before a pull request is merged, the two Profile Quality jobs and both CodeQL analysis jobs must succeed on the exact pull-request head:
+The active `Protect Main` ruleset must continue to require pull requests and block deletion and non-fast-forward updates. Before a pull request is merged, the two Profile Quality jobs, the Dependency Review job, and both CodeQL analysis jobs must succeed on the exact pull-request head:
 
 - `Profile quality / validate-contracts`
 - `Profile quality / integration-pinned-upstream`
+- `Dependency review / dependency-review`
 - `CodeQL / analyze-python`
 - `CodeQL / analyze-actions`
 
-All four checks should be configured as **required status checks** in the `Protect Main` GitHub ruleset. That requirement is a repository setting rather than a file in this branch; this document records the intended setting so it cannot be mistaken for optional process.
+All five checks should be configured as **required status checks** in the `Protect Main` GitHub ruleset. That requirement is a repository setting rather than a file in this branch; this document records the intended setting so it cannot be mistaken for optional process.
 
 The integration check intentionally executes the exact SHA-pinned upstream Signal Field generator using read-only repository permissions and runs the complete production transformation chain without publishing.
 
@@ -19,15 +20,27 @@ The integration check intentionally executes the exact SHA-pinned upstream Signa
 
 `.github/dependabot.yml` is the version-controlled Dependabot contract for this repository. Because this repository currently has no application package manifest, scheduled version updates are limited to the `github-actions` ecosystem at repository root. Dependabot runs weekly on Monday morning in `America/New_York`, with a bounded open-pull-request limit of ten. The configuration is intentionally canonical: adding another ecosystem, target branch, ignore/allow rule, registry, grouping rule, or other behavior is a governance change rather than silent configuration drift.
 
-Every external workflow dependency must remain pinned to an **exact commit SHA**. Human-readable release tags in same-line comments are documentation that Dependabot can keep synchronized; execution authority comes only from the immutable commit identifier. The dependency validator discovers every `.github/workflows/*.yml` and `.yaml` file, including future workflows such as CodeQL, and rejects floating tags/branches or unsupported external action forms.
+Every external workflow dependency must remain pinned to an **exact commit SHA**. Human-readable release tags in same-line comments are documentation that Dependabot can keep synchronized; execution authority comes only from the immutable commit identifier. The dependency validator discovers every `.github/workflows/*.yml` and `.yaml` file, including future workflows, and rejects floating tags/branches or unsupported external action forms.
 
-Dependency updates remain individually reviewable: each action is expected in a **separate pull request** rather than a broad owner-level group. Shared ownership does not imply shared blast radius. `actions/attest` executes at the OIDC/attestation boundary, `actions/checkout` also participates in the write-only publication path, upload/download actions transport immutable evidence, setup actions control the execution environment, and the third-party `shinpr/github-profile-stats` generator materially affects generated evidence. Keeping these updates separate preserves attributable review and makes the exact SHA-contract change explicit for one dependency at a time.
+Dependency updates remain individually reviewable: each action is expected in a **separate pull request** rather than a broad owner-level group. Shared ownership does not imply shared blast radius. `actions/attest` executes at the OIDC/attestation boundary, `actions/checkout` also participates in the write-only publication path, upload/download actions transport immutable evidence, setup actions control the execution environment, the Dependency Review action is a merge-time supply-chain gate, and the third-party `shinpr/github-profile-stats` generator materially affects generated evidence. Keeping these updates separate preserves attributable review and makes the exact SHA-contract change explicit for one dependency at a time.
 
-Dependabot pull requests are **never auto-merged**. They must pass `Profile quality / validate-contracts`, `Profile quality / integration-pinned-upstream`, `CodeQL / analyze-python`, and `CodeQL / analyze-actions` on the exact proposed head and receive deliberate review. Existing governance validators intentionally pin the currently reviewed trust-boundary SHAs, so an action update should fail closed until the corresponding reviewed SHA contract is deliberately updated in the same pull request. This is intentional friction: the bot discovers an update, but a human authorizes the new executable identity.
+Dependabot pull requests are **never auto-merged**. They must pass `Profile quality / validate-contracts`, `Profile quality / integration-pinned-upstream`, `Dependency review / dependency-review`, `CodeQL / analyze-python`, and `CodeQL / analyze-actions` on the exact proposed head and receive deliberate review. Existing governance validators intentionally pin the currently reviewed trust-boundary SHAs, so an action update should fail closed until the corresponding reviewed SHA contract is deliberately updated in the same pull request. This is intentional friction: the bot discovers an update, but a human authorizes the new executable identity.
 
 Dependabot alerts and Dependabot security updates are repository settings distinct from this scheduled version-update file and should be enabled where supported. GitHub currently does not generate Dependabot vulnerability alerts for **SHA-pinned GitHub Actions** references, so scheduled GitHub Actions version updates remain the primary automated discovery channel for these immutable pins. Security settings still matter for any supported present or future dependency-graph entries and should remain enabled independently of version updates.
 
 Neither scheduled nor security dependency updates may weaken workflow permissions, bypass attestation/generation/publication authority separation, target the `generated` artifact branch, expand the scope of any evidence claim, or introduce an auto-merge workflow with repository-write authority.
+
+## Dependency review gate
+
+`.github/workflows/dependency-review.yml` is the version-controlled pre-merge vulnerability gate for dependency changes. It runs the single stable `Dependency review / dependency-review` status on every pull request and intentionally uses **no path filters**, so workflow/action or future package-manifest changes cannot create an unreviewed dependency path.
+
+The gate blocks **moderate-or-higher** known vulnerabilities across `runtime, development, and unknown` dependency scopes. All three scopes are covered deliberately because GitHub Actions and future dependency sources should not escape review due to scope classification. Vulnerability checking is enabled and `warn-only` behavior is forbidden.
+
+Dependency Review is intentionally not a repository **license policy**. License checking is disabled so this security gate cannot silently reject a change based on an unreviewed licensing rule. A future license policy must be introduced as its own explicit governance decision rather than hidden inside vulnerability review.
+
+The workflow and `actions/dependency-review-action` must remain pinned to exact commit SHAs. Workflow and job permissions remain `contents: read`; checkout credentials are not persisted, PR comments are disabled, and the gate must not receive `pull-requests: write`, repository-content write, OIDC, attestation, Actions-mutation, package-write, or security-event write authority.
+
+The Dependency Review status is a merge-time supply-chain signal and should be required by `Protect Main` as `dependency-review`. It complements Dependabot: Dependabot discovers newer versions over time, while Dependency Review evaluates dependency changes introduced by each pull request before they reach `main`.
 
 ## CodeQL security analysis
 
@@ -75,4 +88,4 @@ The engineering attestation establishes artifact provenance and repository-defin
 
 The predicate schema and verification instructions are version controlled in `.github/attestation/profile-evidence-v1.schema.json` and `.github/ATTESTATION.md`.
 
-Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.
+Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, governed Dependency Review, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.

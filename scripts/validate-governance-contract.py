@@ -71,6 +71,7 @@ def validate_quality(text: str) -> None:
     require(integration.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1, "PR integration must exercise the reviewed download-artifact SHA exactly once")
     require(integration.count("digest-mismatch: error") == 1, "PR artifact round-trip must fail on digest mismatch")
     require("python3 scripts/validate-generated-signal-field.py roundtrip-signal-field" in integration, "PR integration must revalidate downloaded Signal Field bytes")
+    require("python3 scripts/validate-dependency-review-contract.py" in validate, "Profile Quality must execute Dependency Review governance validator")
     require("python3 scripts/validate-governance-contract.py" in validate, "Profile Quality must execute this governance validator")
     require("python3 scripts/validate-profile-attestation-contract.py" in validate, "Profile Quality must execute engineering-attestation validator")
 
@@ -135,6 +136,7 @@ def validate_governance_doc(text: str) -> None:
     for phrase in (
         "Profile quality / validate-contracts",
         "Profile quality / integration-pinned-upstream",
+        "Dependency review / dependency-review",
         "Protect Main",
         "generated",
         "deletion",
@@ -159,9 +161,9 @@ def main() -> int:
         validate_stats(STATS.read_text(encoding="utf-8"))
         validate_governance_doc(GOVERNANCE.read_text(encoding="utf-8"))
         print(
-            "Repository governance validation passed: PR checks are stable/read-only, pinned-upstream integration "
-            "is mandatory, artifact download integrity is fail-closed and round-trip tested, Signal Field Evidence ID "
-            "is generated/validated before signing, third-party generation has neither write nor signing authority, "
+            "Repository governance validation passed: PR checks are stable/read-only, Dependency Review governance is mandatory, "
+            "pinned-upstream integration is mandatory, artifact download integrity is fail-closed and round-trip tested, "
+            "Signal Field Evidence ID is generated/validated before signing, third-party generation has neither write nor signing authority, "
             "attestation is isolated, and publication revalidates the same identity."
         )
         return 0
