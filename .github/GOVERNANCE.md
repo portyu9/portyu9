@@ -4,12 +4,13 @@ This profile repository treats its README, reviewed visual assets, generated Sig
 
 ## Main branch
 
-The active `Protect Main` ruleset must continue to require pull requests and block deletion and non-fast-forward updates. Before a pull request is merged, both Profile Quality jobs must succeed on the exact pull-request head:
+The active `Protect Main` ruleset must continue to require pull requests and block deletion and non-fast-forward updates. Before a pull request is merged, the two Profile Quality jobs and the CodeQL analysis job must succeed on the exact pull-request head:
 
 - `Profile quality / validate-contracts`
 - `Profile quality / integration-pinned-upstream`
+- `CodeQL / analyze-python`
 
-These two checks should also be configured as **required status checks** in the `Protect Main` GitHub ruleset. That requirement is a repository setting rather than a file in this branch; this document records the intended setting so it cannot be mistaken for optional process.
+All three checks should be configured as **required status checks** in the `Protect Main` GitHub ruleset. That requirement is a repository setting rather than a file in this branch; this document records the intended setting so it cannot be mistaken for optional process.
 
 The integration check intentionally executes the exact SHA-pinned upstream Signal Field generator using read-only repository permissions and runs the complete production transformation chain without publishing.
 
@@ -21,11 +22,23 @@ Every external workflow dependency must remain pinned to an **exact commit SHA**
 
 Dependency updates remain individually reviewable: each action is expected in a **separate pull request** rather than a broad owner-level group. Shared ownership does not imply shared blast radius. `actions/attest` executes at the OIDC/attestation boundary, `actions/checkout` also participates in the write-only publication path, upload/download actions transport immutable evidence, setup actions control the execution environment, and the third-party `shinpr/github-profile-stats` generator materially affects generated evidence. Keeping these updates separate preserves attributable review and makes the exact SHA-contract change explicit for one dependency at a time.
 
-Dependabot pull requests are **never auto-merged**. They must pass `Profile quality / validate-contracts` and `Profile quality / integration-pinned-upstream` on the exact proposed head and receive deliberate review. Existing governance validators intentionally pin the currently reviewed trust-boundary SHAs, so an action update should fail closed until the corresponding reviewed SHA contract is deliberately updated in the same pull request. This is intentional friction: the bot discovers an update, but a human authorizes the new executable identity.
+Dependabot pull requests are **never auto-merged**. They must pass `Profile quality / validate-contracts`, `Profile quality / integration-pinned-upstream`, and `CodeQL / analyze-python` on the exact proposed head and receive deliberate review. Existing governance validators intentionally pin the currently reviewed trust-boundary SHAs, so an action update should fail closed until the corresponding reviewed SHA contract is deliberately updated in the same pull request. This is intentional friction: the bot discovers an update, but a human authorizes the new executable identity.
 
 Dependabot alerts and Dependabot security updates are repository settings distinct from this scheduled version-update file and should be enabled where supported. GitHub currently does not generate Dependabot vulnerability alerts for **SHA-pinned GitHub Actions** references, so scheduled GitHub Actions version updates remain the primary automated discovery channel for these immutable pins. Security settings still matter for any supported present or future dependency-graph entries and should remain enabled independently of version updates.
 
 Neither scheduled nor security dependency updates may weaken workflow permissions, bypass attestation/generation/publication authority separation, target the `generated` artifact branch, expand the scope of any evidence claim, or introduce an auto-merge workflow with repository-write authority.
+
+## CodeQL security analysis
+
+`.github/workflows/codeql.yml` is the version-controlled static-analysis boundary for repository Python code. It runs the single stable `analyze-python` job on every pull request, every push to `main`, manual dispatch, and a weekly scheduled scan. The workflow intentionally uses **no path filters** so changes to workflow/configuration or helper code cannot create an unscanned merge path.
+
+CodeQL runs only for `python`, uses `build-mode: none`, and executes the `security-extended` query suite. The workflow and its `github/codeql-action` dependencies must remain pinned to an **exact commit SHA** and are governed by Dependabot plus `scripts/validate-codeql-contract.py`.
+
+The workflow default token remains `contents: read`. The analysis job receives only `contents: read` plus `security-events: write`, which is required to publish code-scanning results. It must not receive `contents: write`, `pull-requests: write`, `id-token: write`, `attestations: write`, or other mutation/signing authority. Checkout credentials are not persisted.
+
+The CodeQL status is a merge-time security signal and should be required by `Protect Main` as `analyze-python`. Scheduled scans provide defense against newly added queries or newly recognized vulnerability patterns even when repository source is unchanged.
+
+CodeQL is not an attestation and does not certify generated profile evidence, repository behavior, or every possible security property. It is an independent static-analysis control whose findings complement, but do not expand, the repository's evidence and attestation claims.
 
 ## Generated branch
 
@@ -59,4 +72,4 @@ The engineering attestation establishes artifact provenance and repository-defin
 
 The predicate schema and verification instructions are version controlled in `.github/attestation/profile-evidence-v1.schema.json` and `.github/ATTESTATION.md`.
 
-Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, or artifact-only generated-branch staging is a governance-contract change and must fail Profile Quality until deliberately reviewed.
+Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.
