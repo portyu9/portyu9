@@ -108,6 +108,9 @@ def validate_taxonomy_scale(readme: str) -> None:
 
     for label, base_width, url in legacy.SHIELD_BADGES:
         desktop_width = round(base_width * 28 / 24)
+        # Shields static badges do not expose an independent text-size query;
+        # the mobile text grows with the rendered SVG scale. 29px is the reviewed
+        # mobile target while the desktop tier remains fixed at 28px.
         mobile_width = round(base_width * 29 / 20)
         source = (
             f'<source media="(min-width: 641px)" srcset="{url}" '
