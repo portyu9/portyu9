@@ -64,7 +64,7 @@ def validate_uses_text(text: str, label: str) -> set[str]:
     """Return external action names after rejecting mutable/unsupported references."""
     external: set[str] = set()
     for line_number, line in enumerate(text.splitlines(), start=1):
-        match = re.match(r"^\s*uses:\s*(.+?)\s*$", line)
+        match = re.match(r"^\s*(?:-\s*)?uses:\s*(.+?)\s*$", line)
         if not match:
             continue
         value = match.group(1).split("#", 1)[0].strip()
