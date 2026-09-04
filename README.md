@@ -90,6 +90,41 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 ---
 
+<h2 align="center">◇ Qualification Matrix</h2>
+
+<p align="center"><sub>Live qualification signals from selected public QE systems · source branch: <code>main</code></sub></p>
+
+<table width="100%">
+<thead>
+<tr>
+<th align="left">SYSTEM</th>
+<th align="center">QUALIFICATION SIGNALS</th>
+<th align="center">EVIDENCE</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/portyu9/ai-qa-automation"><strong>◈ AI QA CONTROL PLANE</strong></a><br><sub>Bounded reasoning · deterministic authority</sub></td>
+<td align="center"><a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml"><img alt="AI QA CI" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/release-candidate.yml"><img alt="AI QA release candidate" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/release-candidate.yml?branch=main&style=flat-square&label=RC"></a></td>
+<td align="center"><a href="https://github.com/portyu9/ai-qa-automation">ARCHITECTURE ↗</a></td>
+</tr>
+<tr>
+<td><a href="https://github.com/portyu9/qa-automation-graphql"><strong>◇ GRAPHQL QE</strong></a><br><sub>Schema · execution · authorization contracts</sub></td>
+<td align="center"><a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/ci.yml"><img alt="GraphQL QE CI" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/security.yml"><img alt="GraphQL QE security" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/security.yml?branch=main&style=flat-square&label=SECURITY"></a></td>
+<td align="center"><a href="https://github.com/portyu9/qa-automation-graphql">ARCHITECTURE ↗</a></td>
+</tr>
+<tr>
+<td><a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe"><strong>◎ VISUAL + ACCESSIBILITY QE</strong></a><br><sub>Visual evidence · accessibility oracle discipline</sub></td>
+<td align="center"><a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/ci.yml"><img alt="Visual and accessibility QE CI" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/security.yml"><img alt="Visual and accessibility QE security" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main&style=flat-square&label=SECURITY"></a></td>
+<td align="center"><a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe">ARCHITECTURE ↗</a></td>
+</tr>
+</tbody>
+</table>
+
+<p align="center"><sub>Workflow badges report the latest <code>main</code>-branch status for the named workflow only; they are live evidence signals, not universal certification.</sub></p>
+
+---
+
 <h2 align="center">◉ Activity Metrics</h2>
 
 <div align="center">
