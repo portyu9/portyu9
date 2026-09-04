@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json",
+  "title": "Ƴunior Ƥortal generated profile evidence attestation predicate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "repository",
+    "sourceRevision",
+    "workflowRef",
+    "run",
+    "subjectSet",
+    "validation",
+    "authority",
+    "claim"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "kind": {
+      "const": "profile-evidence-attestation"
+    },
+    "repository": {
+      "const": "portyu9/portyu9"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "workflowRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "attempt", "url"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "attempt": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://github\\.com/portyu9/portyu9/actions/runs/[0-9]+$"
+        }
+      }
+    },
+    "subjectSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "publishedPaths"],
+      "properties": {
+        "name": {
+          "const": "generated-profile-evidence"
+        },
+        "publishedPaths": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signalField", "engineeringSpotlight", "boundary"],
+      "properties": {
+        "signalField": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string"
+          }
+        },
+        "engineeringSpotlight": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "boundary": {
+          "const": "attest-validated-evidence"
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation", "attestation", "publication", "separation"],
+      "properties": {
+        "generation": {
+          "const": "contents:read"
+        },
+        "attestation": {
+          "const": "contents:read,id-token:write,attestations:write"
+        },
+        "publication": {
+          "const": "contents:write"
+        },
+        "separation": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "claim": {
+      "const": "Subjects passed repository-defined validation at sourceRevision before publication; this attests artifact provenance and contract conformance, not universal certification."
+    }
+  }
+}
