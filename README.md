@@ -111,24 +111,20 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <a href="https://github.com/portyu9/ai-qa-automation"><img alt="AI QA Control Plane qualification card" src="assets/profile-systems/qualification-ai-qa-control-plane.svg"></a><br>
-<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml"><img alt="AI QA CI" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/ci.yml?branch=main&style=flat-square&label=CI"></a>
+<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml"><img alt="AI QA CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/ci.yml?branch=main&style=flat-square&label=CI"></a>
 </p>
-
-<br>
 
 <p align="center">
 <a href="https://github.com/portyu9/qa-automation-graphql"><img alt="GraphQL QE qualification card" src="assets/profile-systems/qualification-graphql-qe.svg"></a><br>
-<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/ci.yml"><img alt="GraphQL QE CI" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/security.yml"><img alt="GraphQL QE security" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/ci.yml"><img alt="GraphQL QE CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-graphql/actions/workflows/security.yml"><img alt="GraphQL QE security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-graphql/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
-
-<br>
 
 <p align="center">
 <a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe"><img alt="Visual and Accessibility QE qualification card" src="assets/profile-systems/qualification-visual-accessibility-qe.svg"></a><br>
-<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/ci.yml"><img alt="Visual and accessibility QE CI" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/security.yml"><img alt="Visual and accessibility QE security" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/ci.yml"><img alt="Visual and accessibility QE CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/security.yml"><img alt="Visual and accessibility QE security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
 
-<p align="center"><sub>Workflow badges report the latest <code>main</code>-branch status for the named workflow only; they are live evidence signals, not universal certification.</sub></p>
+<p align="center"><sub>Live badges reflect only the named <code>main</code>-branch workflow; they are evidence signals, not universal certification.</sub></p>
 
 ---
 
