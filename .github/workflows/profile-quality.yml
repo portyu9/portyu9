@@ -13,8 +13,7 @@ on:
       - ".github/ATTESTATION.md"
       - ".github/attestation/**"
       - ".github/dependabot.yml"
-      - ".github/workflows/profile-quality.yml"
-      - ".github/workflows/profile-stats.yml"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
