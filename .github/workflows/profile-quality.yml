@@ -81,6 +81,9 @@ jobs:
       - name: Validate Signal Field v2.12 secondary metric balance
         run: python3 scripts/balance-signal-field-secondary-metrics.py --self-test
 
+      - name: Validate Signal Field v2.13 evidence-window clarity
+        run: python3 scripts/clarify-signal-field-evidence-window.py --self-test
+
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile-v4.py
 
@@ -143,7 +146,18 @@ jobs:
           python3 scripts/relabel-signal-field-metrics.py "$READY_DIR"
           python3 scripts/glyphs-signal-field-metrics.py "$READY_DIR"
           python3 scripts/balance-signal-field-secondary-metrics.py "$READY_DIR"
+          python3 scripts/clarify-signal-field-evidence-window.py "$READY_DIR"
+          python3 scripts/validate-signal-field-v213.py "$READY_DIR"
           python3 scripts/validate-generated-signal-field.py "$READY_DIR"
+
+      - name: Upload Signal Field review artifacts
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: signal-field-v213-review
+          path: ${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Exercise live Engineering Spotlight evidence path
         env:

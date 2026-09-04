@@ -20,6 +20,8 @@ on:
       - "scripts/relabel-signal-field-metrics.py"
       - "scripts/glyphs-signal-field-metrics.py"
       - "scripts/balance-signal-field-secondary-metrics.py"
+      - "scripts/clarify-signal-field-evidence-window.py"
+      - "scripts/validate-signal-field-v213.py"
       - "scripts/validate-generated-signal-field.py"
       - "scripts/generate-engineering-spotlight.py"
       - "scripts/validate-engineering-spotlight.py"
@@ -85,6 +87,8 @@ jobs:
           python3 source/scripts/relabel-signal-field-metrics.py "$READY_DIR"
           python3 source/scripts/glyphs-signal-field-metrics.py "$READY_DIR"
           python3 source/scripts/balance-signal-field-secondary-metrics.py "$READY_DIR"
+          python3 source/scripts/clarify-signal-field-evidence-window.py "$READY_DIR"
+          python3 source/scripts/validate-signal-field-v213.py "$READY_DIR"
           python3 source/scripts/validate-generated-signal-field.py "$READY_DIR"
 
       - name: Upload immutable validated Signal Field
@@ -154,6 +158,7 @@ jobs:
       - name: Revalidate publish boundary
         run: |
           set -euo pipefail
+          python3 source/scripts/validate-signal-field-v213.py publish-input
           python3 source/scripts/validate-generated-signal-field.py publish-input
           python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input --require-live
 
@@ -164,6 +169,7 @@ jobs:
           mkdir -p artifacts/profile-stats/profile artifacts/engineering-spotlight
           cp publish-input/signal-field-*.svg artifacts/profile-stats/profile/
           cp spotlight-publish-input/* artifacts/engineering-spotlight/
+          python3 source/scripts/validate-signal-field-v213.py artifacts/profile-stats/profile
           python3 source/scripts/validate-generated-signal-field.py artifacts/profile-stats/profile
           python3 source/scripts/validate-engineering-spotlight.py artifacts/engineering-spotlight --require-live
           git -C artifacts add -A
