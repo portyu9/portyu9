@@ -124,21 +124,21 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/ci.yml"><img alt="Visual and accessibility QE CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/workflows/security.yml"><img alt="Visual and accessibility QE security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
 
-<p align="center"><sub>Live badges reflect only the named <code>main</code>-branch workflow; they are evidence signals, not universal certification.</sub></p>
+<p align="center"><sub>Workflow badges are scoped <code>main</code>-branch evidence signals, not universal certification.</sub></p>
 
 <h3 align="center">↻ Evidence Spotlight</h3>
 
-<p align="center"><sub>Two additional systems are selected deterministically each UTC day from a curated pool of substantive public QE frameworks.</sub></p>
+<p align="center"><sub>2 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v1"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v1" width="100%"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v1-rich-v2-20260904"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v1-rich-v2-20260904" width="100%"></picture>
 </p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v1"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v1" width="100%"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v1-rich-v2-20260904"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v1-rich-v2-20260904" width="100%"></picture>
 </p>
 
-<p align="center"><sub>Spotlight workflow states are scoped to the named <code>main</code>-branch CI and Security workflows and refresh through the same generated evidence pipeline as Activity Metrics.</sub></p>
+<p align="center"><sub>Selected from a curated pool of substantive public QE frameworks; CI/Security signals are scoped to named <code>main</code>-branch workflows.</sub></p>
 
 ---
 
