@@ -13,6 +13,18 @@ These two checks should also be configured as **required status checks** in the 
 
 The integration check intentionally executes the exact SHA-pinned upstream Signal Field generator using read-only repository permissions and runs the complete production transformation chain without publishing.
 
+## Dependency update automation
+
+`.github/dependabot.yml` is the version-controlled Dependabot contract for this repository. Because this repository has no application package manifest, scheduled version updates are limited to the `github-actions` ecosystem at repository root. Dependabot runs weekly on Monday morning in `America/New_York`, with a bounded open-pull-request limit so dependency review cannot flood the repository.
+
+Every external workflow dependency must remain pinned to an **exact commit SHA**. Human-readable release tags in comments are informational only. A Dependabot pull request is therefore a proposal to move one reviewed SHA to another reviewed SHA; it must never replace a pin with a floating tag or branch.
+
+First-party `actions/*` dependencies may be grouped together because they share the same GitHub-maintained trust domain. The third-party `shinpr/github-profile-stats` generator must remain separately reviewable and must not be hidden inside that group because it executes inside the read-only generation boundary and materially affects generated evidence.
+
+Dependabot pull requests are **never auto-merged**. They must pass `Profile quality / validate-contracts` and `Profile quality / integration-pinned-upstream` on the exact proposed head and receive deliberate review. Existing governance validators intentionally pin the currently reviewed action SHAs, so an action update should fail closed until the corresponding reviewed SHA contract is deliberately updated in the same pull request.
+
+Dependabot security-update enablement is a repository setting distinct from this scheduled version-update file. Neither scheduled nor security dependency updates may weaken workflow permissions, bypass attestation/generation/publication authority separation, target the `generated` artifact branch, or expand the scope of any evidence claim.
+
 ## Generated branch
 
 The `generated` branch is an artifact branch, not a source branch. Its root is expected to contain only the generated Signal Field and Engineering Spotlight artifact trees. Publishing is performed only by the `publish-write-only` GitHub Actions job after a separately executed read-only generation job has succeeded, the immutable artifact set has been revalidated, and the attestation gate has completed.
