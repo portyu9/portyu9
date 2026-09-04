@@ -71,8 +71,10 @@ def main() -> int:
         linked_repos: set[str] = set()
         for label, href in EVIDENCE_LINKS.items():
             pattern = re.compile(
-                rf'<a\s+href="{re.escape(href)}">\s*<picture>.*?'
-                rf'<img\s+alt="{re.escape(label)}"\b.*?</picture>\s*</a>',
+                rf'<a\s+href="{re.escape(href)}">\s*'
+                rf'<picture>(?:(?!</picture>).)*?'
+                rf'<img\s+alt="{re.escape(label)}"\b(?:(?!</picture>).)*?'
+                rf'</picture>\s*</a>',
                 re.I | re.S,
             )
             matches = pattern.findall(text)
