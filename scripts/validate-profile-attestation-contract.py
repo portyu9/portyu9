@@ -15,7 +15,7 @@ BUILDER = ROOT / "scripts/build-profile-evidence-attestation.py"
 
 ATTEST_SHA = "1e69f48acb82d1966a394da916b4c1698aa569d6"  # actions/attest v4.2.2
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
-SETUP_PYTHON_SHA = "ece7cb06caefa5fff74198d8649806c4678c61a1"
+SETUP_PYTHON_SHA = "5fda3b95a4ea91299a34e894583c3862153e4b97"
 DOWNLOAD_SHA = "634f93cb2916e3fdff6788551b99b062d0335ce0"
 PREDICATE_TYPE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
