@@ -131,11 +131,11 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <p align="center"><sub>Two additional systems are selected deterministically each UTC day from a curated pool of substantive public QE frameworks.</sub></p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v1"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v1" width="100%"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v1"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v1" width="100%"></picture>
 </p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v1"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v1" width="100%"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v1"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v1" width="100%"></picture>
 </p>
 
 <p align="center"><sub>Spotlight workflow states are scoped to the named <code>main</code>-branch CI and Security workflows and refresh through the same generated evidence pipeline as Activity Metrics.</sub></p>

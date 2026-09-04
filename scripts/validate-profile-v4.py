@@ -41,10 +41,10 @@ RETIRED_FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-visual-accessibility-qe.svg",
 )
 SPOTLIGHT_REFS = (
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-dark.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-light.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-dark.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-light.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-dark.svg",
 )
 
 
