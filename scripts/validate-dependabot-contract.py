@@ -38,6 +38,7 @@ REQUIRED_EXTERNAL_ACTIONS = {
     "actions/upload-artifact",
     "actions/download-artifact",
     "actions/attest",
+    "actions/dependency-review-action",
     "shinpr/github-profile-stats",
 }
 ACTION_NAME = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.\-/]+)?")
@@ -137,6 +138,7 @@ def validate_governance(text: str) -> None:
         "actions/attest",
         "actions/checkout",
         "shinpr/github-profile-stats",
+        "Dependency review / dependency-review",
         "never auto-merged",
         "Dependabot alerts",
         "SHA-pinned GitHub Actions",
