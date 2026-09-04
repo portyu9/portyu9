@@ -131,14 +131,14 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <p align="center"><sub>2 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v1-rich-v2-20260904"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v1-rich-v2-20260904" width="620"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v1-rich-v3-20260904"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v1-rich-v3-20260904" width="620"></picture>
 </p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v1-rich-v2-20260904"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v1-rich-v2-20260904" width="620"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v1-rich-v3-20260904"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v1-rich-v3-20260904" width="620"></picture>
 </p>
 
-<p align="center"><sub>Selected from my curated QE systems portfolio; CI/Security signals are scoped to named <code>main</code>-branch workflows.</sub></p>
+<p align="center"><sub>From my QE systems portfolio · signals scoped to named <code>main</code>-branch workflows.</sub></p>
 
 ---
 
