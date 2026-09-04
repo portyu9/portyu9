@@ -4,7 +4,7 @@
 Established profile contracts remain delegated to validate-profile.py helpers; this
 validator replaces only the former Qualification Matrix contract with deterministic
 light/dark flagship cards and generated daily Evidence Spotlight references. It also
-owns the current responsive QE taxonomy scale contract.
+owns the current responsive QE taxonomy scale and desktop-only thesis scale contracts.
 """
 from __future__ import annotations
 import hashlib
@@ -47,6 +47,20 @@ SPOTLIGHT_REFS = (
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg",
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg",
 )
+THESIS_HEADER_ASSET_COMMIT = "5f29170f9fe0722299a0f45e59bea83618610e9a"
+THESIS_HEADER_REFS = tuple(
+    f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
+    for path in legacy.HEADER_SVGS
+)
+DESKTOP_PRINCIPLES = (
+    ("Evidence before / Confidence", "assets/profile-badges/principle-evidence-confidence-desktop.svg", 170, 79, "assets/profile-badges/principle-evidence-confidence.svg?fit=20260903-font23r-a", 84),
+    ("Reasoning without / Self-authorization", "assets/profile-badges/principle-reasoning-authorization-desktop.svg", 187, 79, "assets/profile-badges/principle-reasoning-authorization.svg?fit=20260903-font23r-b", 84),
+    ("Attribution before / Abstraction", "assets/profile-badges/principle-attribution-abstraction-desktop.svg", 173, 79, "assets/profile-badges/principle-attribution-abstraction.svg?fit=20260903-font23r-c", 84),
+    ("Oracle Discipline", "assets/profile-badges/principle-oracle-discipline-desktop.svg", 171, 39, "assets/profile-badges/principle-oracle-discipline.svg?fit=20260903-font23r-d", 44),
+    ("Reproducibility over Optics", "assets/profile-badges/principle-reproducibility-optics-desktop.svg", 166, 79, "assets/profile-badges/principle-reproducibility-optics.svg?fit=20260903-font23r-e", 84),
+    ("Safety by / Architecture", "assets/profile-badges/principle-safety-architecture-desktop.svg", 152, 79, "assets/profile-badges/principle-safety-architecture.svg?fit=20260903-font23r-f", 84),
+)
+DESKTOP_PRINCIPLE_SVGS = tuple(item[1] for item in DESKTOP_PRINCIPLES)
 
 
 def require(condition: bool, message: str) -> None:
@@ -63,7 +77,7 @@ def validate_references(readme: str) -> None:
     for match in pattern.finditer(readme):
         ref=match.group(1) or match.group(2) or match.group(3)
         references.append(ref.split("?",1)[0].split("#",1)[0].lstrip("./"))
-    allowed = set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(legacy.HEADER_REFERENCES) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS) | set(SPOTLIGHT_REFS)
+    allowed = set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(DESKTOP_PRINCIPLE_SVGS) | set(THESIS_HEADER_REFS) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS) | set(SPOTLIGHT_REFS)
     unexpected=sorted(set(references)-allowed); missing=sorted(allowed-set(references))
     require(not unexpected, "README contains unapproved SVG references: " + ", ".join(unexpected))
     require(not missing, "README is missing approved SVG references: " + ", ".join(missing))
@@ -110,6 +124,67 @@ def validate_taxonomy_scale(readme: str) -> None:
                 f"Reviewed 28px desktop taxonomy badge changed: {label}")
         require(readme.count(fallback) == 1,
                 f"Reviewed 29px mobile taxonomy badge changed: {label}")
+
+
+def validate_thesis_scale(readme: str) -> None:
+    """Lock the desktop-only smaller thesis type while preserving mobile assets."""
+    require(readme.count('<table width="100%">') == 1, "Principle table must render at 100% README width")
+    require(readme.count('<th width="37%" align="center"><picture>') == 1, "Principle column must remain 37%")
+    require(readme.count('<th width="63%" align="center"><picture>') == 1, "Engineering Contract column must remain 63%")
+
+    landscape_dark = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape) and (prefers-color-scheme: dark)"'
+    landscape_light = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape)"'
+    require(readme.count(landscape_dark) == 2, "Both thesis headers must retain the dark mobile-landscape override")
+    require(readme.count(landscape_light) == 2, "Both thesis headers must retain the light mobile-landscape override")
+
+    for family in ("principle", "engineering-contract"):
+        mobile_dark = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-mobile-dark.svg"
+        mobile_light = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-mobile-light.svg"
+        desktop_dark = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-desktop-dark.svg"
+        desktop_light = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-desktop-light.svg"
+        require(readme.count(f'media="(min-width: 1025px) and (prefers-color-scheme: dark)" srcset="{desktop_dark}"') == 1,
+                f"{family} dark desktop header must start at 1025px")
+        require(readme.count(f'media="(min-width: 1025px)" srcset="{desktop_light}"') == 1,
+                f"{family} light desktop header must start at 1025px")
+        require(readme.count(f'media="(prefers-color-scheme: dark)" srcset="{mobile_dark}"') == 1,
+                f"{family} dark mobile fallback changed")
+        require(readme.count(f'src="{mobile_light}"') == 1,
+                f"{family} light mobile fallback changed")
+        require(readme.find(f"thesis-header-{family}-mobile-dark.svg") < readme.find(f"thesis-header-{family}-desktop-dark.svg"),
+                f"{family} mobile-landscape source must precede desktop source")
+
+    for relative in legacy.HEADER_SVGS:
+        content = legacy.safe_svg(ROOT / relative, relative)
+        expected_size = 'font-size="16"' if "desktop" in relative else 'font-size="23"'
+        require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
+        expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
+        require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
+
+    for relative in (
+        "assets/profile-badges/thesis-header-principle-mobile-light.svg",
+        "assets/profile-badges/thesis-header-principle-mobile-dark.svg",
+    ):
+        content=(ROOT/relative).read_text(encoding="utf-8")
+        require('width="136" height="40" viewBox="0 0 136 40"' in content and 'x="68"' in content,
+                f"Mobile Principle header canvas changed: {relative}")
+    for relative in (
+        "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
+        "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
+    ):
+        content=(ROOT/relative).read_text(encoding="utf-8")
+        require('width="276" height="40" viewBox="0 0 276 40"' in content and 'x="138"' in content,
+                f"Mobile Engineering Contract header canvas changed: {relative}")
+
+    for alt, desktop_path, width, height, mobile_path, mobile_height in DESKTOP_PRINCIPLES:
+        content=legacy.safe_svg(ROOT/desktop_path, desktop_path)
+        require(f'width="{width}" height="{height}" viewBox="0 0 {width} {height}"' in content,
+                f"Desktop principle dimensions changed: {desktop_path}")
+        require('font-size="12"' in content,
+                f"Desktop principle typography must retain the reviewed ~5pt reduction: {desktop_path}")
+        source = f'<source media="(min-width: 1025px)" srcset="{desktop_path}" width="{width}" height="{height}">'
+        fallback = f'<img alt="{alt}" height="{mobile_height}" src="{mobile_path}">'
+        require(readme.count(source) == 1, f"Desktop-only principle source changed: {alt}")
+        require(readme.count(fallback) == 1, f"Mobile principle fallback changed: {alt}")
 
 
 def validate_flagships(readme: str) -> None:
@@ -163,13 +238,13 @@ def main() -> int:
     for phrase in legacy.FORBIDDEN_WORDING:
         require(phrase not in readme, f"Retired wording returned: {phrase}")
     require(readme.count("© 2026 Ƴunior Ƥortal. All rights reserved.")==1, "Copyright owner/year must appear exactly once")
-    validate_taxonomy_scale(readme); legacy.validate_thesis_headers(readme)
+    validate_taxonomy_scale(readme); validate_thesis_scale(readme)
     for relative in legacy.IDENTITY_AND_PRINCIPLE_SVGS: legacy.safe_svg(ROOT/relative, relative)
     for relative in legacy.PRINCIPLE_BADGES:
         content=(ROOT/relative).read_text(encoding="utf-8")
-        require('font-size="23"' in content and 'font-size="24"' not in content, f"Principle badge typography changed: {relative}")
+        require('font-size="23"' in content and 'font-size="24"' not in content, f"Mobile principle badge typography changed: {relative}")
     oracle=(ROOT/"assets/profile-badges/principle-oracle-discipline.svg").read_text(encoding="utf-8")
-    require('width="210" height="54" viewBox="0 0 210 54"' in oracle, "Oracle Discipline must retain its 210px canvas")
+    require('width="210" height="54" viewBox="0 0 210 54"' in oracle, "Mobile Oracle Discipline must retain its 210px canvas")
     repro=(ROOT/"assets/profile-badges/principle-reproducibility-optics.svg").read_text(encoding="utf-8")
     require(">Reproducibility</text>" in repro and ">over Optics</text>" in repro, "Reproducibility principle wording changed")
     validate_flagships(readme); validate_references(readme)
@@ -184,6 +259,6 @@ def main() -> int:
     footer='\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
     require(readme.count(footer)==1, "A horizontal rule must exist immediately above the copyright footer")
     require("release-candidate.yml?branch=main" not in readme, "Profile must not present an RC workflow with no current main status")
-    print("Profile v4 validation passed: taxonomy headings and badge tiers use the reviewed enlarged responsive scale; established profile contracts remain intact; three rich explicit-theme flagship systems and two generated daily Evidence Spotlights are attributable, scoped, responsive, and fail-closed by validation.")
+    print("Profile v4 validation passed: taxonomy scale and desktop-only thesis typography are locked while mobile thesis assets remain unchanged; established profile contracts, three rich explicit-theme flagship systems, and two generated daily Evidence Spotlights remain attributable, scoped, responsive, and fail-closed by validation.")
     return 0
 if __name__ == "__main__": raise SystemExit(main())
