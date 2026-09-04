@@ -179,8 +179,8 @@ def validate_thesis_scale(readme: str) -> None:
         content=legacy.safe_svg(ROOT/desktop_path, desktop_path)
         require(f'width="{width}" height="{height}" viewBox="0 0 {width} {height}"' in content,
                 f"Desktop principle dimensions changed: {desktop_path}")
-        require('font-size="19"' in content,
-                f"Desktop principle typography must retain the reviewed restored 19px label scale: {desktop_path}")
+        require('font-size="16"' in content,
+                f"Desktop principle typography must retain the reviewed 16px label scale: {desktop_path}")
         source = f'<source media="(min-width: 1025px)" srcset="{desktop_path}" width="{width}" height="{height}">'
         fallback = f'<img alt="{alt}" height="{mobile_height}" src="{mobile_path}">'
         require(readme.count(source) == 1, f"Desktop-only principle source changed: {alt}")
