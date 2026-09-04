@@ -31,8 +31,8 @@ CONTEXT_RECT = re.compile(
     r'(?P<tag><rect\b(?=[^>]*\bdata-evidence-window-role="context")[^>]*/>)', re.I
 )
 CONTEXT_DAY = re.compile(
-    r'(?P<tag><text\b(?=[^>]*\bdata-evidence-context-label="calendar-leading")[^>]*'
-    r'\bdata-day-label="\d{4}-\d{2}-\d{2}"[^>]*>)', re.I
+    r'(?P<tag><text\b(?=[^>]*\bdata-evidence-context-label="calendar-leading")'
+    r'(?=[^>]*\bdata-day-label="\d{4}-\d{2}-\d{2}")[^>]*>)', re.I
 )
 MONTH_LABEL = re.compile(
     r'(?P<tag><text\b(?=[^>]*\bdata-month-boundary="[A-Z]{3}")[^>]*>)', re.I
@@ -132,6 +132,10 @@ def outline_context(text: str, scheme: str) -> str:
     text = CONTEXT_RECT.sub(tile, text)
 
     primary = THEMES[scheme]["primary"]
+    day_matches = list(CONTEXT_DAY.finditer(text))
+    if len(day_matches) != len(matches):
+        raise ValueError("leading-context day-label count changed")
+
     def day(match: re.Match[str]) -> str:
         tag = set_attr(match.group("tag"), "fill", primary)
         return set_attr(tag, "opacity", "0.92")
@@ -165,7 +169,6 @@ def simplify_latest(text: str, scheme: str) -> str:
     tile = set_attr(tile, "stroke-width", "0")
     text = text[:tiles[0].start()] + tile + text[tiles[0].end():]
 
-    # Re-find after changing string length.
     outline_match = LATEST_OUTLINE.search(text)
     assert outline_match is not None
     outline = set_attr(outline_match.group("tag"), "stroke", THEMES[scheme]["latest"])
@@ -242,8 +245,11 @@ def validate(text: str, path: Path) -> None:
             raise ValueError("leading context outline encoding changed")
 
     primary = THEMES[scheme_for(path)]["primary"]
-    for match in CONTEXT_DAY.finditer(text):
-        a = attrs_of(match.group("tag"))
+    days = [m.group("tag") for m in CONTEXT_DAY.finditer(text)]
+    if len(days) != len(tiles):
+        raise ValueError("leading-context day-label count changed")
+    for tag in days:
+        a = attrs_of(tag)
         if a.get("fill") != primary or a.get("opacity") != "0.92":
             raise ValueError("leading context day labels are not legible")
 
@@ -292,8 +298,8 @@ def self_test() -> None:
                 'data-calendar-context-visual="dimmed" data-issues-display-alias="bugs-found">'
                 f'<desc>calendar display includes context {OLD_DESC}</desc>'
                 '<rect data-evidence-window-role="context" data-date="2026-08-03" opacity="0.50"/>'
-                '<text data-evidence-context-label="calendar-leading" data-day-label="2026-08-03" opacity="0.58">03</text>'
-                '<text data-evidence-context-label="calendar-leading" data-month-boundary="AUG" opacity="0.58">AUG</text>'
+                '<text data-day-label="2026-08-03" opacity="0.58" data-evidence-context-label="calendar-leading">03</text>'
+                '<text data-month-boundary="AUG" opacity="0.58" data-evidence-context-label="calendar-leading">AUG</text>'
                 '<text data-month-boundary="SEP">SEP</text>'
                 '<rect data-latest-day="true" stroke="#F8FAFC" stroke-width="1"/>'
                 '<rect data-latest-outline="outer" stroke="#00AEEF" stroke-width="1.25" opacity="0.68"/>'
