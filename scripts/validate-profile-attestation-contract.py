@@ -16,7 +16,7 @@ BUILDER = ROOT / "scripts/build-profile-evidence-attestation.py"
 ATTEST_SHA = "1e69f48acb82d1966a394da916b4c1698aa569d6"  # actions/attest v4.2.2
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_PYTHON_SHA = "5fda3b95a4ea91299a34e894583c3862153e4b97"
-DOWNLOAD_SHA = "634f93cb2916e3fdff6788551b99b062d0335ce0"
+DOWNLOAD_SHA = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
 PREDICATE_TYPE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
     "profile-evidence-v1.schema.json"
@@ -125,6 +125,9 @@ def validate_workflow() -> None:
     require(attest.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "attestation must use reviewed checkout SHA for source and current generated evidence")
     require(attest.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 1, "attestation setup-python SHA changed")
     require(attest.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 2, "attestation must download both immutable artifact sets")
+    require(attest.count("digest-mismatch: error") == 2, "attestation artifact downloads must fail closed on digest mismatch")
+    require(publish.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 2, "publication must download both immutable artifact sets")
+    require(publish.count("digest-mismatch: error") == 2, "publication artifact downloads must fail closed on digest mismatch")
     require(attest.count("persist-credentials: false") == 2, "attestation checkouts must not persist credentials")
     require("ref: generated" in attest and "path: published" in attest, "attestation must compare against current generated evidence")
     require("github.event_name != 'schedule' || steps.delta.outputs.changed == 'true'" in attest, "scheduled attestation deduplication guard changed")
@@ -175,8 +178,8 @@ def main() -> int:
         validate_doc()
         print(
             "Engineering attestation validation passed: generation has no signing/write authority, "
-            "Signal Field Evidence ID is bound into the signed predicate, publication depends on "
-            "attestation/revalidation, and the claim remains provenance/contract conformance rather than certification."
+            "artifact downloads fail closed on digest mismatch, Signal Field Evidence ID is bound into the signed predicate, "
+            "publication depends on attestation/revalidation, and the claim remains provenance/contract conformance rather than certification."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError) as exc:
