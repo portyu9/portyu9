@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Clarify Signal Field's measured 30-day evidence window versus calendar context.
 
-Signal Field v2.13 is a presentation-only pass after v2.12. It does not change any
-metric, count, source, date, contribution level, or evidence-window membership.
-It makes the Monday-aligned leading calendar context visually subordinate, quiets
-empty calendar slots, and labels the measured window more precisely.
+Signal Field v2.13 is a presentation-only pass after v2.12. It changes no metric,
+count, source, date, contribution level, or evidence-window membership. Monday-aligned
+leading context is visually subordinate and empty calendar slots are quieter.
 """
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,39 +13,32 @@ import sys
 
 VERSION = "signal-field-v2.13"
 PREVIOUS = "signal-field-v2.12"
-EXPECTED_FILES = (
-    "signal-field-wide-light.svg",
-    "signal-field-wide-dark.svg",
-    "signal-field-compact-light.svg",
-    "signal-field-compact-dark.svg",
+EXPECTED_FILES = tuple(
+    f"signal-field-{layout}-{theme}.svg"
+    for layout in ("wide", "compact")
+    for theme in ("light", "dark")
 )
-
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
-LEADING_RECT = re.compile(
-    r'(?P<tag><rect\b(?=[^>]*\bdata-window-context="leading")[^>]*/>)', re.I
-)
-MEASURED_RECT = re.compile(
-    r'(?P<tag><rect\b(?=[^>]*\bdata-window-day="\d+")[^>]*/>)', re.I
-)
-OUTSIDE_RECT = re.compile(
-    r'(?P<tag><rect\b(?=[^>]*\bdata-slot-state="outside-window")[^>]*/>)', re.I
-)
-DAY_LABEL = re.compile(
-    r'(?P<tag><text\b(?=[^>]*\bdata-day-label="(?P<date>\d{4}-\d{2}-\d{2})")[^>]*>)', re.I
-)
-MONTH_LABEL = re.compile(
-    r'(?P<tag><text\b(?=[^>]*\bdata-month-boundary="(?P<month>[A-Z]{3})")[^>]*>)', re.I
-)
+LEADING_RECT = re.compile(r'(?P<tag><rect\b(?=[^>]*\bdata-window-context="leading")[^>]*/>)', re.I)
+MEASURED_RECT = re.compile(r'(?P<tag><rect\b(?=[^>]*\bdata-window-day="\d+")[^>]*/>)', re.I)
+OUTSIDE_RECT = re.compile(r'(?P<tag><rect\b(?=[^>]*\bdata-slot-state="outside-window")[^>]*/>)', re.I)
+DAY_LABEL = re.compile(r'(?P<tag><text\b(?=[^>]*\bdata-day-label="(?P<date>\d{4}-\d{2}-\d{2})")[^>]*>)', re.I)
+MONTH_LABEL = re.compile(r'(?P<tag><text\b(?=[^>]*\bdata-month-boundary="(?P<month>[A-Z]{3})")[^>]*>)', re.I)
 
-WIDE_OLD_HEADING = "DAILY ACTIVITY · LAST 30 DAYS"
-WIDE_NEW_HEADING = "DAILY ACTIVITY · 30-DAY EVIDENCE WINDOW"
-COMPACT_OLD_HEADING = "DAILY ACTIVITY · 30 DAYS"
-COMPACT_NEW_HEADING = "DAILY ACTIVITY · 30D EVIDENCE"
-WIDE_OLD_FOOTER = "WINDOW · 30 UTC DAYS · LEVELS 0–4 · RAW COUNTS"
-WIDE_NEW_FOOTER = "30D EVIDENCE · DIM CONTEXT · LEVELS 0–4 · RAW COUNTS"
-OLD_DESC_CONTEXT = "for Monday-aligned context."
-NEW_DESC_CONTEXT = "as dimmed Monday-aligned context."
+HEADINGS = {
+    "wide": ("DAILY ACTIVITY · LAST 30 DAYS", "DAILY ACTIVITY · 30-DAY EVIDENCE WINDOW"),
+    # Compact intentionally stays short so it cannot collide with the LESS/MORE legend.
+    "compact": ("DAILY ACTIVITY · 30 DAYS", "DAILY ACTIVITY · 30D"),
+}
+WIDE_FOOTERS = (
+    "WINDOW · 30 UTC DAYS · LEVELS 0–4 · RAW COUNTS",
+    "30D EVIDENCE · DIM CONTEXT · LEVELS 0–4 · RAW COUNTS",
+)
+DESC_CONTEXT = (
+    "for Monday-aligned context.",
+    "as dimmed Monday-aligned context.",
+)
 CONTEXT_OPACITY = "0.50"
 CONTEXT_LABEL_OPACITY = "0.58"
 OUTSIDE_OPACITY = "0.16"
@@ -72,21 +63,9 @@ def set_attr(tag: str, name: str, value: str) -> str:
 
 def layout_of(root_tag: str) -> str:
     viewbox = attrs_of(root_tag).get("viewBox")
-    if viewbox == "0 0 640 425":
-        return "wide"
-    if viewbox == "0 0 320 500":
-        return "compact"
+    if viewbox == "0 0 640 425": return "wide"
+    if viewbox == "0 0 320 500": return "compact"
     raise ValueError(f"unexpected Signal Field viewBox: {viewbox!r}")
-
-
-def add_root_provenance(text: str) -> str:
-    root = SVG_OPEN.search(text)
-    if not root:
-        raise ValueError("SVG root missing")
-    tag = root.group(0)
-    tag = set_attr(tag, "data-evidence-window-clarity", VERSION)
-    tag = set_attr(tag, "data-calendar-context-visual", "dimmed")
-    return text[: root.start()] + tag + text[root.end() :]
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -96,52 +75,53 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
 
 
 def mark_calendar_roles(text: str) -> str:
-    leading_matches = list(LEADING_RECT.finditer(text))
-    leading_dates = {
-        attrs_of(match.group("tag"))["data-date"] for match in leading_matches
-    }
+    original_leading = list(LEADING_RECT.finditer(text))
+    leading_dates = {attrs_of(m.group("tag"))["data-date"] for m in original_leading}
     leading_months = {
-        attrs.get("data-month-boundary")
-        for match in leading_matches
-        if (attrs := attrs_of(match.group("tag"))).get("data-month-boundary")
+        attrs["data-month-boundary"]
+        for m in original_leading
+        if "data-month-boundary" in (attrs := attrs_of(m.group("tag")))
     }
 
-    def leading_repl(match: re.Match[str]) -> str:
+    def leading(match: re.Match[str]) -> str:
         tag = set_attr(match.group("tag"), "opacity", CONTEXT_OPACITY)
-        tag = set_attr(tag, "data-evidence-window-role", "context")
-        return tag
+        return set_attr(tag, "data-evidence-window-role", "context")
 
-    text = LEADING_RECT.sub(leading_repl, text)
-
-    def measured_repl(match: re.Match[str]) -> str:
+    def measured(match: re.Match[str]) -> str:
         return set_attr(match.group("tag"), "data-evidence-window-role", "measured")
 
-    text = MEASURED_RECT.sub(measured_repl, text)
-
-    def outside_repl(match: re.Match[str]) -> str:
+    def outside(match: re.Match[str]) -> str:
         tag = set_attr(match.group("tag"), "opacity", OUTSIDE_OPACITY)
-        tag = set_attr(tag, "data-evidence-window-role", "empty")
-        return tag
+        return set_attr(tag, "data-evidence-window-role", "empty")
 
-    text = OUTSIDE_RECT.sub(outside_repl, text)
+    text = LEADING_RECT.sub(leading, text)
+    text = MEASURED_RECT.sub(measured, text)
+    text = OUTSIDE_RECT.sub(outside, text)
 
-    def day_repl(match: re.Match[str]) -> str:
+    def day_label(match: re.Match[str]) -> str:
         tag = match.group("tag")
         if match.group("date") not in leading_dates:
             return tag
         tag = set_attr(tag, "opacity", CONTEXT_LABEL_OPACITY)
         return set_attr(tag, "data-evidence-context-label", "calendar-leading")
 
-    text = DAY_LABEL.sub(day_repl, text)
-
-    def month_repl(match: re.Match[str]) -> str:
+    def month_label(match: re.Match[str]) -> str:
         tag = match.group("tag")
         if match.group("month") not in leading_months:
             return tag
         tag = set_attr(tag, "opacity", CONTEXT_LABEL_OPACITY)
         return set_attr(tag, "data-evidence-context-label", "calendar-leading")
 
-    return MONTH_LABEL.sub(month_repl, text)
+    return MONTH_LABEL.sub(month_label, DAY_LABEL.sub(day_label, text))
+
+
+def add_root_provenance(text: str) -> str:
+    root = SVG_OPEN.search(text)
+    if not root:
+        raise ValueError("SVG root missing")
+    tag = set_attr(root.group(0), "data-evidence-window-clarity", VERSION)
+    tag = set_attr(tag, "data-calendar-context-visual", "dimmed")
+    return text[:root.start()] + tag + text[root.end():]
 
 
 def validate(text: str, layout: str) -> None:
@@ -155,7 +135,6 @@ def validate(text: str, layout: str) -> None:
         raise ValueError("calendar-context visual provenance changed")
     if attrs.get("data-secondary-metric-balance") != PREVIOUS:
         raise ValueError("v2.12 must precede v2.13")
-
     try:
         window_days = int(attrs["data-activity-window-days"])
         display_days = int(attrs["data-activity-display-days"])
@@ -174,45 +153,39 @@ def validate(text: str, layout: str) -> None:
     if not outside:
         raise ValueError("calendar outside-window slots unexpectedly disappeared")
 
-    for tag in measured:
-        if attrs_of(tag).get("data-evidence-window-role") != "measured":
-            raise ValueError("measured evidence tile role missing")
+    if any(attrs_of(t).get("data-evidence-window-role") != "measured" for t in measured):
+        raise ValueError("measured evidence tile role missing")
     for tag in leading:
-        tag_attrs = attrs_of(tag)
-        if tag_attrs.get("data-evidence-window-role") != "context":
-            raise ValueError("leading context role missing")
-        if tag_attrs.get("opacity") != CONTEXT_OPACITY:
-            raise ValueError("leading context opacity changed")
+        a = attrs_of(tag)
+        if a.get("data-evidence-window-role") != "context" or a.get("opacity") != CONTEXT_OPACITY:
+            raise ValueError("leading calendar context styling/provenance changed")
     for tag in outside:
-        tag_attrs = attrs_of(tag)
-        if tag_attrs.get("data-evidence-window-role") != "empty":
-            raise ValueError("outside calendar role missing")
-        if tag_attrs.get("opacity") != OUTSIDE_OPACITY:
-            raise ValueError("outside calendar opacity changed")
+        a = attrs_of(tag)
+        if a.get("data-evidence-window-role") != "empty" or a.get("opacity") != OUTSIDE_OPACITY:
+            raise ValueError("outside calendar slot styling/provenance changed")
 
     if leading:
-        leading_dates = {attrs_of(tag)["data-date"] for tag in leading}
-        label_count = 0
+        leading_dates = {attrs_of(t)["data-date"] for t in leading}
+        found = 0
         for match in DAY_LABEL.finditer(text):
-            if match.group("date") in leading_dates:
-                label_count += 1
-                tag_attrs = attrs_of(match.group("tag"))
-                if tag_attrs.get("opacity") != CONTEXT_LABEL_OPACITY:
-                    raise ValueError("leading context day label is not dimmed")
-                if tag_attrs.get("data-evidence-context-label") != "calendar-leading":
-                    raise ValueError("leading context day-label provenance missing")
-        if label_count != len(leading_dates):
+            if match.group("date") not in leading_dates:
+                continue
+            found += 1
+            a = attrs_of(match.group("tag"))
+            if a.get("opacity") != CONTEXT_LABEL_OPACITY or a.get("data-evidence-context-label") != "calendar-leading":
+                raise ValueError("leading context day label is not correctly dimmed")
+        if found != len(leading_dates):
             raise ValueError("leading context day-label count changed")
 
-    expected_heading = WIDE_NEW_HEADING if layout == "wide" else COMPACT_NEW_HEADING
-    stale_heading = WIDE_OLD_HEADING if layout == "wide" else COMPACT_OLD_HEADING
-    if text.count(expected_heading) != 1 or stale_heading in text:
+    old_heading, new_heading = HEADINGS[layout]
+    if text.count(new_heading) != 1 or old_heading in text:
         raise ValueError(f"{layout} evidence-window heading contract changed")
-
-    if OLD_DESC_CONTEXT in text or text.count(NEW_DESC_CONTEXT) != 1:
+    old_desc, new_desc = DESC_CONTEXT
+    if old_desc in text or text.count(new_desc) != 1:
         raise ValueError("accessible dimmed-context semantics changed")
     if layout == "wide":
-        if text.count(WIDE_NEW_FOOTER) != 1 or WIDE_OLD_FOOTER in text:
+        old_footer, new_footer = WIDE_FOOTERS
+        if text.count(new_footer) != 1 or old_footer in text:
             raise ValueError("wide evidence footer clarity contract changed")
 
 
@@ -221,52 +194,40 @@ def clarify_svg(text: str) -> str:
     if not root:
         raise ValueError("SVG root missing")
     layout = layout_of(root.group(0))
-    root_attrs = attrs_of(root.group(0))
-    if root_attrs.get("data-evidence-window-clarity") == VERSION:
+    attrs = attrs_of(root.group(0))
+    if attrs.get("data-evidence-window-clarity") == VERSION:
         validate(text, layout)
         return text
-    if root_attrs.get("data-secondary-metric-balance") != PREVIOUS:
+    if attrs.get("data-secondary-metric-balance") != PREVIOUS:
         raise ValueError("Signal Field v2.12 must exist before v2.13")
 
+    old_heading, new_heading = HEADINGS[layout]
+    text = replace_once(text, old_heading, new_heading, f"{layout} activity heading")
     if layout == "wide":
-        text = replace_once(text, WIDE_OLD_HEADING, WIDE_NEW_HEADING, "wide activity heading")
-        text = replace_once(text, WIDE_OLD_FOOTER, WIDE_NEW_FOOTER, "wide evidence footer")
-    else:
-        text = replace_once(text, COMPACT_OLD_HEADING, COMPACT_NEW_HEADING, "compact activity heading")
-
-    text = replace_once(text, OLD_DESC_CONTEXT, NEW_DESC_CONTEXT, "accessible calendar-context phrase")
-    text = mark_calendar_roles(text)
-    text = add_root_provenance(text)
+        text = replace_once(text, *WIDE_FOOTERS, "wide evidence footer")
+    text = replace_once(text, *DESC_CONTEXT, "accessible calendar-context phrase")
+    text = add_root_provenance(mark_calendar_roles(text))
     validate(text, layout)
     return text
 
 
 def fixture(layout: str) -> str:
-    geometry = (
-        'viewBox="0 0 640 425" width="640" height="425"'
-        if layout == "wide"
-        else 'viewBox="0 0 320 500" width="320" height="500"'
+    geometry = 'viewBox="0 0 640 425" width="640" height="425"' if layout == "wide" else 'viewBox="0 0 320 500" width="320" height="500"'
+    leading = (
+        '<rect data-date="2026-08-01" data-window-context="leading" data-month-boundary="AUG"/>'
+        '<text data-month-boundary="AUG" opacity="1">AUG</text>'
+        '<text data-day-label="2026-08-01">01</text>'
+        '<rect data-date="2026-08-02" data-window-context="leading"/><text data-day-label="2026-08-02">02</text>'
+        '<rect data-date="2026-08-03" data-window-context="leading"/><text data-day-label="2026-08-03">03</text>'
     )
-    heading = WIDE_OLD_HEADING if layout == "wide" else COMPACT_OLD_HEADING
-    footer = f'<text>{WIDE_OLD_FOOTER}</text>' if layout == "wide" else ""
-    leading = []
-    for day in range(1, 4):
-        month = ' data-month-boundary="AUG"' if day == 1 else ""
-        leading.append(
-            f'<rect data-date="2026-08-0{day}" data-window-context="leading"{month}/>'
-            f'<text data-day-label="2026-08-0{day}">0{day}</text>'
-        )
-    leading.insert(1, '<text data-month-boundary="AUG" opacity="1">AUG</text>')
-    measured = ''.join(
-        f'<rect data-date="2026-08-{day:02d}" data-window-day="{index}"/>'
-        for index, day in enumerate(range(4, 34), start=1)
-    )
+    measured = ''.join(f'<rect data-date="2026-09-{i:02d}" data-window-day="{i}"/>' for i in range(1, 31))
     outside = '<rect opacity="0.38" data-slot-state="outside-window"/><rect opacity="0.38" data-slot-state="outside-window"/>'
+    old_heading, _ = HEADINGS[layout]
+    footer = f'<text>{WIDE_FOOTERS[0]}</text>' if layout == "wide" else ""
     return (
-        f'<svg {geometry} data-activity-window-days="30" data-activity-display-days="33" '
-        f'data-secondary-metric-balance="{PREVIOUS}"><desc>calendar display includes 33 dated marks '
-        f'from 2026-08-01 through 2026-09-02 for Monday-aligned context.</desc>'
-        f'<text>{heading}</text>{"".join(leading)}{measured}{outside}{footer}</svg>'
+        f'<svg {geometry} data-activity-window-days="30" data-activity-display-days="33" data-secondary-metric-balance="{PREVIOUS}">'
+        '<desc>calendar display includes 33 dated marks from 2026-08-01 through 2026-09-30 for Monday-aligned context.</desc>'
+        f'<text>{old_heading}</text>{leading}{measured}{outside}{footer}</svg>'
     )
 
 
@@ -292,17 +253,12 @@ def apply(directory: Path) -> None:
 def main() -> int:
     try:
         if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
-            self_test()
-            return 0
+            self_test(); return 0
         if len(sys.argv) != 2:
-            raise ValueError(
-                "usage: clarify-signal-field-evidence-window.py <generated-directory> | --self-test"
-            )
-        apply(Path(sys.argv[1]))
-        return 0
+            raise ValueError("usage: clarify-signal-field-evidence-window.py <generated-directory> | --self-test")
+        apply(Path(sys.argv[1])); return 0
     except (OSError, ValueError, AssertionError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
+        print(f"ERROR: {exc}", file=sys.stderr); return 1
 
 
 if __name__ == "__main__":
