@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="620" height="164" viewBox="0 0 620 164" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="190" viewBox="0 0 620 190" role="img" aria-labelledby="title desc" data-system-card="selected-engineering-systems-v2">
   <title id="title">GraphQL Quality Engineering</title>
   <desc id="desc">Selected engineering system. Explicit schema, execution, and authorization contracts with attributable evidence.</desc>
   <defs>
@@ -8,30 +8,31 @@
       <stop offset="1" stop-color="#28D7FF"/>
     </linearGradient>
     <linearGradient id="wash" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#E10098" stop-opacity=".07"/>
-      <stop offset=".5" stop-color="#8C7CFF" stop-opacity=".04"/>
-      <stop offset="1" stop-color="#28D7FF" stop-opacity=".07"/>
+      <stop offset="0" stop-color="#E10098" stop-opacity=".06"/>
+      <stop offset=".52" stop-color="#8C7CFF" stop-opacity=".03"/>
+      <stop offset="1" stop-color="#28D7FF" stop-opacity=".05"/>
     </linearGradient>
   </defs>
   <style>
-    .surface{fill:#FFFFFF;stroke:#D0D7DE}.ink{fill:#1F2328}.muted{fill:#57606A}.chip{fill:#F6F8FA;stroke:#D8DEE4}.chiptext{fill:#3D444D}.topology{fill:none;stroke-linecap:round;stroke-linejoin:round}.node{fill:#FFFFFF}
-    @media (prefers-color-scheme: dark){.surface{fill:#0D1117;stroke:#30363D}.ink{fill:#F0F6FC}.muted{fill:#8B949E}.chip{fill:#161B22;stroke:#30363D}.chiptext{fill:#C9D1D9}.node{fill:#0D1117}}
+    .surface{fill:#FFFFFF;stroke:#D0D7DE}.ink{fill:#1F2328}.muted{fill:#57606A}.accent{fill:#C60084}.accentstroke{stroke:#C60084}.chip{fill:#F6F8FA;stroke:#D8DEE4}.chiptext{fill:#3D444D}.topology{fill:none;stroke-linecap:round;stroke-linejoin:round}.node{fill:#FFFFFF}
+    @media (prefers-color-scheme: dark){.surface{fill:#0D1117;stroke:#30363D}.ink{fill:#F0F6FC}.muted{fill:#8B949E}.accent{fill:#FF52C8}.accentstroke{stroke:#FF52C8}.chip{fill:#161B22;stroke:#30363D}.chiptext{fill:#C9D1D9}.node{fill:#0D1117}}
   </style>
-  <rect x="1" y="1" width="618" height="162" rx="16" class="surface"/>
-  <rect x="2" y="2" width="616" height="160" rx="15" fill="url(#wash)"/>
-  <path d="M350 22h58l18 16h56l22-18h92" class="topology" stroke="#E10098" stroke-opacity=".14"/>
-  <path d="M362 139h48l20-22h78l18 18h72" class="topology" stroke="#28D7FF" stroke-opacity=".16"/>
-  <path d="M454 18l42 26-18 38 36 24-16 38" class="topology" stroke="#8C7CFF" stroke-opacity=".16"/>
+  <rect x="1" y="1" width="618" height="188" rx="16" class="surface"/>
+  <rect x="2" y="2" width="616" height="186" rx="15" fill="url(#wash)"/>
+  <path d="M458 20h40l18 18h46l18-18h26" class="topology" stroke="#E10098" stroke-opacity=".12"/>
+  <path d="M472 170h38l18-20h40l18 18h20" class="topology" stroke="#28D7FF" stroke-opacity=".12"/>
+  <path d="M524 18l30 24-14 34 24 22-12 48" class="topology" stroke="#8C7CFF" stroke-opacity=".11"/>
   <g stroke-width="1.5">
-    <circle cx="426" cy="38" r="3.5" class="node" stroke="#E10098"/><circle cx="504" cy="20" r="3.5" class="node" stroke="#8C7CFF"/><circle cx="430" cy="117" r="3.5" class="node" stroke="#28D7FF"/><circle cx="526" cy="135" r="3.5" class="node" stroke="#E10098"/>
+    <circle cx="516" cy="38" r="3.5" class="node" stroke="#E10098"/><circle cx="580" cy="20" r="3.5" class="node" stroke="#8C7CFF"/><circle cx="528" cy="150" r="3.5" class="node" stroke="#28D7FF"/><circle cx="586" cy="168" r="3.5" class="node" stroke="#E10098"/>
   </g>
-  <rect x="20" y="20" width="4" height="124" rx="2" fill="url(#edge)"/>
-  <text x="40" y="32" class="muted" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="11" font-weight="700" letter-spacing="1.25">SELECTED ENGINEERING SYSTEM · 02</text>
-  <text x="40" y="66" fill="#8C7CFF" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="27" font-weight="800">◇ GRAPHQL QE</text>
-  <text x="40" y="92" class="ink" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="15" font-weight="550">Schema · execution · authorization contracts</text>
-  <g font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="10.5" font-weight="700" letter-spacing=".25">
-    <rect x="40" y="111" width="132" height="26" rx="7" class="chip"/><text x="53" y="128" class="chiptext">CONTRACTS · SCHEMA</text>
-    <rect x="182" y="111" width="158" height="26" rx="7" class="chip"/><text x="195" y="128" class="chiptext">SEMANTICS · EXECUTION</text>
-    <rect x="350" y="111" width="132" height="26" rx="7" class="chip"/><text x="363" y="128" class="chiptext">AUTHZ · EXPLICIT</text>
+  <rect x="20" y="20" width="4" height="150" rx="2" fill="url(#edge)"/>
+  <text x="40" y="34" class="muted" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="11" font-weight="700" letter-spacing="1.25">SELECTED ENGINEERING SYSTEM · 02</text>
+  <g fill="none" class="accentstroke" stroke-width="2.1" stroke-linejoin="round"><path d="M52 55l10 6v12l-10 6-10-6V61z"/><path d="M42 61l20 12M62 61L42 73"/></g>
+  <text x="70" y="72" class="accent" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="26" font-weight="800">GRAPHQL QE</text>
+  <text x="40" y="101" class="ink" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="14.5" font-weight="550">Schema · execution · authorization contracts</text>
+  <g font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="10" font-weight="700" letter-spacing=".15">
+    <rect x="40" y="128" width="125" height="32" rx="8" class="chip"/><text x="54" y="148" class="chiptext">SCHEMA CONTRACT</text>
+    <rect x="177" y="128" width="145" height="32" rx="8" class="chip"/><text x="191" y="148" class="chiptext">EXECUTION SEMANTICS</text>
+    <rect x="334" y="128" width="120" height="32" rx="8" class="chip"/><text x="348" y="148" class="chiptext">EXPLICIT AUTHZ</text>
   </g>
 </svg>
