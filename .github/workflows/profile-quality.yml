@@ -120,6 +120,9 @@ jobs:
       - name: Validate workflow authority firewall
         run: python3 scripts/validate-workflow-authority-contract.py
 
+      - name: Validate workflow shell safety
+        run: python3 scripts/validate-workflow-shell-safety.py
+
       - name: Validate CodeQL governance contract
         run: python3 scripts/validate-codeql-contract.py
 
