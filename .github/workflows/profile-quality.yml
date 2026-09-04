@@ -111,6 +111,9 @@ jobs:
       - name: Validate Dependabot governance contract
         run: python3 scripts/validate-dependabot-contract.py
 
+      - name: Validate CodeQL governance contract
+        run: python3 scripts/validate-codeql-contract.py
+
       - name: Validate repository governance contract
         run: python3 scripts/validate-governance-contract.py
 
