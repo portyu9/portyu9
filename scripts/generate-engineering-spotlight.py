@@ -125,15 +125,62 @@ def glyph_markup(glyph: str, accent: str) -> str:
 
 def topology_markup(name: str, node: str, a: str, b: str, c: str) -> str:
     styles = {
-        "session-rails": (f'<path d="M468 22h34l16 16h28l16-12h42" fill="none" stroke="{b}" stroke-opacity=".12" stroke-linecap="round"/><path d="M478 154h38l16-18h34l16 16h24" fill="none" stroke="{a}" stroke-opacity=".10" stroke-linecap="round"/><path d="M536 38v28l18 16v30" fill="none" stroke="{c}" stroke-opacity=".09"/>',[(518,38,b),(562,26,c),(532,136,a),(582,152,b)]),
-        "request-route": (f'<path d="M456 28h52l16 16h26l18 18h38" fill="none" stroke="{a}" stroke-opacity=".12"/><path d="M482 148h28l18-20h42l18-18h18" fill="none" stroke="{b}" stroke-opacity=".11"/><path d="M544 44l22 22-12 22 18 20" fill="none" stroke="{c}" stroke-opacity=".08"/>',[(508,28,a),(550,44,b),(528,128,c),(588,110,a)]),
-        "device-bus": (f'<path d="M490 20v28l16 14v42l-16 16v30" fill="none" stroke="{a}" stroke-opacity=".11"/><path d="M490 62h36l14-14h42l14 14h10" fill="none" stroke="{b}" stroke-opacity=".12"/><path d="M506 104h38l18 20h44" fill="none" stroke="{c}" stroke-opacity=".10"/>',[(490,48,a),(540,48,b),(506,104,c),(562,124,a)]),
-        "retry-circuit": (f'<path d="M474 34h52c26 0 34 34 10 46-18 9-18 31 0 40 21 10 18 36-6 36h-54" fill="none" stroke="{a}" stroke-opacity=".10"/><path d="M526 34h36l16 16h28" fill="none" stroke="{b}" stroke-opacity=".12"/><path d="M530 156h34l16-16h26" fill="none" stroke="{c}" stroke-opacity=".11"/>',[(526,34,b),(578,50,c),(530,120,a),(580,140,b)]),
-        "layered-ladder": (f'<path d="M470 26h54l14 14h54" fill="none" stroke="{b}" stroke-opacity=".12"/><path d="M486 70h42l16 14h62" fill="none" stroke="{a}" stroke-opacity=".09"/><path d="M476 126h48l16-14h42l16 14" fill="none" stroke="{c}" stroke-opacity=".10"/><path d="M508 40v30M528 84v28M540 112v28" fill="none" stroke="{b}" stroke-opacity=".07"/>',[(524,26,b),(544,84,a),(524,126,c),(598,126,b)]),
-        "contract-bridge": (f'<path d="M458 44h42l18 18h26l18-18h44" fill="none" stroke="{a}" stroke-opacity=".12"/><path d="M470 140h36l20-18h30l18 18h32" fill="none" stroke="{c}" stroke-opacity=".11"/><path d="M518 62v60M562 44v96" fill="none" stroke="{b}" stroke-opacity=".07"/>',[(500,44,a),(544,62,b),(526,122,c),(574,140,a)]),
-        "protocol-chain": (f'<path d="M458 30h30l14 14h28l14 14h28l14 14h10" fill="none" stroke="{a}" stroke-opacity=".12"/><path d="M474 146h30l14-14h30l14-14h44" fill="none" stroke="{b}" stroke-opacity=".11"/><path d="M530 58c12 12 12 28 0 40s-12 28 0 40" fill="none" stroke="{c}" stroke-opacity=".08"/>',[(502,44,a),(544,58,b),(518,132,c),(586,72,a)]),
-        "trace-fan": (f'<path d="M470 86h38l24-52h38l20-14" fill="none" stroke="{a}" stroke-opacity=".11"/><path d="M508 86h48l30-30h20" fill="none" stroke="{b}" stroke-opacity=".12"/><path d="M508 86h44l32 42h22" fill="none" stroke="{c}" stroke-opacity=".10"/><path d="M508 86h28l18 64h40" fill="none" stroke="{a}" stroke-opacity=".08"/>',[(508,86,a),(532,34,b),(586,56,c),(584,128,a)]),
-        "load-wave": (f'<path d="M458 74c18-28 36-28 54 0s36 28 54 0 28-28 40-8" fill="none" stroke="{a}" stroke-opacity=".11"/><path d="M458 116c18-22 36-22 54 0s36 22 54 0 28-22 40-8" fill="none" stroke="{b}" stroke-opacity=".10"/><path d="M500 32h44l14 14h48" fill="none" stroke="{c}" stroke-opacity=".12"/>',[(500,74,a),(548,102,b),(558,46,c),(594,108,a)]),
+        "session-rails": (
+            f'<path d="M468 22h34l16 16h28l16-12h42" fill="none" stroke="{b}" stroke-opacity=".12" stroke-linecap="round"/>'
+            f'<path d="M478 154h38l16-18h34l16 16h24" fill="none" stroke="{a}" stroke-opacity=".10" stroke-linecap="round"/>'
+            f'<path d="M536 38v28l18 16v30" fill="none" stroke="{c}" stroke-opacity=".09"/>',
+            [(518,38,b),(562,26,c),(532,136,a),(582,152,b)]
+        ),
+        "request-route": (
+            f'<path d="M456 28h52l16 16h26l18 18h38" fill="none" stroke="{a}" stroke-opacity=".12"/>'
+            f'<path d="M482 148h28l18-20h42l18-18h18" fill="none" stroke="{b}" stroke-opacity=".11"/>'
+            f'<path d="M544 44l22 22-12 22 18 20" fill="none" stroke="{c}" stroke-opacity=".08"/>',
+            [(508,28,a),(550,44,b),(528,128,c),(588,110,a)]
+        ),
+        "device-bus": (
+            f'<path d="M490 20v28l16 14v42l-16 16v30" fill="none" stroke="{a}" stroke-opacity=".11"/>'
+            f'<path d="M490 62h36l14-14h42l14 14h10" fill="none" stroke="{b}" stroke-opacity=".12"/>'
+            f'<path d="M506 104h38l18 20h44" fill="none" stroke="{c}" stroke-opacity=".10"/>',
+            [(490,48,a),(540,48,b),(506,104,c),(562,124,a)]
+        ),
+        "retry-circuit": (
+            f'<path d="M474 34h52c26 0 34 34 10 46-18 9-18 31 0 40 21 10 18 36-6 36h-54" fill="none" stroke="{a}" stroke-opacity=".10"/>'
+            f'<path d="M526 34h36l16 16h28" fill="none" stroke="{b}" stroke-opacity=".12"/>'
+            f'<path d="M530 156h34l16-16h26" fill="none" stroke="{c}" stroke-opacity=".11"/>',
+            [(526,34,b),(578,50,c),(530,120,a),(580,140,b)]
+        ),
+        "layered-ladder": (
+            f'<path d="M470 26h54l14 14h54" fill="none" stroke="{b}" stroke-opacity=".12"/>'
+            f'<path d="M486 70h42l16 14h62" fill="none" stroke="{a}" stroke-opacity=".09"/>'
+            f'<path d="M476 126h48l16-14h42l16 14" fill="none" stroke="{c}" stroke-opacity=".10"/>'
+            f'<path d="M508 40v30M528 84v28M540 112v28" fill="none" stroke="{b}" stroke-opacity=".07"/>',
+            [(524,26,b),(544,84,a),(524,126,c),(598,126,b)]
+        ),
+        "contract-bridge": (
+            f'<path d="M458 44h42l18 18h26l18-18h44" fill="none" stroke="{a}" stroke-opacity=".12"/>'
+            f'<path d="M470 140h36l20-18h30l18 18h32" fill="none" stroke="{c}" stroke-opacity=".11"/>'
+            f'<path d="M518 62v60M562 44v96" fill="none" stroke="{b}" stroke-opacity=".07"/>',
+            [(500,44,a),(544,62,b),(526,122,c),(574,140,a)]
+        ),
+        "protocol-chain": (
+            f'<path d="M458 30h30l14 14h28l14 14h28l14 14h10" fill="none" stroke="{a}" stroke-opacity=".12"/>'
+            f'<path d="M474 146h30l14-14h30l14-14h44" fill="none" stroke="{b}" stroke-opacity=".11"/>'
+            f'<path d="M530 58c12 12 12 28 0 40s-12 28 0 40" fill="none" stroke="{c}" stroke-opacity=".08"/>',
+            [(502,44,a),(544,58,b),(518,132,c),(586,72,a)]
+        ),
+        "trace-fan": (
+            f'<path d="M470 86h38l24-52h38l20-14" fill="none" stroke="{a}" stroke-opacity=".11"/>'
+            f'<path d="M508 86h48l30-30h20" fill="none" stroke="{b}" stroke-opacity=".12"/>'
+            f'<path d="M508 86h44l32 42h22" fill="none" stroke="{c}" stroke-opacity=".10"/>'
+            f'<path d="M508 86h28l18 64h40" fill="none" stroke="{a}" stroke-opacity=".08"/>',
+            [(508,86,a),(532,34,b),(586,56,c),(584,128,a)]
+        ),
+        "load-wave": (
+            f'<path d="M458 74c18-28 36-28 54 0s36 28 54 0 28-28 40-8" fill="none" stroke="{a}" stroke-opacity=".11"/>'
+            f'<path d="M458 116c18-22 36-22 54 0s36 22 54 0 28-22 40-8" fill="none" stroke="{b}" stroke-opacity=".10"/>'
+            f'<path d="M500 32h44l14 14h48" fill="none" stroke="{c}" stroke-opacity=".12"/>',
+            [(500,74,a),(548,102,b),(558,46,c),(594,108,a)]
+        ),
     }
     paths, nodes = styles[name]
     circles = ''.join(f'<circle cx="{x}" cy="{y}" r="3.4" fill="{node}" stroke="{color}" stroke-width="1.5"/>' for x,y,color in nodes)
@@ -154,7 +201,10 @@ def render_card(system: dict[str, str], slot: int, day: dt.date, statuses: dict[
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="620" height="170" viewBox="0 0 620 170" role="img" aria-labelledby="title desc" data-spotlight="{VERSION}" data-layout="rich-v2" data-slot="{slot}" data-date="{day.isoformat()}" data-repository="{OWNER}/{repo}" data-glyph="{system["glyph"]}" data-topology="{system["topology"]}">
   <title id="title">{title}</title>
   <desc id="desc">Daily deterministic Evidence Spotlight for {OWNER}/{repo}. {signature}. Workflow signals are scoped to the named main-branch workflows.</desc>
-  <defs><linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{accent}"/><stop offset=".54" stop-color="{accent2}"/><stop offset="1" stop-color="{accent3}"/></linearGradient><linearGradient id="wash" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="{accent}" stop-opacity=".055"/><stop offset=".54" stop-color="{accent2}" stop-opacity=".026"/><stop offset="1" stop-color="{accent3}" stop-opacity=".045"/></linearGradient></defs>
+  <defs>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{accent}"/><stop offset=".54" stop-color="{accent2}"/><stop offset="1" stop-color="{accent3}"/></linearGradient>
+    <linearGradient id="wash" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="{accent}" stop-opacity=".055"/><stop offset=".54" stop-color="{accent2}" stop-opacity=".026"/><stop offset="1" stop-color="{accent3}" stop-opacity=".045"/></linearGradient>
+  </defs>
   <rect x="1" y="1" width="618" height="168" rx="15" fill="{p['surface']}" stroke="{p['stroke']}"/><rect x="2" y="2" width="616" height="166" rx="14" fill="url(#wash)"/>
   {topology}
   <rect x="20" y="18" width="4" height="134" rx="2" fill="url(#edge)"/>
@@ -164,7 +214,7 @@ def render_card(system: dict[str, str], slot: int, day: dt.date, statuses: dict[
   <text x="40" y="87" fill="{p['ink']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="10.5" font-weight="700">{domain}</text>
   <text x="40" y="110" fill="{p['muted']}" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12.3" font-weight="550">{signature}</text>
   {first}{second}
-  <text x="590" y="161" text-anchor="end" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="9.2">repo · {repo}</text>
+  <text x="590" y="158" text-anchor="end" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="9.2">repo · {repo}</text>
 </svg>\n'''
 
 def main() -> int:
