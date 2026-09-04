@@ -78,6 +78,8 @@ def validate_flagships(readme: str) -> None:
         expected_theme="dark" if relative.endswith("-dark.svg") else "light"
         require(f'data-theme="{expected_theme}"' in content, f"Explicit theme marker changed: {relative}")
         require("@media" not in content, f"System card must not depend on internal theme media queries: {relative}")
+        require('<linearGradient id="edge"' in content and '<linearGradient id="wash"' in content and 'fill="url(#edge)"' in content and 'fill="url(#wash)"' in content, f"Rich gradient visual system regressed: {relative}")
+        require(content.count("<circle") >= 4, f"Flagship topology nodes regressed: {relative}")
         require(readme.count(relative)==1, f"System card variant must be referenced exactly once: {relative}")
     require(readme.count('media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-') == 3, "Each flagship must select an explicit dark SVG in README picture markup")
     for phrase in (
@@ -129,13 +131,13 @@ def main() -> int:
     validate_flagships(readme); validate_references(readme)
     for ref in SPOTLIGHT_REFS:
         require(readme.count(ref)==1, f"Generated spotlight reference must occur exactly once: {ref}")
-    require("deterministically each UTC day" in readme, "Daily deterministic spotlight policy must remain explicit")
+    require("deterministic daily rotation" in readme, "Daily deterministic spotlight policy must remain explicit")
     require("curated pool of substantive public QE frameworks" in readme, "Spotlight qualification pool wording changed")
     activity=readme.find('<h2 align="center">◉ Activity Metrics</h2>'); signal=readme.find('alt="GitHub activity signal field"'); systems=readme.find('<h2 align="center">◇ Selected Engineering Systems</h2>'); spotlight=readme.find('<h3 align="center">↻ Evidence Spotlight</h3>'); copyright_notice=readme.find("© 2026 Ƴunior Ƥortal")
     require(activity<signal<systems<spotlight<copyright_notice, "Selected systems and spotlight placement changed")
     footer='\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
     require(readme.count(footer)==1, "A horizontal rule must exist immediately above the copyright footer")
     require("release-candidate.yml?branch=main" not in readme, "Profile must not present an RC workflow with no current main status")
-    print("Profile v4 validation passed: established profile contracts remain intact; three explicit-theme flagship systems and two generated daily Evidence Spotlights are attributable, scoped, responsive, and fail-closed by validation.")
+    print("Profile v4 validation passed: established profile contracts remain intact; three rich explicit-theme flagship systems and two generated daily Evidence Spotlights are attributable, scoped, responsive, and fail-closed by validation.")
     return 0
 if __name__ == "__main__": raise SystemExit(main())
