@@ -27,7 +27,15 @@ The custom predicate type is:
 
 `https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json`
 
-The predicate records the exact source revision, workflow/run identity, published subject paths, validators, and the authority separation under which the evidence was produced.
+The predicate records the exact source revision, workflow/run identity, published subject paths, validators, Signal Field Evidence ID, and the authority separation under which the evidence was produced.
+
+## Signal Field Evidence ID
+
+Every generated Signal Field variant carries the same deterministic **Signal Field Evidence ID** in the form `SF1-XXXXXXXXXXXXXXXX` plus the complete SHA-256 evidence digest.
+
+The ID uses the `signal-field-evidence-v1` canonical evidence schema. It is derived from measured evidence semantics rather than SVG bytes: exact profile contribution period/total, headline metrics, the measured 30-day date/count/level sequence, activity telemetry, and source/timezone/intensity semantics. Light/dark and wide/compact presentation differences therefore share one identity when they represent the same evidence.
+
+The short visible ID is the first 64 bits of the complete canonical SHA-256 digest. The full digest remains in each SVG's provenance and is copied into the signed attestation predicate as `signalFieldEvidence.digest`. Verification should use the complete digest and attestation; the short ID is a human correlation handle, not a replacement for cryptographic verification.
 
 ## Claim boundary
 
@@ -45,4 +53,4 @@ gh attestation verify <artifact.svg> \
   --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json
 ```
 
-A successful verification binds the artifact digest to the GitHub Actions workflow identity that created the attestation. The predicate should then be inspected for `sourceRevision`, validation scope, subject set, and authority boundary before making any broader inference.
+A successful verification binds the artifact digest to the GitHub Actions workflow identity that created the attestation. The predicate should then be inspected for `sourceRevision`, `signalFieldEvidence.id`, `signalFieldEvidence.digest`, validation scope, subject set, and authority boundary before making any broader inference.

@@ -23,7 +23,9 @@ on:
       - "scripts/glyphs-signal-field-metrics.py"
       - "scripts/balance-signal-field-secondary-metrics.py"
       - "scripts/clarify-signal-field-evidence-window.py"
+      - "scripts/identify-signal-field-evidence.py"
       - "scripts/validate-signal-field-v213.py"
+      - "scripts/validate-signal-field-v214.py"
       - "scripts/validate-generated-signal-field.py"
       - "scripts/generate-engineering-spotlight.py"
       - "scripts/validate-engineering-spotlight.py"
@@ -93,6 +95,8 @@ jobs:
           python3 source/scripts/balance-signal-field-secondary-metrics.py "$READY_DIR"
           python3 source/scripts/clarify-signal-field-evidence-window.py "$READY_DIR"
           python3 source/scripts/validate-signal-field-v213.py "$READY_DIR"
+          python3 source/scripts/identify-signal-field-evidence.py "$READY_DIR"
+          python3 source/scripts/validate-signal-field-v214.py "$READY_DIR"
           python3 source/scripts/validate-generated-signal-field.py "$READY_DIR"
 
       - name: Upload immutable validated Signal Field
@@ -166,6 +170,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 source/scripts/validate-signal-field-v213.py profile-stats/profile
+          python3 source/scripts/validate-signal-field-v214.py profile-stats/profile
           python3 source/scripts/validate-generated-signal-field.py profile-stats/profile
           python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live
 
@@ -182,7 +187,7 @@ jobs:
 
       - name: Build profile evidence attestation predicate
         if: github.event_name != 'schedule' || steps.delta.outputs.changed == 'true'
-        run: python3 source/scripts/build-profile-evidence-attestation.py attestation-predicate.json
+        run: python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile attestation-predicate.json
 
       - name: Attest validated profile evidence
         if: github.event_name != 'schedule' || steps.delta.outputs.changed == 'true'
@@ -238,6 +243,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 source/scripts/validate-signal-field-v213.py publish-input
+          python3 source/scripts/validate-signal-field-v214.py publish-input
           python3 source/scripts/validate-generated-signal-field.py publish-input
           python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input --require-live
 
@@ -249,6 +255,7 @@ jobs:
           cp publish-input/signal-field-*.svg artifacts/profile-stats/profile/
           cp spotlight-publish-input/* artifacts/engineering-spotlight/
           python3 source/scripts/validate-signal-field-v213.py artifacts/profile-stats/profile
+          python3 source/scripts/validate-signal-field-v214.py artifacts/profile-stats/profile
           python3 source/scripts/validate-generated-signal-field.py artifacts/profile-stats/profile
           python3 source/scripts/validate-engineering-spotlight.py artifacts/engineering-spotlight --require-live
           git -C artifacts add -A

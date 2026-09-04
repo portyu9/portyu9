@@ -12,6 +12,7 @@
     "workflowRef",
     "run",
     "subjectSet",
+    "signalFieldEvidence",
     "validation",
     "authority",
     "claim"
@@ -72,6 +73,24 @@
         }
       }
     },
+    "signalFieldEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "id", "digest"],
+      "properties": {
+        "schema": {
+          "const": "signal-field-evidence-v1"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^SF1-[0-9A-F]{16}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
     "validation": {
       "type": "object",
       "additionalProperties": false,
@@ -79,7 +98,7 @@
       "properties": {
         "signalField": {
           "type": "array",
-          "minItems": 2,
+          "minItems": 3,
           "items": {
             "type": "string"
           }
