@@ -29,8 +29,8 @@ PREDICATE_TYPE = (
 )
 
 SUBJECT_PATHS = (
-    "attested/profile-stats/profile/signal-field-*.svg",
-    "attested/engineering-spotlight/*.svg",
+    "profile-stats/profile/signal-field-*.svg",
+    "engineering-spotlight/*.svg",
 )
 
 
@@ -119,15 +119,17 @@ def validate_workflow() -> None:
     require("id-token: write" not in publish, "publication job must not receive OIDC signing authority")
     require("permissions:\n      contents: write" in publish, "publication job must retain only contents write authority")
 
-    require(attest.count(f"actions/checkout@{CHECKOUT_SHA}") == 1, "attestation source checkout SHA changed")
+    require(attest.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "attestation must use reviewed checkout SHA for source and current generated evidence")
     require(attest.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 1, "attestation setup-python SHA changed")
     require(attest.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 2, "attestation must download both immutable artifact sets")
-    require("persist-credentials: false" in attest, "attestation source checkout must not persist credentials")
+    require(attest.count("persist-credentials: false") == 2, "attestation checkouts must not persist credentials")
+    require("ref: generated" in attest and "path: published" in attest, "attestation must compare against current generated evidence")
+    require("github.event_name != 'schedule' || steps.delta.outputs.changed == 'true'" in attest, "scheduled attestation deduplication guard changed")
 
     for command in (
-        "python3 source/scripts/validate-signal-field-v213.py attested/profile-stats/profile",
-        "python3 source/scripts/validate-generated-signal-field.py attested/profile-stats/profile",
-        "python3 source/scripts/validate-engineering-spotlight.py attested/engineering-spotlight --require-live",
+        "python3 source/scripts/validate-signal-field-v213.py profile-stats/profile",
+        "python3 source/scripts/validate-generated-signal-field.py profile-stats/profile",
+        "python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live",
         "python3 source/scripts/build-profile-evidence-attestation.py attestation-predicate.json",
     ):
         require(command in attest, f"attestation boundary command is missing: {command}")
@@ -168,7 +170,8 @@ def main() -> int:
         print(
             "Engineering attestation validation passed: generation has no signing/write authority, "
             "validated SVG evidence is Sigstore-attested in a separate job, publication depends on "
-            "that attestation, and the claim remains provenance/contract conformance rather than certification."
+            "that attestation, scheduled duplicate attestations are suppressed, and the claim remains "
+            "provenance/contract conformance rather than certification."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError) as exc:
