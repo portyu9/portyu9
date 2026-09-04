@@ -94,7 +94,7 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center"><sub>Live qualification signals from selected public QE systems · source branch: <code>main</code></sub></p>
 
-<table width="100%">
+<table>
 <thead>
 <tr>
 <th align="left">SYSTEM</th>
