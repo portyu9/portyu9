@@ -41,10 +41,10 @@ RETIRED_FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-visual-accessibility-qe.svg",
 )
 SPOTLIGHT_REFS = (
-    "https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-1-dark.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/engineering-systems-preview-pr50/engineering-spotlight/spotlight-2-dark.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-light.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-dark.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg",
+    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg",
 )
 
 
@@ -132,7 +132,8 @@ def main() -> int:
     for ref in SPOTLIGHT_REFS:
         require(readme.count(ref)==1, f"Generated spotlight reference must occur exactly once: {ref}")
     require("deterministic daily rotation" in readme, "Daily deterministic spotlight policy must remain explicit")
-    require("my curated QE systems portfolio" in readme, "Spotlight ownership wording changed")
+    require("From my QE systems portfolio" in readme, "Spotlight ownership wording changed")
+    require("engineering-systems-preview-pr50" not in readme, "PR-only Spotlight preview references must not reach production")
     require(readme.count('width="620"') >= 2, "Spotlight cards must retain native-width desktop proportions")
     activity=readme.find('<h2 align="center">◉ Activity Metrics</h2>'); signal=readme.find('alt="GitHub activity signal field"'); systems=readme.find('<h2 align="center">◇ Selected Engineering Systems</h2>'); spotlight=readme.find('<h3 align="center">↻ Evidence Spotlight</h3>'); copyright_notice=readme.find("© 2026 Ƴunior Ƥortal")
     require(activity<signal<systems<spotlight<copyright_notice, "Selected systems and spotlight placement changed")
