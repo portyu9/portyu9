@@ -26,6 +26,14 @@ HEADLINE = re.compile(
     re.I,
 )
 DESC_TOTAL = re.compile(r'<desc\b[^>]*>([\d,]+) contributions in the past year;', re.I)
+ISSUE_VALUE = re.compile(
+    r'<text\b(?=[^>]*\bdata-metric-phosphor="issues")[^>]*>([\d,]+)</text>',
+    re.I,
+)
+DESC_ISSUES = re.compile(
+    r'([\d,]+) authored public issues reported by GitHub REST Search',
+    re.I,
+)
 
 REQUIRED_ROOT_ATTRS = {
     "data-theme": "yunior-portal-neon-v2",
@@ -47,11 +55,14 @@ REQUIRED_ROOT_ATTRS = {
     "data-count-semantics": "raw-github-contribution-counts",
     "data-activity-layout": "month-calendar-v2",
     "data-activity-columns": "7",
+    "data-issues-metric-source": "github-rest-search-authored-public-issues",
+    "data-issues-display-alias": "bugs-found",
 }
 
 FORBIDDEN = (
     'data-restricted-contributions=',
     'data-refresh-cadence=',
+    'data-period-days=',
     "REFRESH · 5 MIN",
     "REFRESH · DAILY",
     "Refresh cadence: every 5 minutes.",
@@ -132,6 +143,13 @@ def validate_file(path: Path) -> None:
     expected = f"{int(attrs['data-calendar-contributions']):,}"
     if headline[0] != expected or accessible[0] != expected:
         fail(f"{path.name}: visible/accessibility contribution total diverges from provenance")
+
+    issue_value = ISSUE_VALUE.findall(text)
+    accessible_issues = DESC_ISSUES.findall(text)
+    if len(issue_value) != 1 or len(accessible_issues) != 1:
+        fail(f"{path.name}: authored public GitHub Issues metric/source contract changed")
+    if issue_value[0] != accessible_issues[0]:
+        fail(f"{path.name}: BUGS FOUND display value diverges from underlying authored public Issues total")
 
     if text.count('data-activity-summary="true"') != 1:
         fail(f"{path.name}: activity summary count changed")
@@ -220,8 +238,9 @@ def validate_directory(directory: Path) -> None:
         fail(f"generated artifact set changed: {actual}")
     print(
         "Final Signal Field validation passed: four responsive artifacts are complete, attributable, "
-        "source-accurate, privacy-minimized, Bugs Found-labeled, large-glyph balanced, center-aligned, "
-        "and scheduled with best-effort five-minute semantics."
+        "source-accurate, privacy-minimized, BUGS FOUND remains a display alias over the authored-public "
+        "GitHub Issues total, exact profile-period provenance is unambiguous, glyphs are balanced/centered, "
+        "and generation uses best-effort five-minute scheduling semantics."
     )
 
 
