@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the generated profile-evidence attestation contract.
-
-This validator protects the trust boundary around GitHub artifact attestations. It
-requires attestation to happen in its own job after read-only generation and before
-write-only publication, with the reviewed first-party action pinned to an exact SHA.
-"""
-
+"""Validate the generated profile-evidence attestation contract."""
 from __future__ import annotations
 
 import json
@@ -27,7 +21,6 @@ PREDICATE_TYPE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
     "profile-evidence-v1.schema.json"
 )
-
 SUBJECT_PATHS = (
     "profile-stats/profile/signal-field-*.svg",
     "engineering-spotlight/*.svg",
@@ -59,6 +52,8 @@ def validate_schema() -> None:
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
     require(schema.get("$id") == PREDICATE_TYPE, "attestation predicate schema id changed")
     require(schema.get("additionalProperties") is False, "predicate schema must fail closed")
+    required = schema.get("required", [])
+    require("signalFieldEvidence" in required, "predicate must require Signal Field Evidence ID")
     properties = schema.get("properties")
     require(isinstance(properties, dict), "predicate schema properties are missing")
     require(properties.get("schemaVersion", {}).get("const") == 1, "schema version changed")
@@ -66,6 +61,12 @@ def validate_schema() -> None:
         properties.get("kind", {}).get("const") == "profile-evidence-attestation",
         "predicate kind changed",
     )
+    evidence = properties.get("signalFieldEvidence", {})
+    evidence_props = evidence.get("properties", {}) if isinstance(evidence, dict) else {}
+    require(evidence.get("additionalProperties") is False, "Signal Field evidence block must fail closed")
+    require(evidence_props.get("schema", {}).get("const") == "signal-field-evidence-v1", "Evidence ID schema changed")
+    require(evidence_props.get("id", {}).get("pattern") == "^SF1-[0-9A-F]{16}$", "Evidence ID format changed")
+    require(evidence_props.get("digest", {}).get("pattern") == "^sha256:[0-9a-f]{64}$", "Evidence digest format changed")
     claim = properties.get("claim", {}).get("const")
     require(
         isinstance(claim, str) and "not universal certification" in claim,
@@ -81,9 +82,12 @@ def validate_builder() -> None:
         'REPOSITORY = "portyu9/portyu9"',
         'KIND = "profile-evidence-attestation"',
         'BOUNDARY = "attest-validated-evidence"',
+        'EVIDENCE_SCHEMA = "signal-field-evidence-v1"',
         "scripts/validate-signal-field-v213.py",
+        "scripts/validate-signal-field-v214.py",
         "scripts/validate-generated-signal-field.py",
         "scripts/validate-engineering-spotlight.py --require-live",
+        '"signalFieldEvidence": read_signal_field_evidence(signal_field_dir)',
         '"generation": "contents:read"',
         '"attestation": "contents:read,id-token:write,attestations:write"',
         '"publication": "contents:write"',
@@ -103,7 +107,6 @@ def validate_workflow() -> None:
     require("name: generate-read-only" in generate, "generation job name changed")
     require("name: attest-validated-evidence" in attest, "attestation job name changed")
     require("name: publish-write-only" in publish, "publication job name changed")
-
     require("contents: write" not in generate, "generation job must not receive repository write authority")
     require("attestations: write" not in generate, "generation job must not receive attestation authority")
     require("id-token: write" not in generate, "generation job must not receive OIDC signing authority")
@@ -128,9 +131,10 @@ def validate_workflow() -> None:
 
     for command in (
         "python3 source/scripts/validate-signal-field-v213.py profile-stats/profile",
+        "python3 source/scripts/validate-signal-field-v214.py profile-stats/profile",
         "python3 source/scripts/validate-generated-signal-field.py profile-stats/profile",
         "python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live",
-        "python3 source/scripts/build-profile-evidence-attestation.py attestation-predicate.json",
+        "python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile attestation-predicate.json",
     ):
         require(command in attest, f"attestation boundary command is missing: {command}")
 
@@ -152,6 +156,8 @@ def validate_doc() -> None:
         "publish-write-only",
         "Sigstore",
         "third-party Signal Field generator",
+        "Signal Field Evidence ID",
+        "signal-field-evidence-v1",
         "not universal certification",
         "gh attestation verify",
         PREDICATE_TYPE,
@@ -169,9 +175,8 @@ def main() -> int:
         validate_doc()
         print(
             "Engineering attestation validation passed: generation has no signing/write authority, "
-            "validated SVG evidence is Sigstore-attested in a separate job, publication depends on "
-            "that attestation, scheduled duplicate attestations are suppressed, and the claim remains "
-            "provenance/contract conformance rather than certification."
+            "Signal Field Evidence ID is bound into the signed predicate, publication depends on "
+            "attestation/revalidation, and the claim remains provenance/contract conformance rather than certification."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError) as exc:
