@@ -70,7 +70,7 @@ def validate_references(readme: str) -> None:
 
 
 def validate_taxonomy_scale(readme: str) -> None:
-    """Protect the reviewed H2 hierarchy and responsive +2px badge scale."""
+    """Protect the reviewed H2 hierarchy and responsive +4px badge scale."""
     require(readme.count('<h2 align="center">◈&nbsp;&nbsp;QE Domains</h2>') == 1,
             "QE Domains must match the centered H2 hierarchy")
     require(readme.count('<h2 align="center">▦&nbsp;&nbsp;Test Architecture</h2>') == 1,
@@ -85,28 +85,28 @@ def validate_taxonomy_scale(readme: str) -> None:
     prefix = '<picture><source media="(min-width: 641px)" srcset="https://img.shields.io/badge/'
     require(readme.count(prefix) == 16,
             "Exactly 16 taxonomy badges must use the responsive Shields.io contract")
-    require(readme.count('height="26"><img alt=') == 16,
-            "Every taxonomy badge must render at 26px on desktop")
-    require(readme.count('height="22"></picture>') == 16,
-            "Every taxonomy badge must render at 22px on mobile")
+    require(readme.count('height="28"><img alt=') == 16,
+            "Every taxonomy badge must render at 28px on desktop")
+    require(readme.count('height="24"></picture>') == 16,
+            "Every taxonomy badge must render at 24px on mobile")
     require(readme.count('media="(min-width: 1025px)" srcset="assets/profile-badges/badge-') == 0,
             "Regressed self-hosted wide-desktop badge tier remains")
 
     for label, base_width, url in legacy.SHIELD_BADGES:
-        desktop_width = round(base_width * 26 / 24)
-        mobile_width = round(base_width * 22 / 20)
+        desktop_width = round(base_width * 28 / 24)
+        mobile_width = round(base_width * 24 / 20)
         source = (
             f'<source media="(min-width: 641px)" srcset="{url}" '
-            f'width="{desktop_width}" height="26">'
+            f'width="{desktop_width}" height="28">'
         )
         fallback = (
             f'<img alt="{label}" src="{url}" '
-            f'width="{mobile_width}" height="22">'
+            f'width="{mobile_width}" height="24">'
         )
         require(readme.count(source) == 1,
-                f"Reviewed 26px desktop taxonomy badge changed: {label}")
+                f"Reviewed 28px desktop taxonomy badge changed: {label}")
         require(readme.count(fallback) == 1,
-                f"Reviewed 22px mobile taxonomy badge changed: {label}")
+                f"Reviewed 24px mobile taxonomy badge changed: {label}")
 
 
 def validate_flagships(readme: str) -> None:
