@@ -23,7 +23,9 @@ WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
 
 EXPRESSION = "${{"
-RUN_KEY = re.compile(r"^(\s*)(?:run|'run'|\"run\")\s*:\s*(.*)$")
+RUN_KEY = re.compile(
+    r"^(?P<indent>\s*)(?P<item>-\s+)?(?:run|'run'|\"run\")\s*:\s*(?P<value>.*)$"
+)
 BLOCK_HEADER = re.compile(r"^[|>](?:[+-]?[1-9]?|[1-9][+-]?)?\s*(?:#.*)?$")
 FORBIDDEN_NODE_PREFIXES = ("&", "*", "!", "'", '"', "[", "{")
 
@@ -59,8 +61,8 @@ def extract_run_blocks(text: str, label: str) -> list[RunBlock]:
             index += 1
             continue
 
-        indent = len(match.group(1))
-        value = match.group(2).strip()
+        indent = len(match.group("indent")) + len(match.group("item") or "")
+        value = match.group("value").strip()
         require(value, f"{label}:{index + 1}: empty run scalar is forbidden")
         require(
             not value.startswith(FORBIDDEN_NODE_PREFIXES),
@@ -149,6 +151,9 @@ def self_test() -> None:
     )
     for text, fragment in cases:
         expect_failure(text, fragment)
+
+    shorthand_block = """jobs:\n  test:\n    steps:\n      - run: |\n          echo \"${{ github.event.pull_request.title }}\"\n        shell: bash\n"""
+    expect_failure(shorthand_block, "expression interpolation")
 
     heredoc = """jobs:\n  test:\n    steps:\n      - run: |\n          cat <<'EOF'\n          ${{ github.event.pull_request.body }}\n          EOF\n"""
     expect_failure(heredoc, "expression interpolation")
