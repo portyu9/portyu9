@@ -42,6 +42,18 @@ The workflow and `actions/dependency-review-action` must remain pinned to exact 
 
 The Dependency Review status is a merge-time supply-chain signal and should be required by `Protect Main` as `dependency-review`. It complements Dependabot: Dependabot discovers newer versions over time, while Dependency Review evaluates dependency changes introduced by each pull request before they reach `main`.
 
+## Workflow authority firewall
+
+`scripts/validate-workflow-authority-contract.py` is the repository-wide token-authority firewall. It treats the GitHub Actions surface as a **closed allowlist** rather than assuming that a new workflow or job is safe merely because no existing workflow-specific validator knows about it.
+
+The reviewed inventory is exactly four workflows: `codeql.yml`, `dependency-review.yml`, `profile-quality.yml`, and `profile-stats.yml`. For each file, the validator locks the trigger set, job inventory, workflow-level permissions, and every job-level permissions block. Adding a new workflow, adding a new job, changing a trigger, using scalar permissions such as `write-all`, or adding any token capability fails `Profile quality / validate-contracts` until this authority manifest is deliberately reviewed and updated.
+
+Read-only authority is the default. The only reviewed write-capable exceptions are `security-events: write` in the CodeQL analysis job, `id-token: write` plus `attestations: write` in `attest-validated-evidence`, and `contents: write` in `publish-write-only`. Those capabilities are isolated to their named jobs and may not appear in another workflow or job without an explicit governance change.
+
+The trigger allowlist also prevents privileged or cross-event execution paths from appearing silently. In particular, `pull_request_target` is not authorized; neither are unreviewed trigger families such as `workflow_run`, `repository_dispatch`, or issue/review-comment driven execution. A future need for one of those triggers must be evaluated together with its token and untrusted-input boundary rather than introduced as routine workflow syntax.
+
+This firewall complements, rather than replaces, the specific CodeQL, Dependency Review, attestation, publication, and dependency-pin validators. The specific validators protect semantic details of each trust boundary; the authority firewall ensures there is no unreviewed fifth workflow, extra job, trigger, or permission grant outside those boundaries.
+
 ## CodeQL security analysis
 
 `.github/workflows/codeql.yml` is the version-controlled static-analysis boundary for both authored Python and the repository's GitHub Actions workflows. It runs isolated `analyze-python` and `analyze-actions` jobs on every pull request, every push to `main`, manual dispatch, and a weekly scheduled scan. The workflow intentionally uses **no path filters** so changes to workflow/configuration or helper code cannot create an unscanned merge path.
@@ -88,4 +100,4 @@ The engineering attestation establishes artifact provenance and repository-defin
 
 The predicate schema and verification instructions are version controlled in `.github/attestation/profile-evidence-v1.schema.json` and `.github/ATTESTATION.md`.
 
-Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, governed Dependency Review, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.
+Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, governed Dependency Review, workflow authority firewall, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.
