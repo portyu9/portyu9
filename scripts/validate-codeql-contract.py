@@ -35,9 +35,8 @@ def job_block(workflow: str, key: str) -> str:
 def validate_codeql(text: str) -> None:
     require(text.startswith("name: CodeQL\n"), "CodeQL workflow name changed")
 
-    # Event coverage: analyze every PR, every main update, on demand, and weekly even
-    # when the repository is quiet. Path filters are intentionally forbidden because
-    # workflow/config/script edits can change security posture indirectly.
+    # Event coverage is intentionally broad. Workflow/config changes are themselves
+    # security-sensitive here, so path-gated scans would create a bypass surface.
     require(text.count("  pull_request:\n") == 1, "CodeQL must run on every pull request")
     require(text.count("  push:\n") == 1, "CodeQL must run on push")
     require("    branches:\n      - main\n" in text, "CodeQL push analysis must target main")
@@ -46,30 +45,49 @@ def validate_codeql(text: str) -> None:
     require("paths:" not in text and "paths-ignore:" not in text,
             "CodeQL must not use path filters that can create scan gaps")
 
-    # Default token is read-only. Only the analysis job gets SARIF upload authority.
+    # Default token is read-only. Only each isolated language-analysis job gets SARIF
+    # upload authority. No job may publish repository content, mint identities, or
+    # mutate pull requests/Actions state.
     jobs_index = text.find("\njobs:\n")
     require(jobs_index > 0, "CodeQL jobs block is missing")
     pre_jobs = text[:jobs_index]
     require("permissions:\n  contents: read\n" in pre_jobs,
             "CodeQL default workflow permissions must remain contents: read")
-    require("contents: write" not in text, "CodeQL must never receive repository-content write authority")
-    require("id-token: write" not in text, "CodeQL must not receive OIDC signing authority")
-    require("attestations: write" not in text, "CodeQL must not receive attestation authority")
-    require("pull-requests: write" not in text, "CodeQL must not mutate pull requests")
-    require("actions: write" not in text, "CodeQL must not mutate Actions state")
-    require("packages: write" not in text, "CodeQL must not receive package write authority")
+    for forbidden, message in (
+        ("contents: write", "CodeQL must never receive repository-content write authority"),
+        ("id-token: write", "CodeQL must not receive OIDC signing authority"),
+        ("attestations: write", "CodeQL must not receive attestation authority"),
+        ("pull-requests: write", "CodeQL must not mutate pull requests"),
+        ("actions: write", "CodeQL must not mutate Actions state"),
+        ("packages: write", "CodeQL must not receive package write authority"),
+    ):
+        require(forbidden not in text, message)
 
     require("group: codeql-${{ github.workflow }}-${{ github.ref }}" in text,
             "CodeQL concurrency identity changed")
     require("cancel-in-progress: true" in text, "CodeQL must cancel stale scans")
 
     analyze = job_block(text, "analyze")
-    require("name: analyze-python" in analyze, "CodeQL required job name changed")
+    require("name: analyze-${{ matrix.language }}" in analyze,
+            "CodeQL job naming must expose one stable status per language")
     require("runs-on: ubuntu-24.04" in analyze, "CodeQL runner must remain ubuntu-24.04")
     require("timeout-minutes: 15" in analyze, "CodeQL timeout contract changed")
     require("permissions:\n      contents: read\n      security-events: write\n" in analyze,
-            "CodeQL analysis job must have only contents: read plus security-events: write")
+            "CodeQL analysis jobs must have only contents: read plus security-events: write")
     require("continue-on-error:" not in analyze, "CodeQL findings/errors must not be made non-blocking")
+
+    # GitHub recommends one CodeQL language per analysis. This repository has two
+    # security-relevant CodeQL languages: authored Python and GitHub Actions workflows.
+    require("strategy:\n      fail-fast: false\n      matrix:\n" in analyze,
+            "CodeQL must isolate languages in a non-fail-fast matrix")
+    expected_matrix = "      matrix:\n        language:\n          - python\n          - actions\n"
+    require(expected_matrix in analyze,
+            "CodeQL language matrix must contain exactly Python and GitHub Actions")
+    matrix_start = analyze.index("      matrix:\n")
+    steps_start = analyze.index("\n    steps:\n", matrix_start)
+    matrix_block = analyze[matrix_start:steps_start]
+    require(matrix_block.count("          - ") == 2,
+            "CodeQL language matrix must not silently add or remove analysis languages")
 
     checkout_ref = f"actions/checkout@{CHECKOUT_SHA}"
     require(analyze.count(checkout_ref) == 1, "CodeQL must use the reviewed checkout SHA exactly once")
@@ -84,13 +102,16 @@ def validate_codeql(text: str) -> None:
     require(analyze.count("github/codeql-action/") == 2,
             "CodeQL workflow must contain only the reviewed init and analyze action steps")
     require("github/codeql-action/autobuild" not in analyze,
-            "Python CodeQL analysis must not add an unnecessary autobuild authority surface")
+            "Python/Actions CodeQL analysis must not add an unnecessary autobuild step")
+    require("build-mode:" not in analyze,
+            "Python and GitHub Actions should use their native no-build CodeQL defaults")
 
-    require("languages: python" in analyze, "CodeQL language scope must remain Python")
-    require("build-mode: none" in analyze, "Python CodeQL build mode must remain none")
+    require("languages: ${{ matrix.language }}" in analyze,
+            "CodeQL init must analyze the isolated matrix language")
     require("queries: security-extended" in analyze,
             "CodeQL must retain the reviewed security-extended query suite")
-    require("matrix:" not in analyze, "CodeQL must remain a single Python analysis job")
+    require('category: "/language:${{ matrix.language }}"' in analyze,
+            "CodeQL results must retain a stable per-language SARIF category")
 
 
 def validate_quality(text: str) -> None:
@@ -105,6 +126,8 @@ def validate_governance(text: str) -> None:
         "## CodeQL security analysis",
         ".github/workflows/codeql.yml",
         "analyze-python",
+        "analyze-actions",
+        "GitHub Actions workflows",
         "security-events: write",
         "security-extended",
         "exact commit SHA",
@@ -119,11 +142,12 @@ def self_test(good: str) -> None:
     validate_codeql(good)
     mutations = (
         (good.replace(CODEQL_SHA, "v4"), f"reviewed {CODEQL_RELEASE} commit SHA"),
-        (good.replace("languages: python", "languages: javascript-typescript"), "language scope"),
+        (good.replace("          - actions\n", ""), "Python and GitHub Actions"),
         (good.replace("security-events: write", "security-events: read"), "security-events: write"),
         (good.replace("  pull_request:\n", "  pull_request:\n    paths:\n      - 'scripts/**'\n"), "path filters"),
         (good.replace("      contents: read\n      security-events: write", "      contents: write\n      security-events: write"),
          "repository-content write authority"),
+        (good.replace("queries: security-extended", "queries: security-and-quality"), "security-extended"),
     )
     for mutated, expected in mutations:
         try:
@@ -145,8 +169,9 @@ def main() -> int:
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
-            "CodeQL governance validation passed: Python analysis covers PR/main/weekly/manual events with no path gaps, "
-            "uses security-extended queries, keeps SARIF upload authority isolated, and executes only reviewed SHA-pinned actions."
+            "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
+            "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, and execute only "
+            "reviewed SHA-pinned actions."
         )
         return 0
     except (OSError, ValueError) as exc:
