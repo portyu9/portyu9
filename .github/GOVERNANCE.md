@@ -4,13 +4,14 @@ This profile repository treats its README, reviewed visual assets, generated Sig
 
 ## Main branch
 
-The active `Protect Main` ruleset must continue to require pull requests and block deletion and non-fast-forward updates. Before a pull request is merged, the two Profile Quality jobs and the CodeQL analysis job must succeed on the exact pull-request head:
+The active `Protect Main` ruleset must continue to require pull requests and block deletion and non-fast-forward updates. Before a pull request is merged, the two Profile Quality jobs and both CodeQL analysis jobs must succeed on the exact pull-request head:
 
 - `Profile quality / validate-contracts`
 - `Profile quality / integration-pinned-upstream`
 - `CodeQL / analyze-python`
+- `CodeQL / analyze-actions`
 
-All three checks should be configured as **required status checks** in the `Protect Main` GitHub ruleset. That requirement is a repository setting rather than a file in this branch; this document records the intended setting so it cannot be mistaken for optional process.
+All four checks should be configured as **required status checks** in the `Protect Main` GitHub ruleset. That requirement is a repository setting rather than a file in this branch; this document records the intended setting so it cannot be mistaken for optional process.
 
 The integration check intentionally executes the exact SHA-pinned upstream Signal Field generator using read-only repository permissions and runs the complete production transformation chain without publishing.
 
@@ -22,7 +23,7 @@ Every external workflow dependency must remain pinned to an **exact commit SHA**
 
 Dependency updates remain individually reviewable: each action is expected in a **separate pull request** rather than a broad owner-level group. Shared ownership does not imply shared blast radius. `actions/attest` executes at the OIDC/attestation boundary, `actions/checkout` also participates in the write-only publication path, upload/download actions transport immutable evidence, setup actions control the execution environment, and the third-party `shinpr/github-profile-stats` generator materially affects generated evidence. Keeping these updates separate preserves attributable review and makes the exact SHA-contract change explicit for one dependency at a time.
 
-Dependabot pull requests are **never auto-merged**. They must pass `Profile quality / validate-contracts`, `Profile quality / integration-pinned-upstream`, and `CodeQL / analyze-python` on the exact proposed head and receive deliberate review. Existing governance validators intentionally pin the currently reviewed trust-boundary SHAs, so an action update should fail closed until the corresponding reviewed SHA contract is deliberately updated in the same pull request. This is intentional friction: the bot discovers an update, but a human authorizes the new executable identity.
+Dependabot pull requests are **never auto-merged**. They must pass `Profile quality / validate-contracts`, `Profile quality / integration-pinned-upstream`, `CodeQL / analyze-python`, and `CodeQL / analyze-actions` on the exact proposed head and receive deliberate review. Existing governance validators intentionally pin the currently reviewed trust-boundary SHAs, so an action update should fail closed until the corresponding reviewed SHA contract is deliberately updated in the same pull request. This is intentional friction: the bot discovers an update, but a human authorizes the new executable identity.
 
 Dependabot alerts and Dependabot security updates are repository settings distinct from this scheduled version-update file and should be enabled where supported. GitHub currently does not generate Dependabot vulnerability alerts for **SHA-pinned GitHub Actions** references, so scheduled GitHub Actions version updates remain the primary automated discovery channel for these immutable pins. Security settings still matter for any supported present or future dependency-graph entries and should remain enabled independently of version updates.
 
@@ -30,13 +31,15 @@ Neither scheduled nor security dependency updates may weaken workflow permission
 
 ## CodeQL security analysis
 
-`.github/workflows/codeql.yml` is the version-controlled static-analysis boundary for repository Python code. It runs the single stable `analyze-python` job on every pull request, every push to `main`, manual dispatch, and a weekly scheduled scan. The workflow intentionally uses **no path filters** so changes to workflow/configuration or helper code cannot create an unscanned merge path.
+`.github/workflows/codeql.yml` is the version-controlled static-analysis boundary for both authored Python and the repository's GitHub Actions workflows. It runs isolated `analyze-python` and `analyze-actions` jobs on every pull request, every push to `main`, manual dispatch, and a weekly scheduled scan. The workflow intentionally uses **no path filters** so changes to workflow/configuration or helper code cannot create an unscanned merge path.
 
-CodeQL runs only for `python`, uses `build-mode: none`, and executes the `security-extended` query suite. The workflow and its `github/codeql-action` dependencies must remain pinned to an **exact commit SHA** and are governed by Dependabot plus `scripts/validate-codeql-contract.py`.
+GitHub recommends one CodeQL language per analysis, so the workflow uses a non-fail-fast language matrix containing exactly `python` and `actions`. Each language uses its native no-build analysis path, runs the `security-extended` query suite, and publishes results under a stable per-language SARIF category. No `autobuild` step is permitted because neither reviewed language requires one.
 
-The workflow default token remains `contents: read`. The analysis job receives only `contents: read` plus `security-events: write`, which is required to publish code-scanning results. It must not receive `contents: write`, `pull-requests: write`, `id-token: write`, `attestations: write`, or other mutation/signing authority. Checkout credentials are not persisted.
+The workflow and its `github/codeql-action` dependencies must remain pinned to an **exact commit SHA** and are governed by Dependabot plus `scripts/validate-codeql-contract.py`.
 
-The CodeQL status is a merge-time security signal and should be required by `Protect Main` as `analyze-python`. Scheduled scans provide defense against newly added queries or newly recognized vulnerability patterns even when repository source is unchanged.
+The workflow default token remains `contents: read`. Each language-analysis job receives only `contents: read` plus `security-events: write`, which is required to publish code-scanning results. It must not receive `contents: write`, `pull-requests: write`, `id-token: write`, `attestations: write`, or other mutation/signing authority. Checkout credentials are not persisted.
+
+The two CodeQL statuses are merge-time security signals and should be required by `Protect Main` as `analyze-python` and `analyze-actions`. Scheduled scans provide defense against newly added queries or newly recognized vulnerability patterns even when repository source is unchanged.
 
 CodeQL is not an attestation and does not certify generated profile evidence, repository behavior, or every possible security property. It is an independent static-analysis control whose findings complement, but do not expand, the repository's evidence and attestation claims.
 
