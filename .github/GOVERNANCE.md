@@ -64,6 +64,16 @@ The trigger allowlist also prevents privileged or cross-event execution paths fr
 
 This firewall complements, rather than replaces, the specific CodeQL, Dependency Review, attestation, publication, and dependency-pin validators. The specific validators protect semantic details of each trust boundary; the authority firewall ensures there is no unreviewed fifth workflow, extra job, trigger, or permission grant outside those boundaries.
 
+## Workflow shell safety
+
+`scripts/validate-workflow-shell-safety.py` prevents GitHub expression values from being interpolated directly into `run:` **shell source**. GitHub evaluates `${{ ... }}` expressions before the generated script reaches the shell, so event-controlled text embedded in that source can become shell syntax rather than inert data.
+
+Dynamic workflow values must cross a non-shell boundary such as `env:`, `with:`, or `if:` and shell variables derived from `env:` should be quoted when consumed. The validator scans every single-line and multiline `run:` scalar across every workflow and rejects `${{ ... }}` anywhere in the resulting shell body. This deliberately applies to all contexts, including values that are not currently attacker-controlled, so future changes do not require reviewers to reason about whether a particular context can become untrusted.
+
+To keep the source-level check unambiguous and dependency-free, `run:` commands must use canonical plain single-line scalars or literal/folded block scalars. YAML aliases, anchors, tags, or quoted whole-command run scalars are rejected because they can obscure the bytes that become shell source. Expressions remain permitted in reviewed non-shell fields such as `env:`, `with:`, and `if:`.
+
+This control complements the workflow authority firewall: the authority firewall constrains **what a job may do**, while shell safety constrains how dynamic data can enter the command interpreter. Neither replaces action SHA pinning, Dependency Review, CodeQL, or normal shell quoting and input validation inside authored scripts.
+
 ## CodeQL security analysis
 
 `.github/workflows/codeql.yml` is the version-controlled static-analysis boundary for both authored Python and the repository's GitHub Actions workflows. It runs isolated `analyze-python` and `analyze-actions` jobs on every pull request, every push to `main`, manual dispatch, and a weekly scheduled scan. The workflow intentionally uses **no path filters** so changes to workflow/configuration or helper code cannot create an unscanned merge path.
@@ -110,4 +120,4 @@ The engineering attestation establishes artifact provenance and repository-defin
 
 The predicate schema and verification instructions are version controlled in `.github/attestation/profile-evidence-v1.schema.json` and `.github/ATTESTATION.md`.
 
-Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, action release provenance verification, authority separation, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, governed Dependency Review, workflow authority firewall, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.
+Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, action release provenance verification, authority separation, workflow shell safety, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, governed Dependency Review, workflow authority firewall, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.
