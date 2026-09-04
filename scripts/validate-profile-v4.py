@@ -47,7 +47,7 @@ SPOTLIGHT_REFS = (
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg",
     "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg",
 )
-THESIS_HEADER_ASSET_COMMIT = "5f29170f9fe0722299a0f45e59bea83618610e9a"
+THESIS_HEADER_ASSET_COMMIT = "4c6b83d2b1d04c9735c14492da3e0a03f0bb4ce7"
 THESIS_HEADER_REFS = tuple(
     f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
     for path in legacy.HEADER_SVGS
@@ -155,7 +155,7 @@ def validate_thesis_scale(readme: str) -> None:
 
     for relative in legacy.HEADER_SVGS:
         content = legacy.safe_svg(ROOT / relative, relative)
-        expected_size = 'font-size="16"' if "desktop" in relative else 'font-size="23"'
+        expected_size = 'font-size="18"' if "desktop" in relative else 'font-size="23"'
         require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
         expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
