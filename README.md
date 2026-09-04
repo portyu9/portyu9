@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-<img alt="Ƴunior Ƥortal" height="68" src="assets/profile-badges/nameplate-yunior-portal-v2.svg?text=black-v2">
+<picture><img alt="Ƴunior Ƥortal" height="68" src="assets/profile-badges/nameplate-yunior-portal-v2.svg?text=black-v2"></picture>
 </p>
 
 <p align="center"><strong>I engineer quality systems that turn software change into attributable evidence —<br>and evidence into decision-grade confidence.</strong></p>
@@ -11,7 +11,7 @@
 <br>
 
 <p align="center">
-<img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=5"> <img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=5"> <img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=5">
+<picture><img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=5"></picture> <picture><img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=5"></picture> <picture><img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=5"></picture>
 </p>
 
 <h2 align="center">◈&nbsp;&nbsp;QE Domains</h2>
@@ -127,7 +127,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <p align="center"><sub>Workflow badges are scoped <code>main</code>-branch evidence signals, not universal certification.</sub></p>
 
 <h3 align="center">↻ Evidence Spotlight</h3>
-
 <p align="center"><sub>2 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
 <p align="center">
