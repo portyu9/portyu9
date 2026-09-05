@@ -1,10 +1,13 @@
 # Repository governance contract
 
-This profile repository treats its README, reviewed visual assets, generated Signal Field, Engineering Spotlight, Signal Field Evidence ID, and evidence attestations as production artifacts. Version-controlled workflow checks and GitHub repository settings are expected to enforce the same evidence boundary.
+**Checkpoint:** 2026-09-05  
+**Repository:** `portyu9/portyu9`
 
-## Main branch
+This repository treats the profile README, reviewed source assets, generated Signal Field, Engineering Spotlight, Portfolio Evidence Ledger, cache identities, and profile-evidence attestations as production artifacts. Version-controlled checks and GitHub repository settings must describe the same trust boundary.
 
-The active `Protect Main` ruleset must continue to require pull requests and block deletion and non-fast-forward updates. Before a pull request is merged, the two Profile Quality jobs, the Dependency Review job, and both CodeQL analysis jobs must succeed on the exact pull-request head:
+## Main branch merge contract
+
+`Protect Main` must require pull requests, block deletion and non-fast-forward updates, and require the branch to be current before merge. The exact merge-time status set is:
 
 - `Profile quality / validate-contracts`
 - `Profile quality / integration-pinned-upstream`
@@ -12,112 +15,143 @@ The active `Protect Main` ruleset must continue to require pull requests and blo
 - `CodeQL / analyze-python`
 - `CodeQL / analyze-actions`
 
-All five checks should be configured as **required status checks** in the `Protect Main` GitHub ruleset. That requirement is a repository setting rather than a file in this branch; this document records the intended setting so it cannot be mistaken for optional process.
-
-The integration check intentionally executes the exact SHA-pinned upstream Signal Field generator using read-only repository permissions and runs the complete production transformation chain without publishing.
+All five are required on the exact pull-request head. Repository ruleset settings are control-plane state rather than source files; version-controlled validators protect the executable half of the contract, while repository-setting audits verify the control-plane half.
 
 ## Dependency update automation
 
-`.github/dependabot.yml` is the version-controlled Dependabot contract for this repository. Because this repository currently has no application package manifest, scheduled version updates are limited to the `github-actions` ecosystem at repository root. Dependabot runs weekly on Monday morning in `America/New_York`, with a bounded open-pull-request limit of ten. The configuration is intentionally canonical: adding another ecosystem, target branch, ignore/allow rule, registry, grouping rule, or other behavior is a governance change rather than silent configuration drift.
+`.github/dependabot.yml` is the canonical GitHub Actions update-discovery policy. Dependabot proposes trust-boundary dependency changes but does not authorize them: Dependabot pull requests are **never auto-merged**, must pass the same five merge gates, and each dependency update remains a **separate pull request** so executable-identity changes stay attributable.
 
-Every external workflow dependency must remain pinned to an **exact commit SHA**. Human-readable release tags in same-line comments are reviewed release identities that Dependabot can keep synchronized and that Profile Quality independently verifies against the executable commit. Execution authority still comes only from the immutable commit identifier. The dependency validator discovers every `.github/workflows/*.yml` and `.yaml` file, including future workflows, and rejects floating tags/branches or unsupported external action forms.
+Every external `uses:` reference must execute an **exact commit SHA**. The reviewed trust boundary includes `actions/attest`, `actions/checkout`, artifact transport/setup actions, Dependency Review, CodeQL, and `shinpr/github-profile-stats`. Same-line semantic release annotations are independently resolved by Action release provenance validation; the release label and immutable executable SHA must identify the same upstream release.
 
-Dependency updates remain individually reviewable: each action is expected in a **separate pull request** rather than a broad owner-level group. Shared ownership does not imply shared blast radius. `actions/attest` executes at the OIDC/attestation boundary, `actions/checkout` also participates in the write-only publication path, upload/download actions transport immutable evidence, setup actions control the execution environment, the Dependency Review action is a merge-time supply-chain gate, and the third-party `shinpr/github-profile-stats` generator materially affects generated evidence. Keeping these updates separate preserves attributable review and makes the exact SHA-contract change explicit for one dependency at a time.
-
-Dependabot pull requests are **never auto-merged**. They must pass `Profile quality / validate-contracts`, `Profile quality / integration-pinned-upstream`, `Dependency review / dependency-review`, `CodeQL / analyze-python`, and `CodeQL / analyze-actions` on the exact proposed head and receive deliberate review. Existing governance validators intentionally pin the currently reviewed trust-boundary SHAs, so an action update should fail closed until the corresponding reviewed SHA contract is deliberately updated in the same pull request. This is intentional friction: the bot discovers an update, but a human authorizes the new executable identity.
-
-Dependabot alerts and Dependabot security updates are repository settings distinct from this scheduled version-update file and should be enabled where supported. GitHub currently does not generate Dependabot vulnerability alerts for **SHA-pinned GitHub Actions** references, so scheduled GitHub Actions version updates remain the primary automated discovery channel for these immutable pins. Security settings still matter for any supported present or future dependency-graph entries and should remain enabled independently of version updates.
-
-Neither scheduled nor security dependency updates may weaken workflow permissions, bypass attestation/generation/publication authority separation, target the `generated` artifact branch, expand the scope of any evidence claim, or introduce an auto-merge workflow with repository-write authority.
+Dependabot alerts and security-update settings are separate GitHub control-plane controls and should remain enabled where supported. GitHub does not provide the same vulnerability-alert semantics for every **SHA-pinned GitHub Actions** reference, so scheduled GitHub Actions update discovery remains an important independent signal rather than a replacement for exact pins or review.
 
 ## Action release provenance
 
-`scripts/validate-action-release-provenance.py` binds each external action's immutable executable SHA to the reviewed release identity written in its **same-line** comment. Every external `uses:` reference must therefore have both an exact 40-character commit SHA and an **exact semantic-version** annotation such as `# v7.0.1`; floating major labels or undocumented SHAs are not accepted.
+`scripts/validate-action-release-provenance.py` binds each executable Action SHA to its **same-line** reviewed release annotation. Every external Action must therefore have both an immutable 40-character commit and an **exact semantic-version** label.
 
-The validator discovers all external actions across every workflow, normalizes action subpaths such as `github/codeql-action/init` back to their source repository, and de-duplicates identical repository/tag pairs. Conflicting SHAs for the same repository release fail closed before any network resolution occurs.
-
-Release resolution uses public `git ls-remote` against the action repository and requests both the direct tag and its peeled `^{}` form. This supports lightweight tags and **annotated tags** without adding a token, secret, package dependency, or repository permission. For an annotated tag, the peeled commit is authoritative; for a lightweight tag, the direct tag commit is authoritative. The resolved commit must exactly equal the workflow's executable SHA.
-
-This check is intentionally live because release provenance can drift independently of this repository if an upstream tag is moved or deleted. Such a change should stop a merge until the executable identity and upstream release state are reviewed. The provenance check **does not replace** exact SHA pinning, Dependabot, Dependency Review, the workflow authority firewall, or manual review; it adds independent evidence that the human release label and executable commit describe the same upstream release.
+Release verification uses public `git ls-remote` and supports both lightweight and **annotated tags**; for an annotated tag the peeled commit is authoritative. The resolved release commit must equal the executable SHA. This live provenance check **does not replace** exact pinning, Dependency Review, Dependabot, least privilege, or source review.
 
 ## Dependency review gate
 
-`.github/workflows/dependency-review.yml` is the version-controlled pre-merge vulnerability gate for dependency changes. It runs the single stable `Dependency review / dependency-review` status on every pull request and intentionally uses **no path filters**, so workflow/action or future package-manifest changes cannot create an unreviewed dependency path.
+`.github/workflows/dependency-review.yml` provides the required `Dependency review / dependency-review` status on every pull request with **no path filters**. It runs with `contents: read`, blocks **moderate-or-higher** known vulnerabilities across **runtime, development, and unknown** scopes, and fails rather than silently warning.
 
-The gate blocks **moderate-or-higher** known vulnerabilities across `runtime, development, and unknown` dependency scopes. All three scopes are covered deliberately because GitHub Actions and future dependency sources should not escape review due to scope classification. Vulnerability checking is enabled and `warn-only` behavior is forbidden.
-
-Dependency Review is intentionally not a repository **license policy**. License checking is disabled so this security gate cannot silently reject a change based on an unreviewed licensing rule. A future license policy must be introduced as its own explicit governance decision rather than hidden inside vulnerability review.
-
-The workflow and `actions/dependency-review-action` must remain pinned to exact commit SHAs. Workflow and job permissions remain `contents: read`; checkout credentials are not persisted, PR comments are disabled, and the gate must not receive `pull-requests: write`, repository-content write, OIDC, attestation, Actions-mutation, package-write, or security-event write authority.
-
-The Dependency Review status is a merge-time supply-chain signal and should be required by `Protect Main` as `dependency-review`. It complements Dependabot: Dependabot discovers newer versions over time, while Dependency Review evaluates dependency changes introduced by each pull request before they reach `main`.
+The vulnerability gate intentionally does not become a hidden **license policy**. Dependabot updates remain **never auto-merged**; Dependency Review evaluates proposed dependency changes but does not authorize executable-identity changes by itself.
 
 ## Workflow authority firewall
 
-`scripts/validate-workflow-authority-contract.py` is the repository-wide token-authority firewall. It treats the GitHub Actions surface as a **closed allowlist** rather than assuming that a new workflow or job is safe merely because no existing workflow-specific validator knows about it.
+The GitHub Actions surface is a **closed allowlist** of exactly four workflows:
 
-The reviewed inventory is exactly four workflows: `codeql.yml`, `dependency-review.yml`, `profile-quality.yml`, and `profile-stats.yml`. For each file, the validator locks the trigger set, job inventory, workflow-level permissions, and every job-level permissions block. Adding a new workflow, adding a new job, changing a trigger, using scalar permissions such as `write-all`, or adding any token capability fails `Profile quality / validate-contracts` until this authority manifest is deliberately reviewed and updated.
+- `codeql.yml`
+- `dependency-review.yml`
+- `profile-quality.yml`
+- `profile-stats.yml`
 
-Read-only authority is the default. The only reviewed write-capable exceptions are `security-events: write` in the CodeQL analysis job, `id-token: write` plus `attestations: write` in `attest-validated-evidence`, and `contents: write` in `publish-write-only`. Those capabilities are isolated to their named jobs and may not appear in another workflow or job without an explicit governance change.
+The **Workflow authority firewall** locks workflow triggers, job inventory, workflow-level permissions, and job-level permissions. Read-only authority is the default. The only reviewed write-capable exceptions are:
 
-The trigger allowlist also prevents privileged or cross-event execution paths from appearing silently. In particular, `pull_request_target` is not authorized; neither are unreviewed trigger families such as `workflow_run`, `repository_dispatch`, or issue/review-comment driven execution. A future need for one of those triggers must be evaluated together with its token and untrusted-input boundary rather than introduced as routine workflow syntax.
+| Workflow / job | Additional authority | Purpose |
+| --- | --- | --- |
+| CodeQL analysis | `security-events: write` | publish code-scanning results |
+| Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint and persist the profile evidence attestation |
+| Profile stats / `publish-write-only` | `contents: write` | fast-forward validated artifacts to `generated` |
 
-This firewall complements, rather than replaces, the specific CodeQL, Dependency Review, attestation, publication, and dependency-pin validators. The specific validators protect semantic details of each trust boundary; the authority firewall ensures there is no unreviewed fifth workflow, extra job, trigger, or permission grant outside those boundaries.
+No job may combine repository-content write with OIDC/attestation authority. A **new workflow**, new job, trigger family, or token grant is a governance change. Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, or comment-driven execution remain unauthorized unless a deliberate governance change reviews the new trust boundary.
 
 ## Workflow shell safety
 
-`scripts/validate-workflow-shell-safety.py` prevents GitHub expression values from being interpolated directly into `run:` **shell source**. GitHub evaluates `${{ ... }}` expressions before the generated script reaches the shell, so event-controlled text embedded in that source can become shell syntax rather than inert data.
+**Workflow shell safety** forbids `${{ ... }}` expression interpolation directly into `run:` **shell source**. Dynamic values must cross a non-shell field such as `env:`, `with:`, or `if:` and be treated as data by the resulting script. YAML forms that obscure the generated shell source are rejected.
 
-Dynamic workflow values must cross a non-shell boundary such as `env:`, `with:`, or `if:` and shell variables derived from `env:` should be quoted when consumed. The validator scans every single-line and multiline `run:` scalar across every workflow and rejects `${{ ... }}` anywhere in the resulting shell body. This deliberately applies to all contexts, including values that are not currently attacker-controlled, so future changes do not require reviewers to reason about whether a particular context can become untrusted.
-
-To keep the source-level check unambiguous and dependency-free, `run:` commands must use canonical plain single-line scalars or literal/folded block scalars. YAML aliases, anchors, tags, or quoted whole-command run scalars are rejected because they can obscure the bytes that become shell source. Expressions remain permitted in reviewed non-shell fields such as `env:`, `with:`, and `if:`.
-
-This control complements the workflow authority firewall: the authority firewall constrains **what a job may do**, while shell safety constrains how dynamic data can enter the command interpreter. Neither replaces action SHA pinning, Dependency Review, CodeQL, or normal shell quoting and input validation inside authored scripts.
+This control limits command-source injection risk but does not replace normal quoting, input validation, path safety, or safe subprocess use in authored scripts.
 
 ## CodeQL security analysis
 
-`.github/workflows/codeql.yml` is the version-controlled static-analysis boundary for both authored Python and the repository's GitHub Actions workflows. It runs isolated `analyze-python` and `analyze-actions` jobs on every pull request, every push to `main`, manual dispatch, and a weekly scheduled scan. The workflow intentionally uses **no path filters** so changes to workflow/configuration or helper code cannot create an unscanned merge path.
+`.github/workflows/codeql.yml` runs isolated `analyze-python` and `analyze-actions` jobs for authored Python and **GitHub Actions workflows**. It has **no path filters**, runs on pull requests/main plus a **weekly** scan, and uses the `security-extended` query suite.
 
-GitHub recommends one CodeQL language per analysis, so the workflow uses a non-fail-fast language matrix containing exactly `python` and `actions`. Each language uses its native no-build analysis path, runs the `security-extended` query suite, and publishes results under a stable per-language SARIF category. No `autobuild` step is permitted because neither reviewed language requires one.
+External CodeQL Actions execute at an **exact commit SHA**. Analysis receives only read authority plus `security-events: write` for SARIF publication. **CodeQL is not an attestation** and does not expand the meaning of generated evidence; it is an independent static-analysis control.
 
-The workflow and its `github/codeql-action` dependencies must remain pinned to an **exact commit SHA** and are governed by Dependabot plus `scripts/validate-codeql-contract.py`.
+## Profile Quality boundary
 
-The workflow default token remains `contents: read`. Each language-analysis job receives only `contents: read` plus `security-events: write`, which is required to publish code-scanning results. It must not receive `contents: write`, `pull-requests: write`, `id-token: write`, `attestations: write`, or other mutation/signing authority. Checkout credentials are not persisted.
+`Profile quality / validate-contracts` is read-only and runs the fail-closed repository contract suite, including Signal Field, Spotlight, Portfolio Ledger, attestation, dependency, Action provenance, authority, shell-safety, CodeQL, cache-identity, and repository governance checks.
 
-The two CodeQL statuses are merge-time security signals and should be required by `Protect Main` as `analyze-python` and `analyze-actions`. Scheduled scans provide defense against newly added queries or newly recognized vulnerability patterns even when repository source is unchanged.
+`Profile quality / integration-pinned-upstream` is also read-only. It executes the exact reviewed Signal Field generator, runs the full production transformation chain, performs the Signal Field artifact round trip with digest enforcement, then collects one live Portfolio Evidence Ledger snapshot and renders the Engineering Spotlight strictly from that validated snapshot. The read-only contract summary reports the resulting identities and authority map through `GITHUB_STEP_SUMMARY`.
 
-CodeQL is not an attestation and does not certify generated profile evidence, repository behavior, or every possible security property. It is an independent static-analysis control whose findings complement, but do not expand, the repository's evidence and attestation claims.
+## Single evidence snapshot contract
 
-## Generated branch
+The **Portfolio Evidence Ledger** is the sole live GitHub evidence collection surface for the 13 reviewed QE systems during a profile evidence run.
 
-The `generated` branch is an artifact branch, not a source branch. Its root is expected to contain only the generated Signal Field and Engineering Spotlight artifact trees. Publishing is performed only by the `publish-write-only` GitHub Actions job after a separately executed read-only generation job has succeeded, the immutable artifact set has been revalidated, and the attestation gate has completed.
+The required data flow is:
 
-The `generated` branch should have a GitHub ruleset that blocks **deletion** and **non-fast-forward** updates while still permitting the normal fast-forward pushes performed by GitHub Actions. Do not add a pull-request requirement that would break the automated publisher unless GitHub Actions is explicitly configured as an appropriate bypass actor.
+`GitHub evidence → Portfolio Evidence Ledger → validated Engineering Spotlight projection`
+
+The Spotlight renderer must not independently re-query GitHub for system evidence. Its three deterministic daily slots are selected from the nine rotating systems and must project the exact Ledger `subject_revision`, `evidence_contract`, and complete `signals` for each selected repository. The internal Spotlight manifest records the Ledger Evidence ID and full SHA-256 digest used for the projection.
+
+This removes a temporal race in which two independently collected surfaces could describe different workflow state inside one run.
 
 ## Signal Field Evidence ID
 
-The four Signal Field variants must share one deterministic `signal-field-evidence-v1` identity when they encode the same measured evidence. The human correlation handle is `SF1-` plus the first 64 bits of the canonical evidence SHA-256 digest; the complete digest remains in SVG provenance and in the signed profile-evidence attestation predicate.
+The four Signal Field variants share one deterministic `signal-field-evidence-v1` identity when they encode the same measured evidence. The human handle is `SF1-` plus the first 64 bits of the canonical evidence SHA-256; the **full SHA-256** remains the verification identity carried in artifact provenance and the attestation predicate.
 
-The identity is derived from measured evidence semantics, not rendered SVG bytes, so light/dark and wide/compact presentation differences cannot create distinct identities for the same evidence. Conversely, a change to measured profile totals, headline metrics, the 30-day date/count/level sequence, activity telemetry, or source semantics must change the canonical digest.
+The short Signal Field Evidence ID is a correlation handle, not a substitute for full-digest verification.
 
-The short Evidence ID is not itself a cryptographic verification mechanism. Verification depends on the full SHA-256 evidence digest plus the artifact attestation.
+## Generated asset cache contract
 
-## Authority separation
+Mutable images served from the `generated` branch must carry an explicit cache identity in README URLs. All six Spotlight theme assets share one current Spotlight cache token and all four Signal Field assets share one current Signal Field cache token. `scripts/validate-profile-cache-contract.py` rejects missing, stale, or inconsistent family tokens.
 
-Third-party generation code must not receive repository write or attestation authority.
+Immutable source-revision URLs do not need query-based cache busting because the revision itself is the cache identity.
 
-`generate-read-only` may read GitHub data and produce candidate artifacts with `contents: read` only. It has neither `contents: write`, `id-token: write`, nor `attestations: write`.
+## Generation, attestation, and publication authority separation
 
-`attest-validated-evidence` is a separate trust-boundary job. It downloads the immutable generated artifacts into a fresh runner, revalidates both evidence sets, and may mint a short-lived OIDC identity and persist a GitHub artifact attestation. It receives `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission. The reviewed `actions/attest` dependency must remain pinned to an exact commit SHA.
+`generate-read-only` receives `contents: read` only. Third-party generation code has neither repository-write nor attestation authority. It produces and validates three immutable evidence sets:
 
-`publish-write-only` may publish only the immutable artifact set passed from generation after the attestation job succeeds. It receives `contents: write` but no OIDC or attestation authority, and revalidates the downloaded artifacts again at the publication boundary.
+1. four Signal Field SVGs;
+2. six Engineering Spotlight SVGs plus an internal validation manifest;
+3. one Portfolio Evidence Ledger JSON document.
 
-This separation prevents the third-party generator from signing its own output and prevents the publisher from creating the attestation on which publication depends.
+The public/attested subject set is exactly **11 subjects**: four Signal Field SVGs, six Spotlight SVGs, and one Portfolio Evidence Ledger JSON file. `spotlight-manifest.json` is internal validation metadata and must never be published or attested.
+
+`attest-validated-evidence` runs on a fresh job boundary with `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission. It downloads the three immutable evidence sets, fails closed on artifact digest mismatch, revalidates Signal Field, Portfolio Ledger, and Ledger-backed Spotlight projection, builds the predicate, and only then invokes the pinned attestation Action.
+
+`publish-write-only` depends on both generation and attestation. It receives `contents: write` but no OIDC or attestation authority. It downloads the same immutable evidence, revalidates it again, stages exactly the 11 public subjects, and pushes only to `generated`.
+
+## Attestation schema versioning
+
+Published predicate schema versions are immutable.
+
+- `.github/attestation/profile-evidence-v1.schema.json` is a **frozen legacy verification contract** and must never change byte-for-byte.
+- `.github/attestation/profile-evidence-v2.schema.json` is the current issuance contract.
+
+New production attestations use v2. The predicate records a `predicateSchema` identity that binds the v2 schema URI and the exact SHA-256 digest of the schema bytes used by the builder. A semantic predicate change requires a new schema filename/version rather than mutation of an already published contract.
 
 ## Attestation claim boundary
 
-The engineering attestation establishes artifact provenance and repository-defined contract conformance for the named generated SVG subjects at the recorded source revision. It does not certify every software behavior represented by the profile, replace underlying CI/security evidence, or expand the scope of any oracle.
+The engineering attestation establishes provenance and repository-defined contract conformance for the exact 11 named subjects at the recorded source revision. It binds the Signal Field Evidence ID/digest, Portfolio Ledger ID/digest/system count, current predicate schema identity, validation inventories, and authority separation.
 
-The predicate schema and verification instructions are version controlled in `.github/attestation/profile-evidence-v1.schema.json` and `.github/ATTESTATION.md`.
+It does **not certify every software behavior** represented by the profile, replace underlying CI/security evidence, or expand the scope of any oracle.
 
-Any workflow edit that removes the named generation/attestation/publication jobs, pinned runtimes/actions, action release provenance verification, authority separation, workflow shell safety, Signal Field Evidence ID contract, final artifact validation, attestation gate, artifact-only generated-branch staging, governed Dependency Review, workflow authority firewall, or governed CodeQL analysis is a governance-contract change and must fail Profile Quality until deliberately reviewed.
+Verification instructions and the current/legacy schema relationship are documented in `.github/ATTESTATION.md`.
+
+## Generated branch
+
+`generated` is an artifact branch, not a source branch. Its public root is expected to contain only:
+
+- `profile-stats/profile/` with four Signal Field SVGs;
+- `engineering-spotlight/` with six Spotlight SVGs;
+- `portfolio-evidence/portfolio-evidence-ledger.json`.
+
+The `Protect generated` ruleset should block branch **deletion** and **non-fast-forward** updates while permitting the reviewed GitHub Actions publisher to make normal fast-forward artifact commits. A pull-request requirement must not be added to this artifact branch unless the automation model is deliberately redesigned.
+
+## Verification after material trust-boundary changes
+
+Confirm all of the following before declaring a security/governance change complete:
+
+1. the exact five required PR checks passed on the final head;
+2. Action release provenance, Dependency Review, Workflow authority firewall, Workflow shell safety, and CodeQL contracts remain green;
+3. the Signal Field artifact round trip fails closed on digest mismatch and revalidates downloaded bytes;
+4. one Portfolio Ledger is collected and Spotlight is projected from that same validated Ledger;
+5. generation remains read-only, attestation remains non-publishing, and publication remains non-signing;
+6. the attestation subject set and generated public set are the same exact 11 subjects;
+7. v1 schema bytes remain frozen and new predicates use v2 with `predicateSchema.digest`;
+8. mutable generated README asset URLs pass the cache-identity contract;
+9. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only`;
+10. repository rulesets are checked separately because settings-level controls cannot be guaranteed by repository files alone.
+
+Any change that weakens these boundaries is a governance-contract change and must fail closed until deliberately reviewed.

@@ -138,6 +138,9 @@ jobs:
       - name: Validate repository governance contract
         run: python3 scripts/validate-governance-contract.py
 
+      - name: Validate assurance documentation contract
+        run: python3 scripts/validate-assurance-docs.py
+
   integration:
     name: integration-pinned-upstream
     runs-on: ubuntu-24.04
