@@ -27,6 +27,8 @@ The pull-request rule intentionally keeps `required_approving_review_count: 0` f
 
 `python3 scripts/validate-ruleset-contract.py` validates the version-controlled contract and its fail-closed invariants without requiring administration access.
 
-`python3 scripts/validate-ruleset-contract.py --live` additionally reads GitHub's repository rulesets and compares the control-plane state with the version-controlled target. A live mismatch is a governance defect even when source CI is green.
+`python3 scripts/validate-ruleset-contract.py --live` additionally reads GitHub's repository rulesets and compares the control-plane state with the version-controlled target. `Profile quality / validate-contracts` executes this live form on every pull request and on relevant `main` pushes with only the workflow's read-only GitHub token. A live mismatch is therefore a **merge-blocking** governance defect rather than a separate manual observation.
 
-The connected automation surface used for this repository may not have GitHub administration authority. In that case source review can codify and test the desired ruleset contract, but it must not claim the control-plane setting changed until a live audit returns success.
+The live comparison covers the exact ruleset inventory, targets, enforcement, bypass actors, `Protect Main` pull-request parameters, the strict five-check set, and the `Protect generated` rule inventory. It detects settings drift that cannot be represented by a repository source diff.
+
+The connected mutation surface used for this repository may still lack GitHub administration authority. Source review can codify and verify the desired ruleset contract, but it must not claim a control-plane setting changed unless an authorized settings operation occurred and the live gate then returns success.
