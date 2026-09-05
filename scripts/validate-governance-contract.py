@@ -6,9 +6,8 @@ integration. This validator therefore protects the executable half of the govern
 contract: named PR checks, explicit runtime, pinned dependencies, release provenance,
 closed workflow authority, shell-safe expression boundaries, least-privilege profile
 evidence generation/identity/attestation/publication, measured refresh cadence,
-generated-surface cache binding, fresh-run concurrency, and artifact-only publish
-behavior. The companion governance documents record the settings-level and cadence
-controls that must mirror these checks.
+generated-surface cache binding, fresh-run concurrency, artifact-only publish behavior,
+and the single governed Signal Field pipeline entrypoint.
 """
 from __future__ import annotations
 
@@ -21,6 +20,8 @@ QUALITY = ROOT / ".github/workflows/profile-quality.yml"
 STATS = ROOT / ".github/workflows/profile-stats.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 CADENCE = ROOT / ".github/REFRESH_CADENCE.md"
+PIPELINE = ROOT / "scripts/signal_field_pipeline.py"
+PIPELINE_MANIFEST = ROOT / "scripts/signal-field-pipeline-v1.json"
 
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_PYTHON_SHA = "5fda3b95a4ea91299a34e894583c3862153e4b97"
@@ -28,6 +29,14 @@ UPLOAD_SHA = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
 DOWNLOAD_SHA = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
 UPSTREAM_SHA = "49b5f7091182a45f3ef93923505b660c6da5f835"
 ATTEST_SHA = "1e69f48acb82d1966a394da916b4c1698aa569d6"
+DIRECT_PIPELINE_STAGE_MARKERS = (
+    "customize-signal-field.py \"$READY_DIR\"",
+    "polish-signal-field-v2.py \"$READY_DIR\"",
+    "enhance-signal-field-v2.py \"$READY_DIR\"",
+    "identify-signal-field-evidence.py \"$READY_DIR\"",
+    "set-signal-field-refresh-cadence.py \"$READY_DIR\"",
+    "validate-generated-signal-field.py \"$READY_DIR\"",
+)
 
 
 def fail(message: str) -> None:
@@ -53,6 +62,13 @@ def job_block(workflow: str, key: str, next_key: str | None) -> str:
     return workflow[start.start():end.start()]
 
 
+def require_pipeline_entrypoint(block: str, command: str, label: str) -> None:
+    require(command in block, f"{label} must invoke the governed Signal Field pipeline")
+    require(block.count(command) == 1, f"{label} must invoke the Signal Field pipeline exactly once")
+    for marker in DIRECT_PIPELINE_STAGE_MARKERS:
+        require(marker not in block, f"{label} must not duplicate pipeline stage ordering in workflow YAML: {marker}")
+
+
 def validate_quality(text: str) -> None:
     require("name: Profile quality" in text, "Profile quality workflow name changed")
     require('PYTHON_VERSION: "3.13"' in text, "Profile quality Python version is not explicit")
@@ -70,14 +86,11 @@ def validate_quality(text: str) -> None:
     require("permissions:\n      contents: read" in integration, "Integration job must remain read-only")
     require("contents: write" not in integration, "Profile Quality integration must not receive repository write authority")
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in integration, "PR integration must execute reviewed pinned upstream generator")
-    require("python3 scripts/identify-signal-field-evidence.py \"$READY_DIR\"" in integration, "PR integration must stamp Signal Field Evidence ID")
-    require("python3 scripts/validate-signal-field-v214.py \"$READY_DIR\"" in integration, "PR integration must validate Signal Field Evidence ID")
-    require("python3 scripts/set-signal-field-refresh-cadence.py \"$READY_DIR\"" in integration, "PR integration must finalize measured refresh cadence")
-    require("python3 scripts/validate-generated-signal-field.py \"$READY_DIR\"" in integration, "PR integration must validate complete publishable artifact")
+    require("python3 scripts/signal_field_pipeline.py --self-test" in validate, "Profile Quality must self-test the governed Signal Field pipeline")
+    require_pipeline_entrypoint(integration, 'python3 scripts/signal_field_pipeline.py "$READY_DIR"', "PR integration")
     require(integration.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1, "PR integration must exercise the reviewed download-artifact SHA exactly once")
     require(integration.count("digest-mismatch: error") == 1, "PR artifact round-trip must fail on digest mismatch")
     require("python3 scripts/validate-generated-signal-field.py roundtrip-signal-field" in integration, "PR integration must revalidate downloaded Signal Field bytes")
-    require("python3 scripts/set-signal-field-refresh-cadence.py --self-test" in validate, "Profile Quality must self-test the refresh-cadence finalizer")
     require("python3 scripts/validate-profile-cache-contract.py" in validate, "Profile Quality must validate generated-surface cache identities")
     require(
         "name: Bind generated cache identities to live candidate contracts" in integration,
@@ -110,6 +123,8 @@ def validate_stats(text: str) -> None:
     require('cron: "17,47 * * * *"' in text, "Thirty-minute best-effort schedule contract changed")
     require('cron: "2-57/5 * * * *"' not in text, "Stale five-minute cron remains in production workflow")
     require('- "scripts/set-signal-field-refresh-cadence.py"' in text, "Stats push paths must cover refresh-cadence finalizer changes")
+    require('- "scripts/signal_field_pipeline.py"' in text, "Stats push paths must cover the Signal Field orchestrator")
+    require('- "scripts/signal-field-pipeline-v1.json"' in text, "Stats push paths must cover the Signal Field stage manifest")
     require("cancel-in-progress: true" in text, "Stats workflow must cancel stale runs")
     require('PYTHON_VERSION: "3.13"' in text, "Stats Python version is not explicit")
     require(text.count("runs-on: ubuntu-24.04") == 3, "All three stats jobs must pin ubuntu-24.04")
@@ -126,12 +141,7 @@ def validate_stats(text: str) -> None:
     require("contents: write" not in generate, "Third-party generation job received repository write authority")
     require("id-token: write" not in generate, "Third-party generation job received signing identity authority")
     require("attestations: write" not in generate, "Third-party generation job received attestation authority")
-    require("python3 source/scripts/identify-signal-field-evidence.py \"$READY_DIR\"" in generate, "Production generation must stamp Signal Field Evidence ID")
-    identity_validation = generate.find("python3 source/scripts/validate-signal-field-v214.py \"$READY_DIR\"")
-    cadence_finalization = generate.find("python3 source/scripts/set-signal-field-refresh-cadence.py \"$READY_DIR\"")
-    publishable_validation = generate.find("python3 source/scripts/validate-generated-signal-field.py \"$READY_DIR\"")
-    require(min(identity_validation, cadence_finalization, publishable_validation) >= 0, "Production generation cadence chain is incomplete")
-    require(identity_validation < cadence_finalization < publishable_validation, "Refresh cadence must finalize after evidence identity and before publishable validation")
+    require_pipeline_entrypoint(generate, 'python3 source/scripts/signal_field_pipeline.py "$READY_DIR"', "Production generation")
 
     require("needs: generate" in attest, "Attestation job must depend on validated generation")
     require("contents: read" in attest, "Attestation job must retain contents: read")
@@ -216,7 +226,7 @@ def validate_cadence_doc(text: str) -> None:
 
 def main() -> int:
     try:
-        for path in (QUALITY, STATS, GOVERNANCE, CADENCE):
+        for path in (QUALITY, STATS, GOVERNANCE, CADENCE, PIPELINE, PIPELINE_MANIFEST):
             require(path.is_file(), f"governance input is missing: {path.relative_to(ROOT)}")
         validate_quality(QUALITY.read_text(encoding="utf-8"))
         validate_stats(STATS.read_text(encoding="utf-8"))
@@ -225,10 +235,10 @@ def main() -> int:
         print(
             "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
             "Dependency Review governance is mandatory, workflow authority is closed, workflow shell source is expression-safe, "
-            "pinned-upstream integration is mandatory, mutable profile cache identities bind to the same live candidate contracts, "
-            "measured profile generation uses the governed best-effort 30-minute cadence, three artifact downloads are integrity-checked, "
-            "Signal Field and Portfolio Ledger identities are generated/validated before signing, third-party generation has neither write "
-            "nor signing authority, attestation is isolated, and publication revalidates the same identities."
+            "pinned-upstream integration and the single versioned Signal Field pipeline are mandatory, mutable profile cache identities "
+            "bind to the same live candidate contracts, measured profile generation uses the governed best-effort 30-minute cadence, "
+            "three artifact downloads are integrity-checked, Signal Field and Portfolio Ledger identities are validated before signing, "
+            "third-party generation has neither write nor signing authority, attestation is isolated, and publication revalidates the same identities."
         )
         return 0
     except (OSError, ValueError) as exc:
