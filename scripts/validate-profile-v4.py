@@ -236,6 +236,26 @@ def validate_flagships(readme: str) -> None:
     require(readme.count('qa-automation-graphql/ci.yml?branch=main')==1 and readme.count('qa-automation-graphql/security.yml?branch=main')==1, "GraphQL flagship must expose CI + Security")
     require(readme.count('qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main')==1 and readme.count('qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main')==1, "Visual/accessibility flagship must expose CI + Security")
 
+    sequence = (
+        ("qualification-ai-qa-control-plane", "01"),
+        ("qualification-agent-evaluation-tevv", "02"),
+        ("qualification-graphql-qe", "03"),
+        ("qualification-visual-accessibility-qe", "04"),
+    )
+    for family, number in sequence:
+        for theme in ("light", "dark"):
+            path = ROOT / f"assets/profile-systems/{family}-{theme}.svg"
+            content = path.read_text(encoding="utf-8")
+            require(f"ENGINEERING SYSTEM · {number}" in content,
+                    f"Engineering system sequence changed: {family}-{theme}")
+
+    agent_dark=(ROOT/"assets/profile-systems/qualification-agent-evaluation-tevv-dark.svg").read_text(encoding="utf-8")
+    agent_light=(ROOT/"assets/profile-systems/qualification-agent-evaluation-tevv-light.svg").read_text(encoding="utf-8")
+    require('#FF4D4D' in agent_dark and '#FF3131' in agent_dark,
+            "Agent Evaluation dark phosphorescent-red treatment changed")
+    require('#C81D25' in agent_light and '#FF3131' in agent_light,
+            "Agent Evaluation light phosphorescent-red treatment changed")
+
 
 def main() -> int:
     readme=README.read_text(encoding="utf-8")
@@ -257,6 +277,12 @@ def main() -> int:
     for phrase in legacy.FORBIDDEN_WORDING:
         require(phrase not in readme, f"Retired wording returned: {phrase}")
     require(readme.count("© 2026 Ƴunior Ƥortal. All rights reserved.")==1, "Copyright owner/year must appear exactly once")
+
+    review_paths='<p align="center"><sub><strong>Review paths</strong> · <a href="https://github.com/portyu9/ai-qa-automation">AI QA Control Plane</a> · <a href="https://github.com/portyu9/qa-automation-ai-agent-evals">Agent Evaluation / TEVV</a> · <a href="https://github.com/portyu9?tab=repositories">QE Systems Portfolio</a></sub></p>'
+    require(readme.count(review_paths)==1, "Compact reviewer-path row changed")
+    identity=readme.find('alt="AI-Enabled Quality Systems"'); review=readme.find(review_paths); domains=readme.find('<h2 align="center">◈&nbsp;&nbsp;QE Domains</h2>')
+    require(identity<review<domains, "Reviewer paths must sit directly after profile identity and before QE Domains")
+
     validate_taxonomy_scale(readme); validate_thesis_scale(readme)
     for relative in legacy.IDENTITY_AND_PRINCIPLE_SVGS: legacy.safe_svg(ROOT/relative, relative)
     for relative in legacy.PRINCIPLE_BADGES:
@@ -273,11 +299,11 @@ def main() -> int:
     require("From my QE systems portfolio" in readme, "Spotlight ownership wording changed")
     require("engineering-systems-preview-pr50" not in readme, "PR-only Spotlight preview references must not reach production")
     require(readme.count('width="620"') >= 2, "Spotlight cards must retain native-width desktop proportions")
-    activity=readme.find('<h2 align="center">◉ Activity Metrics</h2>'); signal=readme.find('alt="GitHub activity signal field"'); systems=readme.find('<h2 align="center">◇ Selected Engineering Systems</h2>'); spotlight=readme.find('<h3 align="center">↻ Evidence Spotlight</h3>'); copyright_notice=readme.find("© 2026 Ƴunior Ƥortal")
-    require(activity<signal<systems<spotlight<copyright_notice, "Selected systems and spotlight placement changed")
+    systems=readme.find('<h2 align="center">◇ Selected Engineering Systems</h2>'); spotlight=readme.find('<h3 align="center">↻ Evidence Spotlight</h3>'); activity=readme.find('<h2 align="center">◉ Activity Metrics</h2>'); signal=readme.find('alt="GitHub activity signal field"'); copyright_notice=readme.find("© 2026 Ƴunior Ƥortal")
+    require(systems<spotlight<activity<signal<copyright_notice, "Systems-first portfolio information architecture changed")
     footer='\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
     require(readme.count(footer)==1, "A horizontal rule must exist immediately above the copyright footer")
     require("release-candidate.yml?branch=main" not in readme, "Profile must not present an RC workflow with no current main status")
-    print("Profile v4 validation passed: 17 evidence-linked taxonomy capabilities, desktop-only thesis typography, four rich explicit-theme flagship systems, and two generated daily Evidence Spotlights remain attributable, scoped, responsive, and fail-closed by validation.")
+    print("Profile v4 validation passed: reviewer paths lead into 17 evidence-linked capabilities; four numbered flagship systems and two Evidence Spotlights precede Activity Metrics; responsive thesis and evidence contracts remain fail-closed.")
     return 0
 if __name__ == "__main__": raise SystemExit(main())
