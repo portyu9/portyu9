@@ -70,6 +70,13 @@ jobs:
           python3 scripts/generate-engineering-spotlight.py "$tmp/spotlight" --ledger "$tmp/ledger/portfolio-evidence-ledger.json" --date 2026-09-04
           python3 scripts/validate-engineering-spotlight.py "$tmp/spotlight" --ledger "$tmp/ledger/portfolio-evidence-ledger.json"
 
+      - name: Validate canonical profile evidence subject closure
+        run: |
+          set -euo pipefail
+          python3 scripts/profile_evidence_subjects.py
+          python3 scripts/stage-profile-evidence.py --self-test
+          python3 scripts/validate-profile-evidence-subjects.py
+
       - name: Validate engineering attestation predicate builder
         run: python3 scripts/build-profile-evidence-attestation.py --self-test
 
@@ -183,6 +190,22 @@ jobs:
           rm -rf integration-engineering-spotlight
           python3 scripts/generate-engineering-spotlight.py integration-engineering-spotlight --ledger integration-portfolio-evidence/portfolio-evidence-ledger.json
           python3 scripts/validate-engineering-spotlight.py integration-engineering-spotlight --ledger integration-portfolio-evidence/portfolio-evidence-ledger.json --require-live
+
+      - name: Exercise exact live publication subject closure
+        env:
+          SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          rm -rf integration-profile-evidence
+          python3 scripts/validate-profile-evidence-subjects.py \
+            --signal-field-dir "$SIGNAL_FIELD_DIR" \
+            --spotlight-dir integration-engineering-spotlight \
+            --portfolio-ledger-dir integration-portfolio-evidence
+          python3 scripts/stage-profile-evidence.py integration-profile-evidence \
+            --signal-field-dir "$SIGNAL_FIELD_DIR" \
+            --spotlight-dir integration-engineering-spotlight \
+            --portfolio-ledger-dir integration-portfolio-evidence
+          python3 scripts/validate-profile-evidence-subjects.py --published-root integration-profile-evidence
 
       - name: Bind generated cache identities to live candidate contracts
         env:
