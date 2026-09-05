@@ -10,6 +10,10 @@ on:
       - ".github/ATTESTATION.md"
       - ".github/attestation/**"
       - "scripts/**"
+      - "scripts/profile-evidence-subjects-v1.json"
+      - "scripts/profile_evidence_subjects.py"
+      - "scripts/stage-profile-evidence.py"
+      - "scripts/validate-profile-evidence-subjects.py"
   schedule:
     # Two best-effort refresh opportunities per hour, away from top-of-hour congestion.
     - cron: "17,47 * * * *"
