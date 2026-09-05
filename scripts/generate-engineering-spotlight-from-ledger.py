@@ -2,9 +2,9 @@
 """Render Engineering Evidence Spotlight v2.1 from Portfolio Evidence Ledger v2.
 
 The Portfolio Evidence Ledger remains the single live evidence collection surface.
-This renderer performs no GitHub API calls. It deterministically selects the three
-rotating systems for the ledger UTC date and projects the exact ledger subject,
-contract, execution result, subject binding, freshness, and run provenance.
+This renderer performs no GitHub API calls and its import graph contains no legacy
+GitHub collector. System identity, evidence scopes, and presentation metadata come
+from the canonical versioned portfolio registry.
 """
 from __future__ import annotations
 
@@ -18,8 +18,9 @@ import re
 import sys
 from typing import Any
 
-import engineering_spotlight_v2 as base
+import engineering_spotlight_renderer as renderer
 import engineering_spotlight_v21 as v21
+import portfolio_system_registry as registry
 
 LEDGER_VERSION = "portfolio-evidence-ledger-v2"
 LEDGER_KIND = "portfolio-evidence-ledger"
@@ -54,7 +55,7 @@ def expected_contract(system: dict[str, Any]) -> list[dict[str, str]]:
         {
             "label": str(spec["label"]),
             "workflow": str(spec["workflow"]),
-            "scope": base.evidence_scope(spec),
+            "scope": registry.evidence_scope(spec),
         }
         for spec in system["evidence"]
     ]
@@ -66,10 +67,14 @@ def load_ledger(path: Path) -> dict[str, Any]:
     require(isinstance(ledger, dict), "Portfolio Evidence Ledger must be a JSON object")
     require(ledger.get("version") == LEDGER_VERSION, "Portfolio Evidence Ledger version changed")
     require(ledger.get("kind") == LEDGER_KIND, "Portfolio Evidence Ledger kind changed")
-    require(ledger.get("owner") == base.OWNER, "Portfolio Evidence Ledger owner changed")
+    require(ledger.get("owner") == registry.OWNER, "Portfolio Evidence Ledger owner changed")
     require(ledger.get("system_count") == 13, "Portfolio Evidence Ledger must contain 13 systems")
     require(ledger.get("evidence_semantics") == EVIDENCE_SEMANTICS, "Portfolio evidence semantics changed")
     require("signal_summary" not in ledger, "Ledger v2 must not contain the legacy conflated signal summary")
+    provenance = ledger.get("portfolio_registry")
+    require(isinstance(provenance, dict), "Portfolio Ledger registry provenance is missing")
+    require(provenance.get("version") == registry.VERSION, "Portfolio Ledger registry version changed")
+    require(provenance.get("digest") == registry.registry_digest(), "Portfolio Ledger registry digest does not match reviewed registry bytes")
     evidence_id = ledger.get("evidence_id")
     evidence_digest = ledger.get("evidence_digest")
     require(isinstance(evidence_id, str) and LEDGER_ID.fullmatch(evidence_id) is not None, "Portfolio Evidence ID is malformed")
@@ -88,7 +93,7 @@ def ledger_systems(ledger: dict[str, Any]) -> dict[str, dict[str, Any]]:
     for entry in ledger["systems"]:
         require(isinstance(entry, dict), "Portfolio ledger system entry must be an object")
         repository = entry.get("repository")
-        require(isinstance(repository, str) and repository.startswith(f"{base.OWNER}/"), "Portfolio ledger repository is invalid")
+        require(isinstance(repository, str) and repository.startswith(f"{registry.OWNER}/"), "Portfolio ledger repository is invalid")
         require(repository not in result, f"Duplicate Portfolio ledger repository: {repository}")
         result[repository] = entry
     require(len(result) == 13, "Portfolio ledger repository inventory must contain 13 distinct systems")
@@ -96,7 +101,7 @@ def ledger_systems(ledger: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def project_entry(system: dict[str, Any], entry: dict[str, Any]) -> tuple[str, list[dict[str, Any]], list[dict[str, str]]]:
-    repository = f"{base.OWNER}/{system['repo']}"
+    repository = f"{registry.OWNER}/{system['repo']}"
     require(entry.get("repository") == repository, f"{repository}: ledger repository mismatch")
     require(entry.get("classification") == "rotating", f"{repository}: Spotlight source must be classified rotating")
     require(entry.get("title") == system["title"], f"{repository}: ledger/display title mismatch")
@@ -105,7 +110,7 @@ def project_entry(system: dict[str, Any], entry: dict[str, Any]) -> tuple[str, l
     contract = entry.get("evidence_contract")
     records = entry.get("signals")
     expected = expected_contract(system)
-    require(contract == expected, f"{repository}: ledger evidence contract differs from reviewed Spotlight contract")
+    require(contract == expected, f"{repository}: ledger evidence contract differs from reviewed registry contract")
     require(isinstance(records, list) and len(records) == len(expected), f"{repository}: ledger evidence-record count changed")
     record_keys = [(item.get("label"), item.get("workflow"), item.get("scope")) for item in records if isinstance(item, dict)]
     contract_keys = [(item["label"], item["workflow"], item["scope"]) for item in expected]
@@ -125,10 +130,13 @@ def dimension_attr(records: list[dict[str, Any]], field: str) -> str:
 def render_projection(
     system: dict[str, Any], slot: int, day: dt.date, subject: str, records: list[dict[str, Any]], theme: str
 ) -> str:
-    # The v2 visual renderer still colors the primary pill by execution result. Feed it
-    # a presentation-only compatibility field; the Ledger and manifest remain signal-free.
+    # The reviewed v2 visual renderer colors its primary pill by execution result. Feed
+    # it a presentation-only compatibility field; Ledger and manifest stay signal-free.
     present = [{**record, "signal": record["result"]} for record in records]
-    svg = base.render_card(system, slot, day, subject, present, theme)
+    svg = renderer.render_card(
+        system, slot, day, subject, present, theme,
+        version=v21.VERSION, owner=registry.OWNER,
+    )
     result_attr = html.escape(dimension_attr(records, "result"), quote=True)
     binding_attr = html.escape(dimension_attr(records, "binding"), quote=True)
     freshness_attr = html.escape(dimension_attr(records, "freshness"), quote=True)
@@ -152,6 +160,7 @@ def render_projection(
 
 
 def render(output_dir: Path, ledger_path: Path, requested_date: str | None) -> dict[str, Any]:
+    registry.load_registry()
     ledger = load_ledger(ledger_path)
     raw_date = ledger.get("as_of_date_utc")
     require(isinstance(raw_date, str), "Portfolio ledger UTC date is missing")
@@ -171,6 +180,10 @@ def render(output_dir: Path, ledger_path: Path, requested_date: str | None) -> d
         "evidence_model": EVIDENCE_MODEL,
         "evidence_source": EVIDENCE_SOURCE,
         "evidence_semantics": EVIDENCE_SEMANTICS,
+        "portfolio_registry": {
+            "version": registry.VERSION,
+            "digest": registry.registry_digest(),
+        },
         "portfolio_evidence_id": ledger["evidence_id"],
         "portfolio_evidence_digest": ledger["evidence_digest"],
         "portfolio_as_of_date_utc": raw_date,
@@ -179,32 +192,27 @@ def render(output_dir: Path, ledger_path: Path, requested_date: str | None) -> d
         "slots": [],
     }
 
-    prior_version = base.VERSION
-    base.VERSION = v21.VERSION
-    try:
-        for slot, system in enumerate(selected, start=1):
-            repository = f"{base.OWNER}/{system['repo']}"
-            require(repository in by_repo, f"Selected Spotlight repository is absent from Portfolio ledger: {repository}")
-            subject, records, contract = project_entry(system, by_repo[repository])
-            for theme in ("light", "dark"):
-                (output_dir / f"spotlight-{slot}-{theme}.svg").write_text(
-                    render_projection(system, slot, day, subject, records, theme),
-                    encoding="utf-8",
-                )
-            manifest["slots"].append(
-                {
-                    "slot": slot,
-                    "repository": repository,
-                    "title": system["title"],
-                    "glyph": system["glyph"],
-                    "topology": system["topology"],
-                    "subject_revision": subject,
-                    "evidence_contract": contract,
-                    "signals": records,
-                }
+    for slot, system in enumerate(selected, start=1):
+        repository = f"{registry.OWNER}/{system['repo']}"
+        require(repository in by_repo, f"Selected Spotlight repository is absent from Portfolio ledger: {repository}")
+        subject, records, contract = project_entry(system, by_repo[repository])
+        for theme in ("light", "dark"):
+            (output_dir / f"spotlight-{slot}-{theme}.svg").write_text(
+                render_projection(system, slot, day, subject, records, theme),
+                encoding="utf-8",
             )
-    finally:
-        base.VERSION = prior_version
+        manifest["slots"].append(
+            {
+                "slot": slot,
+                "repository": repository,
+                "title": system["title"],
+                "glyph": system["glyph"],
+                "topology": system["topology"],
+                "subject_revision": subject,
+                "evidence_contract": contract,
+                "signals": records,
+            }
+        )
 
     (output_dir / "spotlight-manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -215,9 +223,8 @@ def render(output_dir: Path, ledger_path: Path, requested_date: str | None) -> d
 def main() -> int:
     try:
         args = parse_args()
-        base.validate_pool()
         render(args.output_dir, args.ledger, args.date)
-        print(f"Engineering Spotlight rendered from Portfolio Evidence Ledger v2: {args.ledger}")
+        print(f"Engineering Spotlight rendered from Portfolio Evidence Ledger v2 + {registry.VERSION}: {args.ledger}")
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
