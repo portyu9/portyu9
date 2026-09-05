@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 
 SPOTLIGHT_TOKEN = "engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"
-SIGNAL_FIELD_TOKEN = "signal-field-v216-profile-refresh-v1"
+SIGNAL_FIELD_TOKEN = "signal-field-v217-wide-alignment-profile-refresh-v1"
 
 STALE_SPOTLIGHT_TOKENS = (
     "engineering-spotlight-v21-three-slots-20260905",
@@ -29,6 +29,7 @@ STALE_SPOTLIGHT_TOKENS = (
 STALE_SIGNAL_FIELD_TOKENS = (
     "signal-field-v212-balance-20260903",
     "signal-field-v214-evidence-id-20260905",
+    "signal-field-v216-profile-refresh-v1",
 )
 
 SPOTLIGHT = re.compile(
@@ -130,18 +131,33 @@ def derive_spotlight_token(spotlight_dir: Path, ledger_dir: Path) -> str:
 
 def derive_signal_field_token(signal_field_dir: Path) -> str:
     paths = require_exact_files(signal_field_dir, EXPECTED_SIGNAL_FIELD_FILES, "signal-field-*.svg")
-    attrs = [attrs_of_svg(path) for path in paths]
+    attrs_by_name = {path.name: attrs_of_svg(path) for path in paths}
+    attrs = list(attrs_by_name.values())
     identity = one_value((item.get("data-evidence-identity", "") for item in attrs), "Signal Field evidence identity")
     presentation = one_value((item.get("data-evidence-presentation", "") for item in attrs), "Signal Field presentation")
-    final_version = one_value((item.get("data-issues-label-balance", "") for item in attrs), "Signal Field final presentation version")
+    final_version = one_value((item.get("data-issues-label-balance", "") for item in attrs), "Signal Field v2.16 presentation")
     cadence = one_value((item.get("data-generation-cadence-contract", "") for item in attrs), "Signal Field cadence contract")
     schedule = one_value((item.get("data-generation-schedule", "") for item in attrs), "Signal Field generation schedule")
 
     require(identity == "signal-field-v2.14", f"candidate Signal Field evidence identity changed: {identity}")
     require(presentation == "signal-field-v2.15", f"candidate Signal Field evidence presentation changed: {presentation}")
+    require(final_version == "signal-field-v2.16", f"candidate Signal Field v2.16 presentation changed: {final_version}")
     require(schedule == "30-minutes", f"candidate Signal Field generation schedule changed: {schedule}")
     require(re.fullmatch(r"profile-refresh-v\d+", cadence) is not None, f"unexpected Signal Field cadence contract: {cadence}")
-    return f"{compact_signal_field_version(final_version)}-{cadence}"
+
+    wide_attrs = [item for name, item in attrs_by_name.items() if "-wide-" in name]
+    compact_attrs = [item for name, item in attrs_by_name.items() if "-compact-" in name]
+    require(len(wide_attrs) == 2 and len(compact_attrs) == 2, "Signal Field responsive inventory changed")
+    wide_alignment = one_value(
+        (item.get("data-wide-detail-alignment", "") for item in wide_attrs),
+        "Signal Field desktop alignment",
+    )
+    require(wide_alignment == "signal-field-v2.17", f"candidate desktop Signal Field alignment changed: {wide_alignment}")
+    require(
+        all("data-wide-detail-alignment" not in item for item in compact_attrs),
+        "desktop-only Signal Field alignment provenance leaked into compact artifacts",
+    )
+    return f"{compact_signal_field_version(wide_alignment)}-wide-alignment-{cadence}"
 
 
 def readme_tokens() -> tuple[list[str], list[str], str]:
@@ -194,7 +210,7 @@ def self_test() -> None:
         "Spotlight cache-token derivation changed",
     )
     require(
-        f"{compact_signal_field_version('signal-field-v2.16')}-profile-refresh-v1" == SIGNAL_FIELD_TOKEN,
+        f"{compact_signal_field_version('signal-field-v2.17')}-wide-alignment-profile-refresh-v1" == SIGNAL_FIELD_TOKEN,
         "Signal Field cache-token derivation changed",
     )
 
