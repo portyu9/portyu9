@@ -39,11 +39,10 @@ def select_systems(day: dt.date) -> list[dict[str, Any]]:
 
 
 def main() -> int:
-    # The v2 renderer and evidence collector read these module globals at runtime.
-    # Patch only the selection/version seam; evidence semantics and visual geometry
-    # remain owned by the reviewed v2 engine.
+    # Keep the reviewed v2 ten-repository pool intact so its base invariant remains
+    # fail-closed. Override only the deterministic selection seam; v2.1 samples its
+    # three visible cards from ELIGIBLE_POOL, which excludes the four permanent cards.
     base.VERSION = VERSION
-    base.POOL = ELIGIBLE_POOL
     base.select_systems = select_systems
     return base.main()
 
