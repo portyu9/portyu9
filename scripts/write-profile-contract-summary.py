@@ -7,6 +7,7 @@ additional workflow authority. Existing validators remain the enforcement bounda
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,7 +19,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
-SCHEMA = ROOT / ".github" / "attestation" / "profile-evidence-v1.schema.json"
+SCHEMA = ROOT / ".github" / "attestation" / "profile-evidence-v2.schema.json"
 AUTHORITY = ROOT / "scripts" / "validate-workflow-authority-contract.py"
 BUILDER = ROOT / "scripts" / "build-profile-evidence-attestation.py"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
@@ -97,13 +98,16 @@ def privileged_authority() -> list[tuple[str, str, str]]:
 
 
 def attestation_contract() -> dict[str, Any]:
-    schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    schema_bytes = SCHEMA.read_bytes()
+    schema = json.loads(schema_bytes.decode("utf-8"))
     namespace = runpy.run_path(str(BUILDER))
     published_paths = namespace.get("PUBLISHED_PATHS")
     require(isinstance(published_paths, tuple), "attestation published-path inventory is unavailable")
+    digest = f"sha256:{hashlib.sha256(schema_bytes).hexdigest()}"
     return {
         "predicate_type": schema.get("$id"),
         "schema_version": schema.get("properties", {}).get("schemaVersion", {}).get("const"),
+        "schema_digest": digest,
         "subject_count": len(published_paths),
     }
 
@@ -167,7 +171,7 @@ def render_summary(env: dict[str, str], signal_dir: Path, spotlight_dir: Path, l
         "",
         f"- **Source head:** `{head}`",
         "- **Profile Quality authority:** `contents: read` only in both required jobs",
-        f"- **Attestation predicate:** `{attestation['predicate_type']}` · schema v{attestation['schema_version']} · {attestation['subject_count']} subjects",
+        f"- **Attestation predicate:** `{attestation['predicate_type']}` · schema v{attestation['schema_version']} · `{attestation['schema_digest']}` · {attestation['subject_count']} subjects",
         "",
         "## Validated evidence snapshot",
         "",
@@ -243,6 +247,9 @@ def self_test() -> None:
         text = render_summary({"GITHUB_EVENT_PATH": str(event), "GITHUB_SHA": "d" * 40}, signal, spotlight, ledger)
         for phrase in (
             "read-only contract summary",
+            "profile-evidence-v2.schema.json",
+            "schema v2",
+            "sha256:",
             "SF1-0123456789ABCDEF",
             "PL1-0123456789ABCDEF",
             "PASSING",
