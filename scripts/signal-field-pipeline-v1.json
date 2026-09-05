@@ -1,0 +1,159 @@
+{
+  "version": "signal-field-pipeline-v1",
+  "description": "Ordered dependency-free production pipeline for publishable Signal Field SVGs.",
+  "terminal_contract": "signal-field-v2.18+profile-refresh-v1",
+  "stages": [
+    {
+      "id": "customize-v2",
+      "contract": "yunior-portal-neon-v2",
+      "script": "customize-signal-field.py",
+      "kind": "transform",
+      "required_predecessor": null,
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "polish-v2.1",
+      "contract": "signal-field-v2.1",
+      "script": "polish-signal-field-v2.py",
+      "kind": "transform",
+      "required_predecessor": "customize-v2",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "evidence-v2.2",
+      "contract": "signal-field-v2.2",
+      "script": "enhance-signal-field-v2.py",
+      "kind": "transform",
+      "required_predecessor": "polish-v2.1",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "background-v2.3",
+      "contract": "signal-field-v2.3",
+      "script": "background-signal-field-v2.py",
+      "kind": "transform",
+      "required_predecessor": "evidence-v2.2",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "portal-v2.4",
+      "contract": "signal-field-v2.4",
+      "script": "portal-signal-field-v2.py",
+      "kind": "transform",
+      "required_predecessor": "background-v2.3",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "layout-v2.5",
+      "contract": "signal-field-v2.5",
+      "script": "align-signal-field-v2.py",
+      "kind": "transform",
+      "required_predecessor": "portal-v2.4",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "metrics-v2.6",
+      "contract": "signal-field-v2.6",
+      "script": "phosphor-signal-field-v2.py",
+      "kind": "transform",
+      "required_predecessor": "layout-v2.5",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "activity-v2.7",
+      "contract": "signal-field-v2.7",
+      "script": "phosphor-activity-signal-field-v2.py",
+      "kind": "transform",
+      "required_predecessor": "metrics-v2.6",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "lines-v2.8",
+      "contract": "signal-field-v2.8",
+      "script": "phosphor-lines-signal-field-v2.py",
+      "kind": "transform",
+      "required_predecessor": "activity-v2.7",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "profile-total-v2.9",
+      "contract": "signal-field-v2.9",
+      "script": "sync-profile-contribution-total.py",
+      "kind": "transform",
+      "required_predecessor": "lines-v2.8",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "labels-v2.10",
+      "contract": "signal-field-v2.10",
+      "script": "relabel-signal-field-metrics.py",
+      "kind": "transform",
+      "required_predecessor": "profile-total-v2.9",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "glyphs-v2.11",
+      "contract": "signal-field-v2.11",
+      "script": "glyphs-signal-field-metrics.py",
+      "kind": "transform",
+      "required_predecessor": "labels-v2.10",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "balance-v2.12",
+      "contract": "signal-field-v2.12",
+      "script": "balance-signal-field-secondary-metrics.py",
+      "kind": "transform",
+      "required_predecessor": "glyphs-v2.11",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "clarity-v2.13",
+      "contract": "signal-field-v2.13",
+      "script": "clarify-signal-field-evidence-window.py",
+      "kind": "transform",
+      "required_predecessor": "balance-v2.12",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "validate-v2.13",
+      "contract": "signal-field-v2.13",
+      "script": "validate-signal-field-v213.py",
+      "kind": "validate",
+      "required_predecessor": "clarity-v2.13",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "identity-v2.14",
+      "contract": "signal-field-v2.14",
+      "script": "identify-signal-field-evidence.py",
+      "kind": "transform",
+      "required_predecessor": "validate-v2.13",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "validate-v2.14",
+      "contract": "signal-field-v2.14",
+      "script": "validate-signal-field-v214.py",
+      "kind": "validate",
+      "required_predecessor": "identity-v2.14",
+      "responsive_scope": "wide+compact"
+    },
+    {
+      "id": "refresh-and-wide-v2.18",
+      "contract": "profile-refresh-v1+signal-field-v2.18",
+      "script": "set-signal-field-refresh-cadence.py",
+      "kind": "transform",
+      "required_predecessor": "validate-v2.14",
+      "responsive_scope": "wide+compact-with-desktop-finalizer"
+    },
+    {
+      "id": "validate-publishable",
+      "contract": "publishable-signal-field",
+      "script": "validate-generated-signal-field.py",
+      "kind": "validate",
+      "required_predecessor": "refresh-and-wide-v2.18",
+      "responsive_scope": "wide+compact"
+    }
+  ]
+}
