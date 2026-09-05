@@ -1,44 +1,50 @@
 # Security threat model and control inventory
 
-**Checkpoint:** 2026-09-04  
+**Checkpoint:** 2026-09-05  
 **Repository:** `portyu9/portyu9`  
-**Baseline:** `main` after PR #65 (`ce5dcf4e1d884c38236f0ef369e3d89afba11faa`)
+**Baseline:** `main` after PR #83 (`80f08c6103e1da50e655681c57842df06b60f094`)
 
-This document is an assurance checkpoint, not a new runtime control. It records the current trust boundaries, enforced controls, residual risks, and verification points for the profile repository after completion of the planned roadmap and post-roadmap hardening.
+This document records the current trust graph, enforced repository controls, accepted residual risk, and verification points for the profile evidence system. It is an assurance checkpoint, not a new runtime permission grant.
 
 ## Security objective
 
-Protect the integrity and attribution of the public profile and its generated evidence while keeping automation authority narrowly separated.
+Protect the integrity, attribution, and bounded meaning of the public profile and its generated evidence while keeping data collection, signing, and publication authority separate.
 
-The repository is designed so that:
+The architecture is intended to ensure that:
 
-1. unreviewed source changes cannot reach `main` without all required gates;
+1. unreviewed source changes cannot reach `main` without the required merge gates;
 2. third-party generation code cannot write repository content or mint attestations;
-3. generated evidence is validated before transport, after transport, before attestation, and before publication;
-4. the signer cannot publish repository content;
-5. the publisher cannot mint the attestation on which publication depends;
-6. external Actions execute only at reviewed immutable commits whose release labels are independently resolved;
-7. new workflow authority, triggers, jobs, or direct expression-to-shell paths fail closed;
-8. the `generated` branch remains an artifact branch rather than a second source branch.
+3. one Portfolio Evidence Ledger snapshot is the live system-evidence source for a run;
+4. Spotlight cannot silently describe evidence collected at a different moment from its Ledger;
+5. generated evidence is validated before transport, after transport, before attestation, and before publication;
+6. the signer cannot publish repository content;
+7. the publisher cannot mint the attestation on which publication depends;
+8. public generated subjects exactly equal attested subjects;
+9. published predicate schemas cannot be retroactively redefined;
+10. mutable generated profile image URLs carry explicit, reviewed cache identities.
 
 ## Protected assets
 
 | Asset | Security property |
 | --- | --- |
-| `main` source and profile README | reviewed integrity and attributable change history |
+| `main` source and README | reviewed integrity and attributable change history |
 | Workflow definitions | least privilege, immutable dependencies, controlled triggers and shell inputs |
-| Signal Field SVG set | validated evidence semantics, shared deterministic Evidence ID, artifact integrity |
-| Engineering Spotlight SVG set | scoped live evidence, validated safe SVG structure and provenance |
-| Signal Field Evidence ID / full evidence digest | stable correlation between equivalent render variants and signed evidence |
-| Artifact attestation | provenance and repository-defined contract-conformance statement |
-| `generated` branch | artifact-only publication history with no force-push/deletion path |
+| Four Signal Field SVGs | validated evidence semantics and one deterministic Evidence ID/digest |
+| Portfolio Evidence Ledger | one 13-system live evidence snapshot with exact system/run provenance |
+| Six Engineering Spotlight SVGs | deterministic projection of the same validated Ledger snapshot |
+| Signal Field Evidence ID / digest | stable correlation plus full-digest verification identity |
+| Portfolio Ledger Evidence ID / digest | stable snapshot correlation plus full-digest verification identity |
+| Profile evidence attestation | provenance and repository-defined contract-conformance statement |
+| v1/v2 predicate schemas | immutable verification history and explicit current issuance semantics |
+| `generated` branch | exact artifact-only public evidence history |
+| README generated-asset cache tokens | cache identity aligned with current visual/evidence surface contract |
 | GitHub Actions token capabilities | separation of read, signing, and publication authority |
 
 ## Trust boundaries
 
 ### 1. Pull request boundary
 
-All source changes enter `main` through pull requests. `Protect Main` is active, has no bypass actors, blocks branch deletion and non-fast-forward updates, requires the branch to be current, and requires these five exact status contexts:
+Source changes reach `main` through pull requests gated by these five exact status contexts:
 
 - `validate-contracts`
 - `integration-pinned-upstream`
@@ -46,210 +52,165 @@ All source changes enter `main` through pull requests. `Protect Main` is active,
 - `analyze-actions`
 - `analyze-python`
 
-The ruleset currently requires **zero approving reviews**. This is an intentional solo-maintainer operating choice; automated gates are enforced, while human review remains process rather than a GitHub review-count requirement.
+`Protect Main` is expected to block deletion and non-fast-forward updates and require the branch to be current. Review-count, conversation-resolution, and other ruleset details are GitHub control-plane settings and must be inspected separately from source-controlled validators.
 
-Repository auto-merge is disabled. Completed source branches are deleted after merge.
+### 2. Read-only Profile Quality boundary
 
-### 2. PR validation boundary
+`Profile quality / validate-contracts` receives `contents: read` and executes fail-closed source contracts, including profile assets, cache identities, Signal Field, Portfolio Ledger, Ledger-backed Spotlight projection, attestation, dependency provenance, workflow authority, shell safety, CodeQL governance, and repository governance.
 
-`Profile quality / validate-contracts` is read-only and executes the repository's fail-closed contracts, including:
-
-- profile/visual contracts;
-- Signal Field generation and semantic contracts;
-- Engineering Spotlight validation;
-- attestation-boundary validation;
-- capability-evidence validation;
-- Dependabot governance;
-- action release provenance;
-- Dependency Review governance;
-- workflow authority firewall;
-- workflow shell-safety firewall;
-- CodeQL governance;
-- repository meta-governance.
-
-`Profile quality / integration-pinned-upstream` is also read-only. It executes the exact reviewed third-party generator, runs the complete transformation chain, performs an upload/download artifact round trip, fails on artifact digest mismatch, revalidates the downloaded bytes, and exercises the live Engineering Spotlight evidence path.
+`Profile quality / integration-pinned-upstream` is also read-only. It executes the exact reviewed upstream Signal Field generator, applies the production transformation chain, performs an artifact upload/download round trip with digest enforcement, collects one live Portfolio Evidence Ledger, renders Spotlight from that Ledger without a second live evidence collection pass, and emits a read-only `GITHUB_STEP_SUMMARY`.
 
 ### 3. Dependency and Action boundary
 
-Every external `uses:` reference must execute an exact 40-character commit SHA.
+Every external `uses:` reference executes at a reviewed 40-character commit SHA. The same-line semantic release annotation is resolved independently against the upstream repository and must identify the same executable commit.
 
-Profile Quality separately resolves the same-line `# vX.Y.Z` release annotation against the public upstream repository and requires the resolved release commit to equal the executable SHA. Both lightweight and annotated tags are supported.
-
-The current workflow inventory contains eight unique external repository/release identities:
-
-- `actions/attest@v4.2.2`
-- `actions/checkout@v7.0.1`
-- `actions/dependency-review-action@v5.0.0`
-- `actions/download-artifact@v8.0.1`
-- `actions/setup-python@v7.0.0`
-- `actions/upload-artifact@v7.0.1`
-- `github/codeql-action@v4.37.9`
-- `shinpr/github-profile-stats@v0.2.0`
-
-Dependabot discovers GitHub Actions updates weekly and keeps each dependency independently reviewable. Bot-driven auto-merge is intentionally forbidden. A new action SHA is not trusted merely because Dependabot proposed it: reviewed SHA contracts must be deliberately updated and the full gate set must pass.
-
-Dependency graph, Dependabot alerts, and Dependabot security updates were enabled as repository settings during this hardening checkpoint.
+Dependency Review is a required pull-request vulnerability gate. Dependabot discovers GitHub Actions updates but does not authorize them; trust changes remain explicit source changes and must pass the complete gate set.
 
 ### 4. Workflow authority boundary
 
-The GitHub Actions surface is a closed allowlist containing exactly four workflows:
+The GitHub Actions surface is a closed allowlist of exactly four workflows:
 
 - `codeql.yml`
 - `dependency-review.yml`
 - `profile-quality.yml`
 - `profile-stats.yml`
 
-The authority firewall locks each workflow's trigger inventory, job inventory, workflow-level permissions, and job-level permissions.
-
-Read-only is the default. The only reviewed write-capable token exceptions are:
+Read-only is the default. Reviewed write-capable exceptions are limited to:
 
 | Workflow / job | Additional authority | Purpose |
 | --- | --- | --- |
-| CodeQL / analysis | `security-events: write` | publish code-scanning results |
-| Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint and persist artifact attestation |
+| CodeQL analysis | `security-events: write` | publish code-scanning results |
+| Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | create profile-evidence attestation |
 | Profile stats / `publish-write-only` | `contents: write` | fast-forward validated artifacts to `generated` |
 
-No current job combines repository-content write with OIDC/attestation authority.
-
-Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, and comment-driven execution are not currently authorized.
+No job combines repository-content write with OIDC/attestation authority.
 
 ### 5. Shell/data boundary
 
-GitHub expressions are forbidden inside every `run:` shell body.
+GitHub expressions are forbidden inside `run:` shell source. Dynamic values must cross reviewed non-shell fields such as `env:`, `with:`, or `if:`. The shell-safety validator rejects ambiguous YAML forms that obscure the generated command source.
 
-The shell-safety firewall currently scans all workflow shell steps and requires dynamic values to cross non-shell fields such as `env:`, `with:`, or `if:`. YAML aliases, anchors, tags, quoted whole-command scalars, and non-canonical `run:` forms that would obscure the generated shell source are rejected.
+This prevents direct expression-to-shell-source injection but does not replace input validation, quoting, path safety, or safe subprocess use inside authored scripts.
 
-This prevents event-controlled values such as PR titles, branch names, issue bodies, or matrix/context data from becoming shell source through direct `${{ ... }}` interpolation.
+### 6. Generation boundary
 
-Normal shell hygiene still applies after data enters through `env:`: variables should be quoted and authored scripts must validate values according to their own contracts.
+`generate-read-only` executes with `contents: read` only. It has neither `contents: write`, `id-token: write`, nor `attestations: write`.
 
-### 6. Read-only generation boundary
+Its evidence flow is:
 
-`generate-read-only` executes the third-party Signal Field generator with `contents: read` only.
+1. generate/transform/validate four Signal Field variants;
+2. collect and validate one 13-system Portfolio Evidence Ledger;
+3. deterministically select three rotating systems for the Ledger UTC date;
+4. project exact Ledger subject revisions, evidence contracts, and full signal records into six light/dark Spotlight SVGs;
+5. upload three immutable transport sets.
 
-It has neither:
-
-- `contents: write`;
-- `id-token: write`;
-- `attestations: write`.
-
-Candidate Signal Field and Engineering Spotlight artifacts are transformed and validated before upload. The generation job uploads immutable evidence sets but cannot publish them to a repository branch and cannot sign them.
+The Spotlight generator must not independently query GitHub for system evidence when operating in the production path.
 
 ### 7. Artifact transport boundary
 
-Artifact transport uses reviewed SHA-pinned upload/download actions.
+Reviewed SHA-pinned upload/download Actions transport immutable evidence between jobs. Digest mismatch fails closed at the PR round trip, attestation boundary, and publication boundary where configured.
 
-Downloads at the PR round-trip, attestation boundary, and publication boundary use `digest-mismatch: error` where applicable. Downloaded Signal Field bytes are revalidated rather than trusted solely because an artifact transfer succeeded.
-
-The artifact mechanism is a transport boundary, not an authorization boundary: downstream jobs still independently validate the artifact content they consume.
+Transport success is not treated as authorization or semantic validity. Downstream jobs revalidate the content they consume.
 
 ### 8. Attestation boundary
 
-`attest-validated-evidence` runs as a separate job with a fresh job token and no repository-content write permission.
+`attest-validated-evidence` receives `contents: read`, `id-token: write`, and `attestations: write`, but not repository-content write permission.
 
-It downloads the immutable evidence, fails closed on digest mismatch, revalidates Signal Field and Engineering Spotlight contracts, builds the repository-defined predicate, and only then executes the pinned `actions/attest` identity.
+It downloads the three immutable evidence sets, fails closed on digest mismatch, revalidates Signal Field, Portfolio Ledger, and the exact Ledger-backed Spotlight projection, builds the profile predicate, and only then invokes the pinned attestation Action.
 
-The attestation binds the generated evidence and Signal Field Evidence ID/digest to the recorded source revision and repository-defined conformance claim.
+The public/attested subject set is exactly 11 files:
 
-The attestation does **not** certify every software behavior represented by the profile and does not replace underlying CI/security evidence.
+- four Signal Field SVGs;
+- six Spotlight SVGs;
+- one Portfolio Evidence Ledger JSON document.
 
-### 9. Publication boundary
+`spotlight-manifest.json` is internal validation metadata. It must not be published or attested.
 
-`publish-write-only` depends on both generation and attestation.
+### 9. Predicate-schema boundary
 
-It receives `contents: write` but receives neither OIDC nor attestation authority. It downloads and revalidates the immutable artifact set again, stages only generated artifact trees, and pushes a normal fast-forward commit to `generated`.
+`.github/attestation/profile-evidence-v1.schema.json` is a frozen historical verification contract. Byte changes to v1 fail closed.
 
-The publisher therefore cannot create the attestation whose successful completion gates publication.
+New production attestations use `profile-evidence-v2.schema.json`. The v2 predicate carries `predicateSchema.id` plus a full SHA-256 digest of the exact schema bytes used by the builder. Future semantic changes require a new schema filename/version rather than mutation of v1 or v2.
 
-### 10. Generated branch boundary
+### 10. Publication boundary
 
-`Protect generated` is active for `refs/heads/generated` and blocks:
+`publish-write-only` depends on generation and attestation. It receives `contents: write`, but no OIDC or attestation authority.
 
-- branch deletion;
-- non-fast-forward updates.
+It downloads the same immutable evidence, revalidates the evidence and Ledger-backed Spotlight binding again, stages exactly the 11 public subjects, proves the Spotlight manifest is absent from publication, and pushes a normal fast-forward commit to `generated`.
 
-It intentionally does not require pull requests, because the reviewed publisher performs normal fast-forward artifact publication.
+### 11. Generated branch boundary
 
-At this checkpoint the repository branch inventory is only:
+`generated` is an artifact branch, not a second source branch. Its public tree is restricted to:
 
-- `main`;
-- `generated`.
+- `profile-stats/profile/` — four Signal Field SVGs;
+- `engineering-spotlight/` — six Spotlight SVGs;
+- `portfolio-evidence/portfolio-evidence-ledger.json` — one Ledger JSON file.
+
+`Protect generated` should block deletion and non-fast-forward updates while permitting the reviewed publisher's normal fast-forward commits.
+
+### 12. Profile image cache boundary
+
+The README references mutable `generated`-branch images through explicit family cache identities. Six Spotlight URLs must share one current Spotlight token and four Signal Field URLs must share one current Signal Field token.
+
+The cache contract is presentation/version hygiene; it does not replace evidence provenance or attestation. Missing, stale, or inconsistent tokens fail Profile Quality.
 
 ## Detection and prevention matrix
 
 | Threat / failure mode | Primary control | Secondary control | Residual |
 | --- | --- | --- | --- |
-| Unvalidated source merged to `main` | strict five-check `Protect Main` ruleset | no bypass actors | automated checks can still have defects |
-| Known vulnerable dependency introduced in a PR | required Dependency Review | Dependabot alerts/security updates | unknown/novel vulnerabilities remain possible |
-| Stale GitHub Action dependency | weekly Dependabot | manual review + exact SHA contracts | update discovery depends on GitHub/Dependabot availability |
-| Floating or silently changed Action reference | exact SHA pin validator | release tag → SHA provenance check | pinned code may itself be malicious or flawed |
-| Upstream release tag moved/deleted | live release provenance check | immutable executable SHA remains unchanged | can cause fail-closed CI availability loss |
-| New workflow silently receives write authority | closed workflow authority allowlist | CodeQL Actions analysis | validator defects remain possible |
-| Dangerous trigger added | trigger allowlist | CodeQL Actions analysis | deliberate governance changes still require sound review |
-| Event text injected into shell source | workflow shell-safety firewall | CodeQL Actions analysis | authored scripts must still validate/quote data |
-| Third-party generator writes repository content | generation job has `contents: read` only | separate publisher job | generator can still produce malicious candidate output |
+| Unvalidated source merged to `main` | five required status checks + `Protect Main` | no source-side bypass path | validator/control-plane defects remain possible |
+| Known vulnerable dependency introduced | Dependency Review | Dependabot discovery | unknown/novel vulnerabilities remain possible |
+| Floating or mislabeled external Action | exact SHA pin | live release-label → SHA provenance | pinned upstream code may itself be flawed |
+| New workflow receives unreviewed authority | closed workflow authority allowlist | CodeQL Actions analysis | validator defects remain possible |
+| Event data becomes shell source | shell-safety firewall | CodeQL Actions analysis | authored scripts still require safe data handling |
+| Third-party generator writes repository content | generation is `contents: read` only | separate publication job | malicious candidate output still relies on validators |
 | Third-party generator signs its own output | no OIDC/attestation authority in generation | fresh attestation job revalidates | validator correctness is part of TCB |
-| Artifact corrupted in transport | digest mismatch fails closed | downstream semantic revalidation | GitHub artifact service is part of TCB |
-| Signer publishes arbitrary repository content | signer lacks `contents: write` | publisher is separate job | GitHub platform compromise is out of scope |
-| Publisher forges attestation | publisher lacks OIDC/attestation authority | publication depends on attestation job | platform-level credential compromise is out of scope |
-| Force-push/delete generated evidence history | `Protect generated` | artifact-only staging contract | normal authorized fast-forward publisher remains powerful |
-| Static vulnerability in Python/workflows | CodeQL `security-extended` for Python + Actions | repository-specific validators | CodeQL is not exhaustive |
-| Evidence variants diverge semantically | deterministic Signal Field Evidence ID/full digest | v2.14/final artifact validators | upstream API correctness is trusted input |
-| Evidence claim overstates assurance | explicit predicate/attestation claim boundary | governance documentation | human interpretation risk remains |
+| Ledger and Spotlight describe different live moments | one live Portfolio Ledger collection | exact projection equality validation | GitHub data semantics at collection time are trusted input |
+| Selected Spotlight data diverges from Ledger | full subject/contract/signal equality checks | revalidation at attestation/publication | renderer/validator implementation defects remain possible |
+| Artifact corrupted in transport | digest mismatch fails closed | downstream semantic validation | GitHub artifact service is part of TCB |
+| Public files differ from attested files | exact 11-subject staging/attestation closure | manifest exclusion + file-count checks | authored path-contract defects remain possible |
+| Historical predicate semantics silently change | frozen v1 bytes + versioned v2 | `predicateSchema.digest` | verifier must choose the intended schema version |
+| Signer publishes arbitrary content | signer lacks `contents: write` | separate publisher | platform compromise is out of scope |
+| Publisher forges attestation | publisher lacks OIDC/attestation authority | publication depends on signer | platform credential compromise is out of scope |
+| Force-push/delete generated history | `Protect generated` | artifact-only staging | authorized fast-forward publisher remains powerful |
+| Stale profile imagery after renderer changes | explicit family cache tokens | cache-contract validator | intermediary cache refresh timing is not fully controllable |
+| Evidence claim overstates assurance | bounded predicate claim | governance/threat-model documentation | human interpretation risk remains |
 
 ## Trusted computing base
 
-The design intentionally reduces authority but does not eliminate all trust. The following remain part of the trusted computing base or external assumptions:
+The design reduces authority but still trusts:
 
-1. **GitHub platform and hosted runners.** Runner provisioning, job-token isolation, artifact storage, OIDC, attestations, branch rulesets, and GitHub API behavior are trusted platform services.
-2. **Reviewed immutable Action commits.** Pinning prevents later movement but cannot make intentionally malicious code safe. Review, release provenance, least privilege, Dependency Review, and CodeQL reduce—not eliminate—this risk.
-3. **Repository validators.** The fail-closed validators are security-sensitive authored code. CodeQL and adversarial self-tests provide defense in depth, but validator implementation errors remain possible.
-4. **GitHub data semantics.** Profile metrics and evidence depend on GitHub API data being available and semantically correct for the queries performed.
-5. **Solo-maintainer authorization.** `Protect Main` does not require an approving review. Deliberate human authorization of dependency trust changes is a maintained process requirement rather than a separate-person approval guarantee.
+1. **GitHub platform and hosted runners** for job isolation, token issuance, artifact storage, OIDC, attestations, API behavior, and rulesets.
+2. **Reviewed immutable Action commits**. Pinning prevents later movement but does not prove the pinned implementation is safe.
+3. **Repository validators and generators**. They are security-sensitive authored code and can contain defects.
+4. **GitHub evidence semantics** returned by the API at collection time.
+5. **Repository control-plane settings** such as rulesets, which must be inspected separately from source-controlled contracts.
 
 ## Accepted residual risks
 
-The following are accepted at this checkpoint rather than hidden as implied guarantees:
-
-- A zero-day or malicious behavior in a reviewed pinned dependency may not be detected by Dependency Review or CodeQL.
-- An upstream tag deletion/move can intentionally or accidentally create a CI denial of service because release provenance fails closed.
-- A compromised GitHub-hosted runner or GitHub control plane is outside the repository-level threat model.
-- The publication job intentionally holds `contents: write` and can fast-forward `generated`; its safety depends on protected source, job authority isolation, and repeated artifact validation.
-- The attestation proves provenance and repository-defined contract conformance, not universal behavioral correctness.
-- Public GitHub API/network outages can prevent live validation or scheduled evidence refreshes; availability is secondary to fail-closed integrity.
-- Shell safety prevents expression-to-source injection but does not replace ordinary input validation, quoting, path safety, or secure subprocess usage inside Python/shell code.
-- Security settings that live only in GitHub's control plane cannot be guaranteed by repository files alone and should be periodically compared with this document.
+- A zero-day or malicious behavior in a reviewed pinned dependency may evade Dependency Review and CodeQL.
+- An upstream release tag move/deletion can cause fail-closed CI availability loss.
+- A compromised GitHub-hosted runner or control plane is outside repository-level mitigation.
+- `publish-write-only` intentionally holds `contents: write`; safety depends on source protection, authority isolation, attestation dependency, and repeated validation.
+- Attestation proves provenance and repository-defined contract conformance, not universal behavioral correctness.
+- Public GitHub API/network outages can block live evidence refresh; integrity takes priority over availability.
+- Mutable-image cache invalidation cannot force every intermediary to refresh instantly; the repository controls cache identity, not external cache implementation.
+- Settings-level controls can drift without a source diff and therefore require periodic control-plane verification.
 
 ## Verification checklist
 
-Use this checklist after a material workflow/security change:
+After a material workflow, evidence, or governance change:
 
-1. Confirm `main` has only the intended source changes and the PR head is current.
-2. Confirm all five required PR checks succeeded on the exact head.
-3. Confirm `Protect Main` still has no bypass actors and still requires the five named contexts.
-4. Confirm `Protect generated` still blocks deletion and non-fast-forward updates.
-5. Confirm workflow inventory remains exactly the reviewed four workflows.
-6. Confirm all external actions are exact-SHA pinned and release-provenance verification passes.
-7. Confirm workflow authority and shell-safety validators pass.
-8. Confirm PR integration completes artifact upload → download → digest enforcement → revalidation.
-9. For production-path changes, confirm a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only`.
-10. Confirm branch hygiene returns to only `main` and `generated` after merge.
+1. confirm the exact five required PR checks succeeded on the final head;
+2. confirm Action provenance, Dependency Review, authority, shell-safety, cache, and CodeQL validators pass;
+3. confirm one Portfolio Ledger is collected before Spotlight and the Spotlight projection validates against that exact Ledger;
+4. confirm the public and attested subject sets remain the same exact 11 files;
+5. confirm v1 schema bytes remain frozen and current issuance uses v2 with `predicateSchema.digest`;
+6. confirm generation has no write/signing authority, attestation has no repository write, and publication has no signing authority;
+7. confirm a real production `Update profile stats` run succeeds after production-path changes;
+8. confirm `generated` contains only the four Signal Field SVGs, six Spotlight SVGs, and Portfolio Ledger JSON;
+9. confirm generated README images pass the cache-identity contract;
+10. inspect repository rulesets separately from source-controlled validation.
 
 ## Change policy
 
-This threat model should change when the **trust graph** changes—not for routine profile copy, styling, or evidence-refresh changes.
-
-Revisit it when adding or changing any of the following:
-
-- workflow/job inventory or trigger families;
-- token permissions or secrets;
-- external Action repositories;
-- package ecosystems or build systems;
-- attestation predicate/identity model;
-- artifact transport/storage mechanism;
-- generated-branch publication model;
-- branch rulesets or required status checks;
-- new external evidence sources;
-- a new trust boundary, signer, publisher, or deployment destination.
-
-The desired operating posture after this checkpoint is to stop adding security machinery speculatively. New controls should be introduced only for a concrete threat, demonstrated gap, platform change, or new repository capability.
+Update this threat model whenever the **trust graph, evidence graph, publication set, signing semantics, or control-plane assumptions** change. Routine copy or visual changes do not require a threat-model revision unless they alter one of those boundaries.
