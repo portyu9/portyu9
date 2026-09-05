@@ -39,6 +39,8 @@ PUBLISHED_PATHS = (
     "engineering-spotlight/spotlight-1-dark.svg",
     "engineering-spotlight/spotlight-2-light.svg",
     "engineering-spotlight/spotlight-2-dark.svg",
+    "engineering-spotlight/spotlight-3-light.svg",
+    "engineering-spotlight/spotlight-3-dark.svg",
 )
 SIGNAL_FIELD_FILENAMES = tuple(Path(path).name for path in PUBLISHED_PATHS[:4])
 SIGNAL_FIELD_VALIDATORS = (
@@ -162,8 +164,8 @@ def validate_predicate(predicate: dict[str, object]) -> None:
     paths = subject_set.get("publishedPaths")
     if paths != list(PUBLISHED_PATHS):
         raise ValueError("published subject paths changed")
-    if len(set(PUBLISHED_PATHS)) != 8:
-        raise ValueError("published subject paths must be eight unique SVGs")
+    if len(set(PUBLISHED_PATHS)) != 10:
+        raise ValueError("published subject paths must be ten unique SVGs")
 
     evidence = predicate.get("signalFieldEvidence")
     if not isinstance(evidence, dict):
@@ -231,7 +233,7 @@ def self_test() -> None:
             raise AssertionError("workflow run URL changed")
         if reparsed["signalFieldEvidence"]["id"] != "SF1-0123456789ABCDEF":
             raise AssertionError("Signal Field Evidence ID was not recorded")
-    print("Profile evidence attestation predicate self-test passed: v1 + Signal Field Evidence ID")
+    print("Profile evidence attestation predicate self-test passed: v1 + Signal Field Evidence ID + three Spotlight slots")
 
 
 def main() -> int:
