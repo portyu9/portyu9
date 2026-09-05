@@ -13,6 +13,7 @@
     "run",
     "subjectSet",
     "signalFieldEvidence",
+    "portfolioEvidenceLedger",
     "validation",
     "authority",
     "claim"
@@ -64,8 +65,8 @@
         },
         "publishedPaths": {
           "type": "array",
-          "minItems": 10,
-          "maxItems": 10,
+          "minItems": 11,
+          "maxItems": 11,
           "uniqueItems": true,
           "items": {
             "type": "string"
@@ -91,10 +92,31 @@
         }
       }
     },
+    "portfolioEvidenceLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "id", "digest", "systemCount"],
+      "properties": {
+        "version": {
+          "const": "portfolio-evidence-ledger-v1"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^PL1-[0-9A-F]{16}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "systemCount": {
+          "const": 13
+        }
+      }
+    },
     "validation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["signalField", "engineeringSpotlight", "boundary"],
+      "required": ["signalField", "engineeringSpotlight", "portfolioEvidenceLedger", "boundary"],
       "properties": {
         "signalField": {
           "type": "array",
@@ -104,6 +126,13 @@
           }
         },
         "engineeringSpotlight": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "portfolioEvidenceLedger": {
           "type": "array",
           "minItems": 1,
           "items": {
