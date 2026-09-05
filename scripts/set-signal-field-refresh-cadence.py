@@ -5,16 +5,20 @@ Earlier presentation stages predate the Portfolio Ledger and encode the historic
 five-minute schedule. This final, idempotent transform runs after v2.14/v2.15
 presentation finalization and before the publishable-artifact validator. It changes
 only schedule provenance/copy; measured evidence and Evidence ID semantics are not
-modified.
+modified. The normal production entrypoint then applies the desktop-only v2.17 detail
+alignment as the final presentation layer.
 """
 from __future__ import annotations
 
 import argparse
+import importlib.util
 from pathlib import Path
 import re
 import sys
 import tempfile
 
+ROOT = Path(__file__).resolve().parents[1]
+WIDE_ALIGNMENT_PATH = ROOT / "scripts" / "finalize-signal-field-wide-alignment.py"
 VERSION = "profile-refresh-v1"
 GENERATION_SCHEDULE = "30-minutes"
 DESCRIPTION = "every 30 minutes"
@@ -40,6 +44,15 @@ NEW_COMPACT = "GITHUB API · GRAPHQL + REST · SCHEDULE · 30 MIN"
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def load_wide_alignment():
+    spec = importlib.util.spec_from_file_location("signal_field_wide_alignment", WIDE_ALIGNMENT_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("could not load desktop Signal Field alignment finalizer")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def root_attrs(text: str) -> dict[str, str]:
@@ -107,6 +120,11 @@ def apply(directory: Path) -> None:
         print(f"generation cadence finalized {filename}: {GENERATION_SCHEDULE}")
 
 
+def apply_publishable(directory: Path) -> None:
+    apply(directory)
+    load_wide_alignment().apply(directory, False)
+
+
 def self_test() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -123,6 +141,7 @@ def self_test() -> None:
         apply(root)
         second = {path.name: path.read_text(encoding="utf-8") for path in root.iterdir()}
         require(first == second, "cadence finalizer must be idempotent")
+    load_wide_alignment().self_test()
     print("Signal Field refresh-cadence self-test passed: final artifacts encode best-effort 30-minute generation")
 
 
@@ -136,9 +155,9 @@ def main() -> int:
             self_test()
             return 0
         require(args.directory is not None, "usage: set-signal-field-refresh-cadence.py <directory> | --self-test")
-        apply(args.directory)
+        apply_publishable(args.directory)
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
