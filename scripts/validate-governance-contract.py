@@ -6,8 +6,9 @@ integration. This validator therefore protects the executable half of the govern
 contract: named PR checks, explicit runtime, pinned dependencies, release provenance,
 closed workflow authority, shell-safe expression boundaries, least-privilege profile
 evidence generation/identity/attestation/publication, measured refresh cadence,
-fresh-run concurrency, and artifact-only publish behavior. The companion governance
-documents record the settings-level and cadence controls that must mirror these checks.
+generated-surface cache binding, fresh-run concurrency, and artifact-only publish
+behavior. The companion governance documents record the settings-level and cadence
+controls that must mirror these checks.
 """
 from __future__ import annotations
 
@@ -77,6 +78,14 @@ def validate_quality(text: str) -> None:
     require(integration.count("digest-mismatch: error") == 1, "PR artifact round-trip must fail on digest mismatch")
     require("python3 scripts/validate-generated-signal-field.py roundtrip-signal-field" in integration, "PR integration must revalidate downloaded Signal Field bytes")
     require("python3 scripts/set-signal-field-refresh-cadence.py --self-test" in validate, "Profile Quality must self-test the refresh-cadence finalizer")
+    require("python3 scripts/validate-profile-cache-contract.py" in validate, "Profile Quality must validate generated-surface cache identities")
+    require(
+        "name: Bind generated cache identities to live candidate contracts" in integration,
+        "Profile Quality integration must bind mutable cache identities to the live candidate contracts",
+    )
+    require("--signal-field-dir \"$SIGNAL_FIELD_DIR\"" in integration, "Cache binding must consume the live Signal Field candidate")
+    require("--spotlight-dir integration-engineering-spotlight" in integration, "Cache binding must consume the live Spotlight candidate")
+    require("--ledger-dir integration-portfolio-evidence" in integration, "Cache binding must consume the live Portfolio Ledger candidate")
     require("python3 scripts/validate-action-release-provenance.py" in validate, "Profile Quality must execute action release provenance verification")
     require("python3 scripts/validate-dependency-review-contract.py" in validate, "Profile Quality must execute Dependency Review governance validator")
     require("python3 scripts/validate-workflow-authority-contract.py" in validate, "Profile Quality must execute workflow authority firewall")
@@ -216,9 +225,10 @@ def main() -> int:
         print(
             "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
             "Dependency Review governance is mandatory, workflow authority is closed, workflow shell source is expression-safe, "
-            "pinned-upstream integration is mandatory, measured profile generation uses the governed best-effort 30-minute cadence, "
-            "three artifact downloads are integrity-checked, Signal Field and Portfolio Ledger identities are generated/validated before signing, "
-            "third-party generation has neither write nor signing authority, attestation is isolated, and publication revalidates the same identities."
+            "pinned-upstream integration is mandatory, mutable profile cache identities bind to the same live candidate contracts, "
+            "measured profile generation uses the governed best-effort 30-minute cadence, three artifact downloads are integrity-checked, "
+            "Signal Field and Portfolio Ledger identities are generated/validated before signing, third-party generation has neither write "
+            "nor signing authority, attestation is isolated, and publication revalidates the same identities."
         )
         return 0
     except (OSError, ValueError) as exc:
