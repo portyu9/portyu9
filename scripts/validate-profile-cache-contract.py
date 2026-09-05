@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 
 SPOTLIGHT_TOKEN = "engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"
-SIGNAL_FIELD_TOKEN = "signal-field-v217-wide-alignment-profile-refresh-v1"
+SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-alignment-profile-refresh-v1"
 
 STALE_SPOTLIGHT_TOKENS = (
     "engineering-spotlight-v21-three-slots-20260905",
@@ -30,6 +30,7 @@ STALE_SIGNAL_FIELD_TOKENS = (
     "signal-field-v212-balance-20260903",
     "signal-field-v214-evidence-id-20260905",
     "signal-field-v216-profile-refresh-v1",
+    "signal-field-v217-wide-alignment-profile-refresh-v1",
 )
 
 SPOTLIGHT = re.compile(
@@ -152,7 +153,7 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
         (item.get("data-wide-detail-alignment", "") for item in wide_attrs),
         "Signal Field desktop alignment",
     )
-    require(wide_alignment == "signal-field-v2.17", f"candidate desktop Signal Field alignment changed: {wide_alignment}")
+    require(wide_alignment == "signal-field-v2.18", f"candidate desktop Signal Field alignment changed: {wide_alignment}")
     require(
         all("data-wide-detail-alignment" not in item for item in compact_attrs),
         "desktop-only Signal Field alignment provenance leaked into compact artifacts",
@@ -210,7 +211,7 @@ def self_test() -> None:
         "Spotlight cache-token derivation changed",
     )
     require(
-        f"{compact_signal_field_version('signal-field-v2.17')}-wide-alignment-profile-refresh-v1" == SIGNAL_FIELD_TOKEN,
+        f"{compact_signal_field_version('signal-field-v2.18')}-wide-alignment-profile-refresh-v1" == SIGNAL_FIELD_TOKEN,
         "Signal Field cache-token derivation changed",
     )
 
