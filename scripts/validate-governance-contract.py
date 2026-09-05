@@ -5,9 +5,9 @@ GitHub repository rulesets are settings-level controls and are not writable from
 integration. This validator therefore protects the executable half of the governance
 contract: named PR checks, explicit runtime, pinned dependencies, release provenance,
 closed workflow authority, shell-safe expression boundaries, least-privilege profile
-evidence generation/identity/attestation/publication, fresh-run concurrency, and
-artifact-only publish behavior. The companion .github/GOVERNANCE.md records the
-settings-level controls that must mirror these checks in GitHub.
+evidence generation/identity/attestation/publication, measured refresh cadence,
+fresh-run concurrency, and artifact-only publish behavior. The companion governance
+documents record the settings-level and cadence controls that must mirror these checks.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 QUALITY = ROOT / ".github/workflows/profile-quality.yml"
 STATS = ROOT / ".github/workflows/profile-stats.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
+CADENCE = ROOT / ".github/REFRESH_CADENCE.md"
 
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_PYTHON_SHA = "5fda3b95a4ea91299a34e894583c3862153e4b97"
@@ -58,6 +59,7 @@ def validate_quality(text: str) -> None:
     require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "Both Profile Quality jobs must use the reviewed checkout SHA")
     require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2, "Both Profile Quality jobs must use the reviewed setup-python SHA")
     require("cancel-in-progress: true" in text, "Profile Quality must cancel stale runs")
+    require('- ".github/REFRESH_CADENCE.md"' in text, "Profile Quality push paths must cover refresh-cadence governance")
 
     validate = job_block(text, "validate", "integration")
     integration = job_block(text, "integration", None)
@@ -69,10 +71,12 @@ def validate_quality(text: str) -> None:
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in integration, "PR integration must execute reviewed pinned upstream generator")
     require("python3 scripts/identify-signal-field-evidence.py \"$READY_DIR\"" in integration, "PR integration must stamp Signal Field Evidence ID")
     require("python3 scripts/validate-signal-field-v214.py \"$READY_DIR\"" in integration, "PR integration must validate Signal Field Evidence ID")
+    require("python3 scripts/set-signal-field-refresh-cadence.py \"$READY_DIR\"" in integration, "PR integration must finalize measured refresh cadence")
     require("python3 scripts/validate-generated-signal-field.py \"$READY_DIR\"" in integration, "PR integration must validate complete publishable artifact")
     require(integration.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1, "PR integration must exercise the reviewed download-artifact SHA exactly once")
     require(integration.count("digest-mismatch: error") == 1, "PR artifact round-trip must fail on digest mismatch")
     require("python3 scripts/validate-generated-signal-field.py roundtrip-signal-field" in integration, "PR integration must revalidate downloaded Signal Field bytes")
+    require("python3 scripts/set-signal-field-refresh-cadence.py --self-test" in validate, "Profile Quality must self-test the refresh-cadence finalizer")
     require("python3 scripts/validate-action-release-provenance.py" in validate, "Profile Quality must execute action release provenance verification")
     require("python3 scripts/validate-dependency-review-contract.py" in validate, "Profile Quality must execute Dependency Review governance validator")
     require("python3 scripts/validate-workflow-authority-contract.py" in validate, "Profile Quality must execute workflow authority firewall")
@@ -94,7 +98,9 @@ def validate_quality(text: str) -> None:
 
 def validate_stats(text: str) -> None:
     require("name: Update profile stats" in text, "Profile stats workflow name changed")
-    require('cron: "2-57/5 * * * *"' in text, "Five-minute schedule offset contract changed")
+    require('cron: "17,47 * * * *"' in text, "Thirty-minute best-effort schedule contract changed")
+    require('cron: "2-57/5 * * * *"' not in text, "Stale five-minute cron remains in production workflow")
+    require('- "scripts/set-signal-field-refresh-cadence.py"' in text, "Stats push paths must cover refresh-cadence finalizer changes")
     require("cancel-in-progress: true" in text, "Stats workflow must cancel stale runs")
     require('PYTHON_VERSION: "3.13"' in text, "Stats Python version is not explicit")
     require(text.count("runs-on: ubuntu-24.04") == 3, "All three stats jobs must pin ubuntu-24.04")
@@ -112,7 +118,11 @@ def validate_stats(text: str) -> None:
     require("id-token: write" not in generate, "Third-party generation job received signing identity authority")
     require("attestations: write" not in generate, "Third-party generation job received attestation authority")
     require("python3 source/scripts/identify-signal-field-evidence.py \"$READY_DIR\"" in generate, "Production generation must stamp Signal Field Evidence ID")
-    require("python3 source/scripts/validate-signal-field-v214.py \"$READY_DIR\"" in generate, "Production generation must validate Signal Field Evidence ID")
+    identity_validation = generate.find("python3 source/scripts/validate-signal-field-v214.py \"$READY_DIR\"")
+    cadence_finalization = generate.find("python3 source/scripts/set-signal-field-refresh-cadence.py \"$READY_DIR\"")
+    publishable_validation = generate.find("python3 source/scripts/validate-generated-signal-field.py \"$READY_DIR\"")
+    require(min(identity_validation, cadence_finalization, publishable_validation) >= 0, "Production generation cadence chain is incomplete")
+    require(identity_validation < cadence_finalization < publishable_validation, "Refresh cadence must finalize after evidence identity and before publishable validation")
 
     require("needs: generate" in attest, "Attestation job must depend on validated generation")
     require("contents: read" in attest, "Attestation job must retain contents: read")
@@ -176,18 +186,38 @@ def validate_governance_doc(text: str) -> None:
         require(phrase in text, f"Governance documentation is missing: {phrase}")
 
 
+def validate_cadence_doc(text: str) -> None:
+    for phrase in (
+        "profile-refresh-v1",
+        "17,47 * * * *",
+        "2-57/5 * * * *",
+        "best-effort 30-minute generation schedule",
+        "4h32m",
+        "3h40m",
+        "3h28m",
+        "2h47m",
+        'data-generation-schedule="30-minutes"',
+        'data-generation-cadence-contract="profile-refresh-v1"',
+        "Generation cadence and evidence freshness are different claims",
+        "push-triggered",
+        "workflow_dispatch",
+    ):
+        require(phrase in text, f"Refresh-cadence documentation is missing: {phrase}")
+
+
 def main() -> int:
     try:
-        for path in (QUALITY, STATS, GOVERNANCE):
+        for path in (QUALITY, STATS, GOVERNANCE, CADENCE):
             require(path.is_file(), f"governance input is missing: {path.relative_to(ROOT)}")
         validate_quality(QUALITY.read_text(encoding="utf-8"))
         validate_stats(STATS.read_text(encoding="utf-8"))
         validate_governance_doc(GOVERNANCE.read_text(encoding="utf-8"))
+        validate_cadence_doc(CADENCE.read_text(encoding="utf-8"))
         print(
             "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
             "Dependency Review governance is mandatory, workflow authority is closed, workflow shell source is expression-safe, "
-            "pinned-upstream integration is mandatory, its read-only contract summary binds live candidate evidence, three artifact "
-            "downloads are integrity-checked, Signal Field and Portfolio Ledger identities are generated/validated before signing, "
+            "pinned-upstream integration is mandatory, measured profile generation uses the governed best-effort 30-minute cadence, "
+            "three artifact downloads are integrity-checked, Signal Field and Portfolio Ledger identities are generated/validated before signing, "
             "third-party generation has neither write nor signing authority, attestation is isolated, and publication revalidates the same identities."
         )
         return 0
