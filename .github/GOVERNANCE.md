@@ -17,11 +17,13 @@ This repository treats the profile README, reviewed source assets, generated Sig
 
 All five are required on the exact pull-request head. Repository ruleset settings are control-plane state rather than source files; version-controlled validators protect the executable half of the contract, while repository-setting audits verify the control-plane half.
 
-## Dependency and external Action governance
+## Dependency update automation
 
-`.github/dependabot.yml` is limited to reviewed GitHub Actions update discovery. Dependabot pull requests are not auto-merged and must pass the same five merge gates.
+`.github/dependabot.yml` is the canonical GitHub Actions update-discovery policy. Dependabot proposes trust-boundary dependency changes but does not authorize them: Dependabot pull requests are **never auto-merged**, must pass the same five merge gates, and each dependency update remains a **separate pull request** so executable-identity changes stay attributable.
 
-Every external `uses:` reference must execute an exact 40-character commit SHA. A same-line semantic release annotation is also required and is independently resolved by **Action release provenance** validation. The human release label and immutable executable SHA must identify the same upstream release before a merge can proceed.
+Every external `uses:` reference must execute an **exact commit SHA**. The reviewed trust boundary includes `actions/attest`, `actions/checkout`, artifact transport/setup actions, Dependency Review, CodeQL, and `shinpr/github-profile-stats`. Same-line semantic release annotations are independently resolved by **Action release provenance** validation; the release label and immutable executable SHA must identify the same upstream release.
+
+Dependabot alerts and security-update settings are separate GitHub control-plane controls and should remain enabled where supported. GitHub does not provide the same vulnerability-alert semantics for every **SHA-pinned GitHub Actions** reference, so scheduled GitHub Actions update discovery remains an important independent signal rather than a replacement for exact pins or review.
 
 `Dependency review / dependency-review` is the required pre-merge vulnerability gate. It runs read-only, uses no PR-comment or repository-write authority, and blocks reviewed severity/scope violations without becoming a hidden license-policy gate.
 
