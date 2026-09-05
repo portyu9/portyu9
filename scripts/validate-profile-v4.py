@@ -28,9 +28,19 @@ def load_legacy():
 
 legacy = load_legacy()
 
+TAXONOMY_BADGES = legacy.SHIELD_BADGES + (
+    (
+        "Agent Evaluation / TEVV",
+        145,
+        "https://img.shields.io/badge/-Agent%20Evaluation%20%2F%20TEVV-9C4DFF?style=flat-square",
+    ),
+)
+
 FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-ai-qa-control-plane-light.svg",
     "assets/profile-systems/qualification-ai-qa-control-plane-dark.svg",
+    "assets/profile-systems/qualification-agent-evaluation-tevv-light.svg",
+    "assets/profile-systems/qualification-agent-evaluation-tevv-dark.svg",
     "assets/profile-systems/qualification-graphql-qe-light.svg",
     "assets/profile-systems/qualification-graphql-qe-dark.svg",
     "assets/profile-systems/qualification-visual-accessibility-qe-light.svg",
@@ -97,16 +107,16 @@ def validate_taxonomy_scale(readme: str) -> None:
             "Taxonomy evidence-design tagline scale changed")
 
     prefix = '<picture><source media="(min-width: 641px)" srcset="https://img.shields.io/badge/'
-    require(readme.count(prefix) == 16,
-            "Exactly 16 taxonomy badges must use the responsive Shields.io contract")
-    require(readme.count('height="29"><img alt=') == 16,
+    require(readme.count(prefix) == 17,
+            "Exactly 17 taxonomy badges must use the responsive Shields.io contract")
+    require(readme.count('height="29"><img alt=') == 17,
             "Every taxonomy badge must render at 29px on desktop")
-    require(readme.count('height="29"></picture>') == 16,
+    require(readme.count('height="29"></picture>') == 17,
             "Every taxonomy badge must render at 29px on mobile")
     require(readme.count('media="(min-width: 1025px)" srcset="assets/profile-badges/badge-') == 0,
             "Regressed self-hosted wide-desktop badge tier remains")
 
-    for label, base_width, url in legacy.SHIELD_BADGES:
+    for label, base_width, url in TAXONOMY_BADGES:
         desktop_width = round(base_width * 29 / 24)
         # Shields static badges do not expose an independent text-size query;
         # 29px is the reviewed desktop target that yields an effective ~16px label.
@@ -200,12 +210,20 @@ def validate_flagships(readme: str) -> None:
         require('<linearGradient id="edge"' in content and '<linearGradient id="wash"' in content and 'fill="url(#edge)"' in content and 'fill="url(#wash)"' in content, f"Rich gradient visual system regressed: {relative}")
         require(content.count("<circle") >= 4, f"Flagship topology nodes regressed: {relative}")
         require(readme.count(relative)==1, f"System card variant must be referenced exactly once: {relative}")
-    require(readme.count('media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-') == 3, "Each flagship must select an explicit dark SVG in README picture markup")
+    require(readme.count('media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-') == 4, "Each flagship must select an explicit dark SVG in README picture markup")
+    require(readme.count('Four flagship systems · scoped live <code>main</code>-branch evidence') == 1,
+            "Selected Engineering Systems must describe exactly four flagship systems")
+    require('Three flagship systems · scoped live <code>main</code>-branch evidence' not in readme,
+            "Legacy three-flagship subtitle returned")
     for phrase in (
         "Bounded AI reasoning · deterministic policy authority",
         "DETERMINISTIC POLICY",
         "TRACEABLE EVIDENCE",
         "FAIL-CLOSED MUTATIONS",
+        "Evidence-bound agent trials · deterministic evaluation authority",
+        "OUTCOME ORACLES",
+        "AUTHORITY BOUNDARIES",
+        "REPLAY + RELEASE GATES",
         "Schema · execution · authorization contracts",
         "AUTHORIZATION BOUNDARY",
         "Visual evidence · explicit accessibility oracles",
@@ -214,6 +232,7 @@ def validate_flagships(readme: str) -> None:
     ):
         require(any(phrase in (ROOT/path).read_text(encoding="utf-8") for path in FLAGSHIP_SVGS), f"Reviewed flagship language missing: {phrase}")
     require(readme.count('ai-qa-automation/ci.yml?branch=main')==1, "AI flagship must expose exactly one scoped CI badge")
+    require(readme.count('qa-automation-ai-agent-evals/ci.yml?branch=main')==1, "Agent Evaluation / TEVV flagship must expose exactly one scoped CI badge")
     require(readme.count('qa-automation-graphql/ci.yml?branch=main')==1 and readme.count('qa-automation-graphql/security.yml?branch=main')==1, "GraphQL flagship must expose CI + Security")
     require(readme.count('qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main')==1 and readme.count('qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main')==1, "Visual/accessibility flagship must expose CI + Security")
 
@@ -256,9 +275,13 @@ def main() -> int:
     require(readme.count('width="620"') >= 2, "Spotlight cards must retain native-width desktop proportions")
     activity=readme.find('<h2 align="center">◉ Activity Metrics</h2>'); signal=readme.find('alt="GitHub activity signal field"'); systems=readme.find('<h2 align="center">◇ Selected Engineering Systems</h2>'); spotlight=readme.find('<h3 align="center">↻ Evidence Spotlight</h3>'); copyright_notice=readme.find("© 2026 Ƴunior Ƥortal")
     require(activity<signal<systems<spotlight<copyright_notice, "Selected systems and spotlight placement changed")
-    footer='\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
+    footer='\
+---\
+\
+<p align="center">\
+<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
     require(readme.count(footer)==1, "A horizontal rule must exist immediately above the copyright footer")
     require("release-candidate.yml?branch=main" not in readme, "Profile must not present an RC workflow with no current main status")
-    print("Profile v4 validation passed: taxonomy scale and desktop-only thesis typography are locked while mobile thesis assets remain unchanged; established profile contracts, three rich explicit-theme flagship systems, and two generated daily Evidence Spotlights remain attributable, scoped, responsive, and fail-closed by validation.")
+    print("Profile v4 validation passed: 17 evidence-linked taxonomy capabilities, desktop-only thesis typography, four rich explicit-theme flagship systems, and two generated daily Evidence Spotlights remain attributable, scoped, responsive, and fail-closed by validation.")
     return 0
 if __name__ == "__main__": raise SystemExit(main())
