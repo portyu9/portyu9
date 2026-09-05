@@ -48,53 +48,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Validate Signal Field customization contract
-        run: python3 scripts/customize-signal-field.py --self-test
-
-      - name: Validate Signal Field v2.1 polish contract
-        run: python3 scripts/polish-signal-field-v2.py --self-test
-
-      - name: Validate Signal Field v2.2 evidence contract
-        run: python3 scripts/enhance-signal-field-v2.py --self-test
-
-      - name: Validate Signal Field v2.3 background contract
-        run: python3 scripts/background-signal-field-v2.py --self-test
-
-      - name: Validate Signal Field v2.4 portal contract
-        run: python3 scripts/portal-signal-field-v2.py --self-test
-
-      - name: Validate Signal Field v2.5 layout alignment
-        run: python3 scripts/align-signal-field-v2.py --self-test
-
-      - name: Validate Signal Field v2.6 phosphorescent metrics
-        run: python3 scripts/phosphor-signal-field-v2.py --self-test
-
-      - name: Validate Signal Field v2.7 phosphorescent activity telemetry
-        run: python3 scripts/phosphor-activity-signal-field-v2.py --self-test
-
-      - name: Validate Signal Field v2.8 phosphorescent metric lines
-        run: python3 scripts/phosphor-lines-signal-field-v2.py --self-test
-
-      - name: Validate Signal Field v2.9 profile evidence semantics
-        run: python3 scripts/sync-profile-contribution-total.py --self-test
-
-      - name: Validate Signal Field v2.10 metric labels
-        run: python3 scripts/relabel-signal-field-metrics.py --self-test
-
-      - name: Validate Signal Field v2.11 metric glyphs
-        run: python3 scripts/glyphs-signal-field-metrics.py --self-test
-
-      - name: Validate Signal Field v2.12 secondary metric balance
-        run: python3 scripts/balance-signal-field-secondary-metrics.py --self-test
-
-      - name: Validate Signal Field v2.13 evidence-window clarity
-        run: python3 scripts/clarify-signal-field-evidence-window.py --self-test
-
-      - name: Validate Signal Field v2.14 Evidence ID
-        run: python3 scripts/validate-signal-field-v214.py --self-test
-
-      - name: Validate Signal Field refresh cadence contract
-        run: python3 scripts/set-signal-field-refresh-cadence.py --self-test
+      - name: Validate Signal Field pipeline contract
+        run: python3 scripts/signal_field_pipeline.py --self-test
 
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile-v4.py
@@ -184,25 +139,7 @@ jobs:
           GITHUB_USERNAME: portyu9
         run: |
           set -euo pipefail
-          python3 scripts/customize-signal-field.py "$READY_DIR"
-          python3 scripts/polish-signal-field-v2.py "$READY_DIR"
-          python3 scripts/enhance-signal-field-v2.py "$READY_DIR"
-          python3 scripts/background-signal-field-v2.py "$READY_DIR"
-          python3 scripts/portal-signal-field-v2.py "$READY_DIR"
-          python3 scripts/align-signal-field-v2.py "$READY_DIR"
-          python3 scripts/phosphor-signal-field-v2.py "$READY_DIR"
-          python3 scripts/phosphor-activity-signal-field-v2.py "$READY_DIR"
-          python3 scripts/phosphor-lines-signal-field-v2.py "$READY_DIR"
-          python3 scripts/sync-profile-contribution-total.py "$READY_DIR"
-          python3 scripts/relabel-signal-field-metrics.py "$READY_DIR"
-          python3 scripts/glyphs-signal-field-metrics.py "$READY_DIR"
-          python3 scripts/balance-signal-field-secondary-metrics.py "$READY_DIR"
-          python3 scripts/clarify-signal-field-evidence-window.py "$READY_DIR"
-          python3 scripts/validate-signal-field-v213.py "$READY_DIR"
-          python3 scripts/identify-signal-field-evidence.py "$READY_DIR"
-          python3 scripts/validate-signal-field-v214.py "$READY_DIR"
-          python3 scripts/set-signal-field-refresh-cadence.py "$READY_DIR"
-          python3 scripts/validate-generated-signal-field.py "$READY_DIR"
+          python3 scripts/signal_field_pipeline.py "$READY_DIR"
 
       - name: Upload Signal Field review artifacts
         if: github.event_name == 'pull_request'
