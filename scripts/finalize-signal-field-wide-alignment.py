@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Finalize desktop-only Signal Field detail alignment without changing evidence semantics.
+"""Finalize desktop Signal Field metric alignment without changing evidence semantics.
 
-This v2.17 presentation pass applies only to the 640x425 wide variants. It keeps the
-reviewed Pull Requests geometry byte-for-byte unchanged, preserves the v2.14 Evidence
-ID element geometry for historical validators, and adds presentation-only transforms:
+v2.18 keeps the v2.17 EID clearance, preserves Pull Requests byte-for-byte, and fixes
+the remaining Stars geometry by mirroring the already-reviewed Pull Requests layout:
 
-- move the visible EID label 8 SVG units upward so it clears the y=390 footer rule;
-- apply a 1.5-unit optical downward correction to the star glyph only;
-- lock the Stars value and STARS label to x=284, exactly the start of the Stars rule.
+- the Stars rule still starts at x=284;
+- the star glyph is optically anchored to the rule start (same +6.25 center offset as
+  the Pull Requests glyph uses from its own rule start);
+- the Stars value and label are centered at x=327 to the right of that glyph;
+- the visible EID remains 8 SVG units above its v2.14 base geometry.
 
 Compact/mobile variants are validation-only and must remain untouched.
 """
@@ -18,7 +19,7 @@ from pathlib import Path
 import re
 import sys
 
-VERSION = "signal-field-v2.17"
+VERSION = "signal-field-v2.18"
 ROOT_ATTR = "data-wide-detail-alignment"
 WIDE_FILES = ("signal-field-wide-light.svg", "signal-field-wide-dark.svg")
 COMPACT_FILES = ("signal-field-compact-light.svg", "signal-field-compact-dark.svg")
@@ -40,9 +41,14 @@ PULL_LABEL = re.compile(r'<text\b[^>]*>PULL REQUESTS</text>', re.I)
 PULL_LINE = re.compile(r'<path\b(?=[^>]*data-metric-phosphor-line="pull_requests")[^>]*>', re.I)
 PULL_GLYPH = re.compile(r'<g\b(?=[^>]*data-metric-glyph="pull_requests")[^>]*>', re.I)
 
-STAR_X = "284"
 STAR_LINE_D = "M284 73h86"
-STAR_WRAPPER = '<g data-wide-star-optical-alignment="true" transform="translate(0 1.5)">{glyph}</g>'
+STAR_VALUE_X = "327"
+STAR_LABEL_X = "327"
+STAR_WRAPPER_TRANSFORM = "translate(20 1.5)"
+STAR_WRAPPER = (
+    '<g data-wide-star-optical-alignment="true" '
+    f'transform="{STAR_WRAPPER_TRANSFORM}">{{glyph}}</g>'
+)
 EID_TRANSFORM = "translate(0 -8)"
 
 
@@ -84,28 +90,39 @@ def validate_wide(text: str, name: str) -> None:
     root = one(SVG_OPEN, text, "SVG root")
     root_attrs = attrs_of(root.group(0))
     require(root_attrs.get("viewBox") == "0 0 640 425", f"{name}: wide viewBox changed")
-    require(root_attrs.get("data-issues-label-balance") == "signal-field-v2.16", f"{name}: v2.16 must precede v2.17")
-    require(root_attrs.get("data-generation-cadence-contract") == "profile-refresh-v1", f"{name}: cadence finalizer must precede v2.17")
-    require(root_attrs.get(ROOT_ATTR) == VERSION, f"{name}: v2.17 provenance missing")
+    require(root_attrs.get("data-issues-label-balance") == "signal-field-v2.16", f"{name}: v2.16 must precede v2.18")
+    require(root_attrs.get("data-generation-cadence-contract") == "profile-refresh-v1", f"{name}: cadence finalizer must precede v2.18")
+    require(root_attrs.get(ROOT_ATTR) == VERSION, f"{name}: v2.18 provenance missing")
 
     line = attrs_of(one(STAR_LINE, text, "Stars rule").group("tag"))
     require(line.get("d") == STAR_LINE_D, f"{name}: Stars rule start changed")
 
     value = attrs_of(one(STAR_VALUE, text, "Stars value").group("tag"))
     label = attrs_of(one(STAR_LABEL, text, "STARS label").group("tag"))
-    require(value.get("x") == STAR_X and value.get("text-anchor", "start") == "start", f"{name}: Stars value must start at x={STAR_X}")
-    require(label.get("x") == STAR_X and label.get("text-anchor", "start") == "start", f"{name}: STARS label must start at x={STAR_X}")
+    require(
+        value.get("x") == STAR_VALUE_X and value.get("text-anchor") == "middle",
+        f"{name}: Stars value must be centered at x={STAR_VALUE_X}",
+    )
+    require(
+        label.get("x") == STAR_LABEL_X and label.get("text-anchor") == "middle",
+        f"{name}: STARS label must be centered at x={STAR_LABEL_X}",
+    )
 
     glyph = one(STAR_GLYPH, text, "Stars glyph")
-    prefix = text[max(0, glyph.start() - 110):glyph.start()]
-    require('data-wide-star-optical-alignment="true"' in prefix, f"{name}: Stars optical-alignment wrapper missing")
-    require('transform="translate(0 1.5)"' in prefix, f"{name}: Stars optical correction changed")
+    prefix = text[max(0, glyph.start() - 130):glyph.start()]
+    require('data-wide-star-optical-alignment="true"' in prefix, f"{name}: Stars alignment wrapper missing")
+    require(f'transform="{STAR_WRAPPER_TRANSFORM}"' in prefix, f"{name}: Stars horizontal/vertical alignment changed")
+    inner = attrs_of(glyph.group("glyph").split(">", 1)[0] + ">")
+    require(
+        inner.get("transform") == "translate(270.25 98.90) scale(1.4583)",
+        f"{name}: reviewed inner Stars glyph geometry changed",
+    )
 
     eid = one(EID, text, "visible Evidence ID")
     eid_attrs = attrs_of(eid.group("tag"))
     require(eid_attrs.get("x") == "320" and eid_attrs.get("y") == "391", f"{name}: base EID geometry must stay compatible with v2.14")
     require(eid_attrs.get("text-anchor") == "middle", f"{name}: EID anchor changed")
-    require(eid_attrs.get("transform") == EID_TRANSFORM, f"{name}: EID must render 8 units above its base position")
+    require(eid_attrs.get("transform") == EID_TRANSFORM, f"{name}: EID must remain 8 units above its base position")
     require(eid_attrs.get("data-wide-eid-clearance") == "true", f"{name}: EID clearance provenance missing")
 
 
@@ -127,8 +144,8 @@ def transform_wide(text: str, name: str) -> str:
         return text
     require(ROOT_ATTR not in root_attrs, f"{name}: unexpected pre-existing desktop alignment provenance")
     require(root_attrs.get("viewBox") == "0 0 640 425", f"{name}: expected wide Signal Field")
-    require(root_attrs.get("data-issues-label-balance") == "signal-field-v2.16", f"{name}: v2.16 must precede v2.17")
-    require(root_attrs.get("data-generation-cadence-contract") == "profile-refresh-v1", f"{name}: cadence finalizer must precede v2.17")
+    require(root_attrs.get("data-issues-label-balance") == "signal-field-v2.16", f"{name}: v2.16 must precede v2.18")
+    require(root_attrs.get("data-generation-cadence-contract") == "profile-refresh-v1", f"{name}: cadence finalizer must precede v2.18")
 
     before_pull = pull_signature(text)
 
@@ -136,17 +153,27 @@ def transform_wide(text: str, name: str) -> str:
     text = text[:root.start()] + root_tag + text[root.end():]
 
     glyph = one(STAR_GLYPH, text, "Stars glyph")
-    prefix = text[max(0, glyph.start() - 110):glyph.start()]
-    require('data-wide-star-optical-alignment="true"' not in prefix, f"{name}: Stars glyph is already wrapped without v2.17 provenance")
+    prefix = text[max(0, glyph.start() - 130):glyph.start()]
+    require('data-wide-star-optical-alignment="true"' not in prefix, f"{name}: Stars glyph is already wrapped without v2.18 provenance")
     wrapped = STAR_WRAPPER.format(glyph=glyph.group("glyph"))
     text = text[:glyph.start()] + wrapped + text[glyph.end():]
+
+    value = one(STAR_VALUE, text, "Stars value")
+    value_tag = set_attr(value.group("tag"), "x", STAR_VALUE_X)
+    value_tag = set_attr(value_tag, "text-anchor", "middle")
+    text = text[:value.start("tag")] + value_tag + text[value.end("tag"):]
+
+    label = one(STAR_LABEL, text, "STARS label")
+    label_tag = set_attr(label.group("tag"), "x", STAR_LABEL_X)
+    label_tag = set_attr(label_tag, "text-anchor", "middle")
+    text = text[:label.start("tag")] + label_tag + text[label.end("tag"):]
 
     eid = one(EID, text, "visible Evidence ID")
     eid_tag = set_attr(eid.group("tag"), "transform", EID_TRANSFORM)
     eid_tag = set_attr(eid_tag, "data-wide-eid-clearance", "true")
     text = text[:eid.start("tag")] + eid_tag + text[eid.end("tag"):]
 
-    require(pull_signature(text) == before_pull, f"{name}: Pull Requests geometry changed; v2.17 must not touch it")
+    require(pull_signature(text) == before_pull, f"{name}: Pull Requests geometry changed; v2.18 must not touch it")
     validate_wide(text, name)
     return text
 
@@ -159,13 +186,14 @@ def self_test() -> None:
         '<text x="284" y="108" data-metric-phosphor="stars">14</text><text x="284" y="132">STARS</text>'
         '<path d="M404 73h86" data-metric-phosphor-line="pull_requests"/>'
         '<g data-metric-glyph="pull_requests" transform="translate(410.24 98.90) scale(1.4583)"></g>'
-        '<text x="447" y="108" text-anchor="middle" data-metric-phosphor="pull_requests">553</text><text x="447" y="132" text-anchor="middle">PULL REQUESTS</text>'
+        '<text x="447" y="108" text-anchor="middle" data-metric-phosphor="pull_requests">558</text><text x="447" y="132" text-anchor="middle">PULL REQUESTS</text>'
         '<text x="320" y="391" text-anchor="middle" data-signal-field-evidence-id="true">EID · SF1-0123456789ABCDEF</text></svg>'
     )
     transformed = transform_wide(wide, "fixture-wide.svg")
-    require(transform_wide(transformed, "fixture-wide.svg") == transformed, "v2.17 wide transform must be idempotent")
+    require(transform_wide(transformed, "fixture-wide.svg") == transformed, "v2.18 wide transform must be idempotent")
+    require(f'transform="{STAR_WRAPPER_TRANSFORM}"' in transformed, "self-test Stars rule-start alignment missing")
+    require(f'x="{STAR_VALUE_X}"' in transformed and 'text-anchor="middle"' in transformed, "self-test Stars value alignment missing")
     require('transform="translate(0 -8)"' in transformed, "self-test EID shift missing")
-    require('transform="translate(0 1.5)"' in transformed, "self-test Stars optical shift missing")
 
     compact = (
         '<svg viewBox="0 0 320 500"><text x="160" y="463" text-anchor="middle" '
@@ -196,7 +224,7 @@ def apply(directory: Path, check_only: bool) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("directory", nargs="?", type=Path)
-    parser.add_argument("--check", action="store_true", help="validate v2.17 without mutating candidate bytes")
+    parser.add_argument("--check", action="store_true", help="validate v2.18 without mutating candidate bytes")
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
 

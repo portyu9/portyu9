@@ -5,7 +5,7 @@ Earlier presentation stages predate the Portfolio Ledger and encode the historic
 five-minute schedule. This final, idempotent transform runs after v2.14/v2.15
 presentation finalization and before the publishable-artifact validator. It changes
 only schedule provenance/copy; measured evidence and Evidence ID semantics are not
-modified. The normal production entrypoint then applies the desktop-only v2.17 detail
+modified. The normal production entrypoint then applies the desktop-only v2.18 detail
 alignment as the final presentation layer.
 """
 from __future__ import annotations
