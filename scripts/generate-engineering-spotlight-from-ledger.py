@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Render Engineering Evidence Spotlight v2.1 from one Portfolio Evidence Ledger.
+"""Render Engineering Evidence Spotlight v2.1 from Portfolio Evidence Ledger v2.
 
-The Portfolio Evidence Ledger is the single live evidence collection surface. This
-renderer performs no GitHub API calls: it deterministically selects the three rotating
-systems for the ledger's UTC date and projects the exact ledger subject revision,
-evidence contract, and signals into the reviewed Spotlight SVG/manifest presentation.
+The Portfolio Evidence Ledger remains the single live evidence collection surface.
+This renderer performs no GitHub API calls. It deterministically selects the three
+rotating systems for the ledger UTC date and projects the exact ledger subject,
+contract, execution result, subject binding, freshness, and run provenance.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import hashlib
+import html
 import json
 from pathlib import Path
 import re
@@ -20,11 +21,13 @@ from typing import Any
 import engineering_spotlight_v2 as base
 import engineering_spotlight_v21 as v21
 
-LEDGER_VERSION = "portfolio-evidence-ledger-v1"
+LEDGER_VERSION = "portfolio-evidence-ledger-v2"
 LEDGER_KIND = "portfolio-evidence-ledger"
 EVIDENCE_SOURCE = LEDGER_VERSION
+EVIDENCE_MODEL = "per-system-evidence-contract-v3"
+EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
-LEDGER_ID = re.compile(r"^PL1-[0-9A-F]{16}$")
+LEDGER_ID = re.compile(r"^PL2-[0-9A-F]{16}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -36,7 +39,7 @@ def require(condition: bool, message: str) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("output_dir", type=Path)
-    parser.add_argument("--ledger", type=Path, required=True, help="Validated Portfolio Evidence Ledger JSON")
+    parser.add_argument("--ledger", type=Path, required=True, help="Validated Portfolio Evidence Ledger v2 JSON")
     parser.add_argument("--date", help="Optional UTC date; must equal the ledger as_of_date_utc")
     return parser.parse_args()
 
@@ -65,6 +68,8 @@ def load_ledger(path: Path) -> dict[str, Any]:
     require(ledger.get("kind") == LEDGER_KIND, "Portfolio Evidence Ledger kind changed")
     require(ledger.get("owner") == base.OWNER, "Portfolio Evidence Ledger owner changed")
     require(ledger.get("system_count") == 13, "Portfolio Evidence Ledger must contain 13 systems")
+    require(ledger.get("evidence_semantics") == EVIDENCE_SEMANTICS, "Portfolio evidence semantics changed")
+    require("signal_summary" not in ledger, "Ledger v2 must not contain the legacy conflated signal summary")
     evidence_id = ledger.get("evidence_id")
     evidence_digest = ledger.get("evidence_digest")
     require(isinstance(evidence_id, str) and LEDGER_ID.fullmatch(evidence_id) is not None, "Portfolio Evidence ID is malformed")
@@ -72,7 +77,7 @@ def load_ledger(path: Path) -> dict[str, Any]:
     core = {key: value for key, value in ledger.items() if key not in {"evidence_id", "evidence_digest"}}
     digest = canonical_digest(core)
     require(evidence_digest == f"sha256:{digest}", "Portfolio evidence digest does not match canonical ledger semantics")
-    require(evidence_id == f"PL1-{digest[:16].upper()}", "Portfolio Evidence ID does not match canonical ledger digest")
+    require(evidence_id == f"PL2-{digest[:16].upper()}", "Portfolio Evidence ID does not match canonical ledger digest")
     systems = ledger.get("systems")
     require(isinstance(systems, list) and len(systems) == 13, "Portfolio Evidence Ledger systems array changed")
     return ledger
@@ -98,14 +103,52 @@ def project_entry(system: dict[str, Any], entry: dict[str, Any]) -> tuple[str, l
     subject = entry.get("subject_revision")
     require(isinstance(subject, str) and SHA40.fullmatch(subject) is not None, f"{repository}: subject revision is malformed")
     contract = entry.get("evidence_contract")
-    signals = entry.get("signals")
+    records = entry.get("signals")
     expected = expected_contract(system)
     require(contract == expected, f"{repository}: ledger evidence contract differs from reviewed Spotlight contract")
-    require(isinstance(signals, list) and len(signals) == len(expected), f"{repository}: ledger signal count changed")
-    signal_keys = [(item.get("label"), item.get("workflow"), item.get("scope")) for item in signals if isinstance(item, dict)]
+    require(isinstance(records, list) and len(records) == len(expected), f"{repository}: ledger evidence-record count changed")
+    record_keys = [(item.get("label"), item.get("workflow"), item.get("scope")) for item in records if isinstance(item, dict)]
     contract_keys = [(item["label"], item["workflow"], item["scope"]) for item in expected]
-    require(signal_keys == contract_keys, f"{repository}: ledger signals do not match the reviewed contract")
-    return subject, [dict(item) for item in signals], expected
+    require(record_keys == contract_keys, f"{repository}: ledger evidence records do not match the reviewed contract")
+    for record in records:
+        require(isinstance(record, dict), f"{repository}: evidence record must be an object")
+        require("signal" not in record, f"{repository}: legacy conflated signal field reached Ledger v2 projection")
+        for field in ("result", "binding", "freshness"):
+            require(isinstance(record.get(field), str) and record.get(field), f"{repository}: evidence {field} is missing")
+    return str(subject), [dict(item) for item in records], expected
+
+
+def dimension_attr(records: list[dict[str, Any]], field: str) -> str:
+    return ";".join(f"{record['label']}:{record[field]}" for record in records)
+
+
+def render_projection(
+    system: dict[str, Any], slot: int, day: dt.date, subject: str, records: list[dict[str, Any]], theme: str
+) -> str:
+    # The v2 visual renderer still colors the primary pill by execution result. Feed it
+    # a presentation-only compatibility field; the Ledger and manifest remain signal-free.
+    present = [{**record, "signal": record["result"]} for record in records]
+    svg = base.render_card(system, slot, day, subject, present, theme)
+    result_attr = html.escape(dimension_attr(records, "result"), quote=True)
+    binding_attr = html.escape(dimension_attr(records, "binding"), quote=True)
+    freshness_attr = html.escape(dimension_attr(records, "freshness"), quote=True)
+    insertion = (
+        f' data-evidence-semantics="{EVIDENCE_SEMANTICS}"'
+        f' data-evidence-results="{result_attr}"'
+        f' data-evidence-bindings="{binding_attr}"'
+        f' data-evidence-freshness="{freshness_attr}"'
+    )
+    svg = svg.replace(' data-glyph="', insertion + ' data-glyph="', 1)
+    details = "; ".join(
+        f"{record['label']} result {record['result']}, binding {record['binding']}, freshness {record['freshness']} ({record['age_days']}d)"
+        for record in records
+    )
+    svg = svg.replace(
+        "Freshness is UTC whole-day age from the named workflow evidence timestamp.</desc>",
+        f"Evidence dimensions: {html.escape(details)}. Freshness is UTC whole-day age from the named workflow evidence timestamp.</desc>",
+        1,
+    )
+    return svg
 
 
 def render(output_dir: Path, ledger_path: Path, requested_date: str | None) -> dict[str, Any]:
@@ -125,13 +168,14 @@ def render(output_dir: Path, ledger_path: Path, requested_date: str | None) -> d
         "version": v21.VERSION,
         "selection_date_utc": raw_date,
         "selection_policy": "deterministic-daily-sha256-sample",
-        "evidence_model": base.EVIDENCE_MODEL,
+        "evidence_model": EVIDENCE_MODEL,
         "evidence_source": EVIDENCE_SOURCE,
+        "evidence_semantics": EVIDENCE_SEMANTICS,
         "portfolio_evidence_id": ledger["evidence_id"],
         "portfolio_evidence_digest": ledger["evidence_digest"],
         "portfolio_as_of_date_utc": raw_date,
         "freshness_basis": ledger.get("freshness_basis"),
-        "live_policy": "signals are projected from the validated Portfolio Evidence Ledger for the same subject revisions",
+        "live_policy": "execution result, subject binding, and freshness are projected independently from the validated Portfolio Evidence Ledger",
         "slots": [],
     }
 
@@ -141,10 +185,10 @@ def render(output_dir: Path, ledger_path: Path, requested_date: str | None) -> d
         for slot, system in enumerate(selected, start=1):
             repository = f"{base.OWNER}/{system['repo']}"
             require(repository in by_repo, f"Selected Spotlight repository is absent from Portfolio ledger: {repository}")
-            subject, signals, contract = project_entry(system, by_repo[repository])
+            subject, records, contract = project_entry(system, by_repo[repository])
             for theme in ("light", "dark"):
                 (output_dir / f"spotlight-{slot}-{theme}.svg").write_text(
-                    base.render_card(system, slot, day, subject, signals, theme),
+                    render_projection(system, slot, day, subject, records, theme),
                     encoding="utf-8",
                 )
             manifest["slots"].append(
@@ -156,7 +200,7 @@ def render(output_dir: Path, ledger_path: Path, requested_date: str | None) -> d
                     "topology": system["topology"],
                     "subject_revision": subject,
                     "evidence_contract": contract,
-                    "signals": signals,
+                    "signals": records,
                 }
             )
     finally:
@@ -173,7 +217,7 @@ def main() -> int:
         args = parse_args()
         base.validate_pool()
         render(args.output_dir, args.ledger, args.date)
-        print(f"Engineering Spotlight rendered from Portfolio Evidence Ledger: {args.ledger}")
+        print(f"Engineering Spotlight rendered from Portfolio Evidence Ledger v2: {args.ledger}")
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
