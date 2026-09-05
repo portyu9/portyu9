@@ -21,11 +21,21 @@ All five are required on the exact pull-request head. Repository ruleset setting
 
 `.github/dependabot.yml` is the canonical GitHub Actions update-discovery policy. Dependabot proposes trust-boundary dependency changes but does not authorize them: Dependabot pull requests are **never auto-merged**, must pass the same five merge gates, and each dependency update remains a **separate pull request** so executable-identity changes stay attributable.
 
-Every external `uses:` reference must execute an **exact commit SHA**. The reviewed trust boundary includes `actions/attest`, `actions/checkout`, artifact transport/setup actions, Dependency Review, CodeQL, and `shinpr/github-profile-stats`. Same-line semantic release annotations are independently resolved by **Action release provenance** validation; the release label and immutable executable SHA must identify the same upstream release.
+Every external `uses:` reference must execute an **exact commit SHA**. The reviewed trust boundary includes `actions/attest`, `actions/checkout`, artifact transport/setup actions, Dependency Review, CodeQL, and `shinpr/github-profile-stats`. Same-line semantic release annotations are independently resolved by Action release provenance validation; the release label and immutable executable SHA must identify the same upstream release.
 
 Dependabot alerts and security-update settings are separate GitHub control-plane controls and should remain enabled where supported. GitHub does not provide the same vulnerability-alert semantics for every **SHA-pinned GitHub Actions** reference, so scheduled GitHub Actions update discovery remains an important independent signal rather than a replacement for exact pins or review.
 
-`Dependency review / dependency-review` is the required pre-merge vulnerability gate. It runs read-only, uses no PR-comment or repository-write authority, and blocks reviewed severity/scope violations without becoming a hidden license-policy gate.
+## Action release provenance
+
+`scripts/validate-action-release-provenance.py` binds each executable Action SHA to its **same-line** reviewed release annotation. Every external Action must therefore have both an immutable 40-character commit and an **exact semantic-version** label.
+
+Release verification uses public `git ls-remote` and supports both lightweight and **annotated tags**; for an annotated tag the peeled commit is authoritative. The resolved release commit must equal the executable SHA. This live provenance check **does not replace** exact pinning, Dependency Review, Dependabot, least privilege, or source review.
+
+## Dependency review gate
+
+`.github/workflows/dependency-review.yml` provides the required `Dependency review / dependency-review` status on every pull request with **no path filters**. It runs with `contents: read`, blocks **moderate-or-higher** known vulnerabilities across **runtime, development, and unknown** scopes, and fails rather than silently warning.
+
+The vulnerability gate intentionally does not become a hidden **license policy**. Dependabot updates remain **never auto-merged**; Dependency Review evaluates proposed dependency changes but does not authorize executable-identity changes by itself.
 
 ## Workflow authority firewall
 
@@ -44,13 +54,19 @@ The **Workflow authority firewall** locks workflow triggers, job inventory, work
 | Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint and persist the profile evidence attestation |
 | Profile stats / `publish-write-only` | `contents: write` | fast-forward validated artifacts to `generated` |
 
-No job may combine repository-content write with OIDC/attestation authority. Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, or comment-driven execution remain unauthorized unless a deliberate governance change reviews the new trust boundary.
+No job may combine repository-content write with OIDC/attestation authority. A **new workflow**, new job, trigger family, or token grant is a governance change. Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, or comment-driven execution remain unauthorized unless a deliberate governance change reviews the new trust boundary.
 
 ## Workflow shell safety
 
 **Workflow shell safety** forbids `${{ ... }}` expression interpolation directly into `run:` **shell source**. Dynamic values must cross a non-shell field such as `env:`, `with:`, or `if:` and be treated as data by the resulting script. YAML forms that obscure the generated shell source are rejected.
 
 This control limits command-source injection risk but does not replace normal quoting, input validation, path safety, or safe subprocess use in authored scripts.
+
+## CodeQL security analysis
+
+`.github/workflows/codeql.yml` runs isolated `analyze-python` and `analyze-actions` jobs for authored Python and **GitHub Actions workflows**. It has **no path filters**, runs on pull requests/main plus a **weekly** scan, and uses the `security-extended` query suite.
+
+External CodeQL Actions execute at an **exact commit SHA**. Analysis receives only read authority plus `security-events: write` for SARIF publication. **CodeQL is not an attestation** and does not expand the meaning of generated evidence; it is an independent static-analysis control.
 
 ## Profile Quality boundary
 
