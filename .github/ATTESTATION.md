@@ -18,8 +18,9 @@ Current attestations use the immutable **v3** predicate type:
 
 `profile-evidence-v3.schema.json` fixes the exact eleven published subject paths, exact validator sets, authority strings, claim boundary, Portfolio Evidence Ledger v2 identity, and its explicit evidence semantics. Every v3 predicate records `predicateSchema.id` plus `predicateSchema.digest`, the SHA-256 digest of the exact schema bytes used by the builder.
 
-Both earlier predicate versions remain historical verification contracts and are **frozen byte-for-byte**:
+All issued predicate schema versions are **frozen byte-for-byte**, including the currently issued v3 contract:
 
+- `profile-evidence-v3.schema.json` is the current immutable contract for Portfolio Evidence Ledger v2 and the exact eleven-subject set.
 - `profile-evidence-v2.schema.json` verifies the prior Portfolio Evidence Ledger v1 / `PL1-` contract.
 - `profile-evidence-v1.schema.json` verifies the original historical predicate contract.
 
@@ -46,7 +47,11 @@ One attestation covers the eleven files that make up the generated profile-evide
 - `engineering-spotlight/spotlight-3-dark.svg`
 - `portfolio-evidence/portfolio-evidence-ledger.json`
 
-`engineering-spotlight/spotlight-manifest.json` is internal generation/validation metadata. It remains inside the immutable workflow artifact long enough for the Spotlight validator to prove manifest/SVG provenance agreement, but it is deliberately excluded from the public `generated` branch. The published generated evidence set is therefore **exactly the same eleven subjects** named by the attestation contract.
+The canonical source for that inventory is `scripts/profile-evidence-subjects-v1.json`. Its `profile-evidence-subjects-v1` contract defines the exact published paths, the three evidence groups, the attestation patterns that must resolve only to those paths, and the internal-only Spotlight manifest. The predicate builder derives `subjectSet.publishedPaths` from this contract rather than maintaining another subject list.
+
+`validate-profile-evidence-subjects.py` closes the remaining boundaries: it requires the frozen v3 schema array to equal the canonical contract, requires the production `actions/attest` patterns to resolve to the same paths, validates the downloaded candidate inventories before attestation and publication, and verifies that the staged `generated` tree contains exactly those eleven files. `stage-profile-evidence.py` uses the same contract for scheduled-delta comparison and final publication staging, eliminating independent shell copies and manual file counts.
+
+`engineering-spotlight/spotlight-manifest.json` is internal generation/validation metadata. It remains inside the immutable workflow artifact long enough for the Spotlight validator to prove manifest/SVG provenance agreement, but it is deliberately excluded from the public `generated` branch and from the attestation glob. The published generated evidence set is therefore **exactly the same eleven subjects** named by the attestation contract.
 
 The v3 predicate records the exact source revision, workflow/run identity, predicate-schema identity/digest, published subject paths, validators, Signal Field Evidence ID, Portfolio Evidence Ledger v2 identity and evidence semantics, and the authority separation under which the evidence was produced.
 
