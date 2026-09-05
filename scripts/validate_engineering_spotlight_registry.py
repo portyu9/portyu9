@@ -2,8 +2,8 @@
 """Registry binding adapter for the reviewed Engineering Spotlight v2.1 validator.
 
 The historical v2.1 validator implementation remains intact, while active validation
-gets its permanent/rotating inventories and Ledger registry provenance from the single
-canonical portfolio registry.
+gets its permanent/rotating inventories and Ledger/manifest registry provenance from
+the single canonical portfolio registry.
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ impl.STATIC_REPOSITORIES = {f"{registry.OWNER}/{item['repo']}" for item in regis
 impl.ALLOWED_REPOS = {f"{registry.OWNER}/{item['repo']}" for item in registry.rotating_systems()}
 
 _historical_load_ledger = impl.load_ledger
+_historical_validate_manifest = impl.validate_manifest
 
 
 def load_ledger(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
@@ -49,7 +50,27 @@ def load_ledger(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     return ledger, by_repo
 
 
+def validate_manifest(
+    root: Path,
+    ledger: dict[str, Any],
+    ledger_by_repo: dict[str, dict[str, Any]],
+    require_live: bool,
+) -> tuple[dict[str, Any], dict[int, dict[str, Any]]]:
+    manifest, slots = _historical_validate_manifest(root, ledger, ledger_by_repo, require_live)
+    provenance = manifest.get("portfolio_registry")
+    if not isinstance(provenance, dict):
+        raise ValueError("Spotlight manifest registry provenance is missing")
+    if provenance.get("version") != registry.VERSION:
+        raise ValueError("Spotlight manifest registry version changed")
+    if provenance.get("digest") != registry.registry_digest():
+        raise ValueError("Spotlight manifest registry digest does not match reviewed registry bytes")
+    if provenance != ledger.get("portfolio_registry"):
+        raise ValueError("Spotlight and Portfolio Ledger registry provenance diverged")
+    return manifest, slots
+
+
 impl.load_ledger = load_ledger
+impl.validate_manifest = validate_manifest
 
 
 def main() -> int:
