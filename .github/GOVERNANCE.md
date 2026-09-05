@@ -15,7 +15,9 @@ This repository treats the profile README, reviewed source assets, generated Sig
 - `CodeQL / analyze-python`
 - `CodeQL / analyze-actions`
 
-All five are required on the exact pull-request head. Repository ruleset settings are control-plane state rather than source files; version-controlled validators protect the executable half of the contract, while repository-setting audits verify the control-plane half.
+All five are required on the exact pull-request head. Repository ruleset settings are control-plane state rather than source files, so `validate-contracts` executes `python3 scripts/validate-ruleset-contract.py --live` and compares the checked-in desired state with the **live GitHub control-plane** using only the workflow's read-only token. A mismatch is merge-blocking; the source contract does not claim a settings mutation occurred merely because desired state was edited.
+
+The current `Protect Main` pull-request contract intentionally keeps zero required approving reviews for the solo-maintainer model while requiring review-thread resolution, allowing merge commits only, requiring the branch to be current, and enforcing the exact five status contexts above with no bypass actors.
 
 ## Dependency update automation
 
@@ -70,7 +72,7 @@ External CodeQL Actions execute at an **exact commit SHA**. Analysis receives on
 
 ## Profile Quality boundary
 
-`Profile quality / validate-contracts` is read-only and runs the fail-closed repository contract suite, including Signal Field, Spotlight, Portfolio Ledger, attestation, dependency, Action provenance, authority, shell-safety, CodeQL, cache-identity, repository governance, assurance-document, and ruleset-source checks.
+`Profile quality / validate-contracts` is read-only and runs the fail-closed repository contract suite, including Signal Field, Spotlight, Portfolio Ledger, attestation, dependency, Action provenance, authority, shell-safety, CodeQL, cache-identity, repository governance, assurance-document, and ruleset checks. Its ruleset step validates both the source-controlled target and the live GitHub control-plane state; this is a read-only drift check, not settings mutation authority.
 
 `Profile quality / integration-pinned-upstream` is also read-only. It executes the exact reviewed Signal Field generator, runs the full production transformation chain, performs the Signal Field artifact round trip with digest enforcement, then collects one live Portfolio Evidence Ledger v2 snapshot and renders the Engineering Spotlight strictly from that validated snapshot. The read-only contract summary reports the resulting identities, independent evidence dimensions, and authority map through `GITHUB_STEP_SUMMARY`.
 
@@ -168,6 +170,6 @@ Confirm all of the following before declaring a security/governance change compl
 8. v1 and v2 predicate schema bytes remain frozen and new predicates use v3 with `predicateSchema.digest`;
 9. mutable generated README asset URLs pass the cache-identity contract;
 10. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only`;
-11. repository rulesets are checked separately because settings-level controls cannot be guaranteed by repository files alone.
+11. `validate-ruleset-contract.py --live` passes inside the required Profile Quality gate and the live GitHub control-plane exactly matches `.github/rulesets/repository-rulesets-v1.json`.
 
 Any change that weakens these boundaries is a governance-contract change and must fail closed until deliberately reviewed.
