@@ -14,6 +14,8 @@
 <picture><img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=5"></picture> <picture><img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=5"></picture> <picture><img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=5"></picture>
 </p>
 
+<p align="center"><sub><strong>Review paths</strong> · <a href="https://github.com/portyu9/ai-qa-automation">AI QA Control Plane</a> · <a href="https://github.com/portyu9/qa-automation-ai-agent-evals">Agent Evaluation / TEVV</a> · <a href="https://github.com/portyu9?tab=repositories">QE Systems Portfolio</a></sub></p>
+
 <h2 align="center">◈&nbsp;&nbsp;QE Domains</h2>
 
 <p align="center">
@@ -90,21 +92,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 ---
 
-<h2 align="center">◉ Activity Metrics</h2>
-
-<div align="center">
-
-<picture>
-  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg?v=signal-field-v212-balance-20260903">
-  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg?v=signal-field-v212-balance-20260903">
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg?v=signal-field-v212-balance-20260903">
-  <img alt="GitHub activity signal field" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg?v=signal-field-v212-balance-20260903" width="100%">
-</picture>
-
-</div>
-
----
-
 <h2 align="center">◇ Selected Engineering Systems</h2>
 
 <p align="center"><sub>Four flagship systems · scoped live <code>main</code>-branch evidence</sub></p>
@@ -143,6 +130,21 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 </p>
 
 <p align="center"><sub>From my QE systems portfolio · signals scoped to named <code>main</code>-branch workflows.</sub></p>
+
+---
+
+<h2 align="center">◉ Activity Metrics</h2>
+
+<div align="center">
+
+<picture>
+  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg?v=signal-field-v212-balance-20260903">
+  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg?v=signal-field-v212-balance-20260903">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg?v=signal-field-v212-balance-20260903">
+  <img alt="GitHub activity signal field" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg?v=signal-field-v212-balance-20260903" width="100%">
+</picture>
+
+</div>
 
 ---
 
