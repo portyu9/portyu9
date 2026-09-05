@@ -73,7 +73,7 @@ def validate_schema() -> None:
         "predicate must preserve the non-certification claim boundary",
     )
     subject = properties.get("subjectSet", {}).get("properties", {}).get("publishedPaths", {})
-    require(subject.get("minItems") == 8 and subject.get("maxItems") == 8, "subject set must remain exactly eight SVGs")
+    require(subject.get("minItems") == 10 and subject.get("maxItems") == 10, "subject set must remain exactly ten SVGs")
 
 
 def validate_builder() -> None:
@@ -95,7 +95,7 @@ def validate_builder() -> None:
     ):
         require(phrase in text, f"attestation predicate builder contract is missing: {phrase}")
     require(text.count("signal-field-") >= 4, "builder must enumerate the four Signal Field subjects")
-    require(text.count("spotlight-") >= 4, "builder must enumerate the four Spotlight subjects")
+    require(text.count("spotlight-") >= 6, "builder must enumerate the six Spotlight subjects")
 
 
 def validate_workflow() -> None:
