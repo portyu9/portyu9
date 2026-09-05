@@ -92,19 +92,15 @@ jobs:
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile-v4.py
 
-      - name: Validate deterministic Engineering Spotlight generation
+      - name: Validate deterministic Portfolio Evidence Ledger and Spotlight projection
         run: |
           set -euo pipefail
           tmp="$(mktemp -d)"
-          python3 scripts/generate-engineering-spotlight.py "$tmp" --date 2026-09-04 --offline
-          python3 scripts/validate-engineering-spotlight.py "$tmp"
-
-      - name: Validate deterministic Portfolio Evidence Ledger
-        run: |
-          set -euo pipefail
-          tmp="$(mktemp -d)"
-          python3 scripts/generate-portfolio-evidence-ledger.py "$tmp" --date 2026-09-04 --offline
-          python3 scripts/validate-portfolio-evidence-ledger.py "$tmp"
+          mkdir -p "$tmp/ledger" "$tmp/spotlight"
+          python3 scripts/generate-portfolio-evidence-ledger.py "$tmp/ledger" --date 2026-09-04 --offline
+          python3 scripts/validate-portfolio-evidence-ledger.py "$tmp/ledger"
+          python3 scripts/generate-engineering-spotlight.py "$tmp/spotlight" --ledger "$tmp/ledger/portfolio-evidence-ledger.json" --date 2026-09-04
+          python3 scripts/validate-engineering-spotlight.py "$tmp/spotlight" --ledger "$tmp/ledger/portfolio-evidence-ledger.json"
 
       - name: Validate engineering attestation predicate builder
         run: python3 scripts/build-profile-evidence-attestation.py --self-test
@@ -215,15 +211,6 @@ jobs:
           python3 scripts/validate-signal-field-v214.py roundtrip-signal-field
           python3 scripts/validate-generated-signal-field.py roundtrip-signal-field
 
-      - name: Exercise live Engineering Spotlight evidence path
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          rm -rf integration-engineering-spotlight
-          python3 scripts/generate-engineering-spotlight.py integration-engineering-spotlight
-          python3 scripts/validate-engineering-spotlight.py integration-engineering-spotlight --require-live
-
       - name: Exercise live Portfolio Evidence Ledger path
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -232,6 +219,13 @@ jobs:
           rm -rf integration-portfolio-evidence
           python3 scripts/generate-portfolio-evidence-ledger.py integration-portfolio-evidence
           python3 scripts/validate-portfolio-evidence-ledger.py integration-portfolio-evidence --require-live
+
+      - name: Exercise live Engineering Spotlight projection
+        run: |
+          set -euo pipefail
+          rm -rf integration-engineering-spotlight
+          python3 scripts/generate-engineering-spotlight.py integration-engineering-spotlight --ledger integration-portfolio-evidence/portfolio-evidence-ledger.json
+          python3 scripts/validate-engineering-spotlight.py integration-engineering-spotlight --ledger integration-portfolio-evidence/portfolio-evidence-ledger.json --require-live
 
       - name: Write read-only contract summary
         env:

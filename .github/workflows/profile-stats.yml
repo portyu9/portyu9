@@ -28,6 +28,7 @@ on:
       - "scripts/validate-signal-field-v214.py"
       - "scripts/validate-generated-signal-field.py"
       - "scripts/generate-engineering-spotlight.py"
+      - "scripts/generate-engineering-spotlight-from-ledger.py"
       - "scripts/engineering_spotlight_v2.py"
       - "scripts/engineering_spotlight_v21.py"
       - "scripts/validate-engineering-spotlight.py"
@@ -113,24 +114,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Generate deterministic daily Engineering Spotlight
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          rm -rf spotlight-ready
-          python3 source/scripts/generate-engineering-spotlight.py spotlight-ready
-          python3 source/scripts/validate-engineering-spotlight.py spotlight-ready --require-live
-
-      - name: Upload immutable validated Engineering Spotlight
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: engineering-spotlight-svg
-          path: spotlight-ready/*
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Generate Portfolio Evidence Ledger
+      - name: Generate Portfolio Evidence Ledger once
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -144,6 +128,21 @@ jobs:
         with:
           name: portfolio-evidence-ledger
           path: portfolio-ledger-ready/portfolio-evidence-ledger.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Render deterministic daily Engineering Spotlight from Ledger
+        run: |
+          set -euo pipefail
+          rm -rf spotlight-ready
+          python3 source/scripts/generate-engineering-spotlight.py spotlight-ready --ledger portfolio-ledger-ready/portfolio-evidence-ledger.json
+          python3 source/scripts/validate-engineering-spotlight.py spotlight-ready --ledger portfolio-ledger-ready/portfolio-evidence-ledger.json --require-live
+
+      - name: Upload immutable validated Engineering Spotlight
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: engineering-spotlight-svg
+          path: spotlight-ready/*
           if-no-files-found: error
           retention-days: 1
 
@@ -204,8 +203,8 @@ jobs:
           python3 source/scripts/validate-signal-field-v213.py profile-stats/profile
           python3 source/scripts/validate-signal-field-v214.py profile-stats/profile
           python3 source/scripts/validate-generated-signal-field.py profile-stats/profile
-          python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live
           python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence --require-live
+          python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live --ledger portfolio-evidence/portfolio-evidence-ledger.json
 
       - name: Determine whether scheduled evidence changed
         id: delta
@@ -299,8 +298,8 @@ jobs:
           python3 source/scripts/validate-signal-field-v213.py publish-input
           python3 source/scripts/validate-signal-field-v214.py publish-input
           python3 source/scripts/validate-generated-signal-field.py publish-input
-          python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input --require-live
           python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input --require-live
+          python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input --ledger portfolio-ledger-publish-input/portfolio-evidence-ledger.json --require-live
 
       - name: Stage artifact-only generated branch
         run: |
