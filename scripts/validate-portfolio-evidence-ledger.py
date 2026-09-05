@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate Portfolio Evidence Ledger v1."""
+"""Validate Portfolio Evidence Ledger v2 orthogonal evidence semantics."""
 from __future__ import annotations
 
 import argparse
@@ -9,13 +9,38 @@ import re
 from pathlib import Path
 from typing import Any
 
-VERSION = "portfolio-evidence-ledger-v1"
+VERSION = "portfolio-evidence-ledger-v2"
 KIND = "portfolio-evidence-ledger"
 OWNER = "portyu9"
 FILENAME = "portfolio-evidence-ledger.json"
+EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
+SHA40_ZERO = "0" * 40
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
-EVIDENCE_ID = re.compile(r"^PL1-[0-9A-F]{16}$")
+EVIDENCE_ID = re.compile(r"^PL2-[0-9A-F]{16}$")
 EVIDENCE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+RESULTS = {
+    "PASSING",
+    "FAILING",
+    "RUNNING",
+    "CANCELLED",
+    "SKIPPED",
+    "NEUTRAL",
+    "ACTION REQUIRED",
+    "STALE",
+    "UNKNOWN",
+    "UNAVAILABLE",
+    "NO SIGNAL",
+}
+BINDINGS = {
+    "CURRENT_SUBJECT",
+    "DIFFERENT_SUBJECT",
+    "SUBJECT_UNAVAILABLE",
+    "RUN_HEAD_UNAVAILABLE",
+    "UNAVAILABLE",
+    "SYNTHETIC",
+}
+FRESHNESS = {"SAME_DAY", "AGED", "UNAVAILABLE", "SYNTHETIC"}
 
 PERMANENT = {
     "portyu9/ai-qa-automation",
@@ -47,42 +72,81 @@ def canonical_digest(payload: dict[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def validate_signal(repository: str, subject: str, signal: dict[str, Any], require_live: bool) -> None:
+def validate_dimensions(repository: str, subject: str, signal: dict[str, Any], require_live: bool) -> None:
     label = signal.get("label")
     workflow = signal.get("workflow")
-    state = signal.get("signal")
-    require(isinstance(label, str) and label, f"{repository}: signal label is missing")
+    result = signal.get("result")
+    binding = signal.get("binding")
+    freshness = signal.get("freshness")
+    require(isinstance(label, str) and label, f"{repository}: evidence label is missing")
     require(isinstance(workflow, str) and workflow.endswith((".yml", ".yaml")), f"{repository} {label}: workflow is invalid")
     require(isinstance(signal.get("scope"), str) and signal.get("scope"), f"{repository} {label}: scope is missing")
-    require(isinstance(state, str) and state, f"{repository} {label}: signal state is missing")
-    require(isinstance(signal.get("age_days"), int) and signal["age_days"] >= 0, f"{repository} {label}: age is invalid")
-    require(isinstance(signal.get("ordinal"), int) and signal["ordinal"] >= 1, f"{repository} {label}: ordinal is invalid")
-    require(isinstance(signal.get("offline"), bool), f"{repository} {label}: offline marker is invalid")
+    require(result in RESULTS, f"{repository} {label}: execution result is invalid: {result!r}")
+    require(result != "STALE", f"{repository} {label}: STALE must not be encoded as an execution result")
+    require(binding in BINDINGS, f"{repository} {label}: subject binding is invalid: {binding!r}")
+    require(freshness in FRESHNESS, f"{repository} {label}: freshness state is invalid: {freshness!r}")
+    require("signal" not in signal, f"{repository} {label}: legacy conflated signal field is forbidden in Ledger v2")
 
+    age = signal.get("age_days")
+    require(isinstance(age, int) and age >= 0, f"{repository} {label}: age is invalid")
+    ordinal = signal.get("ordinal")
+    require(isinstance(ordinal, int) and ordinal >= 1, f"{repository} {label}: ordinal is invalid")
+    offline = signal.get("offline")
+    require(isinstance(offline, bool), f"{repository} {label}: offline marker is invalid")
     head = signal.get("head_sha")
     require(isinstance(head, str) and SHA40.fullmatch(head) is not None, f"{repository} {label}: workflow head SHA is malformed")
     run_id = signal.get("run_id")
     run_number = signal.get("run_number")
     require(isinstance(run_id, int) and run_id >= 0, f"{repository} {label}: run id is invalid")
     require(isinstance(run_number, int) and run_number >= 0, f"{repository} {label}: run number is invalid")
+    completed = signal.get("completed_at_utc")
+    require(isinstance(completed, str), f"{repository} {label}: evidence timestamp is invalid")
 
-    if require_live:
-        require(signal.get("offline") is False, f"{repository} {label}: live ledger cannot contain offline evidence")
-        require(subject != "0" * 40, f"{repository}: current main revision is unavailable")
-        require(state not in {"UNAVAILABLE", "NO SIGNAL", "UNKNOWN"}, f"{repository} {label}: live evidence is unavailable: {state}")
-        require(run_id > 0 and run_number > 0, f"{repository} {label}: live run provenance is missing")
+    if binding == "SYNTHETIC":
+        require(offline is True, f"{repository} {label}: SYNTHETIC binding requires offline evidence")
+    elif binding == "UNAVAILABLE":
+        require(run_id == 0 and head == SHA40_ZERO, f"{repository} {label}: unavailable binding must have no run head")
+    elif binding == "SUBJECT_UNAVAILABLE":
+        require(subject == SHA40_ZERO and run_id > 0, f"{repository} {label}: SUBJECT_UNAVAILABLE consistency failed")
+    elif binding == "RUN_HEAD_UNAVAILABLE":
+        require(subject != SHA40_ZERO and head == SHA40_ZERO and run_id > 0, f"{repository} {label}: RUN_HEAD_UNAVAILABLE consistency failed")
+    elif binding == "CURRENT_SUBJECT":
+        require(subject != SHA40_ZERO and head == subject and run_id > 0, f"{repository} {label}: CURRENT_SUBJECT binding is false")
+    elif binding == "DIFFERENT_SUBJECT":
+        require(subject != SHA40_ZERO and head != SHA40_ZERO and head != subject and run_id > 0, f"{repository} {label}: DIFFERENT_SUBJECT binding is false")
+
+    if freshness == "SYNTHETIC":
+        require(offline is True and completed.endswith("Z"), f"{repository} {label}: synthetic freshness is inconsistent")
+    elif freshness == "UNAVAILABLE":
+        require(completed == "", f"{repository} {label}: unavailable freshness must not carry a timestamp")
+    elif freshness == "SAME_DAY":
+        require(completed.endswith("Z") and age == 0, f"{repository} {label}: SAME_DAY freshness is inconsistent")
+    elif freshness == "AGED":
+        require(completed.endswith("Z") and age > 0, f"{repository} {label}: AGED freshness is inconsistent")
+
+    if run_id > 0:
         run_url = signal.get("run_url")
         require(
-            isinstance(run_url, str)
-            and run_url == f"https://github.com/{repository}/actions/runs/{run_id}",
+            isinstance(run_url, str) and run_url == f"https://github.com/{repository}/actions/runs/{run_id}",
             f"{repository} {label}: exact run URL is invalid",
         )
-        completed = signal.get("completed_at_utc")
-        require(isinstance(completed, str) and completed.endswith("Z"), f"{repository} {label}: evidence timestamp is missing")
-        if state == "STALE":
-            require(head != subject, f"{repository} {label}: STALE signal must identify a different workflow head")
-        else:
-            require(head == subject, f"{repository} {label}: non-stale evidence must bind to current main")
+
+    if require_live:
+        require(offline is False, f"{repository} {label}: live ledger cannot contain synthetic evidence")
+        require(subject != SHA40_ZERO, f"{repository}: current main revision is unavailable")
+        require(result not in {"UNAVAILABLE", "NO SIGNAL", "UNKNOWN"}, f"{repository} {label}: live result is unavailable: {result}")
+        require(binding not in {"UNAVAILABLE", "SUBJECT_UNAVAILABLE", "RUN_HEAD_UNAVAILABLE", "SYNTHETIC"}, f"{repository} {label}: live binding is unavailable: {binding}")
+        require(freshness in {"SAME_DAY", "AGED"}, f"{repository} {label}: live freshness is unavailable")
+        require(run_id > 0 and run_number > 0, f"{repository} {label}: live run provenance is missing")
+
+
+def summary(systems: list[dict[str, Any]], field: str) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for system in systems:
+        for signal in system["signals"]:
+            value = str(signal[field])
+            result[value] = result.get(value, 0) + 1
+    return dict(sorted(result.items()))
 
 
 def main() -> int:
@@ -99,6 +163,7 @@ def main() -> int:
         require(ledger.get("kind") == KIND, "Portfolio evidence ledger kind changed")
         require(ledger.get("owner") == OWNER, "Portfolio evidence ledger owner changed")
         require(re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(ledger.get("as_of_date_utc") or "")) is not None, "Ledger UTC date is invalid")
+        require(ledger.get("evidence_semantics") == EVIDENCE_SEMANTICS, "Ledger evidence semantics changed")
         require(ledger.get("subject_policy") == "current-main-revision-per-system", "Ledger subject policy changed")
         require(ledger.get("freshness_basis") == "UTC whole-day age from workflow evidence timestamp", "Ledger freshness basis changed")
         require(
@@ -106,6 +171,7 @@ def main() -> int:
             "Ledger classification policy changed",
         )
         require(ledger.get("system_count") == 13, "Ledger must contain exactly 13 reviewed systems")
+        require("signal_summary" not in ledger, "Legacy conflated signal summary is forbidden in Ledger v2")
 
         systems = ledger.get("systems")
         require(isinstance(systems, list) and len(systems) == 13, "Ledger systems array must contain exactly 13 systems")
@@ -113,7 +179,6 @@ def main() -> int:
         require(len(repos) == 13 and len(set(repos)) == 13, "Ledger repositories must be 13 distinct values")
         require(set(repos) == EXPECTED, "Ledger reviewed repository inventory changed")
 
-        summary: dict[str, int] = {}
         for system in systems:
             require(isinstance(system, dict), "Ledger system entry must be an object")
             repository = str(system.get("repository") or "")
@@ -127,19 +192,21 @@ def main() -> int:
             contract = system.get("evidence_contract")
             signals = system.get("signals")
             require(isinstance(contract, list) and contract, f"{repository}: evidence contract is missing")
-            require(isinstance(signals, list) and signals, f"{repository}: evidence signals are missing")
-            require(len(contract) == len(signals), f"{repository}: evidence contract/signal count diverged")
+            require(isinstance(signals, list) and signals, f"{repository}: evidence dimensions are missing")
+            require(len(contract) == len(signals), f"{repository}: evidence contract/record count diverged")
             contract_keys = [(entry.get("label"), entry.get("workflow"), entry.get("scope")) for entry in contract]
             signal_keys = [(entry.get("label"), entry.get("workflow"), entry.get("scope")) for entry in signals]
-            require(contract_keys == signal_keys, f"{repository}: evidence signals do not match declared contract")
+            require(contract_keys == signal_keys, f"{repository}: evidence records do not match declared contract")
             require(len({entry.get("label") for entry in signals}) == len(signals), f"{repository}: evidence labels must be distinct")
-            require(system["evidence_max_age_days"] == max(int(signal.get("age_days") or 0) for signal in signals), f"{repository}: maximum evidence age is inconsistent")
+            available_ages = [int(signal["age_days"]) for signal in signals if signal.get("freshness") != "UNAVAILABLE"]
+            require(system["evidence_max_age_days"] == max(available_ages, default=0), f"{repository}: maximum evidence age is inconsistent")
             for signal in signals:
-                validate_signal(repository, str(subject), signal, args.require_live)
-                state = str(signal.get("signal"))
-                summary[state] = summary.get(state, 0) + 1
+                validate_dimensions(repository, str(subject), signal, args.require_live)
 
-        require(ledger.get("signal_summary") == dict(sorted(summary.items())), "Ledger signal summary does not match system evidence")
+        require(ledger.get("result_summary") == summary(systems, "result"), "Ledger result summary does not match evidence records")
+        require(ledger.get("binding_summary") == summary(systems, "binding"), "Ledger binding summary does not match evidence records")
+        require(ledger.get("freshness_summary") == summary(systems, "freshness"), "Ledger freshness summary does not match evidence records")
+
         evidence_id = ledger.get("evidence_id")
         evidence_digest = ledger.get("evidence_digest")
         require(isinstance(evidence_id, str) and EVIDENCE_ID.fullmatch(evidence_id) is not None, "Portfolio Evidence ID is malformed")
@@ -147,11 +214,11 @@ def main() -> int:
         core = {key: value for key, value in ledger.items() if key not in {"evidence_id", "evidence_digest"}}
         digest = canonical_digest(core)
         require(evidence_digest == f"sha256:{digest}", "Portfolio evidence digest does not match canonical ledger bytes")
-        require(evidence_id == f"PL1-{digest[:16].upper()}", "Portfolio Evidence ID does not match canonical ledger digest")
+        require(evidence_id == f"PL2-{digest[:16].upper()}", "Portfolio Evidence ID does not match canonical ledger digest")
 
         print(
-            f"Portfolio evidence ledger validation passed: {evidence_id} binds 13 reviewed systems "
-            "(4 permanent + 9 rotating) to current-main subjects, explicit evidence contracts, run provenance, and UTC freshness."
+            f"Portfolio evidence ledger v2 validation passed: {evidence_id} binds 13 reviewed systems with "
+            "independent execution result, subject binding, and UTC freshness dimensions."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError) as exc:
