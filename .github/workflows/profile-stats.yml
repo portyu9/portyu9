@@ -28,7 +28,13 @@ on:
       - "scripts/validate-signal-field-v214.py"
       - "scripts/validate-generated-signal-field.py"
       - "scripts/generate-engineering-spotlight.py"
+      - "scripts/engineering_spotlight_v2.py"
+      - "scripts/engineering_spotlight_v21.py"
       - "scripts/validate-engineering-spotlight.py"
+      - "scripts/validate_engineering_spotlight_v2.py"
+      - "scripts/validate_engineering_spotlight_v21.py"
+      - "scripts/generate-portfolio-evidence-ledger.py"
+      - "scripts/validate-portfolio-evidence-ledger.py"
       - "scripts/build-profile-evidence-attestation.py"
       - "scripts/validate-profile-attestation-contract.py"
   schedule:
@@ -124,6 +130,23 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Generate Portfolio Evidence Ledger
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf portfolio-ledger-ready
+          python3 source/scripts/generate-portfolio-evidence-ledger.py portfolio-ledger-ready
+          python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-ready --require-live
+
+      - name: Upload immutable validated Portfolio Evidence Ledger
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: portfolio-evidence-ledger
+          path: portfolio-ledger-ready/portfolio-evidence-ledger.json
+          if-no-files-found: error
+          retention-days: 1
+
   attest:
     name: attest-validated-evidence
     needs: generate
@@ -168,6 +191,13 @@ jobs:
           path: engineering-spotlight
           digest-mismatch: error
 
+      - name: Download validated Portfolio Evidence Ledger for attestation
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: portfolio-evidence-ledger
+          path: portfolio-evidence
+          digest-mismatch: error
+
       - name: Revalidate attestation boundary
         run: |
           set -euo pipefail
@@ -175,13 +205,15 @@ jobs:
           python3 source/scripts/validate-signal-field-v214.py profile-stats/profile
           python3 source/scripts/validate-generated-signal-field.py profile-stats/profile
           python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live
+          python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence --require-live
 
       - name: Determine whether scheduled evidence changed
         id: delta
         run: |
           set -euo pipefail
           if diff -qr profile-stats/profile published/profile-stats/profile >/dev/null \
-            && diff -qr engineering-spotlight published/engineering-spotlight >/dev/null; then
+            && diff -qr engineering-spotlight published/engineering-spotlight >/dev/null \
+            && diff -qr portfolio-evidence published/portfolio-evidence >/dev/null; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -189,7 +221,7 @@ jobs:
 
       - name: Build profile evidence attestation predicate
         if: github.event_name != 'schedule' || steps.delta.outputs.changed == 'true'
-        run: python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile attestation-predicate.json
+        run: python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile portfolio-evidence attestation-predicate.json
 
       - name: Attest validated profile evidence
         if: github.event_name != 'schedule' || steps.delta.outputs.changed == 'true'
@@ -198,6 +230,7 @@ jobs:
           subject-path: |
             profile-stats/profile/signal-field-*.svg
             engineering-spotlight/*.svg
+            portfolio-evidence/portfolio-evidence-ledger.json
           predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json
           predicate-path: attestation-predicate.json
           show-summary: true
@@ -243,6 +276,13 @@ jobs:
           path: spotlight-publish-input
           digest-mismatch: error
 
+      - name: Download validated Portfolio Evidence Ledger
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: portfolio-evidence-ledger
+          path: portfolio-ledger-publish-input
+          digest-mismatch: error
+
       - name: Revalidate publish boundary
         run: |
           set -euo pipefail
@@ -250,18 +290,21 @@ jobs:
           python3 source/scripts/validate-signal-field-v214.py publish-input
           python3 source/scripts/validate-generated-signal-field.py publish-input
           python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input --require-live
+          python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input --require-live
 
       - name: Stage artifact-only generated branch
         run: |
           set -euo pipefail
           find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          mkdir -p artifacts/profile-stats/profile artifacts/engineering-spotlight
+          mkdir -p artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence
           cp publish-input/signal-field-*.svg artifacts/profile-stats/profile/
           cp spotlight-publish-input/* artifacts/engineering-spotlight/
+          cp portfolio-ledger-publish-input/portfolio-evidence-ledger.json artifacts/portfolio-evidence/
           python3 source/scripts/validate-signal-field-v213.py artifacts/profile-stats/profile
           python3 source/scripts/validate-signal-field-v214.py artifacts/profile-stats/profile
           python3 source/scripts/validate-generated-signal-field.py artifacts/profile-stats/profile
           python3 source/scripts/validate-engineering-spotlight.py artifacts/engineering-spotlight --require-live
+          python3 source/scripts/validate-portfolio-evidence-ledger.py artifacts/portfolio-evidence --require-live
           git -C artifacts add -A
 
       - name: Publish changed artifact set
