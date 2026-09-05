@@ -11,6 +11,14 @@ The profile evidence pipeline has three refresh paths:
 
 The scheduled path is deliberately a fallback. It is not the primary response to source changes, because relevant merges already trigger the same production workflow immediately.
 
+## Push-trigger source closure
+
+The production push trigger covers the complete trusted `scripts/**` tree rather than maintaining a per-script allowlist. This is intentionally broader than the runtime import graph: validator-only changes may cause an extra refresh, but new generators, renderers, registries, helpers, transformers, or validators cannot be introduced under `scripts/` without entering the immediate production refresh path on `main`.
+
+Four profile-evidence subject-contract files are also named explicitly in the workflow as review sentinels. They are redundant with `scripts/**`; they do not carry source-coverage responsibility. The umbrella trigger is the fail-safe that ensures new production source modules cannot silently fall outside the immediate push-triggered refresh path.
+
+Workflow, attestation documentation, and predicate-schema changes remain explicit non-script triggers because they live outside the trusted scripts tree. `scripts/validate-profile-stats-trigger-contract.py` locks this trigger shape in Profile Quality.
+
 ## Measurement that replaced the five-minute request
 
 The prior workflow requested `2-57/5 * * * *`, but the five newest scheduled `Update profile stats` runs sampled during the 2026-09-05 audit arrived at approximately:
@@ -50,4 +58,4 @@ Generation cadence and evidence freshness are different claims. The Portfolio Ev
 
 ## Change rule
 
-Changing the cron, the published schedule provenance, or the cadence-contract version is a governance change. The repository governance validator and Profile Quality integration must fail closed until the workflow, finalizer, validator, and this rationale agree.
+Changing the cron, the push-trigger source boundary, the published schedule provenance, or the cadence-contract version is a governance change. The repository governance validator and Profile Quality integration must fail closed until the workflow, trigger validator, finalizer, validator, and this rationale agree.
