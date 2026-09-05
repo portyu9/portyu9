@@ -19,6 +19,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / ".github" / "rulesets" / "repository-rulesets-v1.json"
 DOC = ROOT / ".github" / "RULESETS.md"
+QUALITY = ROOT / ".github" / "workflows" / "profile-quality.yml"
 REPOSITORY = "portyu9/portyu9"
 API = f"https://api.github.com/repos/{REPOSITORY}/rulesets"
 
@@ -91,8 +92,27 @@ def validate_source(payload: dict[str, Any]) -> None:
         "no bypass actors",
         "--live",
         "control-plane",
+        "merge-blocking",
     ):
         require(phrase in doc, f"ruleset governance documentation is missing: {phrase}")
+
+    quality = QUALITY.read_text(encoding="utf-8")
+    require(
+        "name: Validate repository ruleset source + live control-plane contract" in quality,
+        "Profile Quality must expose the ruleset source + live control-plane gate",
+    )
+    require(
+        "run: python3 scripts/validate-ruleset-contract.py --live" in quality,
+        "Profile Quality must compare the source ruleset contract with live GitHub state",
+    )
+    require(
+        "GITHUB_TOKEN: ${{ github.token }}" in quality,
+        "live ruleset comparison must receive the workflow's read-only GitHub token through env",
+    )
+    require(
+        "run: python3 scripts/validate-ruleset-contract.py\n" not in quality,
+        "Profile Quality must not regress to source-only ruleset validation",
+    )
 
 
 def request_json(url: str) -> Any:
@@ -191,7 +211,7 @@ def main() -> int:
     parser.add_argument("--live", action="store_true", help="also compare the checked-in target with GitHub control-plane state")
     args = parser.parse_args()
     try:
-        for path in (CONTRACT, DOC):
+        for path in (CONTRACT, DOC, QUALITY):
             require(path.is_file(), f"ruleset contract input is missing: {path.relative_to(ROOT)}")
         payload = load_contract()
         validate_source(payload)
