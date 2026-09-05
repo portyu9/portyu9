@@ -3,7 +3,8 @@
 
 This validator runs downstream of every transformation stage and validates the bytes
 that may be attested/published. It protects source semantics, Evidence ID provenance,
-30-day membership, reviewed final presentation, metric geometry, and privacy limits.
+30-day membership, reviewed final presentation, metric geometry, privacy limits, and
+the measured best-effort generation-cadence contract.
 """
 from __future__ import annotations
 
@@ -45,9 +46,10 @@ REQUIRED_ROOT_ATTRS = {
     "data-evidence-window-clarity": "signal-field-v2.13",
     "data-evidence-identity": "signal-field-v2.14",
     "data-evidence-presentation": "signal-field-v2.15",
+    "data-generation-cadence-contract": "profile-refresh-v1",
     "data-contribution-total-source": "github-default-contribution-calendar",
     "data-metric-sources": "github-graphql+rest",
-    "data-generation-schedule": "5-minutes",
+    "data-generation-schedule": "30-minutes",
     "data-intensity-scale": "github-contribution-levels-0-4",
     "data-count-semantics": "raw-github-contribution-counts",
     "data-activity-layout": "month-calendar-v2",
@@ -65,6 +67,8 @@ FORBIDDEN = (
     "REFRESH · DAILY",
     "Refresh cadence: every 5 minutes.",
     "Refresh cadence: daily.",
+    "SCHEDULE · 5 MIN",
+    "Generation schedule: every 5 minutes; execution and README cache propagation are best-effort.",
     ">ISSUES</text>",
     ">BUGS FOUND</text>",
     "DIM CONTEXT",
@@ -236,12 +240,12 @@ def validate_file(path: Path) -> None:
             fail(f"{path.name}: forbidden stale/sensitive contract remains: {forbidden}")
 
     expected_footer = (
-        "SOURCES · GITHUB GRAPHQL + REST · SCHEDULE · 5 MIN"
-        if "wide" in path.name else "GITHUB API · GRAPHQL + REST · SCHEDULE · 5 MIN"
+        "SOURCES · GITHUB GRAPHQL + REST · SCHEDULE · 30 MIN"
+        if "wide" in path.name else "GITHUB API · GRAPHQL + REST · SCHEDULE · 30 MIN"
     )
     if text.count(expected_footer) != 1:
         fail(f"{path.name}: final source/schedule footer is missing")
-    if "Generation schedule: every 5 minutes; execution and README cache propagation are best-effort." not in text:
+    if "Generation schedule: every 30 minutes; execution and README cache propagation are best-effort." not in text:
         fail(f"{path.name}: accessible best-effort schedule semantics are missing")
 
     if "wide" in path.name:
@@ -271,7 +275,7 @@ def validate_directory(directory: Path) -> None:
     print(
         "Final Signal Field validation passed: four responsive artifacts preserve one measured evidence set "
         f"({evidence_id}), source-accurate authored-Issues semantics, outline-only leading context, maximum-contrast "
-        "month markers, a single latest-day ring, balanced glyph geometry, and best-effort five-minute scheduling."
+        "month markers, a single latest-day ring, balanced glyph geometry, and best-effort 30-minute scheduling."
     )
 
 
