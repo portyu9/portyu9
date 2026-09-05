@@ -2,8 +2,8 @@
 """Build the custom predicate used for generated profile-evidence attestations.
 
 Subject digests are supplied by actions/attest. This predicate records source revision,
-workflow identity, published paths, validation/authority boundaries, and the deterministic
-Signal Field Evidence ID shared by the four attested Signal Field variants.
+workflow identity, published paths, validation/authority boundaries, the deterministic
+Signal Field Evidence ID, and the Portfolio Evidence Ledger identity.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ KIND = "profile-evidence-attestation"
 SCHEMA_VERSION = 1
 BOUNDARY = "attest-validated-evidence"
 EVIDENCE_SCHEMA = "signal-field-evidence-v1"
+PORTFOLIO_LEDGER_VERSION = "portfolio-evidence-ledger-v1"
 CLAIM = (
     "Subjects passed repository-defined validation at sourceRevision before publication; "
     "this attests artifact provenance and contract conformance, not universal certification."
@@ -27,6 +28,7 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 DIGITS = re.compile(r"^[0-9]+$")
 EVIDENCE_ID = re.compile(r"^SF1-[0-9A-F]{16}$")
 EVIDENCE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+PORTFOLIO_EVIDENCE_ID = re.compile(r"^PL1-[0-9A-F]{16}$")
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 
@@ -41,6 +43,7 @@ PUBLISHED_PATHS = (
     "engineering-spotlight/spotlight-2-dark.svg",
     "engineering-spotlight/spotlight-3-light.svg",
     "engineering-spotlight/spotlight-3-dark.svg",
+    "portfolio-evidence/portfolio-evidence-ledger.json",
 )
 SIGNAL_FIELD_FILENAMES = tuple(Path(path).name for path in PUBLISHED_PATHS[:4])
 SIGNAL_FIELD_VALIDATORS = (
@@ -50,6 +53,9 @@ SIGNAL_FIELD_VALIDATORS = (
 )
 SPOTLIGHT_VALIDATORS = (
     "scripts/validate-engineering-spotlight.py --require-live",
+)
+PORTFOLIO_LEDGER_VALIDATORS = (
+    "scripts/validate-portfolio-evidence-ledger.py --require-live",
 )
 
 
@@ -92,7 +98,33 @@ def read_signal_field_evidence(directory: Path) -> dict[str, str]:
     return {"schema": schema, "id": evidence_id, "digest": digest}
 
 
-def build_predicate(env: dict[str, str], signal_field_dir: Path) -> dict[str, object]:
+def read_portfolio_ledger_evidence(directory: Path) -> dict[str, object]:
+    path = directory / "portfolio-evidence-ledger.json"
+    if not path.is_file() or path.stat().st_size == 0:
+        raise ValueError("attestation Portfolio Evidence Ledger subject is missing")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if payload.get("version") != PORTFOLIO_LEDGER_VERSION:
+        raise ValueError("Portfolio Evidence Ledger version changed")
+    if payload.get("kind") != "portfolio-evidence-ledger":
+        raise ValueError("Portfolio Evidence Ledger kind changed")
+    evidence_id = payload.get("evidence_id")
+    digest = payload.get("evidence_digest")
+    system_count = payload.get("system_count")
+    if not isinstance(evidence_id, str) or not PORTFOLIO_EVIDENCE_ID.fullmatch(evidence_id):
+        raise ValueError("Portfolio Evidence Ledger ID is malformed")
+    if not isinstance(digest, str) or not EVIDENCE_DIGEST.fullmatch(digest):
+        raise ValueError("Portfolio Evidence Ledger digest is malformed")
+    if system_count != 13:
+        raise ValueError("Portfolio Evidence Ledger system count changed")
+    return {
+        "version": PORTFOLIO_LEDGER_VERSION,
+        "id": evidence_id,
+        "digest": digest,
+        "systemCount": system_count,
+    }
+
+
+def build_predicate(env: dict[str, str], signal_field_dir: Path, portfolio_ledger_dir: Path) -> dict[str, object]:
     repository = required_env("GITHUB_REPOSITORY", env)
     revision = required_env("GITHUB_SHA", env)
     workflow_ref = required_env("GITHUB_WORKFLOW_REF", env)
@@ -127,9 +159,11 @@ def build_predicate(env: dict[str, str], signal_field_dir: Path) -> dict[str, ob
             "publishedPaths": list(PUBLISHED_PATHS),
         },
         "signalFieldEvidence": read_signal_field_evidence(signal_field_dir),
+        "portfolioEvidenceLedger": read_portfolio_ledger_evidence(portfolio_ledger_dir),
         "validation": {
             "signalField": list(SIGNAL_FIELD_VALIDATORS),
             "engineeringSpotlight": list(SPOTLIGHT_VALIDATORS),
+            "portfolioEvidenceLedger": list(PORTFOLIO_LEDGER_VALIDATORS),
             "boundary": BOUNDARY,
         },
         "authority": {
@@ -164,8 +198,8 @@ def validate_predicate(predicate: dict[str, object]) -> None:
     paths = subject_set.get("publishedPaths")
     if paths != list(PUBLISHED_PATHS):
         raise ValueError("published subject paths changed")
-    if len(set(PUBLISHED_PATHS)) != 10:
-        raise ValueError("published subject paths must be ten unique SVGs")
+    if len(set(PUBLISHED_PATHS)) != 11:
+        raise ValueError("published subject paths must be eleven unique subjects")
 
     evidence = predicate.get("signalFieldEvidence")
     if not isinstance(evidence, dict):
@@ -177,6 +211,18 @@ def validate_predicate(predicate: dict[str, object]) -> None:
     if not isinstance(evidence.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(str(evidence["digest"])):
         raise ValueError("Signal Field evidence digest is malformed")
 
+    portfolio = predicate.get("portfolioEvidenceLedger")
+    if not isinstance(portfolio, dict):
+        raise ValueError("portfolioEvidenceLedger is missing")
+    if portfolio.get("version") != PORTFOLIO_LEDGER_VERSION:
+        raise ValueError("Portfolio Evidence Ledger version changed")
+    if not isinstance(portfolio.get("id"), str) or not PORTFOLIO_EVIDENCE_ID.fullmatch(str(portfolio["id"])):
+        raise ValueError("Portfolio Evidence Ledger ID is malformed")
+    if not isinstance(portfolio.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(str(portfolio["digest"])):
+        raise ValueError("Portfolio Evidence Ledger digest is malformed")
+    if portfolio.get("systemCount") != 13:
+        raise ValueError("Portfolio Evidence Ledger system count changed")
+
     validation = predicate.get("validation")
     if not isinstance(validation, dict) or validation.get("boundary") != BOUNDARY:
         raise ValueError("validation boundary changed")
@@ -184,6 +230,8 @@ def validate_predicate(predicate: dict[str, object]) -> None:
         raise ValueError("Signal Field validator set changed")
     if validation.get("engineeringSpotlight") != list(SPOTLIGHT_VALIDATORS):
         raise ValueError("Engineering Spotlight validator set changed")
+    if validation.get("portfolioEvidenceLedger") != list(PORTFOLIO_LEDGER_VALIDATORS):
+        raise ValueError("Portfolio Evidence Ledger validator set changed")
 
     authority = predicate.get("authority")
     if not isinstance(authority, dict):
@@ -215,25 +263,41 @@ def fixture_env() -> dict[str, str]:
 
 def self_test() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        directory = Path(tmp)
+        root = Path(tmp)
+        signal_dir = root / "signal"
+        ledger_dir = root / "ledger"
+        signal_dir.mkdir()
+        ledger_dir.mkdir()
         for filename in SIGNAL_FIELD_FILENAMES:
-            (directory / filename).write_text(
+            (signal_dir / filename).write_text(
                 '<svg data-evidence-identity="signal-field-v2.14" '
                 'data-evidence-id-schema="signal-field-evidence-v1" '
                 'data-evidence-id="SF1-0123456789ABCDEF" '
                 f'data-evidence-digest="sha256:{"a" * 64}"></svg>',
                 encoding="utf-8",
             )
-        predicate = build_predicate(fixture_env(), directory)
+        (ledger_dir / "portfolio-evidence-ledger.json").write_text(
+            json.dumps(
+                {
+                    "version": PORTFOLIO_LEDGER_VERSION,
+                    "kind": "portfolio-evidence-ledger",
+                    "evidence_id": "PL1-0123456789ABCDEF",
+                    "evidence_digest": f"sha256:{'b' * 64}",
+                    "system_count": 13,
+                }
+            ),
+            encoding="utf-8",
+        )
+        predicate = build_predicate(fixture_env(), signal_dir, ledger_dir)
         validate_predicate(predicate)
         encoded = json.dumps(predicate, sort_keys=True, separators=(",", ":"))
         reparsed = json.loads(encoded)
         validate_predicate(reparsed)
         if reparsed["run"]["url"] != "https://github.com/portyu9/portyu9/actions/runs/123456789":
             raise AssertionError("workflow run URL changed")
-        if reparsed["signalFieldEvidence"]["id"] != "SF1-0123456789ABCDEF":
-            raise AssertionError("Signal Field Evidence ID was not recorded")
-    print("Profile evidence attestation predicate self-test passed: v1 + Signal Field Evidence ID + three Spotlight slots")
+        if reparsed["portfolioEvidenceLedger"]["id"] != "PL1-0123456789ABCDEF":
+            raise AssertionError("Portfolio Evidence Ledger ID was not recorded")
+    print("Profile evidence attestation predicate self-test passed: Signal Field + three Spotlights + Portfolio Evidence Ledger")
 
 
 def main() -> int:
@@ -241,19 +305,20 @@ def main() -> int:
         if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
             self_test()
             return 0
-        if len(sys.argv) != 3:
+        if len(sys.argv) != 4:
             raise ValueError(
-                "usage: build-profile-evidence-attestation.py <signal-field-directory> <output.json> | --self-test"
+                "usage: build-profile-evidence-attestation.py <signal-field-directory> <portfolio-ledger-directory> <output.json> | --self-test"
             )
         signal_field_dir = Path(sys.argv[1])
-        predicate = build_predicate(dict(os.environ), signal_field_dir)
+        portfolio_ledger_dir = Path(sys.argv[2])
+        predicate = build_predicate(dict(os.environ), signal_field_dir, portfolio_ledger_dir)
         validate_predicate(predicate)
-        output = Path(sys.argv[2])
+        output = Path(sys.argv[3])
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(predicate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(
             f"wrote profile evidence attestation predicate: {output} · "
-            f"{predicate['signalFieldEvidence']['id']}"
+            f"{predicate['signalFieldEvidence']['id']} · {predicate['portfolioEvidenceLedger']['id']}"
         )
         return 0
     except (OSError, ValueError, AssertionError, TypeError, json.JSONDecodeError) as exc:
