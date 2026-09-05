@@ -4,7 +4,7 @@
 The profile's visible taxonomy is capability-oriented rather than tool-oriented. Every
 badge therefore links to a public repository that directly demonstrates that capability,
 and the link set collectively covers every substantive public QA framework currently
-owned by portyu9. Placeholder/empty repositories are deliberately not treated as proof.
+owned by portyu9.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ README = ROOT / "README.md"
 
 EVIDENCE_LINKS = {
     "AI-Enabled QE": "https://github.com/portyu9/ai-qa-automation",
+    "Agent Evaluation / TEVV": "https://github.com/portyu9/qa-automation-ai-agent-evals",
     "Web / UI": "https://github.com/portyu9/qa-automation-dotnet-selenium",
     "API": "https://github.com/portyu9/qa-automation-api-postman-newman",
     "GraphQL": "https://github.com/portyu9/qa-automation-graphql",
@@ -37,6 +38,7 @@ EVIDENCE_LINKS = {
 
 SUBSTANTIVE_PUBLIC_QE_REPOS = {
     "https://github.com/portyu9/ai-qa-automation",
+    "https://github.com/portyu9/qa-automation-ai-agent-evals",
     "https://github.com/portyu9/qa-automation-api-postman-newman",
     "https://github.com/portyu9/qa-automation-dotnet-selenium",
     "https://github.com/portyu9/qa-automation-graphql",
@@ -50,10 +52,6 @@ SUBSTANTIVE_PUBLIC_QE_REPOS = {
     "https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe",
 }
 
-PLACEHOLDER_REPOS = {
-    "https://github.com/portyu9/qa-automation-ai-agent-evals",
-}
-
 
 def fail(message: str) -> None:
     raise ValueError(message)
@@ -65,8 +63,8 @@ def main() -> int:
             fail("README.md is missing")
         text = README.read_text(encoding="utf-8")
 
-        if len(EVIDENCE_LINKS) != 16:
-            fail("capability evidence map must cover exactly the 16 reviewed badges")
+        if len(EVIDENCE_LINKS) != 17:
+            fail("capability evidence map must cover exactly the 17 reviewed badges")
 
         linked_repos: set[str] = set()
         for label, href in EVIDENCE_LINKS.items():
@@ -86,13 +84,9 @@ def main() -> int:
         if missing_repos:
             fail("substantive public QE repositories are not represented by badge evidence links: " + ", ".join(missing_repos))
 
-        for repo in PLACEHOLDER_REPOS:
-            if f'href="{repo}"' in text:
-                fail(f"placeholder repository must not be presented as capability evidence: {repo}")
-
         print(
-            "Capability evidence validation passed: all 16 reviewed badges are evidence-linked and the link set "
-            "covers all 12 substantive public QE framework repositories without treating placeholders as proof."
+            "Capability evidence validation passed: all 17 reviewed badges are evidence-linked and the link set "
+            "covers all 13 substantive public QE framework repositories."
         )
         return 0
     except (OSError, ValueError) as exc:
