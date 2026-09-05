@@ -1,5 +1,5 @@
 {
-  "selection_date_utc": "2026-09-04",
+  "selection_date_utc": "2026-09-05",
   "selection_policy": "deterministic-daily-sha256-sample",
   "slots": [
     {
@@ -14,15 +14,15 @@
       "topology": "layered-ladder"
     },
     {
-      "glyph": "shield-route",
-      "repository": "portyu9/qa-automation-java-restassured",
+      "glyph": "gauge-needle",
+      "repository": "portyu9/qa-automation-load-k6",
       "slot": 2,
       "statuses": {
         "CI": "PASSING",
         "SECURITY": "PASSING"
       },
-      "title": "REST ASSURED QE",
-      "topology": "protocol-chain"
+      "title": "K6 PERFORMANCE QE",
+      "topology": "load-wave"
     }
   ],
   "status_scope": "latest named workflow run on main",
