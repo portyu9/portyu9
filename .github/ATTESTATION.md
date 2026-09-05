@@ -10,6 +10,20 @@ The production profile workflow separates three authorities:
 
 The third-party Signal Field generator therefore never receives repository write or attestation authority, and the publication job never creates the attestation it relies on.
 
+## Predicate schema versioning
+
+Current attestations use the immutable **v2** predicate type:
+
+`https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json`
+
+`profile-evidence-v2.schema.json` fixes the exact eleven published subject paths, exact validator sets, authority strings, and claim boundary. Every v2 predicate also records `predicateSchema.id` plus `predicateSchema.digest`, the SHA-256 digest of the exact schema bytes used by the builder.
+
+The earlier `profile-evidence-v1.schema.json` remains in the repository solely for historical verification and is now **frozen byte-for-byte**. Production no longer issues v1 predicates. A published predicate schema is never edited to describe a later contract; a future contract change that alters predicate semantics must receive a new schema version and predicate type.
+
+Legacy v1 predicate type:
+
+`https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json`
+
 ## Attested subjects
 
 One attestation covers the eleven files that make up the generated profile-evidence set: ten SVG presentation subjects plus the machine-readable Portfolio Evidence Ledger.
@@ -28,11 +42,7 @@ One attestation covers the eleven files that make up the generated profile-evide
 
 `engineering-spotlight/spotlight-manifest.json` is internal generation/validation metadata. It remains inside the immutable workflow artifact long enough for the Spotlight validator to prove manifest/SVG provenance agreement, but it is deliberately excluded from the public `generated` branch. The published generated evidence set is therefore exactly the same eleven subjects named by the attestation contract.
 
-The custom predicate type is:
-
-`https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json`
-
-The predicate records the exact source revision, workflow/run identity, published subject paths, validators, Signal Field Evidence ID, Portfolio Evidence Ledger identity, and the authority separation under which the evidence was produced.
+The v2 predicate records the exact source revision, workflow/run identity, predicate-schema identity/digest, published subject paths, validators, Signal Field Evidence ID, Portfolio Evidence Ledger identity, and the authority separation under which the evidence was produced.
 
 ## Signal Field Evidence ID
 
@@ -60,12 +70,12 @@ It does **not** certify every software behavior represented by the profile, repl
 
 ## Verification
 
-After downloading any generated subject, verify it with the GitHub CLI. For an SVG:
+After downloading any newly generated subject, verify it with the GitHub CLI using the current v2 predicate type. For an SVG:
 
 ```bash
 gh attestation verify <artifact.svg> \
   --repo portyu9/portyu9 \
-  --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json
+  --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json
 ```
 
 The Portfolio Evidence Ledger can be verified the same way:
@@ -73,7 +83,9 @@ The Portfolio Evidence Ledger can be verified the same way:
 ```bash
 gh attestation verify portfolio-evidence-ledger.json \
   --repo portyu9/portyu9 \
-  --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json
+  --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json
 ```
 
-A successful verification binds the artifact digest to the GitHub Actions workflow identity that created the attestation. The predicate should then be inspected for `sourceRevision`, `signalFieldEvidence.id`, `signalFieldEvidence.digest`, `portfolioEvidenceLedger.id`, `portfolioEvidenceLedger.digest`, validation scope, subject set, and authority boundary before making any broader inference.
+A successful verification binds the artifact digest to the GitHub Actions workflow identity that created the attestation. For v2, inspect `sourceRevision`, `predicateSchema.id`, `predicateSchema.digest`, `signalFieldEvidence.id`, `signalFieldEvidence.digest`, `portfolioEvidenceLedger.id`, `portfolioEvidenceLedger.digest`, validation scope, subject set, and authority boundary before making any broader inference. The recorded `predicateSchema.digest` should equal the SHA-256 digest of the frozen v2 schema bytes used for that run.
+
+Historical attestations created before the v2 cutover remain verifiable with the frozen `profile-evidence-v1.schema.json` predicate type. The existence of a legacy verification path does not authorize new v1 attestations or future edits to the v1 schema.
