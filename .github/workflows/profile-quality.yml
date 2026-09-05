@@ -77,6 +77,9 @@ jobs:
           python3 scripts/stage-profile-evidence.py --self-test
           python3 scripts/validate-profile-evidence-subjects.py
 
+      - name: Validate production refresh trigger closure
+        run: python3 scripts/validate-profile-stats-trigger-contract.py
+
       - name: Validate engineering attestation predicate builder
         run: python3 scripts/build-profile-evidence-attestation.py --self-test
 
