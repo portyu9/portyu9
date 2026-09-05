@@ -275,11 +275,7 @@ def main() -> int:
     require(readme.count('width="620"') >= 2, "Spotlight cards must retain native-width desktop proportions")
     activity=readme.find('<h2 align="center">◉ Activity Metrics</h2>'); signal=readme.find('alt="GitHub activity signal field"'); systems=readme.find('<h2 align="center">◇ Selected Engineering Systems</h2>'); spotlight=readme.find('<h3 align="center">↻ Evidence Spotlight</h3>'); copyright_notice=readme.find("© 2026 Ƴunior Ƥortal")
     require(activity<signal<systems<spotlight<copyright_notice, "Selected systems and spotlight placement changed")
-    footer='\
----\
-\
-<p align="center">\
-<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
+    footer='\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
     require(readme.count(footer)==1, "A horizontal rule must exist immediately above the copyright footer")
     require("release-candidate.yml?branch=main" not in readme, "Profile must not present an RC workflow with no current main status")
     print("Profile v4 validation passed: 17 evidence-linked taxonomy capabilities, desktop-only thesis typography, four rich explicit-theme flagship systems, and two generated daily Evidence Spotlights remain attributable, scoped, responsive, and fail-closed by validation.")
