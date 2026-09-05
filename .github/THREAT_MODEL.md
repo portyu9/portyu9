@@ -20,7 +20,8 @@ The architecture is intended to ensure that:
 7. the signer cannot publish repository content and the publisher cannot mint the attestation on which publication depends;
 8. public generated subjects exactly equal attested subjects;
 9. published predicate schemas cannot be retroactively redefined;
-10. mutable generated profile image URLs carry explicit, reviewed cache identities.
+10. mutable generated profile image URLs carry explicit, reviewed cache identities;
+11. source-controlled ruleset intent and the live GitHub control-plane must agree before the required Profile Quality gate passes.
 
 ## Protected assets
 
@@ -38,6 +39,7 @@ The architecture is intended to ensure that:
 | v3 predicate schema | current issuance semantics with `predicateSchema.digest` and Ledger v2 binding |
 | `generated` branch | exact artifact-only public evidence history |
 | README generated-asset cache tokens | cache identity aligned with current visual surface contract |
+| Repository ruleset control plane | live enforcement must match the reviewed desired-state contract |
 | GitHub Actions token capabilities | separation of read, signing, and publication authority |
 
 ## Trust boundaries
@@ -52,11 +54,11 @@ Source changes reach `main` through pull requests gated by these five exact stat
 - `analyze-actions`
 - `analyze-python`
 
-`Protect Main` is expected to block deletion and non-fast-forward updates and require the branch to be current. Review-thread resolution and other ruleset details are GitHub control-plane settings and are audited separately from source-controlled validators.
+`Protect Main` must block deletion and non-fast-forward updates, require pull requests, allow only merge commits, require review-thread resolution, and require the branch to be current. The required `validate-contracts` job runs `python3 scripts/validate-ruleset-contract.py --live`, so these settings and the exact five-check inventory are compared with the live GitHub control-plane before merge rather than inferred from repository files alone.
 
 ### 2. Read-only Profile Quality boundary
 
-`Profile quality / validate-contracts` receives `contents: read` and executes fail-closed source contracts, including profile assets, cache identities, Signal Field, Portfolio Ledger v2, Ledger-backed Spotlight projection, attestation, dependency provenance, workflow authority, shell safety, CodeQL governance, assurance documentation, ruleset source, and repository governance.
+`Profile quality / validate-contracts` receives `contents: read` and executes fail-closed source contracts, including profile assets, cache identities, Signal Field, Portfolio Ledger v2, Ledger-backed Spotlight projection, attestation, dependency provenance, workflow authority, shell safety, CodeQL governance, assurance documentation, repository governance, and source-plus-live ruleset verification. The ruleset API read uses the workflow's read-only GitHub token and grants no settings mutation authority.
 
 `Profile quality / integration-pinned-upstream` is also read-only. It executes the exact reviewed upstream Signal Field generator, applies the production transformation chain, performs an artifact upload/download round trip with digest enforcement, collects one live Portfolio Evidence Ledger v2, renders Spotlight from that Ledger without a second live evidence collection pass, and emits a read-only `GITHUB_STEP_SUMMARY`.
 
@@ -138,11 +140,18 @@ The README references mutable `generated`-branch images through explicit family 
 
 The **Profile image cache boundary** is presentation/version hygiene; it does not replace evidence provenance or attestation. Missing, stale, or inconsistent tokens fail Profile Quality.
 
+### 14. Ruleset drift boundary
+
+`.github/rulesets/repository-rulesets-v1.json` is the reviewed desired state for `Protect Main` and `Protect generated`. `validate-ruleset-contract.py --live` reads the current repository rulesets and fails when ruleset inventory, targets, enforcement, bypass actors, pull-request parameters, required statuses, or generated-branch protections differ.
+
+This closes a prior observability gap where settings could drift without a source diff and remain outside required PR assurance. The check is intentionally read-only: detecting drift does not imply the workflow has authority to repair it.
+
 ## Detection and prevention matrix
 
 | Threat / failure mode | Primary control | Secondary control | Residual |
 | --- | --- | --- | --- |
 | Unvalidated source merged to `main` | five required status checks + `Protect Main` | no source-side bypass path | validator/control-plane defects remain possible |
+| Ruleset settings drift from reviewed intent | required live ruleset comparison | source-controlled desired-state contract | drift can exist between Profile Quality executions; GitHub API availability is part of the gate |
 | Known vulnerable dependency introduced | Dependency Review | Dependabot discovery | unknown/novel vulnerabilities remain possible |
 | Floating or mislabeled external Action | exact SHA pin | live release-label → SHA provenance | pinned upstream code may itself be flawed |
 | New workflow receives unreviewed authority | closed workflow authority allowlist | CodeQL Actions analysis | validator defects remain possible |
@@ -172,9 +181,9 @@ The design still trusts GitHub platform/hosted runners, reviewed immutable Actio
 - A compromised GitHub-hosted runner or control plane is outside repository-level mitigation.
 - `publish-write-only` intentionally holds `contents: write`; safety depends on source protection, authority isolation, attestation dependency, and repeated validation.
 - Attestation proves provenance and repository-defined contract conformance, not universal behavioral correctness.
-- Public GitHub API/network outages can block live evidence refresh; integrity takes priority over availability.
+- Public GitHub API/network outages can block live evidence refresh or the live ruleset gate; integrity takes priority over availability.
 - Mutable-image cache invalidation cannot force every intermediary to refresh instantly; the repository controls cache identity, not external cache implementation.
-- Settings-level controls can drift without a source diff and therefore require periodic control-plane verification.
+- Settings-level controls can still drift between Profile Quality executions; the next required live gate detects that drift but cannot autonomously repair it without separate administration authority.
 
 ## Verification checklist
 
@@ -182,14 +191,15 @@ After a material workflow, evidence, or governance change:
 
 1. confirm the exact five required PR checks succeeded on the final head;
 2. confirm Action provenance, Dependency Review, authority, shell-safety, cache, ruleset, and CodeQL validators pass;
-3. confirm one Portfolio Ledger v2 is collected before Spotlight and the Spotlight projection validates against that exact Ledger;
-4. confirm result, binding, and freshness stay independent across Ledger, Spotlight metadata, read-only summary, and predicate semantics;
-5. confirm the public and attested subject sets remain the same exact 11 files;
-6. confirm v1/v2 schema bytes remain frozen and current issuance uses v3 with `predicateSchema.digest`;
-7. confirm generation has no write/signing authority, attestation has no repository write, and publication has no signing authority;
-8. confirm a real production `Update profile stats` run succeeds after production-path changes;
-9. confirm `generated` contains only the four Signal Field SVGs, six Spotlight SVGs, and Portfolio Ledger JSON;
-10. confirm generated README images pass the cache-identity contract and inspect repository rulesets separately from source-controlled validation.
+3. confirm `validate-ruleset-contract.py --live` matched the checked-in contract to the live GitHub control-plane;
+4. confirm one Portfolio Ledger v2 is collected before Spotlight and the Spotlight projection validates against that exact Ledger;
+5. confirm result, binding, and freshness stay independent across Ledger, Spotlight metadata, read-only summary, and predicate semantics;
+6. confirm the public and attested subject sets remain the same exact 11 files;
+7. confirm v1/v2 schema bytes remain frozen and current issuance uses v3 with `predicateSchema.digest`;
+8. confirm generation has no write/signing authority, attestation has no repository write, and publication has no signing authority;
+9. confirm a real production `Update profile stats` run succeeds after production-path changes;
+10. confirm `generated` contains only the four Signal Field SVGs, six Spotlight SVGs, and Portfolio Ledger JSON;
+11. confirm generated README images pass the cache-identity contract.
 
 ## Change policy
 
