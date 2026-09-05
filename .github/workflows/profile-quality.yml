@@ -99,6 +99,13 @@ jobs:
           python3 scripts/generate-engineering-spotlight.py "$tmp" --date 2026-09-04 --offline
           python3 scripts/validate-engineering-spotlight.py "$tmp"
 
+      - name: Validate deterministic Portfolio Evidence Ledger
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          python3 scripts/generate-portfolio-evidence-ledger.py "$tmp" --date 2026-09-04 --offline
+          python3 scripts/validate-portfolio-evidence-ledger.py "$tmp"
+
       - name: Validate engineering attestation predicate builder
         run: python3 scripts/build-profile-evidence-attestation.py --self-test
 
@@ -213,3 +220,12 @@ jobs:
           tmp="$(mktemp -d)"
           python3 scripts/generate-engineering-spotlight.py "$tmp"
           python3 scripts/validate-engineering-spotlight.py "$tmp" --require-live
+
+      - name: Exercise live Portfolio Evidence Ledger path
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          python3 scripts/generate-portfolio-evidence-ledger.py "$tmp"
+          python3 scripts/validate-portfolio-evidence-ledger.py "$tmp" --require-live
