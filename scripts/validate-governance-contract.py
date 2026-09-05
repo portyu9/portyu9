@@ -65,6 +65,7 @@ def validate_quality(text: str) -> None:
     require("name: integration-pinned-upstream" in integration, "Required integration-check job name changed")
     require("permissions:\n      contents: read" in validate, "Contract-check job must remain read-only")
     require("permissions:\n      contents: read" in integration, "Integration job must remain read-only")
+    require("contents: write" not in integration, "Profile Quality integration must not receive repository write authority")
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in integration, "PR integration must execute reviewed pinned upstream generator")
     require("python3 scripts/identify-signal-field-evidence.py \"$READY_DIR\"" in integration, "PR integration must stamp Signal Field Evidence ID")
     require("python3 scripts/validate-signal-field-v214.py \"$READY_DIR\"" in integration, "PR integration must validate Signal Field Evidence ID")
@@ -78,6 +79,17 @@ def validate_quality(text: str) -> None:
     require("python3 scripts/validate-workflow-shell-safety.py" in validate, "Profile Quality must execute workflow shell-safety validator")
     require("python3 scripts/validate-governance-contract.py" in validate, "Profile Quality must execute this governance validator")
     require("python3 scripts/validate-profile-attestation-contract.py" in validate, "Profile Quality must execute engineering-attestation validator")
+    require(
+        "python3 scripts/write-profile-contract-summary.py --self-test" in validate,
+        "Profile Quality must self-test the read-only contract summary renderer",
+    )
+    require(
+        "python3 scripts/write-profile-contract-summary.py" in integration,
+        "Profile Quality integration must publish the read-only contract summary",
+    )
+    require("SIGNAL_FIELD_DIR:" in integration, "Contract summary must bind the live Signal Field candidate")
+    require("SPOTLIGHT_DIR: integration-engineering-spotlight" in integration, "Contract summary must bind live Spotlight evidence")
+    require("PORTFOLIO_LEDGER_DIR: integration-portfolio-evidence" in integration, "Contract summary must bind the live Portfolio Ledger")
 
 
 def validate_stats(text: str) -> None:
@@ -174,9 +186,9 @@ def main() -> int:
         print(
             "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
             "Dependency Review governance is mandatory, workflow authority is closed, workflow shell source is expression-safe, "
-            "pinned-upstream integration is mandatory, three artifact downloads are integrity-checked, Signal Field and Portfolio "
-            "Ledger identities are generated/validated before signing, third-party generation has neither write nor signing authority, "
-            "attestation is isolated, and publication revalidates the same identities."
+            "pinned-upstream integration is mandatory, its read-only contract summary binds live candidate evidence, three artifact "
+            "downloads are integrity-checked, Signal Field and Portfolio Ledger identities are generated/validated before signing, "
+            "third-party generation has neither write nor signing authority, attestation is isolated, and publication revalidates the same identities."
         )
         return 0
     except (OSError, ValueError) as exc:
