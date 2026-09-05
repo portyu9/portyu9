@@ -3,7 +3,8 @@
 
 Default mode is deterministic and read-only: validate the checked-in contract and
 its governance documentation. ``--live`` additionally reads GitHub's repository
-ruleset API and requires the control-plane state to match the checked-in target.
+ruleset API and requires every control-plane field observable to the read-only
+workflow identity to match the checked-in target.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / ".github" / "rulesets" / "repository-rulesets-v1.json"
 DOC = ROOT / ".github" / "RULESETS.md"
+QUALITY = ROOT / ".github" / "workflows" / "profile-quality.yml"
 REPOSITORY = "portyu9/portyu9"
 API = f"https://api.github.com/repos/{REPOSITORY}/rulesets"
 
@@ -91,25 +93,46 @@ def validate_source(payload: dict[str, Any]) -> None:
         "no bypass actors",
         "--live",
         "control-plane",
+        "merge-blocking",
+        "admin-scope",
     ):
         require(phrase in doc, f"ruleset governance documentation is missing: {phrase}")
 
+    quality = QUALITY.read_text(encoding="utf-8")
+    require(
+        "name: Validate repository ruleset source + live observable control-plane contract" in quality,
+        "Profile Quality must expose the ruleset source + live observable control-plane gate",
+    )
+    require(
+        "run: python3 scripts/validate-ruleset-contract.py --live" in quality,
+        "Profile Quality must compare the source ruleset contract with live GitHub state",
+    )
+    require(
+        "GITHUB_TOKEN: ${{ github.token }}" in quality,
+        "live ruleset comparison must receive the workflow's read-only GitHub token through env",
+    )
+    require(
+        "run: python3 scripts/validate-ruleset-contract.py\n" not in quality,
+        "Profile Quality must not regress to source-only ruleset validation",
+    )
 
-def request_json(url: str) -> Any:
+
+def request_json(url: str, *, authenticated: bool = True) -> Any:
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "portyu9-ruleset-contract-v1",
         "X-GitHub-Api-Version": "2022-11-28",
     }
     token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if token:
+    if authenticated and token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
             return json.load(response)
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise ValueError(f"could not read GitHub ruleset API: {exc}") from exc
+        mode = "authenticated" if authenticated and token else "public"
+        raise ValueError(f"could not read GitHub ruleset API ({mode} view): {exc}") from exc
 
 
 def rule_map(detail: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -122,21 +145,41 @@ def rule_map(detail: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
-def validate_live(payload: dict[str, Any]) -> None:
+def observable_bypass_actors(name: str, ruleset_id: int, detail: dict[str, Any]) -> list[Any] | None:
+    """Return bypass actors only when GitHub actually exposes them to this gate.
+
+    GitHub's short-lived Actions token currently redacts ``bypass_actors``. The
+    public view for this public repository can redact the same field. We never map
+    an omitted field to an empty list: visible values are enforced, while omission
+    remains an explicit admin-scope verification gap documented by the contract.
+    """
+    observed = detail.get("bypass_actors")
+    if isinstance(observed, list):
+        return observed
+    public_detail = request_json(f"{API}/{ruleset_id}", authenticated=False)
+    require(isinstance(public_detail, dict), f"{name}: public ruleset detail is malformed")
+    observed = public_detail.get("bypass_actors")
+    return observed if isinstance(observed, list) else None
+
+
+def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
     collection = request_json(API)
     require(isinstance(collection, list), "live ruleset collection is malformed")
     by_name = {item.get("name"): item for item in collection if isinstance(item, dict)}
     require(set(by_name) == {"Protect Main", "Protect generated"}, "live repository ruleset inventory differs from contract")
 
     details: dict[str, dict[str, Any]] = {}
+    ids: dict[str, int] = {}
     for name, item in by_name.items():
         ruleset_id = item.get("id")
         require(isinstance(ruleset_id, int), f"live ruleset id is missing: {name}")
         detail = request_json(f"{API}/{ruleset_id}")
         require(isinstance(detail, dict), f"live ruleset detail is malformed: {name}")
         details[str(name)] = detail
+        ids[str(name)] = ruleset_id
 
     expected = payload["rulesets"]
+    bypass_unobservable: list[str] = []
     for name in ("Protect Main", "Protect generated"):
         detail = details[name]
         target = expected[name]
@@ -145,7 +188,11 @@ def validate_live(payload: dict[str, Any]) -> None:
         conditions = detail.get("conditions", {}).get("ref_name", {})
         require(conditions.get("include") == target["include"], f"{name}: live include target differs from contract")
         require(conditions.get("exclude") == target["exclude"], f"{name}: live exclude target differs from contract")
-        require(detail.get("bypass_actors") == [], f"{name}: live bypass actors must remain empty")
+        bypass_actors = observable_bypass_actors(name, ids[name], detail)
+        if bypass_actors is None:
+            bypass_unobservable.append(name)
+        else:
+            require(bypass_actors == [], f"{name}: live bypass actors must remain empty; observed={bypass_actors!r}")
 
     main_rules = rule_map(details["Protect Main"])
     require(set(main_rules) == {"deletion", "non_fast_forward", "pull_request", "required_status_checks"}, "Protect Main: live rule inventory differs from contract")
@@ -172,6 +219,7 @@ def validate_live(payload: dict[str, Any]) -> None:
 
     generated_rules = rule_map(details["Protect generated"])
     require(set(generated_rules) == {"deletion", "non_fast_forward"}, "Protect generated: live rule inventory differs from contract")
+    return tuple(bypass_unobservable)
 
 
 def self_test(payload: dict[str, Any]) -> None:
@@ -188,18 +236,25 @@ def self_test(payload: dict[str, Any]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--live", action="store_true", help="also compare the checked-in target with GitHub control-plane state")
+    parser.add_argument("--live", action="store_true", help="also compare checked-in target with GitHub control-plane fields observable to this identity")
     args = parser.parse_args()
     try:
-        for path in (CONTRACT, DOC):
+        for path in (CONTRACT, DOC, QUALITY):
             require(path.is_file(), f"ruleset contract input is missing: {path.relative_to(ROOT)}")
         payload = load_contract()
         validate_source(payload)
         self_test(payload)
+        unobservable: tuple[str, ...] = ()
         if args.live:
-            validate_live(payload)
-        suffix = " + live GitHub control-plane state" if args.live else ""
-        print(f"Repository ruleset contract passed: source-controlled target{suffix} is fail-closed and internally consistent.")
+            unobservable = validate_live(payload)
+        suffix = " + live observable GitHub control-plane state" if args.live else ""
+        print(f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent and observable drift fails closed.")
+        if unobservable:
+            print(
+                "NOTICE: bypass_actors is not exposed to the read-only workflow/public API for: "
+                + ", ".join(unobservable)
+                + "; empty bypass actors remains an admin-scope control-plane audit invariant and omission was not interpreted as empty."
+            )
         return 0
     except (OSError, ValueError, TypeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
