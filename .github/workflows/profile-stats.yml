@@ -26,6 +26,7 @@ on:
       - "scripts/identify-signal-field-evidence.py"
       - "scripts/validate-signal-field-v213.py"
       - "scripts/validate-signal-field-v214.py"
+      - "scripts/set-signal-field-refresh-cadence.py"
       - "scripts/validate-generated-signal-field.py"
       - "scripts/generate-engineering-spotlight.py"
       - "scripts/generate-engineering-spotlight-from-ledger.py"
@@ -39,8 +40,8 @@ on:
       - "scripts/build-profile-evidence-attestation.py"
       - "scripts/validate-profile-attestation-contract.py"
   schedule:
-    # Offset from the top of the hour to reduce scheduled-run congestion.
-    - cron: "2-57/5 * * * *"
+    # Two best-effort refresh opportunities per hour, away from top-of-hour congestion.
+    - cron: "17,47 * * * *"
 
 permissions:
   contents: read
@@ -104,6 +105,7 @@ jobs:
           python3 source/scripts/validate-signal-field-v213.py "$READY_DIR"
           python3 source/scripts/identify-signal-field-evidence.py "$READY_DIR"
           python3 source/scripts/validate-signal-field-v214.py "$READY_DIR"
+          python3 source/scripts/set-signal-field-refresh-cadence.py "$READY_DIR"
           python3 source/scripts/validate-generated-signal-field.py "$READY_DIR"
 
       - name: Upload immutable validated Signal Field
