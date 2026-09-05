@@ -244,6 +244,16 @@ jobs:
           python3 scripts/generate-engineering-spotlight.py integration-engineering-spotlight --ledger integration-portfolio-evidence/portfolio-evidence-ledger.json
           python3 scripts/validate-engineering-spotlight.py integration-engineering-spotlight --ledger integration-portfolio-evidence/portfolio-evidence-ledger.json --require-live
 
+      - name: Bind generated cache identities to live candidate contracts
+        env:
+          SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          python3 scripts/validate-profile-cache-contract.py \
+            --signal-field-dir "$SIGNAL_FIELD_DIR" \
+            --spotlight-dir integration-engineering-spotlight \
+            --ledger-dir integration-portfolio-evidence
+
       - name: Write read-only contract summary
         env:
           SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
