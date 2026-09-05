@@ -117,7 +117,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 </p>
 
 <p align="center"><sub>Workflow badges are scoped <code>main</code>-branch evidence signals, not universal certification.</sub></p>
-
 <h3 align="center">↻ Evidence Spotlight</h3>
 <p align="center"><sub>3 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
@@ -142,10 +141,10 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <div align="center">
 
 <picture>
-  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg?v=signal-field-v216-profile-refresh-v1">
-  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg?v=signal-field-v216-profile-refresh-v1">
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg?v=signal-field-v216-profile-refresh-v1">
-  <img alt="GitHub activity signal field" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg?v=signal-field-v216-profile-refresh-v1" width="100%">
+  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg?v=signal-field-v217-wide-alignment-profile-refresh-v1">
+  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg?v=signal-field-v217-wide-alignment-profile-refresh-v1">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg?v=signal-field-v217-wide-alignment-profile-refresh-v1">
+  <img alt="GitHub activity signal field" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg?v=signal-field-v217-wide-alignment-profile-refresh-v1" width="100%">
 </picture>
 
 </div>
