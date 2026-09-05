@@ -10,6 +10,7 @@ on:
       - "assets/**"
       - "scripts/**"
       - ".github/GOVERNANCE.md"
+      - ".github/REFRESH_CADENCE.md"
       - ".github/THREAT_MODEL.md"
       - ".github/RULESETS.md"
       - ".github/rulesets/**"
@@ -91,6 +92,9 @@ jobs:
 
       - name: Validate Signal Field v2.14 Evidence ID
         run: python3 scripts/validate-signal-field-v214.py --self-test
+
+      - name: Validate Signal Field refresh cadence contract
+        run: python3 scripts/set-signal-field-refresh-cadence.py --self-test
 
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile-v4.py
@@ -197,6 +201,7 @@ jobs:
           python3 scripts/validate-signal-field-v213.py "$READY_DIR"
           python3 scripts/identify-signal-field-evidence.py "$READY_DIR"
           python3 scripts/validate-signal-field-v214.py "$READY_DIR"
+          python3 scripts/set-signal-field-refresh-cadence.py "$READY_DIR"
           python3 scripts/validate-generated-signal-field.py "$READY_DIR"
 
       - name: Upload Signal Field review artifacts
