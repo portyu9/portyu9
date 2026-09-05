@@ -3,7 +3,8 @@
 
 This replaces duplicated stage ordering in Profile Quality and production workflows.
 The manifest is the reviewed stage registry; this orchestrator validates its exact v1
-order, logs each stage, and executes every stage with the current Python interpreter.
+order, logs each stage, executes every production stage with the current interpreter,
+and centralizes the same stage self-tests previously listed one-by-one in workflow YAML.
 No network or repository-write authority is added here.
 """
 from __future__ import annotations
@@ -41,6 +42,24 @@ EXPECTED_STAGE_IDS = (
     "refresh-and-wide-v2.18",
     "validate-publishable",
 )
+EXPECTED_SELF_TEST_IDS = (
+    "customize-v2",
+    "polish-v2.1",
+    "evidence-v2.2",
+    "background-v2.3",
+    "portal-v2.4",
+    "layout-v2.5",
+    "metrics-v2.6",
+    "activity-v2.7",
+    "lines-v2.8",
+    "profile-total-v2.9",
+    "labels-v2.10",
+    "glyphs-v2.11",
+    "balance-v2.12",
+    "clarity-v2.13",
+    "validate-v2.14",
+    "refresh-and-wide-v2.18",
+)
 ALLOWED_KINDS = {"transform", "validate"}
 ALLOWED_SCOPES = {"wide+compact", "wide+compact-with-desktop-finalizer"}
 
@@ -62,6 +81,7 @@ def load_manifest() -> dict[str, object]:
 
     previous: str | None = None
     seen_scripts: set[str] = set()
+    self_test_ids: list[str] = []
     for index, stage in enumerate(stages):
         require(isinstance(stage, dict), f"stage {index} must be an object")
         stage_id = stage.get("id")
@@ -69,6 +89,7 @@ def load_manifest() -> dict[str, object]:
         kind = stage.get("kind")
         scope = stage.get("responsive_scope")
         predecessor = stage.get("required_predecessor")
+        self_test_enabled = stage.get("self_test")
         require(isinstance(stage_id, str) and stage_id, f"stage {index} id is invalid")
         require(isinstance(stage.get("contract"), str) and stage.get("contract"), f"{stage_id}: contract is missing")
         require(isinstance(script, str) and script.endswith(".py"), f"{stage_id}: script is invalid")
@@ -76,9 +97,13 @@ def load_manifest() -> dict[str, object]:
         require((SCRIPTS / script).is_file(), f"{stage_id}: script is missing: {script}")
         require(kind in ALLOWED_KINDS, f"{stage_id}: unsupported kind: {kind!r}")
         require(scope in ALLOWED_SCOPES, f"{stage_id}: unsupported responsive scope: {scope!r}")
+        require(isinstance(self_test_enabled, bool), f"{stage_id}: self_test must be boolean")
         require(predecessor == previous, f"{stage_id}: predecessor must be {previous!r}, got {predecessor!r}")
+        if self_test_enabled:
+            self_test_ids.append(stage_id)
         seen_scripts.add(script)
         previous = stage_id
+    require(tuple(self_test_ids) == EXPECTED_SELF_TEST_IDS, "Signal Field pipeline self-test coverage changed")
     return data
 
 
@@ -86,12 +111,16 @@ def manifest_digest() -> str:
     return hashlib.sha256(MANIFEST.read_bytes()).hexdigest()
 
 
+def execute(command: list[str], label: str) -> None:
+    print(label, flush=True)
+    subprocess.run(command, check=True, cwd=ROOT, env=os.environ.copy())
+
+
 def run_pipeline(directory: Path) -> None:
     require(directory.is_dir(), f"Signal Field directory is missing: {directory}")
     data = load_manifest()
     stages = data["stages"]
     assert isinstance(stages, list)
-    env = os.environ.copy()
     print(f"Signal Field pipeline {PIPELINE_VERSION} start; manifest_sha256={manifest_digest()}")
     for index, stage in enumerate(stages, start=1):
         assert isinstance(stage, dict)
@@ -99,12 +128,9 @@ def run_pipeline(directory: Path) -> None:
         stage_id = str(stage["id"])
         kind = str(stage["kind"])
         contract = str(stage["contract"])
-        print(f"[{index:02d}/{len(stages):02d}] {kind} {stage_id} -> {contract}: {script}", flush=True)
-        subprocess.run(
+        execute(
             [sys.executable, str(SCRIPTS / script), str(directory)],
-            check=True,
-            cwd=ROOT,
-            env=env,
+            f"[{index:02d}/{len(stages):02d}] {kind} {stage_id} -> {contract}: {script}",
         )
     print(f"Signal Field pipeline complete: {data['terminal_contract']}; manifest_sha256={manifest_digest()}")
 
@@ -116,9 +142,16 @@ def self_test() -> None:
     require(len(stages) == len(EXPECTED_STAGE_IDS), "pipeline stage count changed")
     require(stages[-1]["kind"] == "validate", "pipeline must terminate in a validation stage")
     require(stages[-1]["id"] == "validate-publishable", "pipeline terminal validator changed")
+    selected = [stage for stage in stages if isinstance(stage, dict) and stage["self_test"]]
+    for index, stage in enumerate(selected, start=1):
+        execute(
+            [sys.executable, str(SCRIPTS / str(stage["script"])), "--self-test"],
+            f"[self-test {index:02d}/{len(selected):02d}] {stage['id']}: {stage['script']}",
+        )
     print(
         f"Signal Field pipeline contract passed: {PIPELINE_VERSION}; "
-        f"{len(stages)} ordered stages; manifest_sha256={manifest_digest()}"
+        f"{len(stages)} ordered stages; {len(selected)} stage self-tests; "
+        f"manifest_sha256={manifest_digest()}"
     )
 
 
