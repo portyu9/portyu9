@@ -241,7 +241,7 @@ jobs:
             profile-stats/profile/signal-field-*.svg
             engineering-spotlight/*.svg
             portfolio-evidence/portfolio-evidence-ledger.json
-          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json
           predicate-path: attestation-predicate.json
           show-summary: true
 
