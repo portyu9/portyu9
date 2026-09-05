@@ -92,6 +92,9 @@ jobs:
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile-v4.py
 
+      - name: Validate generated profile cache identities
+        run: python3 scripts/validate-profile-cache-contract.py
+
       - name: Validate deterministic Portfolio Evidence Ledger and Spotlight projection
         run: |
           set -euo pipefail
