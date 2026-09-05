@@ -67,12 +67,7 @@ def validate_schema() -> None:
 
 
 def subject_path_patterns(workflow: str) -> tuple[str, ...]:
-    """Read the literal scalar using YAML indentation without a YAML dependency.
-
-    The subject-path key and its three child lines are review-locked formatting in this
-    workflow. Parsing exact indentation avoids regex `\\s` matching across line breaks and
-    accidentally absorbing adjacent `with:` keys such as predicate-type.
-    """
+    """Read the literal scalar using YAML indentation without a YAML dependency."""
     lines = workflow.splitlines()
     for index, line in enumerate(lines):
         if line.strip() != "subject-path: |":
@@ -105,14 +100,14 @@ def validate_workflow() -> None:
     require("cp spotlight-publish-input/spotlight-*.svg" not in text, "publication still duplicates Spotlight subject selection in shell")
     require("cp portfolio-ledger-publish-input/portfolio-evidence-ledger.json" not in text, "publication still duplicates Ledger subject selection in shell")
     require("find artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence -type f | wc -l" not in text, "publication still encodes an independent eleven-file count")
-
+    require('      - "scripts/**"' in text, "production push trigger must cover the complete trusted scripts source surface")
     for path in (
         "scripts/profile-evidence-subjects-v1.json",
         "scripts/profile_evidence_subjects.py",
         "scripts/stage-profile-evidence.py",
         "scripts/validate-profile-evidence-subjects.py",
     ):
-        require(f'      - "{path}"' in text, f"production push trigger is missing canonical subject-contract source: {path}")
+        require(path.startswith("scripts/"), f"subject-contract source moved outside the closed scripts trigger surface: {path}")
 
 
 def validate_builder() -> None:
