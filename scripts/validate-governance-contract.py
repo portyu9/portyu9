@@ -109,7 +109,7 @@ def validate_stats(text: str) -> None:
     require("contents: write" not in attest, "Attestation job must not receive repository-content write authority")
     require(f"actions/attest@{ATTEST_SHA}" in attest, "Pinned actions/attest SHA changed")
     require("python3 source/scripts/validate-signal-field-v214.py profile-stats/profile" in attest, "Attestation boundary must validate Signal Field Evidence ID")
-    require("python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile attestation-predicate.json" in attest, "Attestation predicate must bind Signal Field Evidence ID")
+    require("python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile portfolio-evidence attestation-predicate.json" in attest, "Attestation predicate must bind Signal Field and Portfolio Ledger identities")
 
     require("permissions:\n      contents: write" in publish, "Only publication job may receive contents: write")
     require("needs: [generate, attest]" in publish, "Publication must depend on both generation and attestation")
@@ -119,11 +119,11 @@ def validate_stats(text: str) -> None:
     require("python3 source/scripts/validate-signal-field-v214.py artifacts/profile-stats/profile" in publish, "Staged generated branch must validate Signal Field Evidence ID")
 
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in generate, "Pinned upstream generator SHA changed")
-    require(generate.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 2, "Generation must upload exactly two immutable evidence sets")
-    require(attest.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 2, "Attestation must download both immutable evidence sets")
-    require(publish.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 2, "Publication must download both immutable evidence sets")
-    require(attest.count("digest-mismatch: error") == 2, "Attestation downloads must fail closed on artifact digest mismatch")
-    require(publish.count("digest-mismatch: error") == 2, "Publication downloads must fail closed on artifact digest mismatch")
+    require(generate.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 3, "Generation must upload exactly three immutable evidence sets")
+    require(attest.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3, "Attestation must download all three immutable evidence sets")
+    require(publish.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3, "Publication must download all three immutable evidence sets")
+    require(attest.count("digest-mismatch: error") == 3, "Attestation downloads must fail closed on all artifact digest mismatches")
+    require(publish.count("digest-mismatch: error") == 3, "Publication downloads must fail closed on all artifact digest mismatches")
     require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 5, "Stats workflow must retain five reviewed checkout calls")
     require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 3, "Stats setup-python action SHA changed")
     require(generate.count("persist-credentials: false") == 1, "Generation checkout must not persist credentials")
@@ -131,7 +131,9 @@ def validate_stats(text: str) -> None:
     require(publish.count("persist-credentials: false") == 1, "Publish trusted-source checkout must not persist credentials")
     require("python3 source/scripts/validate-generated-signal-field.py profile-stats/profile" in attest, "Attestation boundary must revalidate Signal Field artifacts")
     require("python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live" in attest, "Attestation boundary must revalidate Engineering Spotlight")
+    require("python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence --require-live" in attest, "Attestation boundary must revalidate Portfolio Evidence Ledger")
     require("python3 source/scripts/validate-generated-signal-field.py publish-input" in publish, "Publish boundary must revalidate downloaded artifacts")
+    require("python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input --require-live" in publish, "Publish boundary must revalidate Portfolio Evidence Ledger")
     require("find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +" in publish, "Generated branch must be staged as artifact-only")
     require("git -C artifacts push origin HEAD:generated" in publish, "Publisher must target only generated branch")
 
@@ -172,9 +174,9 @@ def main() -> int:
         print(
             "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
             "Dependency Review governance is mandatory, workflow authority is closed, workflow shell source is expression-safe, "
-            "pinned-upstream integration is mandatory, artifact download integrity is fail-closed and round-trip tested, Signal Field "
-            "Evidence ID is generated/validated before signing, third-party generation has neither write nor signing authority, "
-            "attestation is isolated, and publication revalidates the same identity."
+            "pinned-upstream integration is mandatory, three artifact downloads are integrity-checked, Signal Field and Portfolio "
+            "Ledger identities are generated/validated before signing, third-party generation has neither write nor signing authority, "
+            "attestation is isolated, and publication revalidates the same identities."
         )
         return 0
     except (OSError, ValueError) as exc:
