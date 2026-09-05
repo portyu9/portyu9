@@ -177,6 +177,24 @@ def validate_workflow() -> None:
         require(command in publish, f"publication ledger boundary command is missing: {command}")
 
     require(
+        "cp spotlight-publish-input/spotlight-*.svg artifacts/engineering-spotlight/" in publish,
+        "publication must stage only the six attested Spotlight SVG subjects",
+    )
+    require(
+        "cp spotlight-publish-input/* artifacts/engineering-spotlight/" not in publish,
+        "publication must not copy internal Spotlight manifest metadata to generated",
+    )
+    require(
+        'test ! -e artifacts/engineering-spotlight/spotlight-manifest.json' in publish,
+        "publication must fail closed if the internal Spotlight manifest reaches generated",
+    )
+    require('cmp "$source" "$target"' in publish, "staged Spotlight SVGs must remain byte-identical to validated inputs")
+    require(
+        "find artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence -type f | wc -l" in publish,
+        "publication must enforce the exact eleven-file public evidence set",
+    )
+
+    require(
         f"uses: actions/attest@{ATTEST_SHA} # v4.2.2" in attest,
         "actions/attest must remain pinned to the reviewed v4.2.2 commit",
     )
@@ -210,6 +228,8 @@ def validate_doc() -> None:
         "PL1-",
         "portfolio-evidence/portfolio-evidence-ledger.json",
         "13 reviewed systems",
+        "spotlight-manifest.json",
+        "exactly the same eleven subjects",
         "not universal certification",
         "gh attestation verify",
         PREDICATE_TYPE,
@@ -227,8 +247,8 @@ def main() -> int:
         validate_doc()
         print(
             "Engineering attestation validation passed: generation has no signing/write authority, three immutable evidence sets fail closed on digest mismatch, "
-            "Signal Field and Portfolio Ledger identities are bound into the signed predicate, publication depends on attestation/revalidation, "
-            "and the claim remains provenance/contract conformance rather than certification."
+            "Signal Field and Portfolio Ledger identities are bound into the signed predicate, the generated branch publishes exactly the same eleven attested subjects, "
+            "publication depends on attestation/revalidation, and the claim remains provenance/contract conformance rather than certification."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError) as exc:
