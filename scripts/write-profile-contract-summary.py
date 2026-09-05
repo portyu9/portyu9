@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Write a read-only Profile Quality assurance summary to GITHUB_STEP_SUMMARY.
 
-The summary is intentionally informational: it reads already-generated/validated
-artifacts and version-controlled contracts, performs no network calls, and grants no
-additional workflow authority. Existing validators remain the enforcement boundary.
+The summary reads already-generated/validated artifacts and version-controlled
+contracts, performs no network calls, and grants no additional workflow authority.
+Existing validators remain the enforcement boundary.
 """
 from __future__ import annotations
 
@@ -19,16 +19,18 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
-SCHEMA = ROOT / ".github" / "attestation" / "profile-evidence-v2.schema.json"
+SCHEMA = ROOT / ".github" / "attestation" / "profile-evidence-v3.schema.json"
 AUTHORITY = ROOT / "scripts" / "validate-workflow-authority-contract.py"
 BUILDER = ROOT / "scripts" / "build-profile-evidence-attestation.py"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 EVIDENCE_ID = re.compile(r"^SF1-[0-9A-F]{16}$")
-PORTFOLIO_ID = re.compile(r"^PL1-[0-9A-F]{16}$")
+PORTFOLIO_ID = re.compile(r"^PL2-[0-9A-F]{16}$")
 DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 USES = re.compile(r"^\s*(?:-\s*)?uses\s*:\s*([^#]+?)\s*(?:#\s*(v\d+\.\d+\.\d+))?\s*$")
+LEDGER_VERSION = "portfolio-evidence-ledger-v2"
+EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 
 
 def require(condition: bool, message: str) -> None:
@@ -63,9 +65,7 @@ def action_identities() -> list[tuple[str, str, str]]:
                 continue
             value, tag = match.groups()
             value = value.strip().strip("'\"")
-            if value.startswith("./"):
-                continue
-            if "@" not in value:
+            if value.startswith("./") or "@" not in value:
                 continue
             action, sha = value.rsplit("@", 1)
             parts = action.split("/")
@@ -103,11 +103,10 @@ def attestation_contract() -> dict[str, Any]:
     namespace = runpy.run_path(str(BUILDER))
     published_paths = namespace.get("PUBLISHED_PATHS")
     require(isinstance(published_paths, tuple), "attestation published-path inventory is unavailable")
-    digest = f"sha256:{hashlib.sha256(schema_bytes).hexdigest()}"
     return {
         "predicate_type": schema.get("$id"),
         "schema_version": schema.get("properties", {}).get("schemaVersion", {}).get("const"),
-        "schema_digest": digest,
+        "schema_digest": f"sha256:{hashlib.sha256(schema_bytes).hexdigest()}",
         "subject_count": len(published_paths),
     }
 
@@ -125,19 +124,31 @@ def signal_field_identity(directory: Path) -> tuple[str, str]:
     return evidence_id, digest
 
 
-def portfolio_identity(directory: Path) -> tuple[str, str, int, dict[str, int]]:
+def normalized_summary(payload: dict[str, Any], name: str) -> dict[str, int]:
+    value = payload.get(name)
+    require(isinstance(value, dict), f"Portfolio {name} is missing")
+    return {str(key): int(count) for key, count in value.items()}
+
+
+def portfolio_identity(directory: Path) -> tuple[str, str, int, dict[str, dict[str, int]]]:
     path = directory / "portfolio-evidence-ledger.json"
     require(path.is_file(), f"Portfolio Evidence Ledger is missing: {path}")
     payload = json.loads(path.read_text(encoding="utf-8"))
+    require(payload.get("version") == LEDGER_VERSION, "Portfolio Ledger summary version changed")
+    require(payload.get("evidence_semantics") == EVIDENCE_SEMANTICS, "Portfolio evidence semantics changed")
+    require("signal_summary" not in payload, "Portfolio Ledger v2 contains legacy conflated signal summary")
     evidence_id = payload.get("evidence_id")
     digest = payload.get("evidence_digest")
     count = payload.get("system_count")
-    summary = payload.get("signal_summary")
     require(isinstance(evidence_id, str) and PORTFOLIO_ID.fullmatch(evidence_id) is not None, "Portfolio Evidence ID is malformed")
     require(isinstance(digest, str) and DIGEST.fullmatch(digest) is not None, "Portfolio evidence digest is malformed")
     require(count == 13, "Portfolio system count changed")
-    require(isinstance(summary, dict), "Portfolio signal summary is missing")
-    return evidence_id, digest, count, {str(k): int(v) for k, v in summary.items()}
+    summaries = {
+        "result": normalized_summary(payload, "result_summary"),
+        "binding": normalized_summary(payload, "binding_summary"),
+        "freshness": normalized_summary(payload, "freshness_summary"),
+    }
+    return evidence_id, digest, count, summaries
 
 
 def spotlight_snapshot(directory: Path) -> tuple[str, str, list[str]]:
@@ -146,6 +157,7 @@ def spotlight_snapshot(directory: Path) -> tuple[str, str, list[str]]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     version = payload.get("version")
     date = payload.get("selection_date_utc")
+    require(payload.get("evidence_semantics") == EVIDENCE_SEMANTICS, "Spotlight summary evidence semantics changed")
     slots = payload.get("slots")
     require(isinstance(version, str) and version, "Spotlight version is missing")
     require(isinstance(date, str) and date, "Spotlight selection date is missing")
@@ -157,10 +169,14 @@ def spotlight_snapshot(directory: Path) -> tuple[str, str, list[str]]:
     return version, date, repositories
 
 
+def compact(value: dict[str, int]) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+
 def render_summary(env: dict[str, str], signal_dir: Path, spotlight_dir: Path, ledger_dir: Path) -> str:
     head = source_head(env)
     signal_id, signal_digest = signal_field_identity(signal_dir)
-    portfolio_id, portfolio_digest, system_count, signal_summary = portfolio_identity(ledger_dir)
+    portfolio_id, portfolio_digest, system_count, summaries = portfolio_identity(ledger_dir)
     spotlight_version, spotlight_date, repositories = spotlight_snapshot(spotlight_dir)
     attestation = attestation_contract()
     actions = action_identities()
@@ -178,8 +194,8 @@ def render_summary(env: dict[str, str], signal_dir: Path, spotlight_dir: Path, l
         "| Surface | Contract / scope | Identity |",
         "| --- | --- | --- |",
         f"| Signal Field | `signal-field-evidence-v1` | `{signal_id}` · `{signal_digest}` |",
-        f"| Portfolio Evidence Ledger | `portfolio-evidence-ledger-v1` · {system_count} systems · `{json.dumps(signal_summary, sort_keys=True, separators=(',', ':'))}` | `{portfolio_id}` · `{portfolio_digest}` |",
-        f"| Engineering Spotlight | `{spotlight_version}` · selection `{spotlight_date}` | " + " · ".join(f"`{repo}`" for repo in repositories) + " |",
+        f"| Portfolio Evidence Ledger | `{LEDGER_VERSION}` · {system_count} systems · result `{compact(summaries['result'])}` · binding `{compact(summaries['binding'])}` · freshness `{compact(summaries['freshness'])}` | `{portfolio_id}` · `{portfolio_digest}` |",
+        f"| Engineering Spotlight | `{spotlight_version}` · `{EVIDENCE_SEMANTICS}` · selection `{spotlight_date}` | " + " · ".join(f"`{repo}`" for repo in repositories) + " |",
         "",
         "## Immutable external Action identities",
         "",
@@ -209,50 +225,44 @@ def self_test() -> None:
         signal = root / "signal"
         spotlight = root / "spotlight"
         ledger = root / "ledger"
-        signal.mkdir()
-        spotlight.mkdir()
-        ledger.mkdir()
+        signal.mkdir(); spotlight.mkdir(); ledger.mkdir()
         (signal / "signal-field-wide-light.svg").write_text(
             '<svg data-evidence-id="SF1-0123456789ABCDEF" '
-            f'data-evidence-digest="sha256:{"a" * 64}"></svg>',
-            encoding="utf-8",
+            f'data-evidence-digest="sha256:{"a" * 64}"></svg>', encoding="utf-8"
         )
         (ledger / "portfolio-evidence-ledger.json").write_text(
-            json.dumps(
-                {
-                    "evidence_id": "PL1-0123456789ABCDEF",
-                    "evidence_digest": f"sha256:{'b' * 64}",
-                    "system_count": 13,
-                    "signal_summary": {"PASSING": 25},
-                }
-            ),
-            encoding="utf-8",
+            json.dumps({
+                "version": LEDGER_VERSION,
+                "evidence_semantics": EVIDENCE_SEMANTICS,
+                "evidence_id": "PL2-0123456789ABCDEF",
+                "evidence_digest": f"sha256:{'b' * 64}",
+                "system_count": 13,
+                "result_summary": {"PASSING": 25},
+                "binding_summary": {"CURRENT_SUBJECT": 25},
+                "freshness_summary": {"SAME_DAY": 25},
+            }), encoding="utf-8"
         )
         (spotlight / "spotlight-manifest.json").write_text(
-            json.dumps(
-                {
-                    "version": "engineering-spotlight-v2.1",
-                    "selection_date_utc": "2026-09-05",
-                    "slots": [
-                        {"repository": "portyu9/a"},
-                        {"repository": "portyu9/b"},
-                        {"repository": "portyu9/c"},
-                    ],
-                }
-            ),
-            encoding="utf-8",
+            json.dumps({
+                "version": "engineering-spotlight-v2.1",
+                "evidence_semantics": EVIDENCE_SEMANTICS,
+                "selection_date_utc": "2026-09-05",
+                "slots": [{"repository": "portyu9/a"}, {"repository": "portyu9/b"}, {"repository": "portyu9/c"}],
+            }), encoding="utf-8"
         )
         event = root / "event.json"
         event.write_text(json.dumps({"pull_request": {"head": {"sha": "c" * 40}}}), encoding="utf-8")
         text = render_summary({"GITHUB_EVENT_PATH": str(event), "GITHUB_SHA": "d" * 40}, signal, spotlight, ledger)
         for phrase in (
             "read-only contract summary",
-            "profile-evidence-v2.schema.json",
-            "schema v2",
-            "sha256:",
+            "profile-evidence-v3.schema.json",
+            "schema v3",
             "SF1-0123456789ABCDEF",
-            "PL1-0123456789ABCDEF",
+            "PL2-0123456789ABCDEF",
             "PASSING",
+            "CURRENT_SUBJECT",
+            "SAME_DAY",
+            EVIDENCE_SEMANTICS,
             "engineering-spotlight-v2.1",
             "Reviewed write-capable authority boundaries",
             "Immutable external Action identities",
