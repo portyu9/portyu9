@@ -119,17 +119,21 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <p align="center"><sub>Workflow badges are scoped <code>main</code>-branch evidence signals, not universal certification.</sub></p>
 
 <h3 align="center">↻ Evidence Spotlight</h3>
-<p align="center"><sub>2 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
+<p align="center"><sub>3 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v1-rich-v3-20260904"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v1-rich-v3-20260904" width="620"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v21-three-slots-20260905"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v21-three-slots-20260905" width="620"></picture>
 </p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v1-rich-v3-20260904"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v1-rich-v3-20260904" width="620"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v21-three-slots-20260905"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v21-three-slots-20260905" width="620"></picture>
 </p>
 
-<p align="center"><sub>From my QE systems portfolio · signals scoped to named <code>main</code>-branch workflows.</sub></p>
+<p align="center">
+<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-3-dark.svg?v=engineering-spotlight-v21-three-slots-20260905"><img alt="Daily engineering Evidence Spotlight slot 3" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-3-light.svg?v=engineering-spotlight-v21-three-slots-20260905" width="620"></picture>
+</p>
+
+<p align="center"><sub>From my QE systems portfolio · permanent flagship systems excluded · signals scoped to named <code>main</code>-branch workflows.</sub></p>
 
 ---
 
