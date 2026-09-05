@@ -2,11 +2,13 @@
 """Build the custom predicate used for generated profile-evidence attestations.
 
 Subject digests are supplied by actions/attest. This predicate records source revision,
-workflow identity, published paths, validation/authority boundaries, the deterministic
-Signal Field Evidence ID, and the Portfolio Evidence Ledger identity.
+workflow identity, immutable predicate-schema identity, published paths,
+validation/authority boundaries, the deterministic Signal Field Evidence ID, and the
+Portfolio Evidence Ledger identity.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,12 +16,22 @@ import re
 import sys
 import tempfile
 
+ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "portyu9/portyu9"
 KIND = "profile-evidence-attestation"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+PREDICATE_TYPE = (
+    "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
+    "profile-evidence-v2.schema.json"
+)
+PREDICATE_SCHEMA = ROOT / ".github/attestation/profile-evidence-v2.schema.json"
 BOUNDARY = "attest-validated-evidence"
 EVIDENCE_SCHEMA = "signal-field-evidence-v1"
 PORTFOLIO_LEDGER_VERSION = "portfolio-evidence-ledger-v1"
+AUTHORITY_SEPARATION = (
+    "Generation, attestation, and publication run as distinct jobs; third-party "
+    "generation code has neither repository-write nor attestation authority."
+)
 CLAIM = (
     "Subjects passed repository-defined validation at sourceRevision before publication; "
     "this attests artifact provenance and contract conformance, not universal certification."
@@ -64,6 +76,13 @@ def required_env(name: str, env: dict[str, str]) -> str:
     if not value:
         raise ValueError(f"required environment variable is missing: {name}")
     return value
+
+
+def predicate_schema_identity() -> dict[str, str]:
+    if not PREDICATE_SCHEMA.is_file():
+        raise ValueError(f"predicate schema is missing: {PREDICATE_SCHEMA.relative_to(ROOT)}")
+    digest = hashlib.sha256(PREDICATE_SCHEMA.read_bytes()).hexdigest()
+    return {"id": PREDICATE_TYPE, "digest": f"sha256:{digest}"}
 
 
 def root_attrs(text: str) -> dict[str, str]:
@@ -113,7 +132,7 @@ def read_portfolio_ledger_evidence(directory: Path) -> dict[str, object]:
     if not isinstance(evidence_id, str) or not PORTFOLIO_EVIDENCE_ID.fullmatch(evidence_id):
         raise ValueError("Portfolio Evidence Ledger ID is malformed")
     if not isinstance(digest, str) or not EVIDENCE_DIGEST.fullmatch(digest):
-        raise ValueError("Portfolio Evidence Ledger digest is malformed")
+        raise ValueError("Portfolio evidence digest is malformed")
     if system_count != 13:
         raise ValueError("Portfolio Evidence Ledger system count changed")
     return {
@@ -154,6 +173,7 @@ def build_predicate(env: dict[str, str], signal_field_dir: Path, portfolio_ledge
             "attempt": attempt,
             "url": f"{server}/{REPOSITORY}/actions/runs/{run_id}",
         },
+        "predicateSchema": predicate_schema_identity(),
         "subjectSet": {
             "name": "generated-profile-evidence",
             "publishedPaths": list(PUBLISHED_PATHS),
@@ -170,10 +190,7 @@ def build_predicate(env: dict[str, str], signal_field_dir: Path, portfolio_ledge
             "generation": "contents:read",
             "attestation": "contents:read,id-token:write,attestations:write",
             "publication": "contents:write",
-            "separation": (
-                "Generation, attestation, and publication run as distinct jobs; third-party "
-                "generation code has neither repository-write nor attestation authority."
-            ),
+            "separation": AUTHORITY_SEPARATION,
         },
         "claim": CLAIM,
     }
@@ -189,6 +206,13 @@ def validate_predicate(predicate: dict[str, object]) -> None:
     revision = predicate.get("sourceRevision")
     if not isinstance(revision, str) or not SHA40.fullmatch(revision):
         raise ValueError("sourceRevision is malformed")
+
+    predicate_schema = predicate.get("predicateSchema")
+    if not isinstance(predicate_schema, dict):
+        raise ValueError("predicateSchema is missing")
+    expected_schema = predicate_schema_identity()
+    if predicate_schema != expected_schema:
+        raise ValueError("predicate schema identity changed")
 
     subject_set = predicate.get("subjectSet")
     if not isinstance(subject_set, dict):
@@ -240,12 +264,10 @@ def validate_predicate(predicate: dict[str, object]) -> None:
         "generation": "contents:read",
         "attestation": "contents:read,id-token:write,attestations:write",
         "publication": "contents:write",
+        "separation": AUTHORITY_SEPARATION,
     }
-    for key, expected in expected_authority.items():
-        if authority.get(key) != expected:
-            raise ValueError(f"authority contract changed for {key}")
-    if not isinstance(authority.get("separation"), str) or not authority["separation"]:
-        raise ValueError("authority separation statement is missing")
+    if authority != expected_authority:
+        raise ValueError("authority contract changed")
     if predicate.get("claim") != CLAIM:
         raise ValueError("claim boundary changed")
 
@@ -297,7 +319,9 @@ def self_test() -> None:
             raise AssertionError("workflow run URL changed")
         if reparsed["portfolioEvidenceLedger"]["id"] != "PL1-0123456789ABCDEF":
             raise AssertionError("Portfolio Evidence Ledger ID was not recorded")
-    print("Profile evidence attestation predicate self-test passed: Signal Field + three Spotlights + Portfolio Evidence Ledger")
+        if reparsed["predicateSchema"] != predicate_schema_identity():
+            raise AssertionError("predicate schema digest was not recorded")
+    print("Profile evidence attestation predicate v2 self-test passed: immutable schema + Signal Field + three Spotlights + Portfolio Evidence Ledger")
 
 
 def main() -> int:
@@ -317,8 +341,9 @@ def main() -> int:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(predicate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(
-            f"wrote profile evidence attestation predicate: {output} · "
-            f"{predicate['signalFieldEvidence']['id']} · {predicate['portfolioEvidenceLedger']['id']}"
+            f"wrote profile evidence attestation predicate v2: {output} · "
+            f"{predicate['signalFieldEvidence']['id']} · {predicate['portfolioEvidenceLedger']['id']} · "
+            f"{predicate['predicateSchema']['digest']}"
         )
         return 0
     except (OSError, ValueError, AssertionError, TypeError, json.JSONDecodeError) as exc:
