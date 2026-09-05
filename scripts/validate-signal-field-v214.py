@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Finalize Signal Field presentation and validate v2.14 Evidence ID semantics."""
+"""Read-only validation for Signal Field v2.14 identity and v2.15/v2.16 presentation.
+
+Mutation belongs to explicit pipeline transformer stages. This validator never finalizes
+or rewrites candidate artifacts; it only observes the bytes it is given and fails closed
+when identity or presentation contracts are missing or inconsistent.
+"""
 from __future__ import annotations
 
 import importlib.util
@@ -33,12 +38,6 @@ issues_balance = load_module(ISSUES_BALANCE_PATH, "signal_field_issues_balance")
 
 
 def validate_directory(directory: Path) -> tuple[str, str]:
-    # These finalizers are deliberately idempotent. Generation reaches this validator
-    # immediately after v2.14 stamping, while attestation/publication boundaries re-run
-    # it on already-finalized artifacts. In both cases the same final bytes are checked.
-    presentation.apply(directory)
-    issues_balance.apply(directory)
-
     identities: list[tuple[str, str]] = []
     for filename in EXPECTED_FILES:
         path = directory / filename
@@ -69,17 +68,17 @@ def validate_directory(directory: Path) -> tuple[str, str]:
         raise ValueError("Signal Field responsive variants do not share one Evidence ID/digest")
     evidence_id, digest = identities[0]
     print(
-        "Signal Field final validation passed: four variants share one deterministic semantic identity "
-        f"{evidence_id}, preserve full {digest}, and use the reviewed evidence presentation/metric balance."
+        "Signal Field read-only final validation passed: four variants share one deterministic semantic identity "
+        f"{evidence_id}, preserve full {digest}, and already carry the reviewed v2.15/v2.16 presentation contracts."
     )
     return evidence_id, digest
 
 
 def self_test() -> None:
+    # Transformer self-tests are owned by their explicit pipeline stages. The v2.14
+    # validator keeps only the identity-contract self-test and remains mutation-free.
     identifier.self_test()
-    presentation.self_test()
-    issues_balance.self_test()
-    print("Signal Field v2.14 Evidence ID + final presentation validator self-test passed")
+    print("Signal Field v2.14 identity + v2.15/v2.16 read-only validator self-test passed")
 
 
 def main() -> int:
