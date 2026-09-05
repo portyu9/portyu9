@@ -15,7 +15,7 @@ The scheduled path is deliberately a fallback. It is not the primary response to
 
 The production push trigger covers the complete trusted `scripts/**` tree rather than maintaining a per-script allowlist. This is intentionally broader than the runtime import graph: validator-only changes may cause an extra refresh, but new generators, renderers, registries, helpers, transformers, or validators cannot be introduced under `scripts/` without entering the immediate production refresh path on `main`.
 
-Four profile-evidence subject-contract files are also named explicitly in the workflow as review sentinels. They are redundant with `scripts/**`; they do not carry source-coverage responsibility. The umbrella trigger is the fail-safe that ensures new production source modules cannot silently fall outside the immediate push-triggered refresh path.
+Seven files are also named explicitly beneath the umbrella as review sentinels: three historical pipeline/cadence contract files and four profile-evidence subject-contract files. They are redundant with `scripts/**`; they do not carry source-coverage responsibility. The umbrella trigger is the fail-safe that ensures new production source modules cannot silently fall outside the immediate push-triggered refresh path.
 
 Workflow, attestation documentation, and predicate-schema changes remain explicit non-script triggers because they live outside the trusted scripts tree. `scripts/validate-profile-stats-trigger-contract.py` locks this trigger shape in Profile Quality.
 
