@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 SELF = Path(__file__).name
 
+# Attribute-only calls must be unambiguous enough to classify without type inference.
+# `replace()` is intentionally absent because str.replace() is common; os.replace()
+# remains forbidden through the qualified OS_MUTATORS check below.
 WRITE_METHODS = {
     "write_text",
     "write_bytes",
@@ -24,7 +27,6 @@ WRITE_METHODS = {
     "mkdir",
     "unlink",
     "rename",
-    "replace",
     "rmdir",
     "chmod",
     "symlink_to",
@@ -136,9 +138,11 @@ def inspect_source(path: Path, source: str) -> list[str]:
 def self_test() -> None:
     fixture = Path("validate-fixture.py")
     require(not inspect_source(fixture, "def validate(p):\n    return p.read_text()\n"), "read-only fixture must pass")
+    require(not inspect_source(fixture, "def validate(s):\n    return s.replace('a', 'b')\n"), "string replace fixture must pass")
     require(inspect_source(fixture, "def validate(p):\n    p.write_text('x')\n"), "write_text fixture must fail")
     require(inspect_source(fixture, "def validate(p):\n    open(p, 'wb')\n"), "write-mode open fixture must fail")
     require(inspect_source(fixture, "def validate(m, p):\n    m.apply(p)\n"), "transformer apply fixture must fail")
+    require(inspect_source(fixture, "def validate(a, b):\n    os.replace(a, b)\n"), "qualified os.replace fixture must fail")
     require(
         not inspect_source(fixture, "def self_test(p):\n    p.write_text('fixture')\n"),
         "isolated self-test fixture mutation must be exempt",
