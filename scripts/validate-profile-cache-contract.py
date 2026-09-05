@@ -1,16 +1,35 @@
 #!/usr/bin/env python3
-"""Validate cache-busting identities for mutable generated profile surfaces."""
+"""Validate cache-busting identities for mutable generated profile surfaces.
+
+The README cache token is a contract identity, not a per-run evidence identity. Static
+validation keeps every mutable generated URL on one reviewed token per surface family.
+Optional candidate validation derives the expected token from the exact live candidate
+provenance that Profile Quality just generated, so a renderer/ledger/cadence contract
+change cannot ship behind an older cache key.
+"""
 from __future__ import annotations
 
+import argparse
+import json
 from pathlib import Path
 import re
 import sys
+from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 
-SPOTLIGHT_TOKEN = "engineering-spotlight-v21-ledger-v1-20260905"
-SIGNAL_FIELD_TOKEN = "signal-field-v214-evidence-id-20260905"
+SPOTLIGHT_TOKEN = "engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"
+SIGNAL_FIELD_TOKEN = "signal-field-v216-profile-refresh-v1"
+
+STALE_SPOTLIGHT_TOKENS = (
+    "engineering-spotlight-v21-three-slots-20260905",
+    "engineering-spotlight-v21-ledger-v1-20260905",
+)
+STALE_SIGNAL_FIELD_TOKENS = (
+    "signal-field-v212-balance-20260903",
+    "signal-field-v214-evidence-id-20260905",
+)
 
 SPOTLIGHT = re.compile(
     r"https://raw\.githubusercontent\.com/portyu9/portyu9/generated/engineering-spotlight/"
@@ -20,6 +39,19 @@ SIGNAL_FIELD = re.compile(
     r"https://raw\.githubusercontent\.com/portyu9/portyu9/generated/profile-stats/profile/"
     r"signal-field-(?:wide|compact)-(?:light|dark)\.svg\?v=([^\"'> ]+)"
 )
+SVG_ROOT = re.compile(r"<svg\b([^>]*)>", re.I)
+ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
+
+EXPECTED_SPOTLIGHT_FILES = tuple(
+    f"spotlight-{slot}-{theme}.svg"
+    for slot in (1, 2, 3)
+    for theme in ("light", "dark")
+)
+EXPECTED_SIGNAL_FIELD_FILES = tuple(
+    f"signal-field-{layout}-{theme}.svg"
+    for layout in ("wide", "compact")
+    for theme in ("light", "dark")
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -27,22 +59,106 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def validate() -> None:
-    text = README.read_text(encoding="utf-8")
-    spotlight = SPOTLIGHT.findall(text)
-    signal = SIGNAL_FIELD.findall(text)
+def attrs_of_svg(path: Path) -> dict[str, str]:
+    require(path.is_file() and path.stat().st_size > 0, f"candidate SVG is missing or empty: {path}")
+    match = SVG_ROOT.search(path.read_text(encoding="utf-8"))
+    require(match is not None, f"candidate SVG root is missing: {path}")
+    return dict(ATTR.findall(match.group(0)))
 
+
+def require_exact_files(directory: Path, expected: tuple[str, ...], pattern: str) -> list[Path]:
+    require(directory.is_dir(), f"candidate directory is missing: {directory}")
+    actual = sorted(path.name for path in directory.glob(pattern) if path.is_file())
+    require(actual == sorted(expected), f"candidate file inventory changed in {directory}: {actual}")
+    return [directory / name for name in expected]
+
+
+def one_value(values: Iterable[str], label: str) -> str:
+    unique = {value for value in values if value}
+    require(len(unique) == 1, f"candidate {label} is missing or inconsistent: {sorted(unique)}")
+    return next(iter(unique))
+
+
+def compact_spotlight_version(version: str) -> str:
+    require(re.fullmatch(r"engineering-spotlight-v\d+\.\d+", version) is not None, f"unexpected Spotlight version: {version}")
+    return version.replace(".", "")
+
+
+def compact_ledger_version(version: str) -> str:
+    match = re.fullmatch(r"portfolio-evidence-ledger-(v\d+)", version)
+    require(match is not None, f"unexpected Portfolio Ledger version: {version}")
+    return f"ledger-{match.group(1)}"
+
+
+def compact_evidence_semantics(semantics: str) -> str:
+    match = re.fullmatch(r"execution-result-subject-binding-freshness-(v\d+)", semantics)
+    require(match is not None, f"unexpected evidence-dimension semantics: {semantics}")
+    return f"result-binding-freshness-{match.group(1)}"
+
+
+def compact_signal_field_version(version: str) -> str:
+    require(re.fullmatch(r"signal-field-v\d+\.\d+", version) is not None, f"unexpected final Signal Field version: {version}")
+    return version.replace(".", "")
+
+
+def derive_spotlight_token(spotlight_dir: Path, ledger_dir: Path) -> str:
+    paths = require_exact_files(spotlight_dir, EXPECTED_SPOTLIGHT_FILES, "spotlight-*.svg")
+    attrs = [attrs_of_svg(path) for path in paths]
+    spotlight_version = one_value((item.get("data-spotlight", "") for item in attrs), "Spotlight version")
+    spotlight_semantics = one_value(
+        (item.get("data-evidence-semantics", "") for item in attrs),
+        "Spotlight evidence semantics",
+    )
+
+    ledger_path = ledger_dir / "portfolio-evidence-ledger.json"
+    require(ledger_path.is_file() and ledger_path.stat().st_size > 0, "candidate Portfolio Ledger is missing")
+    ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+    require(isinstance(ledger, dict), "candidate Portfolio Ledger root must be an object")
+    ledger_version = str(ledger.get("version") or "")
+    ledger_semantics = str(ledger.get("evidence_semantics") or "")
+    require(ledger.get("system_count") == 13, "candidate Portfolio Ledger system count changed")
+    require(ledger_semantics == spotlight_semantics, "Spotlight/Portfolio Ledger evidence semantics diverged")
+
+    return "-".join(
+        (
+            compact_spotlight_version(spotlight_version),
+            compact_ledger_version(ledger_version),
+            compact_evidence_semantics(ledger_semantics),
+        )
+    )
+
+
+def derive_signal_field_token(signal_field_dir: Path) -> str:
+    paths = require_exact_files(signal_field_dir, EXPECTED_SIGNAL_FIELD_FILES, "signal-field-*.svg")
+    attrs = [attrs_of_svg(path) for path in paths]
+    identity = one_value((item.get("data-evidence-identity", "") for item in attrs), "Signal Field evidence identity")
+    presentation = one_value((item.get("data-evidence-presentation", "") for item in attrs), "Signal Field presentation")
+    final_version = one_value((item.get("data-issues-label-balance", "") for item in attrs), "Signal Field final presentation version")
+    cadence = one_value((item.get("data-generation-cadence-contract", "") for item in attrs), "Signal Field cadence contract")
+    schedule = one_value((item.get("data-generation-schedule", "") for item in attrs), "Signal Field generation schedule")
+
+    require(identity == "signal-field-v2.14", f"candidate Signal Field evidence identity changed: {identity}")
+    require(presentation == "signal-field-v2.15", f"candidate Signal Field evidence presentation changed: {presentation}")
+    require(schedule == "30-minutes", f"candidate Signal Field generation schedule changed: {schedule}")
+    require(re.fullmatch(r"profile-refresh-v\d+", cadence) is not None, f"unexpected Signal Field cadence contract: {cadence}")
+    return f"{compact_signal_field_version(final_version)}-{cadence}"
+
+
+def readme_tokens() -> tuple[list[str], list[str], str]:
+    text = README.read_text(encoding="utf-8")
+    return SPOTLIGHT.findall(text), SIGNAL_FIELD.findall(text), text
+
+
+def validate_readme(expected_spotlight: str = SPOTLIGHT_TOKEN, expected_signal: str = SIGNAL_FIELD_TOKEN) -> None:
+    spotlight, signal, text = readme_tokens()
     require(len(spotlight) == 6, "README must reference exactly six generated Spotlight theme assets")
     require(len(signal) == 4, "README must reference exactly four generated Signal Field assets")
-    require(set(spotlight) == {SPOTLIGHT_TOKEN}, "Spotlight cache token is stale or inconsistent across slots/themes")
-    require(set(signal) == {SIGNAL_FIELD_TOKEN}, "Signal Field cache token is stale or inconsistent across layouts/themes")
+    require(set(spotlight) == {expected_spotlight}, "Spotlight cache token is stale or inconsistent across slots/themes")
+    require(set(signal) == {expected_signal}, "Signal Field cache token is stale or inconsistent across layouts/themes")
 
-    require("engineering-spotlight-v21-three-slots-20260905" not in text, "pre-Ledger Spotlight cache token remains in README")
-    require("signal-field-v212-balance-20260903" not in text, "pre-v2.14 Signal Field cache token remains in README")
+    for stale in STALE_SPOTLIGHT_TOKENS + STALE_SIGNAL_FIELD_TOKENS:
+        require(stale not in text, f"stale generated-surface cache token remains in README: {stale}")
 
-    # Mutable generated-branch surfaces must never be referenced without an explicit
-    # cache identity. Immutable source-revision URLs elsewhere in the README do not
-    # need query-based cache busting.
     generated_urls = re.findall(
         r"https://raw\.githubusercontent\.com/portyu9/portyu9/generated/[^\"'> ]+",
         text,
@@ -51,15 +167,67 @@ def validate() -> None:
     require(all("?v=" in url for url in generated_urls), "mutable generated profile asset lacks an explicit cache identity")
 
 
-def main() -> int:
-    try:
-        validate()
-        print(
-            "Profile cache contract passed: six Spotlight and four Signal Field generated assets "
-            "use one current cache identity per surface family."
+def validate_candidate(signal_field_dir: Path, spotlight_dir: Path, ledger_dir: Path) -> None:
+    candidate_spotlight = derive_spotlight_token(spotlight_dir, ledger_dir)
+    candidate_signal = derive_signal_field_token(signal_field_dir)
+    require(
+        candidate_spotlight == SPOTLIGHT_TOKEN,
+        f"README Spotlight cache contract must advance to live candidate identity {candidate_spotlight!r}",
+    )
+    require(
+        candidate_signal == SIGNAL_FIELD_TOKEN,
+        f"README Signal Field cache contract must advance to live candidate identity {candidate_signal!r}",
+    )
+    validate_readme(candidate_spotlight, candidate_signal)
+
+
+def self_test() -> None:
+    require(
+        "-".join(
+            (
+                compact_spotlight_version("engineering-spotlight-v2.1"),
+                compact_ledger_version("portfolio-evidence-ledger-v2"),
+                compact_evidence_semantics("execution-result-subject-binding-freshness-v1"),
+            )
         )
+        == SPOTLIGHT_TOKEN,
+        "Spotlight cache-token derivation changed",
+    )
+    require(
+        f"{compact_signal_field_version('signal-field-v2.16')}-profile-refresh-v1" == SIGNAL_FIELD_TOKEN,
+        "Signal Field cache-token derivation changed",
+    )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--signal-field-dir", type=Path)
+    parser.add_argument("--spotlight-dir", type=Path)
+    parser.add_argument("--ledger-dir", type=Path)
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        self_test()
+        validate_readme()
+        supplied = (args.signal_field_dir, args.spotlight_dir, args.ledger_dir)
+        require(all(value is None for value in supplied) or all(value is not None for value in supplied), "candidate validation requires all three candidate directories")
+        if all(value is not None for value in supplied):
+            assert args.signal_field_dir is not None and args.spotlight_dir is not None and args.ledger_dir is not None
+            validate_candidate(args.signal_field_dir, args.spotlight_dir, args.ledger_dir)
+            print(
+                "Profile cache contract passed: README cache identities match the exact live Signal Field, "
+                "Portfolio Ledger, and Spotlight candidate contracts."
+            )
+        else:
+            print(
+                "Profile cache contract passed: six Spotlight and four Signal Field generated assets "
+                "use the current reviewed cache identity per surface family."
+            )
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
