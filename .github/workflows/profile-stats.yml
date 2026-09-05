@@ -204,7 +204,7 @@ jobs:
           python3 source/scripts/validate-signal-field-v214.py profile-stats/profile
           python3 source/scripts/validate-generated-signal-field.py profile-stats/profile
           python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence --require-live
-          python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --ledger portfolio-evidence/portfolio-evidence-ledger.json --require-live
+          python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live --ledger portfolio-evidence/portfolio-evidence-ledger.json
 
       - name: Determine whether scheduled evidence changed
         id: delta
