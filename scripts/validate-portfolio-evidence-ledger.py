@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Validate Portfolio Evidence Ledger v2 orthogonal evidence semantics."""
+"""Validate Portfolio Evidence Ledger v2 semantics and live-collection retry policy."""
 from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
+import io
 import json
 import re
+import urllib.error
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +21,7 @@ SHA40_ZERO = "0" * 40
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 EVIDENCE_ID = re.compile(r"^PL2-[0-9A-F]{16}$")
 EVIDENCE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+GENERATOR = Path(__file__).with_name("generate-portfolio-evidence-ledger.py")
 
 RESULTS = {
     "PASSING",
@@ -70,6 +74,139 @@ def require(condition: bool, message: str) -> None:
 def canonical_digest(payload: dict[str, Any]) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def load_generator() -> Any:
+    require(GENERATOR.is_file(), "Portfolio evidence generator is missing")
+    spec = importlib.util.spec_from_file_location("portfolio_evidence_retry_contract", GENERATOR)
+    require(spec is not None and spec.loader is not None, "Portfolio evidence generator cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class FakeResponse(io.StringIO):
+    def __enter__(self) -> "FakeResponse":
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        self.close()
+
+
+def fake_opener(outcomes: list[Any], calls: list[float]) -> Any:
+    queue = list(outcomes)
+
+    def opener(request: Any, *, timeout: float) -> FakeResponse:
+        calls.append(timeout)
+        require(queue, "retry self-test exhausted fake opener outcomes")
+        outcome = queue.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        if isinstance(outcome, str):
+            return FakeResponse(outcome)
+        return FakeResponse(json.dumps(outcome))
+
+    return opener
+
+
+def http_error(code: int, headers: dict[str, str] | None = None) -> urllib.error.HTTPError:
+    return urllib.error.HTTPError("https://api.github.com/test", code, "fixture", headers or {}, None)
+
+
+def validate_retry_contract() -> None:
+    generator = load_generator()
+    require(generator.API_ATTEMPTS == 3, "GitHub evidence retry budget must remain exactly three attempts")
+    require(generator.API_TIMEOUT_SECONDS == 12, "GitHub evidence request timeout changed")
+    require(generator.API_BACKOFF_SECONDS == (1.0, 2.0), "GitHub evidence backoff schedule changed")
+    require(generator.API_MAX_RETRY_AFTER_SECONDS == 5.0, "GitHub Retry-After cap changed")
+    require(generator.RETRYABLE_HTTP_STATUS == frozenset({408, 429, 500, 502, 503, 504}), "retryable HTTP status allowlist changed")
+
+    calls: list[float] = []
+    sleeps: list[float] = []
+    payload = generator.fetch_json(
+        "https://api.github.com/test",
+        None,
+        opener=fake_opener(
+            [
+                urllib.error.URLError("connection reset"),
+                http_error(503, {"Retry-After": "0"}),
+                {"ok": True},
+            ],
+            calls,
+        ),
+        sleeper=sleeps.append,
+    )
+    require(payload == {"ok": True}, "transient retry fixture did not return successful payload")
+    require(calls == [12, 12, 12], "transient retry fixture did not use exactly three bounded attempts")
+    require(sleeps == [1.0, 0.0], "transient retry fixture backoff sequence changed")
+
+    rate_calls: list[float] = []
+    rate_sleeps: list[float] = []
+    payload = generator.fetch_json(
+        "https://api.github.com/test",
+        None,
+        opener=fake_opener(
+            [http_error(403, {"X-RateLimit-Remaining": "0", "Retry-After": "1"}), {"rate": "recovered"}],
+            rate_calls,
+        ),
+        sleeper=rate_sleeps.append,
+    )
+    require(payload == {"rate": "recovered"}, "rate-limit retry fixture did not recover")
+    require(rate_calls == [12, 12] and rate_sleeps == [1.0], "rate-limit retry behavior changed")
+    require(
+        generator.retry_delay_seconds(http_error(429, {"Retry-After": "999"}), 0) == 5.0,
+        "Retry-After must remain capped at five seconds",
+    )
+
+    forbidden_calls: list[float] = []
+    forbidden_sleeps: list[float] = []
+    try:
+        generator.fetch_json(
+            "https://api.github.com/test",
+            None,
+            opener=fake_opener([http_error(403)], forbidden_calls),
+            sleeper=forbidden_sleeps.append,
+        )
+    except urllib.error.HTTPError as exc:
+        require(exc.code == 403, "non-retryable HTTP fixture failed for wrong reason")
+    else:
+        raise ValueError("ordinary 403 was incorrectly retried or accepted")
+    require(forbidden_calls == [12] and forbidden_sleeps == [], "ordinary 403 must fail on the first attempt")
+
+    malformed_calls: list[float] = []
+    malformed_sleeps: list[float] = []
+    try:
+        generator.fetch_json(
+            "https://api.github.com/test",
+            None,
+            opener=fake_opener(["{"], malformed_calls),
+            sleeper=malformed_sleeps.append,
+        )
+    except json.JSONDecodeError:
+        pass
+    else:
+        raise ValueError("malformed GitHub JSON was incorrectly retried or accepted")
+    require(malformed_calls == [12] and malformed_sleeps == [], "malformed JSON must fail without retry")
+
+    exhausted_calls: list[float] = []
+    exhausted_sleeps: list[float] = []
+    try:
+        generator.fetch_json(
+            "https://api.github.com/test",
+            None,
+            opener=fake_opener([http_error(502), http_error(502), http_error(502)], exhausted_calls),
+            sleeper=exhausted_sleeps.append,
+        )
+    except urllib.error.HTTPError as exc:
+        require(exc.code == 502, "exhausted retry fixture failed for wrong reason")
+    else:
+        raise ValueError("exhausted retry budget did not fail closed")
+    require(exhausted_calls == [12, 12, 12], "retry budget exceeded or shortened the three-attempt contract")
+    require(exhausted_sleeps == [1.0, 2.0], "retry exhaustion backoff sequence changed")
+
+    source = GENERATOR.read_text(encoding="utf-8")
+    for forbidden in ("evidence.main_revision(", "evidence.latest_workflow_run(", "evidence.workflow_jobs("):
+        require(forbidden not in source, f"production Ledger collection bypasses bounded retry layer: {forbidden}")
 
 
 def validate_dimensions(repository: str, subject: str, signal: dict[str, Any], require_live: bool) -> None:
@@ -155,6 +292,7 @@ def main() -> int:
     parser.add_argument("--require-live", action="store_true")
     args = parser.parse_args()
     try:
+        validate_retry_contract()
         path = args.directory / FILENAME
         require(path.is_file(), "Portfolio evidence ledger is missing")
         ledger = json.loads(path.read_text(encoding="utf-8"))
@@ -218,7 +356,7 @@ def main() -> int:
 
         print(
             f"Portfolio evidence ledger v2 validation passed: {evidence_id} binds 13 reviewed systems with "
-            "independent execution result, subject binding, and UTC freshness dimensions."
+            "independent execution result, subject binding, UTC freshness, and a bounded fail-closed GitHub API retry contract."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError) as exc:
