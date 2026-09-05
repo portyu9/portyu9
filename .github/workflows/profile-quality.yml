@@ -51,6 +51,9 @@ jobs:
       - name: Validate Signal Field pipeline contract
         run: python3 scripts/signal_field_pipeline.py --self-test
 
+      - name: Validate validator purity
+        run: python3 scripts/validate-validator-purity.py
+
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile-v4.py
 
