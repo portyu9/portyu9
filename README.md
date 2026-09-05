@@ -6,7 +6,7 @@
 <picture><img alt="Ƴunior Ƥortal" height="68" src="assets/profile-badges/nameplate-yunior-portal-v2.svg?text=black-v2"></picture>
 </p>
 
-<p align="center"><strong>I engineer quality systems that turn software change into attributable evidence —<br>and evidence into decision-grade confidence.</strong></p>
+<p align="center"><strong>I engineer quality systems that turn software change into attributable evidence —<br>and evidence into bounded, decision-grade confidence.</strong></p>
 
 <br>
 
