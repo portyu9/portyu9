@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import sys
 
+import profile_evidence_subjects as subjects
+
 ROOT = Path(__file__).resolve().parents[1]
 STATS = ROOT / ".github/workflows/profile-stats.yml"
 V1_SCHEMA = ROOT / ".github/attestation/profile-evidence-v1.schema.json"
@@ -15,9 +17,12 @@ V2_SCHEMA = ROOT / ".github/attestation/profile-evidence-v2.schema.json"
 CURRENT_SCHEMA = ROOT / ".github/attestation/profile-evidence-v3.schema.json"
 DOC = ROOT / ".github/ATTESTATION.md"
 BUILDER = ROOT / "scripts/build-profile-evidence-attestation.py"
+SUBJECT_VALIDATOR = ROOT / "scripts/validate-profile-evidence-subjects.py"
+STAGER = ROOT / "scripts/stage-profile-evidence.py"
 
 V1_GIT_BLOB_SHA = "075fc17c817fe689702bc96c9875a0eb0a934375"
 V2_GIT_BLOB_SHA = "66a1486e565b89759812ff00dd33edc44a64cfa6"
+V3_GIT_BLOB_SHA = "9f9ef42b4861fd3130568197f0592353c0acad9c"
 ATTEST_SHA = "1e69f48acb82d1966a394da916b4c1698aa569d6"  # actions/attest v4.2.2
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_PYTHON_SHA = "5fda3b95a4ea91299a34e894583c3862153e4b97"
@@ -27,19 +32,6 @@ V1_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.git
 V2_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json"
 PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v3.schema.json"
 EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
-PUBLISHED_PATHS = [
-    "profile-stats/profile/signal-field-wide-light.svg",
-    "profile-stats/profile/signal-field-wide-dark.svg",
-    "profile-stats/profile/signal-field-compact-light.svg",
-    "profile-stats/profile/signal-field-compact-dark.svg",
-    "engineering-spotlight/spotlight-1-light.svg",
-    "engineering-spotlight/spotlight-1-dark.svg",
-    "engineering-spotlight/spotlight-2-light.svg",
-    "engineering-spotlight/spotlight-2-dark.svg",
-    "engineering-spotlight/spotlight-3-light.svg",
-    "engineering-spotlight/spotlight-3-dark.svg",
-    "portfolio-evidence/portfolio-evidence-ledger.json",
-]
 SIGNAL_VALIDATORS = [
     "scripts/validate-signal-field-v213.py",
     "scripts/validate-signal-field-v214.py",
@@ -47,11 +39,6 @@ SIGNAL_VALIDATORS = [
 ]
 SPOTLIGHT_VALIDATORS = ["scripts/validate-engineering-spotlight.py --require-live"]
 LEDGER_VALIDATORS = ["scripts/validate-portfolio-evidence-ledger.py --require-live"]
-SUBJECT_PATHS = (
-    "profile-stats/profile/signal-field-*.svg",
-    "engineering-spotlight/*.svg",
-    "portfolio-evidence/portfolio-evidence-ledger.json",
-)
 
 
 def fail(message: str) -> None:
@@ -111,7 +98,7 @@ def validate_current_schema() -> None:
     require(schema_identity_props.get("digest", {}).get("pattern") == "^sha256:[0-9a-f]{64}$", "predicateSchema digest format changed")
 
     subject = properties.get("subjectSet", {}).get("properties", {}).get("publishedPaths", {})
-    require(subject.get("const") == PUBLISHED_PATHS, "v3 published subject paths must be the exact eleven-file array")
+    require(subject.get("const") == list(subjects.published_paths()), "v3 published subjects must equal the canonical subject contract")
 
     signal = properties.get("signalFieldEvidence", {})
     signal_props = signal.get("properties", {}) if isinstance(signal, dict) else {}
@@ -150,6 +137,9 @@ def validate_builder() -> None:
         'PORTFOLIO_LEDGER_VERSION = "portfolio-evidence-ledger-v2"',
         f'PORTFOLIO_EVIDENCE_SEMANTICS = "{EVIDENCE_SEMANTICS}"',
         'PORTFOLIO_EVIDENCE_ID = re.compile(r"^PL2-[0-9A-F]{16}$")',
+        "import profile_evidence_subjects as subjects",
+        "PUBLISHED_PATHS = subjects.published_paths()",
+        'SIGNAL_FIELD_FILENAMES = subjects.source_basenames("signal_field")',
         '"predicateSchema": predicate_schema_identity()',
         "hashlib.sha256(PREDICATE_SCHEMA.read_bytes()).hexdigest()",
         '"signalFieldEvidence": read_signal_field_evidence(signal_field_dir)',
@@ -160,7 +150,8 @@ def validate_builder() -> None:
         "not universal certification",
     ):
         require(phrase in text, f"attestation predicate v3 builder contract is missing: {phrase}")
-    require(text.count("portfolio-evidence/portfolio-evidence-ledger.json") == 1, "builder must enumerate the Portfolio Ledger subject exactly once")
+    for published_path in subjects.published_paths():
+        require(f'"{published_path}"' not in text, f"attestation builder must not hardcode canonical subject path: {published_path}")
 
 
 def validate_workflow() -> None:
@@ -190,19 +181,38 @@ def validate_workflow() -> None:
         "python3 source/scripts/validate-generated-signal-field.py profile-stats/profile",
         "python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live",
         "python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence --require-live",
+        "python3 source/scripts/validate-profile-evidence-subjects.py",
         "python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile portfolio-evidence attestation-predicate.json",
     ):
         require(command in attest, f"attestation boundary command is missing: {command}")
 
     require(f"uses: actions/attest@{ATTEST_SHA} # v4.2.2" in attest, "actions/attest pin changed")
-    for path in SUBJECT_PATHS:
-        require(path in attest, f"attestation subject path is missing: {path}")
+    for pattern in subjects.attestation_patterns():
+        require(pattern in attest, f"attestation subject pattern is missing: {pattern}")
+    require("engineering-spotlight/*.svg" not in attest, "attestation must not use a glob that can include the internal Spotlight manifest")
     require(f"predicate-type: {PREDICATE_TYPE}" in attest, "production must issue current v3 predicate type")
     require(V1_PREDICATE_TYPE not in attest and V2_PREDICATE_TYPE not in attest, "production workflow must not issue frozen historical predicate versions")
     require("predicate-path: attestation-predicate.json" in attest, "custom predicate path changed")
-    require("cp spotlight-publish-input/spotlight-*.svg artifacts/engineering-spotlight/" in publish, "publication must stage only six attested Spotlight SVGs")
-    require('test ! -e artifacts/engineering-spotlight/spotlight-manifest.json' in publish, "internal Spotlight manifest must not reach generated")
-    require("find artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence -type f | wc -l" in publish, "publication must enforce exact eleven-file subject set")
+
+    require("python3 source/scripts/stage-profile-evidence.py candidate-profile-evidence" in attest, "scheduled delta comparison must stage the canonical subject set")
+    require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root published" in attest, "scheduled delta comparison must validate the current generated inventory")
+    require("python3 source/scripts/stage-profile-evidence.py artifacts" in publish, "publication must stage through the canonical subject contract")
+    require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root artifacts" in publish, "publication must validate exact generated inventory")
+    for forbidden in (
+        "cp publish-input/signal-field-*.svg",
+        "cp spotlight-publish-input/spotlight-*.svg",
+        "cp portfolio-ledger-publish-input/portfolio-evidence-ledger.json",
+        "find artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence -type f | wc -l",
+    ):
+        require(forbidden not in publish, f"publication still encodes an independent subject selection/count: {forbidden}")
+
+    for path in (
+        "scripts/profile-evidence-subjects-v1.json",
+        "scripts/profile_evidence_subjects.py",
+        "scripts/stage-profile-evidence.py",
+        "scripts/validate-profile-evidence-subjects.py",
+    ):
+        require(f'      - "{path}"' in text, f"production push trigger is missing canonical subject source: {path}")
 
 
 def validate_doc() -> None:
@@ -220,6 +230,7 @@ def validate_doc() -> None:
         "subject binding",
         "freshness",
         "exactly the same eleven subjects",
+        "profile-evidence-subjects-v1",
         "not universal certification",
         "gh attestation verify",
     ):
@@ -228,18 +239,20 @@ def validate_doc() -> None:
 
 def main() -> int:
     try:
-        for path in (STATS, V1_SCHEMA, V2_SCHEMA, CURRENT_SCHEMA, DOC, BUILDER):
+        subjects.load_manifest()
+        for path in (STATS, V1_SCHEMA, V2_SCHEMA, CURRENT_SCHEMA, DOC, BUILDER, SUBJECT_VALIDATOR, STAGER):
             require(path.is_file(), f"attestation contract input is missing: {path.relative_to(ROOT)}")
         validate_frozen_schema(V1_SCHEMA, V1_GIT_BLOB_SHA, V1_PREDICATE_TYPE, 1)
         validate_frozen_schema(V2_SCHEMA, V2_GIT_BLOB_SHA, V2_PREDICATE_TYPE, 2)
+        validate_frozen_schema(CURRENT_SCHEMA, V3_GIT_BLOB_SHA, PREDICATE_TYPE, 3)
         validate_current_schema()
         validate_builder()
         validate_workflow()
         validate_doc()
         print(
-            "Engineering attestation validation passed: predicate v1/v2 bytes are frozen, current v3 binds its schema digest and "
-            "Ledger v2 result/binding/freshness semantics, generation has no signing/write authority, publication matches the eleven attested subjects, "
-            "and the claim remains provenance/contract conformance rather than certification."
+            "Engineering attestation validation passed: predicate v1/v2/v3 bytes are frozen, v3 binds its schema digest and "
+            "Ledger v2 semantics, the canonical eleven-subject contract closes attestation/publication/generated inventory, "
+            "authority remains separated, and the claim remains provenance/contract conformance rather than certification."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError) as exc:
