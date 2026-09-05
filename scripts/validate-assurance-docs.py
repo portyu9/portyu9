@@ -74,7 +74,7 @@ FORBIDDEN = (
     "signal state, and UTC whole-day freshness",
     "audited separately from source-controlled validators",
     "inspect repository rulesets separately from source-controlled validation",
-    "omission as empty",
+    "redacted bypass actors are empty",
 )
 
 
