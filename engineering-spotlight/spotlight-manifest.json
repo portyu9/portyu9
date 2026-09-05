@@ -1,30 +1,110 @@
 {
+  "evidence_model": "per-system-evidence-contract-v2",
+  "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
+  "live_policy": "signals bind to current main revision; mismatched workflow head is STALE",
   "selection_date_utc": "2026-09-05",
   "selection_policy": "deterministic-daily-sha256-sample",
   "slots": [
     {
-      "glyph": "bracket-check",
-      "repository": "portyu9/qa-automation-python-pytest",
+      "evidence_contract": [
+        {
+          "label": "QUALITY+SEC",
+          "scope": "job-prefix:Quality / Python ;steps:Tests|Bandit|Dependency audit",
+          "workflow": "ci.yml"
+        },
+        {
+          "label": "AGENT LABS",
+          "scope": "jobs:OpenAI adapter / deterministic SDK|MCP fault lab / deterministic protocol|MCP remote auth / loopback HTTP|MCP OAuth flow / separated AS-RS|Package integrity",
+          "workflow": "ci.yml"
+        }
+      ],
+      "glyph": "evidence-hex",
+      "repository": "portyu9/qa-automation-ai-agent-evals",
+      "signals": [
+        {
+          "age_days": 0,
+          "completed_at_utc": "2026-09-05T00:24:34Z",
+          "head_sha": "b8b1590408e484a91d3315228f3942ca8abf9a77",
+          "label": "QUALITY+SEC",
+          "offline": false,
+          "ordinal": 1,
+          "run_id": 33932829645,
+          "run_number": 474,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/33932829645",
+          "scope": "job-prefix:Quality / Python ;steps:Tests|Bandit|Dependency audit",
+          "signal": "PASSING",
+          "workflow": "ci.yml"
+        },
+        {
+          "age_days": 0,
+          "completed_at_utc": "2026-09-05T00:24:34Z",
+          "head_sha": "b8b1590408e484a91d3315228f3942ca8abf9a77",
+          "label": "AGENT LABS",
+          "offline": false,
+          "ordinal": 2,
+          "run_id": 33932829645,
+          "run_number": 474,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/33932829645",
+          "scope": "jobs:OpenAI adapter / deterministic SDK|MCP fault lab / deterministic protocol|MCP remote auth / loopback HTTP|MCP OAuth flow / separated AS-RS|Package integrity",
+          "signal": "PASSING",
+          "workflow": "ci.yml"
+        }
+      ],
       "slot": 1,
-      "statuses": {
-        "CI": "PASSING",
-        "SECURITY": "PASSING"
-      },
-      "title": "PYTHON + PYTEST QE",
-      "topology": "layered-ladder"
+      "subject_revision": "b8b1590408e484a91d3315228f3942ca8abf9a77",
+      "title": "AGENT EVALUATION + TEVV",
+      "topology": "assurance-lattice"
     },
     {
-      "glyph": "gauge-needle",
-      "repository": "portyu9/qa-automation-load-k6",
+      "evidence_contract": [
+        {
+          "label": "CI",
+          "scope": "workflow",
+          "workflow": "ci.yml"
+        },
+        {
+          "label": "SECURITY",
+          "scope": "workflow",
+          "workflow": "security.yml"
+        }
+      ],
+      "glyph": "retry-loop",
+      "repository": "portyu9/qa-automation-ui-cypress",
+      "signals": [
+        {
+          "age_days": 3,
+          "completed_at_utc": "2026-09-02T16:37:42Z",
+          "head_sha": "4329768f6f5868db80c215fd096f570834c3743d",
+          "label": "CI",
+          "offline": false,
+          "ordinal": 1,
+          "run_id": 33655978280,
+          "run_number": 101,
+          "run_url": "https://github.com/portyu9/qa-automation-ui-cypress/actions/runs/33655978280",
+          "scope": "workflow",
+          "signal": "PASSING",
+          "workflow": "ci.yml"
+        },
+        {
+          "age_days": 3,
+          "completed_at_utc": "2026-09-02T16:38:14Z",
+          "head_sha": "4329768f6f5868db80c215fd096f570834c3743d",
+          "label": "SECURITY",
+          "offline": false,
+          "ordinal": 2,
+          "run_id": 33655978406,
+          "run_number": 69,
+          "run_url": "https://github.com/portyu9/qa-automation-ui-cypress/actions/runs/33655978406",
+          "scope": "workflow",
+          "signal": "PASSING",
+          "workflow": "security.yml"
+        }
+      ],
       "slot": 2,
-      "statuses": {
-        "CI": "PASSING",
-        "SECURITY": "PASSING"
-      },
-      "title": "K6 PERFORMANCE QE",
-      "topology": "load-wave"
+      "subject_revision": "4329768f6f5868db80c215fd096f570834c3743d",
+      "title": "CYPRESS UI QE",
+      "topology": "retry-circuit"
     }
   ],
-  "status_scope": "latest named workflow run on main",
-  "version": "engineering-spotlight-v1"
+  "version": "engineering-spotlight-v2"
 }
