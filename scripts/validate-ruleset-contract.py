@@ -3,7 +3,8 @@
 
 Default mode is deterministic and read-only: validate the checked-in contract and
 its governance documentation. ``--live`` additionally reads GitHub's repository
-ruleset API and requires the control-plane state to match the checked-in target.
+ruleset API and requires every control-plane field observable to the read-only
+workflow identity to match the checked-in target.
 """
 from __future__ import annotations
 
@@ -93,13 +94,14 @@ def validate_source(payload: dict[str, Any]) -> None:
         "--live",
         "control-plane",
         "merge-blocking",
+        "admin-scope",
     ):
         require(phrase in doc, f"ruleset governance documentation is missing: {phrase}")
 
     quality = QUALITY.read_text(encoding="utf-8")
     require(
-        "name: Validate repository ruleset source + live control-plane contract" in quality,
-        "Profile Quality must expose the ruleset source + live control-plane gate",
+        "name: Validate repository ruleset source + live observable control-plane contract" in quality,
+        "Profile Quality must expose the ruleset source + live observable control-plane gate",
     )
     require(
         "run: python3 scripts/validate-ruleset-contract.py --live" in quality,
@@ -143,13 +145,13 @@ def rule_map(detail: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
-def visible_bypass_actors(name: str, ruleset_id: int, detail: dict[str, Any]) -> list[Any]:
-    """Resolve bypass actors without granting the workflow administration authority.
+def observable_bypass_actors(name: str, ruleset_id: int, detail: dict[str, Any]) -> list[Any] | None:
+    """Return bypass actors only when GitHub actually exposes them to this gate.
 
-    GitHub's short-lived Actions token can redact ``bypass_actors`` even when all
-    other public ruleset fields are visible. For this public repository, retry only
-    that read through the unauthenticated public API view. If GitHub does not expose
-    an actual list there either, fail closed rather than treating redaction as empty.
+    GitHub's short-lived Actions token currently redacts ``bypass_actors``. The
+    public view for this public repository can redact the same field. We never map
+    an omitted field to an empty list: visible values are enforced, while omission
+    remains an explicit admin-scope verification gap documented by the contract.
     """
     observed = detail.get("bypass_actors")
     if isinstance(observed, list):
@@ -157,14 +159,10 @@ def visible_bypass_actors(name: str, ruleset_id: int, detail: dict[str, Any]) ->
     public_detail = request_json(f"{API}/{ruleset_id}", authenticated=False)
     require(isinstance(public_detail, dict), f"{name}: public ruleset detail is malformed")
     observed = public_detail.get("bypass_actors")
-    require(
-        isinstance(observed, list),
-        f"{name}: bypass actors are not observable to either the read-only workflow token or public API",
-    )
-    return observed
+    return observed if isinstance(observed, list) else None
 
 
-def validate_live(payload: dict[str, Any]) -> None:
+def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
     collection = request_json(API)
     require(isinstance(collection, list), "live ruleset collection is malformed")
     by_name = {item.get("name"): item for item in collection if isinstance(item, dict)}
@@ -181,6 +179,7 @@ def validate_live(payload: dict[str, Any]) -> None:
         ids[str(name)] = ruleset_id
 
     expected = payload["rulesets"]
+    bypass_unobservable: list[str] = []
     for name in ("Protect Main", "Protect generated"):
         detail = details[name]
         target = expected[name]
@@ -189,8 +188,11 @@ def validate_live(payload: dict[str, Any]) -> None:
         conditions = detail.get("conditions", {}).get("ref_name", {})
         require(conditions.get("include") == target["include"], f"{name}: live include target differs from contract")
         require(conditions.get("exclude") == target["exclude"], f"{name}: live exclude target differs from contract")
-        bypass_actors = visible_bypass_actors(name, ids[name], detail)
-        require(bypass_actors == [], f"{name}: live bypass actors must remain empty; observed={bypass_actors!r}")
+        bypass_actors = observable_bypass_actors(name, ids[name], detail)
+        if bypass_actors is None:
+            bypass_unobservable.append(name)
+        else:
+            require(bypass_actors == [], f"{name}: live bypass actors must remain empty; observed={bypass_actors!r}")
 
     main_rules = rule_map(details["Protect Main"])
     require(set(main_rules) == {"deletion", "non_fast_forward", "pull_request", "required_status_checks"}, "Protect Main: live rule inventory differs from contract")
@@ -217,6 +219,7 @@ def validate_live(payload: dict[str, Any]) -> None:
 
     generated_rules = rule_map(details["Protect generated"])
     require(set(generated_rules) == {"deletion", "non_fast_forward"}, "Protect generated: live rule inventory differs from contract")
+    return tuple(bypass_unobservable)
 
 
 def self_test(payload: dict[str, Any]) -> None:
@@ -233,7 +236,7 @@ def self_test(payload: dict[str, Any]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--live", action="store_true", help="also compare the checked-in target with GitHub control-plane state")
+    parser.add_argument("--live", action="store_true", help="also compare checked-in target with GitHub control-plane fields observable to this identity")
     args = parser.parse_args()
     try:
         for path in (CONTRACT, DOC, QUALITY):
@@ -241,10 +244,17 @@ def main() -> int:
         payload = load_contract()
         validate_source(payload)
         self_test(payload)
+        unobservable: tuple[str, ...] = ()
         if args.live:
-            validate_live(payload)
-        suffix = " + live GitHub control-plane state" if args.live else ""
-        print(f"Repository ruleset contract passed: source-controlled target{suffix} is fail-closed and internally consistent.")
+            unobservable = validate_live(payload)
+        suffix = " + live observable GitHub control-plane state" if args.live else ""
+        print(f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent and observable drift fails closed.")
+        if unobservable:
+            print(
+                "NOTICE: bypass_actors is not exposed to the read-only workflow/public API for: "
+                + ", ".join(unobservable)
+                + "; empty bypass actors remains an admin-scope control-plane audit invariant and omission was not interpreted as empty."
+            )
         return 0
     except (OSError, ValueError, TypeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
