@@ -9,6 +9,8 @@ on:
       - ".github/workflows/profile-stats.yml"
       - ".github/ATTESTATION.md"
       - ".github/attestation/**"
+      - "scripts/signal_field_pipeline.py"
+      - "scripts/signal-field-pipeline-v1.json"
       - "scripts/customize-signal-field.py"
       - "scripts/polish-signal-field-v2.py"
       - "scripts/enhance-signal-field-v2.py"
@@ -88,25 +90,7 @@ jobs:
           GITHUB_USERNAME: portyu9
         run: |
           set -euo pipefail
-          python3 source/scripts/customize-signal-field.py "$READY_DIR"
-          python3 source/scripts/polish-signal-field-v2.py "$READY_DIR"
-          python3 source/scripts/enhance-signal-field-v2.py "$READY_DIR"
-          python3 source/scripts/background-signal-field-v2.py "$READY_DIR"
-          python3 source/scripts/portal-signal-field-v2.py "$READY_DIR"
-          python3 source/scripts/align-signal-field-v2.py "$READY_DIR"
-          python3 source/scripts/phosphor-signal-field-v2.py "$READY_DIR"
-          python3 source/scripts/phosphor-activity-signal-field-v2.py "$READY_DIR"
-          python3 source/scripts/phosphor-lines-signal-field-v2.py "$READY_DIR"
-          python3 source/scripts/sync-profile-contribution-total.py "$READY_DIR"
-          python3 source/scripts/relabel-signal-field-metrics.py "$READY_DIR"
-          python3 source/scripts/glyphs-signal-field-metrics.py "$READY_DIR"
-          python3 source/scripts/balance-signal-field-secondary-metrics.py "$READY_DIR"
-          python3 source/scripts/clarify-signal-field-evidence-window.py "$READY_DIR"
-          python3 source/scripts/validate-signal-field-v213.py "$READY_DIR"
-          python3 source/scripts/identify-signal-field-evidence.py "$READY_DIR"
-          python3 source/scripts/validate-signal-field-v214.py "$READY_DIR"
-          python3 source/scripts/set-signal-field-refresh-cadence.py "$READY_DIR"
-          python3 source/scripts/validate-generated-signal-field.py "$READY_DIR"
+          python3 source/scripts/signal_field_pipeline.py "$READY_DIR"
 
       - name: Upload immutable validated Signal Field
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
