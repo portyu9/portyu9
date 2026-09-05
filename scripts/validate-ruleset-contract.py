@@ -115,21 +115,22 @@ def validate_source(payload: dict[str, Any]) -> None:
     )
 
 
-def request_json(url: str) -> Any:
+def request_json(url: str, *, authenticated: bool = True) -> Any:
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "portyu9-ruleset-contract-v1",
         "X-GitHub-Api-Version": "2022-11-28",
     }
     token = os.environ.get("GITHUB_TOKEN", "").strip()
-    if token:
+    if authenticated and token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:
             return json.load(response)
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        raise ValueError(f"could not read GitHub ruleset API: {exc}") from exc
+        mode = "authenticated" if authenticated and token else "public"
+        raise ValueError(f"could not read GitHub ruleset API ({mode} view): {exc}") from exc
 
 
 def rule_map(detail: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -142,6 +143,27 @@ def rule_map(detail: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def visible_bypass_actors(name: str, ruleset_id: int, detail: dict[str, Any]) -> list[Any]:
+    """Resolve bypass actors without granting the workflow administration authority.
+
+    GitHub's short-lived Actions token can redact ``bypass_actors`` even when all
+    other public ruleset fields are visible. For this public repository, retry only
+    that read through the unauthenticated public API view. If GitHub does not expose
+    an actual list there either, fail closed rather than treating redaction as empty.
+    """
+    observed = detail.get("bypass_actors")
+    if isinstance(observed, list):
+        return observed
+    public_detail = request_json(f"{API}/{ruleset_id}", authenticated=False)
+    require(isinstance(public_detail, dict), f"{name}: public ruleset detail is malformed")
+    observed = public_detail.get("bypass_actors")
+    require(
+        isinstance(observed, list),
+        f"{name}: bypass actors are not observable to either the read-only workflow token or public API",
+    )
+    return observed
+
+
 def validate_live(payload: dict[str, Any]) -> None:
     collection = request_json(API)
     require(isinstance(collection, list), "live ruleset collection is malformed")
@@ -149,12 +171,14 @@ def validate_live(payload: dict[str, Any]) -> None:
     require(set(by_name) == {"Protect Main", "Protect generated"}, "live repository ruleset inventory differs from contract")
 
     details: dict[str, dict[str, Any]] = {}
+    ids: dict[str, int] = {}
     for name, item in by_name.items():
         ruleset_id = item.get("id")
         require(isinstance(ruleset_id, int), f"live ruleset id is missing: {name}")
         detail = request_json(f"{API}/{ruleset_id}")
         require(isinstance(detail, dict), f"live ruleset detail is malformed: {name}")
         details[str(name)] = detail
+        ids[str(name)] = ruleset_id
 
     expected = payload["rulesets"]
     for name in ("Protect Main", "Protect generated"):
@@ -165,7 +189,8 @@ def validate_live(payload: dict[str, Any]) -> None:
         conditions = detail.get("conditions", {}).get("ref_name", {})
         require(conditions.get("include") == target["include"], f"{name}: live include target differs from contract")
         require(conditions.get("exclude") == target["exclude"], f"{name}: live exclude target differs from contract")
-        require(detail.get("bypass_actors") == [], f"{name}: live bypass actors must remain empty")
+        bypass_actors = visible_bypass_actors(name, ids[name], detail)
+        require(bypass_actors == [], f"{name}: live bypass actors must remain empty; observed={bypass_actors!r}")
 
     main_rules = rule_map(details["Protect Main"])
     require(set(main_rules) == {"deletion", "non_fast_forward", "pull_request", "required_status_checks"}, "Protect Main: live rule inventory differs from contract")
