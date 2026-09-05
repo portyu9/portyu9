@@ -214,7 +214,7 @@ jobs:
             --spotlight-dir engineering-spotlight \
             --portfolio-ledger-dir portfolio-evidence
           python3 source/scripts/validate-profile-evidence-subjects.py --published-root published
-          if diff -qr candidate-profile-evidence published >/dev/null; then
+          if diff -qr --exclude=.git candidate-profile-evidence published >/dev/null; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
