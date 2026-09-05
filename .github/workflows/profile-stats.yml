@@ -45,6 +45,10 @@ on:
       - "scripts/validate-portfolio-evidence-ledger.py"
       - "scripts/build-profile-evidence-attestation.py"
       - "scripts/validate-profile-attestation-contract.py"
+      - "scripts/profile-evidence-subjects-v1.json"
+      - "scripts/profile_evidence_subjects.py"
+      - "scripts/stage-profile-evidence.py"
+      - "scripts/validate-profile-evidence-subjects.py"
   schedule:
     # Two best-effort refresh opportunities per hour, away from top-of-hour congestion.
     - cron: "17,47 * * * *"
@@ -195,24 +199,22 @@ jobs:
           python3 source/scripts/validate-generated-signal-field.py profile-stats/profile
           python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence --require-live
           python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live --ledger portfolio-evidence/portfolio-evidence-ledger.json
+          python3 source/scripts/validate-profile-evidence-subjects.py \
+            --signal-field-dir profile-stats/profile \
+            --spotlight-dir engineering-spotlight \
+            --portfolio-ledger-dir portfolio-evidence
 
       - name: Determine whether scheduled evidence changed
         id: delta
         run: |
           set -euo pipefail
-          spotlight_changed=false
-          for source in engineering-spotlight/spotlight-*.svg; do
-            target="published/engineering-spotlight/${source##*/}"
-            if ! cmp -s "$source" "$target"; then
-              spotlight_changed=true
-              break
-            fi
-          done
-          published_spotlight_count="$(find published/engineering-spotlight -maxdepth 1 -type f -name 'spotlight-*.svg' | wc -l)"
-          if diff -qr profile-stats/profile published/profile-stats/profile >/dev/null \
-            && [ "$spotlight_changed" = false ] \
-            && [ "$published_spotlight_count" -eq 6 ] \
-            && diff -qr portfolio-evidence published/portfolio-evidence >/dev/null; then
+          rm -rf candidate-profile-evidence
+          python3 source/scripts/stage-profile-evidence.py candidate-profile-evidence \
+            --signal-field-dir profile-stats/profile \
+            --spotlight-dir engineering-spotlight \
+            --portfolio-ledger-dir portfolio-evidence
+          python3 source/scripts/validate-profile-evidence-subjects.py --published-root published
+          if diff -qr --exclude=.git candidate-profile-evidence published >/dev/null; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -228,7 +230,7 @@ jobs:
         with:
           subject-path: |
             profile-stats/profile/signal-field-*.svg
-            engineering-spotlight/*.svg
+            engineering-spotlight/spotlight-*.svg
             portfolio-evidence/portfolio-evidence-ledger.json
           predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v3.schema.json
           predicate-path: attestation-predicate.json
@@ -290,26 +292,24 @@ jobs:
           python3 source/scripts/validate-generated-signal-field.py publish-input
           python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input --require-live
           python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input --ledger portfolio-ledger-publish-input/portfolio-evidence-ledger.json --require-live
+          python3 source/scripts/validate-profile-evidence-subjects.py \
+            --signal-field-dir publish-input \
+            --spotlight-dir spotlight-publish-input \
+            --portfolio-ledger-dir portfolio-ledger-publish-input
 
       - name: Stage artifact-only generated branch
         run: |
           set -euo pipefail
           find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          mkdir -p artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence
-          cp publish-input/signal-field-*.svg artifacts/profile-stats/profile/
-          cp spotlight-publish-input/spotlight-*.svg artifacts/engineering-spotlight/
-          cp portfolio-ledger-publish-input/portfolio-evidence-ledger.json artifacts/portfolio-evidence/
+          python3 source/scripts/stage-profile-evidence.py artifacts \
+            --signal-field-dir publish-input \
+            --spotlight-dir spotlight-publish-input \
+            --portfolio-ledger-dir portfolio-ledger-publish-input
+          python3 source/scripts/validate-profile-evidence-subjects.py --published-root artifacts
           python3 source/scripts/validate-signal-field-v213.py artifacts/profile-stats/profile
           python3 source/scripts/validate-signal-field-v214.py artifacts/profile-stats/profile
           python3 source/scripts/validate-generated-signal-field.py artifacts/profile-stats/profile
           python3 source/scripts/validate-portfolio-evidence-ledger.py artifacts/portfolio-evidence --require-live
-          for source in spotlight-publish-input/spotlight-*.svg; do
-            target="artifacts/engineering-spotlight/${source##*/}"
-            cmp "$source" "$target"
-          done
-          test ! -e artifacts/engineering-spotlight/spotlight-manifest.json
-          test "$(find artifacts/engineering-spotlight -maxdepth 1 -type f -name 'spotlight-*.svg' | wc -l)" -eq 6
-          test "$(find artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence -type f | wc -l)" -eq 11
           git -C artifacts add -A
 
       - name: Publish changed artifact set

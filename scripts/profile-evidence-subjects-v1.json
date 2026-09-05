@@ -1,0 +1,51 @@
+{
+  "version": "profile-evidence-subjects-v1",
+  "name": "generated-profile-evidence",
+  "published_paths": [
+    "profile-stats/profile/signal-field-wide-light.svg",
+    "profile-stats/profile/signal-field-wide-dark.svg",
+    "profile-stats/profile/signal-field-compact-light.svg",
+    "profile-stats/profile/signal-field-compact-dark.svg",
+    "engineering-spotlight/spotlight-1-light.svg",
+    "engineering-spotlight/spotlight-1-dark.svg",
+    "engineering-spotlight/spotlight-2-light.svg",
+    "engineering-spotlight/spotlight-2-dark.svg",
+    "engineering-spotlight/spotlight-3-light.svg",
+    "engineering-spotlight/spotlight-3-dark.svg",
+    "portfolio-evidence/portfolio-evidence-ledger.json"
+  ],
+  "groups": {
+    "signal_field": {
+      "published_paths": [
+        "profile-stats/profile/signal-field-wide-light.svg",
+        "profile-stats/profile/signal-field-wide-dark.svg",
+        "profile-stats/profile/signal-field-compact-light.svg",
+        "profile-stats/profile/signal-field-compact-dark.svg"
+      ],
+      "attestation_pattern": "profile-stats/profile/signal-field-*.svg",
+      "source_argument": "signal-field-dir"
+    },
+    "engineering_spotlight": {
+      "published_paths": [
+        "engineering-spotlight/spotlight-1-light.svg",
+        "engineering-spotlight/spotlight-1-dark.svg",
+        "engineering-spotlight/spotlight-2-light.svg",
+        "engineering-spotlight/spotlight-2-dark.svg",
+        "engineering-spotlight/spotlight-3-light.svg",
+        "engineering-spotlight/spotlight-3-dark.svg"
+      ],
+      "attestation_pattern": "engineering-spotlight/spotlight-*.svg",
+      "source_argument": "spotlight-dir"
+    },
+    "portfolio_evidence_ledger": {
+      "published_paths": [
+        "portfolio-evidence/portfolio-evidence-ledger.json"
+      ],
+      "attestation_pattern": "portfolio-evidence/portfolio-evidence-ledger.json",
+      "source_argument": "portfolio-ledger-dir"
+    }
+  },
+  "internal_artifacts": [
+    "engineering-spotlight/spotlight-manifest.json"
+  ]
+}
