@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-import re
 import sys
 
 import profile_evidence_subjects as subjects
@@ -67,18 +66,37 @@ def validate_schema() -> None:
     require(published == list(subjects.published_paths()), "predicate v3 schema subject array differs from canonical subject contract")
 
 
-def subject_path_block(workflow: str) -> str:
-    match = re.search(r"(?ms)^\s+subject-path:\s*\|\s*\n(?P<body>(?:\s{12}.+\n)+)", workflow)
-    require(match is not None, "actions/attest subject-path block is missing")
-    return match.group("body")
+def subject_path_patterns(workflow: str) -> tuple[str, ...]:
+    """Read the literal scalar using YAML indentation without a YAML dependency.
+
+    The subject-path key and its three child lines are review-locked formatting in this
+    workflow. Parsing exact indentation avoids regex `\\s` matching across line breaks and
+    accidentally absorbing adjacent `with:` keys such as predicate-type.
+    """
+    lines = workflow.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() != "subject-path: |":
+            continue
+        parent_indent = len(line) - len(line.lstrip(" "))
+        child_indent = parent_indent + 2
+        collected: list[str] = []
+        for candidate in lines[index + 1 :]:
+            if not candidate.strip():
+                break
+            indent = len(candidate) - len(candidate.lstrip(" "))
+            if indent != child_indent:
+                break
+            collected.append(candidate.strip())
+        require(collected, "actions/attest subject-path block is empty")
+        return tuple(collected)
+    raise ValueError("actions/attest subject-path block is missing")
 
 
 def validate_workflow() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    block = subject_path_block(text)
-    lines = tuple(line.strip() for line in block.splitlines() if line.strip())
-    require(lines == subjects.attestation_patterns(), "actions/attest patterns differ from canonical subject contract")
-    require("engineering-spotlight/*.svg" not in block, "broad Spotlight attestation glob can include internal artifacts")
+    patterns = subject_path_patterns(text)
+    require(patterns == subjects.attestation_patterns(), "actions/attest patterns differ from canonical subject contract")
+    require("engineering-spotlight/*.svg" not in patterns, "broad Spotlight attestation glob can include internal artifacts")
 
     candidate_command = "python3 source/scripts/validate-profile-evidence-subjects.py"
     require(text.count(candidate_command) >= 3, "subject closure validator must run at attestation, publish-input, and staged-publication boundaries")
