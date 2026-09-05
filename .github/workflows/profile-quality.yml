@@ -116,7 +116,7 @@ jobs:
       - name: Validate assurance documentation contract
         run: python3 scripts/validate-assurance-docs.py
 
-      - name: Validate repository ruleset source + live control-plane contract
+      - name: Validate repository ruleset source + live observable control-plane contract
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/validate-ruleset-contract.py --live
