@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json",
+  "title": "Ƴunior Ƥortal generated profile evidence attestation predicate v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "repository",
+    "sourceRevision",
+    "workflowRef",
+    "run",
+    "predicateSchema",
+    "subjectSet",
+    "signalFieldEvidence",
+    "portfolioEvidenceLedger",
+    "validation",
+    "authority",
+    "claim"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "kind": {
+      "const": "profile-evidence-attestation"
+    },
+    "repository": {
+      "const": "portyu9/portyu9"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "workflowRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "attempt", "url"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "attempt": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://github\\.com/portyu9/portyu9/actions/runs/[0-9]+$"
+        }
+      }
+    },
+    "predicateSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "digest"],
+      "properties": {
+        "id": {
+          "const": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "subjectSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "publishedPaths"],
+      "properties": {
+        "name": {
+          "const": "generated-profile-evidence"
+        },
+        "publishedPaths": {
+          "const": [
+            "profile-stats/profile/signal-field-wide-light.svg",
+            "profile-stats/profile/signal-field-wide-dark.svg",
+            "profile-stats/profile/signal-field-compact-light.svg",
+            "profile-stats/profile/signal-field-compact-dark.svg",
+            "engineering-spotlight/spotlight-1-light.svg",
+            "engineering-spotlight/spotlight-1-dark.svg",
+            "engineering-spotlight/spotlight-2-light.svg",
+            "engineering-spotlight/spotlight-2-dark.svg",
+            "engineering-spotlight/spotlight-3-light.svg",
+            "engineering-spotlight/spotlight-3-dark.svg",
+            "portfolio-evidence/portfolio-evidence-ledger.json"
+          ]
+        }
+      }
+    },
+    "signalFieldEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "id", "digest"],
+      "properties": {
+        "schema": {
+          "const": "signal-field-evidence-v1"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^SF1-[0-9A-F]{16}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "portfolioEvidenceLedger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "id", "digest", "systemCount"],
+      "properties": {
+        "version": {
+          "const": "portfolio-evidence-ledger-v1"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^PL1-[0-9A-F]{16}$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "systemCount": {
+          "const": 13
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signalField", "engineeringSpotlight", "portfolioEvidenceLedger", "boundary"],
+      "properties": {
+        "signalField": {
+          "const": [
+            "scripts/validate-signal-field-v213.py",
+            "scripts/validate-signal-field-v214.py",
+            "scripts/validate-generated-signal-field.py"
+          ]
+        },
+        "engineeringSpotlight": {
+          "const": [
+            "scripts/validate-engineering-spotlight.py --require-live"
+          ]
+        },
+        "portfolioEvidenceLedger": {
+          "const": [
+            "scripts/validate-portfolio-evidence-ledger.py --require-live"
+          ]
+        },
+        "boundary": {
+          "const": "attest-validated-evidence"
+        }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation", "attestation", "publication", "separation"],
+      "properties": {
+        "generation": {
+          "const": "contents:read"
+        },
+        "attestation": {
+          "const": "contents:read,id-token:write,attestations:write"
+        },
+        "publication": {
+          "const": "contents:write"
+        },
+        "separation": {
+          "const": "Generation, attestation, and publication run as distinct jobs; third-party generation code has neither repository-write nor attestation authority."
+        }
+      }
+    },
+    "claim": {
+      "const": "Subjects passed repository-defined validation at sourceRevision before publication; this attests artifact provenance and contract conformance, not universal certification."
+    }
+  }
+}
