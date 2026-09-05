@@ -16,6 +16,8 @@ import re
 import sys
 import tempfile
 
+import profile_evidence_subjects as subjects
+
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "portyu9/portyu9"
 KIND = "profile-evidence-attestation"
@@ -45,20 +47,8 @@ PORTFOLIO_EVIDENCE_ID = re.compile(r"^PL2-[0-9A-F]{16}$")
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 
-PUBLISHED_PATHS = (
-    "profile-stats/profile/signal-field-wide-light.svg",
-    "profile-stats/profile/signal-field-wide-dark.svg",
-    "profile-stats/profile/signal-field-compact-light.svg",
-    "profile-stats/profile/signal-field-compact-dark.svg",
-    "engineering-spotlight/spotlight-1-light.svg",
-    "engineering-spotlight/spotlight-1-dark.svg",
-    "engineering-spotlight/spotlight-2-light.svg",
-    "engineering-spotlight/spotlight-2-dark.svg",
-    "engineering-spotlight/spotlight-3-light.svg",
-    "engineering-spotlight/spotlight-3-dark.svg",
-    "portfolio-evidence/portfolio-evidence-ledger.json",
-)
-SIGNAL_FIELD_FILENAMES = tuple(Path(path).name for path in PUBLISHED_PATHS[:4])
+PUBLISHED_PATHS = subjects.published_paths()
+SIGNAL_FIELD_FILENAMES = subjects.source_basenames("signal_field")
 SIGNAL_FIELD_VALIDATORS = (
     "scripts/validate-signal-field-v213.py",
     "scripts/validate-signal-field-v214.py",
@@ -172,7 +162,7 @@ def build_predicate(env: dict[str, str], signal_field_dir: Path, portfolio_ledge
         "workflowRef": workflow_ref,
         "run": {"id": run_id, "attempt": attempt, "url": f"{server}/{REPOSITORY}/actions/runs/{run_id}"},
         "predicateSchema": predicate_schema_identity(),
-        "subjectSet": {"name": "generated-profile-evidence", "publishedPaths": list(PUBLISHED_PATHS)},
+        "subjectSet": {"name": subjects.NAME, "publishedPaths": list(PUBLISHED_PATHS)},
         "signalFieldEvidence": read_signal_field_evidence(signal_field_dir),
         "portfolioEvidenceLedger": read_portfolio_ledger_evidence(portfolio_ledger_dir),
         "validation": {
@@ -203,7 +193,7 @@ def validate_predicate(predicate: dict[str, object]) -> None:
         raise ValueError("predicate schema identity changed")
 
     subject_set = predicate.get("subjectSet")
-    if not isinstance(subject_set, dict) or subject_set.get("name") != "generated-profile-evidence":
+    if not isinstance(subject_set, dict) or subject_set.get("name") != subjects.NAME:
         raise ValueError("subjectSet changed")
     if subject_set.get("publishedPaths") != list(PUBLISHED_PATHS) or len(set(PUBLISHED_PATHS)) != 11:
         raise ValueError("published subject paths changed")
