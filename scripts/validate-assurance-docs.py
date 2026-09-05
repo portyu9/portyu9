@@ -9,14 +9,24 @@ ROOT = Path(__file__).resolve().parents[1]
 GOV = ROOT / ".github" / "GOVERNANCE.md"
 THREAT = ROOT / ".github" / "THREAT_MODEL.md"
 
+SEMANTICS = "execution-result-subject-binding-freshness-v1"
+
 GOV_REQUIRED = (
-    "Portfolio Evidence Ledger",
+    "Portfolio Evidence Ledger v2",
     "GitHub evidence → Portfolio Evidence Ledger → validated Engineering Spotlight projection",
     "exactly **11 subjects**",
     "spotlight-manifest.json",
-    "frozen legacy verification contract",
+    "frozen historical verification contract",
+    "profile-evidence-v3.schema.json",
     "profile-evidence-v2.schema.json",
     "predicateSchema",
+    "PL2-",
+    SEMANTICS,
+    "execution result",
+    "subject binding",
+    "freshness",
+    "DIFFERENT_SUBJECT",
+    "CURRENT_SUBJECT",
     "validate-profile-cache-contract.py",
     "generate-read-only",
     "attest-validated-evidence",
@@ -32,8 +42,16 @@ THREAT_REQUIRED = (
     "exactly 11 files",
     "Ledger-backed Spotlight projection",
     "frozen historical verification contract",
+    "profile-evidence-v3.schema.json",
     "profile-evidence-v2.schema.json",
     "predicateSchema.digest",
+    "PL2-",
+    SEMANTICS,
+    "execution result",
+    "subject binding",
+    "freshness",
+    "DIFFERENT_SUBJECT",
+    "CURRENT_SUBJECT",
     "Profile image cache boundary",
     "spotlight-manifest.json",
     "generated",
@@ -43,6 +61,10 @@ FORBIDDEN = (
     "Baseline: `main` after PR #65",
     "root is expected to contain only the generated Signal Field and Engineering Spotlight artifact trees",
     "revalidates both evidence sets",
+    "New production attestations use `profile-evidence-v2.schema.json`",
+    "current issuance uses v2",
+    "PL1-XXXXXXXXXXXXXXXX",
+    "signal state, and UTC whole-day freshness",
 )
 
 
@@ -62,7 +84,10 @@ def main() -> int:
         joined = governance + "\n" + threat
         for phrase in FORBIDDEN:
             require(phrase not in joined, f"stale assurance statement remains: {phrase}")
-        print("Assurance documentation contract passed: governance and threat model match the current evidence, schema, cache, and authority graph.")
+        print(
+            "Assurance documentation contract passed: governance and threat model match Ledger v2 orthogonal evidence semantics, "
+            "predicate v3 issuance, historical schema immutability, cache boundaries, and authority separation."
+        )
         return 0
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
