@@ -9,6 +9,11 @@ Each evidence record keeps three independent facts:
 A different-subject run therefore never overwrites a PASSING/FAILING execution result
 with a synthetic "STALE" result. The ledger is the single live evidence collection
 surface consumed by the Engineering Spotlight projection.
+
+Live GitHub API collection uses a small fail-closed retry budget. Only transient
+transport failures, retryable 4xx rate/timeout responses, and 5xx responses are
+retried. Authentication, authorization, not-found, malformed JSON, and semantic
+validation failures are never hidden behind retries.
 """
 from __future__ import annotations
 
@@ -17,9 +22,12 @@ import datetime as dt
 import hashlib
 import json
 import os
+import time
 import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import engineering_spotlight_v2 as evidence
 
@@ -29,6 +37,12 @@ KIND = "portfolio-evidence-ledger"
 OUTPUT = "portfolio-evidence-ledger.json"
 EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 SHA40_ZERO = "0" * 40
+
+API_ATTEMPTS = 3
+API_TIMEOUT_SECONDS = 12
+API_BACKOFF_SECONDS = (1.0, 2.0)
+API_MAX_RETRY_AFTER_SECONDS = 5.0
+RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
 PERMANENT = (
     {
@@ -80,6 +94,82 @@ def canonical_digest(payload: dict[str, Any]) -> str:
 
 def classify(repo: str) -> str:
     return "permanent" if repo in PERMANENT_REPOS else "rotating"
+
+
+def retryable_http_error(exc: urllib.error.HTTPError) -> bool:
+    if exc.code in RETRYABLE_HTTP_STATUS:
+        return True
+    if exc.code != 403:
+        return False
+    headers = exc.headers or {}
+    # GitHub can express primary rate exhaustion as 403 with remaining=0 and
+    # secondary throttling with Retry-After. Ordinary forbidden responses must not retry.
+    return headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After"))
+
+
+def retry_delay_seconds(exc: BaseException, failure_index: int) -> float:
+    default = API_BACKOFF_SECONDS[min(failure_index, len(API_BACKOFF_SECONDS) - 1)]
+    if not isinstance(exc, urllib.error.HTTPError) or not exc.headers:
+        return default
+    raw = str(exc.headers.get("Retry-After") or "").strip()
+    try:
+        requested = float(raw)
+    except ValueError:
+        return default
+    return max(0.0, min(requested, API_MAX_RETRY_AFTER_SECONDS))
+
+
+def fetch_json(
+    url: str,
+    token: str | None,
+    *,
+    opener: Callable[..., Any] = urllib.request.urlopen,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    request = urllib.request.Request(url, headers=evidence.request_headers(token))
+    for attempt in range(API_ATTEMPTS):
+        try:
+            with opener(request, timeout=API_TIMEOUT_SECONDS) as response:
+                payload = json.load(response)
+            if not isinstance(payload, dict):
+                raise ValueError("GitHub API response must be an object")
+            return payload
+        except urllib.error.HTTPError as exc:
+            if attempt + 1 >= API_ATTEMPTS or not retryable_http_error(exc):
+                raise
+            sleeper(retry_delay_seconds(exc, attempt))
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError) as exc:
+            if attempt + 1 >= API_ATTEMPTS:
+                raise
+            sleeper(retry_delay_seconds(exc, attempt))
+    raise RuntimeError("unreachable GitHub API retry state")
+
+
+def main_revision(repo: str, token: str | None) -> str:
+    payload = fetch_json(f"https://api.github.com/repos/{OWNER}/{repo}/git/ref/heads/main", token)
+    sha = str((payload.get("object") or {}).get("sha") or "")
+    if len(sha) != 40 or any(ch not in "0123456789abcdef" for ch in sha):
+        raise ValueError(f"{repo}: current main revision is malformed")
+    return sha
+
+
+def latest_workflow_run(repo: str, workflow: str, token: str | None) -> dict[str, Any]:
+    encoded = urllib.parse.quote(workflow, safe="")
+    endpoint = (
+        f"https://api.github.com/repos/{OWNER}/{repo}/actions/workflows/{encoded}/runs"
+        "?branch=main&event=push&per_page=1"
+    )
+    payload = fetch_json(endpoint, token)
+    runs = payload.get("workflow_runs") or []
+    return runs[0] if runs and isinstance(runs[0], dict) else {}
+
+
+def workflow_jobs(repo: str, run_id: int, token: str | None) -> list[dict[str, Any]]:
+    payload = fetch_json(
+        f"https://api.github.com/repos/{OWNER}/{repo}/actions/runs/{run_id}/jobs?per_page=100",
+        token,
+    )
+    return [job for job in (payload.get("jobs") or []) if isinstance(job, dict)]
 
 
 def binding_state(subject: str, head_sha: str, has_run: bool) -> str:
@@ -135,8 +225,8 @@ def collect_evidence_dimensions(
         return subject, [offline_signal(repo, spec, day, index) for index, spec in enumerate(specs, 1)]
 
     try:
-        subject = evidence.main_revision(repo, token)
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+        subject = main_revision(repo, token)
+    except (urllib.error.URLError, TimeoutError, ConnectionResetError, json.JSONDecodeError, ValueError):
         subject = SHA40_ZERO
 
     run_cache: dict[str, dict[str, Any]] = {}
@@ -147,9 +237,9 @@ def collect_evidence_dimensions(
         workflow = str(spec["workflow"])
         try:
             if workflow not in run_cache:
-                run_cache[workflow] = evidence.latest_workflow_run(repo, workflow, token)
+                run_cache[workflow] = latest_workflow_run(repo, workflow, token)
             run = run_cache[workflow]
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError, json.JSONDecodeError, ValueError):
             run = {}
 
         if not run:
@@ -185,9 +275,9 @@ def collect_evidence_dimensions(
         if result == "PASSING" and (spec.get("jobs") or spec.get("job_prefixes")):
             try:
                 if run_id not in jobs_cache:
-                    jobs_cache[run_id] = evidence.workflow_jobs(repo, run_id, token)
+                    jobs_cache[run_id] = workflow_jobs(repo, run_id, token)
                 result = evidence.aggregate_jobs(spec, jobs_cache[run_id])
-            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+            except (urllib.error.URLError, TimeoutError, ConnectionResetError, json.JSONDecodeError, ValueError):
                 result = "UNAVAILABLE"
 
         age = evidence.evidence_age_days(day, completed) if completed else 0
