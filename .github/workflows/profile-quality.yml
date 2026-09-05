@@ -133,6 +133,9 @@ jobs:
       - name: Validate CodeQL governance contract
         run: python3 scripts/validate-codeql-contract.py
 
+      - name: Validate read-only contract summary renderer
+        run: python3 scripts/write-profile-contract-summary.py --self-test
+
       - name: Validate repository governance contract
         run: python3 scripts/validate-governance-contract.py
 
@@ -217,15 +220,22 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tmp="$(mktemp -d)"
-          python3 scripts/generate-engineering-spotlight.py "$tmp"
-          python3 scripts/validate-engineering-spotlight.py "$tmp" --require-live
+          rm -rf integration-engineering-spotlight
+          python3 scripts/generate-engineering-spotlight.py integration-engineering-spotlight
+          python3 scripts/validate-engineering-spotlight.py integration-engineering-spotlight --require-live
 
       - name: Exercise live Portfolio Evidence Ledger path
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tmp="$(mktemp -d)"
-          python3 scripts/generate-portfolio-evidence-ledger.py "$tmp"
-          python3 scripts/validate-portfolio-evidence-ledger.py "$tmp" --require-live
+          rm -rf integration-portfolio-evidence
+          python3 scripts/generate-portfolio-evidence-ledger.py integration-portfolio-evidence
+          python3 scripts/validate-portfolio-evidence-ledger.py integration-portfolio-evidence --require-live
+
+      - name: Write read-only contract summary
+        env:
+          SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
+          SPOTLIGHT_DIR: integration-engineering-spotlight
+          PORTFOLIO_LEDGER_DIR: integration-portfolio-evidence
+        run: python3 scripts/write-profile-contract-summary.py
