@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Build the custom predicate used for generated profile-evidence attestations.
 
-Subject digests are supplied by actions/attest. This predicate records source revision,
-workflow identity, immutable predicate-schema identity, published paths,
-validation/authority boundaries, the deterministic Signal Field Evidence ID, and the
-Portfolio Evidence Ledger identity.
+Subject digests are supplied by actions/attest. Predicate v3 records source revision,
+workflow identity, immutable predicate-schema identity, the exact eleven published
+subjects, Signal Field identity, Portfolio Evidence Ledger v2 identity/semantics, the
+validation boundary, authority separation, and a bounded provenance claim.
 """
 from __future__ import annotations
 
@@ -19,15 +19,16 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "portyu9/portyu9"
 KIND = "profile-evidence-attestation"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 PREDICATE_TYPE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
-    "profile-evidence-v2.schema.json"
+    "profile-evidence-v3.schema.json"
 )
-PREDICATE_SCHEMA = ROOT / ".github/attestation/profile-evidence-v2.schema.json"
+PREDICATE_SCHEMA = ROOT / ".github/attestation/profile-evidence-v3.schema.json"
 BOUNDARY = "attest-validated-evidence"
 EVIDENCE_SCHEMA = "signal-field-evidence-v1"
-PORTFOLIO_LEDGER_VERSION = "portfolio-evidence-ledger-v1"
+PORTFOLIO_LEDGER_VERSION = "portfolio-evidence-ledger-v2"
+PORTFOLIO_EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 AUTHORITY_SEPARATION = (
     "Generation, attestation, and publication run as distinct jobs; third-party "
     "generation code has neither repository-write nor attestation authority."
@@ -40,7 +41,7 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 DIGITS = re.compile(r"^[0-9]+$")
 EVIDENCE_ID = re.compile(r"^SF1-[0-9A-F]{16}$")
 EVIDENCE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
-PORTFOLIO_EVIDENCE_ID = re.compile(r"^PL1-[0-9A-F]{16}$")
+PORTFOLIO_EVIDENCE_ID = re.compile(r"^PL2-[0-9A-F]{16}$")
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 
@@ -63,12 +64,8 @@ SIGNAL_FIELD_VALIDATORS = (
     "scripts/validate-signal-field-v214.py",
     "scripts/validate-generated-signal-field.py",
 )
-SPOTLIGHT_VALIDATORS = (
-    "scripts/validate-engineering-spotlight.py --require-live",
-)
-PORTFOLIO_LEDGER_VALIDATORS = (
-    "scripts/validate-portfolio-evidence-ledger.py --require-live",
-)
+SPOTLIGHT_VALIDATORS = ("scripts/validate-engineering-spotlight.py --require-live",)
+PORTFOLIO_LEDGER_VALIDATORS = ("scripts/validate-portfolio-evidence-ledger.py --require-live",)
 
 
 def required_env(name: str, env: dict[str, str]) -> str:
@@ -126,6 +123,10 @@ def read_portfolio_ledger_evidence(directory: Path) -> dict[str, object]:
         raise ValueError("Portfolio Evidence Ledger version changed")
     if payload.get("kind") != "portfolio-evidence-ledger":
         raise ValueError("Portfolio Evidence Ledger kind changed")
+    if payload.get("evidence_semantics") != PORTFOLIO_EVIDENCE_SEMANTICS:
+        raise ValueError("Portfolio Evidence Ledger semantics changed")
+    if "signal_summary" in payload:
+        raise ValueError("Portfolio Evidence Ledger v2 contains legacy conflated signal summary")
     evidence_id = payload.get("evidence_id")
     digest = payload.get("evidence_digest")
     system_count = payload.get("system_count")
@@ -137,6 +138,7 @@ def read_portfolio_ledger_evidence(directory: Path) -> dict[str, object]:
         raise ValueError("Portfolio Evidence Ledger system count changed")
     return {
         "version": PORTFOLIO_LEDGER_VERSION,
+        "semantics": PORTFOLIO_EVIDENCE_SEMANTICS,
         "id": evidence_id,
         "digest": digest,
         "systemCount": system_count,
@@ -168,16 +170,9 @@ def build_predicate(env: dict[str, str], signal_field_dir: Path, portfolio_ledge
         "repository": REPOSITORY,
         "sourceRevision": revision,
         "workflowRef": workflow_ref,
-        "run": {
-            "id": run_id,
-            "attempt": attempt,
-            "url": f"{server}/{REPOSITORY}/actions/runs/{run_id}",
-        },
+        "run": {"id": run_id, "attempt": attempt, "url": f"{server}/{REPOSITORY}/actions/runs/{run_id}"},
         "predicateSchema": predicate_schema_identity(),
-        "subjectSet": {
-            "name": "generated-profile-evidence",
-            "publishedPaths": list(PUBLISHED_PATHS),
-        },
+        "subjectSet": {"name": "generated-profile-evidence", "publishedPaths": list(PUBLISHED_PATHS)},
         "signalFieldEvidence": read_signal_field_evidence(signal_field_dir),
         "portfolioEvidenceLedger": read_portfolio_ledger_evidence(portfolio_ledger_dir),
         "validation": {
@@ -199,74 +194,61 @@ def build_predicate(env: dict[str, str], signal_field_dir: Path, portfolio_ledge
 def validate_predicate(predicate: dict[str, object]) -> None:
     if predicate.get("schemaVersion") != SCHEMA_VERSION:
         raise ValueError("schemaVersion changed")
-    if predicate.get("kind") != KIND:
-        raise ValueError("attestation kind changed")
-    if predicate.get("repository") != REPOSITORY:
-        raise ValueError("repository changed")
+    if predicate.get("kind") != KIND or predicate.get("repository") != REPOSITORY:
+        raise ValueError("predicate identity changed")
     revision = predicate.get("sourceRevision")
     if not isinstance(revision, str) or not SHA40.fullmatch(revision):
         raise ValueError("sourceRevision is malformed")
-
-    predicate_schema = predicate.get("predicateSchema")
-    if not isinstance(predicate_schema, dict):
-        raise ValueError("predicateSchema is missing")
-    expected_schema = predicate_schema_identity()
-    if predicate_schema != expected_schema:
+    if predicate.get("predicateSchema") != predicate_schema_identity():
         raise ValueError("predicate schema identity changed")
 
     subject_set = predicate.get("subjectSet")
-    if not isinstance(subject_set, dict):
-        raise ValueError("subjectSet is missing")
-    if subject_set.get("name") != "generated-profile-evidence":
-        raise ValueError("subject-set name changed")
-    paths = subject_set.get("publishedPaths")
-    if paths != list(PUBLISHED_PATHS):
+    if not isinstance(subject_set, dict) or subject_set.get("name") != "generated-profile-evidence":
+        raise ValueError("subjectSet changed")
+    if subject_set.get("publishedPaths") != list(PUBLISHED_PATHS) or len(set(PUBLISHED_PATHS)) != 11:
         raise ValueError("published subject paths changed")
-    if len(set(PUBLISHED_PATHS)) != 11:
-        raise ValueError("published subject paths must be eleven unique subjects")
 
-    evidence = predicate.get("signalFieldEvidence")
-    if not isinstance(evidence, dict):
-        raise ValueError("signalFieldEvidence is missing")
-    if evidence.get("schema") != EVIDENCE_SCHEMA:
-        raise ValueError("Signal Field Evidence ID schema changed")
-    if not isinstance(evidence.get("id"), str) or not EVIDENCE_ID.fullmatch(str(evidence["id"])):
+    signal = predicate.get("signalFieldEvidence")
+    if not isinstance(signal, dict) or signal.get("schema") != EVIDENCE_SCHEMA:
+        raise ValueError("Signal Field evidence block changed")
+    if not isinstance(signal.get("id"), str) or not EVIDENCE_ID.fullmatch(str(signal["id"])):
         raise ValueError("Signal Field Evidence ID is malformed")
-    if not isinstance(evidence.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(str(evidence["digest"])):
+    if not isinstance(signal.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(str(signal["digest"])):
         raise ValueError("Signal Field evidence digest is malformed")
 
     portfolio = predicate.get("portfolioEvidenceLedger")
     if not isinstance(portfolio, dict):
         raise ValueError("portfolioEvidenceLedger is missing")
-    if portfolio.get("version") != PORTFOLIO_LEDGER_VERSION:
-        raise ValueError("Portfolio Evidence Ledger version changed")
+    expected_portfolio = {
+        "version": PORTFOLIO_LEDGER_VERSION,
+        "semantics": PORTFOLIO_EVIDENCE_SEMANTICS,
+        "id": portfolio.get("id"),
+        "digest": portfolio.get("digest"),
+        "systemCount": 13,
+    }
+    if portfolio != expected_portfolio:
+        raise ValueError("Portfolio Evidence Ledger predicate block changed")
     if not isinstance(portfolio.get("id"), str) or not PORTFOLIO_EVIDENCE_ID.fullmatch(str(portfolio["id"])):
         raise ValueError("Portfolio Evidence Ledger ID is malformed")
     if not isinstance(portfolio.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(str(portfolio["digest"])):
         raise ValueError("Portfolio Evidence Ledger digest is malformed")
-    if portfolio.get("systemCount") != 13:
-        raise ValueError("Portfolio Evidence Ledger system count changed")
 
     validation = predicate.get("validation")
-    if not isinstance(validation, dict) or validation.get("boundary") != BOUNDARY:
-        raise ValueError("validation boundary changed")
-    if validation.get("signalField") != list(SIGNAL_FIELD_VALIDATORS):
-        raise ValueError("Signal Field validator set changed")
-    if validation.get("engineeringSpotlight") != list(SPOTLIGHT_VALIDATORS):
-        raise ValueError("Engineering Spotlight validator set changed")
-    if validation.get("portfolioEvidenceLedger") != list(PORTFOLIO_LEDGER_VALIDATORS):
-        raise ValueError("Portfolio Evidence Ledger validator set changed")
-
-    authority = predicate.get("authority")
-    if not isinstance(authority, dict):
-        raise ValueError("authority block is missing")
+    expected_validation = {
+        "signalField": list(SIGNAL_FIELD_VALIDATORS),
+        "engineeringSpotlight": list(SPOTLIGHT_VALIDATORS),
+        "portfolioEvidenceLedger": list(PORTFOLIO_LEDGER_VALIDATORS),
+        "boundary": BOUNDARY,
+    }
+    if validation != expected_validation:
+        raise ValueError("validation contract changed")
     expected_authority = {
         "generation": "contents:read",
         "attestation": "contents:read,id-token:write,attestations:write",
         "publication": "contents:write",
         "separation": AUTHORITY_SEPARATION,
     }
-    if authority != expected_authority:
+    if predicate.get("authority") != expected_authority:
         raise ValueError("authority contract changed")
     if predicate.get("claim") != CLAIM:
         raise ValueError("claim boundary changed")
@@ -303,7 +285,11 @@ def self_test() -> None:
                 {
                     "version": PORTFOLIO_LEDGER_VERSION,
                     "kind": "portfolio-evidence-ledger",
-                    "evidence_id": "PL1-0123456789ABCDEF",
+                    "evidence_semantics": PORTFOLIO_EVIDENCE_SEMANTICS,
+                    "result_summary": {"PASSING": 25},
+                    "binding_summary": {"CURRENT_SUBJECT": 25},
+                    "freshness_summary": {"SAME_DAY": 25},
+                    "evidence_id": "PL2-0123456789ABCDEF",
                     "evidence_digest": f"sha256:{'b' * 64}",
                     "system_count": 13,
                 }
@@ -312,16 +298,16 @@ def self_test() -> None:
         )
         predicate = build_predicate(fixture_env(), signal_dir, ledger_dir)
         validate_predicate(predicate)
-        encoded = json.dumps(predicate, sort_keys=True, separators=(",", ":"))
-        reparsed = json.loads(encoded)
+        reparsed = json.loads(json.dumps(predicate, sort_keys=True, separators=(",", ":")))
         validate_predicate(reparsed)
-        if reparsed["run"]["url"] != "https://github.com/portyu9/portyu9/actions/runs/123456789":
-            raise AssertionError("workflow run URL changed")
-        if reparsed["portfolioEvidenceLedger"]["id"] != "PL1-0123456789ABCDEF":
-            raise AssertionError("Portfolio Evidence Ledger ID was not recorded")
+        if reparsed["portfolioEvidenceLedger"]["semantics"] != PORTFOLIO_EVIDENCE_SEMANTICS:
+            raise AssertionError("Portfolio evidence semantics were not recorded")
         if reparsed["predicateSchema"] != predicate_schema_identity():
             raise AssertionError("predicate schema digest was not recorded")
-    print("Profile evidence attestation predicate v2 self-test passed: immutable schema + Signal Field + three Spotlights + Portfolio Evidence Ledger")
+    print(
+        "Profile evidence attestation predicate v3 self-test passed: immutable schema + Signal Field + "
+        "three Spotlights + Portfolio Evidence Ledger v2 with result/binding/freshness semantics"
+    )
 
 
 def main() -> int:
@@ -341,12 +327,11 @@ def main() -> int:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(predicate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(
-            f"wrote profile evidence attestation predicate v2: {output} · "
-            f"{predicate['signalFieldEvidence']['id']} · {predicate['portfolioEvidenceLedger']['id']} · "
-            f"{predicate['predicateSchema']['digest']}"
+            "Profile evidence predicate v3 built: "
+            f"{predicate['portfolioEvidenceLedger']['id']} · {predicate['portfolioEvidenceLedger']['semantics']}"
         )
         return 0
-    except (OSError, ValueError, AssertionError, TypeError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
