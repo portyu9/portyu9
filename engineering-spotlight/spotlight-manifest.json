@@ -8,52 +8,52 @@
     {
       "evidence_contract": [
         {
-          "label": "QUALITY+SEC",
-          "scope": "job-prefix:Quality / Python ;steps:Tests|Bandit|Dependency audit",
+          "label": "CI",
+          "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "label": "AGENT LABS",
-          "scope": "jobs:OpenAI adapter / deterministic SDK|MCP fault lab / deterministic protocol|MCP remote auth / loopback HTTP|MCP OAuth flow / separated AS-RS|Package integrity",
-          "workflow": "ci.yml"
+          "label": "SECURITY",
+          "scope": "workflow",
+          "workflow": "security.yml"
         }
       ],
-      "glyph": "evidence-hex",
-      "repository": "portyu9/qa-automation-ai-agent-evals",
+      "glyph": "shield-route",
+      "repository": "portyu9/qa-automation-java-restassured",
       "signals": [
         {
-          "age_days": 0,
-          "completed_at_utc": "2026-09-05T00:24:34Z",
-          "head_sha": "b8b1590408e484a91d3315228f3942ca8abf9a77",
-          "label": "QUALITY+SEC",
+          "age_days": 2,
+          "completed_at_utc": "2026-09-03T04:05:47Z",
+          "head_sha": "8f3ed02ba06747146181b5d3435e54eb007a5f60",
+          "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "run_id": 33932829645,
-          "run_number": 474,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/33932829645",
-          "scope": "job-prefix:Quality / Python ;steps:Tests|Bandit|Dependency audit",
+          "run_id": 33713708457,
+          "run_number": 142,
+          "run_url": "https://github.com/portyu9/qa-automation-java-restassured/actions/runs/33713708457",
+          "scope": "workflow",
           "signal": "PASSING",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 0,
-          "completed_at_utc": "2026-09-05T00:24:34Z",
-          "head_sha": "b8b1590408e484a91d3315228f3942ca8abf9a77",
-          "label": "AGENT LABS",
+          "age_days": 2,
+          "completed_at_utc": "2026-09-03T04:06:22Z",
+          "head_sha": "8f3ed02ba06747146181b5d3435e54eb007a5f60",
+          "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
-          "run_id": 33932829645,
-          "run_number": 474,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/33932829645",
-          "scope": "jobs:OpenAI adapter / deterministic SDK|MCP fault lab / deterministic protocol|MCP remote auth / loopback HTTP|MCP OAuth flow / separated AS-RS|Package integrity",
+          "run_id": 33713708468,
+          "run_number": 118,
+          "run_url": "https://github.com/portyu9/qa-automation-java-restassured/actions/runs/33713708468",
+          "scope": "workflow",
           "signal": "PASSING",
-          "workflow": "ci.yml"
+          "workflow": "security.yml"
         }
       ],
       "slot": 1,
-      "subject_revision": "b8b1590408e484a91d3315228f3942ca8abf9a77",
-      "title": "AGENT EVALUATION + TEVV",
-      "topology": "assurance-lattice"
+      "subject_revision": "8f3ed02ba06747146181b5d3435e54eb007a5f60",
+      "title": "REST ASSURED QE",
+      "topology": "protocol-chain"
     },
     {
       "evidence_contract": [
@@ -68,43 +68,93 @@
           "workflow": "security.yml"
         }
       ],
-      "glyph": "retry-loop",
-      "repository": "portyu9/qa-automation-ui-cypress",
+      "glyph": "trace-frame",
+      "repository": "portyu9/qa-automation-node-playwright",
       "signals": [
         {
-          "age_days": 3,
-          "completed_at_utc": "2026-09-02T16:37:42Z",
-          "head_sha": "4329768f6f5868db80c215fd096f570834c3743d",
+          "age_days": 2,
+          "completed_at_utc": "2026-09-03T04:20:55Z",
+          "head_sha": "e30dd76ed3f3b61b2ea4aff6a3fac90669d4e277",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "run_id": 33655978280,
-          "run_number": 101,
-          "run_url": "https://github.com/portyu9/qa-automation-ui-cypress/actions/runs/33655978280",
+          "run_id": 33714594338,
+          "run_number": 120,
+          "run_url": "https://github.com/portyu9/qa-automation-node-playwright/actions/runs/33714594338",
           "scope": "workflow",
           "signal": "PASSING",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 3,
-          "completed_at_utc": "2026-09-02T16:38:14Z",
-          "head_sha": "4329768f6f5868db80c215fd096f570834c3743d",
+          "age_days": 2,
+          "completed_at_utc": "2026-09-03T04:20:42Z",
+          "head_sha": "e30dd76ed3f3b61b2ea4aff6a3fac90669d4e277",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
-          "run_id": 33655978406,
-          "run_number": 69,
-          "run_url": "https://github.com/portyu9/qa-automation-ui-cypress/actions/runs/33655978406",
+          "run_id": 33714594520,
+          "run_number": 76,
+          "run_url": "https://github.com/portyu9/qa-automation-node-playwright/actions/runs/33714594520",
           "scope": "workflow",
           "signal": "PASSING",
           "workflow": "security.yml"
         }
       ],
       "slot": 2,
-      "subject_revision": "4329768f6f5868db80c215fd096f570834c3743d",
-      "title": "CYPRESS UI QE",
-      "topology": "retry-circuit"
+      "subject_revision": "e30dd76ed3f3b61b2ea4aff6a3fac90669d4e277",
+      "title": "PLAYWRIGHT QE",
+      "topology": "trace-fan"
+    },
+    {
+      "evidence_contract": [
+        {
+          "label": "CI",
+          "scope": "workflow",
+          "workflow": "ci.yml"
+        },
+        {
+          "label": "SECURITY",
+          "scope": "workflow",
+          "workflow": "security.yml"
+        }
+      ],
+      "glyph": "endpoint-link",
+      "repository": "portyu9/qa-automation-node-supertest",
+      "signals": [
+        {
+          "age_days": 2,
+          "completed_at_utc": "2026-09-03T05:33:24Z",
+          "head_sha": "19d73d35d902aff477f031ff1da19a1faa5bd6bb",
+          "label": "CI",
+          "offline": false,
+          "ordinal": 1,
+          "run_id": 33719288260,
+          "run_number": 153,
+          "run_url": "https://github.com/portyu9/qa-automation-node-supertest/actions/runs/33719288260",
+          "scope": "workflow",
+          "signal": "PASSING",
+          "workflow": "ci.yml"
+        },
+        {
+          "age_days": 2,
+          "completed_at_utc": "2026-09-03T05:33:41Z",
+          "head_sha": "19d73d35d902aff477f031ff1da19a1faa5bd6bb",
+          "label": "SECURITY",
+          "offline": false,
+          "ordinal": 2,
+          "run_id": 33719288259,
+          "run_number": 98,
+          "run_url": "https://github.com/portyu9/qa-automation-node-supertest/actions/runs/33719288259",
+          "scope": "workflow",
+          "signal": "PASSING",
+          "workflow": "security.yml"
+        }
+      ],
+      "slot": 3,
+      "subject_revision": "19d73d35d902aff477f031ff1da19a1faa5bd6bb",
+      "title": "SUPERTEST API QE",
+      "topology": "contract-bridge"
     }
   ],
-  "version": "engineering-spotlight-v2"
+  "version": "engineering-spotlight-v2.1"
 }
