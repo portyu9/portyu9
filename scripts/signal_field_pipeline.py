@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """Run the versioned Signal Field production pipeline from one ordered manifest.
 
-This replaces duplicated stage ordering in Profile Quality and production workflows.
-The manifest is the reviewed stage registry; this orchestrator validates its exact v1
-order, logs each stage, executes every production stage with the current interpreter,
-and centralizes the same stage self-tests previously listed one-by-one in workflow YAML.
-No network or repository-write authority is added here.
+Pipeline v2 makes mutation/validation boundaries explicit: v2.15 and v2.16 are
+standalone transformer stages, while validators only observe finalized candidate bytes.
+The historical v1 manifest remains in the repository as the reviewed predecessor.
 """
 from __future__ import annotations
 
@@ -19,8 +17,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
-MANIFEST = SCRIPTS / "signal-field-pipeline-v1.json"
-PIPELINE_VERSION = "signal-field-pipeline-v1"
+MANIFEST = SCRIPTS / "signal-field-pipeline-v2.json"
+PIPELINE_VERSION = "signal-field-pipeline-v2"
 EXPECTED_STAGE_IDS = (
     "customize-v2",
     "polish-v2.1",
@@ -38,7 +36,9 @@ EXPECTED_STAGE_IDS = (
     "clarity-v2.13",
     "validate-v2.13",
     "identity-v2.14",
-    "validate-v2.14",
+    "presentation-v2.15",
+    "issues-balance-v2.16",
+    "validate-v2.14-plus-presentation",
     "refresh-and-wide-v2.18",
     "validate-publishable",
 )
@@ -57,7 +57,9 @@ EXPECTED_SELF_TEST_IDS = (
     "glyphs-v2.11",
     "balance-v2.12",
     "clarity-v2.13",
-    "validate-v2.14",
+    "presentation-v2.15",
+    "issues-balance-v2.16",
+    "validate-v2.14-plus-presentation",
     "refresh-and-wide-v2.18",
 )
 ALLOWED_KINDS = {"transform", "validate"}
@@ -70,6 +72,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def load_manifest() -> dict[str, object]:
+    require((SCRIPTS / "signal-field-pipeline-v1.json").is_file(), "historical pipeline v1 manifest must remain present")
     require(MANIFEST.is_file(), f"pipeline manifest is missing: {MANIFEST.relative_to(ROOT)}")
     data = json.loads(MANIFEST.read_text(encoding="utf-8"))
     require(isinstance(data, dict), "pipeline manifest root must be an object")
@@ -104,6 +107,11 @@ def load_manifest() -> dict[str, object]:
         seen_scripts.add(script)
         previous = stage_id
     require(tuple(self_test_ids) == EXPECTED_SELF_TEST_IDS, "Signal Field pipeline self-test coverage changed")
+
+    kinds = {str(stage["id"]): str(stage["kind"]) for stage in stages if isinstance(stage, dict)}
+    require(kinds["presentation-v2.15"] == "transform", "v2.15 presentation must remain an explicit transformer")
+    require(kinds["issues-balance-v2.16"] == "transform", "v2.16 issue balance must remain an explicit transformer")
+    require(kinds["validate-v2.14-plus-presentation"] == "validate", "final identity/presentation check must remain validation-only")
     return data
 
 
