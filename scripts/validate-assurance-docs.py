@@ -35,6 +35,7 @@ GOV_REQUIRED = (
     "attestations: write",
     "validate-ruleset-contract.py --live",
     "live GitHub control-plane",
+    "admin-scope",
     "does **not certify every software behavior**",
 )
 
@@ -57,6 +58,8 @@ THREAT_REQUIRED = (
     "Profile image cache boundary",
     "validate-ruleset-contract.py --live",
     "live GitHub control-plane",
+    "admin-scope",
+    "redact",
     "spotlight-manifest.json",
     "generated",
 )
@@ -71,6 +74,7 @@ FORBIDDEN = (
     "signal state, and UTC whole-day freshness",
     "audited separately from source-controlled validators",
     "inspect repository rulesets separately from source-controlled validation",
+    "omission as empty",
 )
 
 
@@ -92,7 +96,8 @@ def main() -> int:
             require(phrase not in joined, f"stale assurance statement remains: {phrase}")
         print(
             "Assurance documentation contract passed: governance and threat model match Ledger v2 orthogonal evidence semantics, "
-            "predicate v3 issuance, historical schema immutability, cache boundaries, authority separation, and live ruleset drift verification."
+            "predicate v3 issuance, historical schema immutability, cache boundaries, authority separation, live observable ruleset drift verification, "
+            "and the explicit admin-scope bypass-actor audit boundary."
         )
         return 0
     except (OSError, ValueError) as exc:
