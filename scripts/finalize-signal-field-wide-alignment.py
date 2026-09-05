@@ -7,7 +7,7 @@ the remaining Stars geometry by mirroring the already-reviewed Pull Requests lay
 - the Stars rule still starts at x=284;
 - the star glyph is optically anchored to the rule start (same +6.25 center offset as
   the Pull Requests glyph uses from its own rule start);
-- the Stars value and label are centered at x=327 to the right of that glyph;
+- the Stars value and label are optically centered at x=320 to the right of that glyph;
 - the visible EID remains 8 SVG units above its v2.14 base geometry.
 
 Compact/mobile variants are validation-only and must remain untouched.
@@ -42,8 +42,8 @@ PULL_LINE = re.compile(r'<path\b(?=[^>]*data-metric-phosphor-line="pull_requests
 PULL_GLYPH = re.compile(r'<g\b(?=[^>]*data-metric-glyph="pull_requests")[^>]*>', re.I)
 
 STAR_LINE_D = "M284 73h86"
-STAR_VALUE_X = "327"
-STAR_LABEL_X = "327"
+STAR_VALUE_X = "320"
+STAR_LABEL_X = "320"
 STAR_WRAPPER_TRANSFORM = "translate(20 1.5)"
 STAR_WRAPPER = (
     '<g data-wide-star-optical-alignment="true" '
