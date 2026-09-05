@@ -8,11 +8,18 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/profile-stats.yml"
 CADENCE = ROOT / ".github/REFRESH_CADENCE.md"
+SUBJECT_SENTINELS = (
+    "scripts/profile-evidence-subjects-v1.json",
+    "scripts/profile_evidence_subjects.py",
+    "scripts/stage-profile-evidence.py",
+    "scripts/validate-profile-evidence-subjects.py",
+)
 EXPECTED_PATHS = (
     ".github/workflows/profile-stats.yml",
     ".github/ATTESTATION.md",
     ".github/attestation/**",
     "scripts/**",
+    *SUBJECT_SENTINELS,
 )
 
 
@@ -26,11 +33,7 @@ def push_paths(workflow: str) -> tuple[str, ...]:
     push_index = next((i for i, line in enumerate(lines) if line == "  push:"), None)
     require(push_index is not None, "profile-stats push trigger is missing")
     paths_index = next(
-        (
-            i
-            for i in range(push_index + 1, len(lines))
-            if lines[i] == "    paths:"
-        ),
+        (i for i in range(push_index + 1, len(lines)) if lines[i] == "    paths:"),
         None,
     )
     require(paths_index is not None, "profile-stats push paths block is missing")
@@ -54,18 +57,19 @@ def main() -> int:
         paths = push_paths(workflow)
         require(paths == EXPECTED_PATHS, f"profile-stats push paths must be the exact closed trigger set: {EXPECTED_PATHS!r}; got {paths!r}")
         script_paths = tuple(path for path in paths if path.startswith("scripts/"))
-        require(script_paths == ("scripts/**",), "production refresh must use one scripts/** umbrella rather than a partial per-script allowlist")
+        require(script_paths[0] == "scripts/**", "scripts/** must be the first and authoritative script trigger")
+        require(script_paths[1:] == SUBJECT_SENTINELS, "only reviewed subject-contract sentinels may accompany the scripts/** umbrella")
         require("scripts/**" in cadence, "refresh cadence rationale must document the trusted scripts/** trigger surface")
         require(
             "new production source modules cannot silently fall outside the immediate push-triggered refresh path" in cadence,
             "refresh cadence rationale must state the source-closure property",
         )
         print(
-            "Profile stats trigger contract passed: every trusted scripts/** change on main immediately enters the production refresh workflow; "
-            "workflow/schema/attestation inputs remain explicit."
+            "Profile stats trigger contract passed: scripts/** closes the trusted production source surface; "
+            "four explicit subject-contract paths remain review sentinels, not coverage dependencies."
         )
         return 0
-    except (OSError, ValueError, StopIteration) as exc:
+    except (OSError, ValueError, StopIteration, IndexError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
