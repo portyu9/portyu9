@@ -26,6 +26,8 @@ One attestation covers the eleven files that make up the generated profile-evide
 - `engineering-spotlight/spotlight-3-dark.svg`
 - `portfolio-evidence/portfolio-evidence-ledger.json`
 
+`engineering-spotlight/spotlight-manifest.json` is internal generation/validation metadata. It remains inside the immutable workflow artifact long enough for the Spotlight validator to prove manifest/SVG provenance agreement, but it is deliberately excluded from the public `generated` branch. The published generated evidence set is therefore exactly the same eleven subjects named by the attestation contract.
+
 The custom predicate type is:
 
 `https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json`
