@@ -8,7 +8,10 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/profile-stats.yml"
 CADENCE = ROOT / ".github/REFRESH_CADENCE.md"
-SUBJECT_SENTINELS = (
+REVIEW_SENTINELS = (
+    "scripts/set-signal-field-refresh-cadence.py",
+    "scripts/signal_field_pipeline.py",
+    "scripts/signal-field-pipeline-v1.json",
     "scripts/profile-evidence-subjects-v1.json",
     "scripts/profile_evidence_subjects.py",
     "scripts/stage-profile-evidence.py",
@@ -19,7 +22,7 @@ EXPECTED_PATHS = (
     ".github/ATTESTATION.md",
     ".github/attestation/**",
     "scripts/**",
-    *SUBJECT_SENTINELS,
+    *REVIEW_SENTINELS,
 )
 
 
@@ -58,7 +61,7 @@ def main() -> int:
         require(paths == EXPECTED_PATHS, f"profile-stats push paths must be the exact closed trigger set: {EXPECTED_PATHS!r}; got {paths!r}")
         script_paths = tuple(path for path in paths if path.startswith("scripts/"))
         require(script_paths[0] == "scripts/**", "scripts/** must be the first and authoritative script trigger")
-        require(script_paths[1:] == SUBJECT_SENTINELS, "only reviewed subject-contract sentinels may accompany the scripts/** umbrella")
+        require(script_paths[1:] == REVIEW_SENTINELS, "only reviewed legacy/subject contract sentinels may accompany the scripts/** umbrella")
         require("scripts/**" in cadence, "refresh cadence rationale must document the trusted scripts/** trigger surface")
         require(
             "new production source modules cannot silently fall outside the immediate push-triggered refresh path" in cadence,
@@ -66,7 +69,7 @@ def main() -> int:
         )
         print(
             "Profile stats trigger contract passed: scripts/** closes the trusted production source surface; "
-            "four explicit subject-contract paths remain review sentinels, not coverage dependencies."
+            "seven explicit pipeline/cadence/subject paths remain review sentinels, not coverage dependencies."
         )
         return 0
     except (OSError, ValueError, StopIteration, IndexError) as exc:
