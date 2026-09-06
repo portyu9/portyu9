@@ -4,7 +4,7 @@
 This validator runs downstream of every transformation stage and validates the bytes
 that may be attested/published. It protects source semantics, Evidence ID provenance,
 30-day membership, reviewed final presentation, metric geometry, privacy limits, and
-the measured best-effort generation-cadence contract.
+the measured best-effort generation-refresh contract.
 """
 from __future__ import annotations
 
@@ -46,10 +46,11 @@ REQUIRED_ROOT_ATTRS = {
     "data-evidence-window-clarity": "signal-field-v2.13",
     "data-evidence-identity": "signal-field-v2.14",
     "data-evidence-presentation": "signal-field-v2.15",
-    "data-generation-cadence-contract": "profile-refresh-v1",
+    "data-generation-cadence-contract": "profile-refresh-v2",
+    "data-current-day-highlight": "phosphorescent-red-v1",
     "data-contribution-total-source": "github-default-contribution-calendar",
     "data-metric-sources": "github-graphql+rest",
-    "data-generation-schedule": "30-minutes",
+    "data-generation-schedule": "1-hour",
     "data-intensity-scale": "github-contribution-levels-0-4",
     "data-count-semantics": "raw-github-contribution-counts",
     "data-activity-layout": "month-calendar-v2",
@@ -64,11 +65,14 @@ FORBIDDEN = (
     'data-refresh-cadence=',
     'data-period-days=',
     "REFRESH · 5 MIN",
+    "REFRESH · 30 MIN",
     "REFRESH · DAILY",
     "Refresh cadence: every 5 minutes.",
     "Refresh cadence: daily.",
     "SCHEDULE · 5 MIN",
+    "SCHEDULE · 30 MIN",
     "Generation schedule: every 5 minutes; execution and README cache propagation are best-effort.",
+    "Generation schedule: every 30 minutes; execution and README cache propagation are best-effort.",
     ">ISSUES</text>",
     ">BUGS FOUND</text>",
     "DIM CONTEXT",
@@ -182,9 +186,8 @@ def validate_file(path: Path) -> None:
     outline_attrs = attrs_of(outline.group("tag"))
     if latest_attrs.get("stroke") != "none" or latest_attrs.get("stroke-width") != "0":
         fail(f"{path.name}: latest-day tile retained a second keyline")
-    expected_latest = "#00AEEF" if path.name.endswith("-dark.svg") else "#007EA8"
-    if outline_attrs.get("stroke") != expected_latest or outline_attrs.get("stroke-width") != "1.4" or outline_attrs.get("opacity") != "0.92":
-        fail(f"{path.name}: reviewed single latest-day ring changed")
+    if outline_attrs.get("stroke") != "#FF335F" or outline_attrs.get("stroke-width") != "1.4" or outline_attrs.get("opacity") != "0.96":
+        fail(f"{path.name}: phosphorescent-red current-day ring changed")
 
     if text.count('data-activity-summary="true"') != 1:
         fail(f"{path.name}: activity summary count changed")
@@ -240,13 +243,13 @@ def validate_file(path: Path) -> None:
             fail(f"{path.name}: forbidden stale/sensitive contract remains: {forbidden}")
 
     expected_footer = (
-        "SOURCES · GITHUB GRAPHQL + REST · SCHEDULE · 30 MIN"
-        if "wide" in path.name else "GITHUB API · GRAPHQL + REST · SCHEDULE · 30 MIN"
+        "SOURCES · GITHUB GRAPHQL + REST · REFRESH · 1 HR"
+        if "wide" in path.name else "GITHUB API · GRAPHQL + REST · REFRESH · 1 HR"
     )
     if text.count(expected_footer) != 1:
-        fail(f"{path.name}: final source/schedule footer is missing")
-    if "Generation schedule: every 30 minutes; execution and README cache propagation are best-effort." not in text:
-        fail(f"{path.name}: accessible best-effort schedule semantics are missing")
+        fail(f"{path.name}: final source/refresh footer is missing")
+    if "Generation refresh: every hour; execution and README cache propagation are best-effort." not in text:
+        fail(f"{path.name}: accessible best-effort hourly refresh semantics are missing")
 
     if "wide" in path.name:
         if attrs.get("data-metric-layout") != "signal-field-v2.5":
@@ -275,7 +278,7 @@ def validate_directory(directory: Path) -> None:
     print(
         "Final Signal Field validation passed: four responsive artifacts preserve one measured evidence set "
         f"({evidence_id}), source-accurate authored-Issues semantics, outline-only leading context, maximum-contrast "
-        "month markers, a single latest-day ring, balanced glyph geometry, and best-effort 30-minute scheduling."
+        "month markers, a phosphorescent-red current-day ring, balanced glyph geometry, and best-effort hourly refresh."
     )
 
 
