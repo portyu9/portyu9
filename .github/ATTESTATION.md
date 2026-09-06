@@ -1,8 +1,8 @@
 # Engineering attestation contract
 
-This profile treats generated evidence as a supply-chain artifact rather than decorative output.
+My profile treats generated evidence as a supply-chain artifact rather than decorative output.
 
-The production profile workflow separates three authorities:
+My production profile workflow separates three authorities:
 
 1. `generate-read-only` collects GitHub evidence and applies repository-defined transformation and validation contracts with `contents: read` only.
 2. `attest-validated-evidence` downloads the immutable validated artifacts into a fresh job, revalidates them, and creates a GitHub artifact attestation using a short-lived Sigstore-backed workflow identity. This job has `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission.
@@ -95,9 +95,9 @@ As with the Signal Field ID, the short `PL2-` handle is for correlation. The com
 
 ## Claim boundary
 
-The attestation establishes that the named generated artifacts passed the repository-defined validators at the recorded source revision before publication and that GitHub can verify the workflow identity that issued the attestation.
+The attestation establishes that the named generated artifacts passed my repository-defined validators at the recorded source revision before publication and that GitHub can verify the workflow identity that issued the attestation.
 
-It does **not** certify every software behavior represented by the profile, replace the underlying CI/security evidence, or expand the scope of any oracle. The attestation is a provenance and contract-conformance claim, **not universal certification**.
+It does **not** certify every software behavior represented by my profile, replace the underlying CI/security evidence, or expand the scope of any oracle. The attestation is a provenance and contract-conformance claim, **not universal certification**.
 
 ## Verification
 

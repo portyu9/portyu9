@@ -60,6 +60,9 @@ jobs:
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile-v4.py
 
+      - name: Validate first-person profile voice
+        run: python3 scripts/validate-first-person-profile-voice.py
+
       - name: Validate generated profile cache identities
         run: python3 scripts/validate-profile-cache-contract.py
 

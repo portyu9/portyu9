@@ -2,7 +2,7 @@
 """Inject the Signal Field v2.3 evidence-topology background.
 
 The background is an inline, deterministic SVG composition inspired by the visual depth
-of the profile hero while deliberately using a different language: sparse topology arcs,
+of my profile hero while deliberately using a different language: sparse topology arcs,
 circuit traces, micro-nodes, scan-grid geometry, and asymmetric neon field glows.
 
 It runs after v2.2 so the data/semantics layer remains independent from decoration.

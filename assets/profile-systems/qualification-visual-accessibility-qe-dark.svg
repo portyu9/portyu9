@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="620" height="190" viewBox="0 0 620 190" role="img" aria-labelledby="title desc" data-system-card="selected-engineering-systems-v4" data-theme="dark" data-glyph="oracle-rings" data-topology="scanner-orbits">
   <title id="title">Visual and Accessibility Quality Engineering</title>
-  <desc id="desc">Permanent flagship engineering system. Visual evidence · explicit accessibility oracles. The card is a portfolio summary; workflow badges beneath it remain the scoped live evidence signals.</desc>
+  <desc id="desc">Permanent flagship engineering system. Visual evidence · explicit accessibility oracles. This card summarizes my portfolio; workflow badges beneath it remain scoped live evidence signals.</desc>
   <defs><linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#28D7FF"/><stop offset="0.52" stop-color="#00BFA6"/><stop offset="1" stop-color="#A020F0"/></linearGradient><linearGradient id="wash" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#28D7FF" stop-opacity=".06"/><stop offset=".52" stop-color="#00BFA6" stop-opacity=".03"/><stop offset="1" stop-color="#A020F0" stop-opacity=".052"/></linearGradient></defs>
   <rect x="1" y="1" width="618" height="188" rx="16" fill="#0D1117" stroke="#30363D"/><rect x="2" y="2" width="616" height="186" rx="15" fill="url(#wash)"/>
   <path d="M458 34h58l18 18h72" fill="none" stroke="#28D7FF" stroke-opacity=".12" stroke-linecap="round" stroke-linejoin="round"/>

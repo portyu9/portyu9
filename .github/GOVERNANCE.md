@@ -3,7 +3,7 @@
 **Checkpoint:** 2026-09-05  
 **Repository:** `portyu9/portyu9`
 
-This repository treats the profile README, reviewed source assets, generated Signal Field, Engineering Spotlight, Portfolio Evidence Ledger, cache identities, and profile-evidence attestations as production artifacts. Version-controlled checks and GitHub repository settings must describe the same trust boundary.
+I treat my profile README, reviewed source assets, generated Signal Field, Engineering Spotlight, Portfolio Evidence Ledger, cache identities, and profile-evidence attestations as production artifacts. Version-controlled checks and GitHub repository settings must describe the same trust boundary.
 
 ## Main branch merge contract
 
@@ -19,7 +19,7 @@ All five are required on the exact pull-request head. Repository ruleset setting
 
 GitHub does not expose `bypass_actors` to the short-lived read-only Actions token or unauthenticated public API. The live gate therefore never converts an omitted bypass field into an empty list. Zero bypass actors remain a source-locked and **admin-scope** audit invariant. The latest connected control-plane audit on 2026-09-05 observed no bypass actors on either ruleset.
 
-The current `Protect Main` pull-request contract intentionally keeps zero required approving reviews for the solo-maintainer model while requiring review-thread resolution, allowing merge commits only, requiring the branch to be current, and enforcing the exact five status contexts above. The desired-state contract also requires no bypass actors.
+The current `Protect Main` pull-request contract intentionally keeps zero required approving reviews for my solo-maintainer model while requiring review-thread resolution, allowing merge commits only, requiring the branch to be current, and enforcing the exact five status contexts above. The desired-state contract also requires no bypass actors.
 
 ## Dependency update automation
 
@@ -55,7 +55,7 @@ The **Workflow authority firewall** locks workflow triggers, job inventory, work
 | Workflow / job | Additional authority | Purpose |
 | --- | --- | --- |
 | CodeQL analysis | `security-events: write` | publish code-scanning results |
-| Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint and persist the profile evidence attestation |
+| Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint and persist my profile evidence attestation |
 | Profile stats / `publish-write-only` | `contents: write` | fast-forward validated artifacts to `generated` |
 
 No job may combine repository-content write with OIDC/attestation authority. A **new workflow**, new job, trigger family, or token grant is a governance change. Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, or comment-driven execution remain unauthorized unless a deliberate governance change reviews the new trust boundary.
@@ -90,7 +90,7 @@ This consolidation does not share artifacts across authority boundaries and does
 
 ## Single evidence snapshot contract
 
-The **Portfolio Evidence Ledger v2** is the sole live GitHub evidence collection surface for the 13 reviewed QE systems during a profile evidence run.
+The **Portfolio Evidence Ledger v2** is the sole live GitHub evidence collection surface for the 13 reviewed QE systems during my profile evidence run.
 
 The required data flow is:
 
@@ -154,7 +154,7 @@ New production attestations use v3. The predicate records a `predicateSchema` id
 
 The engineering attestation establishes provenance and repository-defined contract conformance for the exact 11 named subjects at the recorded source revision. It binds the Signal Field Evidence ID/digest, Portfolio Ledger v2 ID/digest/system count/semantics, current predicate schema identity, validation inventories, and authority separation.
 
-It does **not certify every software behavior** represented by the profile, replace underlying CI/security evidence, or expand the scope of any oracle.
+It does **not certify every software behavior** represented by my profile, replace underlying CI/security evidence, or expand the scope of any oracle.
 
 Verification instructions and the current/historical schema relationship are documented in `.github/ATTESTATION.md`.
 
