@@ -120,7 +120,8 @@ def validate_quality(text: str) -> None:
 
 def validate_stats(text: str) -> None:
     require("name: Update profile stats" in text, "Profile stats workflow name changed")
-    require('cron: "17,47 * * * *"' in text, "Thirty-minute best-effort schedule contract changed")
+    require('cron: "17 * * * *"' in text, "Hourly best-effort refresh contract changed")
+    require('cron: "17,47 * * * *"' not in text, "Stale twice-hourly cron remains in production workflow")
     require('cron: "2-57/5 * * * *"' not in text, "Stale five-minute cron remains in production workflow")
     require('- "scripts/set-signal-field-refresh-cadence.py"' in text, "Stats push paths must cover refresh-cadence finalizer changes")
     require('- "scripts/signal_field_pipeline.py"' in text, "Stats push paths must cover the Signal Field orchestrator")
@@ -207,17 +208,19 @@ def validate_governance_doc(text: str) -> None:
 
 def validate_cadence_doc(text: str) -> None:
     for phrase in (
-        "profile-refresh-v1",
-        "17,47 * * * *",
+        "profile-refresh-v2",
+        "17 * * * *",
         "2-57/5 * * * *",
-        "best-effort 30-minute generation schedule",
+        "best-effort hourly generation refresh",
         "4h32m",
         "3h40m",
         "3h28m",
         "2h47m",
-        'data-generation-schedule="30-minutes"',
-        'data-generation-cadence-contract="profile-refresh-v1"',
-        "Generation cadence and evidence freshness are different claims",
+        'data-generation-schedule="1-hour"',
+        'data-generation-cadence-contract="profile-refresh-v2"',
+        'data-current-day-highlight="phosphorescent-red-v1"',
+        "REFRESH · 1 HR",
+        "Generation refresh cadence and evidence freshness are different claims",
         "push-triggered",
         "workflow_dispatch",
     ):
@@ -236,7 +239,7 @@ def main() -> int:
             "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
             "Dependency Review governance is mandatory, workflow authority is closed, workflow shell source is expression-safe, "
             "pinned-upstream integration and the single versioned Signal Field pipeline are mandatory, mutable profile cache identities "
-            "bind to the same live candidate contracts, measured profile generation uses the governed best-effort 30-minute cadence, "
+            "bind to the same live candidate contracts, measured profile generation uses the governed best-effort hourly refresh, "
             "three artifact downloads are integrity-checked, Signal Field and Portfolio Ledger identities are validated before signing, "
             "third-party generation has neither write nor signing authority, attestation is isolated, and publication revalidates the same identities."
         )
