@@ -5,6 +5,10 @@ The reviewed third-party Signal Field Action remains outside this script. It sup
 existing candidate directory; this orchestrator owns all authored generation sequencing
 after that boundary: Signal Field transformation/validation, one Portfolio Evidence
 Ledger snapshot, and the Engineering Spotlight projection from that exact Ledger.
+
+Generation outputs are destructive-reset workspaces. They are therefore constrained to
+non-symlink direct children of the current execution workspace and revalidated at the
+exact deletion boundary before any ``shutil.rmtree`` call.
 """
 from __future__ import annotations
 
@@ -17,7 +21,8 @@ import shutil
 import string
 import subprocess
 import sys
-from typing import Any
+import tempfile
+from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -122,23 +127,92 @@ def command_plan(
     return tuple(plan)
 
 
-def validate_paths(signal_field_dir: Path, portfolio_ledger_dir: Path, spotlight_dir: Path) -> None:
-    signal = signal_field_dir.resolve()
-    ledger = portfolio_ledger_dir.resolve()
-    spotlight = spotlight_dir.resolve()
+def paths_overlap(left: Path, right: Path) -> bool:
+    """Return whether either resolved path contains the other."""
+    return left == right or left in right.parents or right in left.parents
+
+
+def safe_output_path(
+    raw: Path,
+    *,
+    label: str,
+    workspace: Path,
+    protected: Iterable[Path] = (),
+) -> Path:
+    """Resolve and prove a destructive generation output is a safe workspace child."""
+    workspace_resolved = workspace.resolve()
+    require(".." not in raw.parts, f"{label} output path must not contain parent traversal: {raw}")
+    require(not raw.is_symlink(), f"{label} output path must not be a symlink: {raw}")
+    resolved = raw.resolve()
+    require(resolved != workspace_resolved, f"{label} output path must not be the execution workspace")
+    require(
+        resolved.parent == workspace_resolved,
+        f"{label} output must be a direct child of the execution workspace: {resolved}",
+    )
+    require(resolved not in {ROOT.resolve(), SCRIPTS.resolve()}, f"{label} output path is a protected repository path")
+    for candidate in protected:
+        candidate_resolved = candidate.resolve()
+        require(
+            not paths_overlap(resolved, candidate_resolved),
+            f"{label} output overlaps protected input/output path: {candidate_resolved}",
+        )
+    if raw.exists() or raw.is_symlink():
+        require(not raw.is_symlink(), f"{label} output path must not resolve through a symlink: {raw}")
+        require(raw.is_dir(), f"{label} output exists but is not a directory: {raw}")
+    return resolved
+
+
+def validate_paths(
+    signal_field_dir: Path,
+    portfolio_ledger_dir: Path,
+    spotlight_dir: Path,
+    *,
+    workspace: Path | None = None,
+) -> tuple[Path, Path, Path]:
+    execution_root = (workspace or Path.cwd()).resolve()
     require(signal_field_dir.is_dir(), f"upstream Signal Field candidate directory is missing: {signal_field_dir}")
-    require(signal not in {ROOT.resolve(), SCRIPTS.resolve()}, "Signal Field candidate must not be the repository/scripts root")
+    signal = signal_field_dir.resolve()
+    require(signal not in {execution_root, ROOT.resolve(), SCRIPTS.resolve()}, "Signal Field candidate must not be a workspace/repository/scripts root")
+
+    ledger = safe_output_path(
+        portfolio_ledger_dir,
+        label="Portfolio Ledger",
+        workspace=execution_root,
+        protected=(signal, spotlight_dir),
+    )
+    spotlight = safe_output_path(
+        spotlight_dir,
+        label="Spotlight",
+        workspace=execution_root,
+        protected=(signal, portfolio_ledger_dir),
+    )
     require(len({signal, ledger, spotlight}) == 3, "generation input/output directories must be distinct")
-    protected = {Path.cwd().resolve(), ROOT.resolve(), SCRIPTS.resolve(), signal}
-    require(ledger not in protected, "Portfolio Ledger output path is unsafe")
-    require(spotlight not in protected, "Spotlight output path is unsafe")
+    return signal, ledger, spotlight
 
 
-def reset_output(path: Path) -> None:
-    if path.exists():
-        require(path.is_dir(), f"generation output exists but is not a directory: {path}")
-        shutil.rmtree(path)
-    path.mkdir(parents=True, exist_ok=False)
+def reset_output(
+    path: Path,
+    *,
+    label: str,
+    workspace: Path,
+    protected: Iterable[Path],
+) -> Path:
+    """Defense-in-depth safety proof at the exact destructive reset boundary."""
+    resolved = safe_output_path(path, label=label, workspace=workspace, protected=protected)
+    if resolved.exists():
+        require(resolved.is_dir() and not resolved.is_symlink(), f"{label} generation output is not a safe directory: {resolved}")
+        shutil.rmtree(resolved)
+    resolved.mkdir(parents=False, exist_ok=False)
+    return resolved
+
+
+def expect_path_failure(callable_obj, expected: str) -> None:
+    try:
+        callable_obj()
+    except ValueError as exc:
+        require(expected in str(exc), f"path-safety self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"path-safety self-test accepted unsafe output: {expected}")
 
 
 def self_test() -> None:
@@ -163,9 +237,69 @@ def self_test() -> None:
     require("--require-live" in plan_live[2][2] and "--require-live" not in plan_offline[2][2], "Ledger validation mode separation changed")
     require("--require-live" in plan_live[4][2] and "--require-live" not in plan_offline[4][2], "Spotlight validation mode separation changed")
     require("2026-09-04" in plan_live[1][2] and "2026-09-04" in plan_live[3][2], "generation date is not bound across Ledger and Spotlight")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        workspace = Path(tmp)
+        signal = workspace / "signal"
+        signal.mkdir()
+        ledger = workspace / "ledger"
+        spotlight = workspace / "spotlight"
+        _, resolved_ledger, resolved_spotlight = validate_paths(signal, ledger, spotlight, workspace=workspace)
+        require(resolved_ledger == ledger.resolve() and resolved_spotlight == spotlight.resolve(), "safe direct-child outputs did not resolve canonically")
+
+        nested = workspace / "nested" / "ledger"
+        expect_path_failure(
+            lambda: safe_output_path(nested, label="nested", workspace=workspace),
+            "direct child",
+        )
+        expect_path_failure(
+            lambda: safe_output_path(workspace, label="root", workspace=workspace),
+            "execution workspace",
+        )
+        expect_path_failure(
+            lambda: safe_output_path(Path("..") / workspace.name / "escape", label="traversal", workspace=workspace),
+            "parent traversal",
+        )
+        outside = workspace.parent / f"{workspace.name}-outside"
+        expect_path_failure(
+            lambda: safe_output_path(outside, label="outside", workspace=workspace),
+            "direct child",
+        )
+        overlap = workspace / "overlap"
+        overlap.mkdir()
+        child_signal = overlap / "signal"
+        child_signal.mkdir()
+        expect_path_failure(
+            lambda: safe_output_path(overlap, label="overlap", workspace=workspace, protected=(child_signal,)),
+            "overlaps protected",
+        )
+
+        link = workspace / "linked-output"
+        try:
+            link.symlink_to(workspace / "real-output", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            expect_path_failure(
+                lambda: safe_output_path(link, label="symlink", workspace=workspace),
+                "symlink",
+            )
+
+        ledger.mkdir()
+        sentinel = ledger / "sentinel"
+        sentinel.write_text("remove me\n", encoding="utf-8")
+        reset = reset_output(
+            ledger,
+            label="Portfolio Ledger",
+            workspace=workspace,
+            protected=(signal, spotlight),
+        )
+        require(reset == ledger.resolve() and reset.is_dir(), "safe destructive reset did not recreate output directory")
+        require(not sentinel.exists(), "safe destructive reset did not remove stale output")
+
     print(
         f"Profile evidence generation contract passed: {payload['version']} · {len(plan_live)} ordered authored stages · "
-        f"manifest_sha256={manifest_digest()} · live/offline policies separated"
+        f"manifest_sha256={manifest_digest()} · live/offline policies separated · destructive outputs workspace-contained"
     )
 
 
@@ -192,9 +326,25 @@ def main() -> int:
         require(args.portfolio_ledger_dir is not None, "--portfolio-ledger-dir is required")
         require(args.spotlight_dir is not None, "--spotlight-dir is required")
         day = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(dt.timezone.utc).date()
-        validate_paths(args.signal_field_dir, args.portfolio_ledger_dir, args.spotlight_dir)
-        reset_output(args.portfolio_ledger_dir)
-        reset_output(args.spotlight_dir)
+        workspace = Path.cwd().resolve()
+        signal, ledger, spotlight = validate_paths(
+            args.signal_field_dir,
+            args.portfolio_ledger_dir,
+            args.spotlight_dir,
+            workspace=workspace,
+        )
+        reset_output(
+            args.portfolio_ledger_dir,
+            label="Portfolio Ledger",
+            workspace=workspace,
+            protected=(signal, spotlight),
+        )
+        reset_output(
+            args.spotlight_dir,
+            label="Spotlight",
+            workspace=workspace,
+            protected=(signal, ledger),
+        )
         plan = command_plan(
             signal_field_dir=args.signal_field_dir,
             portfolio_ledger_dir=args.portfolio_ledger_dir,
