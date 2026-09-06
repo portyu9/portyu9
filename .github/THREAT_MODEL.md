@@ -3,11 +3,11 @@
 **Checkpoint:** 2026-09-05  
 **Repository:** `portyu9/portyu9`
 
-This document records the current trust graph, enforced repository controls, accepted residual risk, and verification points for the profile evidence system. It is an assurance checkpoint, not a new runtime permission grant.
+This document records the current trust graph, enforced repository controls, accepted residual risk, and verification points for my profile evidence system. It is an assurance checkpoint, not a new runtime permission grant.
 
 ## Security objective
 
-Protect the integrity, attribution, and bounded meaning of the public profile and its generated evidence while keeping data collection, signing, and publication authority separate.
+Protect the integrity, attribution, and bounded meaning of my public profile and its generated evidence while keeping data collection, signing, and publication authority separate.
 
 The architecture is intended to ensure that:
 
@@ -116,7 +116,7 @@ Reviewed SHA-pinned upload/download Actions transport immutable evidence between
 
 `attest-validated-evidence` receives `contents: read`, `id-token: write`, and `attestations: write`, but not repository-content write permission.
 
-It downloads the three immutable evidence sets, fails closed on digest mismatch, revalidates Signal Field, Portfolio Ledger v2, and the exact Ledger-backed Spotlight projection, builds the profile predicate, and only then invokes the pinned attestation Action.
+It downloads the three immutable evidence sets, fails closed on digest mismatch, revalidates Signal Field, Portfolio Ledger v2, and the exact Ledger-backed Spotlight projection, builds my profile predicate, and only then invokes the pinned attestation Action.
 
 The public/attested subject set is **exactly 11 files**: four Signal Field SVGs, six Spotlight SVGs, and one Portfolio Evidence Ledger JSON document. `spotlight-manifest.json` is internal validation metadata and must not be published or attested.
 
@@ -184,7 +184,7 @@ The design still trusts GitHub platform/hosted runners, reviewed immutable Actio
 - `publish-write-only` intentionally holds `contents: write`; safety depends on source protection, authority isolation, attestation dependency, and repeated validation.
 - Attestation proves provenance and repository-defined contract conformance, not universal behavioral correctness.
 - Public GitHub API/network outages can block live evidence refresh or the live ruleset gate; integrity takes priority over availability.
-- Mutable-image cache invalidation cannot force every intermediary to refresh instantly; the repository controls cache identity, not external cache implementation.
+- Mutable-image cache invalidation cannot force every intermediary to refresh instantly; my repository controls cache identity, not external cache implementation.
 - Settings-level controls can drift between Profile Quality executions. In addition, `bypass_actors` is not observable to the required read-only workflow identity, so that no-bypass invariant depends on periodic administration-capable control-plane audit rather than silent inference.
 
 ## Verification checklist
