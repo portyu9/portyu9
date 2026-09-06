@@ -26,6 +26,7 @@ REPOSITORY = "portyu9/portyu9"
 API_ORIGIN = "https://api.github.com"
 API_PATH = f"/repos/{REPOSITORY}/rulesets"
 API = f"{API_ORIGIN}{API_PATH}"
+EXPECTED_INTEGRATION_ID = 15368
 
 EXPECTED_CONTEXTS = {
     "validate-contracts",
@@ -78,6 +79,8 @@ def validate_source(payload: dict[str, Any]) -> None:
     require(isinstance(checks, dict), "Protect Main status-check parameters are missing")
     require(checks.get("strict_required_status_checks_policy") is True, "Protect Main must require a current head")
     require(checks.get("do_not_enforce_on_create") is False, "required checks must be enforced on branch creation")
+    require(checks.get("integration_id") == EXPECTED_INTEGRATION_ID,
+            f"required checks must bind to GitHub Actions integration_id {EXPECTED_INTEGRATION_ID}")
     contexts = checks.get("contexts")
     require(isinstance(contexts, list) and set(contexts) == EXPECTED_CONTEXTS and len(contexts) == 5, "Protect Main required status contexts changed")
 
@@ -91,6 +94,7 @@ def validate_source(payload: dict[str, Any]) -> None:
     for phrase in (
         "required_approving_review_count: 0",
         "required_review_thread_resolution: true",
+        "integration_id: 15368",
         "solo-maintainer",
         "Protect generated",
         "no bypass actors",
@@ -250,8 +254,14 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
     require(status.get("do_not_enforce_on_create") is desired_status["do_not_enforce_on_create"], "Protect Main: live create enforcement differs")
     live_contexts = status.get("required_status_checks")
     require(isinstance(live_contexts, list), "Protect Main: live required statuses are malformed")
-    observed = {entry.get("context") for entry in live_contexts if isinstance(entry, dict)}
-    require(observed == EXPECTED_CONTEXTS and len(live_contexts) == 5, "Protect Main: live required status contexts differ from contract")
+    require(len(live_contexts) == 5 and all(isinstance(entry, dict) for entry in live_contexts),
+            "Protect Main: live required status entries are malformed")
+    observed = {str(entry.get("context")): entry.get("integration_id") for entry in live_contexts}
+    require(set(observed) == EXPECTED_CONTEXTS and len(observed) == 5,
+            "Protect Main: live required status contexts differ from contract")
+    expected_integration = desired_status["integration_id"]
+    require(all(value == expected_integration for value in observed.values()),
+            f"Protect Main: required status integration identity differs; expected integration_id={expected_integration}, observed={observed}")
 
     generated_rules = rule_map(details["Protect generated"])
     require(set(generated_rules) == {"deletion", "non_fast_forward"}, "Protect generated: live rule inventory differs from contract")
@@ -277,6 +287,15 @@ def self_test(payload: dict[str, Any]) -> None:
         require("review-thread resolution" in str(exc), f"ruleset self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("ruleset self-test accepted disabled review-thread resolution")
+
+    integration_drift = json.loads(encoded)
+    integration_drift["rulesets"]["Protect Main"]["rules"]["required_status_checks"]["integration_id"] = 1
+    try:
+        validate_source(integration_drift)
+    except ValueError as exc:
+        require("integration_id" in str(exc), f"ruleset integration self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test accepted required-check integration identity drift")
 
     require(validate_api_url(API) == API, "ruleset URL self-test rejected canonical collection endpoint")
     require(validate_api_url(f"{API}/123") == f"{API}/123", "ruleset URL self-test rejected canonical detail endpoint")
@@ -311,7 +330,10 @@ def main() -> int:
         if args.live:
             unobservable = validate_live(payload)
         suffix = " + live observable GitHub control-plane state" if args.live else ""
-        print(f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent and observable drift fails closed.")
+        print(
+            f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
+            f"five required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; observable drift fails closed."
+        )
         if unobservable:
             print(
                 "NOTICE: bypass_actors is not exposed to the read-only workflow/public API for: "
