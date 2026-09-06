@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import stat
 import string
 import sys
 from typing import Any
@@ -18,22 +19,59 @@ SCRIPTS = ROOT / "scripts"
 MANIFEST = SCRIPTS / "profile-evidence-validation-boundary-v1.json"
 VERSION = "profile-evidence-validation-boundary-v1"
 PREDICATE_GROUPS = ("signalField", "engineeringSpotlight", "portfolioEvidenceLedger")
-EXPECTED_STAGE_IDS = (
-    "signal-field-v213",
-    "signal-field-v214",
-    "signal-field-publishable",
-    "portfolio-ledger-live",
-    "engineering-spotlight-live",
-    "exact-subject-closure",
+EXPECTED_STAGE_CONTRACT = (
+    (
+        "signal-field-v213",
+        "validate-signal-field-v213.py",
+        ("{signal_field_dir}",),
+        "signalField",
+        "scripts/validate-signal-field-v213.py",
+    ),
+    (
+        "signal-field-v214",
+        "validate-signal-field-v214.py",
+        ("{signal_field_dir}",),
+        "signalField",
+        "scripts/validate-signal-field-v214.py",
+    ),
+    (
+        "signal-field-publishable",
+        "validate-generated-signal-field.py",
+        ("{signal_field_dir}",),
+        "signalField",
+        "scripts/validate-generated-signal-field.py",
+    ),
+    (
+        "portfolio-ledger-live",
+        "validate-portfolio-evidence-ledger.py",
+        ("{portfolio_ledger_dir}", "--require-live"),
+        "portfolioEvidenceLedger",
+        "scripts/validate-portfolio-evidence-ledger.py --require-live",
+    ),
+    (
+        "engineering-spotlight-live",
+        "validate-engineering-spotlight.py",
+        ("{spotlight_dir}", "--require-live", "--ledger", "{portfolio_ledger_json}"),
+        "engineeringSpotlight",
+        "scripts/validate-engineering-spotlight.py --require-live",
+    ),
+    (
+        "exact-subject-closure",
+        "validate-profile-evidence-subjects.py",
+        (
+            "--signal-field-dir",
+            "{signal_field_dir}",
+            "--spotlight-dir",
+            "{spotlight_dir}",
+            "--portfolio-ledger-dir",
+            "{portfolio_ledger_dir}",
+        ),
+        None,
+        None,
+    ),
 )
-EXPECTED_STAGE_GROUPS = (
-    "signalField",
-    "signalField",
-    "signalField",
-    "portfolioEvidenceLedger",
-    "engineeringSpotlight",
-    None,
-)
+EXPECTED_STAGE_IDS = tuple(item[0] for item in EXPECTED_STAGE_CONTRACT)
+EXPECTED_STAGE_GROUPS = tuple(item[3] for item in EXPECTED_STAGE_CONTRACT)
 ALLOWED_PLACEHOLDERS = {
     "signal_field_dir",
     "spotlight_dir",
@@ -55,8 +93,18 @@ def placeholders(value: str) -> set[str]:
     return names
 
 
-def load_manifest() -> dict[str, Any]:
-    payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+def require_real_validator(script: str, stage_id: str) -> None:
+    path = SCRIPTS / script
+    require(path.exists() or path.is_symlink(), f"{stage_id}: validator script is missing: {script}")
+    require(path.absolute() == path.resolve(strict=True),
+            f"{stage_id}: validator script must not resolve through a symlink/traversal alias: {script}")
+    mode = path.lstat().st_mode
+    require(stat.S_ISREG(mode) and not path.is_symlink(),
+            f"{stage_id}: validator script must be a real regular repository file: {script}")
+
+
+def validate_manifest(payload: Any, *, verify_scripts: bool = True) -> dict[str, Any]:
+    require(isinstance(payload, dict), "validation boundary manifest root must be an object")
     require(set(payload) == {"version", "description", "predicateBoundary", "stages"}, "validation boundary manifest keys changed")
     require(payload.get("version") == VERSION, "validation boundary manifest version changed")
     require(payload.get("predicateBoundary") == "attest-validated-evidence", "predicate validation boundary changed")
@@ -65,10 +113,10 @@ def load_manifest() -> dict[str, Any]:
     stages = payload.get("stages")
     require(isinstance(stages, list), "validation boundary stages are missing")
     require(tuple(stage.get("id") for stage in stages if isinstance(stage, dict)) == EXPECTED_STAGE_IDS, "validation boundary stage order changed")
-    require(len(stages) == len(EXPECTED_STAGE_IDS), "validation boundary stage count changed")
+    require(len(stages) == len(EXPECTED_STAGE_CONTRACT), "validation boundary stage count changed")
 
     observed_groups: list[str | None] = []
-    for index, stage in enumerate(stages):
+    for index, (stage, expected) in enumerate(zip(stages, EXPECTED_STAGE_CONTRACT, strict=True)):
         require(isinstance(stage, dict), f"validation boundary stage {index} is malformed")
         require(set(stage) == {"id", "script", "args", "predicateGroup", "predicateIdentity"}, f"validation boundary stage keys changed: {stage.get('id')}")
         stage_id = stage.get("id")
@@ -76,31 +124,44 @@ def load_manifest() -> dict[str, Any]:
         args = stage.get("args")
         group = stage.get("predicateGroup")
         identity = stage.get("predicateIdentity")
-        require(isinstance(stage_id, str) and stage_id, "validation boundary stage id is missing")
-        require(isinstance(script, str) and script.startswith("validate-") and script.endswith(".py"), f"{stage_id}: validator script name is invalid")
-        require((SCRIPTS / script).is_file(), f"{stage_id}: validator script is missing: {script}")
-        require(isinstance(args, list) and args and all(isinstance(arg, str) and arg for arg in args), f"{stage_id}: validator args are invalid")
+        expected_id, expected_script, expected_args, expected_group, expected_identity = expected
+
+        require(stage_id == expected_id, f"validation boundary stage id changed at index {index}")
+        require(script == expected_script, f"{expected_id}: validator script authority changed: {script!r}")
+        require(isinstance(args, list) and tuple(args) == expected_args,
+                f"{expected_id}: validator argument vector changed: {args!r}")
+        require(group == expected_group, f"{expected_id}: predicate group authority changed: {group!r}")
+        require(identity == expected_identity, f"{expected_id}: predicate validator identity changed: {identity!r}")
+        if verify_scripts:
+            require_real_validator(expected_script, expected_id)
+
+        require(all(isinstance(arg, str) and arg for arg in args), f"{expected_id}: validator args are invalid")
         used = set().union(*(placeholders(arg) for arg in args))
-        require(used <= ALLOWED_PLACEHOLDERS, f"{stage_id}: unknown placeholder(s): {sorted(used - ALLOWED_PLACEHOLDERS)}")
+        require(used <= ALLOWED_PLACEHOLDERS, f"{expected_id}: unknown placeholder(s): {sorted(used - ALLOWED_PLACEHOLDERS)}")
         residual = "".join(args)
         for placeholder in ALLOWED_PLACEHOLDERS:
             residual = residual.replace("{" + placeholder + "}", "")
-        require("{" not in residual and "}" not in residual, f"{stage_id}: malformed placeholder syntax")
+        require("{" not in residual and "}" not in residual, f"{expected_id}: malformed placeholder syntax")
 
         if group is None:
-            require(identity is None, f"{stage_id}: non-predicate stage must not declare predicate identity")
+            require(identity is None, f"{expected_id}: non-predicate stage must not declare predicate identity")
             observed_groups.append(None)
         else:
-            require(group in PREDICATE_GROUPS, f"{stage_id}: unknown predicate group: {group!r}")
-            require(isinstance(identity, str) and identity.startswith(f"scripts/{script}"), f"{stage_id}: predicate identity must bind its validator script")
+            require(group in PREDICATE_GROUPS, f"{expected_id}: unknown predicate group: {group!r}")
+            require(isinstance(identity, str) and identity.startswith(f"scripts/{script}"), f"{expected_id}: predicate identity must bind its validator script")
             if "--require-live" in args:
-                require(identity.endswith(" --require-live"), f"{stage_id}: live predicate identity must record --require-live")
+                require(identity.endswith(" --require-live"), f"{expected_id}: live predicate identity must record --require-live")
             else:
-                require("--require-live" not in identity, f"{stage_id}: predicate identity advertises unexecuted --require-live")
+                require("--require-live" not in identity, f"{expected_id}: predicate identity advertises unexecuted --require-live")
             observed_groups.append(str(group))
 
     require(tuple(observed_groups) == EXPECTED_STAGE_GROUPS, "validation boundary predicate-group assignment changed")
     return payload
+
+
+def load_manifest() -> dict[str, Any]:
+    payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    return validate_manifest(payload)
 
 
 def boundary_name() -> str:
@@ -134,15 +195,47 @@ def candidate_commands(*, signal_field_dir: Path, spotlight_dir: Path, portfolio
     return tuple(commands)
 
 
+def expect_manifest_failure(payload: dict[str, Any], expected: str) -> None:
+    try:
+        validate_manifest(payload, verify_scripts=False)
+    except ValueError as exc:
+        require(expected in str(exc), f"validation-boundary self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"validation-boundary self-test accepted authority drift: {expected}")
+
+
+def self_test(payload: dict[str, Any]) -> None:
+    encoded = json.dumps(payload)
+
+    script_drift = json.loads(encoded)
+    script_drift["stages"][0]["script"] = "validate-generated-signal-field.py"
+    script_drift["stages"][0]["predicateIdentity"] = "scripts/validate-generated-signal-field.py"
+    expect_manifest_failure(script_drift, "validator script authority changed")
+
+    args_drift = json.loads(encoded)
+    args_drift["stages"][3]["args"] = ["{portfolio_ledger_dir}"]
+    args_drift["stages"][3]["predicateIdentity"] = "scripts/validate-portfolio-evidence-ledger.py"
+    expect_manifest_failure(args_drift, "validator argument vector changed")
+
+    group_drift = json.loads(encoded)
+    group_drift["stages"][4]["predicateGroup"] = "portfolioEvidenceLedger"
+    expect_manifest_failure(group_drift, "predicate group authority changed")
+
+    identity_drift = json.loads(encoded)
+    identity_drift["stages"][1]["predicateIdentity"] = "scripts/validate-signal-field-v214.py --require-live"
+    expect_manifest_failure(identity_drift, "predicate validator identity changed")
+
+
 def main() -> int:
     try:
         payload = load_manifest()
         validators = predicate_validators()
         require(sum(len(values) for values in validators.values()) == 5, "predicate validator identity count changed")
+        self_test(payload)
         print(
             f"Profile evidence validation boundary passed: {payload['version']} · "
-            f"{len(payload['stages'])} ordered read-only stages · predicate boundary={payload['predicateBoundary']} · "
-            f"five predicate validator identities sourced from one manifest"
+            f"{len(payload['stages'])} exact ordered read-only stages · predicate boundary={payload['predicateBoundary']} · "
+            f"scripts/args/groups/identities authority-locked and five predicate validators sourced from one manifest"
         )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
