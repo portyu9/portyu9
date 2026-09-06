@@ -1,0 +1,13 @@
+{
+  "version": "profile-evidence-validation-boundary-v1",
+  "description": "Ordered read-only validation boundary for candidate profile evidence before attestation or publication.",
+  "predicateBoundary": "attest-validated-evidence",
+  "stages": [
+    {"id":"signal-field-v213","script":"validate-signal-field-v213.py","args":["{signal_field_dir}"],"predicateGroup":"signalField","predicateIdentity":"scripts/validate-signal-field-v213.py"},
+    {"id":"signal-field-v214","script":"validate-signal-field-v214.py","args":["{signal_field_dir}"],"predicateGroup":"signalField","predicateIdentity":"scripts/validate-signal-field-v214.py"},
+    {"id":"signal-field-publishable","script":"validate-generated-signal-field.py","args":["{signal_field_dir}"],"predicateGroup":"signalField","predicateIdentity":"scripts/validate-generated-signal-field.py"},
+    {"id":"portfolio-ledger-live","script":"validate-portfolio-evidence-ledger.py","args":["{portfolio_ledger_dir}","--require-live"],"predicateGroup":"portfolioEvidenceLedger","predicateIdentity":"scripts/validate-portfolio-evidence-ledger.py --require-live"},
+    {"id":"engineering-spotlight-live","script":"validate-engineering-spotlight.py","args":["{spotlight_dir}","--require-live","--ledger","{portfolio_ledger_json}"],"predicateGroup":"engineeringSpotlight","predicateIdentity":"scripts/validate-engineering-spotlight.py --require-live"},
+    {"id":"exact-subject-closure","script":"validate-profile-evidence-subjects.py","args":["--signal-field-dir","{signal_field_dir}","--spotlight-dir","{spotlight_dir}","--portfolio-ledger-dir","{portfolio_ledger_dir}"],"predicateGroup":null,"predicateIdentity":null}
+  ]
+}
