@@ -25,6 +25,7 @@ MEASURED_RECT = re.compile(r'(?P<tag><rect\b(?=[^>]*\bdata-window-day="\d+")[^>]
 OUTSIDE_RECT = re.compile(r'(?P<tag><rect\b(?=[^>]*\bdata-slot-state="outside-window")[^>]*/>)', re.I)
 DAY_LABEL = re.compile(r'(?P<tag><text\b(?=[^>]*\bdata-day-label="(?P<date>\d{4}-\d{2}-\d{2})")[^>]*>)', re.I)
 MONTH_LABEL = re.compile(r'(?P<tag><text\b(?=[^>]*\bdata-month-boundary="(?P<month>[A-Z]{3})")[^>]*>)', re.I)
+COMPACT_VIEWBOXES = {"0 0 320 500", "0 0 320 528"}
 
 HEADINGS = {
     "wide": ("DAILY ACTIVITY · LAST 30 DAYS", "DAILY ACTIVITY · 30-DAY EVIDENCE WINDOW"),
@@ -64,7 +65,7 @@ def set_attr(tag: str, name: str, value: str) -> str:
 def layout_of(root_tag: str) -> str:
     viewbox = attrs_of(root_tag).get("viewBox")
     if viewbox == "0 0 640 425": return "wide"
-    if viewbox == "0 0 320 500": return "compact"
+    if viewbox in COMPACT_VIEWBOXES: return "compact"
     raise ValueError(f"unexpected Signal Field viewBox: {viewbox!r}")
 
 
@@ -211,8 +212,8 @@ def clarify_svg(text: str) -> str:
     return text
 
 
-def fixture(layout: str) -> str:
-    geometry = 'viewBox="0 0 640 425" width="640" height="425"' if layout == "wide" else 'viewBox="0 0 320 500" width="320" height="500"'
+def fixture(layout: str, compact_view_box: str = "0 0 320 500") -> str:
+    geometry = 'viewBox="0 0 640 425" width="640" height="425"' if layout == "wide" else f'viewBox="{compact_view_box}" width="320" height="{compact_view_box.rsplit(" ", 1)[-1]}"'
     leading = (
         '<rect data-date="2026-08-01" data-window-context="leading" data-month-boundary="AUG"/>'
         '<text data-month-boundary="AUG" opacity="1">AUG</text>'
@@ -232,12 +233,18 @@ def fixture(layout: str) -> str:
 
 
 def self_test() -> None:
-    for layout in ("wide", "compact"):
-        transformed = clarify_svg(fixture(layout))
+    cases = (
+        ("wide", fixture("wide")),
+        ("compact-5-row", fixture("compact", "0 0 320 500")),
+        ("compact-6-row", fixture("compact", "0 0 320 528")),
+    )
+    for label, source in cases:
+        layout = "wide" if label == "wide" else "compact"
+        transformed = clarify_svg(source)
         validate(transformed, layout)
         if clarify_svg(transformed) != transformed:
             raise AssertionError("v2.13 transform must be idempotent")
-        print(f"{layout} v2.13 evidence-window clarity fixture passed")
+        print(f"{label} v2.13 evidence-window clarity fixture passed")
     print(f"Signal Field evidence-window clarity self-test passed: {VERSION}")
 
 
