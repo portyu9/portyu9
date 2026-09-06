@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 
 from portfolio_evidence_ledger import *  # re-export retry/evidence contract for validators
+import profile_delegated_implementation_lock as implementation_lock
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,6 +27,7 @@ def utc_date(raw: str | None) -> dt.date:
 
 def main() -> int:
     try:
+        implementation_lock.self_test()
         args = parse_args()
         day = utc_date(args.date)
         ledger = generate(args.output_dir, day, os.environ.get("GITHUB_TOKEN"), args.offline)
@@ -34,7 +36,7 @@ def main() -> int:
             f"registry {ledger['portfolio_registry']['version']} · result/binding/freshness separated"
         )
         return 0
-    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, TypeError, json.JSONDecodeError, SyntaxError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
