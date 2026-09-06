@@ -32,8 +32,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def top_level_files(directory: Path) -> set[str]:
-    require(directory.is_dir(), f"subject candidate directory is missing: {directory}")
-    return {path.name for path in directory.iterdir() if path.is_file()}
+    return subjects.regular_top_level_files(directory, label="subject candidate directory")
 
 
 def validate_candidate_group(group_name: str, directory: Path) -> None:
@@ -166,7 +165,8 @@ def main() -> int:
 
         print(
             f"Profile evidence subject closure passed: {subjects.VERSION} · "
-            f"11 exact published subjects · candidate closure owned by {validation_contract.VERSION} · sha256:{subjects.manifest_digest()}"
+            f"11 exact published subjects · structural filesystem closure · "
+            f"candidate closure owned by {validation_contract.VERSION} · sha256:{subjects.manifest_digest()}"
         )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
