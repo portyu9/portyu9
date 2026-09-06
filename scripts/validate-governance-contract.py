@@ -7,7 +7,8 @@ contract: named PR checks, explicit runtime, pinned dependencies, release proven
 closed workflow authority, shell-safe expression boundaries, least-privilege profile
 evidence generation/identity/attestation/publication, measured refresh cadence,
 generated-surface cache binding, fresh-run concurrency, artifact-only publish behavior,
-and the single governed Signal Field pipeline entrypoint.
+the single governed Signal Field pipeline entrypoint, and the single candidate profile
+evidence validation boundary used by attestation and publication.
 """
 from __future__ import annotations
 
@@ -22,6 +23,9 @@ GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 CADENCE = ROOT / ".github/REFRESH_CADENCE.md"
 PIPELINE = ROOT / "scripts/signal_field_pipeline.py"
 PIPELINE_MANIFEST = ROOT / "scripts/signal-field-pipeline-v1.json"
+VALIDATION_MANIFEST = ROOT / "scripts/profile-evidence-validation-boundary-v1.json"
+VALIDATION_LOADER = ROOT / "scripts/profile_evidence_validation.py"
+VALIDATION_RUNNER = ROOT / "scripts/validate-profile-evidence-boundary.py"
 
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_PYTHON_SHA = "5fda3b95a4ea91299a34e894583c3862153e4b97"
@@ -69,6 +73,16 @@ def require_pipeline_entrypoint(block: str, command: str, label: str) -> None:
         require(marker not in block, f"{label} must not duplicate pipeline stage ordering in workflow YAML: {marker}")
 
 
+def require_validation_boundary(block: str, *, signal: str, spotlight: str, ledger: str, label: str) -> None:
+    require(block.count("validate-profile-evidence-boundary.py") == 1, f"{label} must invoke the canonical profile evidence validation boundary exactly once")
+    for fragment in (
+        f"--signal-field-dir {signal}",
+        f"--spotlight-dir {spotlight}",
+        f"--portfolio-ledger-dir {ledger}",
+    ):
+        require(fragment in block, f"{label} canonical validation boundary is missing: {fragment}")
+
+
 def validate_quality(text: str) -> None:
     require("name: Profile quality" in text, "Profile quality workflow name changed")
     require('PYTHON_VERSION: "3.13"' in text, "Profile quality Python version is not explicit")
@@ -87,10 +101,19 @@ def validate_quality(text: str) -> None:
     require("contents: write" not in integration, "Profile Quality integration must not receive repository write authority")
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in integration, "PR integration must execute reviewed pinned upstream generator")
     require("python3 scripts/signal_field_pipeline.py --self-test" in validate, "Profile Quality must self-test the governed Signal Field pipeline")
+    require("python3 scripts/profile_evidence_validation.py" in validate, "Profile Quality must validate the canonical profile evidence boundary contract")
     require_pipeline_entrypoint(integration, 'python3 scripts/signal_field_pipeline.py "$READY_DIR"', "PR integration")
     require(integration.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1, "PR integration must exercise the reviewed download-artifact SHA exactly once")
     require(integration.count("digest-mismatch: error") == 1, "PR artifact round-trip must fail on digest mismatch")
     require("python3 scripts/validate-generated-signal-field.py roundtrip-signal-field" in integration, "PR integration must revalidate downloaded Signal Field bytes")
+    require("name: Exercise canonical live profile evidence validation boundary" in integration, "PR integration must execute the canonical live profile evidence validation boundary")
+    require_validation_boundary(
+        integration,
+        signal='"$SIGNAL_FIELD_DIR"',
+        spotlight="integration-engineering-spotlight",
+        ledger="integration-portfolio-evidence",
+        label="PR integration",
+    )
     require("python3 scripts/validate-profile-cache-contract.py" in validate, "Profile Quality must validate generated-surface cache identities")
     require(
         "name: Bind generated cache identities to live candidate contracts" in integration,
@@ -150,14 +173,26 @@ def validate_stats(text: str) -> None:
     require("attestations: write" in attest, "Attestation job must receive attestation authority")
     require("contents: write" not in attest, "Attestation job must not receive repository-content write authority")
     require(f"actions/attest@{ATTEST_SHA}" in attest, "Pinned actions/attest SHA changed")
-    require("python3 source/scripts/validate-signal-field-v214.py profile-stats/profile" in attest, "Attestation boundary must validate Signal Field Evidence ID")
+    require_validation_boundary(
+        attest,
+        signal="profile-stats/profile",
+        spotlight="engineering-spotlight",
+        ledger="portfolio-evidence",
+        label="Attestation boundary",
+    )
     require("python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile portfolio-evidence attestation-predicate.json" in attest, "Attestation predicate must bind Signal Field and Portfolio Ledger identities")
 
     require("permissions:\n      contents: write" in publish, "Only publication job may receive contents: write")
     require("needs: [generate, attest]" in publish, "Publication must depend on both generation and attestation")
     require("id-token: write" not in publish, "Publication job must not receive signing identity authority")
     require("attestations: write" not in publish, "Publication job must not receive attestation authority")
-    require("python3 source/scripts/validate-signal-field-v214.py publish-input" in publish, "Publish boundary must validate Signal Field Evidence ID")
+    require_validation_boundary(
+        publish,
+        signal="publish-input",
+        spotlight="spotlight-publish-input",
+        ledger="portfolio-ledger-publish-input",
+        label="Publish boundary",
+    )
     require("python3 source/scripts/validate-signal-field-v214.py artifacts/profile-stats/profile" in publish, "Staged generated branch must validate Signal Field Evidence ID")
 
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in generate, "Pinned upstream generator SHA changed")
@@ -171,11 +206,24 @@ def validate_stats(text: str) -> None:
     require(generate.count("persist-credentials: false") == 1, "Generation checkout must not persist credentials")
     require(attest.count("persist-credentials: false") == 2, "Attestation source/generated checkouts must not persist credentials")
     require(publish.count("persist-credentials: false") == 1, "Publish trusted-source checkout must not persist credentials")
-    require("python3 source/scripts/validate-generated-signal-field.py profile-stats/profile" in attest, "Attestation boundary must revalidate Signal Field artifacts")
-    require("python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live" in attest, "Attestation boundary must revalidate Engineering Spotlight")
-    require("python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence --require-live" in attest, "Attestation boundary must revalidate Portfolio Evidence Ledger")
-    require("python3 source/scripts/validate-generated-signal-field.py publish-input" in publish, "Publish boundary must revalidate downloaded artifacts")
-    require("python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input --require-live" in publish, "Publish boundary must revalidate Portfolio Evidence Ledger")
+
+    for forbidden in (
+        "python3 source/scripts/validate-signal-field-v213.py profile-stats/profile",
+        "python3 source/scripts/validate-signal-field-v214.py profile-stats/profile",
+        "python3 source/scripts/validate-generated-signal-field.py profile-stats/profile",
+        "python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight",
+        "python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence",
+    ):
+        require(forbidden not in attest, f"Attestation workflow duplicates canonical validation boundary stage: {forbidden}")
+    for forbidden in (
+        "python3 source/scripts/validate-signal-field-v213.py publish-input",
+        "python3 source/scripts/validate-signal-field-v214.py publish-input",
+        "python3 source/scripts/validate-generated-signal-field.py publish-input",
+        "python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input",
+        "python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input",
+    ):
+        require(forbidden not in publish, f"Publish workflow duplicates canonical validation boundary stage: {forbidden}")
+
     require("find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +" in publish, "Generated branch must be staged as artifact-only")
     require("git -C artifacts push origin HEAD:generated" in publish, "Publisher must target only generated branch")
 
@@ -199,6 +247,7 @@ def validate_governance_doc(text: str) -> None:
         "signal-field-evidence-v1",
         "full SHA-256",
         "attest-validated-evidence",
+        "profile-evidence-validation-boundary-v1",
         "id-token: write",
         "attestations: write",
         "not certify every software behavior",
@@ -229,7 +278,17 @@ def validate_cadence_doc(text: str) -> None:
 
 def main() -> int:
     try:
-        for path in (QUALITY, STATS, GOVERNANCE, CADENCE, PIPELINE, PIPELINE_MANIFEST):
+        for path in (
+            QUALITY,
+            STATS,
+            GOVERNANCE,
+            CADENCE,
+            PIPELINE,
+            PIPELINE_MANIFEST,
+            VALIDATION_MANIFEST,
+            VALIDATION_LOADER,
+            VALIDATION_RUNNER,
+        ):
             require(path.is_file(), f"governance input is missing: {path.relative_to(ROOT)}")
         validate_quality(QUALITY.read_text(encoding="utf-8"))
         validate_stats(STATS.read_text(encoding="utf-8"))
@@ -238,10 +297,10 @@ def main() -> int:
         print(
             "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
             "Dependency Review governance is mandatory, workflow authority is closed, workflow shell source is expression-safe, "
-            "pinned-upstream integration and the single versioned Signal Field pipeline are mandatory, mutable profile cache identities "
-            "bind to the same live candidate contracts, measured profile generation uses the governed best-effort hourly refresh, "
-            "three artifact downloads are integrity-checked, Signal Field and Portfolio Ledger identities are validated before signing, "
-            "third-party generation has neither write nor signing authority, attestation is isolated, and publication revalidates the same identities."
+            "pinned-upstream integration and the single versioned Signal Field pipeline are mandatory, the single versioned profile-evidence "
+            "validation boundary is exercised by integration/attestation/publication, mutable profile cache identities bind to live candidates, "
+            "measured generation uses the governed best-effort hourly cadence, three artifact downloads are integrity-checked, "
+            "third-party generation has neither write nor signing authority, attestation is isolated, and publication independently revalidates."
         )
         return 0
     except (OSError, ValueError) as exc:
