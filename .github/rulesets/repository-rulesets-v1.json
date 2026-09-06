@@ -22,6 +22,7 @@
         "required_status_checks": {
           "strict_required_status_checks_policy": true,
           "do_not_enforce_on_create": false,
+          "integration_id": 15368,
           "contexts": [
             "validate-contracts",
             "integration-pinned-upstream",
