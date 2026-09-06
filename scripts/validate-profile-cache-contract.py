@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 
 SPOTLIGHT_TOKEN = "engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"
-SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-v219-compact-eid-current-red-v1-profile-refresh-v2"
+SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-v219-compact-eid-bug-found-current-red-v1-profile-refresh-v2"
 
 STALE_SPOTLIGHT_TOKENS = (
     "engineering-spotlight-v21-three-slots-20260905",
@@ -35,6 +35,7 @@ STALE_SIGNAL_FIELD_TOKENS = (
     "signal-field-v217-wide-alignment-profile-refresh-v1",
     "signal-field-v218-wide-alignment-profile-refresh-v1",
     "signal-field-v218-wide-alignment-current-red-v1-profile-refresh-v2",
+    "signal-field-v218-wide-v219-compact-eid-current-red-v1-profile-refresh-v2",
 )
 
 LEDGER_REVIEW_URL = "https://github.com/portyu9/portyu9/blob/generated/portfolio-evidence/portfolio-evidence-ledger.json"
@@ -157,6 +158,8 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
     identity = one_value((item.get("data-evidence-identity", "") for item in attrs), "Signal Field evidence identity")
     presentation = one_value((item.get("data-evidence-presentation", "") for item in attrs), "Signal Field presentation")
     final_version = one_value((item.get("data-issues-label-balance", "") for item in attrs), "Signal Field v2.16 presentation")
+    issue_alias = one_value((item.get("data-issues-display-alias", "") for item in attrs), "Signal Field issue display alias")
+    issue_scale = one_value((item.get("data-issues-label-scale", "") for item in attrs), "Signal Field issue label scale")
     cadence = one_value((item.get("data-generation-cadence-contract", "") for item in attrs), "Signal Field refresh contract")
     schedule = one_value((item.get("data-generation-schedule", "") for item in attrs), "Signal Field generation schedule")
     current_day = one_value((item.get("data-current-day-highlight", "") for item in attrs), "Signal Field current-day highlight")
@@ -164,6 +167,8 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
     require(identity == "signal-field-v2.14", f"candidate Signal Field evidence identity changed: {identity}")
     require(presentation == "signal-field-v2.15", f"candidate Signal Field evidence presentation changed: {presentation}")
     require(final_version == "signal-field-v2.16", f"candidate Signal Field v2.16 presentation changed: {final_version}")
+    require(issue_alias == "bug-found", f"candidate Signal Field issue display alias changed: {issue_alias}")
+    require(issue_scale == "peer-metric-label", f"candidate Signal Field issue label scale changed: {issue_scale}")
     require(schedule == "1-hour", f"candidate Signal Field generation schedule changed: {schedule}")
     require(cadence == "profile-refresh-v2", f"unexpected Signal Field refresh contract: {cadence}")
     require(current_day == "phosphorescent-red-v1", f"candidate current-day highlight changed: {current_day}")
@@ -191,7 +196,7 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
     )
     return (
         f"{compact_signal_field_version(wide_alignment)}-wide-"
-        f"{compact_signal_field_component(compact_eid)}-compact-eid-current-red-v1-{cadence}"
+        f"{compact_signal_field_component(compact_eid)}-compact-eid-bug-found-current-red-v1-{cadence}"
     )
 
 
@@ -259,7 +264,7 @@ def self_test() -> None:
     require(
         (
             f"{compact_signal_field_version('signal-field-v2.18')}-wide-"
-            f"{compact_signal_field_component('signal-field-v2.19')}-compact-eid-current-red-v1-profile-refresh-v2"
+            f"{compact_signal_field_component('signal-field-v2.19')}-compact-eid-bug-found-current-red-v1-profile-refresh-v2"
         )
         == SIGNAL_FIELD_TOKEN,
         "Signal Field cache-token derivation changed",
