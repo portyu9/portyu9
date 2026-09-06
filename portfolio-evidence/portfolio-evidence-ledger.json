@@ -4,8 +4,8 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:858c7a320dee85a4ead26671fcc2f0a6326217c82e1ed4381443a0bdb00f0742",
-  "evidence_id": "PL2-858C7A320DEE85A4",
+  "evidence_digest": "sha256:1df544402cc886df3172b9026c0afd02c2989064eb7593e677320b93141093a9",
+  "evidence_id": "PL2-1DF544402CC886DF",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -19,7 +19,8 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 25
+    "PASSING": 24,
+    "RUNNING": 1
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -39,21 +40,21 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-06T18:59:42Z",
+          "completed_at_utc": "2026-09-06T22:10:39Z",
           "freshness": "SAME_DAY",
-          "head_sha": "0fe080e8bc0653cfeed67653bcfb70931f0a39bb",
+          "head_sha": "f2eba7f5ce82ed0ed2e516a551d51d19f46cdcc1",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "PASSING",
-          "run_id": 34053232250,
-          "run_number": 1401,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34053232250",
+          "result": "RUNNING",
+          "run_id": 34063045601,
+          "run_number": 1413,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34063045601",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "0fe080e8bc0653cfeed67653bcfb70931f0a39bb",
+      "subject_revision": "f2eba7f5ce82ed0ed2e516a551d51d19f46cdcc1",
       "title": "AI QA CONTROL PLANE"
     },
     {
@@ -76,37 +77,37 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-06T20:26:02Z",
+          "completed_at_utc": "2026-09-06T22:11:23Z",
           "freshness": "SAME_DAY",
-          "head_sha": "bce7b2ad14dd70fd71aa5bf91a05865dca746a7f",
+          "head_sha": "b1dcbe98707b1054acdfdeb284d0e084b27252e9",
           "label": "QUALITY+SEC",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 34057921457,
-          "run_number": 738,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34057921457",
+          "run_id": 34063238911,
+          "run_number": 741,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34063238911",
           "scope": "job-prefix:Quality / Python ;steps:Tests|Bandit|Dependency audit",
           "workflow": "ci.yml"
         },
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-06T20:26:02Z",
+          "completed_at_utc": "2026-09-06T22:11:23Z",
           "freshness": "SAME_DAY",
-          "head_sha": "bce7b2ad14dd70fd71aa5bf91a05865dca746a7f",
+          "head_sha": "b1dcbe98707b1054acdfdeb284d0e084b27252e9",
           "label": "AGENT LABS",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 34057921457,
-          "run_number": 738,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34057921457",
+          "run_id": 34063238911,
+          "run_number": 741,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34063238911",
           "scope": "jobs:OpenAI adapter / deterministic SDK|MCP fault lab / deterministic protocol|MCP remote auth / loopback HTTP|MCP OAuth flow / separated AS-RS|Package integrity",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "bce7b2ad14dd70fd71aa5bf91a05865dca746a7f",
+      "subject_revision": "b1dcbe98707b1054acdfdeb284d0e084b27252e9",
       "title": "AGENT EVALUATION + TEVV"
     },
     {
