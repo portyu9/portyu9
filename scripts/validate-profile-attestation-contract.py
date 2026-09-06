@@ -9,6 +9,7 @@ import re
 import sys
 
 import profile_evidence_subjects as subjects
+import profile_evidence_validation as validation_contract
 
 ROOT = Path(__file__).resolve().parents[1]
 STATS = ROOT / ".github/workflows/profile-stats.yml"
@@ -19,6 +20,8 @@ DOC = ROOT / ".github/ATTESTATION.md"
 BUILDER = ROOT / "scripts/build-profile-evidence-attestation.py"
 SUBJECT_VALIDATOR = ROOT / "scripts/validate-profile-evidence-subjects.py"
 STAGER = ROOT / "scripts/stage-profile-evidence.py"
+VALIDATION_MANIFEST = ROOT / "scripts/profile-evidence-validation-boundary-v1.json"
+VALIDATION_RUNNER = ROOT / "scripts/validate-profile-evidence-boundary.py"
 
 V1_GIT_BLOB_SHA = "075fc17c817fe689702bc96c9875a0eb0a934375"
 V2_GIT_BLOB_SHA = "66a1486e565b89759812ff00dd33edc44a64cfa6"
@@ -32,13 +35,11 @@ V1_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.git
 V2_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json"
 PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v3.schema.json"
 EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
-SIGNAL_VALIDATORS = [
-    "scripts/validate-signal-field-v213.py",
-    "scripts/validate-signal-field-v214.py",
-    "scripts/validate-generated-signal-field.py",
-]
-SPOTLIGHT_VALIDATORS = ["scripts/validate-engineering-spotlight.py --require-live"]
-LEDGER_VALIDATORS = ["scripts/validate-portfolio-evidence-ledger.py --require-live"]
+VALIDATOR_CONTRACT = validation_contract.predicate_validators()
+SIGNAL_VALIDATORS = list(VALIDATOR_CONTRACT["signalField"])
+SPOTLIGHT_VALIDATORS = list(VALIDATOR_CONTRACT["engineeringSpotlight"])
+LEDGER_VALIDATORS = list(VALIDATOR_CONTRACT["portfolioEvidenceLedger"])
+VALIDATION_BOUNDARY = validation_contract.boundary_name()
 
 
 def fail(message: str) -> None:
@@ -68,12 +69,19 @@ def job_block(workflow: str, key: str, next_key: str | None) -> str:
     return workflow[start.start(): start.end() + end.start()]
 
 
+def require_boundary_runner(block: str, *, signal: str, spotlight: str, ledger: str, label: str) -> None:
+    require(block.count("validate-profile-evidence-boundary.py") == 1, f"{label} must invoke canonical validation boundary exactly once")
+    for fragment in (
+        f"--signal-field-dir {signal}",
+        f"--spotlight-dir {spotlight}",
+        f"--portfolio-ledger-dir {ledger}",
+    ):
+        require(fragment in block, f"{label} canonical validation boundary is missing: {fragment}")
+
+
 def validate_frozen_schema(path: Path, blob_sha: str, predicate_type: str, version: int) -> None:
     require(path.is_file(), f"frozen predicate v{version} schema is missing")
-    require(
-        git_blob_sha(path) == blob_sha,
-        f"published profile-evidence-v{version} schema bytes changed; published schema versions are immutable",
-    )
+    require(git_blob_sha(path) == blob_sha, f"published profile-evidence-v{version} schema bytes changed; published schema versions are immutable")
     schema = json.loads(path.read_text(encoding="utf-8"))
     require(schema.get("$id") == predicate_type, f"frozen predicate v{version} schema id changed")
     require(schema.get("properties", {}).get("schemaVersion", {}).get("const") == version, f"frozen predicate v{version} schema version changed")
@@ -97,8 +105,8 @@ def validate_current_schema() -> None:
     require(schema_identity_props.get("id", {}).get("const") == PREDICATE_TYPE, "predicateSchema id must bind v3")
     require(schema_identity_props.get("digest", {}).get("pattern") == "^sha256:[0-9a-f]{64}$", "predicateSchema digest format changed")
 
-    subject = properties.get("subjectSet", {}).get("properties", {}).get("publishedPaths", {})
-    require(subject.get("const") == list(subjects.published_paths()), "v3 published subjects must equal the canonical subject contract")
+    published = properties.get("subjectSet", {}).get("properties", {}).get("publishedPaths", {}).get("const")
+    require(published == list(subjects.published_paths()), "v3 published subjects must equal canonical subject contract")
 
     signal = properties.get("signalFieldEvidence", {})
     signal_props = signal.get("properties", {}) if isinstance(signal, dict) else {}
@@ -116,17 +124,17 @@ def validate_current_schema() -> None:
     require(portfolio_props.get("systemCount", {}).get("const") == 13, "Portfolio Ledger system count changed")
 
     validation = properties.get("validation", {}).get("properties", {})
-    require(validation.get("signalField", {}).get("const") == SIGNAL_VALIDATORS, "Signal Field validator set must be exact")
-    require(validation.get("engineeringSpotlight", {}).get("const") == SPOTLIGHT_VALIDATORS, "Spotlight validator set must be exact")
-    require(validation.get("portfolioEvidenceLedger", {}).get("const") == LEDGER_VALIDATORS, "Ledger validator set must be exact")
-    require(validation.get("boundary", {}).get("const") == "attest-validated-evidence", "validation boundary changed")
+    require(validation.get("signalField", {}).get("const") == SIGNAL_VALIDATORS, "v3 Signal Field validator set differs from canonical validation boundary")
+    require(validation.get("engineeringSpotlight", {}).get("const") == SPOTLIGHT_VALIDATORS, "v3 Spotlight validator set differs from canonical validation boundary")
+    require(validation.get("portfolioEvidenceLedger", {}).get("const") == LEDGER_VALIDATORS, "v3 Ledger validator set differs from canonical validation boundary")
+    require(validation.get("boundary", {}).get("const") == VALIDATION_BOUNDARY, "v3 validation boundary differs from canonical validation boundary")
 
     authority = properties.get("authority", {}).get("properties", {})
     require(authority.get("generation", {}).get("const") == "contents:read", "generation authority changed")
     require(authority.get("attestation", {}).get("const") == "contents:read,id-token:write,attestations:write", "attestation authority changed")
     require(authority.get("publication", {}).get("const") == "contents:write", "publication authority changed")
     claim = properties.get("claim", {}).get("const")
-    require(isinstance(claim, str) and "not universal certification" in claim, "predicate must preserve the non-certification claim boundary")
+    require(isinstance(claim, str) and "not universal certification" in claim, "predicate must preserve non-certification claim boundary")
 
 
 def validate_builder() -> None:
@@ -138,8 +146,11 @@ def validate_builder() -> None:
         f'PORTFOLIO_EVIDENCE_SEMANTICS = "{EVIDENCE_SEMANTICS}"',
         'PORTFOLIO_EVIDENCE_ID = re.compile(r"^PL2-[0-9A-F]{16}$")',
         "import profile_evidence_subjects as subjects",
+        "import profile_evidence_validation as validation_contract",
         "PUBLISHED_PATHS = subjects.published_paths()",
         'SIGNAL_FIELD_FILENAMES = subjects.source_basenames("signal_field")',
+        "VALIDATOR_CONTRACT = validation_contract.predicate_validators()",
+        "BOUNDARY = validation_contract.boundary_name()",
         '"predicateSchema": predicate_schema_identity()',
         "hashlib.sha256(PREDICATE_SCHEMA.read_bytes()).hexdigest()",
         '"signalFieldEvidence": read_signal_field_evidence(signal_field_dir)',
@@ -150,6 +161,8 @@ def validate_builder() -> None:
         "not universal certification",
     ):
         require(phrase in text, f"attestation predicate v3 builder contract is missing: {phrase}")
+    for validator in (*SIGNAL_VALIDATORS, *SPOTLIGHT_VALIDATORS, *LEDGER_VALIDATORS):
+        require(f'"{validator}"' not in text, f"attestation builder still hardcodes canonical validator identity: {validator}")
     for published_path in subjects.published_paths():
         require(f'"{published_path}"' not in text, f"attestation builder must not hardcode canonical subject path: {published_path}")
 
@@ -159,6 +172,7 @@ def validate_workflow() -> None:
     generate = job_block(text, "generate", "attest")
     attest = job_block(text, "attest", "publish")
     publish = job_block(text, "publish", None)
+
     require("name: generate-read-only" in generate, "generation job name changed")
     require("contents: write" not in generate and "id-token: write" not in generate and "attestations: write" not in generate, "generation authority expanded")
     require("name: attest-validated-evidence" in attest, "attestation job name changed")
@@ -175,28 +189,49 @@ def validate_workflow() -> None:
     require(publish.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3, "publication must download three immutable evidence sets")
     require(publish.count("digest-mismatch: error") == 3, "publication downloads must fail closed on digest mismatch")
 
-    for command in (
+    require_boundary_runner(
+        attest,
+        signal="profile-stats/profile",
+        spotlight="engineering-spotlight",
+        ledger="portfolio-evidence",
+        label="attestation",
+    )
+    require_boundary_runner(
+        publish,
+        signal="publish-input",
+        spotlight="spotlight-publish-input",
+        ledger="portfolio-ledger-publish-input",
+        label="publication",
+    )
+    for forbidden in (
         "python3 source/scripts/validate-signal-field-v213.py profile-stats/profile",
         "python3 source/scripts/validate-signal-field-v214.py profile-stats/profile",
         "python3 source/scripts/validate-generated-signal-field.py profile-stats/profile",
-        "python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live",
-        "python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence --require-live",
-        "python3 source/scripts/validate-profile-evidence-subjects.py",
-        "python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile portfolio-evidence attestation-predicate.json",
+        "python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight",
+        "python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence",
     ):
-        require(command in attest, f"attestation boundary command is missing: {command}")
+        require(forbidden not in attest, f"attestation workflow duplicates canonical validation stage: {forbidden}")
+    for forbidden in (
+        "python3 source/scripts/validate-signal-field-v213.py publish-input",
+        "python3 source/scripts/validate-signal-field-v214.py publish-input",
+        "python3 source/scripts/validate-generated-signal-field.py publish-input",
+        "python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input",
+        "python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input",
+    ):
+        require(forbidden not in publish, f"publication workflow duplicates canonical validation stage: {forbidden}")
 
+    require("python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile portfolio-evidence attestation-predicate.json" in attest, "attestation predicate build command is missing")
     require(f"uses: actions/attest@{ATTEST_SHA} # v4.2.2" in attest, "actions/attest pin changed")
     for pattern in subjects.attestation_patterns():
         require(pattern in attest, f"attestation subject pattern is missing: {pattern}")
-    require("engineering-spotlight/*.svg" not in attest, "attestation must not use a glob that can include the internal Spotlight manifest")
+    require("engineering-spotlight/*.svg" not in attest, "attestation must not use broad Spotlight glob")
     require(f"predicate-type: {PREDICATE_TYPE}" in attest, "production must issue current v3 predicate type")
     require(V1_PREDICATE_TYPE not in attest and V2_PREDICATE_TYPE not in attest, "production workflow must not issue frozen historical predicate versions")
     require("predicate-path: attestation-predicate.json" in attest, "custom predicate path changed")
 
-    require("python3 source/scripts/stage-profile-evidence.py candidate-profile-evidence" in attest, "scheduled delta comparison must stage the canonical subject set")
-    require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root published" in attest, "scheduled delta comparison must validate the current generated inventory")
-    require("python3 source/scripts/stage-profile-evidence.py artifacts" in publish, "publication must stage through the canonical subject contract")
+    require("python3 source/scripts/stage-profile-evidence.py candidate-profile-evidence" in attest, "scheduled delta comparison must stage canonical subject set")
+    require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root published" in attest, "scheduled delta comparison must validate current generated inventory")
+    require("python3 source/scripts/stage-profile-evidence.py artifacts" in publish, "publication must stage through canonical subject contract")
     require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root artifacts" in publish, "publication must validate exact generated inventory")
     for forbidden in (
         "cp publish-input/signal-field-*.svg",
@@ -204,15 +239,7 @@ def validate_workflow() -> None:
         "cp portfolio-ledger-publish-input/portfolio-evidence-ledger.json",
         "find artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence -type f | wc -l",
     ):
-        require(forbidden not in publish, f"publication still encodes an independent subject selection/count: {forbidden}")
-
-    for path in (
-        "scripts/profile-evidence-subjects-v1.json",
-        "scripts/profile_evidence_subjects.py",
-        "scripts/stage-profile-evidence.py",
-        "scripts/validate-profile-evidence-subjects.py",
-    ):
-        require(f'      - "{path}"' in text, f"production push trigger is missing canonical subject source: {path}")
+        require(forbidden not in publish, f"publication still encodes independent subject selection/count: {forbidden}")
 
 
 def validate_doc() -> None:
@@ -231,6 +258,8 @@ def validate_doc() -> None:
         "freshness",
         "exactly the same eleven subjects",
         "profile-evidence-subjects-v1",
+        "profile-evidence-validation-boundary-v1",
+        "validate-profile-evidence-boundary.py",
         "not universal certification",
         "gh attestation verify",
     ):
@@ -240,7 +269,19 @@ def validate_doc() -> None:
 def main() -> int:
     try:
         subjects.load_manifest()
-        for path in (STATS, V1_SCHEMA, V2_SCHEMA, CURRENT_SCHEMA, DOC, BUILDER, SUBJECT_VALIDATOR, STAGER):
+        validation_contract.load_manifest()
+        for path in (
+            STATS,
+            V1_SCHEMA,
+            V2_SCHEMA,
+            CURRENT_SCHEMA,
+            DOC,
+            BUILDER,
+            SUBJECT_VALIDATOR,
+            STAGER,
+            VALIDATION_MANIFEST,
+            VALIDATION_RUNNER,
+        ):
             require(path.is_file(), f"attestation contract input is missing: {path.relative_to(ROOT)}")
         validate_frozen_schema(V1_SCHEMA, V1_GIT_BLOB_SHA, V1_PREDICATE_TYPE, 1)
         validate_frozen_schema(V2_SCHEMA, V2_GIT_BLOB_SHA, V2_PREDICATE_TYPE, 2)
@@ -250,8 +291,8 @@ def main() -> int:
         validate_workflow()
         validate_doc()
         print(
-            "Engineering attestation validation passed: predicate v1/v2/v3 bytes are frozen, v3 binds its schema digest and "
-            "Ledger v2 semantics, the canonical eleven-subject contract closes attestation/publication/generated inventory, "
+            "Engineering attestation validation passed: predicate v1/v2/v3 bytes are frozen, v3 validator identities derive from "
+            "the canonical profile-evidence validation boundary, the eleven-subject contract closes attestation/publication/generated inventory, "
             "authority remains separated, and the claim remains provenance/contract conformance rather than certification."
         )
         return 0

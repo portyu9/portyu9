@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 
 import profile_evidence_subjects as subjects
+import profile_evidence_validation as validation_contract
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / ".github/attestation/profile-evidence-v3.schema.json"
@@ -87,14 +88,35 @@ def subject_path_patterns(workflow: str) -> tuple[str, ...]:
     raise ValueError("actions/attest subject-path block is missing")
 
 
+def validate_boundary_contract() -> None:
+    payload = validation_contract.load_manifest()
+    closure = [stage for stage in payload["stages"] if stage.get("id") == "exact-subject-closure"]
+    require(len(closure) == 1, "canonical validation boundary must contain one exact-subject-closure stage")
+    stage = closure[0]
+    require(stage.get("script") == "validate-profile-evidence-subjects.py", "candidate closure stage must execute this validator")
+    require(stage.get("predicateGroup") is None and stage.get("predicateIdentity") is None, "subject closure is a boundary control, not a predicate validator identity")
+    args = stage.get("args")
+    require(isinstance(args, list), "candidate closure stage args are missing")
+    for fragment in (
+        "--signal-field-dir",
+        "{signal_field_dir}",
+        "--spotlight-dir",
+        "{spotlight_dir}",
+        "--portfolio-ledger-dir",
+        "{portfolio_ledger_dir}",
+    ):
+        require(fragment in args, f"candidate closure stage is missing: {fragment}")
+
+
 def validate_workflow() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     patterns = subject_path_patterns(text)
     require(patterns == subjects.attestation_patterns(), "actions/attest patterns differ from canonical subject contract")
     require("engineering-spotlight/*.svg" not in patterns, "broad Spotlight attestation glob can include internal artifacts")
 
-    candidate_command = "python3 source/scripts/validate-profile-evidence-subjects.py"
-    require(text.count(candidate_command) >= 3, "subject closure validator must run at attestation, publish-input, and staged-publication boundaries")
+    require(text.count("python3 source/scripts/validate-profile-evidence-boundary.py") == 2, "attestation and publication must each execute the canonical candidate validation boundary")
+    require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root published" in text, "scheduled delta comparison must validate exact current generated subjects")
+    require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root artifacts" in text, "staged publication must validate exact generated subjects")
     require("python3 source/scripts/stage-profile-evidence.py artifacts" in text, "publication must stage through the canonical subject contract")
     require("cp publish-input/signal-field-*.svg" not in text, "publication still duplicates Signal Field subject selection in shell")
     require("cp spotlight-publish-input/spotlight-*.svg" not in text, "publication still duplicates Spotlight subject selection in shell")
@@ -106,8 +128,11 @@ def validate_workflow() -> None:
         "scripts/profile_evidence_subjects.py",
         "scripts/stage-profile-evidence.py",
         "scripts/validate-profile-evidence-subjects.py",
+        "scripts/profile-evidence-validation-boundary-v1.json",
+        "scripts/profile_evidence_validation.py",
+        "scripts/validate-profile-evidence-boundary.py",
     ):
-        require(path.startswith("scripts/"), f"subject-contract source moved outside the closed scripts trigger surface: {path}")
+        require(path.startswith("scripts/"), f"subject/validation-contract source moved outside the closed scripts trigger surface: {path}")
 
 
 def validate_builder() -> None:
@@ -123,6 +148,7 @@ def main() -> int:
     args = parse_args()
     try:
         subjects.load_manifest()
+        validate_boundary_contract()
         for path in (SCHEMA, WORKFLOW, BUILDER, STAGER):
             require(path.is_file(), f"subject-closure contract input is missing: {path.relative_to(ROOT)}")
         validate_schema()
@@ -140,7 +166,7 @@ def main() -> int:
 
         print(
             f"Profile evidence subject closure passed: {subjects.VERSION} · "
-            f"11 exact published subjects · sha256:{subjects.manifest_digest()}"
+            f"11 exact published subjects · candidate closure owned by {validation_contract.VERSION} · sha256:{subjects.manifest_digest()}"
         )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:

@@ -49,7 +49,15 @@ One attestation covers the eleven files that make up the generated profile-evide
 
 The canonical source for that inventory is `scripts/profile-evidence-subjects-v1.json`. Its `profile-evidence-subjects-v1` contract defines the exact published paths, the three evidence groups, the attestation patterns that must resolve only to those paths, and the internal-only Spotlight manifest. The predicate builder derives `subjectSet.publishedPaths` from this contract rather than maintaining another subject list.
 
-`validate-profile-evidence-subjects.py` closes the remaining boundaries: it requires the frozen v3 schema array to equal the canonical contract, requires the production `actions/attest` patterns to resolve to the same paths, validates the downloaded candidate inventories before attestation and publication, and verifies that the staged `generated` tree contains exactly those eleven files. `stage-profile-evidence.py` uses the same contract for scheduled-delta comparison and final publication staging, eliminating independent shell copies and manual file counts.
+`validate-profile-evidence-subjects.py` closes the remaining subject boundaries: it requires the frozen v3 schema array to equal the canonical contract, requires the production `actions/attest` patterns to resolve to the same paths, validates candidate inventories, and verifies that the staged `generated` tree contains exactly those eleven files. `stage-profile-evidence.py` uses the same contract for scheduled-delta comparison and final publication staging, eliminating independent shell copies and manual file counts.
+
+## Canonical validation boundary
+
+`scripts/profile-evidence-validation-boundary-v1.json` is the versioned `profile-evidence-validation-boundary-v1` contract for candidate evidence revalidation. It owns the exact read-only validator order, live-evidence flags, predicate validator identities, and the `attest-validated-evidence` boundary name. `profile_evidence_validation.py` loads that contract, and `validate-profile-evidence-boundary.py` executes its six ordered stages.
+
+Both `attest-validated-evidence` and `publish-write-only` invoke `validate-profile-evidence-boundary.py` instead of maintaining separate copies of Signal Field, Portfolio Ledger, Spotlight, and subject-closure commands. The v3 predicate builder derives its `validation.signalField`, `validation.engineeringSpotlight`, `validation.portfolioEvidenceLedger`, and `validation.boundary` values from the same contract. The immutable v3 schema bytes remain unchanged; the attestation contract validator requires the frozen schema's validator arrays to equal the canonical boundary contract.
+
+This does not collapse authority boundaries. Attestation and publication still run as distinct jobs with different permissions and independently execute the same read-only candidate validation contract after downloading their own immutable artifact copies.
 
 `engineering-spotlight/spotlight-manifest.json` is internal generation/validation metadata. It remains inside the immutable workflow artifact long enough for the Spotlight validator to prove manifest/SVG provenance agreement, but it is deliberately excluded from the public `generated` branch and from the attestation glob. The published generated evidence set is therefore **exactly the same eleven subjects** named by the attestation contract.
 

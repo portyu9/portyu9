@@ -76,7 +76,17 @@ External CodeQL Actions execute at an **exact commit SHA**. Analysis receives on
 
 `Profile quality / validate-contracts` is read-only and runs the fail-closed repository contract suite, including Signal Field, Spotlight, Portfolio Ledger, attestation, dependency, Action provenance, authority, shell-safety, CodeQL, cache-identity, repository governance, assurance-document, and ruleset checks. Its ruleset step validates the source-controlled target against every control-plane field visible to the read-only workflow identity; this is drift detection, not settings mutation authority. Admin-redacted bypass actors remain separately auditable rather than being guessed.
 
-`Profile quality / integration-pinned-upstream` is also read-only. It executes the exact reviewed Signal Field generator, runs the full production transformation chain, performs the Signal Field artifact round trip with digest enforcement, then collects one live Portfolio Evidence Ledger v2 snapshot and renders the Engineering Spotlight strictly from that validated snapshot. The read-only contract summary reports the resulting identities, independent evidence dimensions, and authority map through `GITHUB_STEP_SUMMARY`.
+`Profile quality / integration-pinned-upstream` is also read-only. It executes the exact reviewed Signal Field generator, runs the full production transformation chain, performs the Signal Field artifact round trip with digest enforcement, then collects one live Portfolio Evidence Ledger v2 snapshot and renders the Engineering Spotlight strictly from that validated snapshot. It also exercises the same canonical candidate validation boundary used by production before staging the exact publication subjects. The read-only contract summary reports the resulting identities, independent evidence dimensions, and authority map through `GITHUB_STEP_SUMMARY`.
+
+## Canonical profile evidence validation boundary
+
+`scripts/profile-evidence-validation-boundary-v1.json` is the versioned `profile-evidence-validation-boundary-v1` contract for downloaded candidate evidence. It owns the ordered validator scripts, their live-evidence flags, the validator identities recorded in the attestation predicate, and the `attest-validated-evidence` boundary name.
+
+`scripts/validate-profile-evidence-boundary.py` is the only workflow entrypoint for full candidate revalidation after artifact transport. Both `attest-validated-evidence` and `publish-write-only` invoke it against their own downloaded copies. The predicate builder reads the same manifest through `profile_evidence_validation.py`, so the validator identities it records cannot drift independently from the commands production actually executes.
+
+The immutable predicate v3 schema remains byte-for-byte frozen. `validate-profile-attestation-contract.py` requires its validator arrays and boundary constant to match this canonical manifest. A future semantic validator-set change that cannot satisfy the frozen schema therefore requires an explicit new predicate schema version rather than silent divergence.
+
+This consolidation does not share artifacts across authority boundaries and does not move validation into a write-capable helper. The runner is read-only; attestation and publication still download separately, execute separately, and retain distinct permissions.
 
 ## Single evidence snapshot contract
 
@@ -126,9 +136,9 @@ Immutable source-revision URLs do not need query-based cache busting because the
 
 The public/attested subject set is exactly **11 subjects**: four Signal Field SVGs, six Spotlight SVGs, and one Portfolio Evidence Ledger JSON file. `spotlight-manifest.json` is internal validation metadata and must never be published or attested.
 
-`attest-validated-evidence` runs on a fresh job boundary with `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission. It downloads the three immutable evidence sets, fails closed on artifact digest mismatch, revalidates Signal Field, Portfolio Ledger v2, and Ledger-backed Spotlight projection, builds the predicate, and only then invokes the pinned attestation Action.
+`attest-validated-evidence` runs on a fresh job boundary with `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission. It downloads the three immutable evidence sets, fails closed on artifact digest mismatch, executes the canonical candidate validation boundary, builds the predicate, and only then invokes the pinned attestation Action.
 
-`publish-write-only` depends on both generation and attestation. It receives `contents: write` but no OIDC or attestation authority. It downloads the same immutable evidence, revalidates it again, stages exactly the 11 public subjects, and pushes only to `generated`.
+`publish-write-only` depends on both generation and attestation. It receives `contents: write` but no OIDC or attestation authority. It downloads the same immutable evidence, independently executes the same canonical candidate validation boundary, stages exactly the 11 public subjects, and pushes only to `generated`.
 
 ## Attestation schema versioning
 
@@ -166,12 +176,13 @@ Confirm all of the following before declaring a security/governance change compl
 2. Action release provenance, Dependency Review, Workflow authority firewall, Workflow shell safety, and CodeQL contracts remain green;
 3. the Signal Field artifact round trip fails closed on digest mismatch and revalidates downloaded bytes;
 4. one Portfolio Ledger v2 is collected and Spotlight is projected from that same validated Ledger;
-5. execution result, subject binding, and freshness remain independent across Ledger, Spotlight, summary, and attestation semantics;
-6. generation remains read-only, attestation remains non-publishing, and publication remains non-signing;
-7. the attestation subject set and generated public set are the same exact 11 subjects;
-8. v1 and v2 predicate schema bytes remain frozen and new predicates use v3 with `predicateSchema.digest`;
-9. mutable generated README asset URLs pass the cache-identity contract;
-10. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only`;
-11. `validate-ruleset-contract.py --live` passes inside the required Profile Quality gate for every observable ruleset field, while an administration-capable audit separately confirms the source-locked no-bypass invariant when GitHub redacts that field from the workflow identity.
+5. the canonical `profile-evidence-validation-boundary-v1` contract is exercised by Profile Quality integration, attestation, and publication and its predicate identities still match the frozen current schema;
+6. execution result, subject binding, and freshness remain independent across Ledger, Spotlight, summary, and attestation semantics;
+7. generation remains read-only, attestation remains non-publishing, and publication remains non-signing;
+8. the attestation subject set and generated public set are the same exact 11 subjects;
+9. v1 and v2 predicate schema bytes remain frozen and new predicates use v3 with `predicateSchema.digest`;
+10. mutable generated README asset URLs pass the cache-identity contract;
+11. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only`;
+12. `validate-ruleset-contract.py --live` passes inside the required Profile Quality gate for every observable ruleset field, while an administration-capable audit separately confirms the source-locked no-bypass invariant when GitHub redacts that field from the workflow identity.
 
 Any change that weakens these boundaries is a governance-contract change and must fail closed until deliberately reviewed.
