@@ -6,9 +6,11 @@ existing candidate directory; this orchestrator owns all authored generation seq
 after that boundary: Signal Field transformation/validation, one Portfolio Evidence
 Ledger snapshot, and the Engineering Spotlight projection from that exact Ledger.
 
-Generation outputs are destructive-reset workspaces. They are therefore constrained to
-non-symlink direct children of the current execution workspace and revalidated at the
-exact deletion boundary before any ``shutil.rmtree`` call.
+The upstream Signal Field candidate is accepted only as a real, unaliased directory and
+its canonical path is propagated to authored transformers. Generation outputs are
+destructive-reset workspaces, so they are constrained to non-symlink direct children of
+the current execution workspace and revalidated at the exact deletion boundary before
+any ``shutil.rmtree`` call.
 """
 from __future__ import annotations
 
@@ -98,6 +100,17 @@ def require_real_stage_script(script: str, stage_id: str) -> None:
     mode = path.lstat().st_mode
     require(stat.S_ISREG(mode) and not path.is_symlink(),
             f"{stage_id}: generation script must be a real regular repository file: {script}")
+
+
+def require_real_input_directory(path: Path, label: str) -> Path:
+    """Return a canonical input directory only when no path alias is involved."""
+    require(path.exists() or path.is_symlink(), f"{label} is missing: {path}")
+    resolved = path.resolve(strict=True)
+    require(path.absolute() == resolved,
+            f"{label} must not resolve through symlink/traversal aliases: {path}")
+    mode = path.lstat().st_mode
+    require(stat.S_ISDIR(mode) and not path.is_symlink(), f"{label} must be a real directory: {path}")
+    return resolved
 
 
 def validate_manifest(payload: Any, *, verify_scripts: bool = True) -> dict[str, Any]:
@@ -226,9 +239,12 @@ def validate_paths(
     workspace: Path | None = None,
 ) -> tuple[Path, Path, Path]:
     execution_root = (workspace or Path.cwd()).resolve()
-    require(signal_field_dir.is_dir(), f"upstream Signal Field candidate directory is missing: {signal_field_dir}")
-    signal = signal_field_dir.resolve()
-    require(signal not in {execution_root, ROOT.resolve(), SCRIPTS.resolve()}, "Signal Field candidate must not be a workspace/repository/scripts root")
+    signal = require_real_input_directory(signal_field_dir, "upstream Signal Field candidate directory")
+    require(signal != execution_root, "Signal Field candidate must not be the execution workspace")
+    require(not paths_overlap(signal, ROOT.resolve()),
+            "Signal Field candidate must not overlap the trusted source checkout")
+    require(not paths_overlap(signal, SCRIPTS.resolve()),
+            "Signal Field candidate must not overlap the trusted scripts directory")
 
     ledger = safe_output_path(
         portfolio_ledger_dir,
@@ -323,8 +339,45 @@ def self_test() -> None:
         signal.mkdir()
         ledger = workspace / "ledger"
         spotlight = workspace / "spotlight"
-        _, resolved_ledger, resolved_spotlight = validate_paths(signal, ledger, spotlight, workspace=workspace)
+        resolved_signal, resolved_ledger, resolved_spotlight = validate_paths(signal, ledger, spotlight, workspace=workspace)
+        require(resolved_signal == signal.resolve(), "safe upstream Signal Field candidate did not resolve canonically")
         require(resolved_ledger == ledger.resolve() and resolved_spotlight == spotlight.resolve(), "safe direct-child outputs did not resolve canonically")
+
+        signal_alias = workspace / "signal-alias"
+        try:
+            signal_alias.symlink_to(signal, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            expect_path_failure(
+                lambda: validate_paths(signal_alias, ledger, spotlight, workspace=workspace),
+                "symlink/traversal aliases",
+            )
+
+        aliased_parent = workspace / "aliased-parent"
+        real_parent = workspace / "real-parent"
+        real_parent.mkdir()
+        nested_signal = real_parent / "signal"
+        nested_signal.mkdir()
+        try:
+            aliased_parent.symlink_to(real_parent, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pass
+        else:
+            expect_path_failure(
+                lambda: validate_paths(aliased_parent / "signal", ledger, spotlight, workspace=workspace),
+                "symlink/traversal aliases",
+            )
+
+        canonical_plan = command_plan(
+            signal_field_dir=resolved_signal,
+            portfolio_ledger_dir=resolved_ledger,
+            spotlight_dir=resolved_spotlight,
+            day=dt.date(2026, 9, 4),
+            offline=False,
+        )
+        require(canonical_plan[0][2] == (str(resolved_signal),),
+                "Signal Field transformer plan did not receive the canonical upstream path")
 
         nested = workspace / "nested" / "ledger"
         expect_path_failure(
@@ -379,7 +432,7 @@ def self_test() -> None:
     print(
         f"Profile evidence generation contract passed: {payload['version']} · {len(plan_live)} exact ordered authored stages · "
         f"manifest_sha256={manifest_digest()} · script/args/kind authority-locked · live/offline policies separated · "
-        "destructive outputs workspace-contained"
+        "upstream candidate canonicalized · destructive outputs workspace-contained"
     )
 
 
@@ -426,9 +479,9 @@ def main() -> int:
             protected=(signal, ledger),
         )
         plan = command_plan(
-            signal_field_dir=args.signal_field_dir,
-            portfolio_ledger_dir=args.portfolio_ledger_dir,
-            spotlight_dir=args.spotlight_dir,
+            signal_field_dir=signal,
+            portfolio_ledger_dir=ledger,
+            spotlight_dir=spotlight,
             day=day,
             offline=args.offline,
         )
