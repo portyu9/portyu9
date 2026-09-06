@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Relabel the visible GitHub Issues headline as BUGS FOUND without changing its data semantics.
+"""Relabel the visible GitHub Issues headline as BUG FOUND without changing its data semantics.
 
 The underlying metric remains exactly the authored public GitHub Issues total supplied
 by the SHA-pinned upstream REST Search collector. This stage changes presentation only:
-ISSUES -> BUGS FOUND. It records that alias explicitly, proves the numeric Issues value
+ISSUES -> BUG FOUND. It records that alias explicitly, proves the numeric Issues value
 is unchanged across the rewrite, preserves the accessible GitHub Issues description,
 and removes the stale upstream ``data-period-days=365`` attribute now that v2.9 owns the
 exact GitHub ContributionsCollection period.
@@ -17,9 +17,9 @@ import sys
 
 VERSION = "signal-field-v2.10"
 OLD_LABEL = "ISSUES"
-NEW_LABEL = "BUGS FOUND"
+NEW_LABEL = "BUG FOUND"
 ISSUE_SOURCE = "github-rest-search-authored-public-issues"
-ISSUE_DISPLAY_ALIAS = "bugs-found"
+ISSUE_DISPLAY_ALIAS = "bug-found"
 EXPECTED_FILES = (
     "signal-field-wide-light.svg",
     "signal-field-wide-dark.svg",
@@ -75,13 +75,13 @@ def normalize_root_provenance(text: str) -> str:
 
 def validate_semantics(text: str, expected_count: str) -> None:
     if issue_count(text) != expected_count:
-        raise ValueError("BUGS FOUND relabel changed the underlying authored public Issues total")
+        raise ValueError("BUG FOUND relabel changed the underlying authored public Issues total")
     if text.count(f'data-metric-labels="{VERSION}"') != 1:
         raise ValueError("metric-label provenance is missing or duplicated")
     if text.count(f'data-issues-metric-source="{ISSUE_SOURCE}"') != 1:
         raise ValueError("authored public Issues source provenance is missing or duplicated")
     if text.count(f'data-issues-display-alias="{ISSUE_DISPLAY_ALIAS}"') != 1:
-        raise ValueError("BUGS FOUND display-alias provenance is missing or duplicated")
+        raise ValueError("BUG FOUND display-alias provenance is missing or duplicated")
     if "data-period-days=" in text:
         raise ValueError("stale upstream data-period-days provenance must be removed")
 
@@ -106,7 +106,7 @@ def relabel_svg(text: str) -> str:
     text = normalize_root_provenance(text)
 
     if text.count(new_token) != 1 or old_token in text:
-        raise ValueError("BUGS FOUND label rewrite did not converge")
+        raise ValueError("BUG FOUND label rewrite did not converge")
     validate_semantics(text, original_issue_count)
     return text
 
@@ -121,7 +121,7 @@ def self_test() -> None:
             '<text x="10" y="20">ISSUES</text></svg>'
         )
         transformed = relabel_svg(fixture)
-        assert ">BUGS FOUND</text>" in transformed
+        assert ">BUG FOUND</text>" in transformed
         assert ">ISSUES</text>" not in transformed
         assert f'data-metric-labels="{VERSION}"' in transformed
         assert f'data-issues-metric-source="{ISSUE_SOURCE}"' in transformed
@@ -139,7 +139,7 @@ def self_test() -> None:
         raise AssertionError("missing Issues metric/source semantics must fail closed")
 
     print(
-        f"Signal Field metric-label self-test passed: {VERSION}; visible ISSUES -> BUGS FOUND; "
+        f"Signal Field metric-label self-test passed: {VERSION}; visible ISSUES -> BUG FOUND; "
         "underlying authored public GitHub Issues total unchanged"
     )
 

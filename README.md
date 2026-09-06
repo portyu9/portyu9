@@ -142,10 +142,10 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <div align="center">
 
 <picture>
-  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg?v=signal-field-v218-wide-v219-compact-eid-current-red-v1-profile-refresh-v2">
-  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg?v=signal-field-v218-wide-v219-compact-eid-current-red-v1-profile-refresh-v2">
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg?v=signal-field-v218-wide-v219-compact-eid-current-red-v1-profile-refresh-v2">
-  <img alt="GitHub activity signal field" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg?v=signal-field-v218-wide-v219-compact-eid-current-red-v1-profile-refresh-v2" width="100%">
+  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-dark.svg?v=signal-field-v218-wide-v219-compact-eid-bug-found-current-red-v1-profile-refresh-v2">
+  <source media="(max-width: 640px)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-compact-light.svg?v=signal-field-v218-wide-v219-compact-eid-bug-found-current-red-v1-profile-refresh-v2">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-dark.svg?v=signal-field-v218-wide-v219-compact-eid-bug-found-current-red-v1-profile-refresh-v2">
+  <img alt="GitHub activity signal field" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/signal-field-wide-light.svg?v=signal-field-v218-wide-v219-compact-eid-bug-found-current-red-v1-profile-refresh-v2" width="100%">
 </picture>
 
 </div>
