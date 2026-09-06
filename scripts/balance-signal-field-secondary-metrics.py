@@ -24,6 +24,7 @@ METRICS = ("stars", "pull_requests", "issues")
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 PULL_LABEL = re.compile(r'(?P<tag><text\b[^>]*>)PULL REQUESTS</text>', re.I)
+COMPACT_VIEWBOXES = {"0 0 320 500", "0 0 320 528"}
 
 WIDE_GLYPH_SIZE = 17.5
 COMPACT_GLYPH_SIZE = 14.5
@@ -70,7 +71,7 @@ def layout_of(root_tag: str) -> str:
     view_box = attrs_of(root_tag).get("viewBox")
     if view_box == "0 0 640 425":
         return "wide"
-    if view_box == "0 0 320 500":
+    if view_box in COMPACT_VIEWBOXES:
         return "compact"
     raise ValueError(f"unexpected Signal Field viewBox: {view_box!r}")
 
@@ -215,7 +216,7 @@ def balance_svg(text: str) -> str:
     return text
 
 
-def fixture(layout: str) -> str:
+def fixture(layout: str, compact_view_box: str = "0 0 320 500") -> str:
     if layout == "wide":
         return (
             '<svg viewBox="0 0 640 425" data-metric-glyphs="signal-field-v2.11">'
@@ -230,7 +231,7 @@ def fixture(layout: str) -> str:
             '</svg>'
         )
     return (
-        '<svg viewBox="0 0 320 500" data-metric-glyphs="signal-field-v2.11">'
+        f'<svg viewBox="{compact_view_box}" data-metric-glyphs="signal-field-v2.11">'
         '<g data-metric-glyph="stars" transform="translate(1 1) scale(.8)"></g>'
         '<text x="66" y="206" text-anchor="middle" fill="#C96BFF" font-size="22" data-metric-phosphor="stars">14</text>'
         '<g data-metric-glyph="pull_requests" transform="translate(1 1) scale(.8)"></g>'
@@ -243,8 +244,14 @@ def fixture(layout: str) -> str:
 
 
 def self_test() -> None:
-    for layout in ("wide", "compact"):
-        transformed = balance_svg(fixture(layout))
+    cases = (
+        ("wide", fixture("wide")),
+        ("compact-5-row", fixture("compact", "0 0 320 500")),
+        ("compact-6-row", fixture("compact", "0 0 320 528")),
+    )
+    for label, source in cases:
+        layout = "wide" if label == "wide" else "compact"
+        transformed = balance_svg(source)
         assert f'data-secondary-metric-balance="{VERSION}"' in transformed
         assert balance_svg(transformed) == transformed
         if layout == "wide":
@@ -253,7 +260,7 @@ def self_test() -> None:
             assert transformed.count("scale(1.4583)") == 3
         else:
             assert transformed.count("scale(1.2083)") == 3
-        print(f"{layout} v2.12 secondary-metric balance fixture passed")
+        print(f"{label} v2.12 secondary-metric balance fixture passed")
     print(f"Signal Field secondary-metric balance self-test passed: {VERSION}")
 
 
