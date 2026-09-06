@@ -32,6 +32,7 @@ DELEGATED_STAGE_IDS = (
 )
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 LOCAL_SUFFIXES = {".py", ".json"}
+ENFORCEMENT_MODULES = {"profile_delegated_implementation_lock"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -59,6 +60,8 @@ def git_blob_oid(path: Path) -> str:
 
 def local_module_path(module: str) -> str | None:
     root_name = module.split(".", 1)[0]
+    if root_name in ENFORCEMENT_MODULES:
+        return None
     candidate = SCRIPTS / f"{root_name}.py"
     if candidate.is_file() and not candidate.is_symlink():
         return f"scripts/{candidate.name}"
