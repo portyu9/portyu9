@@ -21,6 +21,7 @@ import profile_evidence_validation as validation_contract
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "portyu9/portyu9"
+WORKFLOW_REF = f"{REPOSITORY}/.github/workflows/profile-stats.yml@refs/heads/main"
 KIND = "profile-evidence-attestation"
 SCHEMA_VERSION = 3
 PREDICATE_TYPE = (
@@ -63,6 +64,12 @@ def required_env(name: str, env: dict[str, str]) -> str:
     return value
 
 
+def positive_decimal(name: str, value: str) -> str:
+    if not DIGITS.fullmatch(value) or int(value) <= 0 or value != str(int(value)):
+        raise ValueError(f"{name} must be one canonical positive decimal string")
+    return value
+
+
 def predicate_schema_identity() -> dict[str, str]:
     if not PREDICATE_SCHEMA.is_file():
         raise ValueError(f"predicate schema is missing: {PREDICATE_SCHEMA.relative_to(ROOT)}")
@@ -78,11 +85,13 @@ def root_attrs(text: str) -> dict[str, str]:
 
 
 def read_signal_field_evidence(directory: Path) -> dict[str, str]:
+    subjects.require_unaliased_directory(directory, "attestation Signal Field directory")
     identities: list[tuple[str, str, str]] = []
     for filename in SIGNAL_FIELD_FILENAMES:
         path = directory / filename
-        if not path.is_file() or path.stat().st_size == 0:
-            raise ValueError(f"attestation Signal Field subject is missing: {filename}")
+        subjects.require_regular_file(path, "attestation Signal Field subject")
+        if path.stat().st_size == 0:
+            raise ValueError(f"attestation Signal Field subject is empty: {filename}")
         attrs = root_attrs(path.read_text(encoding="utf-8"))
         schema = attrs.get("data-evidence-id-schema", "")
         evidence_id = attrs.get("data-evidence-id", "")
@@ -103,9 +112,11 @@ def read_signal_field_evidence(directory: Path) -> dict[str, str]:
 
 
 def read_portfolio_ledger_evidence(directory: Path) -> dict[str, object]:
+    subjects.require_unaliased_directory(directory, "attestation Portfolio Evidence Ledger directory")
     path = directory / "portfolio-evidence-ledger.json"
-    if not path.is_file() or path.stat().st_size == 0:
-        raise ValueError("attestation Portfolio Evidence Ledger subject is missing")
+    subjects.require_regular_file(path, "attestation Portfolio Evidence Ledger subject")
+    if path.stat().st_size == 0:
+        raise ValueError("attestation Portfolio Evidence Ledger subject is empty")
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("version") != PORTFOLIO_LEDGER_VERSION:
         raise ValueError("Portfolio Evidence Ledger version changed")
@@ -137,20 +148,18 @@ def build_predicate(env: dict[str, str], signal_field_dir: Path, portfolio_ledge
     repository = required_env("GITHUB_REPOSITORY", env)
     revision = required_env("GITHUB_SHA", env)
     workflow_ref = required_env("GITHUB_WORKFLOW_REF", env)
-    run_id = required_env("GITHUB_RUN_ID", env)
-    attempt = required_env("GITHUB_RUN_ATTEMPT", env)
+    run_id = positive_decimal("GITHUB_RUN_ID", required_env("GITHUB_RUN_ID", env))
+    attempt = positive_decimal("GITHUB_RUN_ATTEMPT", required_env("GITHUB_RUN_ATTEMPT", env))
     server = required_env("GITHUB_SERVER_URL", env).rstrip("/")
 
     if repository != REPOSITORY:
         raise ValueError(f"unexpected attestation repository: {repository!r}")
     if not SHA40.fullmatch(revision):
         raise ValueError("GITHUB_SHA must be one lowercase 40-character git SHA")
-    if not DIGITS.fullmatch(run_id) or not DIGITS.fullmatch(attempt):
-        raise ValueError("workflow run id and attempt must be positive decimal strings")
     if server != "https://github.com":
         raise ValueError(f"unexpected GitHub server URL: {server!r}")
-    if ".github/workflows/profile-stats.yml@" not in workflow_ref:
-        raise ValueError("attestation must originate from profile-stats.yml")
+    if workflow_ref != WORKFLOW_REF:
+        raise ValueError(f"attestation must originate from exact production workflow ref: {WORKFLOW_REF}")
 
     return {
         "schemaVersion": SCHEMA_VERSION,
@@ -187,6 +196,19 @@ def validate_predicate(predicate: dict[str, object]) -> None:
     revision = predicate.get("sourceRevision")
     if not isinstance(revision, str) or not SHA40.fullmatch(revision):
         raise ValueError("sourceRevision is malformed")
+    if predicate.get("workflowRef") != WORKFLOW_REF:
+        raise ValueError("workflowRef changed from exact production workflow identity")
+    run = predicate.get("run")
+    if not isinstance(run, dict):
+        raise ValueError("run identity block is missing")
+    run_id = run.get("id")
+    attempt = run.get("attempt")
+    if not isinstance(run_id, str) or not isinstance(attempt, str):
+        raise ValueError("run id/attempt identity is malformed")
+    positive_decimal("run.id", run_id)
+    positive_decimal("run.attempt", attempt)
+    if run.get("url") != f"https://github.com/{REPOSITORY}/actions/runs/{run_id}":
+        raise ValueError("run URL changed from canonical GitHub Actions identity")
     if predicate.get("predicateSchema") != predicate_schema_identity():
         raise ValueError("predicate schema identity changed")
 
@@ -246,11 +268,21 @@ def fixture_env() -> dict[str, str]:
     return {
         "GITHUB_REPOSITORY": REPOSITORY,
         "GITHUB_SHA": "a" * 40,
-        "GITHUB_WORKFLOW_REF": f"{REPOSITORY}/.github/workflows/profile-stats.yml@refs/heads/main",
+        "GITHUB_WORKFLOW_REF": WORKFLOW_REF,
         "GITHUB_RUN_ID": "123456789",
         "GITHUB_RUN_ATTEMPT": "1",
         "GITHUB_SERVER_URL": "https://github.com",
     }
+
+
+def expect_build_failure(env: dict[str, str], signal_dir: Path, ledger_dir: Path, expected: str) -> None:
+    try:
+        build_predicate(env, signal_dir, ledger_dir)
+    except ValueError as exc:
+        if expected not in str(exc):
+            raise AssertionError(f"attestation builder self-test failed for wrong reason: {exc}") from exc
+    else:
+        raise AssertionError(f"attestation builder self-test accepted unsafe identity/input: {expected}")
 
 
 def self_test() -> None:
@@ -268,7 +300,8 @@ def self_test() -> None:
                 f'data-evidence-digest="sha256:{"a" * 64}"></svg>',
                 encoding="utf-8",
             )
-        (ledger_dir / "portfolio-evidence-ledger.json").write_text(
+        ledger_path = ledger_dir / "portfolio-evidence-ledger.json"
+        ledger_path.write_text(
             json.dumps(
                 {
                     "version": PORTFOLIO_LEDGER_VERSION,
@@ -299,9 +332,36 @@ def self_test() -> None:
             "boundary": BOUNDARY,
         }:
             raise AssertionError("predicate validation inventory did not derive from canonical boundary contract")
+
+        forged_env = fixture_env()
+        forged_env["GITHUB_WORKFLOW_REF"] = f"evil/{WORKFLOW_REF}/suffix"
+        expect_build_failure(forged_env, signal_dir, ledger_dir, "exact production workflow ref")
+        zero_env = fixture_env()
+        zero_env["GITHUB_RUN_ATTEMPT"] = "0"
+        expect_build_failure(zero_env, signal_dir, ledger_dir, "canonical positive decimal")
+        padded_env = fixture_env()
+        padded_env["GITHUB_RUN_ID"] = "0123"
+        expect_build_failure(padded_env, signal_dir, ledger_dir, "canonical positive decimal")
+
+        signal_leaf = signal_dir / SIGNAL_FIELD_FILENAMES[0]
+        signal_bytes = signal_leaf.read_bytes()
+        external_signal = root / "external-signal.svg"
+        external_signal.write_bytes(signal_bytes)
+        signal_leaf.unlink()
+        signal_leaf.symlink_to(external_signal)
+        expect_build_failure(fixture_env(), signal_dir, ledger_dir, "real regular file")
+        signal_leaf.unlink()
+        signal_leaf.write_bytes(signal_bytes)
+
+        ledger_bytes = ledger_path.read_bytes()
+        external_ledger = root / "external-ledger.json"
+        external_ledger.write_bytes(ledger_bytes)
+        ledger_path.unlink()
+        ledger_path.symlink_to(external_ledger)
+        expect_build_failure(fixture_env(), signal_dir, ledger_dir, "real regular file")
     print(
-        "Profile evidence attestation predicate v3 self-test passed: immutable schema + canonical validation boundary + "
-        "Signal Field + three Spotlights + Portfolio Evidence Ledger v2 with result/binding/freshness semantics"
+        "Profile evidence attestation predicate v3 self-test passed: exact workflow/run identity + real evidence inputs + "
+        "immutable schema + canonical validation boundary + Signal Field + Portfolio Evidence Ledger v2"
     )
 
 
