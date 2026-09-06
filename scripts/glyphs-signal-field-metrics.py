@@ -22,6 +22,7 @@ EXPECTED_FILES = (
 METRICS = ("stars", "pull_requests", "issues")
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
+COMPACT_VIEWBOXES = {"0 0 320 500", "0 0 320 528"}
 
 
 def attrs_of(tag: str) -> dict[str, str]:
@@ -82,7 +83,7 @@ def layout_of(root_tag: str) -> str:
     view_box = attrs_of(root_tag).get("viewBox")
     if view_box == "0 0 640 425":
         return "wide"
-    if view_box == "0 0 320 500":
+    if view_box in COMPACT_VIEWBOXES:
         return "compact"
     raise ValueError(f"unexpected Signal Field viewBox: {view_box!r}")
 
@@ -153,6 +154,16 @@ def add_glyphs(text: str) -> str:
     return text
 
 
+def compact_fixture(view_box: str) -> str:
+    return (
+        f'<svg viewBox="{view_box}" data-metric-labels="signal-field-v2.10">'
+        '<text x="66" y="206" text-anchor="middle" fill="#C96BFF" font-size="22" data-metric-phosphor="stars">14</text>'
+        '<text x="160" y="206" text-anchor="middle" fill="#8C7CFF" font-size="22" data-metric-phosphor="pull_requests">475</text>'
+        '<text x="254" y="206" text-anchor="middle" fill="#28D7FF" font-size="22" data-metric-phosphor="issues">33</text>'
+        '<text>BUGS FOUND</text></svg>'
+    )
+
+
 def self_test() -> None:
     fixtures = {
         "wide": (
@@ -162,13 +173,8 @@ def self_test() -> None:
             '<text x="610" y="108" text-anchor="end" fill="#28D7FF" font-size="26" data-metric-phosphor="issues">33</text>'
             '<text>BUGS FOUND</text></svg>'
         ),
-        "compact": (
-            '<svg viewBox="0 0 320 500" data-metric-labels="signal-field-v2.10">'
-            '<text x="66" y="206" text-anchor="middle" fill="#C96BFF" font-size="22" data-metric-phosphor="stars">14</text>'
-            '<text x="160" y="206" text-anchor="middle" fill="#8C7CFF" font-size="22" data-metric-phosphor="pull_requests">475</text>'
-            '<text x="254" y="206" text-anchor="middle" fill="#28D7FF" font-size="22" data-metric-phosphor="issues">33</text>'
-            '<text>BUGS FOUND</text></svg>'
-        ),
+        "compact-5-row": compact_fixture("0 0 320 500"),
+        "compact-6-row": compact_fixture("0 0 320 528"),
     }
     for layout, fixture in fixtures.items():
         transformed = add_glyphs(fixture)
