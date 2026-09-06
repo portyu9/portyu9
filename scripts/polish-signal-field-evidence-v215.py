@@ -5,11 +5,13 @@ This pass changes presentation only. It preserves measured counts, contribution 
 30-day membership, Evidence ID/digest, metric values, and source provenance while:
 - encoding leading calendar context with an outline instead of opacity,
 - restoring maximum-contrast month markers,
-- simplifying the latest-day state to one cyan outer ring,
+- simplifying the latest-day state to one outer ring,
 - replacing implementation wording DIM CONTEXT with LEADING CONTEXT, and
 - relabeling the authored-public GitHub Issues metric as ISSUES AUTHORED.
 
 The transform is idempotent and fails closed on unexpected final-artifact structure.
+The read-only validation path also recognizes the reviewed profile-refresh-v2 successor,
+which changes only the latest/current-day outer ring to fixed phosphorescent red.
 """
 from __future__ import annotations
 
@@ -19,6 +21,10 @@ import sys
 
 VERSION = "signal-field-v2.15"
 PREVIOUS = "signal-field-v2.14"
+FINAL_REFRESH = "profile-refresh-v2"
+FINAL_CURRENT_DAY = "phosphorescent-red-v1"
+FINAL_LATEST_COLOR = "#FF335F"
+FINAL_LATEST_OPACITY = "0.96"
 EXPECTED_FILES = tuple(
     f"signal-field-{layout}-{theme}.svg"
     for layout in ("wide", "compact")
@@ -273,7 +279,19 @@ def validate(text: str, path: Path) -> None:
     oa = attrs_of(outline.group("tag"))
     if la.get("stroke") != "none" or la.get("stroke-width") != "0":
         raise ValueError("latest-day tile must not retain a second keyline")
-    if oa.get("stroke") != THEMES[scheme_for(path)]["latest"] or oa.get("stroke-width") != "1.4" or oa.get("opacity") != "0.92":
+
+    refresh = attrs.get("data-generation-cadence-contract")
+    if refresh == FINAL_REFRESH:
+        if attrs.get("data-current-day-highlight") != FINAL_CURRENT_DAY:
+            raise ValueError("profile-refresh-v2 current-day highlight provenance is missing")
+        expected_latest = FINAL_LATEST_COLOR
+        expected_opacity = FINAL_LATEST_OPACITY
+    else:
+        if attrs.get("data-current-day-highlight"):
+            raise ValueError("current-day successor provenance exists without profile-refresh-v2")
+        expected_latest = THEMES[scheme_for(path)]["latest"]
+        expected_opacity = "0.92"
+    if oa.get("stroke") != expected_latest or oa.get("stroke-width") != "1.4" or oa.get("opacity") != expected_opacity:
         raise ValueError("latest-day outer ring changed")
 
     if text.count(">ISSUES AUTHORED</text>") != 1 or ">BUGS FOUND</text>" in text:
@@ -309,6 +327,18 @@ def self_test() -> None:
             validate(transformed, filename)
             if transform(transformed, filename) != transformed:
                 raise AssertionError("v2.15 transform must be idempotent")
+
+            successor_root = SVG_OPEN.search(transformed)
+            assert successor_root is not None
+            successor_tag = set_attr(successor_root.group(0), "data-generation-cadence-contract", FINAL_REFRESH)
+            successor_tag = set_attr(successor_tag, "data-current-day-highlight", FINAL_CURRENT_DAY)
+            successor = transformed[:successor_root.start()] + successor_tag + transformed[successor_root.end():]
+            successor_outline = LATEST_OUTLINE.search(successor)
+            assert successor_outline is not None
+            outline_tag = set_attr(successor_outline.group("tag"), "stroke", FINAL_LATEST_COLOR)
+            outline_tag = set_attr(outline_tag, "opacity", FINAL_LATEST_OPACITY)
+            successor = successor[:successor_outline.start()] + outline_tag + successor[successor_outline.end():]
+            validate(successor, filename)
     print("Signal Field v2.15 evidence-presentation self-test passed")
 
 
@@ -330,8 +360,7 @@ def main() -> int:
             raise ValueError("usage: polish-signal-field-evidence-v215.py <generated-directory> | --self-test")
         apply(Path(sys.argv[1])); return 0
     except (OSError, ValueError, AssertionError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
+        print(f"ERROR: {exc}", file=sys.stderr); return 1
 
 
 if __name__ == "__main__":
