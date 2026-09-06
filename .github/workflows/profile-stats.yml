@@ -33,6 +33,7 @@ env:
 
 jobs:
   generate:
+    if: github.ref == 'refs/heads/main'
     name: generate-read-only
     runs-on: ubuntu-24.04
     timeout-minutes: 12
