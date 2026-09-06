@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="620" height="190" viewBox="0 0 620 190" role="img" aria-labelledby="title desc" data-system-card="selected-engineering-systems-v4" data-theme="light" data-glyph="control-diamond" data-topology="policy-gate-mesh">
   <title id="title">AI QA Control Plane</title>
-  <desc id="desc">Permanent flagship engineering system. Bounded AI reasoning · deterministic policy authority. The card is a portfolio summary; workflow badges beneath it remain the scoped live evidence signals.</desc>
+  <desc id="desc">Permanent flagship engineering system. Bounded AI reasoning · deterministic policy authority. This card summarizes my portfolio; workflow badges beneath it remain scoped live evidence signals.</desc>
   <defs><linearGradient id="edge" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#168F00"/><stop offset="0.55" stop-color="#20C900"/><stop offset="1" stop-color="#0086A8"/></linearGradient><linearGradient id="wash" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#39FF14" stop-opacity=".055"/><stop offset=".56" stop-color="#20C900" stop-opacity=".022"/><stop offset="1" stop-color="#28D7FF" stop-opacity=".042"/></linearGradient></defs>
   <rect x="1" y="1" width="618" height="188" rx="16" fill="#FFFFFF" stroke="#D0D7DE"/><rect x="2" y="2" width="616" height="186" rx="15" fill="url(#wash)"/>
   <path d="M452 28h34l14 14h28l14-14h50" fill="none" stroke="#168F00" stroke-opacity=".16" stroke-linecap="round" stroke-linejoin="round"/>
