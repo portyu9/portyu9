@@ -14,54 +14,42 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 MANIFEST = SCRIPTS / "signal-field-pipeline-v2.json"
+HISTORICAL_MANIFEST = SCRIPTS / "signal-field-pipeline-v1.json"
 PIPELINE_VERSION = "signal-field-pipeline-v2"
-EXPECTED_STAGE_IDS = (
-    "customize-v2",
-    "polish-v2.1",
-    "evidence-v2.2",
-    "background-v2.3",
-    "portal-v2.4",
-    "layout-v2.5",
-    "metrics-v2.6",
-    "activity-v2.7",
-    "lines-v2.8",
-    "profile-total-v2.9",
-    "labels-v2.10",
-    "glyphs-v2.11",
-    "balance-v2.12",
-    "clarity-v2.13",
-    "validate-v2.13",
-    "identity-v2.14",
-    "presentation-v2.15",
-    "issues-balance-v2.16",
-    "validate-v2.14-plus-presentation",
-    "refresh-and-wide-v2.18",
-    "validate-publishable",
+TERMINAL_CONTRACT = "signal-field-v2.18+signal-field-v2.19-compact-eid+profile-refresh-v2"
+
+# id, contract, script, kind, self_test, required_predecessor, responsive_scope
+EXPECTED_STAGE_AUTHORITY = (
+    ("customize-v2", "yunior-portal-neon-v2", "customize-signal-field.py", "transform", True, None, "wide+compact"),
+    ("polish-v2.1", "signal-field-v2.1", "polish-signal-field-v2.py", "transform", True, "customize-v2", "wide+compact"),
+    ("evidence-v2.2", "signal-field-v2.2", "enhance-signal-field-v2.py", "transform", True, "polish-v2.1", "wide+compact"),
+    ("background-v2.3", "signal-field-v2.3", "background-signal-field-v2.py", "transform", True, "evidence-v2.2", "wide+compact"),
+    ("portal-v2.4", "signal-field-v2.4", "portal-signal-field-v2.py", "transform", True, "background-v2.3", "wide+compact"),
+    ("layout-v2.5", "signal-field-v2.5", "align-signal-field-v2.py", "transform", True, "portal-v2.4", "wide+compact"),
+    ("metrics-v2.6", "signal-field-v2.6", "phosphor-signal-field-v2.py", "transform", True, "layout-v2.5", "wide+compact"),
+    ("activity-v2.7", "signal-field-v2.7", "phosphor-activity-signal-field-v2.py", "transform", True, "metrics-v2.6", "wide+compact"),
+    ("lines-v2.8", "signal-field-v2.8", "phosphor-lines-signal-field-v2.py", "transform", True, "activity-v2.7", "wide+compact"),
+    ("profile-total-v2.9", "signal-field-v2.9", "sync-profile-contribution-total.py", "transform", True, "lines-v2.8", "wide+compact"),
+    ("labels-v2.10", "signal-field-v2.10", "relabel-signal-field-metrics.py", "transform", True, "profile-total-v2.9", "wide+compact"),
+    ("glyphs-v2.11", "signal-field-v2.11", "glyphs-signal-field-metrics.py", "transform", True, "labels-v2.10", "wide+compact"),
+    ("balance-v2.12", "signal-field-v2.12", "balance-signal-field-secondary-metrics.py", "transform", True, "glyphs-v2.11", "wide+compact"),
+    ("clarity-v2.13", "signal-field-v2.13", "clarify-signal-field-evidence-window.py", "transform", True, "balance-v2.12", "wide+compact"),
+    ("validate-v2.13", "signal-field-v2.13", "validate-signal-field-v213.py", "validate", False, "clarity-v2.13", "wide+compact"),
+    ("identity-v2.14", "signal-field-v2.14", "identify-signal-field-evidence.py", "transform", False, "validate-v2.13", "wide+compact"),
+    ("presentation-v2.15", "signal-field-v2.15", "polish-signal-field-evidence-v215.py", "transform", True, "identity-v2.14", "wide+compact"),
+    ("issues-balance-v2.16", "signal-field-v2.16", "balance-signal-field-issues-label.py", "transform", True, "presentation-v2.15", "wide+compact"),
+    ("validate-v2.14-plus-presentation", "signal-field-v2.14+v2.15+v2.16", "validate-signal-field-v214.py", "validate", True, "issues-balance-v2.16", "wide+compact"),
+    ("refresh-and-wide-v2.18", "profile-refresh-v2+signal-field-v2.18+signal-field-v2.19-compact-eid", "set-signal-field-refresh-cadence.py", "transform", True, "validate-v2.14-plus-presentation", "wide+compact-with-desktop-finalizer"),
+    ("validate-publishable", "publishable-signal-field", "validate-generated-signal-field.py", "validate", False, "refresh-and-wide-v2.18", "wide+compact"),
 )
-EXPECTED_SELF_TEST_IDS = (
-    "customize-v2",
-    "polish-v2.1",
-    "evidence-v2.2",
-    "background-v2.3",
-    "portal-v2.4",
-    "layout-v2.5",
-    "metrics-v2.6",
-    "activity-v2.7",
-    "lines-v2.8",
-    "profile-total-v2.9",
-    "labels-v2.10",
-    "glyphs-v2.11",
-    "balance-v2.12",
-    "clarity-v2.13",
-    "presentation-v2.15",
-    "issues-balance-v2.16",
-    "validate-v2.14-plus-presentation",
-    "refresh-and-wide-v2.18",
-)
+EXPECTED_STAGE_IDS = tuple(stage[0] for stage in EXPECTED_STAGE_AUTHORITY)
+EXPECTED_SELF_TEST_IDS = tuple(stage[0] for stage in EXPECTED_STAGE_AUTHORITY if stage[4])
+STAGE_KEYS = {"id", "contract", "script", "kind", "self_test", "required_predecessor", "responsive_scope"}
 ALLOWED_KINDS = {"transform", "validate"}
 ALLOWED_SCOPES = {"wide+compact", "wide+compact-with-desktop-finalizer"}
 
@@ -71,51 +59,65 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def load_manifest() -> dict[str, object]:
-    require((SCRIPTS / "signal-field-pipeline-v1.json").is_file(), "historical pipeline v1 manifest must remain present")
-    require(MANIFEST.is_file(), f"pipeline manifest is missing: {MANIFEST.relative_to(ROOT)}")
-    data = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    require(isinstance(data, dict), "pipeline manifest root must be an object")
-    require(data.get("version") == PIPELINE_VERSION, "Signal Field pipeline version changed")
-    require(
-        data.get("terminal_contract") == "signal-field-v2.18+signal-field-v2.19-compact-eid+profile-refresh-v2",
-        "pipeline terminal contract changed",
+def require_real_script(path: Path, label: str) -> None:
+    require(not path.is_symlink(), f"{label} must not be a symlink: {path.relative_to(ROOT)}")
+    require(path.is_file(), f"{label} is missing: {path.relative_to(ROOT)}")
+    require(path.resolve().parent == SCRIPTS.resolve(), f"{label} escaped the scripts directory: {path}")
+
+
+def stage_authority(stage: dict[str, Any]) -> tuple[object, ...]:
+    return (
+        stage.get("id"),
+        stage.get("contract"),
+        stage.get("script"),
+        stage.get("kind"),
+        stage.get("self_test"),
+        stage.get("required_predecessor"),
+        stage.get("responsive_scope"),
     )
+
+
+def validate_manifest(data: dict[str, Any]) -> dict[str, Any]:
+    require(set(data) == {"version", "description", "terminal_contract", "stages"}, "pipeline manifest keys changed")
+    require(data.get("version") == PIPELINE_VERSION, "Signal Field pipeline version changed")
+    require(isinstance(data.get("description"), str) and data["description"], "pipeline description is missing")
+    require(data.get("terminal_contract") == TERMINAL_CONTRACT, "pipeline terminal contract changed")
     stages = data.get("stages")
     require(isinstance(stages, list), "pipeline stages must be an array")
-    require(tuple(stage.get("id") for stage in stages if isinstance(stage, dict)) == EXPECTED_STAGE_IDS, "Signal Field pipeline stage order changed")
+    require(len(stages) == len(EXPECTED_STAGE_AUTHORITY), "Signal Field pipeline stage count changed")
 
-    previous: str | None = None
-    seen_scripts: set[str] = set()
     self_test_ids: list[str] = []
-    for index, stage in enumerate(stages):
+    seen_scripts: set[str] = set()
+    for index, expected in enumerate(EXPECTED_STAGE_AUTHORITY):
+        stage = stages[index]
         require(isinstance(stage, dict), f"stage {index} must be an object")
-        stage_id = stage.get("id")
-        script = stage.get("script")
-        kind = stage.get("kind")
-        scope = stage.get("responsive_scope")
-        predecessor = stage.get("required_predecessor")
-        self_test_enabled = stage.get("self_test")
-        require(isinstance(stage_id, str) and stage_id, f"stage {index} id is invalid")
-        require(isinstance(stage.get("contract"), str) and stage.get("contract"), f"{stage_id}: contract is missing")
-        require(isinstance(script, str) and script.endswith(".py"), f"{stage_id}: script is invalid")
-        require(script not in seen_scripts, f"{stage_id}: script is duplicated in pipeline: {script}")
-        require((SCRIPTS / script).is_file(), f"{stage_id}: script is missing: {script}")
-        require(kind in ALLOWED_KINDS, f"{stage_id}: unsupported kind: {kind!r}")
-        require(scope in ALLOWED_SCOPES, f"{stage_id}: unsupported responsive scope: {scope!r}")
-        require(isinstance(self_test_enabled, bool), f"{stage_id}: self_test must be boolean")
-        require(predecessor == previous, f"{stage_id}: predecessor must be {previous!r}, got {predecessor!r}")
-        if self_test_enabled:
-            self_test_ids.append(stage_id)
-        seen_scripts.add(script)
-        previous = stage_id
-    require(tuple(self_test_ids) == EXPECTED_SELF_TEST_IDS, "Signal Field pipeline self-test coverage changed")
+        stage_id = expected[0]
+        require(set(stage) == STAGE_KEYS, f"{stage_id}: stage keys changed")
+        require(stage_authority(stage) == expected, f"{stage_id}: reviewed stage authority changed")
 
-    kinds = {str(stage["id"]): str(stage["kind"]) for stage in stages if isinstance(stage, dict)}
-    require(kinds["presentation-v2.15"] == "transform", "v2.15 presentation must remain an explicit transformer")
-    require(kinds["issues-balance-v2.16"] == "transform", "v2.16 issue balance must remain an explicit transformer")
-    require(kinds["validate-v2.14-plus-presentation"] == "validate", "final identity/presentation check must remain validation-only")
+        script = stage["script"]
+        assert isinstance(script, str)
+        require(Path(script).name == script, f"{stage_id}: script must be one scripts-directory basename")
+        require(script not in seen_scripts, f"{stage_id}: script is duplicated in pipeline: {script}")
+        require_real_script(SCRIPTS / script, f"{stage_id} executable")
+        require(stage["kind"] in ALLOWED_KINDS, f"{stage_id}: unsupported kind: {stage['kind']!r}")
+        require(stage["responsive_scope"] in ALLOWED_SCOPES, f"{stage_id}: unsupported responsive scope: {stage['responsive_scope']!r}")
+        if stage["self_test"]:
+            self_test_ids.append(str(stage_id))
+        seen_scripts.add(script)
+
+    require(tuple(stage["id"] for stage in stages) == EXPECTED_STAGE_IDS, "Signal Field pipeline stage order changed")
+    require(tuple(self_test_ids) == EXPECTED_SELF_TEST_IDS, "Signal Field pipeline self-test coverage changed")
+    require(stages[-1]["kind"] == "validate" and stages[-1]["id"] == "validate-publishable", "pipeline terminal validator changed")
     return data
+
+
+def load_manifest() -> dict[str, Any]:
+    require_real_script(HISTORICAL_MANIFEST, "historical pipeline v1 manifest")
+    require_real_script(MANIFEST, "pipeline v2 manifest")
+    data = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    require(isinstance(data, dict), "pipeline manifest root must be an object")
+    return validate_manifest(data)
 
 
 def manifest_digest() -> str:
@@ -146,13 +148,36 @@ def run_pipeline(directory: Path) -> None:
     print(f"Signal Field pipeline complete: {data['terminal_contract']}; manifest_sha256={manifest_digest()}")
 
 
+def expect_manifest_failure(payload: dict[str, Any], expected: str) -> None:
+    try:
+        validate_manifest(payload)
+    except ValueError as exc:
+        require(expected in str(exc), f"pipeline manifest self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("pipeline manifest self-test accepted unreviewed stage authority")
+
+
 def self_test() -> None:
     data = load_manifest()
     stages = data["stages"]
     assert isinstance(stages, list)
-    require(len(stages) == len(EXPECTED_STAGE_IDS), "pipeline stage count changed")
-    require(stages[-1]["kind"] == "validate", "pipeline must terminate in a validation stage")
-    require(stages[-1]["id"] == "validate-publishable", "pipeline terminal validator changed")
+
+    mutation = json.loads(json.dumps(data))
+    mutation["stages"][0]["script"] = "polish-signal-field-v2.py"
+    expect_manifest_failure(mutation, "reviewed stage authority changed")
+
+    mutation = json.loads(json.dumps(data))
+    mutation["stages"][18]["contract"] = "signal-field-v2.14"
+    expect_manifest_failure(mutation, "reviewed stage authority changed")
+
+    mutation = json.loads(json.dumps(data))
+    mutation["stages"][20]["self_test"] = True
+    expect_manifest_failure(mutation, "reviewed stage authority changed")
+
+    mutation = json.loads(json.dumps(data))
+    mutation["stages"][0]["unexpected"] = "value"
+    expect_manifest_failure(mutation, "stage keys changed")
+
     selected = [stage for stage in stages if isinstance(stage, dict) and stage["self_test"]]
     for index, stage in enumerate(selected, start=1):
         execute(
@@ -161,7 +186,7 @@ def self_test() -> None:
         )
     print(
         f"Signal Field pipeline contract passed: {PIPELINE_VERSION}; "
-        f"{len(stages)} ordered stages; {len(selected)} stage self-tests; "
+        f"{len(stages)} exact-authority ordered stages; {len(selected)} stage self-tests; "
         f"manifest_sha256={manifest_digest()}"
     )
 
@@ -189,7 +214,7 @@ def main() -> int:
         require(args.directory is not None, "usage: signal_field_pipeline.py <directory> | --self-test | --print-manifest-digest")
         run_pipeline(args.directory)
         return 0
-    except (OSError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
+    except (OSError, ValueError, TypeError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
