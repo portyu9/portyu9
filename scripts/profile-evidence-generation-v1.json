@@ -1,0 +1,41 @@
+{
+  "version": "profile-evidence-generation-v1",
+  "description": "Ordered authored generation pipeline after the reviewed upstream Signal Field Action has produced its candidate directory.",
+  "stages": [
+    {
+      "id": "signal-field-pipeline",
+      "script": "signal_field_pipeline.py",
+      "kind": "transform-validate",
+      "liveArgs": ["{signal_field_dir}"],
+      "offlineArgs": ["{signal_field_dir}"]
+    },
+    {
+      "id": "portfolio-ledger-generate",
+      "script": "generate-portfolio-evidence-ledger.py",
+      "kind": "generate",
+      "liveArgs": ["{portfolio_ledger_dir}", "--date", "{date}"],
+      "offlineArgs": ["{portfolio_ledger_dir}", "--date", "{date}", "--offline"]
+    },
+    {
+      "id": "portfolio-ledger-validate",
+      "script": "validate-portfolio-evidence-ledger.py",
+      "kind": "validate",
+      "liveArgs": ["{portfolio_ledger_dir}", "--require-live"],
+      "offlineArgs": ["{portfolio_ledger_dir}"]
+    },
+    {
+      "id": "engineering-spotlight-generate",
+      "script": "generate-engineering-spotlight.py",
+      "kind": "generate",
+      "liveArgs": ["{spotlight_dir}", "--ledger", "{portfolio_ledger_json}", "--date", "{date}"],
+      "offlineArgs": ["{spotlight_dir}", "--ledger", "{portfolio_ledger_json}", "--date", "{date}"]
+    },
+    {
+      "id": "engineering-spotlight-validate",
+      "script": "validate-engineering-spotlight.py",
+      "kind": "validate",
+      "liveArgs": ["{spotlight_dir}", "--ledger", "{portfolio_ledger_json}", "--require-live"],
+      "offlineArgs": ["{spotlight_dir}", "--ledger", "{portfolio_ledger_json}"]
+    }
+  ]
+}
