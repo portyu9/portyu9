@@ -18,6 +18,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import stat
 import string
 import subprocess
 import sys
@@ -28,14 +29,45 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 MANIFEST = SCRIPTS / "profile-evidence-generation-v1.json"
 VERSION = "profile-evidence-generation-v1"
-EXPECTED_STAGE_IDS = (
-    "signal-field-pipeline",
-    "portfolio-ledger-generate",
-    "portfolio-ledger-validate",
-    "engineering-spotlight-generate",
-    "engineering-spotlight-validate",
+EXPECTED_STAGE_CONTRACT = (
+    (
+        "signal-field-pipeline",
+        "signal_field_pipeline.py",
+        "transform-validate",
+        ("{signal_field_dir}",),
+        ("{signal_field_dir}",),
+    ),
+    (
+        "portfolio-ledger-generate",
+        "generate-portfolio-evidence-ledger.py",
+        "generate",
+        ("{portfolio_ledger_dir}", "--date", "{date}"),
+        ("{portfolio_ledger_dir}", "--date", "{date}", "--offline"),
+    ),
+    (
+        "portfolio-ledger-validate",
+        "validate-portfolio-evidence-ledger.py",
+        "validate",
+        ("{portfolio_ledger_dir}", "--require-live"),
+        ("{portfolio_ledger_dir}",),
+    ),
+    (
+        "engineering-spotlight-generate",
+        "generate-engineering-spotlight.py",
+        "generate",
+        ("{spotlight_dir}", "--ledger", "{portfolio_ledger_json}", "--date", "{date}"),
+        ("{spotlight_dir}", "--ledger", "{portfolio_ledger_json}", "--date", "{date}"),
+    ),
+    (
+        "engineering-spotlight-validate",
+        "validate-engineering-spotlight.py",
+        "validate",
+        ("{spotlight_dir}", "--ledger", "{portfolio_ledger_json}", "--require-live"),
+        ("{spotlight_dir}", "--ledger", "{portfolio_ledger_json}"),
+    ),
 )
-EXPECTED_KINDS = ("transform-validate", "generate", "validate", "generate", "validate")
+EXPECTED_STAGE_IDS = tuple(item[0] for item in EXPECTED_STAGE_CONTRACT)
+EXPECTED_KINDS = tuple(item[2] for item in EXPECTED_STAGE_CONTRACT)
 ALLOWED_PLACEHOLDERS = {
     "signal_field_dir",
     "portfolio_ledger_dir",
@@ -58,35 +90,54 @@ def placeholders(value: str) -> set[str]:
     return result
 
 
-def load_manifest() -> dict[str, Any]:
-    payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+def require_real_stage_script(script: str, stage_id: str) -> None:
+    path = SCRIPTS / script
+    require(path.exists() or path.is_symlink(), f"{stage_id}: generation script is missing: {script}")
+    require(path.absolute() == path.resolve(strict=True),
+            f"{stage_id}: generation script must not resolve through a symlink/traversal alias: {script}")
+    mode = path.lstat().st_mode
+    require(stat.S_ISREG(mode) and not path.is_symlink(),
+            f"{stage_id}: generation script must be a real regular repository file: {script}")
+
+
+def validate_manifest(payload: Any, *, verify_scripts: bool = True) -> dict[str, Any]:
+    require(isinstance(payload, dict), "generation manifest root must be an object")
     require(set(payload) == {"version", "description", "stages"}, "generation manifest keys changed")
     require(payload.get("version") == VERSION, "generation manifest version changed")
     require(isinstance(payload.get("description"), str) and payload["description"], "generation manifest description is missing")
     stages = payload.get("stages")
-    require(isinstance(stages, list) and len(stages) == len(EXPECTED_STAGE_IDS), "generation stage count changed")
+    require(isinstance(stages, list) and len(stages) == len(EXPECTED_STAGE_CONTRACT), "generation stage count changed")
     require(tuple(stage.get("id") for stage in stages if isinstance(stage, dict)) == EXPECTED_STAGE_IDS, "generation stage order changed")
 
-    for index, stage in enumerate(stages):
+    for index, (stage, expected) in enumerate(zip(stages, EXPECTED_STAGE_CONTRACT, strict=True)):
         require(isinstance(stage, dict), f"generation stage {index} is malformed")
         require(
             set(stage) == {"id", "script", "kind", "liveArgs", "offlineArgs"},
             f"generation stage keys changed: {stage.get('id')}",
         )
-        stage_id = stage["id"]
-        script = stage["script"]
-        require(stage.get("kind") == EXPECTED_KINDS[index], f"{stage_id}: generation stage kind changed")
-        require(isinstance(script, str) and script.endswith(".py"), f"{stage_id}: script name is invalid")
-        require((SCRIPTS / script).is_file(), f"{stage_id}: script is missing: {script}")
-        for mode_key in ("liveArgs", "offlineArgs"):
-            args = stage.get(mode_key)
-            require(isinstance(args, list) and args and all(isinstance(arg, str) and arg for arg in args), f"{stage_id}: {mode_key} is invalid")
+        expected_id, expected_script, expected_kind, expected_live, expected_offline = expected
+        stage_id = stage.get("id")
+        script = stage.get("script")
+        live_args = stage.get("liveArgs")
+        offline_args = stage.get("offlineArgs")
+        require(stage_id == expected_id, f"generation stage id changed at index {index}")
+        require(script == expected_script, f"{expected_id}: generation script authority changed: {script!r}")
+        require(stage.get("kind") == expected_kind, f"{expected_id}: generation stage kind changed")
+        require(isinstance(live_args, list) and tuple(live_args) == expected_live,
+                f"{expected_id}: liveArgs authority changed: {live_args!r}")
+        require(isinstance(offline_args, list) and tuple(offline_args) == expected_offline,
+                f"{expected_id}: offlineArgs authority changed: {offline_args!r}")
+        if verify_scripts:
+            require_real_stage_script(expected_script, expected_id)
+
+        for mode_key, args in (("liveArgs", live_args), ("offlineArgs", offline_args)):
+            require(all(isinstance(arg, str) and arg for arg in args), f"{expected_id}: {mode_key} is invalid")
             used = set().union(*(placeholders(arg) for arg in args))
-            require(used <= ALLOWED_PLACEHOLDERS, f"{stage_id}: unknown placeholder(s): {sorted(used - ALLOWED_PLACEHOLDERS)}")
+            require(used <= ALLOWED_PLACEHOLDERS, f"{expected_id}: unknown placeholder(s): {sorted(used - ALLOWED_PLACEHOLDERS)}")
             residual = "".join(args)
             for placeholder in ALLOWED_PLACEHOLDERS:
                 residual = residual.replace("{" + placeholder + "}", "")
-            require("{" not in residual and "}" not in residual, f"{stage_id}: malformed placeholder syntax")
+            require("{" not in residual and "}" not in residual, f"{expected_id}: malformed placeholder syntax")
 
     live = {stage["id"]: stage["liveArgs"] for stage in stages}
     offline = {stage["id"]: stage["offlineArgs"] for stage in stages}
@@ -97,6 +148,11 @@ def load_manifest() -> dict[str, Any]:
     require("--offline" in offline["portfolio-ledger-generate"], "offline generation must use synthetic Ledger evidence")
     require("--offline" not in live["portfolio-ledger-generate"], "live generation must not use synthetic Ledger evidence")
     return payload
+
+
+def load_manifest() -> dict[str, Any]:
+    payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    return validate_manifest(payload)
 
 
 def manifest_digest() -> str:
@@ -215,6 +271,15 @@ def expect_path_failure(callable_obj, expected: str) -> None:
         raise ValueError(f"path-safety self-test accepted unsafe output: {expected}")
 
 
+def expect_manifest_failure(payload: dict[str, Any], expected: str) -> None:
+    try:
+        validate_manifest(payload, verify_scripts=False)
+    except ValueError as exc:
+        require(expected in str(exc), f"generation-manifest self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"generation-manifest self-test accepted authority drift: {expected}")
+
+
 def self_test() -> None:
     payload = load_manifest()
     plan_live = command_plan(
@@ -237,6 +302,20 @@ def self_test() -> None:
     require("--require-live" in plan_live[2][2] and "--require-live" not in plan_offline[2][2], "Ledger validation mode separation changed")
     require("--require-live" in plan_live[4][2] and "--require-live" not in plan_offline[4][2], "Spotlight validation mode separation changed")
     require("2026-09-04" in plan_live[1][2] and "2026-09-04" in plan_live[3][2], "generation date is not bound across Ledger and Spotlight")
+
+    encoded = json.dumps(payload)
+    script_drift = json.loads(encoded)
+    script_drift["stages"][0]["script"] = "generate-engineering-spotlight.py"
+    expect_manifest_failure(script_drift, "generation script authority changed")
+    live_drift = json.loads(encoded)
+    live_drift["stages"][2]["liveArgs"] = ["{portfolio_ledger_dir}"]
+    expect_manifest_failure(live_drift, "liveArgs authority changed")
+    offline_drift = json.loads(encoded)
+    offline_drift["stages"][1]["offlineArgs"] = ["{portfolio_ledger_dir}", "--date", "{date}"]
+    expect_manifest_failure(offline_drift, "offlineArgs authority changed")
+    kind_drift = json.loads(encoded)
+    kind_drift["stages"][3]["kind"] = "validate"
+    expect_manifest_failure(kind_drift, "generation stage kind changed")
 
     with tempfile.TemporaryDirectory() as tmp:
         workspace = Path(tmp)
@@ -298,8 +377,9 @@ def self_test() -> None:
         require(not sentinel.exists(), "safe destructive reset did not remove stale output")
 
     print(
-        f"Profile evidence generation contract passed: {payload['version']} · {len(plan_live)} ordered authored stages · "
-        f"manifest_sha256={manifest_digest()} · live/offline policies separated · destructive outputs workspace-contained"
+        f"Profile evidence generation contract passed: {payload['version']} · {len(plan_live)} exact ordered authored stages · "
+        f"manifest_sha256={manifest_digest()} · script/args/kind authority-locked · live/offline policies separated · "
+        "destructive outputs workspace-contained"
     )
 
 
@@ -361,7 +441,7 @@ def main() -> int:
         for index, (stage_id, script, command_args) in enumerate(plan, start=1):
             print(f"[profile-evidence-generation {index:02d}/{len(plan):02d}] {stage_id}: {script.name}", flush=True)
             subprocess.run([sys.executable, str(script), *command_args], check=True)
-        print(f"Profile evidence generation complete: {VERSION} · {len(plan)} ordered authored stages · {mode}")
+        print(f"Profile evidence generation complete: {VERSION} · {len(plan)} exact ordered authored stages · {mode}")
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: profile evidence generation failed: {exc}", file=sys.stderr)
