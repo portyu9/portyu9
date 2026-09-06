@@ -162,12 +162,7 @@ jobs:
       - name: Revalidate attestation boundary
         run: |
           set -euo pipefail
-          python3 source/scripts/validate-signal-field-v213.py profile-stats/profile
-          python3 source/scripts/validate-signal-field-v214.py profile-stats/profile
-          python3 source/scripts/validate-generated-signal-field.py profile-stats/profile
-          python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence --require-live
-          python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight --require-live --ledger portfolio-evidence/portfolio-evidence-ledger.json
-          python3 source/scripts/validate-profile-evidence-subjects.py \
+          python3 source/scripts/validate-profile-evidence-boundary.py \
             --signal-field-dir profile-stats/profile \
             --spotlight-dir engineering-spotlight \
             --portfolio-ledger-dir portfolio-evidence
@@ -255,12 +250,7 @@ jobs:
       - name: Revalidate publish boundary
         run: |
           set -euo pipefail
-          python3 source/scripts/validate-signal-field-v213.py publish-input
-          python3 source/scripts/validate-signal-field-v214.py publish-input
-          python3 source/scripts/validate-generated-signal-field.py publish-input
-          python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input --require-live
-          python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input --ledger portfolio-ledger-publish-input/portfolio-evidence-ledger.json --require-live
-          python3 source/scripts/validate-profile-evidence-subjects.py \
+          python3 source/scripts/validate-profile-evidence-boundary.py \
             --signal-field-dir publish-input \
             --spotlight-dir spotlight-publish-input \
             --portfolio-ledger-dir portfolio-ledger-publish-input
