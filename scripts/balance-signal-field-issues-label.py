@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep the final BUG FOUND label at the same text scale as its peer metric labels."""
+"""Keep the final BUGS FOUND label at the same text scale as its peer metric labels."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -14,7 +14,7 @@ EXPECTED_FILES = tuple(
 )
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
-BUG_LABEL = re.compile(r'(?P<tag><text\b[^>]*>)BUG FOUND</text>', re.I)
+BUG_LABEL = re.compile(r'(?P<tag><text\b[^>]*>)BUGS FOUND</text>', re.I)
 
 
 def attrs_of(tag: str) -> dict[str, str]:
@@ -56,17 +56,17 @@ def transform(text: str, path: Path) -> str:
         raise ValueError("SVG root missing")
     attrs = attrs_of(root.group(0))
     if attrs.get("data-evidence-presentation") != "signal-field-v2.15":
-        raise ValueError("Signal Field v2.15 must precede BUG FOUND label balancing")
+        raise ValueError("Signal Field v2.15 must precede BUGS FOUND label balancing")
 
     labels = list(BUG_LABEL.finditer(text))
     if len(labels) != 1:
-        raise ValueError("expected exactly one BUG FOUND label")
-    if ">BUGS FOUND</text>" in text or ">ISSUES AUTHORED</text>" in text:
-        raise ValueError("stale Issues label reached BUG FOUND balancing")
+        raise ValueError("expected exactly one BUGS FOUND label")
+    if ">BUG FOUND</text>" in text or ">ISSUES AUTHORED</text>" in text:
+        raise ValueError("stale Issues label reached BUGS FOUND balancing")
 
     match = labels[0]
     tag = set_attr(match.group("tag"), "font-size", peer_label_size(text))
-    text = text[:match.start()] + tag + "BUG FOUND</text>" + text[match.end():]
+    text = text[:match.start()] + tag + "BUGS FOUND</text>" + text[match.end():]
 
     root = SVG_OPEN.search(text)
     assert root is not None
@@ -80,21 +80,21 @@ def transform(text: str, path: Path) -> str:
 def validate(text: str, path: Path) -> None:
     root = SVG_OPEN.search(text)
     if not root:
-        raise ValueError("SVG root missing after BUG FOUND label balance")
+        raise ValueError("SVG root missing after BUGS FOUND label balance")
     root_attrs = attrs_of(root.group(0))
     if root_attrs.get("data-issues-label-balance") != VERSION:
-        raise ValueError("BUG FOUND label-balance provenance missing")
+        raise ValueError("BUGS FOUND label-balance provenance missing")
     if root_attrs.get("data-issues-label-scale") != "peer-metric-label":
-        raise ValueError("BUG FOUND peer-label scale provenance missing")
+        raise ValueError("BUGS FOUND peer-label scale provenance missing")
 
     labels = list(BUG_LABEL.finditer(text))
     if len(labels) != 1:
-        raise ValueError("BUG FOUND label missing or duplicated")
+        raise ValueError("BUGS FOUND label missing or duplicated")
     expected = peer_label_size(text)
     actual = attrs_of(labels[0].group("tag")).get("font-size")
     if actual != expected:
-        raise ValueError(f"BUG FOUND label size {actual!r} does not match peer metric label size {expected!r}")
-    if ">BUGS FOUND</text>" in text or ">ISSUES AUTHORED</text>" in text:
+        raise ValueError(f"BUGS FOUND label size {actual!r} does not match peer metric label size {expected!r}")
+    if ">BUG FOUND</text>" in text or ">ISSUES AUTHORED</text>" in text:
         raise ValueError("stale Issues label returned")
 
 
@@ -106,7 +106,7 @@ def apply(directory: Path) -> None:
         text = path.read_text(encoding="utf-8")
         transformed = transform(text, path)
         path.write_text(transformed, encoding="utf-8")
-        print(f"balanced {filename}: BUG FOUND matches STARS / PULL REQUESTS label scale")
+        print(f"balanced {filename}: BUGS FOUND matches STARS / PULL REQUESTS label scale")
 
 
 def self_test() -> None:
@@ -118,15 +118,15 @@ def self_test() -> None:
                 '<svg data-evidence-presentation="signal-field-v2.15">'
                 f'<text font-size="{peer_size}">STARS</text>'
                 f'<text font-size="{peer_size}">PULL REQUESTS</text>'
-                '<text font-size="7">BUG FOUND</text></svg>'
+                '<text font-size="7">BUGS FOUND</text></svg>'
             )
             transformed = transform(text, path)
             validate(transformed, path)
             if attrs_of(BUG_LABEL.search(transformed).group("tag")).get("font-size") != peer_size:  # type: ignore[union-attr]
-                raise AssertionError("BUG FOUND label did not inherit peer metric label scale")
+                raise AssertionError("BUGS FOUND label did not inherit peer metric label scale")
             if transform(transformed, path) != transformed:
-                raise AssertionError("BUG FOUND label balancing must be idempotent")
-    print("Signal Field BUG FOUND peer-label scale self-test passed")
+                raise AssertionError("BUGS FOUND label balancing must be idempotent")
+    print("Signal Field BUGS FOUND peer-label scale self-test passed")
 
 
 def main() -> int:

@@ -105,6 +105,8 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    outputs:
+      changed: ${{ steps.delta.outputs.changed }}
 
     steps:
       - name: Checkout trusted source without credentials
@@ -188,6 +190,7 @@ jobs:
           show-summary: true
 
   publish:
+    if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
     name: publish-write-only
     needs: [generate, attest]
     runs-on: ubuntu-24.04
