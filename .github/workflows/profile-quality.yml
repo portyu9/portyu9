@@ -61,6 +61,9 @@ jobs:
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile-v4.py
 
+      - name: Validate unified engineering card geometry
+        run: python3 scripts/validate-engineering-card-geometry.py
+
       - name: Validate first-person profile voice
         run: python3 scripts/validate-first-person-profile-voice.py
 
@@ -168,6 +171,9 @@ jobs:
             --signal-field-dir "$READY_DIR" \
             --portfolio-ledger-dir integration-portfolio-evidence \
             --spotlight-dir integration-engineering-spotlight
+
+      - name: Validate generated engineering card geometry
+        run: python3 scripts/validate-engineering-card-geometry.py --spotlight-dir integration-engineering-spotlight
 
       - name: Upload Signal Field review artifacts
         if: github.event_name == 'pull_request'
