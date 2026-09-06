@@ -3,11 +3,12 @@
 
 This pass changes presentation only. It preserves measured counts, contribution levels,
 30-day membership, Evidence ID/digest, metric values, source provenance, and the
-BUG FOUND display alias for the authored-public GitHub Issues metric while:
+BUGS FOUND display wording for the authored-public GitHub Issues metric while:
 - encoding leading calendar context with an outline instead of opacity,
 - restoring maximum-contrast month markers,
-- simplifying the latest-day state to one outer ring, and
-- replacing implementation wording DIM CONTEXT with LEADING CONTEXT.
+- simplifying the latest-day state to one outer ring,
+- replacing implementation wording DIM CONTEXT with LEADING CONTEXT, and
+- pluralizing the BUG FOUND display copy without changing its evidence semantics.
 
 The transform is idempotent and fails closed on unexpected final-artifact structure.
 The read-only validation path also recognizes the reviewed profile-refresh-v2 successor,
@@ -49,7 +50,8 @@ LATEST_TILE = re.compile(
 LATEST_OUTLINE = re.compile(
     r'(?P<tag><rect\b(?=[^>]*\bdata-latest-outline="outer")[^>]*/>)', re.I
 )
-ISSUE_LABEL = re.compile(r'(?P<tag><text\b[^>]*>)BUG FOUND</text>', re.I)
+SINGULAR_ISSUE_LABEL = re.compile(r'(?P<tag><text\b[^>]*>)BUG FOUND</text>', re.I)
+PLURAL_ISSUE_LABEL = re.compile(r'(?P<tag><text\b[^>]*>)BUGS FOUND</text>', re.I)
 
 THEMES = {
     "dark": {
@@ -188,10 +190,16 @@ def clarify_copy(text: str) -> str:
     if OLD_DESC in text:
         text = text.replace(OLD_DESC, NEW_DESC, 1)
 
-    labels = list(ISSUE_LABEL.finditer(text))
-    if len(labels) != 1:
-        raise ValueError("expected exactly one BUG FOUND display label")
-    if ">BUGS FOUND</text>" in text or ">ISSUES AUTHORED</text>" in text:
+    singular = list(SINGULAR_ISSUE_LABEL.finditer(text))
+    plural = list(PLURAL_ISSUE_LABEL.finditer(text))
+    if len(singular) == 1 and not plural:
+        match = singular[0]
+        text = text[:match.start()] + match.group("tag") + "BUGS FOUND</text>" + text[match.end():]
+    elif not singular and len(plural) == 1:
+        pass
+    else:
+        raise ValueError("expected exactly one BUG FOUND/BUGS FOUND display label")
+    if ">ISSUES AUTHORED</text>" in text:
         raise ValueError("stale Issues display alias reached v2.15")
     return text
 
@@ -226,7 +234,7 @@ def validate(text: str, path: Path) -> None:
     if attrs.get("data-calendar-context-visual") != "outlined":
         raise ValueError("calendar context must be outline-encoded")
     if attrs.get("data-issues-display-alias") != "bug-found":
-        raise ValueError("Issues display alias must remain BUG FOUND")
+        raise ValueError("Issues display alias provenance changed")
     if not re.fullmatch(r"SF1-[0-9A-F]{16}", attrs.get("data-evidence-id", "")):
         raise ValueError("Evidence ID changed or disappeared")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", attrs.get("data-evidence-digest", "")):
@@ -289,10 +297,10 @@ def validate(text: str, path: Path) -> None:
     if oa.get("stroke") != expected_latest or oa.get("stroke-width") != "1.4" or oa.get("opacity") != expected_opacity:
         raise ValueError("latest-day outer ring changed")
 
-    if text.count(">BUG FOUND</text>") != 1:
-        raise ValueError("BUG FOUND label contract changed")
-    if ">BUGS FOUND</text>" in text or ">ISSUES AUTHORED</text>" in text:
-        raise ValueError("stale Issues display alias returned")
+    if text.count(">BUGS FOUND</text>") != 1:
+        raise ValueError("BUGS FOUND label contract changed")
+    if ">BUG FOUND</text>" in text or ">ISSUES AUTHORED</text>" in text:
+        raise ValueError("stale Issues display copy returned")
     if layout_for(path) == "wide":
         if text.count(NEW_FOOTER) != 1 or OLD_FOOTER in text:
             raise ValueError("wide leading-context footer wording changed")
@@ -346,7 +354,7 @@ def apply(directory: Path) -> None:
             raise ValueError(f"missing generated Signal Field artifact: {filename}")
         transformed = transform(path.read_text(encoding="utf-8"), path)
         path.write_text(transformed, encoding="utf-8")
-        print(f"polished {filename}: outlined context, bright months, single latest ring, BUG FOUND label")
+        print(f"polished {filename}: outlined context, bright months, single latest ring, BUGS FOUND label")
 
 
 def main() -> int:

@@ -77,7 +77,7 @@ FORBIDDEN = (
     "Generation schedule: every 30 minutes; execution and README cache propagation are best-effort.",
     ">ISSUES</text>",
     ">ISSUES AUTHORED</text>",
-    ">BUGS FOUND</text>",
+    ">BUG FOUND</text>",
     "DIM CONTEXT",
 )
 
@@ -151,8 +151,8 @@ def validate_file(path: Path) -> None:
     accessible_issues = DESC_ISSUES.findall(text)
     if len(issue_value) != 1 or len(accessible_issues) != 1 or issue_value[0] != accessible_issues[0]:
         fail(f"{path.name}: authored public GitHub Issues metric/source contract changed")
-    if text.count(">BUG FOUND</text>") != 1:
-        fail(f"{path.name}: visible BUG FOUND metric label is missing or duplicated")
+    if text.count(">BUGS FOUND</text>") != 1:
+        fail(f"{path.name}: visible BUGS FOUND metric label is missing or duplicated")
 
     measured = [attrs_of(m.group("tag")) for m in MEASURED.finditer(text)]
     context = [attrs_of(m.group("tag")) for m in CONTEXT.finditer(text)]
@@ -219,12 +219,12 @@ def validate_file(path: Path) -> None:
     star_label = tag_attrs_for_label(text, "STARS")
     pull_value = tag_attrs_for_metric(text, "pull_requests")
     pull_label = tag_attrs_for_label(text, "PULL REQUESTS")
-    bug_label = tag_attrs_for_label(text, "BUG FOUND")
+    bug_label = tag_attrs_for_label(text, "BUGS FOUND")
     expected_label_size = "12" if "wide" in path.name else "9"
     label_sizes = {star_label.get("font-size"), pull_label.get("font-size"), bug_label.get("font-size")}
     if label_sizes != {expected_label_size}:
         fail(
-            f"{path.name}: STARS / PULL REQUESTS / BUG FOUND label sizes must all equal "
+            f"{path.name}: STARS / PULL REQUESTS / BUGS FOUND label sizes must all equal "
             f"{expected_label_size}px, got {sorted(value for value in label_sizes if value is not None)}"
         )
 
@@ -290,7 +290,7 @@ def validate_directory(directory: Path) -> None:
     evidence_id, _ = next(iter(identities))
     print(
         "Final Signal Field validation passed: four responsive artifacts preserve one measured evidence set "
-        f"({evidence_id}), source-accurate authored-Issues semantics with a peer-scale BUG FOUND label, "
+        f"({evidence_id}), source-accurate authored-Issues semantics with a peer-scale BUGS FOUND label, "
         "outline-only leading context, maximum-contrast month markers, a phosphorescent-red current-day ring, "
         "balanced glyph geometry, and best-effort hourly refresh."
     )
