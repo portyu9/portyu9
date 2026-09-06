@@ -117,6 +117,12 @@ def compact_signal_field_version(version: str) -> str:
     return version.replace(".", "")
 
 
+def compact_signal_field_component(version: str) -> str:
+    compact = compact_signal_field_version(version)
+    require(compact.startswith("signal-field-"), f"unexpected compact Signal Field version: {compact}")
+    return compact.removeprefix("signal-field-")
+
+
 def derive_spotlight_token(spotlight_dir: Path, ledger_dir: Path) -> str:
     paths = require_exact_files(spotlight_dir, EXPECTED_SPOTLIGHT_FILES, "spotlight-*.svg")
     attrs = [attrs_of_svg(path) for path in paths]
@@ -185,7 +191,7 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
     )
     return (
         f"{compact_signal_field_version(wide_alignment)}-wide-"
-        f"{compact_signal_field_version(compact_eid)}-compact-eid-current-red-v1-{cadence}"
+        f"{compact_signal_field_component(compact_eid)}-compact-eid-current-red-v1-{cadence}"
     )
 
 
@@ -253,7 +259,7 @@ def self_test() -> None:
     require(
         (
             f"{compact_signal_field_version('signal-field-v2.18')}-wide-"
-            f"{compact_signal_field_version('signal-field-v2.19')}-compact-eid-current-red-v1-profile-refresh-v2"
+            f"{compact_signal_field_component('signal-field-v2.19')}-compact-eid-current-red-v1-profile-refresh-v2"
         )
         == SIGNAL_FIELD_TOKEN,
         "Signal Field cache-token derivation changed",
