@@ -4,7 +4,7 @@
 The README cache token is a contract identity, not a per-run evidence identity. Static
 validation keeps every mutable generated URL on one reviewed token per surface family.
 Optional candidate validation derives the expected token from the exact live candidate
-provenance that Profile Quality just generated, so a renderer/ledger/cadence contract
+provenance that Profile Quality just generated, so a renderer/ledger/refresh contract
 change cannot ship behind an older cache key.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 
 SPOTLIGHT_TOKEN = "engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"
-SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-alignment-profile-refresh-v1"
+SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-alignment-current-red-v1-profile-refresh-v2"
 
 STALE_SPOTLIGHT_TOKENS = (
     "engineering-spotlight-v21-three-slots-20260905",
@@ -31,6 +31,7 @@ STALE_SIGNAL_FIELD_TOKENS = (
     "signal-field-v214-evidence-id-20260905",
     "signal-field-v216-profile-refresh-v1",
     "signal-field-v217-wide-alignment-profile-refresh-v1",
+    "signal-field-v218-wide-alignment-profile-refresh-v1",
 )
 
 SPOTLIGHT = re.compile(
@@ -137,14 +138,16 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
     identity = one_value((item.get("data-evidence-identity", "") for item in attrs), "Signal Field evidence identity")
     presentation = one_value((item.get("data-evidence-presentation", "") for item in attrs), "Signal Field presentation")
     final_version = one_value((item.get("data-issues-label-balance", "") for item in attrs), "Signal Field v2.16 presentation")
-    cadence = one_value((item.get("data-generation-cadence-contract", "") for item in attrs), "Signal Field cadence contract")
+    cadence = one_value((item.get("data-generation-cadence-contract", "") for item in attrs), "Signal Field refresh contract")
     schedule = one_value((item.get("data-generation-schedule", "") for item in attrs), "Signal Field generation schedule")
+    current_day = one_value((item.get("data-current-day-highlight", "") for item in attrs), "Signal Field current-day highlight")
 
     require(identity == "signal-field-v2.14", f"candidate Signal Field evidence identity changed: {identity}")
     require(presentation == "signal-field-v2.15", f"candidate Signal Field evidence presentation changed: {presentation}")
     require(final_version == "signal-field-v2.16", f"candidate Signal Field v2.16 presentation changed: {final_version}")
-    require(schedule == "30-minutes", f"candidate Signal Field generation schedule changed: {schedule}")
-    require(re.fullmatch(r"profile-refresh-v\d+", cadence) is not None, f"unexpected Signal Field cadence contract: {cadence}")
+    require(schedule == "1-hour", f"candidate Signal Field generation schedule changed: {schedule}")
+    require(cadence == "profile-refresh-v2", f"unexpected Signal Field refresh contract: {cadence}")
+    require(current_day == "phosphorescent-red-v1", f"candidate current-day highlight changed: {current_day}")
 
     wide_attrs = [item for name, item in attrs_by_name.items() if "-wide-" in name]
     compact_attrs = [item for name, item in attrs_by_name.items() if "-compact-" in name]
@@ -158,7 +161,7 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
         all("data-wide-detail-alignment" not in item for item in compact_attrs),
         "desktop-only Signal Field alignment provenance leaked into compact artifacts",
     )
-    return f"{compact_signal_field_version(wide_alignment)}-wide-alignment-{cadence}"
+    return f"{compact_signal_field_version(wide_alignment)}-wide-alignment-current-red-v1-{cadence}"
 
 
 def readme_tokens() -> tuple[list[str], list[str], str]:
@@ -211,7 +214,7 @@ def self_test() -> None:
         "Spotlight cache-token derivation changed",
     )
     require(
-        f"{compact_signal_field_version('signal-field-v2.18')}-wide-alignment-profile-refresh-v1" == SIGNAL_FIELD_TOKEN,
+        f"{compact_signal_field_version('signal-field-v2.18')}-wide-alignment-current-red-v1-profile-refresh-v2" == SIGNAL_FIELD_TOKEN,
         "Signal Field cache-token derivation changed",
     )
 
