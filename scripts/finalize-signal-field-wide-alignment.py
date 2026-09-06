@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Finalize desktop Signal Field metric alignment without changing evidence semantics.
+"""Finalize responsive Signal Field detail alignment without changing evidence semantics.
 
-v2.18 keeps the v2.17 EID clearance, preserves Pull Requests byte-for-byte, and fixes
-the remaining Stars geometry by mirroring the already-reviewed Pull Requests layout:
+Desktop v2.18 keeps the reviewed EID/Stars alignment and preserves Pull Requests
+byte-for-byte. Compact v2.19 adds a presentation-only Evidence ID clearance rule:
 
-- the Stars rule still starts at x=284;
-- the star glyph is optically anchored to the rule start (same +6.25 center offset as
-  the Pull Requests glyph uses from its own rule start);
-- the Stars value and label are optically centered at x=320 to the right of that glyph;
-- the visible EID remains 8 SVG units above its v2.14 base geometry.
+- five-row compact calendars keep the v2.14 base EID baseline at y=463;
+- six-row compact calendars keep that same base geometry but apply translate(0 24),
+  moving the visible baseline to y=487 below the final 454–478 calendar row;
+- desktop geometry remains exactly the reviewed v2.18 layout;
+- Evidence ID text/value and semantic identity remain unchanged.
 
-Compact/mobile variants are validation-only and must remain untouched. Their reviewed
-height is 500 for five calendar rows or 528 for six calendar rows.
+The legacy filename is retained because it is the reviewed finalizer entrypoint used by
+set-signal-field-refresh-cadence.py.
 """
 from __future__ import annotations
 
@@ -20,12 +20,17 @@ from pathlib import Path
 import re
 import sys
 
-VERSION = "signal-field-v2.18"
-ROOT_ATTR = "data-wide-detail-alignment"
+WIDE_VERSION = "signal-field-v2.18"
+WIDE_ROOT_ATTR = "data-wide-detail-alignment"
+COMPACT_VERSION = "signal-field-v2.19"
+COMPACT_ROOT_ATTR = "data-compact-eid-layout"
 REFRESH_CONTRACT = "profile-refresh-v2"
 WIDE_FILES = ("signal-field-wide-light.svg", "signal-field-wide-dark.svg")
 COMPACT_FILES = ("signal-field-compact-light.svg", "signal-field-compact-dark.svg")
-COMPACT_VIEWBOXES = {"0 0 320 500", "0 0 320 528"}
+COMPACT_LAYOUTS = {
+    "0 0 320 500": ("5", "translate(0 0)"),
+    "0 0 320 528": ("6", "translate(0 24)"),
+}
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 STAR_LINE = re.compile(r'(?P<tag><path\b(?=[^>]*data-metric-phosphor-line="stars")[^>]*>)', re.I)
@@ -52,7 +57,7 @@ STAR_WRAPPER = (
     '<g data-wide-star-optical-alignment="true" '
     f'transform="{STAR_WRAPPER_TRANSFORM}">{{glyph}}</g>'
 )
-EID_TRANSFORM = "translate(0 -8)"
+WIDE_EID_TRANSFORM = "translate(0 -8)"
 
 
 def require(condition: bool, message: str) -> None:
@@ -95,7 +100,8 @@ def validate_wide(text: str, name: str) -> None:
     require(root_attrs.get("viewBox") == "0 0 640 425", f"{name}: wide viewBox changed")
     require(root_attrs.get("data-issues-label-balance") == "signal-field-v2.16", f"{name}: v2.16 must precede v2.18")
     require(root_attrs.get("data-generation-cadence-contract") == REFRESH_CONTRACT, f"{name}: refresh v2 finalizer must precede v2.18")
-    require(root_attrs.get(ROOT_ATTR) == VERSION, f"{name}: v2.18 provenance missing")
+    require(root_attrs.get(WIDE_ROOT_ATTR) == WIDE_VERSION, f"{name}: v2.18 provenance missing")
+    require(COMPACT_ROOT_ATTR not in root_attrs, f"{name}: compact-only provenance leaked into wide output")
 
     line = attrs_of(one(STAR_LINE, text, "Stars rule").group("tag"))
     require(line.get("d") == STAR_LINE_D, f"{name}: Stars rule start changed")
@@ -125,34 +131,50 @@ def validate_wide(text: str, name: str) -> None:
     eid_attrs = attrs_of(eid.group("tag"))
     require(eid_attrs.get("x") == "320" and eid_attrs.get("y") == "391", f"{name}: base EID geometry must stay compatible with v2.14")
     require(eid_attrs.get("text-anchor") == "middle", f"{name}: EID anchor changed")
-    require(eid_attrs.get("transform") == EID_TRANSFORM, f"{name}: EID must remain 8 units above its base position")
+    require(eid_attrs.get("transform") == WIDE_EID_TRANSFORM, f"{name}: EID must remain 8 units above its base position")
     require(eid_attrs.get("data-wide-eid-clearance") == "true", f"{name}: EID clearance provenance missing")
+    require("data-compact-eid-clearance" not in eid_attrs, f"{name}: compact EID provenance leaked into wide output")
+
+
+def compact_contract(root_attrs: dict[str, str], name: str) -> tuple[str, str]:
+    view_box = root_attrs.get("viewBox", "")
+    require(view_box in COMPACT_LAYOUTS, f"{name}: compact viewBox changed")
+    week_rows, transform = COMPACT_LAYOUTS[view_box]
+    require(root_attrs.get("data-activity-week-rows") == week_rows, f"{name}: compact viewBox/week-row contract diverged")
+    return week_rows, transform
 
 
 def validate_compact(text: str, name: str) -> None:
     root = one(SVG_OPEN, text, "SVG root")
-    attrs = attrs_of(root.group(0))
-    require(attrs.get("viewBox") in COMPACT_VIEWBOXES, f"{name}: compact viewBox changed")
-    require(ROOT_ATTR not in attrs, f"{name}: desktop-only provenance leaked into compact output")
+    root_attrs = attrs_of(root.group(0))
+    _, expected_transform = compact_contract(root_attrs, name)
+    require(WIDE_ROOT_ATTR not in root_attrs, f"{name}: desktop-only provenance leaked into compact output")
+    require(root_attrs.get(COMPACT_ROOT_ATTR) == COMPACT_VERSION, f"{name}: compact EID layout provenance missing")
     require('data-wide-star-optical-alignment="true"' not in text, f"{name}: desktop Stars wrapper leaked into compact output")
+
     eid = one(EID, text, "visible Evidence ID")
-    require("transform" not in attrs_of(eid.group("tag")), f"{name}: desktop EID transform leaked into compact output")
+    eid_attrs = attrs_of(eid.group("tag"))
+    require(eid_attrs.get("x") == "160" and eid_attrs.get("y") == "463", f"{name}: v2.14 compact EID base geometry changed")
+    require(eid_attrs.get("text-anchor") == "middle", f"{name}: compact EID anchor changed")
+    require(eid_attrs.get("transform") == expected_transform, f"{name}: compact EID clearance transform changed")
+    require(eid_attrs.get("data-compact-eid-clearance") == "true", f"{name}: compact EID clearance provenance missing")
+    require("data-wide-eid-clearance" not in eid_attrs, f"{name}: desktop EID provenance leaked into compact output")
 
 
 def transform_wide(text: str, name: str) -> str:
     root = one(SVG_OPEN, text, "SVG root")
     root_attrs = attrs_of(root.group(0))
-    if root_attrs.get(ROOT_ATTR) == VERSION:
+    if root_attrs.get(WIDE_ROOT_ATTR) == WIDE_VERSION:
         validate_wide(text, name)
         return text
-    require(ROOT_ATTR not in root_attrs, f"{name}: unexpected pre-existing desktop alignment provenance")
+    require(WIDE_ROOT_ATTR not in root_attrs, f"{name}: unexpected pre-existing desktop alignment provenance")
     require(root_attrs.get("viewBox") == "0 0 640 425", f"{name}: expected wide Signal Field")
     require(root_attrs.get("data-issues-label-balance") == "signal-field-v2.16", f"{name}: v2.16 must precede v2.18")
     require(root_attrs.get("data-generation-cadence-contract") == REFRESH_CONTRACT, f"{name}: refresh v2 finalizer must precede v2.18")
 
     before_pull = pull_signature(text)
 
-    root_tag = set_attr(root.group(0), ROOT_ATTR, VERSION)
+    root_tag = set_attr(root.group(0), WIDE_ROOT_ATTR, WIDE_VERSION)
     text = text[:root.start()] + root_tag + text[root.end():]
 
     glyph = one(STAR_GLYPH, text, "Stars glyph")
@@ -172,12 +194,39 @@ def transform_wide(text: str, name: str) -> str:
     text = text[:label.start("tag")] + label_tag + text[label.end("tag"):]
 
     eid = one(EID, text, "visible Evidence ID")
-    eid_tag = set_attr(eid.group("tag"), "transform", EID_TRANSFORM)
+    eid_tag = set_attr(eid.group("tag"), "transform", WIDE_EID_TRANSFORM)
     eid_tag = set_attr(eid_tag, "data-wide-eid-clearance", "true")
     text = text[:eid.start("tag")] + eid_tag + text[eid.end("tag"):]
 
     require(pull_signature(text) == before_pull, f"{name}: Pull Requests geometry changed; v2.18 must not touch it")
     validate_wide(text, name)
+    return text
+
+
+def transform_compact(text: str, name: str) -> str:
+    root = one(SVG_OPEN, text, "SVG root")
+    root_attrs = attrs_of(root.group(0))
+    _, expected_transform = compact_contract(root_attrs, name)
+    if root_attrs.get(COMPACT_ROOT_ATTR) == COMPACT_VERSION:
+        validate_compact(text, name)
+        return text
+    require(COMPACT_ROOT_ATTR not in root_attrs, f"{name}: unexpected pre-existing compact EID provenance")
+    require(WIDE_ROOT_ATTR not in root_attrs, f"{name}: desktop-only provenance leaked into compact input")
+    require(root_attrs.get("data-issues-label-balance") == "signal-field-v2.16", f"{name}: v2.16 must precede compact v2.19")
+    require(root_attrs.get("data-generation-cadence-contract") == REFRESH_CONTRACT, f"{name}: refresh v2 finalizer must precede compact v2.19")
+
+    root_tag = set_attr(root.group(0), COMPACT_ROOT_ATTR, COMPACT_VERSION)
+    text = text[:root.start()] + root_tag + text[root.end():]
+
+    eid = one(EID, text, "visible Evidence ID")
+    eid_attrs = attrs_of(eid.group("tag"))
+    require(eid_attrs.get("x") == "160" and eid_attrs.get("y") == "463", f"{name}: v2.14 compact EID base geometry changed")
+    require("transform" not in eid_attrs, f"{name}: unexpected pre-existing compact EID transform")
+    eid_tag = set_attr(eid.group("tag"), "transform", expected_transform)
+    eid_tag = set_attr(eid_tag, "data-compact-eid-clearance", "true")
+    text = text[:eid.start("tag")] + eid_tag + text[eid.end("tag"):]
+
+    validate_compact(text, name)
     return text
 
 
@@ -196,15 +245,23 @@ def self_test() -> None:
     require(transform_wide(transformed, "fixture-wide.svg") == transformed, "v2.18 wide transform must be idempotent")
     require(f'transform="{STAR_WRAPPER_TRANSFORM}"' in transformed, "self-test Stars rule-start alignment missing")
     require(f'x="{STAR_VALUE_X}"' in transformed and 'text-anchor="middle"' in transformed, "self-test Stars value alignment missing")
-    require('transform="translate(0 -8)"' in transformed, "self-test EID shift missing")
+    require('transform="translate(0 -8)"' in transformed, "self-test wide EID shift missing")
 
-    for view_box, eid_y in (("0 0 320 500", "463"), ("0 0 320 528", "491")):
+    for view_box, week_rows, expected_transform in (
+        ("0 0 320 500", "5", "translate(0 0)"),
+        ("0 0 320 528", "6", "translate(0 24)"),
+    ):
         compact = (
-            f'<svg viewBox="{view_box}"><text x="160" y="{eid_y}" text-anchor="middle" '
-            'data-signal-field-evidence-id="true">EID · SF1-0123456789ABCDEF</text></svg>'
+            f'<svg viewBox="{view_box}" data-activity-week-rows="{week_rows}" '
+            f'data-issues-label-balance="signal-field-v2.16" data-generation-cadence-contract="{REFRESH_CONTRACT}">'
+            '<text x="160" y="463" text-anchor="middle" data-signal-field-evidence-id="true">'
+            'EID · SF1-0123456789ABCDEF</text></svg>'
         )
-        validate_compact(compact, f"fixture-compact-{view_box.rsplit(' ', 1)[-1]}.svg")
-    print(f"Signal Field desktop alignment self-test passed: {VERSION}")
+        name = f"fixture-compact-{view_box.rsplit(' ', 1)[-1]}.svg"
+        compact_final = transform_compact(compact, name)
+        require(transform_compact(compact_final, name) == compact_final, "v2.19 compact transform must be idempotent")
+        require(f'transform="{expected_transform}"' in compact_final, f"{name}: compact EID self-test transform missing")
+    print(f"Signal Field responsive alignment self-test passed: wide={WIDE_VERSION}; compact={COMPACT_VERSION}")
 
 
 def apply(directory: Path, check_only: bool) -> None:
@@ -221,14 +278,18 @@ def apply(directory: Path, check_only: bool) -> None:
     for filename in COMPACT_FILES:
         path = directory / filename
         require(path.is_file() and path.stat().st_size > 0, f"missing generated Signal Field artifact: {filename}")
-        validate_compact(path.read_text(encoding="utf-8"), filename)
-        print(f"validated {filename}: compact bytes remain outside desktop alignment contract")
+        text = path.read_text(encoding="utf-8")
+        if check_only:
+            validate_compact(text, filename)
+        else:
+            path.write_text(transform_compact(text, filename), encoding="utf-8")
+        print(f"{'validated' if check_only else 'aligned'} {filename}: compact EID clearance contract")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("directory", nargs="?", type=Path)
-    parser.add_argument("--check", action="store_true", help="validate v2.18 without mutating candidate bytes")
+    parser.add_argument("--check", action="store_true", help="validate responsive detail alignment without mutating candidate bytes")
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
 

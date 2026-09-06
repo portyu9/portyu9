@@ -1,7 +1,7 @@
 {
   "version": "signal-field-pipeline-v2",
   "description": "Ordered dependency-free production pipeline with explicit mutation and read-only validation boundaries.",
-  "terminal_contract": "signal-field-v2.18+profile-refresh-v2",
+  "terminal_contract": "signal-field-v2.18+signal-field-v2.19-compact-eid+profile-refresh-v2",
   "stages": [
     {"id":"customize-v2","contract":"yunior-portal-neon-v2","script":"customize-signal-field.py","kind":"transform","self_test":true,"required_predecessor":null,"responsive_scope":"wide+compact"},
     {"id":"polish-v2.1","contract":"signal-field-v2.1","script":"polish-signal-field-v2.py","kind":"transform","self_test":true,"required_predecessor":"customize-v2","responsive_scope":"wide+compact"},
@@ -22,7 +22,7 @@
     {"id":"presentation-v2.15","contract":"signal-field-v2.15","script":"polish-signal-field-evidence-v215.py","kind":"transform","self_test":true,"required_predecessor":"identity-v2.14","responsive_scope":"wide+compact"},
     {"id":"issues-balance-v2.16","contract":"signal-field-v2.16","script":"balance-signal-field-issues-label.py","kind":"transform","self_test":true,"required_predecessor":"presentation-v2.15","responsive_scope":"wide+compact"},
     {"id":"validate-v2.14-plus-presentation","contract":"signal-field-v2.14+v2.15+v2.16","script":"validate-signal-field-v214.py","kind":"validate","self_test":true,"required_predecessor":"issues-balance-v2.16","responsive_scope":"wide+compact"},
-    {"id":"refresh-and-wide-v2.18","contract":"profile-refresh-v2+signal-field-v2.18","script":"set-signal-field-refresh-cadence.py","kind":"transform","self_test":true,"required_predecessor":"validate-v2.14-plus-presentation","responsive_scope":"wide+compact-with-desktop-finalizer"},
+    {"id":"refresh-and-wide-v2.18","contract":"profile-refresh-v2+signal-field-v2.18+signal-field-v2.19-compact-eid","script":"set-signal-field-refresh-cadence.py","kind":"transform","self_test":true,"required_predecessor":"validate-v2.14-plus-presentation","responsive_scope":"wide+compact-with-desktop-finalizer"},
     {"id":"validate-publishable","contract":"publishable-signal-field","script":"validate-generated-signal-field.py","kind":"validate","self_test":false,"required_predecessor":"refresh-and-wide-v2.18","responsive_scope":"wide+compact"}
   ]
 }

@@ -77,7 +77,10 @@ def load_manifest() -> dict[str, object]:
     data = json.loads(MANIFEST.read_text(encoding="utf-8"))
     require(isinstance(data, dict), "pipeline manifest root must be an object")
     require(data.get("version") == PIPELINE_VERSION, "Signal Field pipeline version changed")
-    require(data.get("terminal_contract") == "signal-field-v2.18+profile-refresh-v2", "pipeline terminal contract changed")
+    require(
+        data.get("terminal_contract") == "signal-field-v2.18+signal-field-v2.19-compact-eid+profile-refresh-v2",
+        "pipeline terminal contract changed",
+    )
     stages = data.get("stages")
     require(isinstance(stages, list), "pipeline stages must be an array")
     require(tuple(stage.get("id") for stage in stages if isinstance(stage, dict)) == EXPECTED_STAGE_IDS, "Signal Field pipeline stage order changed")
