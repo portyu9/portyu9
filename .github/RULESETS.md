@@ -15,13 +15,13 @@ GitHub branch rulesets are repository control-plane state, not ordinary source f
 - `analyze-actions`
 - `analyze-python`
 
-The pull-request rule intentionally keeps `required_approving_review_count: 0` for a solo-maintainer repository. It must require `required_review_thread_resolution: true` so an unresolved review conversation cannot be bypassed merely because no second approving reviewer is configured.
+The pull-request rule intentionally keeps `required_approving_review_count: 0` for my solo-maintainer repository. It must require `required_review_thread_resolution: true` so an unresolved review conversation cannot be bypassed merely because no second approving reviewer is configured.
 
-`dismiss_stale_reviews_on_push`, code-owner review, and last-push approval remain disabled because they do not add a meaningful independent reviewer in the current ownership model and can create an artificial self-approval deadlock.
+`dismiss_stale_reviews_on_push`, code-owner review, and last-push approval remain disabled because they do not add a meaningful independent reviewer in my current ownership model and can create an artificial self-approval deadlock.
 
 ## Protect generated
 
-`Protect generated` targets only `refs/heads/generated`, is active, has no bypass actors, and blocks deletion and non-fast-forward updates. It intentionally does not require pull requests or status checks because the reviewed `publish-write-only` job must be able to make normal fast-forward artifact commits after generation and attestation succeed.
+`Protect generated` targets only `refs/heads/generated`, is active, has no bypass actors, and blocks deletion and non-fast-forward updates. It intentionally does not require pull requests or status checks because my reviewed `publish-write-only` job must be able to make normal fast-forward artifact commits after generation and attestation succeed.
 
 ## Verification
 
@@ -33,4 +33,4 @@ The required live comparison covers the exact ruleset inventory, targets, enforc
 
 GitHub currently redacts `bypass_actors` from both the short-lived read-only Actions token and the unauthenticated public API view. The validator does not interpret that omission as an empty list. Empty bypass actors remain locked as desired state in the source contract and as a separate **admin-scope** control-plane audit invariant. An administration-capable read must periodically confirm that invariant; the latest connected control-plane audit on 2026-09-05 observed `bypass_actors: []` on both repository rulesets.
 
-The connected mutation surface used for this repository may still lack GitHub administration authority. Source review can codify and verify desired ruleset state, but it must not claim a control-plane setting changed unless an authorized settings operation occurred and the observable live gate plus any admin-scope invariant checks return the expected state.
+The connected mutation surface used for my repository may still lack GitHub administration authority. Source review can codify and verify desired ruleset state, but it must not claim a control-plane setting changed unless an authorized settings operation occurred and the observable live gate plus any admin-scope invariant checks return the expected state.
