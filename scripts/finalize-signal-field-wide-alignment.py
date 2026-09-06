@@ -10,7 +10,8 @@ the remaining Stars geometry by mirroring the already-reviewed Pull Requests lay
 - the Stars value and label are optically centered at x=320 to the right of that glyph;
 - the visible EID remains 8 SVG units above its v2.14 base geometry.
 
-Compact/mobile variants are validation-only and must remain untouched.
+Compact/mobile variants are validation-only and must remain untouched. Their reviewed
+height is 500 for five calendar rows or 528 for six calendar rows.
 """
 from __future__ import annotations
 
@@ -21,8 +22,10 @@ import sys
 
 VERSION = "signal-field-v2.18"
 ROOT_ATTR = "data-wide-detail-alignment"
+REFRESH_CONTRACT = "profile-refresh-v2"
 WIDE_FILES = ("signal-field-wide-light.svg", "signal-field-wide-dark.svg")
 COMPACT_FILES = ("signal-field-compact-light.svg", "signal-field-compact-dark.svg")
+COMPACT_VIEWBOXES = {"0 0 320 500", "0 0 320 528"}
 SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 STAR_LINE = re.compile(r'(?P<tag><path\b(?=[^>]*data-metric-phosphor-line="stars")[^>]*>)', re.I)
@@ -91,7 +94,7 @@ def validate_wide(text: str, name: str) -> None:
     root_attrs = attrs_of(root.group(0))
     require(root_attrs.get("viewBox") == "0 0 640 425", f"{name}: wide viewBox changed")
     require(root_attrs.get("data-issues-label-balance") == "signal-field-v2.16", f"{name}: v2.16 must precede v2.18")
-    require(root_attrs.get("data-generation-cadence-contract") == "profile-refresh-v1", f"{name}: cadence finalizer must precede v2.18")
+    require(root_attrs.get("data-generation-cadence-contract") == REFRESH_CONTRACT, f"{name}: refresh v2 finalizer must precede v2.18")
     require(root_attrs.get(ROOT_ATTR) == VERSION, f"{name}: v2.18 provenance missing")
 
     line = attrs_of(one(STAR_LINE, text, "Stars rule").group("tag"))
@@ -129,7 +132,7 @@ def validate_wide(text: str, name: str) -> None:
 def validate_compact(text: str, name: str) -> None:
     root = one(SVG_OPEN, text, "SVG root")
     attrs = attrs_of(root.group(0))
-    require(attrs.get("viewBox") == "0 0 320 500", f"{name}: compact viewBox changed")
+    require(attrs.get("viewBox") in COMPACT_VIEWBOXES, f"{name}: compact viewBox changed")
     require(ROOT_ATTR not in attrs, f"{name}: desktop-only provenance leaked into compact output")
     require('data-wide-star-optical-alignment="true"' not in text, f"{name}: desktop Stars wrapper leaked into compact output")
     eid = one(EID, text, "visible Evidence ID")
@@ -145,7 +148,7 @@ def transform_wide(text: str, name: str) -> str:
     require(ROOT_ATTR not in root_attrs, f"{name}: unexpected pre-existing desktop alignment provenance")
     require(root_attrs.get("viewBox") == "0 0 640 425", f"{name}: expected wide Signal Field")
     require(root_attrs.get("data-issues-label-balance") == "signal-field-v2.16", f"{name}: v2.16 must precede v2.18")
-    require(root_attrs.get("data-generation-cadence-contract") == "profile-refresh-v1", f"{name}: cadence finalizer must precede v2.18")
+    require(root_attrs.get("data-generation-cadence-contract") == REFRESH_CONTRACT, f"{name}: refresh v2 finalizer must precede v2.18")
 
     before_pull = pull_signature(text)
 
@@ -180,7 +183,7 @@ def transform_wide(text: str, name: str) -> str:
 
 def self_test() -> None:
     wide = (
-        '<svg viewBox="0 0 640 425" data-issues-label-balance="signal-field-v2.16" data-generation-cadence-contract="profile-refresh-v1">'
+        f'<svg viewBox="0 0 640 425" data-issues-label-balance="signal-field-v2.16" data-generation-cadence-contract="{REFRESH_CONTRACT}">'
         '<path d="M284 73h86" data-metric-phosphor-line="stars"/>'
         '<g data-metric-glyph="stars" transform="translate(270.25 98.90) scale(1.4583)"><path/></g>'
         '<text x="284" y="108" data-metric-phosphor="stars">14</text><text x="284" y="132">STARS</text>'
@@ -195,11 +198,12 @@ def self_test() -> None:
     require(f'x="{STAR_VALUE_X}"' in transformed and 'text-anchor="middle"' in transformed, "self-test Stars value alignment missing")
     require('transform="translate(0 -8)"' in transformed, "self-test EID shift missing")
 
-    compact = (
-        '<svg viewBox="0 0 320 500"><text x="160" y="463" text-anchor="middle" '
-        'data-signal-field-evidence-id="true">EID · SF1-0123456789ABCDEF</text></svg>'
-    )
-    validate_compact(compact, "fixture-compact.svg")
+    for view_box, eid_y in (("0 0 320 500", "463"), ("0 0 320 528", "491")):
+        compact = (
+            f'<svg viewBox="{view_box}"><text x="160" y="{eid_y}" text-anchor="middle" '
+            'data-signal-field-evidence-id="true">EID · SF1-0123456789ABCDEF</text></svg>'
+        )
+        validate_compact(compact, f"fixture-compact-{view_box.rsplit(' ', 1)[-1]}.svg")
     print(f"Signal Field desktop alignment self-test passed: {VERSION}")
 
 
