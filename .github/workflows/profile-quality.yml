@@ -17,6 +17,7 @@ on:
       - ".github/ATTESTATION.md"
       - ".github/attestation/**"
       - ".github/dependabot.yml"
+      - ".github/action-lock.json"
       - ".github/workflows/**"
 
 permissions:
