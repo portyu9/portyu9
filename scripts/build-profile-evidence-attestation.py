@@ -17,6 +17,7 @@ import sys
 import tempfile
 
 import profile_evidence_subjects as subjects
+import profile_evidence_validation as validation_contract
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "portyu9/portyu9"
@@ -27,7 +28,6 @@ PREDICATE_TYPE = (
     "profile-evidence-v3.schema.json"
 )
 PREDICATE_SCHEMA = ROOT / ".github/attestation/profile-evidence-v3.schema.json"
-BOUNDARY = "attest-validated-evidence"
 EVIDENCE_SCHEMA = "signal-field-evidence-v1"
 PORTFOLIO_LEDGER_VERSION = "portfolio-evidence-ledger-v2"
 PORTFOLIO_EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
@@ -49,13 +49,11 @@ ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 
 PUBLISHED_PATHS = subjects.published_paths()
 SIGNAL_FIELD_FILENAMES = subjects.source_basenames("signal_field")
-SIGNAL_FIELD_VALIDATORS = (
-    "scripts/validate-signal-field-v213.py",
-    "scripts/validate-signal-field-v214.py",
-    "scripts/validate-generated-signal-field.py",
-)
-SPOTLIGHT_VALIDATORS = ("scripts/validate-engineering-spotlight.py --require-live",)
-PORTFOLIO_LEDGER_VALIDATORS = ("scripts/validate-portfolio-evidence-ledger.py --require-live",)
+VALIDATOR_CONTRACT = validation_contract.predicate_validators()
+BOUNDARY = validation_contract.boundary_name()
+SIGNAL_FIELD_VALIDATORS = VALIDATOR_CONTRACT["signalField"]
+SPOTLIGHT_VALIDATORS = VALIDATOR_CONTRACT["engineeringSpotlight"]
+PORTFOLIO_LEDGER_VALIDATORS = VALIDATOR_CONTRACT["portfolioEvidenceLedger"]
 
 
 def required_env(name: str, env: dict[str, str]) -> str:
@@ -294,9 +292,16 @@ def self_test() -> None:
             raise AssertionError("Portfolio evidence semantics were not recorded")
         if reparsed["predicateSchema"] != predicate_schema_identity():
             raise AssertionError("predicate schema digest was not recorded")
+        if reparsed["validation"] != {
+            "signalField": list(SIGNAL_FIELD_VALIDATORS),
+            "engineeringSpotlight": list(SPOTLIGHT_VALIDATORS),
+            "portfolioEvidenceLedger": list(PORTFOLIO_LEDGER_VALIDATORS),
+            "boundary": BOUNDARY,
+        }:
+            raise AssertionError("predicate validation inventory did not derive from canonical boundary contract")
     print(
-        "Profile evidence attestation predicate v3 self-test passed: immutable schema + Signal Field + "
-        "three Spotlights + Portfolio Evidence Ledger v2 with result/binding/freshness semantics"
+        "Profile evidence attestation predicate v3 self-test passed: immutable schema + canonical validation boundary + "
+        "Signal Field + three Spotlights + Portfolio Evidence Ledger v2 with result/binding/freshness semantics"
     )
 
 
@@ -318,7 +323,7 @@ def main() -> int:
         output.write_text(json.dumps(predicate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(
             "Profile evidence predicate v3 built: "
-            f"{predicate['portfolioEvidenceLedger']['id']} · {predicate['portfolioEvidenceLedger']['semantics']}"
+            f"{predicate['portfolioEvidenceLedger']['id']} · {predicate['portfolioEvidenceLedger']['semantics']} · {validation_contract.VERSION}"
         )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
