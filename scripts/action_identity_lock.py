@@ -32,14 +32,16 @@ def validate_payload(payload: Any) -> dict[str, dict[str, str]]:
     require(payload.get("version") == VERSION, "action identity lock version changed")
     actions = payload.get("actions")
     require(isinstance(actions, dict) and actions, "action identity lock actions map is missing or empty")
+    require(list(actions) == sorted(actions), "action identity lock must remain deterministically sorted")
 
     normalized: dict[str, dict[str, str]] = {}
     repository_tags: dict[tuple[str, str], str] = {}
-    for action, entry in sorted(actions.items()):
+    for action, entry in actions.items():
         require(isinstance(action, str) and ACTION_ID.fullmatch(action) is not None,
                 f"invalid action identity lock key: {action!r}")
         require(isinstance(entry, dict) and set(entry) == {"sha", "tag"},
                 f"{action}: action identity lock entry keys changed")
+        require(list(entry) == ["sha", "tag"], f"{action}: action identity entry key ordering changed")
         sha = entry.get("sha")
         tag = entry.get("tag")
         require(isinstance(sha, str) and SHA40.fullmatch(sha) is not None,
@@ -54,8 +56,6 @@ def validate_payload(payload: Any) -> dict[str, dict[str, str]]:
                 f"{repository}@{tag}: sub-actions map the same release tag to conflicting SHAs")
         repository_tags[key] = sha
         normalized[action] = {"sha": sha, "tag": tag}
-
-    require(list(normalized) == sorted(normalized), "action identity lock must remain deterministically sorted")
     return normalized
 
 
@@ -101,6 +101,20 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("action lock self-test accepted conflicting sub-action release identity")
+
+    unsorted = {
+        "version": VERSION,
+        "actions": {
+            "github/codeql-action/init": {"sha": "b" * 40, "tag": "v4.5.6"},
+            "actions/checkout": {"sha": "a" * 40, "tag": "v1.2.3"},
+        },
+    }
+    try:
+        validate_payload(unsorted)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("action lock self-test accepted nondeterministic action ordering")
 
 
 if __name__ == "__main__":
