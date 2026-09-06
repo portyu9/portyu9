@@ -18,8 +18,8 @@ on:
       - "scripts/stage-profile-evidence.py"
       - "scripts/validate-profile-evidence-subjects.py"
   schedule:
-    # Two best-effort refresh opportunities per hour, away from top-of-hour congestion.
-    - cron: "17,47 * * * *"
+    # One best-effort hourly fallback, offset from top-of-hour scheduler congestion.
+    - cron: "17 * * * *"
 
 permissions:
   contents: read
