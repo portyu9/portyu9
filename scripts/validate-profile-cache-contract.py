@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Validate cache-busting identities for mutable generated profile surfaces.
+"""Validate cache-busting identities and reviewer paths for generated profile surfaces.
 
 The README cache token is a contract identity, not a per-run evidence identity. Static
 validation keeps every mutable generated URL on one reviewed token per surface family.
 Optional candidate validation derives the expected token from the exact live candidate
 provenance that Profile Quality just generated, so a renderer/ledger/refresh contract
-change cannot ship behind an older cache key.
+change cannot ship behind an older cache key. The same contract also protects the two
+reviewer-navigation links from Selected Engineering Systems to the published Portfolio
+Evidence Ledger and the repository attestation contract.
 """
 from __future__ import annotations
 
@@ -20,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 
 SPOTLIGHT_TOKEN = "engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"
-SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-alignment-current-red-v1-profile-refresh-v2"
+SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-v219-compact-eid-current-red-v1-profile-refresh-v2"
 
 STALE_SPOTLIGHT_TOKENS = (
     "engineering-spotlight-v21-three-slots-20260905",
@@ -32,7 +34,18 @@ STALE_SIGNAL_FIELD_TOKENS = (
     "signal-field-v216-profile-refresh-v1",
     "signal-field-v217-wide-alignment-profile-refresh-v1",
     "signal-field-v218-wide-alignment-profile-refresh-v1",
+    "signal-field-v218-wide-alignment-current-red-v1-profile-refresh-v2",
 )
+
+LEDGER_REVIEW_URL = "https://github.com/portyu9/portyu9/blob/generated/portfolio-evidence/portfolio-evidence-ledger.json"
+ATTESTATION_REVIEW_URL = "https://github.com/portyu9/portyu9/blob/main/.github/ATTESTATION.md"
+REVIEW_NAVIGATION = (
+    '<p align="center"><sub><strong>Evidence review</strong> · '
+    f'<a href="{LEDGER_REVIEW_URL}">Portfolio Evidence Ledger</a> · '
+    f'<a href="{ATTESTATION_REVIEW_URL}">Attestation Contract</a></sub></p>'
+)
+SELECTED_HEADING = '<h2 align="center">◇ Selected Engineering Systems</h2>'
+FIRST_FLAGSHIP = '<a href="https://github.com/portyu9/ai-qa-automation"><picture>'
 
 SPOTLIGHT = re.compile(
     r"https://raw\.githubusercontent\.com/portyu9/portyu9/generated/engineering-spotlight/"
@@ -156,17 +169,40 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
         (item.get("data-wide-detail-alignment", "") for item in wide_attrs),
         "Signal Field desktop alignment",
     )
+    compact_eid = one_value(
+        (item.get("data-compact-eid-layout", "") for item in compact_attrs),
+        "Signal Field compact EID layout",
+    )
     require(wide_alignment == "signal-field-v2.18", f"candidate desktop Signal Field alignment changed: {wide_alignment}")
+    require(compact_eid == "signal-field-v2.19", f"candidate compact Signal Field EID layout changed: {compact_eid}")
     require(
         all("data-wide-detail-alignment" not in item for item in compact_attrs),
         "desktop-only Signal Field alignment provenance leaked into compact artifacts",
     )
-    return f"{compact_signal_field_version(wide_alignment)}-wide-alignment-current-red-v1-{cadence}"
+    require(
+        all("data-compact-eid-layout" not in item for item in wide_attrs),
+        "compact-only Signal Field EID provenance leaked into wide artifacts",
+    )
+    return (
+        f"{compact_signal_field_version(wide_alignment)}-wide-"
+        f"{compact_signal_field_version(compact_eid)}-compact-eid-current-red-v1-{cadence}"
+    )
 
 
 def readme_tokens() -> tuple[list[str], list[str], str]:
     text = README.read_text(encoding="utf-8")
     return SPOTLIGHT.findall(text), SIGNAL_FIELD.findall(text), text
+
+
+def validate_reviewer_navigation(text: str) -> None:
+    require(text.count(REVIEW_NAVIGATION) == 1, "README must contain exactly one reviewed evidence-navigation line")
+    require(text.count(LEDGER_REVIEW_URL) == 1, "README Portfolio Evidence Ledger review link changed or duplicated")
+    require(text.count(ATTESTATION_REVIEW_URL) == 1, "README attestation review link changed or duplicated")
+    selected = text.find(SELECTED_HEADING)
+    navigation = text.find(REVIEW_NAVIGATION)
+    first_flagship = text.find(FIRST_FLAGSHIP, selected)
+    require(selected >= 0 and navigation >= 0 and first_flagship >= 0, "Selected Engineering Systems review-navigation anchors are missing")
+    require(selected < navigation < first_flagship, "evidence review links must remain adjacent to Selected Engineering Systems before flagship cards")
 
 
 def validate_readme(expected_spotlight: str = SPOTLIGHT_TOKEN, expected_signal: str = SIGNAL_FIELD_TOKEN) -> None:
@@ -185,6 +221,7 @@ def validate_readme(expected_spotlight: str = SPOTLIGHT_TOKEN, expected_signal: 
     )
     require(len(generated_urls) == 10, "generated profile asset URL inventory changed")
     require(all("?v=" in url for url in generated_urls), "mutable generated profile asset lacks an explicit cache identity")
+    validate_reviewer_navigation(text)
 
 
 def validate_candidate(signal_field_dir: Path, spotlight_dir: Path, ledger_dir: Path) -> None:
@@ -214,7 +251,11 @@ def self_test() -> None:
         "Spotlight cache-token derivation changed",
     )
     require(
-        f"{compact_signal_field_version('signal-field-v2.18')}-wide-alignment-current-red-v1-profile-refresh-v2" == SIGNAL_FIELD_TOKEN,
+        (
+            f"{compact_signal_field_version('signal-field-v2.18')}-wide-"
+            f"{compact_signal_field_version('signal-field-v2.19')}-compact-eid-current-red-v1-profile-refresh-v2"
+        )
+        == SIGNAL_FIELD_TOKEN,
         "Signal Field cache-token derivation changed",
     )
 
@@ -238,13 +279,13 @@ def main() -> int:
             assert args.signal_field_dir is not None and args.spotlight_dir is not None and args.ledger_dir is not None
             validate_candidate(args.signal_field_dir, args.spotlight_dir, args.ledger_dir)
             print(
-                "Profile cache contract passed: README cache identities match the exact live Signal Field, "
-                "Portfolio Ledger, and Spotlight candidate contracts."
+                "Profile cache/reviewer contract passed: README cache identities match the exact live Signal Field, "
+                "Portfolio Ledger, and Spotlight candidates, and reviewer evidence paths remain explicit."
             )
         else:
             print(
-                "Profile cache contract passed: six Spotlight and four Signal Field generated assets "
-                "use the current reviewed cache identity per surface family."
+                "Profile cache/reviewer contract passed: six Spotlight and four Signal Field generated assets "
+                "use current reviewed cache identities and evidence review paths remain explicit."
             )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
