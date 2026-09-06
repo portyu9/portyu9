@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -22,7 +23,9 @@ CONTRACT = ROOT / ".github" / "rulesets" / "repository-rulesets-v1.json"
 DOC = ROOT / ".github" / "RULESETS.md"
 QUALITY = ROOT / ".github" / "workflows" / "profile-quality.yml"
 REPOSITORY = "portyu9/portyu9"
-API = f"https://api.github.com/repos/{REPOSITORY}/rulesets"
+API_ORIGIN = "https://api.github.com"
+API_PATH = f"/repos/{REPOSITORY}/rulesets"
+API = f"{API_ORIGIN}{API_PATH}"
 
 EXPECTED_CONTEXTS = {
     "validate-contracts",
@@ -117,7 +120,39 @@ def validate_source(payload: dict[str, Any]) -> None:
     )
 
 
+def validate_api_url(url: str) -> str:
+    """Return a credential-safe GitHub ruleset URL or fail closed.
+
+    The authenticated workflow token may be attached only to the exact repository
+    ruleset collection or one numeric ruleset-detail child. No alternate origin,
+    scheme, port, userinfo, query, fragment, encoded id, traversal, or deeper path is
+    accepted.
+    """
+    parsed = urllib.parse.urlsplit(url)
+    require(parsed.scheme == "https", f"ruleset API URL must use https: {url}")
+    require(parsed.netloc == "api.github.com", f"ruleset API URL origin changed: {url}")
+    require(parsed.username is None and parsed.password is None, f"ruleset API URL must not contain userinfo: {url}")
+    require(parsed.query == "" and parsed.fragment == "", f"ruleset API URL must not contain query/fragment data: {url}")
+
+    if parsed.path == API_PATH:
+        return url
+    prefix = API_PATH + "/"
+    require(parsed.path.startswith(prefix), f"ruleset API URL path changed: {url}")
+    suffix = parsed.path[len(prefix):]
+    require(suffix.isascii() and suffix.isdigit() and suffix == str(int(suffix)) and int(suffix) > 0,
+            f"ruleset API detail path must end in one canonical positive integer id: {url}")
+    return url
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse redirects so Authorization can never leave the validated origin."""
+
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+        return None
+
+
 def request_json(url: str, *, authenticated: bool = True) -> Any:
+    safe_url = validate_api_url(url)
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "portyu9-ruleset-contract-v1",
@@ -126,9 +161,10 @@ def request_json(url: str, *, authenticated: bool = True) -> Any:
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     if authenticated and token:
         headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(url, headers=headers)
+    request = urllib.request.Request(safe_url, headers=headers)
+    opener = urllib.request.build_opener(NoRedirect())
     try:
-        with urllib.request.urlopen(request, timeout=15) as response:
+        with opener.open(request, timeout=15) as response:
             return json.load(response)
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         mode = "authenticated" if authenticated and token else "public"
@@ -222,6 +258,15 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
     return tuple(bypass_unobservable)
 
 
+def expect_unsafe_url(url: str, expected: str) -> None:
+    try:
+        validate_api_url(url)
+    except ValueError as exc:
+        require(expected in str(exc), f"ruleset URL self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"ruleset URL self-test accepted unsafe endpoint: {url}")
+
+
 def self_test(payload: dict[str, Any]) -> None:
     encoded = json.dumps(payload)
     mutation = json.loads(encoded)
@@ -232,6 +277,24 @@ def self_test(payload: dict[str, Any]) -> None:
         require("review-thread resolution" in str(exc), f"ruleset self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("ruleset self-test accepted disabled review-thread resolution")
+
+    require(validate_api_url(API) == API, "ruleset URL self-test rejected canonical collection endpoint")
+    require(validate_api_url(f"{API}/123") == f"{API}/123", "ruleset URL self-test rejected canonical detail endpoint")
+    for url, expected in (
+        (API.replace("https://", "http://"), "must use https"),
+        (API.replace("api.github.com", "evil.example"), "origin changed"),
+        (API.replace("api.github.com", "api.github.com.evil.example"), "origin changed"),
+        (API.replace("api.github.com", "token@api.github.com"), "origin changed"),
+        (API.replace("api.github.com", "api.github.com:443"), "origin changed"),
+        (API + "?page=1", "query/fragment"),
+        (API + "#fragment", "query/fragment"),
+        (API + "/../actions", "positive integer"),
+        (API + "/%31%32%33", "positive integer"),
+        (API + "/abc", "positive integer"),
+        (API + "/123/extra", "positive integer"),
+        (API + "/0123", "positive integer"),
+    ):
+        expect_unsafe_url(url, expected)
 
 
 def main() -> int:
