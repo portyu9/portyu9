@@ -7,8 +7,8 @@ contract: named PR checks, explicit runtime, pinned dependencies, release proven
 closed workflow authority, shell-safe expression boundaries, least-privilege profile
 evidence generation/identity/attestation/publication, measured refresh cadence,
 generated-surface cache binding, fresh-run concurrency, artifact-only publish behavior,
-the single governed Signal Field pipeline entrypoint, and the single candidate profile
-evidence validation boundary used by attestation and publication.
+the single governed Signal Field pipeline, the single authored profile-evidence
+generation pipeline, and the single candidate profile-evidence validation boundary.
 """
 from __future__ import annotations
 
@@ -23,6 +23,8 @@ GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 CADENCE = ROOT / ".github/REFRESH_CADENCE.md"
 PIPELINE = ROOT / "scripts/signal_field_pipeline.py"
 PIPELINE_MANIFEST = ROOT / "scripts/signal-field-pipeline-v1.json"
+GENERATION_MANIFEST = ROOT / "scripts/profile-evidence-generation-v1.json"
+GENERATION_RUNNER = ROOT / "scripts/generate-profile-evidence.py"
 VALIDATION_MANIFEST = ROOT / "scripts/profile-evidence-validation-boundary-v1.json"
 VALIDATION_LOADER = ROOT / "scripts/profile_evidence_validation.py"
 VALIDATION_RUNNER = ROOT / "scripts/validate-profile-evidence-boundary.py"
@@ -40,6 +42,13 @@ DIRECT_PIPELINE_STAGE_MARKERS = (
     "identify-signal-field-evidence.py \"$READY_DIR\"",
     "set-signal-field-refresh-cadence.py \"$READY_DIR\"",
     "validate-generated-signal-field.py \"$READY_DIR\"",
+)
+DIRECT_GENERATION_SCRIPTS = (
+    "signal_field_pipeline.py",
+    "generate-portfolio-evidence-ledger.py",
+    "validate-portfolio-evidence-ledger.py",
+    "generate-engineering-spotlight.py",
+    "validate-engineering-spotlight.py",
 )
 
 
@@ -66,11 +75,27 @@ def job_block(workflow: str, key: str, next_key: str | None) -> str:
     return workflow[start.start():end.start()]
 
 
-def require_pipeline_entrypoint(block: str, command: str, label: str) -> None:
-    require(command in block, f"{label} must invoke the governed Signal Field pipeline")
-    require(block.count(command) == 1, f"{label} must invoke the Signal Field pipeline exactly once")
+def require_generation_entrypoint(
+    block: str,
+    *,
+    command: str,
+    signal: str,
+    ledger: str,
+    spotlight: str,
+    label: str,
+) -> None:
+    require(block.count("generate-profile-evidence.py") == 1, f"{label} must invoke the canonical profile evidence generation pipeline exactly once")
+    require(command in block, f"{label} must invoke the reviewed generation entrypoint")
+    for fragment in (
+        f"--signal-field-dir {signal}",
+        f"--portfolio-ledger-dir {ledger}",
+        f"--spotlight-dir {spotlight}",
+    ):
+        require(fragment in block, f"{label} canonical generation pipeline is missing: {fragment}")
+    for script in DIRECT_GENERATION_SCRIPTS:
+        require(script not in block, f"{label} must not duplicate authored generation sequencing in workflow YAML: {script}")
     for marker in DIRECT_PIPELINE_STAGE_MARKERS:
-        require(marker not in block, f"{label} must not duplicate pipeline stage ordering in workflow YAML: {marker}")
+        require(marker not in block, f"{label} must not duplicate Signal Field stage ordering in workflow YAML: {marker}")
 
 
 def require_validation_boundary(block: str, *, signal: str, spotlight: str, ledger: str, label: str) -> None:
@@ -101,8 +126,17 @@ def validate_quality(text: str) -> None:
     require("contents: write" not in integration, "Profile Quality integration must not receive repository write authority")
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in integration, "PR integration must execute reviewed pinned upstream generator")
     require("python3 scripts/signal_field_pipeline.py --self-test" in validate, "Profile Quality must self-test the governed Signal Field pipeline")
+    require("python3 scripts/generate-profile-evidence.py --self-test" in validate, "Profile Quality must self-test the canonical profile evidence generation pipeline")
     require("python3 scripts/profile_evidence_validation.py" in validate, "Profile Quality must validate the canonical profile evidence boundary contract")
-    require_pipeline_entrypoint(integration, 'python3 scripts/signal_field_pipeline.py "$READY_DIR"', "PR integration")
+    require("name: Exercise canonical profile evidence generation pipeline" in integration, "PR integration must execute the canonical profile evidence generation pipeline")
+    require_generation_entrypoint(
+        integration,
+        command="python3 scripts/generate-profile-evidence.py",
+        signal='"$READY_DIR"',
+        ledger="integration-portfolio-evidence",
+        spotlight="integration-engineering-spotlight",
+        label="PR integration",
+    )
     require(integration.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1, "PR integration must exercise the reviewed download-artifact SHA exactly once")
     require(integration.count("digest-mismatch: error") == 1, "PR artifact round-trip must fail on digest mismatch")
     require("python3 scripts/validate-generated-signal-field.py roundtrip-signal-field" in integration, "PR integration must revalidate downloaded Signal Field bytes")
@@ -165,7 +199,15 @@ def validate_stats(text: str) -> None:
     require("contents: write" not in generate, "Third-party generation job received repository write authority")
     require("id-token: write" not in generate, "Third-party generation job received signing identity authority")
     require("attestations: write" not in generate, "Third-party generation job received attestation authority")
-    require_pipeline_entrypoint(generate, 'python3 source/scripts/signal_field_pipeline.py "$READY_DIR"', "Production generation")
+    require("name: Generate canonical profile evidence" in generate, "Production must execute the canonical profile evidence generation pipeline")
+    require_generation_entrypoint(
+        generate,
+        command="python3 source/scripts/generate-profile-evidence.py",
+        signal='"$READY_DIR"',
+        ledger="portfolio-ledger-ready",
+        spotlight="spotlight-ready",
+        label="Production generation",
+    )
 
     require("needs: generate" in attest, "Attestation job must depend on validated generation")
     require("contents: read" in attest, "Attestation job must retain contents: read")
@@ -285,6 +327,8 @@ def main() -> int:
             CADENCE,
             PIPELINE,
             PIPELINE_MANIFEST,
+            GENERATION_MANIFEST,
+            GENERATION_RUNNER,
             VALIDATION_MANIFEST,
             VALIDATION_LOADER,
             VALIDATION_RUNNER,
@@ -297,10 +341,11 @@ def main() -> int:
         print(
             "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
             "Dependency Review governance is mandatory, workflow authority is closed, workflow shell source is expression-safe, "
-            "pinned-upstream integration and the single versioned Signal Field pipeline are mandatory, the single versioned profile-evidence "
-            "validation boundary is exercised by integration/attestation/publication, mutable profile cache identities bind to live candidates, "
-            "measured generation uses the governed best-effort hourly cadence, three artifact downloads are integrity-checked, "
-            "third-party generation has neither write nor signing authority, attestation is isolated, and publication independently revalidates."
+            "pinned-upstream integration and the single versioned Signal Field pipeline are mandatory, authored profile evidence generation "
+            "has one versioned workflow entrypoint, the single versioned profile-evidence validation boundary is exercised by integration/attestation/publication, "
+            "mutable profile cache identities bind to live candidates, measured generation uses the governed best-effort hourly cadence, "
+            "three artifact downloads are integrity-checked, third-party generation has neither write nor signing authority, "
+            "attestation is isolated, and publication independently revalidates."
         )
         return 0
     except (OSError, ValueError) as exc:

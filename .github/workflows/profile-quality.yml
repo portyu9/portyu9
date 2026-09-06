@@ -51,6 +51,9 @@ jobs:
       - name: Validate Signal Field pipeline contract
         run: python3 scripts/signal_field_pipeline.py --self-test
 
+      - name: Validate profile evidence generation contract
+        run: python3 scripts/generate-profile-evidence.py --self-test
+
       - name: Validate validator purity
         run: python3 scripts/validate-validator-purity.py
 
@@ -150,14 +153,17 @@ jobs:
           token: ${{ github.token }}
           profile: signal-field
 
-      - name: Exercise complete production transformation chain
+      - name: Exercise canonical profile evidence generation pipeline
         env:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_USERNAME: portyu9
         run: |
           set -euo pipefail
-          python3 scripts/signal_field_pipeline.py "$READY_DIR"
+          python3 scripts/generate-profile-evidence.py \
+            --signal-field-dir "$READY_DIR" \
+            --portfolio-ledger-dir integration-portfolio-evidence \
+            --spotlight-dir integration-engineering-spotlight
 
       - name: Upload Signal Field review artifacts
         if: github.event_name == 'pull_request'
@@ -182,22 +188,6 @@ jobs:
           set -euo pipefail
           python3 scripts/validate-signal-field-v214.py roundtrip-signal-field
           python3 scripts/validate-generated-signal-field.py roundtrip-signal-field
-
-      - name: Exercise live Portfolio Evidence Ledger path
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          rm -rf integration-portfolio-evidence
-          python3 scripts/generate-portfolio-evidence-ledger.py integration-portfolio-evidence
-          python3 scripts/validate-portfolio-evidence-ledger.py integration-portfolio-evidence --require-live
-
-      - name: Exercise live Engineering Spotlight projection
-        run: |
-          set -euo pipefail
-          rm -rf integration-engineering-spotlight
-          python3 scripts/generate-engineering-spotlight.py integration-engineering-spotlight --ledger integration-portfolio-evidence/portfolio-evidence-ledger.json
-          python3 scripts/validate-engineering-spotlight.py integration-engineering-spotlight --ledger integration-portfolio-evidence/portfolio-evidence-ledger.json --require-live
 
       - name: Exercise canonical live profile evidence validation boundary
         env:
