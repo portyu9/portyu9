@@ -117,12 +117,18 @@ def validate_publish_terminal_surface(publish: str) -> None:
     terminal = publish[split:]
     require("${{ github.token }}" not in before,
             "Publication must not expose the GitHub token before the terminal mutation step")
-    require(terminal.count("      - name: ") == 1,
-            "Publication must not execute another step after write credentials are introduced")
-    require(
-        "        env:\n          GITHUB_TOKEN: ${{ github.token }}\n        run: |\n" in terminal,
-        "Publication terminal step must receive only the step-scoped GitHub token through env",
+    expected_header = (
+        marker
+        + "        env:\n"
+        + "          GITHUB_TOKEN: ${{ github.token }}\n"
+        + "        run: |\n"
     )
+    require(
+        terminal.startswith(expected_header),
+        "Publication terminal step metadata changed; only name -> step-scoped GITHUB_TOKEN -> run is allowed",
+    )
+    require(terminal.count("      - name: ") == 1,
+            "Publication must not execute another named step after write credentials are introduced")
     require(terminal.count("${{ github.token }}") == 1,
             "Publication terminal step GitHub token exposure changed")
     run_marker = "        run: |\n"
