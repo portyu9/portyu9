@@ -130,8 +130,7 @@ jobs:
           test "$(jq -r .generated_sha "$PLAN")" = "$GENERATED_SHA"
           test "$(sha256sum "$PROPOSED" | cut -d' ' -f1)" = "$(jq -r .readme_sha256_after "$PLAN")"
 
-          CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-          test "$CURRENT_MAIN" = "$SOURCE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
           gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content \
             | tr -d '\n' | base64 --decode > current-readme.md
           test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
