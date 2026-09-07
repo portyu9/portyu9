@@ -3,9 +3,9 @@
 
 The repository intentionally treats workflow token authority as a closed allowlist.
 Every workflow, trigger, job, permissions block, and privileged GitHub API call must
-be reviewed here before it can be introduced or changed. This prevents a future workflow from silently acquiring
-repository-write, PR-write, OIDC, attestation, package, Actions, or security-event
-authority merely because it is new and therefore outside a workflow-specific validator.
+be reviewed here before it can be introduced or changed. This prevents a future workflow
+from silently acquiring repository-write, PR-write, OIDC, attestation, package, Actions,
+or security-event authority merely because it is new and therefore outside a workflow-specific validator.
 """
 from __future__ import annotations
 
@@ -389,9 +389,9 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
         'test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"',
         'test "$(jq -r .behind_by <<<"$COMPARE")" = "0"',
         'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
-        'test "$(jq \' .files | length\' <<<"$COMPARE")" = "1"'.replace("' .files", "'.files"),
-        'test "$(jq -r \' .files[0].filename\' <<<"$COMPARE")" = "README.md"'.replace("' .files", "'.files"),
-        'test "$(jq -r \' .files[0].status\' <<<"$COMPARE")" = "modified"'.replace("' .files", "'.files"),
+        'test "$(jq \'.files | length\' <<<"$COMPARE")" = "1"',
+        'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
+        'test "$(jq -r \'.files[0].status\' <<<"$COMPARE")" = "modified"',
     ):
         require(fragment in approve, f"Spotlight approval lost exact README-only head closure: {fragment}")
     require('git/ref/heads/generated' in approve and 'GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}' in approve,
