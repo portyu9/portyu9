@@ -109,7 +109,7 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         sync.replace(" && inputs.merge_ui_after_checks == true", "", 1),
         stats,
         policy,
-        "explicit workflow_dispatch UI merge authorization",
+        "must gate exactly one execution surface",
     )
     expect_failure(
         sync,
