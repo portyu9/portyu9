@@ -9,6 +9,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
+RUNTIME_PROBE = ROOT / "scripts/verify-python-runtime.py"
 EXPECTED_VERSION = "3.13.15"
 EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 EXPECTED_WORKFLOWS = {
@@ -16,6 +17,12 @@ EXPECTED_WORKFLOWS = {
     "profile-stats.yml",
     "spotlight-link-sync.yml",
 }
+VERIFY_COMMANDS = {
+    "profile-quality.yml": "python3 scripts/verify-python-runtime.py",
+    "profile-stats.yml": "python3 source/scripts/verify-python-runtime.py",
+    "spotlight-link-sync.yml": "python3 source/scripts/verify-python-runtime.py",
+}
+VERIFY_STEP_NAME = "      - name: Verify resolved Python runtime"
 SETUP_PYTHON = re.compile(r"(?m)^\s*(?:-\s*)?uses:\s*actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*$")
 VERSION_LINE = f'  PYTHON_VERSION: "{EXPECTED_VERSION}"'
 VERSION_INPUT = "          python-version: ${{ env.PYTHON_VERSION }}"
@@ -67,11 +74,20 @@ def validate_text(text: str, label: str) -> bool:
 
 
 def validate_repository() -> None:
+    require(RUNTIME_PROBE.is_file(), "exact Python runtime probe is missing")
     observed: set[str] = set()
     for path in workflow_files():
         text = path.read_text(encoding="utf-8")
         if validate_text(text, path.name):
             observed.add(path.name)
+            setup_count = len(SETUP_PYTHON.findall(text))
+            require(path.name in VERIFY_COMMANDS,
+                    f"{path.name}: Python-bearing workflow lacks a reviewed runtime probe command")
+            command = VERIFY_COMMANDS[path.name]
+            require(text.count(VERIFY_STEP_NAME) == setup_count,
+                    f"{path.name}: every setup-python execution must be followed by one named runtime probe")
+            require(text.count(f"        run: {command}") == setup_count,
+                    f"{path.name}: every setup-python execution must invoke the reviewed runtime probe")
     require(observed == EXPECTED_WORKFLOWS,
             "Python-bearing workflow inventory changed: "
             f"observed={sorted(observed)} expected={sorted(EXPECTED_WORKFLOWS)}")
@@ -116,7 +132,7 @@ def main() -> int:
         print(
             "Python runtime contract passed: authored setup-python execution is closed to "
             f"{EXPECTED_VERSION} across exactly {len(EXPECTED_WORKFLOWS)} reviewed workflows; "
-            f"observed interpreter=CPython {observed_version}."
+            f"all six setup jobs execute the reviewed runtime probe; observed interpreter=CPython {observed_version}."
         )
         return 0
     except (OSError, ValueError) as exc:
