@@ -2,10 +2,10 @@
 """Fail closed on GitHub Actions workflow authority drift.
 
 The repository intentionally treats workflow token authority as a closed allowlist.
-Every workflow, trigger, job, and permissions block must be reviewed here before it
-can be introduced or changed. This prevents a future workflow from silently acquiring
-repository-write, PR-write, OIDC, attestation, package, Actions, or security-event
-authority merely because it is new and therefore outside a workflow-specific validator.
+Every workflow, trigger, job, permissions block, and privileged GitHub API call must
+be reviewed here before it can be introduced or changed. This prevents a future workflow
+from silently acquiring repository-write, PR-write, OIDC, attestation, package, Actions,
+or security-event authority merely because it is new and therefore outside a workflow-specific validator.
 """
 from __future__ import annotations
 
@@ -207,6 +207,42 @@ def job_block(text: str, key: str, next_key: str | None) -> str:
     return text[start.start(): start.end() + end.start()]
 
 
+def require_exact_gh_api_surface(
+    block: str,
+    *,
+    label: str,
+    expected_lines: tuple[str, ...],
+    required_snippets: tuple[str, ...] = (),
+) -> None:
+    """Lock privileged GitHub CLI calls to one reviewed API surface."""
+    observed = tuple(
+        line.strip()
+        for line in block.splitlines()
+        if "gh api " in line
+    )
+    require(
+        observed == expected_lines,
+        f"{label}: gh api surface changed: expected={expected_lines!r} observed={observed!r}",
+    )
+    for line in block.splitlines():
+        stripped = line.strip()
+        if re.search(r"(^|\s)gh\s+", stripped):
+            require(
+                "gh api " in stripped,
+                f"{label}: non-api GitHub CLI command is forbidden: {stripped}",
+            )
+    for forbidden in ("curl ", "wget ", "git push", "git fetch", "git clone"):
+        require(
+            forbidden not in block,
+            f"{label}: alternate network/mutation path is forbidden: {forbidden.strip()}",
+        )
+    for snippet in required_snippets:
+        require(
+            snippet in block,
+            f"{label}: reviewed API mutation payload changed: {snippet}",
+        )
+
+
 def validate_inventory() -> None:
     require(WORKFLOWS.is_dir(), ".github/workflows is missing")
     paths = sorted({*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")})
@@ -234,12 +270,16 @@ def validate_profile_stats_contract(workflow: str) -> None:
             "Profile stats Spotlight dispatcher identity changed")
     require('GH_TOKEN: ${{ github.token }}' in dispatch,
             "Profile stats Spotlight dispatcher must use only the job-scoped GitHub token")
-    require('gh api --method POST' in dispatch,
-            "Profile stats Spotlight dispatcher must use an explicit Actions API dispatch")
-    require('actions/workflows/spotlight-link-sync.yml/dispatches' in dispatch,
-            "Profile stats Spotlight dispatcher target changed")
-    require('-f ref=main' in dispatch,
-            "Profile stats Spotlight dispatcher must target the trusted default branch")
+    require_exact_gh_api_surface(
+        dispatch,
+        label="Profile stats Spotlight dispatcher",
+        expected_lines=(
+            "gh api --method POST \\",
+        ),
+        required_snippets=(
+            'gh api --method POST \\\n            "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \\\n            -f ref=main',
+        ),
+    )
     for forbidden in (
         "actions/checkout@",
         "actions/setup-python@",
@@ -273,6 +313,69 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
     propose = job_block(workflow, "propose", "approve")
     approve = job_block(workflow, "approve", "merge")
     merge = job_block(workflow, "merge", None)
+
+    require_exact_gh_api_surface(
+        propose,
+        label="Spotlight propose",
+        expected_lines=(
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"',
+            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content \\',
+            'if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BOT_BRANCH}" >/dev/null 2>&1; then',
+            'gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" \\',
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \\',
+            'README_BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BOT_BRANCH}" --jq .sha)"',
+            'gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/README.md" --input update.json > update-response.json',
+            'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BOT_BRANCH}&base=main&per_page=10")"',
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json',
+            'PR_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"',
+        ),
+        required_snippets=(
+            'gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" \\\n              -f sha="$SOURCE_SHA" -F force=true >/dev/null',
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \\\n              -f ref="refs/heads/${BOT_BRANCH}" -f sha="$SOURCE_SHA" >/dev/null',
+            '--arg branch "$BOT_BRANCH" \\',
+            '--arg sha "$README_BLOB" \\',
+            "'{message:$message,content:$content,branch:$branch,sha:$sha}' > update.json",
+            'gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/README.md" --input update.json > update-response.json',
+            '--arg head "$BOT_BRANCH" \\',
+            '--arg base "main" \\',
+            "'{title:$title,head:$head,base:$base,body:$body}' > pr.json",
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json',
+        ),
+    )
+    require_exact_gh_api_surface(
+        approve,
+        label="Spotlight approve",
+        expected_lines=(
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"',
+            'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"',
+            'CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"',
+            'DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"',
+            'PROFILE_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"',
+            'RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"',
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null',
+        ),
+        required_snippets=(
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null',
+        ),
+    )
+    require_exact_gh_api_surface(
+        merge,
+        label="Spotlight merge",
+        expected_lines=(
+            'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"',
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"',
+            'FILES="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100")"',
+            'CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"',
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"',
+            'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
+        ),
+        required_snippets=(
+            'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
+        ),
+    )
     for block, label in ((propose, "propose"), (approve, "approve"), (merge, "merge")):
         require("actions/checkout@" not in block and "actions/setup-python@" not in block,
                 f"Spotlight {label} authority job must not checkout or execute authored Python")
@@ -407,6 +510,28 @@ jobs:
     expect_failure(good.replace("jobs:\n", "jobs:\n  publish:\n    runs-on: ubuntu-24.04\n"), "job inventory changed")
     expect_failure(good.replace("permissions:\n  contents: read", "permissions: write-all", 1), "scalar/inline permissions")
     expect_failure(good.replace("      contents: read", "      contents: read\n      actions: write"), "token authority changed")
+
+    api_good = 'run: |\n  gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null\n'
+    require_exact_gh_api_surface(
+        api_good,
+        label="self-test API surface",
+        expected_lines=(
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null',
+        ),
+    )
+    try:
+        require_exact_gh_api_surface(
+            api_good + '  gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/main"\n',
+            label="self-test API surface",
+            expected_lines=(
+                'gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null',
+            ),
+        )
+    except ValueError as exc:
+        require("gh api surface changed" in str(exc), f"API surface self-test failed for wrong reason: {exc}")
+    else:
+        fail("API surface self-test accepted an extra privileged endpoint")
+
     spotlight_links.self_test()
 
 
@@ -423,7 +548,7 @@ def main() -> int:
         print(
             "Workflow authority validation passed: five workflows form a closed authority inventory; "
             "read-only remains the default, publication-to-Spotlight dispatch is isolated to actions-only authority, "
-            "direct Spotlight synchronization is PR-gated, and each write/Actions/check capability is isolated to one reviewed terminal purpose."
+            "direct Spotlight synchronization is PR-gated, privileged gh api calls form a closed endpoint inventory, and each write/Actions/check capability is isolated to one reviewed terminal purpose."
         )
         return 0
     except (OSError, ValueError) as exc:
