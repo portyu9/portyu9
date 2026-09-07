@@ -1,6 +1,6 @@
 # Repository governance contract
 
-**Checkpoint:** 2026-09-05  
+**Checkpoint:** 2026-09-06  
 **Repository:** `portyu9/portyu9`
 
 I treat my profile README, reviewed source assets, generated Signal Field, Engineering Spotlight, Portfolio Evidence Ledger, cache identities, and profile-evidence attestations as production artifacts. Version-controlled checks and GitHub repository settings must describe the same trust boundary.
@@ -58,11 +58,12 @@ The **Workflow authority firewall** locks workflow triggers, job inventory, work
 | CodeQL analysis | `security-events: write` | publish code-scanning results |
 | Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint and persist my profile evidence attestation |
 | Profile stats / `publish-write-only` | `contents: write` | fast-forward validated artifacts to `generated` |
+| Profile stats / `dispatch-spotlight-link-sync` | `actions: write only` | after successful publication, dispatch only the fixed Spotlight reconciliation workflow on `main`; no checkout/content/PR/signing authority |
 | Spotlight link sync / `propose-readme-only-write` | `contents: write`, `pull-requests: write` | update only the guarded README link block on an automation branch and open/update its PR |
-| Spotlight link sync / `approve-bot-pr-checks-only` | `actions: write` | approve only the exact automation PR's workflow runs when GitHub places them in approval-required state |
-| Spotlight link sync / `merge-readme-only-after-required-checks` | `contents: write`, `pull-requests: write`, `checks: read` | merge only the exact one-file README PR after the five GitHub-Actions checks succeed |
+| Spotlight link sync / `approve-bot-pr-checks-only` | `contents: read`, `actions: write` | prove `main` is still the reviewed base and the exact head is one README-only commit over it, bind runs to canonical workflows, then approve only those exact workflow runs when required |
+| Spotlight link sync / `merge-readme-only-after-required-checks` | `contents: write`, `pull-requests: write`, `checks: read` | merge only the exact one-file README PR after the five GitHub-Actions checks succeed and the planned generated snapshot is still current |
 
-No job may combine repository-content write with OIDC/attestation authority. The Spotlight synchronization jobs split content/PR mutation, Actions approval, and check-gated merge authority so no single bot step receives all three capabilities. A **new workflow**, new job, trigger family, or token grant is a governance change. Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, or comment-driven execution remain unauthorized unless a deliberate governance change reviews the new trust boundary.
+No job may combine repository-content write with OIDC/attestation authority. The Spotlight synchronization jobs split content/PR mutation, Actions approval, and check-gated merge authority so no single bot step receives all three capabilities. The post-publication dispatcher is separate again: it has `actions: write only`, depends on successful publication, checks out no repository content, and cannot itself mutate a branch or PR. A **new workflow**, new job, trigger family, or token grant is a governance change. Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, or comment-driven execution remain unauthorized unless a deliberate governance change reviews the new trust boundary.
 
 ## Spotlight direct-link synchronization
 
@@ -74,9 +75,11 @@ Each published Spotlight snapshot uses flagship-style interaction: the whole car
 
 `propose-readme-only-write` downloads that digest-verified plan, requires the recorded base SHA to still be the exact `main` tip, verifies the before/after README hashes, resets the fixed `automation/spotlight-links` branch to that source SHA, changes only `README.md`, and opens or updates one pull request. It never writes directly to `main`.
 
-GitHub may place workflow runs created by an automation-authored pull request into an approval-required state. `approve-bot-pr-checks-only` therefore receives only `actions: write`; it discovers runs for the exact proposed head SHA and may approve only the expected `CodeQL`, `Dependency review`, and `Profile quality` workflow families. It has no repository-content or pull-request mutation authority.
+GitHub may place workflow runs created by an automation-authored pull request into an approval-required state. Approval is itself execution authority, so `approve-bot-pr-checks-only` receives `contents: read` plus `actions: write` and fails closed before using the latter. It first requires `main` itself to remain the recorded base SHA. It then compares the exact proposed head against that recorded base and requires **one README-only commit**, zero behind commits, the exact merge base, and one modified file named `README.md`. It also requires the planned **generated evidence head** to remain current. Finally, it resolves `codeql.yml`, `dependency-review.yml`, and `profile-quality.yml` from the repository's **canonical default-branch workflow** paths and requires the observed run `workflow_id` values to match those identities before any `/approve` call. It has no repository-content or pull-request mutation authority.
 
-`merge-readme-only-after-required-checks` receives only the authority needed to inspect checks and request the final merge. Immediately before merge it requires the PR to remain open on the fixed automation branch, requires `main` to remain the recorded base SHA, requires exactly one changed file named `README.md`, and requires the exact five merge checks from GitHub Actions integration id `15368` to all conclude `success`. The normal `Protect Main` ruleset remains the final server-side arbiter; the synchronization workflow has no bypass actor and uses merge-commit semantics.
+`merge-readme-only-after-required-checks` receives only the authority needed to inspect checks and request the final merge. Before waiting on checks and again immediately before merge it requires `main` to remain the recorded base SHA and `generated` to remain the exact planned evidence SHA. It also requires the PR to remain open on the fixed automation branch, requires exactly one changed file named `README.md`, and requires the exact five merge checks from GitHub Actions integration id `15368` to all conclude `success`. The normal `Protect Main` ruleset remains the final server-side arbiter; the synchronization workflow has no bypass actor and uses merge-commit semantics.
+
+The `Update profile stats` workflow no longer relies on cron ordering to make Spotlight links converge after publication. After `publish-write-only` succeeds, a dedicated **post-publication** `dispatch-spotlight-link-sync` job with `actions: write only` dispatches the fixed `spotlight-link-sync.yml` workflow on `main`. The synchronizer's hourly schedule remains an eventual-consistency recovery path for transient dispatch/scheduler failures, not an ordering guarantee. The dispatcher has no checkout, content-write, pull-request, OIDC, attestation, check-read, or security-event authority.
 
 The synchronization workflow is presentation/navigation automation only. It does not change Spotlight selection, Portfolio Ledger evidence, generated evidence bytes, the eleven-subject attestation set, attestation authority, or publication authority.
 
@@ -160,6 +163,8 @@ The public/attested subject set is exactly **11 subjects**: four Signal Field SV
 
 `publish-write-only` depends on both generation and attestation. It receives `contents: write` but no OIDC or attestation authority. It downloads the same immutable evidence, independently executes the same canonical candidate validation boundary, stages exactly the 11 public subjects, and pushes only to `generated`.
 
+The post-publication `dispatch-spotlight-link-sync` job depends on `publish-write-only` and receives `actions: write only`. It performs no checkout and executes no authored Python. Its sole mutation is an Actions API dispatch of `.github/workflows/spotlight-link-sync.yml` with `ref=main`, so publication authority and README-reconciliation authority remain separate.
+
 ## Attestation schema versioning
 
 Published predicate schema versions are immutable.
@@ -198,12 +203,12 @@ Confirm all of the following before declaring a security/governance change compl
 4. one Portfolio Ledger v2 is collected and Spotlight is projected from that same validated Ledger;
 5. the canonical `profile-evidence-validation-boundary-v1` contract is exercised by Profile Quality integration, attestation, and publication and its predicate identities still match the frozen current schema;
 6. execution result, subject binding, and freshness remain independent across Ledger, Spotlight, summary, and attestation semantics;
-7. generation remains read-only, attestation remains non-publishing, and publication remains non-signing;
+7. generation remains read-only, attestation remains non-publishing, publication remains non-signing, and the post-publication dispatcher remains `actions: write only` with no checkout/content/PR/signing authority;
 8. the attestation subject set and generated public set are the same exact 11 subjects;
 9. v1 and v2 predicate schema bytes remain frozen and new predicates use v3 with `predicateSchema.digest`;
 10. mutable Signal Field README URLs pass the cache-identity contract and all six Spotlight README URLs bind one immutable generated snapshot SHA;
-11. the Spotlight direct-link synchronizer can only propose/approve/merge the guarded README-only update and remains subject to the same five required main-branch checks;
-12. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only`;
+11. the Spotlight direct-link synchronizer can only propose one README-only commit, binds any approval-required runs to the canonical default-branch workflow identities, and rejects approval or merge if either `main` or the planned generated evidence head moves;
+12. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only → dispatch-spotlight-link-sync`, and the dispatched reconciliation either deterministically no-ops or produces a single guarded README-only PR;
 13. `validate-ruleset-contract.py --live` passes inside the required Profile Quality gate for every observable ruleset field, while an administration-capable audit separately confirms the source-locked no-bypass invariant when GitHub redacts that field from the workflow identity.
 
 Any change that weakens these boundaries is a governance-contract change and must fail closed until deliberately reviewed.

@@ -5,7 +5,7 @@ GitHub repository rulesets are settings-level controls and are not writable from
 integration. This validator therefore protects the executable half of the governance
 contract: named PR checks, explicit runtime, pinned dependencies, release provenance,
 closed workflow authority, shell-safe expression boundaries, least-privilege profile
-evidence generation/identity/attestation/publication, measured refresh cadence,
+evidence generation/identity/attestation/publication/dispatch, measured refresh cadence,
 generated-surface cache binding, fresh-run concurrency, artifact-only publish behavior,
 the single governed Signal Field pipeline, the single authored profile-evidence
 generation pipeline, and the single candidate profile-evidence validation boundary.
@@ -185,15 +185,17 @@ def validate_stats(text: str) -> None:
     require('- "scripts/signal-field-pipeline-v1.json"' in text, "Stats push paths must cover the Signal Field stage manifest")
     require("cancel-in-progress: true" in text, "Stats workflow must cancel stale runs")
     require('PYTHON_VERSION: "3.13"' in text, "Stats Python version is not explicit")
-    require(text.count("runs-on: ubuntu-24.04") == 3, "All three stats jobs must pin ubuntu-24.04")
+    require(text.count("runs-on: ubuntu-24.04") == 4, "All four stats jobs must pin ubuntu-24.04")
 
     generate = job_block(text, "generate", "attest")
     attest = job_block(text, "attest", "publish")
-    publish = job_block(text, "publish", None)
+    publish = job_block(text, "publish", "dispatch")
+    dispatch = job_block(text, "dispatch", None)
 
     require("name: generate-read-only" in generate, "Read-only generation job name changed")
     require("name: attest-validated-evidence" in attest, "Attestation job name changed")
     require("name: publish-write-only" in publish, "Write-only publication job name changed")
+    require("name: dispatch-spotlight-link-sync" in dispatch, "Post-publication dispatcher job name changed")
 
     require("permissions:\n      contents: read" in generate, "Third-party generation job must remain contents: read")
     require("contents: write" not in generate, "Third-party generation job received repository write authority")
@@ -236,6 +238,15 @@ def validate_stats(text: str) -> None:
         label="Publish boundary",
     )
     require("python3 source/scripts/validate-signal-field-v214.py artifacts/profile-stats/profile" in publish, "Staged generated branch must validate Signal Field Evidence ID")
+
+    require("needs: publish" in dispatch, "Spotlight reconciliation dispatch must depend on successful publication")
+    require("permissions:\n      actions: write" in dispatch, "Spotlight reconciliation dispatcher must receive only Actions write authority")
+    for forbidden in ("contents:", "pull-requests:", "checks:", "id-token:", "attestations:", "security-events:"):
+        require(forbidden not in dispatch, f"Spotlight reconciliation dispatcher received forbidden authority: {forbidden}")
+    require("actions/checkout@" not in dispatch, "Spotlight reconciliation dispatcher must not checkout repository content")
+    require("actions/setup-python@" not in dispatch, "Spotlight reconciliation dispatcher must not execute authored Python setup")
+    require("actions/workflows/spotlight-link-sync.yml/dispatches" in dispatch, "Spotlight reconciliation dispatcher target changed")
+    require("-f ref=main" in dispatch, "Spotlight reconciliation dispatcher must target main")
 
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in generate, "Pinned upstream generator SHA changed")
     require(generate.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 3, "Generation must upload exactly three immutable evidence sets")
@@ -292,6 +303,8 @@ def validate_governance_doc(text: str) -> None:
         "profile-evidence-validation-boundary-v1",
         "id-token: write",
         "attestations: write",
+        "post-publication",
+        "actions: write only",
         "not certify every software behavior",
     ):
         require(phrase in text, f"Governance documentation is missing: {phrase}")
@@ -345,7 +358,7 @@ def main() -> int:
             "has one versioned workflow entrypoint, the single versioned profile-evidence validation boundary is exercised by integration/attestation/publication, "
             "mutable profile cache identities bind to live candidates, measured generation uses the governed best-effort hourly cadence, "
             "three artifact downloads are integrity-checked, third-party generation has neither write nor signing authority, "
-            "attestation is isolated, and publication independently revalidates."
+            "attestation is isolated, publication independently revalidates, and post-publication Spotlight dispatch has Actions-only authority."
         )
         return 0
     except (OSError, ValueError) as exc:

@@ -272,3 +272,21 @@ jobs:
           git -C artifacts config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git -C artifacts commit -m "chore: publish validated profile evidence [skip ci]"
           git -C artifacts push origin HEAD:generated
+
+  dispatch:
+    name: dispatch-spotlight-link-sync
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      actions: write
+
+    steps:
+      - name: Dispatch exact Spotlight reconciliation workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \
+            -f ref=main

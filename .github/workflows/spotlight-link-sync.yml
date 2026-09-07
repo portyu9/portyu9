@@ -184,20 +184,48 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions:
+      contents: read
       actions: write
 
     steps:
-      - name: Approve only the automation PR workflow runs when GitHub requires it
+      - name: Approve only the exact README-only automation head and canonical workflows
         env:
           GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ needs.propose.outputs.base_sha }}
           HEAD_SHA: ${{ needs.propose.outputs.head_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
         run: |
           set -euo pipefail
-          EXPECTED='["CodeQL","Dependency review","Profile quality"]'
+
+          # Approval is authority to execute. Prove both mutable roots still match the
+          # reviewed plan, then prove the exact head is still one README-only commit.
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
+          COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
+          test "$(jq -r .status <<<"$COMPARE")" = "ahead"
+          test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
+          test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
+          test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"
+          test "$(jq -r .behind_by <<<"$COMPARE")" = "0"
+          test "$(jq -r .total_commits <<<"$COMPARE")" = "1"
+          test "$(jq '.files | length' <<<"$COMPARE")" = "1"
+          test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
+          test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
+
+          # Bind workflow display names to their canonical default-branch workflow files.
+          CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"
+          DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"
+          PROFILE_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"
+          EXPECTED_IDENTITIES="$(jq -cn \
+            --argjson codeql "$CODEQL_WORKFLOW_ID" \
+            --argjson dependency "$DEPENDENCY_WORKFLOW_ID" \
+            --argjson profile "$PROFILE_WORKFLOW_ID" \
+            '[{"name":"CodeQL","workflow_id":$codeql},{"name":"Dependency review","workflow_id":$dependency},{"name":"Profile quality","workflow_id":$profile}] | sort_by(.name)')"
+
           for attempt in $(seq 1 30); do
             RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
-            NAMES="$(jq -c '[.[("workflow" + "_runs")][].name] | unique | sort' <<<"$RUNS")"
-            if [ "$NAMES" = "$EXPECTED" ]; then
+            OBSERVED_IDENTITIES="$(jq -c '[.[("workflow" + "_runs")][] | {name,workflow_id}] | unique | sort_by(.name)' <<<"$RUNS")"
+            if [ "$OBSERVED_IDENTITIES" = "$EXPECTED_IDENTITIES" ]; then
               break
             fi
             test "$attempt" -lt 30
@@ -205,7 +233,13 @@ jobs:
           done
 
           for NAME in "CodeQL" "Dependency review" "Profile quality"; do
-            RUN="$(jq -c --arg name "$NAME" '[.[("workflow" + "_runs")][] | select(.name == $name)] | sort_by(.created_at) | last' <<<"$RUNS")"
+            case "$NAME" in
+              "CodeQL") EXPECTED_ID="$CODEQL_WORKFLOW_ID" ;;
+              "Dependency review") EXPECTED_ID="$DEPENDENCY_WORKFLOW_ID" ;;
+              "Profile quality") EXPECTED_ID="$PROFILE_WORKFLOW_ID" ;;
+              *) exit 1 ;;
+            esac
+            RUN="$(jq -c --arg name "$NAME" --argjson workflow_id "$EXPECTED_ID" '[.[("workflow" + "_runs")][] | select(.name == $name and .workflow_id == $workflow_id)] | sort_by(.created_at) | last' <<<"$RUNS")"
             RUN_ID="$(jq -r .id <<<"$RUN")"
             STATUS="$(jq -r .status <<<"$RUN")"
             CONCLUSION="$(jq -r '.conclusion // ""' <<<"$RUN")"
@@ -233,6 +267,7 @@ jobs:
           PR_NUMBER: ${{ needs.propose.outputs.pr_number }}
           HEAD_SHA: ${{ needs.propose.outputs.head_sha }}
           BASE_SHA: ${{ needs.propose.outputs.base_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
         run: |
           set -euo pipefail
           PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
@@ -241,6 +276,7 @@ jobs:
           test "$(jq -r .head.ref <<<"$PR")" = "$BOT_BRANCH"
           test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
           FILES="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100")"
           test "$(jq 'length' <<<"$FILES")" = "1"
           test "$(jq -r '.[0].filename' <<<"$FILES")" = "README.md"
@@ -263,7 +299,9 @@ jobs:
             sleep 10
           done
 
+          # Revalidate both mutable roots immediately before the exact-head merge request.
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
           RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"
           test "$(jq -r .merged <<<"$RESULT")" = "true"
