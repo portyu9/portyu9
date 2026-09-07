@@ -50,6 +50,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
       - name: Validate Signal Field pipeline contract
         run: python3 scripts/signal_field_pipeline.py --self-test
 
@@ -158,6 +161,9 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
 
       - name: Generate actual pinned upstream Signal Field
         id: stats
