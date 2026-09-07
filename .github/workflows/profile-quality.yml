@@ -10,6 +10,7 @@ on:
       - "assets/**"
       - "scripts/**"
       - ".github/GOVERNANCE.md"
+      - ".github/SPOTLIGHT_UI_MERGE_AUTHORIZATION.md"
       - ".github/REFRESH_CADENCE.md"
       - ".github/THREAT_MODEL.md"
       - ".github/RULESETS.md"
@@ -113,6 +114,9 @@ jobs:
 
       - name: Validate workflow authority firewall
         run: python3 scripts/validate-workflow-authority-contract.py
+
+      - name: Validate Spotlight UI merge authorization
+        run: python3 scripts/validate-spotlight-ui-merge-authorization.py
 
       - name: Validate workflow shell safety
         run: python3 scripts/validate-workflow-shell-safety.py
