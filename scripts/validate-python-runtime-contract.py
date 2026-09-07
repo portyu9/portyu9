@@ -37,6 +37,17 @@ def require(condition: bool, message: str) -> None:
         fail(message)
 
 
+def runtime_probe_pair(command: str) -> re.Pattern[str]:
+    return re.compile(
+        r"(?m)^      - name: Set up Python\n"
+        r"        uses: actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*\n"
+        r"        with:\n"
+        r"          python-version: \$\{\{ env\.PYTHON_VERSION \}\}\n\n"
+        r"      - name: Verify resolved Python runtime\n"
+        rf"        run: {re.escape(command)}$"
+    )
+
+
 def validate_running_interpreter() -> str:
     observed = tuple(sys.version_info[:3])
     require(sys.implementation.name == "cpython",
@@ -88,6 +99,10 @@ def validate_repository() -> None:
                     f"{path.name}: every setup-python execution must be followed by one named runtime probe")
             require(text.count(f"        run: {command}") == setup_count,
                     f"{path.name}: every setup-python execution must invoke the reviewed runtime probe")
+            pair_count = len(runtime_probe_pair(command).findall(text))
+            require(pair_count == setup_count,
+                    f"{path.name}: runtime probe must immediately follow every setup-python step: "
+                    f"paired={pair_count} setup={setup_count}")
     require(observed == EXPECTED_WORKFLOWS,
             "Python-bearing workflow inventory changed: "
             f"observed={sorted(observed)} expected={sorted(EXPECTED_WORKFLOWS)}")
@@ -123,6 +138,26 @@ def self_test() -> None:
         "canonical PYTHON_VERSION",
     )
 
+    command = "python3 scripts/verify-python-runtime.py"
+    exact_pair = (
+        "      - name: Set up Python\n"
+        + "        uses: actions/setup-python@" + ("a" * 40) + " # v7.0.0\n"
+        + "        with:\n"
+        + "          python-version: ${{ env.PYTHON_VERSION }}\n\n"
+        + "      - name: Verify resolved Python runtime\n"
+        + f"        run: {command}\n"
+    )
+    require(len(runtime_probe_pair(command).findall(exact_pair)) == 1,
+            "self-test rejected immediate runtime probe ordering")
+    intervening = exact_pair.replace(
+        "\n      - name: Verify resolved Python runtime\n",
+        "\n      - name: Intervening action\n"
+        "        run: echo forbidden-before-runtime-proof\n\n"
+        "      - name: Verify resolved Python runtime\n",
+    )
+    require(len(runtime_probe_pair(command).findall(intervening)) == 0,
+            "self-test accepted an intervening step before the runtime probe")
+
 
 def main() -> int:
     try:
@@ -132,7 +167,8 @@ def main() -> int:
         print(
             "Python runtime contract passed: authored setup-python execution is closed to "
             f"{EXPECTED_VERSION} across exactly {len(EXPECTED_WORKFLOWS)} reviewed workflows; "
-            f"all six setup jobs execute the reviewed runtime probe; observed interpreter=CPython {observed_version}."
+            f"all six setup jobs execute the reviewed runtime probe immediately after setup; "
+            f"observed interpreter=CPython {observed_version}."
         )
         return 0
     except (OSError, ValueError) as exc:
