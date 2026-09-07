@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed on floating Python runtimes in authored GitHub workflows."""
+"""Fail closed on floating or misresolved Python runtimes in authored workflows."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
 EXPECTED_VERSION = "3.13.15"
+EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 EXPECTED_WORKFLOWS = {
     "profile-quality.yml",
     "profile-stats.yml",
@@ -27,6 +28,15 @@ def fail(message: str) -> None:
 def require(condition: bool, message: str) -> None:
     if not condition:
         fail(message)
+
+
+def validate_running_interpreter() -> str:
+    observed = tuple(sys.version_info[:3])
+    require(sys.implementation.name == "cpython",
+            f"runtime implementation drifted: observed={sys.implementation.name} expected=cpython")
+    require(observed == EXPECTED_VERSION_INFO,
+            f"runtime version drifted: observed={'.'.join(map(str, observed))} expected={EXPECTED_VERSION}")
+    return ".".join(map(str, observed))
 
 
 def workflow_files() -> list[Path]:
@@ -100,11 +110,13 @@ def self_test() -> None:
 
 def main() -> int:
     try:
+        observed_version = validate_running_interpreter()
         self_test()
         validate_repository()
         print(
             "Python runtime contract passed: authored setup-python execution is closed to "
-            f"{EXPECTED_VERSION} across exactly {len(EXPECTED_WORKFLOWS)} reviewed workflows."
+            f"{EXPECTED_VERSION} across exactly {len(EXPECTED_WORKFLOWS)} reviewed workflows; "
+            f"observed interpreter=CPython {observed_version}."
         )
         return 0
     except (OSError, ValueError) as exc:
