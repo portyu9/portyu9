@@ -1,6 +1,6 @@
 # Repository governance contract
 
-**Checkpoint:** 2026-09-06  
+**Checkpoint:** 2026-09-07  
 **Repository:** `portyu9/portyu9`
 
 I treat my profile README, reviewed source assets, generated Signal Field, Engineering Spotlight, Portfolio Evidence Ledger, cache identities, and profile-evidence attestations as production artifacts. Version-controlled checks and GitHub repository settings must describe the same trust boundary.
@@ -57,11 +57,13 @@ The **Workflow authority firewall** locks workflow triggers, job inventory, work
 | --- | --- | --- |
 | CodeQL analysis | `security-events: write` | publish code-scanning results |
 | Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint and persist my profile evidence attestation |
-| Profile stats / `publish-write-only` | `contents: write` | fast-forward validated artifacts to `generated` |
+| Profile stats / `publish-write-only` | `contents: write` | verify one sealed publication candidate and fast-forward that exact commit to `generated` |
 | Profile stats / `dispatch-spotlight-link-sync` | `actions: write only` | after successful publication, dispatch only the fixed Spotlight reconciliation workflow on `main`; no checkout/content/PR/signing authority |
 | Spotlight link sync / `propose-readme-only-write` | `contents: write`, `pull-requests: write` | update only the guarded README link block on an automation branch and open/update its PR |
 | Spotlight link sync / `approve-bot-pr-checks-only` | `contents: read`, `actions: write` | prove `main` is still the reviewed base and the exact head is one README-only commit over it, bind runs to canonical workflows, then approve only those exact workflow runs when required |
 | Spotlight link sync / `merge-readme-only-after-required-checks` | `contents: write`, `pull-requests: write`, `checks: read` | merge only the exact one-file README PR after the five GitHub-Actions checks succeed and the planned generated snapshot is still current |
+
+`stage-publication-read-only` is deliberately outside the write-capable exceptions. It has `contents: read` only, performs the independent publication revalidation/staging work, creates the local artifact commit without any repository push authority, and seals that exact commit into a digest-transported **sealed Git bundle** for the terminal publisher.
 
 No job may combine repository-content write with OIDC/attestation authority. The Spotlight synchronization jobs split content/PR mutation, Actions approval, and check-gated merge authority so no single bot step receives all three capabilities. The post-publication dispatcher is separate again: it has `actions: write only`, depends on successful publication, checks out no repository content, and cannot itself mutate a branch or PR. A **new workflow**, new job, trigger family, or token grant is a governance change. Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, or comment-driven execution remain unauthorized unless a deliberate governance change reviews the new trust boundary.
 
@@ -105,11 +107,11 @@ External CodeQL Actions execute at an **exact commit SHA**. Analysis receives on
 
 `scripts/profile-evidence-validation-boundary-v1.json` is the versioned `profile-evidence-validation-boundary-v1` contract for downloaded candidate evidence. It owns the ordered validator scripts, their live-evidence flags, the validator identities recorded in the attestation predicate, and the `attest-validated-evidence` boundary name.
 
-`scripts/validate-profile-evidence-boundary.py` is the only workflow entrypoint for full candidate revalidation after artifact transport. Both `attest-validated-evidence` and `publish-write-only` invoke it against their own downloaded copies. The predicate builder reads the same manifest through `profile_evidence_validation.py`, so the validator identities it records cannot drift independently from the commands production actually executes.
+`scripts/validate-profile-evidence-boundary.py` is the only workflow entrypoint for full candidate revalidation after artifact transport. Both `attest-validated-evidence` and `stage-publication-read-only` invoke it against independently downloaded copies. The predicate builder reads the same manifest through `profile_evidence_validation.py`, so the validator identities it records cannot drift independently from the commands production actually executes. `publish-write-only` does not execute authored Python; it verifies the sealed candidate's Git identity, one-parent ancestry, exact 11-path tree, commit identity, credential-free local configuration, and fixed origin before the terminal push.
 
 The immutable predicate v3 schema remains byte-for-byte frozen. `validate-profile-attestation-contract.py` requires its validator arrays and boundary constant to match this canonical manifest. A future semantic validator-set change that cannot satisfy the frozen schema therefore requires an explicit new predicate schema version rather than silent divergence.
 
-This consolidation does not share artifacts across authority boundaries and does not move validation into a write-capable helper. The runner is read-only; attestation and publication still download separately, execute separately, and retain distinct permissions.
+This consolidation does not share mutable working directories across authority boundaries. Attestation and publication staging download the generated evidence independently and execute the candidate validation boundary separately; the write-capable publisher receives only the digest-checked sealed Git bundle produced after read-only staging.
 
 ## Single evidence snapshot contract
 
@@ -161,7 +163,9 @@ The public/attested subject set is exactly **11 subjects**: four Signal Field SV
 
 `attest-validated-evidence` runs on a fresh job boundary with `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission. It downloads the three immutable evidence sets, fails closed on artifact digest mismatch, executes the canonical candidate validation boundary, builds the predicate, and only then invokes the pinned attestation Action.
 
-`publish-write-only` depends on both generation and attestation. It receives `contents: write` but no OIDC or attestation authority. It downloads the same immutable evidence, independently executes the same canonical candidate validation boundary, stages exactly the 11 public subjects, and pushes only to `generated`.
+`stage-publication-read-only` depends on generation and attestation but receives `contents: read` only. It independently downloads the same three immutable evidence sets with digest enforcement, executes the same canonical candidate validation boundary, checks out `generated` without persisted credentials, stages exactly the 11 public subjects, runs the staged-publication validators, creates the local bot commit, verifies its one-parent relationship to the observed generated head, and seals that exact candidate into a verified Git bundle. It has no repository push authority and exposes no explicit repository-write token to authored shell.
+
+`publish-write-only` depends only on successful publication staging and receives `contents: write` but no OIDC or attestation authority. It has no checkout step, no Python setup, and no authored Python. If staging reports no change it succeeds without mutation. Otherwise it downloads only the digest-checked sealed Git bundle, reconstructs the local candidate from that bundle, verifies the expected candidate/base SHAs, one-parent ancestry, exact 11-file `100644` tree, bot commit identity, clean worktree, credential-free local Git configuration, and fixed repository origin, then exposes the job token only to the final exact `HEAD:generated` push. If `generated` moved after staging, normal Git fast-forward semantics plus the `Protect generated` non-fast-forward rule reject the stale candidate rather than overwrite newer evidence.
 
 The post-publication `dispatch-spotlight-link-sync` job depends on `publish-write-only` and receives `actions: write only`. It performs no checkout and executes no authored Python. Its sole mutation is an Actions API dispatch of `.github/workflows/spotlight-link-sync.yml` with `ref=main`, so publication authority and README-reconciliation authority remain separate.
 
@@ -201,14 +205,14 @@ Confirm all of the following before declaring a security/governance change compl
 2. Action release provenance, Dependency Review, Workflow authority firewall, Workflow shell safety, and CodeQL contracts remain green;
 3. the Signal Field artifact round trip fails closed on digest mismatch and revalidates downloaded bytes;
 4. one Portfolio Ledger v2 is collected and Spotlight is projected from that same validated Ledger;
-5. the canonical `profile-evidence-validation-boundary-v1` contract is exercised by Profile Quality integration, attestation, and publication and its predicate identities still match the frozen current schema;
+5. the canonical `profile-evidence-validation-boundary-v1` contract is exercised by Profile Quality integration, attestation, and `stage-publication-read-only`, and its predicate identities still match the frozen current schema;
 6. execution result, subject binding, and freshness remain independent across Ledger, Spotlight, summary, and attestation semantics;
-7. generation remains read-only, attestation remains non-publishing, publication remains non-signing, and the post-publication dispatcher remains `actions: write only` with no checkout/content/PR/signing authority;
+7. generation remains read-only, attestation remains non-publishing, publication staging remains read-only/non-signing, terminal publication contains no checkout/Python/authored validation, and the post-publication dispatcher remains `actions: write only` with no checkout/content/PR/signing authority;
 8. the attestation subject set and generated public set are the same exact 11 subjects;
 9. v1 and v2 predicate schema bytes remain frozen and new predicates use v3 with `predicateSchema.digest`;
 10. mutable Signal Field README URLs pass the cache-identity contract and all six Spotlight README URLs bind one immutable generated snapshot SHA;
 11. the Spotlight direct-link synchronizer can only propose one README-only commit, binds any approval-required runs to the canonical default-branch workflow identities, and rejects approval or merge if either `main` or the planned generated evidence head moves;
-12. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only → dispatch-spotlight-link-sync`, and the dispatched reconciliation either deterministically no-ops or produces a single guarded README-only PR;
+12. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → stage-publication-read-only → publish-write-only → dispatch-spotlight-link-sync`, and the dispatched reconciliation either deterministically no-ops or produces a single guarded README-only PR;
 13. `validate-ruleset-contract.py --live` passes inside the required Profile Quality gate for every observable ruleset field, while an administration-capable audit separately confirms the source-locked no-bypass invariant when GitHub redacts that field from the workflow identity.
 
 Any change that weakens these boundaries is a governance-contract change and must fail closed until deliberately reviewed.
