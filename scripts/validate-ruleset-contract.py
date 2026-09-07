@@ -16,7 +16,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any
+from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / ".github" / "rulesets" / "repository-rulesets-v1.json"
@@ -35,6 +35,10 @@ EXPECTED_CONTEXTS = {
     "analyze-actions",
     "analyze-python",
 }
+
+
+class PublicRateLimitError(ValueError):
+    """The unauthenticated supplemental ruleset view exhausted its public quota."""
 
 
 def require(condition: bool, message: str) -> None:
@@ -102,6 +106,8 @@ def validate_source(payload: dict[str, Any]) -> None:
         "control-plane",
         "merge-blocking",
         "admin-scope",
+        "X-RateLimit-Remaining: 0",
+        "all other public API failures remain merge-blocking",
     ):
         require(phrase in doc, f"ruleset governance documentation is missing: {phrase}")
 
@@ -155,6 +161,12 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def is_proven_public_rate_limit(exc: urllib.error.HTTPError) -> bool:
+    """Recognize only GitHub's explicit exhausted unauthenticated core-rate signal."""
+    remaining = exc.headers.get("X-RateLimit-Remaining") if exc.headers is not None else None
+    return exc.code == 403 and remaining == "0"
+
+
 def request_json(url: str, *, authenticated: bool = True) -> Any:
     safe_url = validate_api_url(url)
     headers = {
@@ -170,6 +182,13 @@ def request_json(url: str, *, authenticated: bool = True) -> Any:
     try:
         with opener.open(request, timeout=15) as response:
             return json.load(response)
+    except urllib.error.HTTPError as exc:
+        mode = "authenticated" if authenticated and token else "public"
+        if not authenticated and is_proven_public_rate_limit(exc):
+            raise PublicRateLimitError(
+                "GitHub public ruleset API rate limit exhausted; supplemental bypass_actors view is temporarily unobservable"
+            ) from exc
+        raise ValueError(f"could not read GitHub ruleset API ({mode} view): {exc}") from exc
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
         mode = "authenticated" if authenticated and token else "public"
         raise ValueError(f"could not read GitHub ruleset API ({mode} view): {exc}") from exc
@@ -185,18 +204,31 @@ def rule_map(detail: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
-def observable_bypass_actors(name: str, ruleset_id: int, detail: dict[str, Any]) -> list[Any] | None:
+def observable_bypass_actors(
+    name: str,
+    ruleset_id: int,
+    detail: dict[str, Any],
+    *,
+    public_reader: Callable[..., Any] = request_json,
+) -> list[Any] | None:
     """Return bypass actors only when GitHub actually exposes them to this gate.
 
     GitHub's short-lived Actions token currently redacts ``bypass_actors``. The
     public view for this public repository can redact the same field. We never map
     an omitted field to an empty list: visible values are enforced, while omission
     remains an explicit admin-scope verification gap documented by the contract.
+
+    The public lookup is supplemental only. A proven unauthenticated GitHub public
+    rate-limit exhaustion leaves this admin-scope field unobservable; every other
+    public read failure remains a hard validation error.
     """
     observed = detail.get("bypass_actors")
     if isinstance(observed, list):
         return observed
-    public_detail = request_json(f"{API}/{ruleset_id}", authenticated=False)
+    try:
+        public_detail = public_reader(f"{API}/{ruleset_id}", authenticated=False)
+    except PublicRateLimitError:
+        return None
     require(isinstance(public_detail, dict), f"{name}: public ruleset detail is malformed")
     observed = public_detail.get("bypass_actors")
     return observed if isinstance(observed, list) else None
@@ -315,6 +347,43 @@ def self_test(payload: dict[str, Any]) -> None:
     ):
         expect_unsafe_url(url, expected)
 
+    limited = urllib.error.HTTPError(
+        API,
+        403,
+        "rate limit exceeded",
+        {"X-RateLimit-Remaining": "0"},
+        None,
+    )
+    require(is_proven_public_rate_limit(limited), "public rate-limit self-test rejected GitHub's exhausted 403 signal")
+    non_exhausted = urllib.error.HTTPError(
+        API,
+        403,
+        "forbidden",
+        {"X-RateLimit-Remaining": "1"},
+        None,
+    )
+    require(not is_proven_public_rate_limit(non_exhausted), "public rate-limit self-test accepted a non-exhausted 403")
+    not_found = urllib.error.HTTPError(API, 404, "not found", {"X-RateLimit-Remaining": "0"}, None)
+    require(not is_proven_public_rate_limit(not_found), "public rate-limit self-test accepted a non-403 response")
+
+    def rate_limited_reader(url: str, *, authenticated: bool = True) -> Any:
+        raise PublicRateLimitError("fixture public rate limit")
+
+    require(
+        observable_bypass_actors("fixture", 123, {}, public_reader=rate_limited_reader) is None,
+        "public rate-limit self-test must leave bypass_actors unobservable",
+    )
+
+    def broken_public_reader(url: str, *, authenticated: bool = True) -> Any:
+        raise ValueError("fixture public failure")
+
+    try:
+        observable_bypass_actors("fixture", 123, {}, public_reader=broken_public_reader)
+    except ValueError as exc:
+        require("fixture public failure" in str(exc), f"public failure self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test softened a non-rate-limit public API failure")
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -336,9 +405,9 @@ def main() -> int:
         )
         if unobservable:
             print(
-                "NOTICE: bypass_actors is not exposed to the read-only workflow/public API for: "
+                "NOTICE: bypass_actors could not be observed by the read-only workflow/public fallback for: "
                 + ", ".join(unobservable)
-                + "; empty bypass actors remains an admin-scope control-plane audit invariant and omission was not interpreted as empty."
+                + "; empty bypass actors remains an admin-scope control-plane audit invariant and unobservability was not interpreted as empty."
             )
         return 0
     except (OSError, ValueError, TypeError) as exc:
