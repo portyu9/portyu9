@@ -5,13 +5,13 @@
     "DIFFERENT_SUBJECT": 4
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:1789e7b23fd4f34d91cf8a1abc4859dace12c98c1ce941984b81fb9f76e069ce",
-  "evidence_id": "PL2-1789E7B23FD4F34D",
+  "evidence_digest": "sha256:218a01fca4ac539bfbbbf1c289524bd19c144f9cfd1f5625398049c0bcaa6c3a",
+  "evidence_id": "PL2-218A01FCA4AC539B",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 20,
-    "SAME_DAY": 5
+    "AGED": 18,
+    "SAME_DAY": 7
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -20,7 +20,8 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 25
+    "PASSING": 24,
+    "RUNNING": 1
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -40,21 +41,21 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-07T16:08:32Z",
+          "completed_at_utc": "2026-09-07T17:40:01Z",
           "freshness": "SAME_DAY",
-          "head_sha": "0d0704f7ff34ee0501b1f0061d023d96c116892d",
+          "head_sha": "32c7210c81b89ade6572adcff78aff6d782b1489",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "PASSING",
-          "run_id": 34141462722,
-          "run_number": 1437,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34141462722",
+          "result": "RUNNING",
+          "run_id": 34148534616,
+          "run_number": 1440,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34148534616",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "0d0704f7ff34ee0501b1f0061d023d96c116892d",
+      "subject_revision": "32c7210c81b89ade6572adcff78aff6d782b1489",
       "title": "AI QA CONTROL PLANE"
     },
     {
@@ -442,43 +443,43 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 4,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/qa-automation-python-pytest",
       "signals": [
         {
-          "age_days": 4,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-03T04:02:10Z",
-          "freshness": "AGED",
-          "head_sha": "64acbdc89a75874d359b0ef6ffda2adf90cc41e5",
+          "completed_at_utc": "2026-09-07T17:02:34Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "7b5ac90259c6034675ba6e15ab531889f30245ae",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 33713429803,
-          "run_number": 239,
-          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/33713429803",
+          "run_id": 34145833571,
+          "run_number": 243,
+          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/34145833571",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 4,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-03T04:01:31Z",
-          "freshness": "AGED",
-          "head_sha": "64acbdc89a75874d359b0ef6ffda2adf90cc41e5",
+          "completed_at_utc": "2026-09-07T17:02:37Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "7b5ac90259c6034675ba6e15ab531889f30245ae",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 33713429834,
-          "run_number": 146,
-          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/33713429834",
+          "run_id": 34145833576,
+          "run_number": 151,
+          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/34145833576",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "64acbdc89a75874d359b0ef6ffda2adf90cc41e5",
+      "subject_revision": "7b5ac90259c6034675ba6e15ab531889f30245ae",
       "title": "PYTHON + PYTEST QE"
     },
     {
