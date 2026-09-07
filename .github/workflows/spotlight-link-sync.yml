@@ -1,0 +1,269 @@
+name: Sync Spotlight profile links
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Reconcile after the hourly profile-evidence refresh. Most runs are deterministic no-ops.
+    - cron: "41 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-spotlight-profile-links
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  BOT_BRANCH: "automation/spotlight-links"
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main'
+    name: plan-direct-links-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.render.outputs.changed }}
+      base_sha: ${{ steps.render.outputs.base_sha }}
+      generated_sha: ${{ steps.render.outputs.generated_sha }}
+
+    steps:
+      - name: Checkout trusted source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Checkout published evidence snapshot
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: generated
+          path: published
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Reconstruct exact published Spotlight projection
+        run: |
+          set -euo pipefail
+          python3 source/scripts/validate-portfolio-evidence-ledger.py published/portfolio-evidence --require-live
+          rm -rf projected-spotlight
+          python3 source/scripts/generate-engineering-spotlight.py projected-spotlight \
+            --ledger published/portfolio-evidence/portfolio-evidence-ledger.json
+          python3 source/scripts/validate-engineering-spotlight.py projected-spotlight \
+            --ledger published/portfolio-evidence/portfolio-evidence-ledger.json
+          for slot in 1 2 3; do
+            for theme in light dark; do
+              cmp "projected-spotlight/spotlight-${slot}-${theme}.svg" \
+                  "published/engineering-spotlight/spotlight-${slot}-${theme}.svg"
+            done
+          done
+
+      - name: Render atomic direct-link README proposal
+        id: render
+        run: |
+          set -euo pipefail
+          GENERATED_SHA="$(git -C published rev-parse HEAD)"
+          python3 source/scripts/spotlight_profile_links.py \
+            --manifest projected-spotlight/spotlight-manifest.json \
+            --readme source/README.md \
+            --generated-sha "$GENERATED_SHA" \
+            --base-sha "$GITHUB_SHA" \
+            --output-dir spotlight-link-plan
+          CHANGED="$(jq -r .changed spotlight-link-plan/plan.json)"
+          test "$CHANGED" = "true" || test "$CHANGED" = "false"
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "generated_sha=$GENERATED_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload reviewed direct-link proposal
+        if: steps.render.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: spotlight-link-plan
+          path: spotlight-link-plan/*
+          if-no-files-found: error
+          retention-days: 1
+
+  propose:
+    if: needs.plan.outputs.changed == 'true'
+    name: propose-readme-only-write
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      pr_number: ${{ steps.propose.outputs.pr_number }}
+      head_sha: ${{ steps.propose.outputs.head_sha }}
+      base_sha: ${{ steps.propose.outputs.base_sha }}
+
+    steps:
+      - name: Download reviewed direct-link proposal
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: spotlight-link-plan
+          path: spotlight-link-plan
+          digest-mismatch: error
+
+      - name: Create or update guarded README-only pull request
+        id: propose
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.plan.outputs.base_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+        run: |
+          set -euo pipefail
+          PLAN="spotlight-link-plan/plan.json"
+          PROPOSED="spotlight-link-plan/README.md"
+          test -s "$PLAN" && test -s "$PROPOSED"
+          test "$(jq -r .version "$PLAN")" = "spotlight-profile-links-v1"
+          test "$(jq -r .base_sha "$PLAN")" = "$SOURCE_SHA"
+          test "$(jq -r .generated_sha "$PLAN")" = "$GENERATED_SHA"
+          test "$(sha256sum "$PROPOSED" | cut -d' ' -f1)" = "$(jq -r .readme_sha256_after "$PLAN")"
+
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content \
+            | tr -d '\n' | base64 --decode > current-readme.md
+          test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
+
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BOT_BRANCH}" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" \
+              -f sha="$SOURCE_SHA" -F force=true >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/heads/${BOT_BRANCH}" -f sha="$SOURCE_SHA" >/dev/null
+          fi
+
+          README_BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BOT_BRANCH}" --jq .sha)"
+          CONTENT="$(base64 -w0 "$PROPOSED")"
+          jq -n \
+            --arg message "chore: sync rotating Spotlight links" \
+            --arg content "$CONTENT" \
+            --arg branch "$BOT_BRANCH" \
+            --arg sha "$README_BLOB" \
+            '{message:$message,content:$content,branch:$branch,sha:$sha}' > update.json
+          gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/README.md" --input update.json > update-response.json
+          HEAD_SHA="$(jq -r .commit.sha update-response.json)"
+          test "$HEAD_SHA" != "null"
+
+          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BOT_BRANCH}&base=main&per_page=10")"
+          COUNT="$(jq 'length' <<<"$PRS")"
+          if [ "$COUNT" = "0" ]; then
+            jq -n \
+              --arg title "chore: sync rotating Spotlight links" \
+              --arg head "$BOT_BRANCH" \
+              --arg base "main" \
+              --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." \
+              '{title:$title,head:$head,base:$base,body:$body}' > pr.json
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json
+            PR_NUMBER="$(jq -r .number pr-response.json)"
+          else
+            test "$COUNT" = "1"
+            PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
+          fi
+
+          PR_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"
+          test "$PR_HEAD" = "$HEAD_SHA"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+  approve:
+    if: needs.plan.outputs.changed == 'true' && needs.propose.result == 'success'
+    name: approve-bot-pr-checks-only
+    needs: [plan, propose]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      actions: write
+
+    steps:
+      - name: Approve only the automation PR workflow runs when GitHub requires it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.propose.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          EXPECTED='["CodeQL","Dependency review","Profile quality"]'
+          for attempt in $(seq 1 30); do
+            RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
+            NAMES="$(jq -c '[.[("workflow" + "_runs")][].name] | unique | sort' <<<"$RUNS")"
+            if [ "$NAMES" = "$EXPECTED" ]; then
+              break
+            fi
+            test "$attempt" -lt 30
+            sleep 2
+          done
+
+          for NAME in "CodeQL" "Dependency review" "Profile quality"; do
+            RUN="$(jq -c --arg name "$NAME" '[.[("workflow" + "_runs")][] | select(.name == $name)] | sort_by(.created_at) | last' <<<"$RUNS")"
+            RUN_ID="$(jq -r .id <<<"$RUN")"
+            STATUS="$(jq -r .status <<<"$RUN")"
+            CONCLUSION="$(jq -r '.conclusion // ""' <<<"$RUN")"
+            test "$RUN_ID" != "null"
+            if [ "$STATUS" = "action_required" ] || [ "$STATUS" = "waiting" ] || [ "$CONCLUSION" = "action_required" ]; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null
+            fi
+          done
+
+  merge:
+    if: needs.plan.outputs.changed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'
+    name: merge-readme-only-after-required-checks
+    needs: [plan, propose, approve]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+
+    steps:
+      - name: Merge only after the exact required GitHub Actions checks succeed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.propose.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.propose.outputs.head_sha }}
+          BASE_SHA: ${{ needs.propose.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .state <<<"$PR")" = "open"
+          test "$(jq -r .base.ref <<<"$PR")" = "main"
+          test "$(jq -r .head.ref <<<"$PR")" = "$BOT_BRANCH"
+          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          FILES="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100")"
+          test "$(jq 'length' <<<"$FILES")" = "1"
+          test "$(jq -r '.[0].filename' <<<"$FILES")" = "README.md"
+
+          REQUIRED='["analyze-actions","analyze-python","dependency-review","integration-pinned-upstream","validate-contracts"]'
+          for attempt in $(seq 1 60); do
+            CHECKS="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+            OBSERVED="$(jq -c '[.check_runs[] | select(.app.id == 15368) | .name] | unique | sort' <<<"$CHECKS")"
+            if [ "$OBSERVED" = "$REQUIRED" ]; then
+              CONCLUSIONS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | select(.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts") | .conclusion] | unique' <<<"$CHECKS")"
+              if [ "$CONCLUSIONS" = '["success"]' ]; then
+                break
+              fi
+              if jq -e '[.check_runs[] | select(.app.id == 15368) | select(.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts") | .conclusion] | any(. == "failure" or . == "cancelled" or . == "timed_out" or . == "action_required")' <<<"$CHECKS" >/dev/null; then
+                echo "A required Spotlight-link PR check failed." >&2
+                exit 1
+              fi
+            fi
+            test "$attempt" -lt 60
+            sleep 10
+          done
+
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
+          RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"
+          test "$(jq -r .merged <<<"$RESULT")" = "true"

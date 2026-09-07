@@ -14,32 +14,10 @@ def palette(theme: str) -> dict[str, str]:
     return {"surface":"#FFFFFF","stroke":"#D0D7DE","ink":"#1F2328","muted":"#57606A","chip":"#F6F8FA","chiptext":"#3D444D","node":"#FFFFFF"}
 
 
-def signal_color(signal: str) -> str:
-    if signal == "PASSING": return "#1A7F37"
-    if signal == "FAILING": return "#CF222E"
-    if signal == "RUNNING": return "#9A6700"
-    if signal == "STALE": return "#BF8700"
-    return "#57606A"
-
-
 def fit_font(text: str, default: int = 24) -> int:
     if len(text) > 25: return default - 4
     if len(text) > 21: return default - 2
     return default
-
-
-def evidence_pill(label: str, signal: str, x: float, theme: str) -> tuple[str, float]:
-    p = palette(theme)
-    rendered = f"{label} · {signal}"
-    width = max(118.0, min(218.0, 34.0 + len(rendered) * 6.4))
-    border = signal_color(signal)
-    text_size = 9.4 if len(rendered) <= 21 else 8.7
-    markup = (
-        f'<rect x="{x:.1f}" y="145" width="{width:.1f}" height="28" rx="8" fill="{p["chip"]}" stroke="{border}" stroke-opacity=".75" stroke-width="1.15"/>'
-        f'<circle cx="{x+15:.1f}" cy="159" r="4.0" fill="{border}"/>'
-        f'<text x="{x+27:.1f}" y="163" fill="{p["chiptext"]}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="{text_size}" font-weight="800">{html.escape(rendered)}</text>'
-    )
-    return markup, width
 
 
 def glyph_markup(glyph: str, accent: str) -> str:
@@ -94,8 +72,6 @@ def render_card(
     domain = html.escape(str(system["domain"]))
     signature = html.escape(str(system["signature"]))
     repo = html.escape(str(system["repo"]))
-    first, first_w = evidence_pill(str(evidence[0]["label"]), str(evidence[0]["signal"]), 40, theme)
-    second, _ = evidence_pill(str(evidence[1]["label"]), str(evidence[1]["signal"]), 52 + first_w, theme)
     max_age = max(int(item["age_days"]) for item in evidence)
     run_attr = ";".join(f"{item['label']}:{item['run_id']}" for item in evidence)
     workflow_attr = ";".join(f"{item['label']}:{item['workflow']}" for item in evidence)
@@ -106,7 +82,7 @@ def render_card(
     glyph = glyph_markup(str(system["glyph"]), str(accent))
     topology = topology_markup(str(system["topology"]), p["node"], str(accent), str(accent2), str(accent3))
     title_size = fit_font(str(system["title"]))
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="620" height="198" viewBox="0 0 620 198" role="img" aria-labelledby="title desc" data-spotlight="{version}" data-layout="evidence-v2" data-slot="{slot}" data-date="{day.isoformat()}" data-repository="{owner}/{repo}" data-subject-revision="{subject}" data-evidence-age-days="{max_age}" data-evidence-runs="{html.escape(run_attr)}" data-evidence-workflows="{html.escape(workflow_attr)}" data-glyph="{system["glyph"]}" data-topology="{system["topology"]}">
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="620" height="198" viewBox="0 0 620 198" role="img" aria-labelledby="title desc" data-spotlight="{version}" data-layout="evidence-v2" data-slot="{slot}" data-date="{day.isoformat()}" data-repository="{owner}/{repo}" data-subject-revision="{subject}" data-evidence-age-days="{max_age}" data-evidence-runs="{html.escape(run_attr)}" data-evidence-workflows="{html.escape(workflow_attr)}" data-status-presentation="external-clickable-only" data-glyph="{system["glyph"]}" data-topology="{system["topology"]}">
   <title id="title">{title}</title>
   <desc id="desc">Daily deterministic Evidence Spotlight for {owner}/{repo} at main revision {subject}. {signature}. {html.escape(evidence_desc)}. Freshness is UTC whole-day age from the named workflow evidence timestamp.</desc>
   <defs>
@@ -123,8 +99,7 @@ def render_card(
   <text x="40" y="109" fill="{p['muted']}" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="12.2" font-weight="550">{signature}</text>
   <text x="40" y="131" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.8" font-weight="700">SUBJECT · {subject} · MAIN</text>
   <text x="590" y="131" text-anchor="end" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.8" font-weight="700">FRESHNESS · {max_age}d UTC</text>
-  {first}{second}
-  <text x="40" y="189" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.2">RUNS · {html.escape(" / ".join(f"{item['workflow']}#{item['run_id']}" for item in evidence))}</text>
-  <text x="590" y="189" text-anchor="end" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.2">repo · {repo}</text>
+  <text x="40" y="166" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.2">RUNS · {html.escape(" / ".join(f"{item['workflow']}#{item['run_id']}" for item in evidence))}</text>
+  <text x="590" y="166" text-anchor="end" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.2">repo · {repo}</text>
 </svg>
 """

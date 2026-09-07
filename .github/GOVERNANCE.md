@@ -43,22 +43,42 @@ The vulnerability gate intentionally does not become a hidden **license policy**
 
 ## Workflow authority firewall
 
-The GitHub Actions surface is a **closed allowlist** of exactly four workflows:
+The GitHub Actions surface is a **closed allowlist** of exactly five workflows:
 
 - `codeql.yml`
 - `dependency-review.yml`
 - `profile-quality.yml`
 - `profile-stats.yml`
+- `spotlight-link-sync.yml`
 
-The **Workflow authority firewall** locks workflow triggers, job inventory, workflow-level permissions, and job-level permissions. Read-only authority is the default. The only reviewed write-capable exceptions are:
+The **Workflow authority firewall** locks workflow triggers, job inventory, workflow-level permissions, and job-level permissions. Read-only authority is the default. The reviewed write-capable exceptions are deliberately split by terminal purpose:
 
 | Workflow / job | Additional authority | Purpose |
 | --- | --- | --- |
 | CodeQL analysis | `security-events: write` | publish code-scanning results |
 | Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint and persist my profile evidence attestation |
 | Profile stats / `publish-write-only` | `contents: write` | fast-forward validated artifacts to `generated` |
+| Spotlight link sync / `propose-readme-only-write` | `contents: write`, `pull-requests: write` | update only the guarded README link block on an automation branch and open/update its PR |
+| Spotlight link sync / `approve-bot-pr-checks-only` | `actions: write` | approve only the exact automation PR's workflow runs when GitHub places them in approval-required state |
+| Spotlight link sync / `merge-readme-only-after-required-checks` | `contents: write`, `pull-requests: write`, `checks: read` | merge only the exact one-file README PR after the five GitHub-Actions checks succeed |
 
-No job may combine repository-content write with OIDC/attestation authority. A **new workflow**, new job, trigger family, or token grant is a governance change. Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, or comment-driven execution remain unauthorized unless a deliberate governance change reviews the new trust boundary.
+No job may combine repository-content write with OIDC/attestation authority. The Spotlight synchronization jobs split content/PR mutation, Actions approval, and check-gated merge authority so no single bot step receives all three capabilities. A **new workflow**, new job, trigger family, or token grant is a governance change. Privileged trigger families such as `pull_request_target`, `workflow_run`, `repository_dispatch`, or comment-driven execution remain unauthorized unless a deliberate governance change reviews the new trust boundary.
+
+## Spotlight direct-link synchronization
+
+The three Evidence Spotlight subjects rotate deterministically, while `README.md` is protected source and `Protect Main` has no bypass actors. My profile therefore does **not** weaken `main`, route clicks through an issue, or let a scheduled job push directly to the protected branch.
+
+Each published Spotlight snapshot uses flagship-style interaction: the whole card links directly to the selected repository, and the external CI / SECURITY Shields link directly to that repository's named `ci.yml` / `security.yml` workflow. All six light/dark card image URLs in the guarded block are pinned to one immutable `generated` commit SHA. The image bytes and their three repository/six workflow hrefs therefore change atomically when one reviewed README commit lands; a mutable card can never rotate ahead of a static link.
+
+`plan-direct-links-read-only` checks out trusted `main` and `generated` without persisted credentials, revalidates the published Portfolio Evidence Ledger, deterministically reconstructs the Spotlight projection from that Ledger, and byte-compares all six regenerated cards with the published snapshot. Only then does `scripts/spotlight_profile_links.py` render a complete proposed README and a hash-bound plan. The planning job has `contents: read` only.
+
+`propose-readme-only-write` downloads that digest-verified plan, requires the recorded base SHA to still be the exact `main` tip, verifies the before/after README hashes, resets the fixed `automation/spotlight-links` branch to that source SHA, changes only `README.md`, and opens or updates one pull request. It never writes directly to `main`.
+
+GitHub may place workflow runs created by an automation-authored pull request into an approval-required state. `approve-bot-pr-checks-only` therefore receives only `actions: write`; it discovers runs for the exact proposed head SHA and may approve only the expected `CodeQL`, `Dependency review`, and `Profile quality` workflow families. It has no repository-content or pull-request mutation authority.
+
+`merge-readme-only-after-required-checks` receives only the authority needed to inspect checks and request the final merge. Immediately before merge it requires the PR to remain open on the fixed automation branch, requires `main` to remain the recorded base SHA, requires exactly one changed file named `README.md`, and requires the exact five merge checks from GitHub Actions integration id `15368` to all conclude `success`. The normal `Protect Main` ruleset remains the final server-side arbiter; the synchronization workflow has no bypass actor and uses merge-commit semantics.
+
+The synchronization workflow is presentation/navigation automation only. It does not change Spotlight selection, Portfolio Ledger evidence, generated evidence bytes, the eleven-subject attestation set, attestation authority, or publication authority.
 
 ## Workflow shell safety
 
@@ -122,7 +142,7 @@ The short Signal Field Evidence ID is a correlation handle, not a substitute for
 
 ## Generated asset cache contract
 
-Mutable images served from the `generated` branch must carry an explicit cache identity in README URLs. All six Spotlight theme assets share one current Spotlight cache token and all four Signal Field assets share one current Signal Field cache token. `scripts/validate-profile-cache-contract.py` rejects missing, stale, or inconsistent family tokens.
+Mutable images served from the `generated` branch must carry an explicit cache identity in README URLs. The four Signal Field assets share one current Signal Field cache token. Evidence Spotlight uses a stronger atomic presentation contract: all six theme assets in my profile README are pinned to one immutable generated commit SHA, so they require no query-based cache token and cannot rotate independently from their direct repository/workflow links. `scripts/validate-profile-cache-contract.py` rejects mixed Spotlight SHAs, mutable Spotlight URLs, and stale or inconsistent Signal Field tokens.
 
 Immutable source-revision URLs do not need query-based cache busting because the revision itself is the cache identity.
 
@@ -181,8 +201,9 @@ Confirm all of the following before declaring a security/governance change compl
 7. generation remains read-only, attestation remains non-publishing, and publication remains non-signing;
 8. the attestation subject set and generated public set are the same exact 11 subjects;
 9. v1 and v2 predicate schema bytes remain frozen and new predicates use v3 with `predicateSchema.digest`;
-10. mutable generated README asset URLs pass the cache-identity contract;
-11. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only`;
-12. `validate-ruleset-contract.py --live` passes inside the required Profile Quality gate for every observable ruleset field, while an administration-capable audit separately confirms the source-locked no-bypass invariant when GitHub redacts that field from the workflow identity.
+10. mutable Signal Field README URLs pass the cache-identity contract and all six Spotlight README URLs bind one immutable generated snapshot SHA;
+11. the Spotlight direct-link synchronizer can only propose/approve/merge the guarded README-only update and remains subject to the same five required main-branch checks;
+12. for production-path changes, a real `Update profile stats` run succeeds through `generate-read-only → attest-validated-evidence → publish-write-only`;
+13. `validate-ruleset-contract.py --live` passes inside the required Profile Quality gate for every observable ruleset field, while an administration-capable audit separately confirms the source-locked no-bypass invariant when GitHub redacts that field from the workflow identity.
 
 Any change that weakens these boundaries is a governance-contract change and must fail closed until deliberately reviewed.

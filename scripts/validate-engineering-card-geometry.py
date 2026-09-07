@@ -50,6 +50,10 @@ def validate_flagships() -> None:
         require(FLAGSHIP_OUTER in content, f"flagship outer surface no longer fills 620×198 canvas: {relative}")
         require(FLAGSHIP_WASH in content, f"flagship wash no longer fills 620×198 canvas: {relative}")
         require(FLAGSHIP_RAIL in content, f"flagship rail no longer preserves 20px vertical insets: {relative}")
+        require(content.count(' y="132"') == 3,
+                f"flagship capability row must occupy the reviewed y=132 band: {relative}")
+        require(content.count(' y="152"') == 3,
+                f"flagship capability labels must occupy the reviewed y=152 baseline: {relative}")
 
 
 def validate_spotlights(directory: Path) -> None:
@@ -58,6 +62,12 @@ def validate_spotlights(directory: Path) -> None:
         content = read_svg(directory / basename, "generated Spotlight card")
         require('data-spotlight="engineering-spotlight-v2.1"' in content,
                 f"generated Spotlight identity changed: {basename}")
+        require('data-status-presentation="external-clickable-only"' in content,
+                f"generated Spotlight status presentation must remain external/clickable: {basename}")
+        require(content.count(' y="166"') == 2,
+                f"generated Spotlight provenance row must occupy the reviewed y=166 band: {basename}")
+        require(' y="145"' not in content,
+                f"duplicate in-card Spotlight status controls returned: {basename}")
 
 
 def main() -> int:
@@ -69,7 +79,7 @@ def main() -> int:
         if args.spotlight_dir is not None:
             validate_spotlights(args.spotlight_dir)
         scope = "flagships + generated Spotlight" if args.spotlight_dir is not None else "flagships"
-        print(f"Engineering card geometry validation passed: {scope} use exact 620×198 canvases")
+        print(f"Engineering card geometry validation passed: {scope} use exact 620×198 canvases with reviewed interior balance")
         return 0
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

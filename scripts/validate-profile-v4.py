@@ -51,13 +51,14 @@ RETIRED_FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-graphql-qe.svg",
     "assets/profile-systems/qualification-visual-accessibility-qe.svg",
 )
-SPOTLIGHT_REFS = (
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-dark.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-3-light.svg",
-    "https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-3-dark.svg",
+SPOTLIGHT_PATHS = tuple(
+    f"engineering-spotlight/spotlight-{slot}-{theme}.svg"
+    for slot in range(1, 4)
+    for theme in ("light", "dark")
+)
+SPOTLIGHT_REF = re.compile(
+    r"^https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/"
+    r"(engineering-spotlight/spotlight-[123]-(?:light|dark)\.svg)$"
 )
 THESIS_HEADER_ASSET_COMMIT = "4c6b83d2b1d04c9735c14492da3e0a03f0bb4ce7"
 THESIS_HEADER_REFS = tuple(
@@ -86,13 +87,22 @@ def validate_references(readme: str) -> None:
         re.I,
     )
     references=[]
+    spotlight_refs: list[tuple[str, str]] = []
     for match in pattern.finditer(readme):
         ref=match.group(1) or match.group(2) or match.group(3)
-        references.append(ref.split("?",1)[0].split("#",1)[0].lstrip("./"))
-    allowed = set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(DESKTOP_PRINCIPLE_SVGS) | set(THESIS_HEADER_REFS) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS) | set(SPOTLIGHT_REFS)
+        cleaned=ref.split("?",1)[0].split("#",1)[0].lstrip("./")
+        spotlight=SPOTLIGHT_REF.fullmatch(cleaned)
+        if spotlight is not None:
+            spotlight_refs.append((spotlight.group(1), spotlight.group(2)))
+        else:
+            references.append(cleaned)
+    allowed = set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(DESKTOP_PRINCIPLE_SVGS) | set(THESIS_HEADER_REFS) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS)
     unexpected=sorted(set(references)-allowed); missing=sorted(allowed-set(references))
     require(not unexpected, "README contains unapproved SVG references: " + ", ".join(unexpected))
     require(not missing, "README is missing approved SVG references: " + ", ".join(missing))
+    require(len(spotlight_refs) == 6, "README must reference exactly six immutable Spotlight SVGs")
+    require({path for _, path in spotlight_refs} == set(SPOTLIGHT_PATHS), "README immutable Spotlight slot/theme inventory changed")
+    require(len({revision for revision, _ in spotlight_refs}) == 1, "All six Spotlight SVGs must pin one immutable generated commit")
 
 
 def validate_taxonomy_scale(readme: str) -> None:
@@ -295,8 +305,6 @@ def main() -> int:
     repro=(ROOT/"assets/profile-badges/principle-reproducibility-optics.svg").read_text(encoding="utf-8")
     require(">Reproducibility</text>" in repro and ">over Optics</text>" in repro, "Reproducibility principle wording changed")
     validate_flagships(readme); validate_references(readme)
-    for ref in SPOTLIGHT_REFS:
-        require(readme.count(ref)==1, f"Generated spotlight reference must occur exactly once: {ref}")
     require("3 systems · deterministic daily rotation" in readme, "Three-system daily deterministic spotlight policy must remain explicit")
     require("From my QE systems portfolio" in readme, "Spotlight ownership wording changed")
     require("engineering-systems-preview-pr50" not in readme, "PR-only Spotlight preview references must not reach production")

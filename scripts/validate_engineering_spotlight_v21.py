@@ -260,6 +260,7 @@ def validate_svgs(root: Path, slot_by_number: dict[int, dict[str, Any]]) -> None
         require(len(content.encode()) <= 38000, f"Spotlight SVG exceeds 38 KB: {name}")
         require(f'data-spotlight="{VERSION}"' in content, f"Spotlight provenance missing: {name}")
         require('data-layout="evidence-v2"' in content, f"Spotlight layout provenance missing: {name}")
+        require('data-status-presentation="external-clickable-only"' in content, f"Spotlight visible status presentation regressed: {name}")
         require(f'data-evidence-semantics="{EVIDENCE_SEMANTICS}"' in content, f"Spotlight evidence semantics missing: {name}")
         require('width="620" height="198" viewBox="0 0 620 198"' in content, f"Spotlight reviewed geometry changed: {name}")
         for marker in (
@@ -279,7 +280,7 @@ def validate_svgs(root: Path, slot_by_number: dict[int, dict[str, Any]]) -> None
             require(marker in content, f"Spotlight evidence marker missing from {name}: {marker}")
         require('fill="url(#edge)"' in content and 'fill="url(#wash)"' in content, f"Spotlight gradient visual system regressed: {name}")
         require(content.count("<linearGradient") >= 2, f"Spotlight gradient definitions missing: {name}")
-        require(content.count("<circle") >= 7, f"Spotlight node/evidence markers regressed: {name}")
+        require(content.count("<circle") >= 5, f"Spotlight topology node markers regressed: {name}")
 
         glyph = re.search(r'data-glyph="([^"]+)"', content)
         topology = re.search(r'data-topology="([^"]+)"', content)
@@ -299,7 +300,7 @@ def validate_svgs(root: Path, slot_by_number: dict[int, dict[str, Any]]) -> None
         require(attr_value(content, "data-evidence-bindings") == expected_dimension_attr(records, "binding"), f"SVG subject-binding projection diverged: {name}")
         require(attr_value(content, "data-evidence-freshness") == expected_dimension_attr(records, "freshness"), f"SVG freshness projection diverged: {name}")
         for record in records:
-            require(f"{record['label']} · {record['result']}" in content, f"Named execution result missing from {name}: {record['label']}")
+            require(f"{record['label']} result {record['result']}" in content, f"Execution result missing from accessible evidence description: {name}: {record['label']}")
             require(f"{record['workflow']}#{record['run_id']}" in content, f"Exact workflow/run provenance missing from {name}: {record['label']}")
             require(f"binding {record['binding']}" in content, f"Subject binding missing from SVG description: {name}")
             require(f"freshness {record['freshness']}" in content, f"Freshness state missing from SVG description: {name}")
