@@ -1,11 +1,12 @@
 {
   "as_of_date_utc": "2026-09-07",
   "binding_summary": {
-    "CURRENT_SUBJECT": 25
+    "CURRENT_SUBJECT": 23,
+    "DIFFERENT_SUBJECT": 2
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:9473e851ff49e2dfe2a1120d08a12b7478f6bb2fa15468d92f654f7e0cb62aad",
-  "evidence_id": "PL2-9473E851FF49E2DF",
+  "evidence_digest": "sha256:46d33ac72dad34738e1e4e5422fd106ae095f685e624c34e873851325bb992f8",
+  "evidence_id": "PL2-46D33AC72DAD3473",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -39,21 +40,21 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-07T02:17:54Z",
+          "completed_at_utc": "2026-09-07T03:28:09Z",
           "freshness": "SAME_DAY",
-          "head_sha": "bc3d0525e7e910c0fff6cfb38df35dbf0e396014",
+          "head_sha": "75388f4f7e45f9adc2e760b9a369934ff1144255",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 34075585767,
-          "run_number": 1425,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34075585767",
+          "run_id": 34079497343,
+          "run_number": 1430,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34079497343",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "bc3d0525e7e910c0fff6cfb38df35dbf0e396014",
+      "subject_revision": "75388f4f7e45f9adc2e760b9a369934ff1144255",
       "title": "AI QA CONTROL PLANE"
     },
     {
@@ -75,38 +76,38 @@
       "signals": [
         {
           "age_days": 0,
-          "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-07T01:01:14Z",
+          "binding": "DIFFERENT_SUBJECT",
+          "completed_at_utc": "2026-09-07T03:25:48Z",
           "freshness": "SAME_DAY",
-          "head_sha": "b5f2f75c5eae168a7c133c37c5ca7a69e4b03fbc",
+          "head_sha": "53beb458fe87a93a3aa6d5a777dd5650507d45aa",
           "label": "QUALITY+SEC",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 34071583570,
-          "run_number": 778,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34071583570",
+          "run_id": 34079556295,
+          "run_number": 806,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34079556295",
           "scope": "job-prefix:Quality / Python ;steps:Tests|Bandit|Dependency audit",
           "workflow": "ci.yml"
         },
         {
           "age_days": 0,
-          "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-07T01:01:14Z",
+          "binding": "DIFFERENT_SUBJECT",
+          "completed_at_utc": "2026-09-07T03:25:48Z",
           "freshness": "SAME_DAY",
-          "head_sha": "b5f2f75c5eae168a7c133c37c5ca7a69e4b03fbc",
+          "head_sha": "53beb458fe87a93a3aa6d5a777dd5650507d45aa",
           "label": "AGENT LABS",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 34071583570,
-          "run_number": 778,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34071583570",
+          "run_id": 34079556295,
+          "run_number": 806,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34079556295",
           "scope": "jobs:OpenAI adapter / deterministic SDK|MCP fault lab / deterministic protocol|MCP remote auth / loopback HTTP|MCP OAuth flow / separated AS-RS|Package integrity",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "b5f2f75c5eae168a7c133c37c5ca7a69e4b03fbc",
+      "subject_revision": "a072366710600e8144bbc920d3e4bf5eb4ca7202",
       "title": "AGENT EVALUATION + TEVV"
     },
     {
