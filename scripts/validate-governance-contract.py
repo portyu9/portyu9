@@ -195,7 +195,7 @@ def validate_publish_write_surface(publish: str) -> None:
 
 def validate_quality(text: str) -> None:
     require("name: Profile quality" in text, "Profile quality workflow name changed")
-    require('PYTHON_VERSION: "3.13"' in text, "Profile quality Python version is not explicit")
+    require('PYTHON_VERSION: "3.13.15"' in text, "Profile quality Python version is not explicit")
     require(text.count("runs-on: ubuntu-24.04") == 2, "Both Profile Quality jobs must pin ubuntu-24.04")
     require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "Both Profile Quality jobs must use the reviewed checkout SHA")
     require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2, "Both Profile Quality jobs must use the reviewed setup-python SHA")
@@ -269,7 +269,7 @@ def validate_stats(text: str) -> None:
     require('- "scripts/signal_field_pipeline.py"' in text, "Stats push paths must cover the Signal Field orchestrator")
     require('- "scripts/signal-field-pipeline-v1.json"' in text, "Stats push paths must cover the Signal Field stage manifest")
     require("cancel-in-progress: true" in text, "Stats workflow must cancel stale runs")
-    require('PYTHON_VERSION: "3.13"' in text, "Stats Python version is not explicit")
+    require('PYTHON_VERSION: "3.13.15"' in text, "Stats Python version is not explicit")
     require(text.count("runs-on: ubuntu-24.04") == 5, "All five stats jobs must pin ubuntu-24.04")
 
     generate = job_block(text, "generate", "attest")

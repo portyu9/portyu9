@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.13.15"
 
 jobs:
   validate:
@@ -114,6 +114,9 @@ jobs:
 
       - name: Validate workflow authority firewall
         run: python3 scripts/validate-workflow-authority-contract.py
+
+      - name: Validate exact Python runtime contract
+        run: python3 scripts/validate-python-runtime-contract.py
 
       - name: Validate Spotlight UI merge authorization
         run: python3 scripts/validate-spotlight-ui-merge-authorization.py
