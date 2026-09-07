@@ -381,6 +381,17 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
             'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json',
         ),
     )
+    require(
+        "for attempt in $(seq 1 15); do" in propose
+        and 'if [ "$PR_HEAD" = "$HEAD_SHA" ]; then' in propose
+        and 'test "$attempt" -lt 15' in propose
+        and "sleep 2" in propose,
+        "Spotlight proposal must bound PR-head metadata convergence to fifteen exact-head checks",
+    )
+    require(
+        propose.count('PR_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"') == 1,
+        "Spotlight proposal exact PR-head observation surface changed",
+    )
     require_exact_gh_api_surface(
         approve,
         label="Spotlight approve",
