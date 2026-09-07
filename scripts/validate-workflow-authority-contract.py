@@ -434,7 +434,7 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
         'test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"',
         'test "$(jq -r .behind_by <<<"$COMPARE")" = "0"',
         'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
-        'test "$(jq \' .files | length \' <<<"$COMPARE")" = "1"'.replace(" ", ""),
+        'test "$(jq \'.files | length\' <<<"$COMPARE")" = "1"',
         'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
         'test "$(jq -r \'.files[0].status\' <<<"$COMPARE")" = "modified"',
     ):
