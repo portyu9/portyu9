@@ -15,7 +15,7 @@ EXPECTED_WORKFLOWS = {
     "profile-stats.yml",
     "spotlight-link-sync.yml",
 }
-SETUP_PYTHON = re.compile(r"(?m)^\s*uses:\s*actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*$")
+SETUP_PYTHON = re.compile(r"(?m)^\s*(?:-\s*)?uses:\s*actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*$")
 VERSION_LINE = f'  PYTHON_VERSION: "{EXPECTED_VERSION}"'
 VERSION_INPUT = "          python-version: ${{ env.PYTHON_VERSION }}"
 
