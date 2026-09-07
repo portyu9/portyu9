@@ -53,7 +53,7 @@ EXPECTED = {
     },
     "profile-stats.yml": {
         "triggers": {"workflow_dispatch", "push", "schedule"},
-        "jobs": {"generate", "attest", "publish", "dispatch"},
+        "jobs": {"generate", "attest", "stage", "publish", "dispatch"},
         "permissions": {
             WORKFLOW_SCOPE: {"contents": "read"},
             "generate": {"contents": "read"},
@@ -62,6 +62,7 @@ EXPECTED = {
                 "id-token": "write",
                 "attestations": "write",
             },
+            "stage": {"contents": "read"},
             "publish": {"contents": "write"},
             "dispatch": {"actions": "write"},
         },
@@ -263,7 +264,45 @@ def validate_quality_contract(text: str) -> None:
 
 
 def validate_profile_stats_contract(workflow: str) -> None:
+    stage = job_block(workflow, "stage", "publish")
+    publish = job_block(workflow, "publish", "dispatch")
     dispatch = job_block(workflow, "dispatch", None)
+
+    require("name: stage-publication-read-only" in stage,
+            "Profile stats publication staging identity changed")
+    require("permissions:\n      contents: read" in stage,
+            "Profile stats publication staging must remain read-only")
+    for forbidden in ("contents: write", "id-token: write", "attestations: write", "git push", "GITHUB_TOKEN:"):
+        require(forbidden not in stage,
+                f"Profile stats publication staging acquired forbidden authority/mutation surface: {forbidden}")
+
+    require("name: publish-write-only" in publish,
+            "Profile stats terminal publisher identity changed")
+    require("permissions:\n      contents: write" in publish,
+            "Profile stats terminal publisher must retain only repository-content write authority")
+    require("needs: stage" in publish,
+            "Profile stats terminal publisher must consume only the sealed staging job")
+    for forbidden in (
+        "actions/checkout@",
+        "actions/setup-python@",
+        "python3 ",
+        "id-token:",
+        "attestations:",
+        "actions:",
+        "pull-requests:",
+        "checks:",
+        "security-events:",
+        "packages:",
+    ):
+        require(forbidden not in publish,
+                f"Profile stats terminal publisher acquired forbidden capability/code surface: {forbidden}")
+    require(publish.count("uses: actions/download-artifact@") == 1,
+            "Profile stats terminal publisher must execute only one candidate-transport Action")
+    require(publish.count("${{ github.token }}") == 1,
+            "Profile stats terminal publisher explicit token surface changed")
+    require("git -C artifacts -c \"http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}\" push origin HEAD:generated" in publish,
+            "Profile stats terminal publisher exact generated push changed")
+
     require("needs: publish" in dispatch,
             "Profile stats Spotlight dispatcher must run only after successful publication")
     require('name: dispatch-spotlight-link-sync' in dispatch,
@@ -395,7 +434,7 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
         'test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"',
         'test "$(jq -r .behind_by <<<"$COMPARE")" = "0"',
         'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
-        'test "$(jq \'.files | length\' <<<"$COMPARE")" = "1"',
+        'test "$(jq \' .files | length \' <<<"$COMPARE")" = "1"'.replace(" ", ""),
         'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
         'test "$(jq -r \'.files[0].status\' <<<"$COMPARE")" = "modified"',
     ):
@@ -452,6 +491,8 @@ def validate_governance(text: str) -> None:
         "pull-requests: write",
         "actions: write",
         "checks: read",
+        "stage-publication-read-only",
+        "sealed Git bundle",
         "Spotlight direct-link synchronization",
         "pull_request_target",
         "new workflow",
@@ -547,8 +588,9 @@ def main() -> int:
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
         print(
             "Workflow authority validation passed: five workflows form a closed authority inventory; "
-            "read-only remains the default, publication-to-Spotlight dispatch is isolated to actions-only authority, "
-            "direct Spotlight synchronization is PR-gated, privileged gh api calls form a closed endpoint inventory, and each write/Actions/check capability is isolated to one reviewed terminal purpose."
+            "read-only remains the default, publication staging is isolated from terminal repository-write authority, "
+            "publication-to-Spotlight dispatch is isolated to actions-only authority, direct Spotlight synchronization is PR-gated, "
+            "privileged gh api calls form a closed endpoint inventory, and each write/Actions/check capability is isolated to one reviewed terminal purpose."
         )
         return 0
     except (OSError, ValueError) as exc:
