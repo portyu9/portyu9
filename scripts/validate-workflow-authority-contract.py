@@ -18,6 +18,7 @@ import spotlight_profile_links as spotlight_links
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
+PROFILE_STATS = WORKFLOWS / "profile-stats.yml"
 SYNC = WORKFLOWS / "spotlight-link-sync.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 README = ROOT / "README.md"
@@ -52,7 +53,7 @@ EXPECTED = {
     },
     "profile-stats.yml": {
         "triggers": {"workflow_dispatch", "push", "schedule"},
-        "jobs": {"generate", "attest", "publish"},
+        "jobs": {"generate", "attest", "publish", "dispatch"},
         "permissions": {
             WORKFLOW_SCOPE: {"contents": "read"},
             "generate": {"contents": "read"},
@@ -62,6 +63,7 @@ EXPECTED = {
                 "attestations": "write",
             },
             "publish": {"contents": "write"},
+            "dispatch": {"actions": "write"},
         },
     },
     "spotlight-link-sync.yml": {
@@ -71,7 +73,7 @@ EXPECTED = {
             WORKFLOW_SCOPE: {"contents": "read"},
             "plan": {"contents": "read"},
             "propose": {"contents": "write", "pull-requests": "write"},
-            "approve": {"actions": "write"},
+            "approve": {"contents": "read", "actions": "write"},
             "merge": {"contents": "write", "pull-requests": "write", "checks": "read"},
         },
     },
@@ -224,6 +226,35 @@ def validate_quality_contract(text: str) -> None:
             "Profile Quality push paths must cover every workflow authority change")
 
 
+def validate_profile_stats_contract(workflow: str) -> None:
+    dispatch = job_block(workflow, "dispatch", None)
+    require("needs: publish" in dispatch,
+            "Profile stats Spotlight dispatcher must run only after successful publication")
+    require('name: dispatch-spotlight-link-sync' in dispatch,
+            "Profile stats Spotlight dispatcher identity changed")
+    require('GH_TOKEN: ${{ github.token }}' in dispatch,
+            "Profile stats Spotlight dispatcher must use only the job-scoped GitHub token")
+    require('gh api --method POST' in dispatch,
+            "Profile stats Spotlight dispatcher must use an explicit Actions API dispatch")
+    require('actions/workflows/spotlight-link-sync.yml/dispatches' in dispatch,
+            "Profile stats Spotlight dispatcher target changed")
+    require('-f ref=main' in dispatch,
+            "Profile stats Spotlight dispatcher must target the trusted default branch")
+    for forbidden in (
+        "actions/checkout@",
+        "actions/setup-python@",
+        "contents:",
+        "pull-requests:",
+        "checks:",
+        "id-token:",
+        "attestations:",
+        "security-events:",
+        "packages:",
+    ):
+        require(forbidden not in dispatch,
+                f"Profile stats Spotlight dispatcher acquired forbidden capability/code surface: {forbidden}")
+
+
 def validate_sync_contract(workflow: str, readme: str) -> None:
     for forbidden in ("pull_request_target", "workflow_run", "repository_dispatch", "issues: write", "id-token: write", "attestations: write"):
         require(forbidden not in workflow, f"Spotlight direct-link sync contains forbidden authority/trigger: {forbidden}")
@@ -249,17 +280,44 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
             "Spotlight proposal must bind the plan to the exact main source SHA")
     require('test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"' in propose,
             "Spotlight proposal must fail if main moved")
+
+    require('compare/${BASE_SHA}...${HEAD_SHA}' in approve,
+            "Spotlight approval must compare the exact proposed head against the reviewed base before authorizing execution")
+    require('test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"' in approve,
+            "Spotlight approval must reject a proposal after main advances")
+    for fragment in (
+        'test "$(jq -r .status <<<"$COMPARE")" = "ahead"',
+        'test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"',
+        'test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"',
+        'test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"',
+        'test "$(jq -r .behind_by <<<"$COMPARE")" = "0"',
+        'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
+        'test "$(jq \'.files | length\' <<<"$COMPARE")" = "1"',
+        'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
+        'test "$(jq -r \'.files[0].status\' <<<"$COMPARE")" = "modified"',
+    ):
+        require(fragment in approve, f"Spotlight approval lost exact README-only head closure: {fragment}")
+    require('git/ref/heads/generated' in approve and 'GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}' in approve,
+            "Spotlight approval must reject a plan after the generated evidence head advances")
+    for workflow_path in ("codeql.yml", "dependency-review.yml", "profile-quality.yml"):
+        require(f'actions/workflows/{workflow_path}' in approve,
+                f"Spotlight approval must resolve the canonical workflow identity: {workflow_path}")
+    require('workflow_id' in approve and 'EXPECTED_IDENTITIES' in approve and 'OBSERVED_IDENTITIES' in approve,
+            "Spotlight approval must bind workflow display names to canonical workflow ids")
+    require('/approve' in approve and 'actions/runs?head_sha=${HEAD_SHA}&event=pull_request' in approve,
+            "Spotlight approval job must be scoped to the exact automation PR head")
+
     require('test "$(jq \'length\' <<<"$FILES")" = "1"' in merge and
             'test "$(jq -r \'.[0].filename\' <<<"$FILES")" = "README.md"' in merge,
             "Spotlight merge must enforce one-file README-only closure")
+    require(merge.count('git/ref/heads/generated') >= 2 and 'GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}' in merge,
+            "Spotlight merge must revalidate the exact generated evidence head before and immediately before merge")
     require('app.id == 15368' in merge,
             "Spotlight merge must bind required checks to the GitHub Actions integration")
     for check in ("analyze-actions", "analyze-python", "dependency-review", "integration-pinned-upstream", "validate-contracts"):
         require(check in merge, f"Spotlight merge is missing required check: {check}")
     require('merge_method:"merge"' in merge and 'sha:$sha' in merge,
             "Spotlight merge must use exact-head merge-commit semantics")
-    require('/approve' in approve and 'actions/runs?head_sha=${HEAD_SHA}&event=pull_request' in approve,
-            "Spotlight approval job must be scoped to the exact automation PR head")
 
     require(readme.count(spotlight_links.START) == 1 and readme.count(spotlight_links.END) == 1,
             "README must contain exactly one guarded Spotlight direct-link block")
@@ -294,6 +352,11 @@ def validate_governance(text: str) -> None:
         "Spotlight direct-link synchronization",
         "pull_request_target",
         "new workflow",
+        "one README-only commit",
+        "canonical default-branch workflow",
+        "generated evidence head",
+        "post-publication",
+        "actions: write only",
     ):
         require(phrase in text, f"Workflow authority governance documentation is missing: {phrase}")
 
@@ -349,17 +412,18 @@ jobs:
 
 def main() -> int:
     try:
-        for path in (QUALITY, GOVERNANCE, README, SYNC):
+        for path in (QUALITY, PROFILE_STATS, GOVERNANCE, README, SYNC):
             require(path.is_file(), f"Workflow authority input is missing: {path.relative_to(ROOT)}")
         self_test()
         validate_inventory()
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
+        validate_profile_stats_contract(PROFILE_STATS.read_text(encoding="utf-8"))
         validate_sync_contract(SYNC.read_text(encoding="utf-8"), README.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
         print(
             "Workflow authority validation passed: five workflows form a closed authority inventory; "
-            "read-only remains the default, direct Spotlight synchronization is PR-gated, and each "
-            "write/Actions/check capability is isolated to one reviewed terminal purpose."
+            "read-only remains the default, publication-to-Spotlight dispatch is isolated to actions-only authority, "
+            "direct Spotlight synchronization is PR-gated, and each write/Actions/check capability is isolated to one reviewed terminal purpose."
         )
         return 0
     except (OSError, ValueError) as exc:
