@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Validate cache-busting identities and reviewer paths for generated profile surfaces.
+"""Validate generated-surface cache identities and reviewer paths.
 
-The README cache token is a contract identity, not a per-run evidence identity. Static
-validation keeps every mutable generated URL on one reviewed token per surface family.
-Optional candidate validation derives the expected token from the exact live candidate
-provenance that Profile Quality just generated, so a renderer/ledger/refresh contract
-change cannot ship behind an older cache key. The same contract also protects the two
-reviewer-navigation links from Selected Engineering Systems to the published Portfolio
-Evidence Ledger and the repository attestation contract.
+Signal Field remains a mutable generated-branch surface and therefore uses one reviewed
+query-token identity. Engineering Spotlight is different: its profile hrefs rotate with
+the selected systems, so all six theme images are pinned to one immutable generated
+commit SHA. That makes the card bytes and direct navigation targets switch atomically in
+one reviewed README change instead of allowing a mutable image to outrun a static href.
 """
 from __future__ import annotations
 
@@ -48,9 +46,13 @@ REVIEW_NAVIGATION = (
 SELECTED_HEADING = '<h2 align="center">◇ Selected Engineering Systems</h2>'
 FIRST_FLAGSHIP = '<a href="https://github.com/portyu9/ai-qa-automation"><picture>'
 
-SPOTLIGHT = re.compile(
+SPOTLIGHT_IMMUTABLE = re.compile(
+    r"https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/engineering-spotlight/"
+    r"spotlight-[123]-(?:light|dark)\.svg"
+)
+MUTABLE_SPOTLIGHT = re.compile(
     r"https://raw\.githubusercontent\.com/portyu9/portyu9/generated/engineering-spotlight/"
-    r"spotlight-[123]-(?:light|dark)\.svg\?v=([^\"'> ]+)"
+    r"spotlight-[123]-(?:light|dark)\.svg"
 )
 SIGNAL_FIELD = re.compile(
     r"https://raw\.githubusercontent\.com/portyu9/portyu9/generated/profile-stats/profile/"
@@ -97,7 +99,8 @@ def one_value(values: Iterable[str], label: str) -> str:
 
 
 def compact_spotlight_version(version: str) -> str:
-    require(re.fullmatch(r"engineering-spotlight-v\d+\.\d+", version) is not None, f"unexpected Spotlight version: {version}")
+    require(re.fullmatch(r"engineering-spotlight-v\d+\.\d+", version) is not None,
+            f"unexpected Spotlight version: {version}")
     return version.replace(".", "")
 
 
@@ -114,7 +117,8 @@ def compact_evidence_semantics(semantics: str) -> str:
 
 
 def compact_signal_field_version(version: str) -> str:
-    require(re.fullmatch(r"signal-field-v\d+\.\d+", version) is not None, f"unexpected final Signal Field version: {version}")
+    require(re.fullmatch(r"signal-field-v\d+\.\d+", version) is not None,
+            f"unexpected final Signal Field version: {version}")
     return version.replace(".", "")
 
 
@@ -132,23 +136,21 @@ def derive_spotlight_token(spotlight_dir: Path, ledger_dir: Path) -> str:
         (item.get("data-evidence-semantics", "") for item in attrs),
         "Spotlight evidence semantics",
     )
-
     ledger_path = ledger_dir / "portfolio-evidence-ledger.json"
-    require(ledger_path.is_file() and ledger_path.stat().st_size > 0, "candidate Portfolio Ledger is missing")
+    require(ledger_path.is_file() and ledger_path.stat().st_size > 0,
+            "candidate Portfolio Ledger is missing")
     ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
     require(isinstance(ledger, dict), "candidate Portfolio Ledger root must be an object")
     ledger_version = str(ledger.get("version") or "")
     ledger_semantics = str(ledger.get("evidence_semantics") or "")
     require(ledger.get("system_count") == 13, "candidate Portfolio Ledger system count changed")
-    require(ledger_semantics == spotlight_semantics, "Spotlight/Portfolio Ledger evidence semantics diverged")
-
-    return "-".join(
-        (
-            compact_spotlight_version(spotlight_version),
-            compact_ledger_version(ledger_version),
-            compact_evidence_semantics(ledger_semantics),
-        )
-    )
+    require(ledger_semantics == spotlight_semantics,
+            "Spotlight/Portfolio Ledger evidence semantics diverged")
+    return "-".join((
+        compact_spotlight_version(spotlight_version),
+        compact_ledger_version(ledger_version),
+        compact_evidence_semantics(ledger_semantics),
+    ))
 
 
 def derive_signal_field_token(signal_field_dir: Path) -> str:
@@ -175,97 +177,94 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
 
     wide_attrs = [item for name, item in attrs_by_name.items() if "-wide-" in name]
     compact_attrs = [item for name, item in attrs_by_name.items() if "-compact-" in name]
-    require(len(wide_attrs) == 2 and len(compact_attrs) == 2, "Signal Field responsive inventory changed")
-    wide_alignment = one_value(
-        (item.get("data-wide-detail-alignment", "") for item in wide_attrs),
-        "Signal Field desktop alignment",
-    )
-    compact_eid = one_value(
-        (item.get("data-compact-eid-layout", "") for item in compact_attrs),
-        "Signal Field compact EID layout",
-    )
-    require(wide_alignment == "signal-field-v2.18", f"candidate desktop Signal Field alignment changed: {wide_alignment}")
-    require(compact_eid == "signal-field-v2.19", f"candidate compact Signal Field EID layout changed: {compact_eid}")
-    require(
-        all("data-wide-detail-alignment" not in item for item in compact_attrs),
-        "desktop-only Signal Field alignment provenance leaked into compact artifacts",
-    )
-    require(
-        all("data-compact-eid-layout" not in item for item in wide_attrs),
-        "compact-only Signal Field EID provenance leaked into wide artifacts",
-    )
+    require(len(wide_attrs) == 2 and len(compact_attrs) == 2,
+            "Signal Field responsive inventory changed")
+    wide_alignment = one_value((item.get("data-wide-detail-alignment", "") for item in wide_attrs),
+                               "Signal Field desktop alignment")
+    compact_eid = one_value((item.get("data-compact-eid-layout", "") for item in compact_attrs),
+                            "Signal Field compact EID layout")
+    require(wide_alignment == "signal-field-v2.18",
+            f"candidate desktop Signal Field alignment changed: {wide_alignment}")
+    require(compact_eid == "signal-field-v2.19",
+            f"candidate compact Signal Field EID layout changed: {compact_eid}")
+    require(all("data-wide-detail-alignment" not in item for item in compact_attrs),
+            "desktop-only Signal Field alignment provenance leaked into compact artifacts")
+    require(all("data-compact-eid-layout" not in item for item in wide_attrs),
+            "compact-only Signal Field EID provenance leaked into wide artifacts")
     return (
         f"{compact_signal_field_version(wide_alignment)}-wide-"
         f"{compact_signal_field_component(compact_eid)}-compact-eid-bug-found-current-red-v1-{cadence}"
     )
 
 
-def readme_tokens() -> tuple[list[str], list[str], str]:
+def readme_identities() -> tuple[list[str], list[str], str]:
     text = README.read_text(encoding="utf-8")
-    return SPOTLIGHT.findall(text), SIGNAL_FIELD.findall(text), text
+    return SPOTLIGHT_IMMUTABLE.findall(text), SIGNAL_FIELD.findall(text), text
 
 
 def validate_reviewer_navigation(text: str) -> None:
-    require(text.count(REVIEW_NAVIGATION) == 1, "README must contain exactly one reviewed evidence-navigation line")
-    require(text.count(LEDGER_REVIEW_URL) == 1, "README Portfolio Evidence Ledger review link changed or duplicated")
-    require(text.count(ATTESTATION_REVIEW_URL) == 1, "README attestation review link changed or duplicated")
+    require(text.count(REVIEW_NAVIGATION) == 1,
+            "README must contain exactly one reviewed evidence-navigation line")
+    require(text.count(LEDGER_REVIEW_URL) == 1,
+            "README Portfolio Evidence Ledger review link changed or duplicated")
+    require(text.count(ATTESTATION_REVIEW_URL) == 1,
+            "README attestation review link changed or duplicated")
     selected = text.find(SELECTED_HEADING)
     navigation = text.find(REVIEW_NAVIGATION)
     first_flagship = text.find(FIRST_FLAGSHIP, selected)
-    require(selected >= 0 and navigation >= 0 and first_flagship >= 0, "Selected Engineering Systems review-navigation anchors are missing")
-    require(selected < navigation < first_flagship, "evidence review links must remain adjacent to Selected Engineering Systems before flagship cards")
+    require(selected >= 0 and navigation >= 0 and first_flagship >= 0,
+            "Selected Engineering Systems review-navigation anchors are missing")
+    require(selected < navigation < first_flagship,
+            "evidence review links must remain adjacent to Selected Engineering Systems before flagship cards")
 
 
-def validate_readme(expected_spotlight: str = SPOTLIGHT_TOKEN, expected_signal: str = SIGNAL_FIELD_TOKEN) -> None:
-    spotlight, signal, text = readme_tokens()
-    require(len(spotlight) == 6, "README must reference exactly six generated Spotlight theme assets")
-    require(len(signal) == 4, "README must reference exactly four generated Signal Field assets")
-    require(set(spotlight) == {expected_spotlight}, "Spotlight cache token is stale or inconsistent across slots/themes")
-    require(set(signal) == {expected_signal}, "Signal Field cache token is stale or inconsistent across layouts/themes")
+def validate_readme(expected_signal: str = SIGNAL_FIELD_TOKEN) -> None:
+    spotlight_shas, signal, text = readme_identities()
+    require(len(spotlight_shas) == 6,
+            "README must reference exactly six immutable Spotlight theme assets")
+    require(len(set(spotlight_shas)) == 1,
+            "all six Spotlight theme assets must bind one immutable generated commit")
+    require(MUTABLE_SPOTLIGHT.search(text) is None,
+            "Spotlight README images must not regress to mutable generated-branch URLs")
+    require(len(signal) == 4,
+            "README must reference exactly four generated Signal Field assets")
+    require(set(signal) == {expected_signal},
+            "Signal Field cache token is stale or inconsistent across layouts/themes")
 
     for stale in STALE_SPOTLIGHT_TOKENS + STALE_SIGNAL_FIELD_TOKENS:
         require(stale not in text, f"stale generated-surface cache token remains in README: {stale}")
 
-    generated_urls = re.findall(
+    mutable_urls = re.findall(
         r"https://raw\.githubusercontent\.com/portyu9/portyu9/generated/[^\"'> ]+",
         text,
     )
-    require(len(generated_urls) == 10, "generated profile asset URL inventory changed")
-    require(all("?v=" in url for url in generated_urls), "mutable generated profile asset lacks an explicit cache identity")
+    require(len(mutable_urls) == 4,
+            "mutable generated profile asset inventory must contain only four Signal Field URLs")
+    require(all("?v=" in url for url in mutable_urls),
+            "mutable generated profile asset lacks an explicit cache identity")
     validate_reviewer_navigation(text)
 
 
 def validate_candidate(signal_field_dir: Path, spotlight_dir: Path, ledger_dir: Path) -> None:
     candidate_spotlight = derive_spotlight_token(spotlight_dir, ledger_dir)
     candidate_signal = derive_signal_field_token(signal_field_dir)
-    require(
-        candidate_spotlight == SPOTLIGHT_TOKEN,
-        f"README Spotlight cache contract must advance to live candidate identity {candidate_spotlight!r}",
-    )
-    require(
-        candidate_signal == SIGNAL_FIELD_TOKEN,
-        f"README Signal Field cache contract must advance to live candidate identity {candidate_signal!r}",
-    )
-    validate_readme(candidate_spotlight, candidate_signal)
+    require(candidate_spotlight == SPOTLIGHT_TOKEN,
+            f"Spotlight renderer/ledger semantics advanced unexpectedly to {candidate_spotlight!r}; "
+            "the direct-link snapshot contract must be reviewed before publication")
+    require(candidate_signal == SIGNAL_FIELD_TOKEN,
+            f"README Signal Field cache contract must advance to live candidate identity {candidate_signal!r}")
+    validate_readme(candidate_signal)
 
 
 def self_test() -> None:
+    require("-".join((
+        compact_spotlight_version("engineering-spotlight-v2.1"),
+        compact_ledger_version("portfolio-evidence-ledger-v2"),
+        compact_evidence_semantics("execution-result-subject-binding-freshness-v1"),
+    )) == SPOTLIGHT_TOKEN, "Spotlight semantic-token derivation changed")
     require(
-        "-".join(
-            (
-                compact_spotlight_version("engineering-spotlight-v2.1"),
-                compact_ledger_version("portfolio-evidence-ledger-v2"),
-                compact_evidence_semantics("execution-result-subject-binding-freshness-v1"),
-            )
-        )
-        == SPOTLIGHT_TOKEN,
-        "Spotlight cache-token derivation changed",
-    )
-    require(
-        (
-            f"{compact_signal_field_version('signal-field-v2.18')}-wide-"
-            f"{compact_signal_field_component('signal-field-v2.19')}-compact-eid-bug-found-current-red-v1-profile-refresh-v2"
-        )
+        f"{compact_signal_field_version('signal-field-v2.18')}-wide-"
+        f"{compact_signal_field_component('signal-field-v2.19')}-compact-eid-bug-found-current-red-v1-profile-refresh-v2"
         == SIGNAL_FIELD_TOKEN,
         "Signal Field cache-token derivation changed",
     )
@@ -285,18 +284,21 @@ def main() -> int:
         self_test()
         validate_readme()
         supplied = (args.signal_field_dir, args.spotlight_dir, args.ledger_dir)
-        require(all(value is None for value in supplied) or all(value is not None for value in supplied), "candidate validation requires all three candidate directories")
+        require(all(value is None for value in supplied) or all(value is not None for value in supplied),
+                "candidate validation requires all three candidate directories")
         if all(value is not None for value in supplied):
-            assert args.signal_field_dir is not None and args.spotlight_dir is not None and args.ledger_dir is not None
+            assert args.signal_field_dir is not None
+            assert args.spotlight_dir is not None
+            assert args.ledger_dir is not None
             validate_candidate(args.signal_field_dir, args.spotlight_dir, args.ledger_dir)
             print(
-                "Profile cache/reviewer contract passed: README cache identities match the exact live Signal Field, "
-                "Portfolio Ledger, and Spotlight candidates, and reviewer evidence paths remain explicit."
+                "Profile cache/reviewer contract passed: immutable Spotlight snapshot semantics match the live "
+                "candidate family, Signal Field cache identity matches the live candidate, and reviewer paths remain explicit."
             )
         else:
             print(
-                "Profile cache/reviewer contract passed: six Spotlight and four Signal Field generated assets "
-                "use current reviewed cache identities and evidence review paths remain explicit."
+                "Profile cache/reviewer contract passed: six Spotlight assets share one immutable generated commit; "
+                "four mutable Signal Field assets share the reviewed cache identity; reviewer paths remain explicit."
             )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:

@@ -1,7 +1,7 @@
 {
   "version": "profile-delegated-implementation-lock-v1",
   "files": {
-    "scripts/engineering_spotlight_renderer.py": "a672b3a38294613da6d9935cdd441f8159eda241",
+    "scripts/engineering_spotlight_renderer.py": "43ba4c1b0cf06b5508d0900aaa21c38db68ea4a2",
     "scripts/engineering_spotlight_v2.py": "14eacc778a66a383cc6597df0c7126920ad9c114",
     "scripts/engineering_spotlight_v21.py": "7bd9b1a53667a9192ba9976d95c9c8b95dfac981",
     "scripts/generate-engineering-spotlight-from-ledger.py": "710289ce4b924b62c624c633a7689f8841b4ed03",
@@ -14,7 +14,7 @@
     "scripts/validate-engineering-spotlight.py": "388991c414a74569da749867929a97705ad67f9e",
     "scripts/validate-portfolio-evidence-ledger.py": "d56caab8e7e68ea6d723a0f92da6ba350a9c97a4",
     "scripts/validate_engineering_spotlight_registry.py": "8db80dfb7395d284b5b844c39f28feb0db5a1147",
-    "scripts/validate_engineering_spotlight_v21.py": "befddd991fa4be3a25a26ce26161173e5a1ef651"
+    "scripts/validate_engineering_spotlight_v21.py": "c27d6a5b16ba701ef13f85f989a5cb8d2d0ae56c"
   },
   "stages": {
     "engineering-spotlight-generate": [

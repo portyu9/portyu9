@@ -121,17 +121,23 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <h3 align="center">↻ Evidence Spotlight</h3>
 <p align="center"><sub>3 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
+<!-- spotlight-direct-links:start -->
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-dark.svg?v=engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-1-light.svg?v=engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1" width="620"></picture>
+<a href="https://github.com/portyu9/qa-automation-ui-cypress"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/da4b4d0fd47dcf74b02a8b2d44d3a9350a4372cc/engineering-spotlight/spotlight-1-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/da4b4d0fd47dcf74b02a8b2d44d3a9350a4372cc/engineering-spotlight/spotlight-1-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-ui-cypress/actions/workflows/ci.yml"><img alt="Spotlight slot 1 CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-ui-cypress/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-ui-cypress/actions/workflows/security.yml"><img alt="Spotlight slot 1 security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-ui-cypress/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-dark.svg?v=engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-2-light.svg?v=engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1" width="620"></picture>
+<a href="https://github.com/portyu9/qa-automation-api-postman-newman"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/da4b4d0fd47dcf74b02a8b2d44d3a9350a4372cc/engineering-spotlight/spotlight-2-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/da4b4d0fd47dcf74b02a8b2d44d3a9350a4372cc/engineering-spotlight/spotlight-2-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-api-postman-newman/actions/workflows/ci.yml"><img alt="Spotlight slot 2 CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-api-postman-newman/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-api-postman-newman/actions/workflows/security.yml"><img alt="Spotlight slot 2 security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-api-postman-newman/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center">
-<picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-3-dark.svg?v=engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"><img alt="Daily engineering Evidence Spotlight slot 3" src="https://raw.githubusercontent.com/portyu9/portyu9/generated/engineering-spotlight/spotlight-3-light.svg?v=engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1" width="620"></picture>
+<a href="https://github.com/portyu9/qa-automation-node-supertest"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/da4b4d0fd47dcf74b02a8b2d44d3a9350a4372cc/engineering-spotlight/spotlight-3-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 3" src="https://raw.githubusercontent.com/portyu9/portyu9/da4b4d0fd47dcf74b02a8b2d44d3a9350a4372cc/engineering-spotlight/spotlight-3-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-node-supertest/actions/workflows/ci.yml"><img alt="Spotlight slot 3 CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-node-supertest/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-node-supertest/actions/workflows/security.yml"><img alt="Spotlight slot 3 security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-node-supertest/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
+
+<!-- spotlight-direct-links:end -->
 
 <p align="center"><sub>From my QE systems portfolio · permanent flagship systems excluded · signals scoped to named <code>main</code>-branch workflows.</sub></p>
 
