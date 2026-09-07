@@ -23,8 +23,7 @@ updates:
   - package-ecosystem: \"github-actions\"
     directory: \"/\"
     schedule:
-      interval: \"weekly\"
-      day: \"monday\"
+      interval: \"daily\"
       time: \"09:00\"
       timezone: \"America/New_York\"
     open-pull-requests-limit: 10
@@ -184,7 +183,7 @@ def main() -> int:
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
-            "Dependabot governance validation passed: the canonical GitHub Actions update policy is locked; "
+            "Dependabot governance validation passed: the canonical daily GitHub Actions update-discovery policy is locked; "
             "dependency updates remain individually reviewable; and every external action in every workflow "
             "is pinned to an immutable 40-character commit SHA."
         )
