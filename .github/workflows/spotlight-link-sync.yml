@@ -56,6 +56,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
       - name: Reconstruct exact published Spotlight projection
         run: |
           set -euo pipefail
