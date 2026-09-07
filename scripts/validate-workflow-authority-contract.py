@@ -332,7 +332,13 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
         required_snippets=(
             'gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" \\\n              -f sha="$SOURCE_SHA" -F force=true >/dev/null',
             'gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \\\n              -f ref="refs/heads/${BOT_BRANCH}" -f sha="$SOURCE_SHA" >/dev/null',
+            '--arg branch "$BOT_BRANCH" \\',
+            '--arg sha "$README_BLOB" \\',
+            "'{message:$message,content:$content,branch:$branch,sha:$sha}' > update.json",
             'gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/README.md" --input update.json > update-response.json',
+            '--arg head "$BOT_BRANCH" \\',
+            '--arg base "main" \\',
+            "'{title:$title,head:$head,base:$base,body:$body}' > pr.json",
             'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json',
         ),
     )
