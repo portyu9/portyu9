@@ -108,6 +108,45 @@ def require_validation_boundary(block: str, *, signal: str, spotlight: str, ledg
         require(fragment in block, f"{label} canonical validation boundary is missing: {fragment}")
 
 
+def validate_publish_terminal_surface(publish: str) -> None:
+    """Keep repository-write credentials absent until one exact terminal push step."""
+    marker = "      - name: Publish changed artifact set\n"
+    require(publish.count(marker) == 1, "Publication must contain exactly one terminal mutation step")
+    split = publish.index(marker)
+    before = publish[:split]
+    terminal = publish[split:]
+    require("${{ github.token }}" not in before,
+            "Publication must not expose the GitHub token before the terminal mutation step")
+    require(terminal.count("      - name: ") == 1,
+            "Publication must not execute another step after write credentials are introduced")
+    require(
+        "        env:\n          GITHUB_TOKEN: ${{ github.token }}\n        run: |\n" in terminal,
+        "Publication terminal step must receive only the step-scoped GitHub token through env",
+    )
+    require(terminal.count("${{ github.token }}") == 1,
+            "Publication terminal step GitHub token exposure changed")
+    run_marker = "        run: |\n"
+    require(terminal.count(run_marker) == 1, "Publication terminal step must contain exactly one run block")
+    shell = terminal.split(run_marker, 1)[1]
+    observed = tuple(line.strip() for line in shell.splitlines() if line.strip())
+    expected = (
+        "set -euo pipefail",
+        "if git -C artifacts diff --cached --quiet; then",
+        'echo "Generated profile evidence is already current."',
+        "exit 0",
+        "fi",
+        "git -C artifacts config user.name github-actions[bot]",
+        "git -C artifacts config user.email 41898282+github-actions[bot]@users.noreply.github.com",
+        'git -C artifacts commit -m "chore: publish validated profile evidence [skip ci]"',
+        'AUTH_HEADER="$(printf \'x-access-token:%s\' "$GITHUB_TOKEN" | base64 -w0)"',
+        'git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated',
+    )
+    require(
+        observed == expected,
+        f"Publication terminal credential/mutation surface changed: expected={expected!r} observed={observed!r}",
+    )
+
+
 def validate_quality(text: str) -> None:
     require("name: Profile quality" in text, "Profile quality workflow name changed")
     require('PYTHON_VERSION: "3.13"' in text, "Profile quality Python version is not explicit")
@@ -258,7 +297,10 @@ def validate_stats(text: str) -> None:
     require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 3, "Stats setup-python action SHA changed")
     require(generate.count("persist-credentials: false") == 1, "Generation checkout must not persist credentials")
     require(attest.count("persist-credentials: false") == 2, "Attestation source/generated checkouts must not persist credentials")
-    require(publish.count("persist-credentials: false") == 1, "Publish trusted-source checkout must not persist credentials")
+    require(publish.count("persist-credentials: false") == 2,
+            "Both publication checkouts must keep repository credentials out of staging/validation steps")
+    require("name: Checkout generated artifact branch for publication without credentials" in publish,
+            "Generated publication checkout must remain credential-free")
 
     for forbidden in (
         "python3 source/scripts/validate-signal-field-v213.py profile-stats/profile",
@@ -278,7 +320,7 @@ def validate_stats(text: str) -> None:
         require(forbidden not in publish, f"Publish workflow duplicates canonical validation boundary stage: {forbidden}")
 
     require("find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +" in publish, "Generated branch must be staged as artifact-only")
-    require("git -C artifacts push origin HEAD:generated" in publish, "Publisher must target only generated branch")
+    validate_publish_terminal_surface(publish)
 
 
 def validate_governance_doc(text: str) -> None:
@@ -358,7 +400,8 @@ def main() -> int:
             "has one versioned workflow entrypoint, the single versioned profile-evidence validation boundary is exercised by integration/attestation/publication, "
             "mutable profile cache identities bind to live candidates, measured generation uses the governed best-effort hourly cadence, "
             "three artifact downloads are integrity-checked, third-party generation has neither write nor signing authority, "
-            "attestation is isolated, publication independently revalidates, and post-publication Spotlight dispatch has Actions-only authority."
+            "attestation is isolated, publication revalidates without persisted credentials, the GitHub token is terminal-step scoped to one exact generated push, "
+            "and post-publication Spotlight dispatch has Actions-only authority."
         )
         return 0
     except (OSError, ValueError) as exc:
