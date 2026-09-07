@@ -170,24 +170,32 @@ def validate_builder() -> None:
 def validate_workflow() -> None:
     text = STATS.read_text(encoding="utf-8")
     generate = job_block(text, "generate", "attest")
-    attest = job_block(text, "attest", "publish")
-    publish = job_block(text, "publish", None)
+    attest = job_block(text, "attest", "stage")
+    stage = job_block(text, "stage", "publish")
+    publish = job_block(text, "publish", "dispatch")
 
     require("name: generate-read-only" in generate, "generation job name changed")
     require("contents: write" not in generate and "id-token: write" not in generate and "attestations: write" not in generate, "generation authority expanded")
     require("name: attest-validated-evidence" in attest, "attestation job name changed")
     require("contents: read" in attest and "id-token: write" in attest and "attestations: write" in attest, "attestation authority changed")
     require("contents: write" not in attest, "attestation job must not receive repository-content write authority")
-    require("name: publish-write-only" in publish and "needs: [generate, attest]" in publish, "publication dependency changed")
+    require("name: stage-publication-read-only" in stage and "needs: [generate, attest]" in stage, "publication staging dependency changed")
+    require("permissions:\n      contents: read" in stage, "publication staging authority changed")
+    require("contents: write" not in stage and "id-token: write" not in stage and "attestations: write" not in stage, "publication staging authority expanded")
+    require("name: publish-write-only" in publish and "needs: stage" in publish, "publication dependency changed")
     require("permissions:\n      contents: write" in publish and "id-token: write" not in publish and "attestations: write" not in publish, "publication authority changed")
+    require("actions/checkout@" not in publish and "actions/setup-python@" not in publish and "python3 " not in publish, "terminal publication must not execute checkout/setup/authored Python")
 
     require(generate.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 3, "generation must upload exactly three immutable evidence sets")
     require(attest.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "attestation checkout inventory changed")
     require(attest.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 1, "attestation setup-python SHA changed")
     require(attest.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3, "attestation must download three immutable evidence sets")
     require(attest.count("digest-mismatch: error") == 3, "attestation downloads must fail closed on digest mismatch")
-    require(publish.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3, "publication must download three immutable evidence sets")
-    require(publish.count("digest-mismatch: error") == 3, "publication downloads must fail closed on digest mismatch")
+    require(stage.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3, "publication staging must download three immutable evidence sets")
+    require(stage.count("digest-mismatch: error") == 3, "publication staging downloads must fail closed on digest mismatch")
+    require(stage.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 1, "publication staging must upload one sealed candidate bundle")
+    require(publish.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1, "terminal publication must download only the sealed candidate bundle")
+    require(publish.count("digest-mismatch: error") == 1, "terminal publication candidate download must fail closed on digest mismatch")
 
     require_boundary_runner(
         attest,
@@ -197,11 +205,11 @@ def validate_workflow() -> None:
         label="attestation",
     )
     require_boundary_runner(
-        publish,
+        stage,
         signal="publish-input",
         spotlight="spotlight-publish-input",
         ledger="portfolio-ledger-publish-input",
-        label="publication",
+        label="publication staging",
     )
     for forbidden in (
         "python3 source/scripts/validate-signal-field-v213.py profile-stats/profile",
@@ -218,7 +226,7 @@ def validate_workflow() -> None:
         "python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input",
         "python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input",
     ):
-        require(forbidden not in publish, f"publication workflow duplicates canonical validation stage: {forbidden}")
+        require(forbidden not in stage, f"publication staging duplicates canonical validation stage: {forbidden}")
 
     require("python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile portfolio-evidence attestation-predicate.json" in attest, "attestation predicate build command is missing")
     require(f"uses: actions/attest@{ATTEST_SHA} # v4.2.2" in attest, "actions/attest pin changed")
@@ -231,15 +239,17 @@ def validate_workflow() -> None:
 
     require("python3 source/scripts/stage-profile-evidence.py candidate-profile-evidence" in attest, "scheduled delta comparison must stage canonical subject set")
     require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root published" in attest, "scheduled delta comparison must validate current generated inventory")
-    require("python3 source/scripts/stage-profile-evidence.py artifacts" in publish, "publication must stage through canonical subject contract")
-    require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root artifacts" in publish, "publication must validate exact generated inventory")
+    require("python3 source/scripts/stage-profile-evidence.py artifacts" in stage, "publication staging must use canonical subject contract")
+    require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root artifacts" in stage, "publication staging must validate exact generated inventory")
+    require("git -C artifacts bundle create ../generated-publication.bundle generated" in stage, "publication staging must seal the generated candidate bundle")
+    require("name: generated-publication-candidate" in stage and "path: generated-publication.bundle" in stage, "sealed publication artifact identity changed")
     for forbidden in (
         "cp publish-input/signal-field-*.svg",
         "cp spotlight-publish-input/spotlight-*.svg",
         "cp portfolio-ledger-publish-input/portfolio-evidence-ledger.json",
         "find artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence -type f | wc -l",
     ):
-        require(forbidden not in publish, f"publication still encodes independent subject selection/count: {forbidden}")
+        require(forbidden not in stage, f"publication staging still encodes independent subject selection/count: {forbidden}")
 
 
 def validate_doc() -> None:
@@ -292,7 +302,7 @@ def main() -> int:
         validate_doc()
         print(
             "Engineering attestation validation passed: predicate v1/v2/v3 bytes are frozen, v3 validator identities derive from "
-            "the canonical profile-evidence validation boundary, the eleven-subject contract closes attestation/publication/generated inventory, "
+            "the canonical profile-evidence validation boundary, the eleven-subject contract closes attestation/staging/publication/generated inventory, "
             "authority remains separated, and the claim remains provenance/contract conformance rather than certification."
         )
         return 0

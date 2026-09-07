@@ -189,14 +189,18 @@ jobs:
           predicate-path: attestation-predicate.json
           show-summary: true
 
-  publish:
+  stage:
     if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
-    name: publish-write-only
+    name: stage-publication-read-only
     needs: [generate, attest]
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 6
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      changed: ${{ steps.seal.outputs.changed }}
+      base_sha: ${{ steps.seal.outputs.base_sha }}
+      candidate_sha: ${{ steps.seal.outputs.candidate_sha }}
 
     steps:
       - name: Checkout trusted source without credentials
@@ -210,28 +214,28 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Download validated Signal Field
+      - name: Download validated Signal Field for publication staging
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: signal-field-svg
           path: publish-input
           digest-mismatch: error
 
-      - name: Download validated Engineering Spotlight
+      - name: Download validated Engineering Spotlight for publication staging
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: engineering-spotlight-svg
           path: spotlight-publish-input
           digest-mismatch: error
 
-      - name: Download validated Portfolio Evidence Ledger
+      - name: Download validated Portfolio Evidence Ledger for publication staging
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: portfolio-evidence-ledger
           path: portfolio-ledger-publish-input
           digest-mismatch: error
 
-      - name: Revalidate publish boundary
+      - name: Revalidate publication candidate boundary
         run: |
           set -euo pipefail
           python3 source/scripts/validate-profile-evidence-boundary.py \
@@ -239,17 +243,25 @@ jobs:
             --spotlight-dir spotlight-publish-input \
             --portfolio-ledger-dir portfolio-ledger-publish-input
 
-      - name: Checkout generated artifact branch for publication without credentials
+      - name: Checkout generated artifact branch without credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: generated
           path: artifacts
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
 
-      - name: Stage artifact-only generated branch
+      - name: Stage and seal exact generated publication candidate
+        id: seal
         run: |
           set -euo pipefail
+          base_sha="$(git -C artifacts rev-parse HEAD)"
+          test "$(git -C artifacts rev-parse refs/remotes/origin/generated)" = "$base_sha"
+          test "$(git -C artifacts rev-parse --abbrev-ref HEAD)" = "generated"
+          if git -C artifacts config --local --get-regexp '^(credential\.|http\..*\.extraheader|includeif\.)' >/dev/null; then
+            echo "Credential-bearing Git configuration survived the read-only checkout." >&2
+            exit 1
+          fi
           find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           python3 source/scripts/stage-profile-evidence.py artifacts \
             --signal-field-dir publish-input \
@@ -261,19 +273,110 @@ jobs:
           python3 source/scripts/validate-generated-signal-field.py artifacts/profile-stats/profile
           python3 source/scripts/validate-portfolio-evidence-ledger.py artifacts/portfolio-evidence --require-live
           git -C artifacts add -A
-
-      - name: Publish changed artifact set
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
           if git -C artifacts diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "candidate_sha=$base_sha" >> "$GITHUB_OUTPUT"
             echo "Generated profile evidence is already current."
             exit 0
           fi
           git -C artifacts config user.name github-actions[bot]
           git -C artifacts config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git -C artifacts commit -m "chore: publish validated profile evidence [skip ci]"
+          candidate_sha="$(git -C artifacts rev-parse HEAD)"
+          test "$(git -C artifacts rev-parse HEAD^)" = "$base_sha"
+          test "$(git -C artifacts rev-list --parents -n 1 HEAD | awk '{print NF}')" -eq 2
+          test -z "$(git -C artifacts status --porcelain)"
+          git -C artifacts bundle create ../generated-publication.bundle generated
+          git -C artifacts bundle verify ../generated-publication.bundle
+          test "$(git bundle list-heads generated-publication.bundle)" = "$candidate_sha refs/heads/generated"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Upload sealed generated publication candidate
+        if: steps.seal.outputs.changed == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-publication-candidate
+          path: generated-publication.bundle
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: publish-write-only
+    needs: stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: write
+
+    steps:
+      - name: Publication candidate already current
+        if: needs.stage.outputs.changed == 'false'
+        run: echo "Validated generated profile evidence is already current."
+
+      - name: Download sealed generated publication candidate
+        if: needs.stage.outputs.changed == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: generated-publication-candidate
+          path: publication-candidate
+          digest-mismatch: error
+
+      - name: Verify sealed generated publication candidate
+        if: needs.stage.outputs.changed == 'true'
+        env:
+          BASE_SHA: ${{ needs.stage.outputs.base_sha }}
+          CANDIDATE_SHA: ${{ needs.stage.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$BASE_SHA" != "$CANDIDATE_SHA"
+          test "$(find publication-candidate -mindepth 1 -maxdepth 1 -type f -printf '%f\n')" = "generated-publication.bundle"
+          test "$(git bundle list-heads publication-candidate/generated-publication.bundle)" = "$CANDIDATE_SHA refs/heads/generated"
+          rm -rf artifacts
+          git init -q artifacts
+          git -C artifacts bundle verify ../publication-candidate/generated-publication.bundle
+          git -C artifacts fetch -q ../publication-candidate/generated-publication.bundle refs/heads/generated:refs/heads/generated
+          git -C artifacts checkout -q generated
+          test "$(git -C artifacts rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C artifacts rev-parse HEAD^)" = "$BASE_SHA"
+          test "$(git -C artifacts rev-list --parents -n 1 HEAD | awk '{print NF}')" -eq 2
+          test -z "$(git -C artifacts status --porcelain)"
+          test "$(git -C artifacts log -1 --format=%s)" = "chore: publish validated profile evidence [skip ci]"
+          test "$(git -C artifacts log -1 --format='%an <%ae>')" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          test "$(git -C artifacts log -1 --format='%cn <%ce>')" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          printf '%s\n' \
+            engineering-spotlight/spotlight-1-dark.svg \
+            engineering-spotlight/spotlight-1-light.svg \
+            engineering-spotlight/spotlight-2-dark.svg \
+            engineering-spotlight/spotlight-2-light.svg \
+            engineering-spotlight/spotlight-3-dark.svg \
+            engineering-spotlight/spotlight-3-light.svg \
+            portfolio-evidence/portfolio-evidence-ledger.json \
+            profile-stats/profile/signal-field-compact-dark.svg \
+            profile-stats/profile/signal-field-compact-light.svg \
+            profile-stats/profile/signal-field-wide-dark.svg \
+            profile-stats/profile/signal-field-wide-light.svg \
+            > expected-publication-paths.txt
+          git -C artifacts ls-tree -r --name-only HEAD | LC_ALL=C sort > observed-publication-paths.txt
+          LC_ALL=C sort -o expected-publication-paths.txt expected-publication-paths.txt
+          diff -u expected-publication-paths.txt observed-publication-paths.txt
+          test "$(git -C artifacts ls-tree -r HEAD | awk '{print $1}' | LC_ALL=C sort -u)" = "100644"
+          if git -C artifacts config --local --get-regexp '^(credential\.|http\..*\.extraheader|includeif\.)' >/dev/null; then
+            echo "Sealed publication candidate contains credential-bearing Git configuration." >&2
+            exit 1
+          fi
+          git -C artifacts remote add origin https://github.com/portyu9/portyu9
+          test "$(git -C artifacts remote get-url origin)" = "https://github.com/portyu9/portyu9"
+
+      - name: Publish sealed artifact commit
+        if: needs.stage.outputs.changed == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           AUTH_HEADER="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated
 
