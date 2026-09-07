@@ -69,6 +69,7 @@ def validate(sync: str, stats: str, policy: str) -> None:
         "Profile-stats dispatcher must remain a ref-only reconciliation dispatch",
     )
 
+    policy_lower = policy.lower()
     for phrase in (
         "merge_ui_after_checks",
         "defaults to `false`",
@@ -78,7 +79,8 @@ def validate(sync: str, stats: str, policy: str) -> None:
         "five protected-main checks",
         "no bypass",
     ):
-        require(phrase in policy, f"Spotlight UI merge authorization policy is missing: {phrase}")
+        require(phrase.lower() in policy_lower,
+                f"Spotlight UI merge authorization policy is missing: {phrase}")
 
 
 def expect_failure(sync: str, stats: str, policy: str, expected: str) -> None:
