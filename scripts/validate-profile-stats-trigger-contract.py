@@ -79,10 +79,14 @@ def main() -> int:
         require("  push:\n    branches:\n      - main\n" in workflow, "push-triggered production refresh must remain restricted to main")
         require("pull_request:" not in workflow, "production refresh workflow must never run from pull_request events")
         generate = job_block(workflow, "generate", "attest")
+        attest = job_block(workflow, "attest", "stage")
+        stage = job_block(workflow, "stage", "publish")
+        publish = job_block(workflow, "publish", "dispatch")
         require(MAIN_REF_GUARD in generate, "production generation must be guarded to refs/heads/main")
         require(workflow.count(MAIN_REF_GUARD) == 1, "main source-ref guard must exist exactly once at the generation authority boundary")
-        require("needs: generate" in job_block(workflow, "attest", "publish"), "attestation must remain downstream of main-guarded generation")
-        require("needs: [generate, attest]" in job_block(workflow, "publish", None), "publication must remain downstream of main-guarded generation and attestation")
+        require("needs: generate" in attest, "attestation must remain downstream of main-guarded generation")
+        require("needs: [generate, attest]" in stage, "publication staging must remain downstream of main-guarded generation and attestation")
+        require("needs: stage" in publish, "terminal publication must remain downstream of read-only publication staging")
 
         require("scripts/**" in cadence, "refresh cadence rationale must document the trusted scripts/** trigger surface")
         require(
@@ -92,7 +96,7 @@ def main() -> int:
         print(
             "Profile stats trigger contract passed: scripts/** closes the trusted production source surface; "
             "pushes are main-only, manual dispatch remains available but generation is gated to refs/heads/main, "
-            "and attestation/publication stay downstream of that source-ref guard."
+            "and attestation/read-only publication staging/terminal publication stay downstream of that source-ref guard."
         )
         return 0
     except (OSError, ValueError, StopIteration, IndexError) as exc:
