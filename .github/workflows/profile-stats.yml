@@ -239,12 +239,13 @@ jobs:
             --spotlight-dir spotlight-publish-input \
             --portfolio-ledger-dir portfolio-ledger-publish-input
 
-      - name: Checkout generated artifact branch for publication
+      - name: Checkout generated artifact branch for publication without credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: generated
           path: artifacts
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Stage artifact-only generated branch
         run: |
@@ -262,6 +263,8 @@ jobs:
           git -C artifacts add -A
 
       - name: Publish changed artifact set
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if git -C artifacts diff --cached --quiet; then
@@ -271,7 +274,8 @@ jobs:
           git -C artifacts config user.name github-actions[bot]
           git -C artifacts config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git -C artifacts commit -m "chore: publish validated profile evidence [skip ci]"
-          git -C artifacts push origin HEAD:generated
+          AUTH_HEADER="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated
 
   dispatch:
     name: dispatch-spotlight-link-sync
