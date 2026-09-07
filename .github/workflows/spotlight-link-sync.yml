@@ -171,8 +171,16 @@ jobs:
             PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
           fi
 
-          PR_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"
-          test "$PR_HEAD" = "$HEAD_SHA"
+          # GitHub's PR view can briefly lag the just-updated bot branch. Preserve the
+          # exact-head invariant while allowing only a bounded metadata-convergence window.
+          for attempt in $(seq 1 15); do
+            PR_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"
+            if [ "$PR_HEAD" = "$HEAD_SHA" ]; then
+              break
+            fi
+            test "$attempt" -lt 15
+            sleep 2
+          done
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
           echo "base_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
