@@ -109,14 +109,14 @@ def require_validation_boundary(block: str, *, signal: str, spotlight: str, ledg
 
 
 def validate_publish_terminal_surface(publish: str) -> None:
-    """Keep repository-write credentials absent until one exact terminal push step."""
+    """Keep persisted Git credentials out of authored validation and explicit shell-token use terminal."""
     marker = "      - name: Publish changed artifact set\n"
     require(publish.count(marker) == 1, "Publication must contain exactly one terminal mutation step")
     split = publish.index(marker)
     before = publish[:split]
     terminal = publish[split:]
     require("${{ github.token }}" not in before,
-            "Publication must not expose the GitHub token before the terminal mutation step")
+            "Publication must not explicitly expose github.token to workflow steps before the terminal mutation step")
     expected_header = (
         marker
         + "        env:\n"
@@ -125,12 +125,12 @@ def validate_publish_terminal_surface(publish: str) -> None:
     )
     require(
         terminal.startswith(expected_header),
-        "Publication terminal step metadata changed; only name -> step-scoped GITHUB_TOKEN -> run is allowed",
+        "Publication terminal step metadata changed; only name -> explicit step-scoped GITHUB_TOKEN -> run is allowed",
     )
     require(terminal.count("      - name: ") == 1,
-            "Publication must not execute another named step after write credentials are introduced")
+            "Publication must not execute another named step after explicit shell-token introduction")
     require(terminal.count("${{ github.token }}") == 1,
-            "Publication terminal step GitHub token exposure changed")
+            "Publication explicit github.token expression count changed")
     run_marker = "        run: |\n"
     require(terminal.count(run_marker) == 1, "Publication terminal step must contain exactly one run block")
     shell = terminal.split(run_marker, 1)[1]
@@ -149,7 +149,7 @@ def validate_publish_terminal_surface(publish: str) -> None:
     )
     require(
         observed == expected,
-        f"Publication terminal credential/mutation surface changed: expected={expected!r} observed={observed!r}",
+        f"Publication terminal explicit-token/mutation surface changed: expected={expected!r} observed={observed!r}",
     )
 
 
@@ -304,9 +304,9 @@ def validate_stats(text: str) -> None:
     require(generate.count("persist-credentials: false") == 1, "Generation checkout must not persist credentials")
     require(attest.count("persist-credentials: false") == 2, "Attestation source/generated checkouts must not persist credentials")
     require(publish.count("persist-credentials: false") == 2,
-            "Both publication checkouts must keep repository credentials out of staging/validation steps")
+            "Both publication checkouts must keep persisted repository credentials out of authored staging/validation steps")
     require("name: Checkout generated artifact branch for publication without credentials" in publish,
-            "Generated publication checkout must remain credential-free")
+            "Generated publication checkout must not persist Git credentials")
 
     for forbidden in (
         "python3 source/scripts/validate-signal-field-v213.py profile-stats/profile",
@@ -406,7 +406,7 @@ def main() -> int:
             "has one versioned workflow entrypoint, the single versioned profile-evidence validation boundary is exercised by integration/attestation/publication, "
             "mutable profile cache identities bind to live candidates, measured generation uses the governed best-effort hourly cadence, "
             "three artifact downloads are integrity-checked, third-party generation has neither write nor signing authority, "
-            "attestation is isolated, publication revalidates without persisted credentials, the GitHub token is terminal-step scoped to one exact generated push, "
+            "attestation is isolated, publication revalidates without persisted Git credentials, explicit token exposure to authored shell is terminal-step scoped to one exact generated push, "
             "and post-publication Spotlight dispatch has Actions-only authority."
         )
         return 0
