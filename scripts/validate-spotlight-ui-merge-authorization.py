@@ -11,10 +11,11 @@ SYNC = ROOT / ".github/workflows/spotlight-link-sync.yml"
 STATS = ROOT / ".github/workflows/profile-stats.yml"
 POLICY = ROOT / ".github/SPOTLIGHT_UI_MERGE_AUTHORIZATION.md"
 
-MERGE_IF = (
-    "if: needs.plan.outputs.changed == 'true' && needs.propose.result == 'success' "
+MERGE_IF_EXPR = (
+    "needs.plan.outputs.changed == 'true' && needs.propose.result == 'success' "
     "&& needs.approve.result == 'success'"
 )
+JOB_IF_LINE = re.compile(r"(?m)^    if:\s*(?P<expr>.+?)\s*$")
 
 
 def fail(message: str) -> None:
@@ -36,6 +37,13 @@ def job_block(workflow: str, key: str, next_key: str | None) -> str:
     return workflow[start.start(): start.end() + end.start()]
 
 
+def exact_job_if(block: str, label: str) -> str:
+    """Return one canonical job-level if expression, never a comment or nested step predicate."""
+    expressions = [match.group("expr").strip() for match in JOB_IF_LINE.finditer(block)]
+    require(len(expressions) == 1, f"{label} must contain exactly one canonical job-level if predicate")
+    return expressions[0]
+
+
 def validate(sync: str, stats: str, policy: str) -> None:
     require("  workflow_dispatch:\n" in sync,
             "Spotlight synchronization must retain a manual recovery dispatch")
@@ -47,10 +55,10 @@ def validate(sync: str, stats: str, policy: str) -> None:
             "Profile-stats post-publication dispatch must not introduce a separate merge input")
 
     merge = job_block(sync, "merge", None)
-    require(MERGE_IF in merge,
-            "Spotlight merge job must require the exact guarded plan/propose/approve prerequisites")
-    require(merge.count(MERGE_IF) == 1,
-            "Spotlight standing merge predicate must appear exactly once")
+    require(
+        exact_job_if(merge, "Spotlight merge job") == MERGE_IF_EXPR,
+        "Spotlight merge job must require the exact guarded plan/propose/approve prerequisites",
+    )
     for forbidden in (
         "github.event_name == 'workflow_dispatch'",
         "inputs.merge_ui_after_checks",
@@ -106,6 +114,29 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         policy,
         "exact guarded plan/propose/approve prerequisites",
     )
+    guarded_line = f"    if: {MERGE_IF_EXPR}"
+    comment_shadow = sync.replace(
+        guarded_line,
+        f"    # if: {MERGE_IF_EXPR}\n    if: always()",
+        1,
+    )
+    expect_failure(
+        comment_shadow,
+        stats,
+        policy,
+        "exact guarded plan/propose/approve prerequisites",
+    )
+    duplicate_job_if = sync.replace(
+        guarded_line,
+        guarded_line + "\n    if: always()",
+        1,
+    )
+    expect_failure(
+        duplicate_job_if,
+        stats,
+        policy,
+        "exactly one canonical job-level if predicate",
+    )
     expect_failure(
         sync,
         stats + "\nmerge_ui_after_checks: true\n",
@@ -137,7 +168,7 @@ def main() -> int:
         self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: the fixed deterministic README-only synchronization class "
-            "has standing auto-merge authority after plan/propose/approval guards and the five protected-main checks; "
+            "has standing auto-merge authority after one exact parsed plan/propose/approval job guard and the five protected-main checks; "
             "scheduled/post-publication runs may converge automatically without authorizing arbitrary UI or dependency PRs."
         )
         return 0
