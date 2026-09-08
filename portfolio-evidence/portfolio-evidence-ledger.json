@@ -4,8 +4,8 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:9559897053bab876f963d14537e645b22f4206973275a977babf5ce55b0f6c2e",
-  "evidence_id": "PL2-9559897053BAB876",
+  "evidence_digest": "sha256:e3c518c017be313485d22e4bcd7d9bcee0442a43d80d0ee6a324846c10d56df1",
+  "evidence_id": "PL2-E3C518C017BE3134",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -19,8 +19,7 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 23,
-    "RUNNING": 2
+    "PASSING": 25
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -236,13 +235,13 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T22:08:15Z",
+          "completed_at_utc": "2026-09-08T22:08:57Z",
           "freshness": "SAME_DAY",
           "head_sha": "6b5bb33229a12c4ad85082f28061ca2fe98a2adf",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "RUNNING",
+          "result": "PASSING",
           "run_id": 34284316297,
           "run_number": 175,
           "run_url": "https://github.com/portyu9/qa-automation-dotnet-selenium/actions/runs/34284316297",
@@ -252,13 +251,13 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T22:08:14Z",
+          "completed_at_utc": "2026-09-08T22:09:54Z",
           "freshness": "SAME_DAY",
           "head_sha": "6b5bb33229a12c4ad85082f28061ca2fe98a2adf",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
-          "result": "RUNNING",
+          "result": "PASSING",
           "run_id": 34284316249,
           "run_number": 93,
           "run_url": "https://github.com/portyu9/qa-automation-dotnet-selenium/actions/runs/34284316249",
