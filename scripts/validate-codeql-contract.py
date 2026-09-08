@@ -14,6 +14,33 @@ GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 CODEQL_SHA = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
 CODEQL_RELEASE = "v4.37.9"
+STEP_START = re.compile(r"^      - name: (?P<name>.+?)\s*$")
+EXPECTED_STEP_NAMES = ("Checkout", "Initialize CodeQL", "Analyze")
+
+EXPECTED_CHECKOUT_STEP = (
+    "      - name: Checkout\n"
+    f"        uses: actions/checkout@{CHECKOUT_SHA} # v7.0.1\n"
+    "        with:\n"
+    "          persist-credentials: false"
+)
+EXPECTED_INIT_STEP = (
+    "      - name: Initialize CodeQL\n"
+    f"        uses: github/codeql-action/init@{CODEQL_SHA} # {CODEQL_RELEASE}\n"
+    "        with:\n"
+    "          languages: ${{ matrix.language }}\n"
+    "          queries: security-extended"
+)
+EXPECTED_ANALYZE_STEP = (
+    "      - name: Analyze\n"
+    f"        uses: github/codeql-action/analyze@{CODEQL_SHA} # {CODEQL_RELEASE}\n"
+    "        with:\n"
+    "          category: \"/language:${{ matrix.language }}\""
+)
+EXPECTED_STEPS = {
+    "Checkout": EXPECTED_CHECKOUT_STEP,
+    "Initialize CodeQL": EXPECTED_INIT_STEP,
+    "Analyze": EXPECTED_ANALYZE_STEP,
+}
 
 
 def fail(message: str) -> None:
@@ -25,11 +52,50 @@ def require(condition: bool, message: str) -> None:
         fail(message)
 
 
+def indentation(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
 def job_block(workflow: str, key: str) -> str:
     match = re.search(rf"(?m)^  {re.escape(key)}:\s*$", workflow)
     if not match:
         fail(f"CodeQL workflow job is missing: {key}")
     return workflow[match.start():]
+
+
+def codeql_step_blocks(analyze: str) -> dict[str, str]:
+    """Return the exact ordered named steps from the CodeQL analysis job."""
+    lines = analyze.splitlines()
+    starts = [index for index, line in enumerate(lines) if line == "    steps:"]
+    require(len(starts) == 1, "CodeQL analyze job must contain exactly one steps block")
+
+    ordered: list[tuple[str, str]] = []
+    current_name: str | None = None
+    current_lines: list[str] = []
+    for line in lines[starts[0] + 1 :]:
+        if line.startswith("      - "):
+            match = STEP_START.fullmatch(line)
+            require(match is not None, f"CodeQL contains an unnamed or noncanonical step: {line.strip()}")
+            if current_name is not None:
+                ordered.append((current_name, "\n".join(current_lines).rstrip()))
+            current_name = match.group("name")
+            current_lines = [line]
+            continue
+        if current_name is None:
+            if not line.strip():
+                continue
+            require(indentation(line) > 4, f"CodeQL steps block ended before a reviewed step: {line.strip()}")
+            fail(f"CodeQL contains content before the first reviewed step: {line.strip()}")
+        if line.strip() and indentation(line) <= 4:
+            break
+        current_lines.append(line)
+
+    if current_name is not None:
+        ordered.append((current_name, "\n".join(current_lines).rstrip()))
+    require(tuple(name for name, _ in ordered) == EXPECTED_STEP_NAMES,
+            f"CodeQL step inventory/order changed: {[name for name, _ in ordered]!r}")
+    require(len({name for name, _ in ordered}) == len(ordered), "CodeQL step names must be distinct")
+    return dict(ordered)
 
 
 def validate_codeql(text: str) -> None:
@@ -89,6 +155,13 @@ def validate_codeql(text: str) -> None:
     require(matrix_block.count("          - ") == 2,
             "CodeQL language matrix must not silently add or remove analysis languages")
 
+    # Step execution is authority too. Exact source blocks ensure reviewed action/query
+    # text cannot be moved into comments/inert data while an extra run step mutates the
+    # checkout or otherwise weakens what the required CodeQL statuses actually analyze.
+    steps = codeql_step_blocks(analyze)
+    for name in EXPECTED_STEP_NAMES:
+        require(steps[name] == EXPECTED_STEPS[name], f"CodeQL {name} step changed")
+
     checkout_ref = f"actions/checkout@{CHECKOUT_SHA}"
     require(analyze.count(checkout_ref) == 1, "CodeQL must use the reviewed checkout SHA exactly once")
     require("persist-credentials: false" in analyze, "CodeQL checkout must not persist credentials")
@@ -141,13 +214,35 @@ def validate_governance(text: str) -> None:
 def self_test(good: str) -> None:
     validate_codeql(good)
     mutations = (
-        (good.replace(CODEQL_SHA, "v4"), f"reviewed {CODEQL_RELEASE} commit SHA"),
+        (good.replace(CODEQL_SHA, "v4"), "Initialize CodeQL step changed"),
         (good.replace("          - actions\n", ""), "Python and GitHub Actions"),
         (good.replace("security-events: write", "security-events: read"), "security-events: write"),
         (good.replace("  pull_request:\n", "  pull_request:\n    paths:\n      - 'scripts/**'\n"), "path filters"),
         (good.replace("      contents: read\n      security-events: write", "      contents: write\n      security-events: write"),
          "repository-content write authority"),
-        (good.replace("queries: security-extended", "queries: security-and-quality"), "security-extended"),
+        (good.replace("queries: security-extended", "queries: security-and-quality"), "Initialize CodeQL step changed"),
+        (
+            good.replace(
+                "      - name: Initialize CodeQL\n",
+                "      - name: Preprocess checkout\n        run: rm -rf scripts .github/workflows\n\n"
+                "      - name: Initialize CodeQL\n",
+            ),
+            "step inventory/order changed",
+        ),
+        (
+            good.replace(
+                "          queries: security-extended\n",
+                "          queries: security-and-quality\n          # queries: security-extended\n",
+            ),
+            "Initialize CodeQL step changed",
+        ),
+        (
+            good.replace(
+                '          category: "/language:${{ matrix.language }}"\n',
+                '          category: "/language:${{ matrix.language }}"\n        if: false\n',
+            ),
+            "Analyze step changed",
+        ),
     )
     for mutated, expected in mutations:
         try:
@@ -170,8 +265,8 @@ def main() -> int:
 
         print(
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
-            "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, and execute only "
-            "reviewed SHA-pinned actions."
+            "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
+            "reviewed steps, and use only reviewed SHA-pinned actions."
         )
         return 0
     except (OSError, ValueError) as exc:
