@@ -47,9 +47,82 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def exact_int(value: Any, expected: int | None = None, *, minimum: int | None = None) -> bool:
+    """Accept JSON integer primitives only; bool/float equality must not erase type identity."""
+    if type(value) is not int:
+        return False
+    if expected is not None and value != expected:
+        return False
+    return minimum is None or value >= minimum
+
+
+def exact_bool(value: Any, expected: bool) -> bool:
+    """Accept JSON boolean primitives only; integer 0/1 are not equivalent policy values."""
+    return type(value) is bool and value is expected
+
+
+def validate_live_pr_parameters(pr: Any, desired: dict[str, Any]) -> None:
+    require(isinstance(pr, dict), "Protect Main: live pull-request parameters are malformed")
+    review_count = pr.get("required_approving_review_count")
+    require(
+        exact_int(review_count, desired["required_approving_review_count"]),
+        "Protect Main: live required_approving_review_count primitive/value differs from contract",
+    )
+    for key in (
+        "required_review_thread_resolution",
+        "dismiss_stale_reviews_on_push",
+        "require_code_owner_review",
+        "require_last_push_approval",
+    ):
+        require(
+            exact_bool(pr.get(key), desired[key]),
+            f"Protect Main: live {key} primitive/value differs from contract",
+        )
+    methods = pr.get("allowed_merge_methods")
+    require(
+        isinstance(methods, list)
+        and all(isinstance(method, str) for method in methods)
+        and methods == desired["allowed_merge_methods"],
+        "Protect Main: live allowed_merge_methods differs from contract",
+    )
+
+
+def required_status_context_map(entries: Any, expected_integration: int) -> dict[str, int]:
+    """Return exact required-check identities without string/numeric coercion or duplicate collapse."""
+    require(isinstance(entries, list), "Protect Main: live required statuses are malformed")
+    require(len(entries) == len(EXPECTED_CONTEXTS), "Protect Main: live required status count differs from contract")
+    observed: dict[str, int] = {}
+    for entry in entries:
+        require(isinstance(entry, dict), "Protect Main: live required status entry is malformed")
+        context = entry.get("context")
+        integration_id = entry.get("integration_id")
+        require(isinstance(context, str) and context, "Protect Main: live required status context is malformed")
+        require(context not in observed, f"Protect Main: duplicate live required status context: {context}")
+        require(
+            exact_int(integration_id, expected_integration),
+            f"Protect Main: required status integration identity differs for {context}: {integration_id!r}",
+        )
+        observed[context] = integration_id
+    require(set(observed) == EXPECTED_CONTEXTS, "Protect Main: live required status contexts differ from contract")
+    return observed
+
+
+def validate_detail_identity(detail: Any, name: str, ruleset_id: int) -> dict[str, Any]:
+    require(isinstance(detail, dict), f"live ruleset detail is malformed: {name}")
+    require(
+        exact_int(detail.get("id"), ruleset_id),
+        f"{name}: live ruleset detail id primitive/value differs from collection identity",
+    )
+    require(
+        isinstance(detail.get("name"), str) and detail.get("name") == name,
+        f"{name}: live ruleset detail name differs from collection identity",
+    )
+    return detail
+
+
 def load_contract() -> dict[str, Any]:
     payload = json.loads(CONTRACT.read_text(encoding="utf-8"))
-    require(payload.get("schemaVersion") == 1, "ruleset contract schema version changed")
+    require(exact_int(payload.get("schemaVersion"), 1), "ruleset contract schema version changed")
     require(payload.get("repository") == REPOSITORY, "ruleset contract repository changed")
     rulesets = payload.get("rulesets")
     require(isinstance(rulesets, dict), "ruleset contract inventory is missing")
@@ -58,7 +131,12 @@ def load_contract() -> dict[str, Any]:
 
 
 def validate_source(payload: dict[str, Any]) -> None:
-    rulesets = payload["rulesets"]
+    require(isinstance(payload, dict), "ruleset contract root must be an object")
+    require(exact_int(payload.get("schemaVersion"), 1), "ruleset contract schema version changed")
+    require(payload.get("repository") == REPOSITORY, "ruleset contract repository changed")
+    rulesets = payload.get("rulesets")
+    require(isinstance(rulesets, dict), "ruleset contract inventory is missing")
+    require(set(rulesets) == set(EXPECTED_RULESET_NAMES), "ruleset contract inventory changed")
     main = rulesets["Protect Main"]
     generated = rulesets["Protect generated"]
 
@@ -73,7 +151,7 @@ def validate_source(payload: dict[str, Any]) -> None:
 
     pr = main_rules.get("pull_request")
     require(isinstance(pr, dict), "Protect Main pull-request parameters are missing")
-    require(pr.get("required_approving_review_count") == 0, "solo-maintainer review-count contract changed")
+    require(exact_int(pr.get("required_approving_review_count"), 0), "solo-maintainer review-count contract changed")
     require(pr.get("required_review_thread_resolution") is True, "Protect Main must require review-thread resolution")
     require(pr.get("dismiss_stale_reviews_on_push") is False, "stale-review policy changed")
     require(pr.get("require_code_owner_review") is False, "code-owner review policy changed")
@@ -84,16 +162,27 @@ def validate_source(payload: dict[str, Any]) -> None:
     require(isinstance(checks, dict), "Protect Main status-check parameters are missing")
     require(checks.get("strict_required_status_checks_policy") is True, "Protect Main must require a current head")
     require(checks.get("do_not_enforce_on_create") is False, "required checks must be enforced on branch creation")
-    require(checks.get("integration_id") == EXPECTED_INTEGRATION_ID,
-            f"required checks must bind to GitHub Actions integration_id {EXPECTED_INTEGRATION_ID}")
+    require(
+        exact_int(checks.get("integration_id"), EXPECTED_INTEGRATION_ID),
+        f"required checks must bind to GitHub Actions integration_id {EXPECTED_INTEGRATION_ID}",
+    )
     contexts = checks.get("contexts")
-    require(isinstance(contexts, list) and set(contexts) == EXPECTED_CONTEXTS and len(contexts) == 5, "Protect Main required status contexts changed")
+    require(
+        isinstance(contexts, list)
+        and len(contexts) == 5
+        and all(isinstance(context, str) and context for context in contexts)
+        and set(contexts) == EXPECTED_CONTEXTS,
+        "Protect Main required status contexts changed",
+    )
 
     require(generated.get("target") == "branch" and generated.get("enforcement") == "active", "Protect generated must be an active branch ruleset")
     require(generated.get("include") == ["refs/heads/generated"] and generated.get("exclude") == [], "Protect generated target changed")
     require(generated.get("bypassActors") == [], "Protect generated must have no bypass actors")
     generated_rules = generated.get("rules")
-    require(generated_rules == {"deletion": True, "non_fast_forward": True}, "Protect generated must contain only deletion/non-fast-forward protection")
+    require(isinstance(generated_rules, dict) and set(generated_rules) == {"deletion", "non_fast_forward"},
+            "Protect generated must contain only deletion/non-fast-forward protection")
+    require(generated_rules.get("deletion") is True and generated_rules.get("non_fast_forward") is True,
+            "Protect generated deletion/non-fast-forward values must be boolean true")
 
     doc = DOC.read_text(encoding="utf-8")
     for phrase in (
@@ -210,14 +299,8 @@ def ruleset_collection_map(collection: Any) -> dict[str, dict[str, Any]]:
         require(isinstance(name, str) and name, "live repository ruleset name is malformed")
         require(name not in result, f"live repository ruleset inventory contains duplicate name: {name}")
         ruleset_id = item.get("id")
-        require(
-            isinstance(ruleset_id, int) and not isinstance(ruleset_id, bool) and ruleset_id > 0,
-            f"live ruleset id is malformed: {name}",
-        )
-        require(
-            ruleset_id not in seen_ids,
-            f"live repository ruleset inventory contains duplicate id: {ruleset_id}",
-        )
+        require(exact_int(ruleset_id, minimum=1), f"live ruleset id is malformed: {name}")
+        require(ruleset_id not in seen_ids, f"live repository ruleset inventory contains duplicate id: {ruleset_id}")
         result[name] = item
         seen_ids.add(ruleset_id)
     require(set(result) == set(EXPECTED_RULESET_NAMES), "live repository ruleset inventory differs from contract")
@@ -275,10 +358,7 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
     ids: dict[str, int] = {}
     for name, item in by_name.items():
         ruleset_id = item["id"]
-        detail = request_json(f"{API}/{ruleset_id}")
-        require(isinstance(detail, dict), f"live ruleset detail is malformed: {name}")
-        require(detail.get("id") == ruleset_id, f"{name}: live ruleset detail id differs from collection identity")
-        require(detail.get("name") == name, f"{name}: live ruleset detail name differs from collection identity")
+        detail = validate_detail_identity(request_json(f"{API}/{ruleset_id}"), name, ruleset_id)
         details[name] = detail
         ids[name] = ruleset_id
 
@@ -289,9 +369,12 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
         target = expected[name]
         require(detail.get("target") == target["target"], f"{name}: live target differs from contract")
         require(detail.get("enforcement") == target["enforcement"], f"{name}: live enforcement differs from contract")
-        conditions = detail.get("conditions", {}).get("ref_name", {})
-        require(conditions.get("include") == target["include"], f"{name}: live include target differs from contract")
-        require(conditions.get("exclude") == target["exclude"], f"{name}: live exclude target differs from contract")
+        conditions = detail.get("conditions")
+        require(isinstance(conditions, dict), f"{name}: live conditions are malformed")
+        ref_name = conditions.get("ref_name")
+        require(isinstance(ref_name, dict), f"{name}: live ref_name conditions are malformed")
+        require(ref_name.get("include") == target["include"], f"{name}: live include target differs from contract")
+        require(ref_name.get("exclude") == target["exclude"], f"{name}: live exclude target differs from contract")
         bypass_actors = observable_bypass_actors(name, ids[name], detail)
         if bypass_actors is None:
             bypass_unobservable.append(name)
@@ -300,32 +383,24 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
 
     main_rules = rule_map(details["Protect Main"])
     require(set(main_rules) == {"deletion", "non_fast_forward", "pull_request", "required_status_checks"}, "Protect Main: live rule inventory differs from contract")
-    pr = main_rules["pull_request"].get("parameters", {})
+    pr = main_rules["pull_request"].get("parameters")
     desired_pr = expected["Protect Main"]["rules"]["pull_request"]
-    for key in (
-        "required_approving_review_count",
-        "required_review_thread_resolution",
-        "dismiss_stale_reviews_on_push",
-        "require_code_owner_review",
-        "require_last_push_approval",
-        "allowed_merge_methods",
-    ):
-        require(pr.get(key) == desired_pr[key], f"Protect Main: live {key}={pr.get(key)!r}, expected {desired_pr[key]!r}")
+    validate_live_pr_parameters(pr, desired_pr)
 
-    status = main_rules["required_status_checks"].get("parameters", {})
+    status = main_rules["required_status_checks"].get("parameters")
+    require(isinstance(status, dict), "Protect Main: live required status parameters are malformed")
     desired_status = expected["Protect Main"]["rules"]["required_status_checks"]
-    require(status.get("strict_required_status_checks_policy") is desired_status["strict_required_status_checks_policy"], "Protect Main: live strict status policy differs")
-    require(status.get("do_not_enforce_on_create") is desired_status["do_not_enforce_on_create"], "Protect Main: live create enforcement differs")
-    live_contexts = status.get("required_status_checks")
-    require(isinstance(live_contexts, list), "Protect Main: live required statuses are malformed")
-    require(len(live_contexts) == 5 and all(isinstance(entry, dict) for entry in live_contexts),
-            "Protect Main: live required status entries are malformed")
-    observed = {str(entry.get("context")): entry.get("integration_id") for entry in live_contexts}
-    require(set(observed) == EXPECTED_CONTEXTS and len(observed) == 5,
-            "Protect Main: live required status contexts differ from contract")
+    require(
+        exact_bool(status.get("strict_required_status_checks_policy"), desired_status["strict_required_status_checks_policy"]),
+        "Protect Main: live strict status policy primitive/value differs",
+    )
+    require(
+        exact_bool(status.get("do_not_enforce_on_create"), desired_status["do_not_enforce_on_create"]),
+        "Protect Main: live create enforcement primitive/value differs",
+    )
     expected_integration = desired_status["integration_id"]
-    require(all(value == expected_integration for value in observed.values()),
-            f"Protect Main: required status integration identity differs; expected integration_id={expected_integration}, observed={observed}")
+    require(exact_int(expected_integration, EXPECTED_INTEGRATION_ID), "Protect Main: source integration identity is malformed")
+    required_status_context_map(status.get("required_status_checks"), expected_integration)
 
     generated_rules = rule_map(details["Protect generated"])
     require(set(generated_rules) == {"deletion", "non_fast_forward"}, "Protect generated: live rule inventory differs from contract")
@@ -361,6 +436,33 @@ def self_test(payload: dict[str, Any]) -> None:
     else:
         raise ValueError("ruleset self-test accepted disabled review-thread resolution")
 
+    schema_bool = json.loads(encoded)
+    schema_bool["schemaVersion"] = True
+    try:
+        validate_source(schema_bool)
+    except (ValueError, KeyError):
+        pass
+    else:
+        raise ValueError("ruleset self-test accepted boolean schema version")
+
+    review_count_bool = json.loads(encoded)
+    review_count_bool["rulesets"]["Protect Main"]["rules"]["pull_request"]["required_approving_review_count"] = False
+    try:
+        validate_source(review_count_bool)
+    except ValueError as exc:
+        require("review-count" in str(exc), f"ruleset review-count type self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test accepted boolean review count as integer zero")
+
+    review_thread_int = json.loads(encoded)
+    review_thread_int["rulesets"]["Protect Main"]["rules"]["pull_request"]["required_review_thread_resolution"] = 1
+    try:
+        validate_source(review_thread_int)
+    except ValueError as exc:
+        require("review-thread resolution" in str(exc), f"ruleset review-thread type self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test accepted integer one as boolean review-thread policy")
+
     integration_drift = json.loads(encoded)
     integration_drift["rulesets"]["Protect Main"]["rules"]["required_status_checks"]["integration_id"] = 1
     try:
@@ -369,6 +471,40 @@ def self_test(payload: dict[str, Any]) -> None:
         require("integration_id" in str(exc), f"ruleset integration self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("ruleset self-test accepted required-check integration identity drift")
+
+    integration_float = json.loads(encoded)
+    integration_float["rulesets"]["Protect Main"]["rules"]["required_status_checks"]["integration_id"] = float(EXPECTED_INTEGRATION_ID)
+    try:
+        validate_source(integration_float)
+    except ValueError as exc:
+        require("integration_id" in str(exc), f"ruleset integration primitive self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test accepted floating-point integration identity")
+
+    generated_numeric = json.loads(encoded)
+    generated_numeric["rulesets"]["Protect generated"]["rules"]["deletion"] = 1
+    try:
+        validate_source(generated_numeric)
+    except ValueError as exc:
+        require("boolean true" in str(exc), f"generated rules primitive self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test accepted integer one as generated deletion boolean")
+
+    desired_pr = payload["rulesets"]["Protect Main"]["rules"]["pull_request"]
+    validate_live_pr_parameters(dict(desired_pr), desired_pr)
+    for field, value in (
+        ("required_approving_review_count", False),
+        ("required_review_thread_resolution", 1),
+        ("dismiss_stale_reviews_on_push", 0),
+    ):
+        malformed_pr = dict(desired_pr)
+        malformed_pr[field] = value
+        try:
+            validate_live_pr_parameters(malformed_pr, desired_pr)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"live ruleset PR primitive self-test accepted malformed {field}")
 
     canonical_collection = [
         {"id": 1, "name": "Protect Main"},
@@ -394,12 +530,47 @@ def self_test(payload: dict[str, Any]) -> None:
         canonical_collection + [{"id": 3, "name": "Unexpected"}],
         "exactly 2 entries",
     )
+    expect_collection_failure(
+        [{"id": True, "name": "Protect Main"}, {"id": 2, "name": "Protect generated"}],
+        "id is malformed",
+    )
     try:
         rule_map({"rules": [{"type": "deletion"}, {"type": "deletion"}]})
     except ValueError as exc:
         require("duplicate type" in str(exc), f"rule-map ambiguity self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("rule-map self-test accepted duplicate live rule types")
+
+    validate_detail_identity({"id": 1, "name": "Protect Main"}, "Protect Main", 1)
+    try:
+        validate_detail_identity({"id": True, "name": "Protect Main"}, "Protect Main", 1)
+    except ValueError as exc:
+        require("id primitive/value" in str(exc), f"detail identity type self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset detail self-test accepted boolean id as integer one")
+
+    canonical_statuses = [
+        {"context": context, "integration_id": EXPECTED_INTEGRATION_ID}
+        for context in sorted(EXPECTED_CONTEXTS)
+    ]
+    require(set(required_status_context_map(canonical_statuses, EXPECTED_INTEGRATION_ID)) == EXPECTED_CONTEXTS,
+            "required status identity fixture changed")
+    malformed_statuses = [dict(entry) for entry in canonical_statuses]
+    malformed_statuses[0]["integration_id"] = float(EXPECTED_INTEGRATION_ID)
+    try:
+        required_status_context_map(malformed_statuses, EXPECTED_INTEGRATION_ID)
+    except ValueError as exc:
+        require("integration identity differs" in str(exc), f"required status primitive self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test accepted floating-point required status integration id")
+    duplicate_statuses = [dict(entry) for entry in canonical_statuses]
+    duplicate_statuses[-1]["context"] = duplicate_statuses[0]["context"]
+    try:
+        required_status_context_map(duplicate_statuses, EXPECTED_INTEGRATION_ID)
+    except ValueError as exc:
+        require("duplicate live required status context" in str(exc), f"required status duplicate self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test accepted duplicate required status context")
 
     require(validate_api_url(API) == API, "ruleset URL self-test rejected canonical collection endpoint")
     require(validate_api_url(f"{API}/123") == f"{API}/123", "ruleset URL self-test rejected canonical detail endpoint")
@@ -473,7 +644,7 @@ def main() -> int:
         suffix = " + live observable GitHub control-plane state" if args.live else ""
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
-            f"five required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; observable drift fails closed."
+            f"five required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity and observable drift fail closed."
         )
         if unobservable:
             print(
