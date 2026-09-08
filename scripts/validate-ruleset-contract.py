@@ -27,6 +27,7 @@ API_ORIGIN = "https://api.github.com"
 API_PATH = f"/repos/{REPOSITORY}/rulesets"
 API = f"{API_ORIGIN}{API_PATH}"
 EXPECTED_INTEGRATION_ID = 15368
+EXPECTED_RULESET_NAMES = ("Protect Main", "Protect generated")
 
 EXPECTED_CONTEXTS = {
     "validate-contracts",
@@ -52,7 +53,7 @@ def load_contract() -> dict[str, Any]:
     require(payload.get("repository") == REPOSITORY, "ruleset contract repository changed")
     rulesets = payload.get("rulesets")
     require(isinstance(rulesets, dict), "ruleset contract inventory is missing")
-    require(set(rulesets) == {"Protect Main", "Protect generated"}, "ruleset contract inventory changed")
+    require(set(rulesets) == set(EXPECTED_RULESET_NAMES), "ruleset contract inventory changed")
     return payload
 
 
@@ -194,13 +195,46 @@ def request_json(url: str, *, authenticated: bool = True) -> Any:
         raise ValueError(f"could not read GitHub ruleset API ({mode} view): {exc}") from exc
 
 
+def ruleset_collection_map(collection: Any) -> dict[str, dict[str, Any]]:
+    """Return the exact live ruleset inventory without filtering or collapsing identities."""
+    require(isinstance(collection, list), "live ruleset collection is malformed")
+    require(
+        len(collection) == len(EXPECTED_RULESET_NAMES),
+        f"live repository ruleset inventory must contain exactly {len(EXPECTED_RULESET_NAMES)} entries",
+    )
+    result: dict[str, dict[str, Any]] = {}
+    seen_ids: set[int] = set()
+    for item in collection:
+        require(isinstance(item, dict), "live repository ruleset inventory contains a malformed entry")
+        name = item.get("name")
+        require(isinstance(name, str) and name, "live repository ruleset name is malformed")
+        require(name not in result, f"live repository ruleset inventory contains duplicate name: {name}")
+        ruleset_id = item.get("id")
+        require(
+            isinstance(ruleset_id, int) and not isinstance(ruleset_id, bool) and ruleset_id > 0,
+            f"live ruleset id is malformed: {name}",
+        )
+        require(
+            ruleset_id not in seen_ids,
+            f"live repository ruleset inventory contains duplicate id: {ruleset_id}",
+        )
+        result[name] = item
+        seen_ids.add(ruleset_id)
+    require(set(result) == set(EXPECTED_RULESET_NAMES), "live repository ruleset inventory differs from contract")
+    return result
+
+
 def rule_map(detail: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Return rules by type only when every live rule identity is unique and well formed."""
     result: dict[str, dict[str, Any]] = {}
     rules = detail.get("rules")
     require(isinstance(rules, list), "live ruleset rule inventory is malformed")
     for rule in rules:
-        require(isinstance(rule, dict) and isinstance(rule.get("type"), str), "live ruleset rule is malformed")
-        result[str(rule["type"])] = rule
+        require(isinstance(rule, dict), "live ruleset rule is malformed")
+        rule_type = rule.get("type")
+        require(isinstance(rule_type, str) and rule_type, "live ruleset rule type is malformed")
+        require(rule_type not in result, f"live ruleset rule inventory contains duplicate type: {rule_type}")
+        result[rule_type] = rule
     return result
 
 
@@ -235,24 +269,22 @@ def observable_bypass_actors(
 
 
 def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
-    collection = request_json(API)
-    require(isinstance(collection, list), "live ruleset collection is malformed")
-    by_name = {item.get("name"): item for item in collection if isinstance(item, dict)}
-    require(set(by_name) == {"Protect Main", "Protect generated"}, "live repository ruleset inventory differs from contract")
+    by_name = ruleset_collection_map(request_json(API))
 
     details: dict[str, dict[str, Any]] = {}
     ids: dict[str, int] = {}
     for name, item in by_name.items():
-        ruleset_id = item.get("id")
-        require(isinstance(ruleset_id, int), f"live ruleset id is missing: {name}")
+        ruleset_id = item["id"]
         detail = request_json(f"{API}/{ruleset_id}")
         require(isinstance(detail, dict), f"live ruleset detail is malformed: {name}")
-        details[str(name)] = detail
-        ids[str(name)] = ruleset_id
+        require(detail.get("id") == ruleset_id, f"{name}: live ruleset detail id differs from collection identity")
+        require(detail.get("name") == name, f"{name}: live ruleset detail name differs from collection identity")
+        details[name] = detail
+        ids[name] = ruleset_id
 
     expected = payload["rulesets"]
     bypass_unobservable: list[str] = []
-    for name in ("Protect Main", "Protect generated"):
+    for name in EXPECTED_RULESET_NAMES:
         detail = details[name]
         target = expected[name]
         require(detail.get("target") == target["target"], f"{name}: live target differs from contract")
@@ -309,6 +341,15 @@ def expect_unsafe_url(url: str, expected: str) -> None:
         raise ValueError(f"ruleset URL self-test accepted unsafe endpoint: {url}")
 
 
+def expect_collection_failure(collection: Any, expected: str) -> None:
+    try:
+        ruleset_collection_map(collection)
+    except ValueError as exc:
+        require(expected in str(exc), f"ruleset collection self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"ruleset collection self-test accepted ambiguous inventory: {expected}")
+
+
 def self_test(payload: dict[str, Any]) -> None:
     encoded = json.dumps(payload)
     mutation = json.loads(encoded)
@@ -328,6 +369,37 @@ def self_test(payload: dict[str, Any]) -> None:
         require("integration_id" in str(exc), f"ruleset integration self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("ruleset self-test accepted required-check integration identity drift")
+
+    canonical_collection = [
+        {"id": 1, "name": "Protect Main"},
+        {"id": 2, "name": "Protect generated"},
+    ]
+    require(
+        tuple(ruleset_collection_map(canonical_collection)) == EXPECTED_RULESET_NAMES,
+        "ruleset collection self-test did not preserve the exact reviewed inventory",
+    )
+    expect_collection_failure(
+        [{"id": 1, "name": "Protect Main"}, {"id": 2, "name": "Protect Main"}],
+        "duplicate name",
+    )
+    expect_collection_failure(
+        [{"id": 1, "name": "Protect Main"}, "malformed"],
+        "malformed entry",
+    )
+    expect_collection_failure(
+        [{"id": 1, "name": "Protect Main"}, {"id": 1, "name": "Protect generated"}],
+        "duplicate id",
+    )
+    expect_collection_failure(
+        canonical_collection + [{"id": 3, "name": "Unexpected"}],
+        "exactly 2 entries",
+    )
+    try:
+        rule_map({"rules": [{"type": "deletion"}, {"type": "deletion"}]})
+    except ValueError as exc:
+        require("duplicate type" in str(exc), f"rule-map ambiguity self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("rule-map self-test accepted duplicate live rule types")
 
     require(validate_api_url(API) == API, "ruleset URL self-test rejected canonical collection endpoint")
     require(validate_api_url(f"{API}/123") == f"{API}/123", "ruleset URL self-test rejected canonical detail endpoint")
