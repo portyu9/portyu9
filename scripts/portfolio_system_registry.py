@@ -2,6 +2,7 @@
 """Load and validate the canonical 13-system portfolio registry."""
 from __future__ import annotations
 
+import colorsys
 import hashlib
 import json
 from pathlib import Path
@@ -13,6 +14,7 @@ REGISTRY_PATH = ROOT / "scripts" / "portfolio-systems-v1.json"
 VERSION = "portfolio-systems-v1"
 OWNER = "portyu9"
 CLASSIFICATION_POLICY = "four permanent profile systems plus nine rotating Spotlight systems"
+MIN_ROTATING_ACCENT_HUE_DISTANCE = 30.0
 
 
 def require(condition: bool, message: str) -> None:
@@ -63,6 +65,29 @@ def validate_spotlight(repo: str, spotlight: Any) -> None:
         require(len(value) == 7 and value.startswith("#") and all(ch in "0123456789ABCDEFabcdef" for ch in value[1:]), f"{repo}: Spotlight {key} must be #RRGGBB")
 
 
+def accent_hue(accent: str) -> float:
+    rgb = tuple(int(accent[index:index + 2], 16) / 255 for index in (1, 3, 5))
+    hue, saturation, _ = colorsys.rgb_to_hsv(*rgb)
+    require(saturation >= 0.35, f"Spotlight accent must retain a clearly chromatic identity: {accent}")
+    return hue * 360.0
+
+
+def validate_rotating_accent_palette(entries: list[tuple[str, str]]) -> None:
+    require(len(entries) == 9, "rotating Spotlight accent palette must contain exactly nine systems")
+    accents = [accent.upper() for _, accent in entries]
+    require(len(accents) == len(set(accents)), "rotating Spotlight primary accent hex values must be distinct")
+    hues = [(repo, accent, accent_hue(accent)) for repo, accent in entries]
+    for index, (repo_a, accent_a, hue_a) in enumerate(hues):
+        for repo_b, accent_b, hue_b in hues[index + 1:]:
+            distance = abs(hue_a - hue_b)
+            distance = min(distance, 360.0 - distance)
+            require(
+                distance >= MIN_ROTATING_ACCENT_HUE_DISTANCE,
+                "rotating Spotlight primary accents must occupy distinct visual hue families: "
+                f"{repo_a} {accent_a} vs {repo_b} {accent_b} ({distance:.1f}° < {MIN_ROTATING_ACCENT_HUE_DISTANCE:.1f}°)",
+            )
+
+
 def load_registry() -> dict[str, Any]:
     require(REGISTRY_PATH.is_file(), f"portfolio registry is missing: {REGISTRY_PATH.relative_to(ROOT)}")
     data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
@@ -79,6 +104,7 @@ def load_registry() -> dict[str, Any]:
     spotlight_capable = 0
     rotating_glyphs: list[str] = []
     rotating_topologies: list[str] = []
+    rotating_accents: list[tuple[str, str]] = []
     for entry in systems:
         require(isinstance(entry, dict), "portfolio registry system entry must be an object")
         repo = entry.get("repo")
@@ -96,6 +122,7 @@ def load_registry() -> dict[str, Any]:
             validate_spotlight(repo, entry.get("spotlight"))
             rotating_glyphs.append(str(entry["spotlight"]["glyph"]))
             rotating_topologies.append(str(entry["spotlight"]["topology"]))
+            rotating_accents.append((repo, str(entry["spotlight"]["accent"])))
         if entry.get("spotlight") is not None:
             validate_spotlight(repo, entry.get("spotlight"))
             spotlight_capable += 1
@@ -105,6 +132,7 @@ def load_registry() -> dict[str, Any]:
     require(spotlight_capable == 10, "portfolio registry must retain ten Spotlight-capable systems for legacy compatibility")
     require(len(rotating_glyphs) == len(set(rotating_glyphs)) == 9, "rotating Spotlight glyph identities must be distinct")
     require(len(rotating_topologies) == len(set(rotating_topologies)) == 9, "rotating Spotlight topology identities must be distinct")
+    validate_rotating_accent_palette(rotating_accents)
 
     by_repo = {str(entry["repo"]): entry for entry in systems}
     agent = by_repo.get("qa-automation-ai-agent-evals")
