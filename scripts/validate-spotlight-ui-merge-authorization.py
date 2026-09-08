@@ -115,7 +115,7 @@ def self_test(sync: str, stats: str, policy: str) -> None:
     expect_failure(
         sync,
         stats,
-        policy.replace("standing authorization", "standing permission", 1),
+        policy.replace("standing authorization", "standing permission"),
         "standing authorization",
     )
 
