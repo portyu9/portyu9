@@ -28,6 +28,7 @@ QUOTED_KEY = re.compile(r"^\s*(?:-\s*)?['\"][^'\"\n]+['\"]\s*:")
 FORBIDDEN_TOKEN = re.compile(
     r"(?:^|[\s,:])(?:&[A-Za-z0-9_.-]+|\*[A-Za-z0-9_.-]+|!(?!=)[^\s]+|<<\s*:)"
 )
+AUTHORITY_IDENTITY_KEY = re.compile(r"^  ([A-Za-z0-9_-]+):(?:\s*(?:#.*)?)$")
 
 
 def require(condition: bool, message: str) -> None:
@@ -98,6 +99,33 @@ def structural_skeleton(line: str) -> str:
     return "".join(result).rstrip()
 
 
+def reject_duplicate_authority_identities(text: str, label: str, parent: str) -> None:
+    """Reject duplicate trigger/job keys before set-based authority parsing can collapse them."""
+    lines = text.splitlines()
+    starts = [index for index, line in enumerate(lines) if line == f"{parent}:"]
+    if len(starts) != 1:
+        return
+    seen: set[str] = set()
+    for index in range(starts[0] + 1, len(lines)):
+        line = lines[index]
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = indentation(line)
+        if indent == 0:
+            break
+        if indent != 2:
+            continue
+        match = AUTHORITY_IDENTITY_KEY.fullmatch(line)
+        if not match:
+            continue
+        identity = match.group(1)
+        require(
+            identity not in seen,
+            f"{label}:{index + 1}: duplicate {parent} authority identity is forbidden: {identity}",
+        )
+        seen.add(identity)
+
+
 def validate_text(text: str, label: str) -> int:
     lines = text.splitlines()
     block_indent: int | None = None
@@ -146,6 +174,8 @@ def validate_text(text: str, label: str) -> int:
             block_indent = indentation(line)
 
     require(structural_lines > 0, f"{label}: workflow source contains no structural YAML")
+    reject_duplicate_authority_identities(text, label, "on")
+    reject_duplicate_authority_identities(text, label, "jobs")
     return structural_lines
 
 
@@ -192,6 +222,8 @@ def self_test() -> None:
         ("---\n" + safe, "document markers"),
         (safe.replace("jobs:", '"jobs":'), "quoted mapping keys"),
         (safe.replace("jobs:", "? jobs\n:"), "complex mapping keys"),
+        (safe.replace("  pull_request:\n", "  pull_request:\n  pull_request:\n"), "duplicate on authority identity"),
+        (safe.replace("  plan:\n", "  plan:\n  plan:\n", 1), "duplicate jobs authority identity"),
     )
     for mutated, fragment in cases:
         expect_failure(mutated, fragment)
@@ -205,7 +237,8 @@ def main() -> int:
         validate_quality_binding(QUALITY.read_text(encoding="utf-8"))
         print(
             f"Workflow source-shape validation passed: {workflow_count} workflows · {structural_lines} structural lines · "
-            "block-style canonical YAML enforced, flow mappings/structural aliases rejected, and only reviewed simple needs sequences allowed."
+            "block-style canonical YAML enforced, trigger/job authority identities are unique, flow mappings/structural aliases rejected, "
+            "and only reviewed simple needs sequences allowed."
         )
         return 0
     except (OSError, ValueError) as exc:
