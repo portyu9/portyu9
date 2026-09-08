@@ -124,6 +124,9 @@ jobs:
       - name: Validate workflow authority firewall
         run: python3 scripts/validate-workflow-authority-contract.py
 
+      - name: Validate privileged workflow byte identity
+        run: python3 scripts/validate-privileged-workflow-identity.py
+
       - name: Validate exact Python runtime contract
         run: python3 scripts/validate-python-runtime-contract.py
 
