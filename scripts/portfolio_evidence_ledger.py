@@ -23,6 +23,7 @@ OUTPUT = "portfolio-evidence-ledger.json"
 EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 SHA40_ZERO = "0" * 40
 API_ORIGIN = "https://api.github.com"
+TRUSTED_WORKFLOW_EVENTS = frozenset({"push", "workflow_dispatch"})
 
 API_ATTEMPTS = 3
 API_TIMEOUT_SECONDS = 12
@@ -156,15 +157,32 @@ def main_revision(repo: str, token: str | None) -> str:
     return sha
 
 
-def latest_workflow_run(repo: str, workflow: str, token: str | None) -> dict[str, Any]:
+def select_workflow_run(runs: Any, subject: str | None) -> dict[str, Any]:
+    """Prefer the newest trusted run bound to subject, then preserve a trusted fallback."""
+    if not isinstance(runs, list):
+        return {}
+    trusted = [
+        run for run in runs
+        if isinstance(run, dict) and str(run.get("event") or "") in TRUSTED_WORKFLOW_EVENTS
+    ]
+    trusted.sort(key=lambda run: str(run.get("created_at") or ""), reverse=True)
+    if subject and subject != SHA40_ZERO:
+        for run in trusted:
+            if str(run.get("head_sha") or "") == subject:
+                return run
+    return trusted[0] if trusted else {}
+
+
+def latest_workflow_run(repo: str, workflow: str, subject: str, token: str | None) -> dict[str, Any]:
     encoded = urllib.parse.quote(workflow, safe="")
-    endpoint = (
-        f"https://api.github.com/repos/{OWNER}/{repo}/actions/workflows/{encoded}/runs"
-        "?branch=main&event=push&per_page=1"
-    )
-    payload = fetch_json(endpoint, token)
-    runs = payload.get("workflow_runs") or []
-    return runs[0] if runs and isinstance(runs[0], dict) else {}
+    base = f"https://api.github.com/repos/{OWNER}/{repo}/actions/workflows/{encoded}/runs"
+    if subject != SHA40_ZERO:
+        exact = fetch_json(f"{base}?branch=main&head_sha={subject}&per_page=20", token)
+        selected = select_workflow_run(exact.get("workflow_runs") or [], subject)
+        if selected:
+            return selected
+    recent = fetch_json(f"{base}?branch=main&per_page=20", token)
+    return select_workflow_run(recent.get("workflow_runs") or [], subject)
 
 
 def workflow_jobs(repo: str, run_id: int, token: str | None) -> list[dict[str, Any]]:
@@ -233,7 +251,7 @@ def collect_evidence_dimensions(
         workflow = str(spec["workflow"])
         try:
             if workflow not in run_cache:
-                run_cache[workflow] = latest_workflow_run(repo, workflow, token)
+                run_cache[workflow] = latest_workflow_run(repo, workflow, subject, token)
             run = run_cache[workflow]
         except (urllib.error.URLError, TimeoutError, ConnectionResetError, json.JSONDecodeError, ValueError):
             run = {}

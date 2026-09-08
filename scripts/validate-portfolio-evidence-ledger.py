@@ -196,9 +196,40 @@ def validate_dimensions(repository: str, subject: str, signal: dict[str, Any], r
     if require_live:
         require(offline is False and subject != SHA40_ZERO, f"{repository} {label}: live evidence subject is unavailable")
         require(result not in {"UNAVAILABLE", "NO SIGNAL", "UNKNOWN"}, f"{repository} {label}: live result is unavailable: {result}")
-        require(binding not in {"UNAVAILABLE", "SUBJECT_UNAVAILABLE", "RUN_HEAD_UNAVAILABLE", "SYNTHETIC"}, f"{repository} {label}: live binding is unavailable: {binding}")
+        require(binding == "CURRENT_SUBJECT", f"{repository} {label}: live evidence must bind to CURRENT_SUBJECT, got {binding}")
         require(freshness in {"SAME_DAY", "AGED"}, f"{repository} {label}: live freshness is unavailable")
         require(run_id > 0 and run_number > 0, f"{repository} {label}: live run provenance is missing")
+
+
+def validate_live_binding_contract() -> None:
+    repository = "portyu9/fixture-repo"
+    subject = "1" * 40
+    current = {
+        "label": "CI",
+        "workflow": "ci.yml",
+        "scope": "workflow conclusion",
+        "result": "PASSING",
+        "binding": "CURRENT_SUBJECT",
+        "freshness": "SAME_DAY",
+        "run_id": 123,
+        "run_number": 7,
+        "run_url": f"https://github.com/{repository}/actions/runs/123",
+        "head_sha": subject,
+        "completed_at_utc": "2026-09-08T00:00:00Z",
+        "age_days": 0,
+        "offline": False,
+        "ordinal": 1,
+    }
+    validate_dimensions(repository, subject, current, True)
+
+    different = {**current, "binding": "DIFFERENT_SUBJECT", "head_sha": "2" * 40}
+    validate_dimensions(repository, subject, different, False)
+    try:
+        validate_dimensions(repository, subject, different, True)
+    except ValueError as exc:
+        require("CURRENT_SUBJECT" in str(exc), "live binding rejection failed for an unrelated reason")
+    else:
+        raise ValueError("live binding contract accepted DIFFERENT_SUBJECT evidence")
 
 
 def summary(systems: list[dict[str, Any]], field: str) -> dict[str, int]:
@@ -224,6 +255,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         validate_retry_contract()
+        validate_live_binding_contract()
         reviewed = registry.system_by_repo()
         path = args.directory / FILENAME
         require(path.is_file(), "Portfolio evidence ledger is missing")
