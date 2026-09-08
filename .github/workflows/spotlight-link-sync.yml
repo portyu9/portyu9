@@ -2,12 +2,6 @@ name: Sync Spotlight profile links
 
 on:
   workflow_dispatch:
-    inputs:
-      merge_ui_after_checks:
-        description: Explicitly authorize merging the generated README/UI PR after required checks
-        required: false
-        type: boolean
-        default: false
   schedule:
     # Reconcile after the hourly profile-evidence refresh. Most runs are deterministic no-ops.
     - cron: "41 * * * *"
@@ -267,7 +261,7 @@ jobs:
           done
 
   merge:
-    if: needs.plan.outputs.changed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.merge_ui_after_checks == true
+    if: needs.plan.outputs.changed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'
     name: merge-readme-only-after-required-checks
     needs: [plan, propose, approve]
     runs-on: ubuntu-24.04
