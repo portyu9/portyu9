@@ -59,6 +59,9 @@ jobs:
       - name: Validate profile evidence generation contract
         run: python3 scripts/generate-profile-evidence.py --self-test
 
+      - name: Validate source-controlled JSON object uniqueness
+        run: python3 scripts/check-json-object-uniqueness.py
+
       - name: Validate validator purity
         run: python3 scripts/validate-validator-purity.py
 
