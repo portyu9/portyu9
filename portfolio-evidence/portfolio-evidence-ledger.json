@@ -4,8 +4,8 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:2651089eb2de45e5a77ee95cc3fdefc8f336814647a3d36e30c900cdd258c3a0",
-  "evidence_id": "PL2-2651089EB2DE45E5",
+  "evidence_digest": "sha256:4797f693ae8fae350715f8c47fd653819421be2b9e76ff4a3666980dd30dffe0",
+  "evidence_id": "PL2-4797F693AE8FAE35",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -19,8 +19,7 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 23,
-    "RUNNING": 2
+    "PASSING": 25
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -77,13 +76,13 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T14:46:34Z",
+          "completed_at_utc": "2026-09-08T14:47:17Z",
           "freshness": "SAME_DAY",
           "head_sha": "ab6f0a214ea200a044e817efa4ecbf336ca1f857",
           "label": "QUALITY+SEC",
           "offline": false,
           "ordinal": 1,
-          "result": "RUNNING",
+          "result": "PASSING",
           "run_id": 34240420903,
           "run_number": 882,
           "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34240420903",
@@ -93,13 +92,13 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T14:46:34Z",
+          "completed_at_utc": "2026-09-08T14:47:17Z",
           "freshness": "SAME_DAY",
           "head_sha": "ab6f0a214ea200a044e817efa4ecbf336ca1f857",
           "label": "AGENT LABS",
           "offline": false,
           "ordinal": 2,
-          "result": "RUNNING",
+          "result": "PASSING",
           "run_id": 34240420903,
           "run_number": 882,
           "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34240420903",
