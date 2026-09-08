@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed on implicit Spotlight README/UI merge authority."""
+"""Fail closed on overly broad Spotlight README/UI merge authority."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,17 +13,8 @@ POLICY = ROOT / ".github/SPOTLIGHT_UI_MERGE_AUTHORIZATION.md"
 
 MERGE_IF = (
     "if: needs.plan.outputs.changed == 'true' && needs.propose.result == 'success' "
-    "&& needs.approve.result == 'success' && github.event_name == 'workflow_dispatch' "
-    "&& inputs.merge_ui_after_checks == true"
+    "&& needs.approve.result == 'success'"
 )
-INPUT_BLOCK = """  workflow_dispatch:
-    inputs:
-      merge_ui_after_checks:
-        description: Explicitly authorize merging the generated README/UI PR after required checks
-        required: false
-        type: boolean
-        default: false
-"""
 
 
 def fail(message: str) -> None:
@@ -46,41 +37,51 @@ def job_block(workflow: str, key: str, next_key: str | None) -> str:
 
 
 def validate(sync: str, stats: str, policy: str) -> None:
-    require(INPUT_BLOCK in sync,
-            "Spotlight workflow_dispatch merge authorization must be one optional boolean defaulting false")
-    require(sync.count("      merge_ui_after_checks:\n") == 1,
-            "Spotlight UI merge authorization input must be declared exactly once")
-    require(sync.count("inputs.merge_ui_after_checks") == 1,
-            "Spotlight UI merge authorization input must gate exactly one execution surface")
+    require("  workflow_dispatch:\n" in sync,
+            "Spotlight synchronization must retain a manual recovery dispatch")
+    require('  schedule:\n' in sync and '    - cron: "41 * * * *"' in sync,
+            "Spotlight synchronization must retain hourly recovery reconciliation at minute 41")
+    require("merge_ui_after_checks" not in sync,
+            "Spotlight standing authorization must not depend on a manual merge input")
+    require("merge_ui_after_checks" not in stats,
+            "Profile-stats post-publication dispatch must not introduce a separate merge input")
 
     merge = job_block(sync, "merge", None)
     require(MERGE_IF in merge,
-            "Spotlight merge job must require explicit workflow_dispatch UI merge authorization")
-    require(merge.count("inputs.merge_ui_after_checks == true") == 1,
-            "Spotlight merge job exact explicit-authorization predicate changed")
-    require("github.event_name == 'workflow_dispatch'" in merge,
-            "Scheduled or bot-dispatched Spotlight runs must never reach UI merge authority")
+            "Spotlight merge job must require the exact guarded plan/propose/approve prerequisites")
+    require(merge.count(MERGE_IF) == 1,
+            "Spotlight standing merge predicate must appear exactly once")
+    for forbidden in (
+        "github.event_name == 'workflow_dispatch'",
+        "inputs.merge_ui_after_checks",
+        "pull_request_target",
+        "issue_comment",
+        "repository_dispatch",
+    ):
+        require(forbidden not in merge,
+                f"Spotlight merge job contains an unauthorized alternate/manual authority gate: {forbidden}")
 
-    require("merge_ui_after_checks" not in stats,
-            "Profile-stats post-publication dispatch must not authorize Spotlight UI merging")
     require(
         '"repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches"' in stats
         and "-f ref=main" in stats,
-        "Profile-stats dispatcher must remain a ref-only reconciliation dispatch",
+        "Profile-stats dispatcher must remain a ref-only fixed-workflow reconciliation dispatch",
     )
 
     policy_lower = policy.lower()
     for phrase in (
-        "merge_ui_after_checks",
-        "defaults to `false`",
+        "standing authorization",
+        "automation/spotlight-links",
         "scheduled reconciliation",
         "post-publication bot dispatch",
-        "explicit manual authorization",
+        "readme-only",
         "five protected-main checks",
-        "no bypass",
+        "integration id `15368`",
+        "no bypass actor",
+        "does not authorize arbitrary readme/ui",
+        "dependabot",
     ):
         require(phrase.lower() in policy_lower,
-                f"Spotlight UI merge authorization policy is missing: {phrase}")
+                f"Spotlight standing auto-merge policy is missing: {phrase}")
 
 
 def expect_failure(sync: str, stats: str, policy: str, expected: str) -> None:
@@ -89,49 +90,49 @@ def expect_failure(sync: str, stats: str, policy: str, expected: str) -> None:
     except ValueError as exc:
         require(expected in str(exc), f"self-test failed for wrong reason: {exc}")
     else:
-        fail(f"self-test accepted forbidden UI merge authorization drift: {expected}")
+        fail(f"self-test accepted forbidden Spotlight auto-merge authority drift: {expected}")
 
 
 def self_test(sync: str, stats: str, policy: str) -> None:
     expect_failure(
-        sync.replace("        default: false\n", "        default: true\n", 1),
+        sync.replace("  workflow_dispatch:\n", "  workflow_dispatch:\n    inputs:\n      merge_ui_after_checks:\n        type: boolean\n", 1),
         stats,
         policy,
-        "optional boolean defaulting false",
+        "must not depend on a manual merge input",
     )
     expect_failure(
-        sync.replace(" && github.event_name == 'workflow_dispatch'", "", 1),
+        sync.replace(" && needs.approve.result == 'success'", "", 1),
         stats,
         policy,
-        "explicit workflow_dispatch UI merge authorization",
-    )
-    expect_failure(
-        sync.replace(" && inputs.merge_ui_after_checks == true", "", 1),
-        stats,
-        policy,
-        "must gate exactly one execution surface",
+        "exact guarded plan/propose/approve prerequisites",
     )
     expect_failure(
         sync,
         stats + "\nmerge_ui_after_checks: true\n",
         policy,
-        "must not authorize Spotlight UI merging",
+        "must not introduce a separate merge input",
+    )
+    expect_failure(
+        sync,
+        stats,
+        policy.replace("standing authorization", "standing permission", 1),
+        "standing authorization",
     )
 
 
 def main() -> int:
     try:
         for path in (SYNC, STATS, POLICY):
-            require(path.is_file(), f"Spotlight UI merge authorization input is missing: {path.relative_to(ROOT)}")
+            require(path.is_file(), f"Spotlight standing auto-merge input is missing: {path.relative_to(ROOT)}")
         sync = SYNC.read_text(encoding="utf-8")
         stats = STATS.read_text(encoding="utf-8")
         policy = POLICY.read_text(encoding="utf-8")
         validate(sync, stats, policy)
         self_test(sync, stats, policy)
         print(
-            "Spotlight UI merge authorization validation passed: reconciliation may plan, propose, and approve checks, "
-            "but merge authority is reachable only from an explicit workflow_dispatch boolean opt-in; scheduled and "
-            "post-publication bot dispatches remain merge-ineligible."
+            "Spotlight UI merge authorization validation passed: the fixed deterministic README-only synchronization class "
+            "has standing auto-merge authority after plan/propose/approval guards and the five protected-main checks; "
+            "scheduled/post-publication runs may converge automatically without authorizing arbitrary UI or dependency PRs."
         )
         return 0
     except (OSError, ValueError) as exc:
