@@ -4,13 +4,13 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:6741bedf5142c9dda58034e9bda8228cccba0029545840fd3c71da56b75aebc7",
-  "evidence_id": "PL2-6741BEDF5142C9DD",
+  "evidence_digest": "sha256:49c472379bbc7928b571a0cd06135e17c5d3af14208746ddbe89cfec16927d39",
+  "evidence_id": "PL2-49C472379BBC7928",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 10,
-    "SAME_DAY": 15
+    "AGED": 8,
+    "SAME_DAY": 17
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -19,8 +19,7 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 23,
-    "RUNNING": 2
+    "PASSING": 25
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -177,43 +176,43 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 5,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/qa-automation-visual-and-accessibility-playwright-axe",
       "signals": [
         {
-          "age_days": 5,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-03T05:34:05Z",
-          "freshness": "AGED",
-          "head_sha": "15acb3a9c7196ff07599e1c0131cf22444831a39",
+          "completed_at_utc": "2026-09-08T13:49:17Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "f0a131ccfe7ab69749df3c8e330910c3bd22ae6c",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 33719300994,
-          "run_number": 116,
-          "run_url": "https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/runs/33719300994",
+          "run_id": 34234181717,
+          "run_number": 137,
+          "run_url": "https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/runs/34234181717",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 5,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-03T05:34:24Z",
-          "freshness": "AGED",
-          "head_sha": "15acb3a9c7196ff07599e1c0131cf22444831a39",
+          "completed_at_utc": "2026-09-08T13:49:05Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "f0a131ccfe7ab69749df3c8e330910c3bd22ae6c",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 33719300999,
-          "run_number": 113,
-          "run_url": "https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/runs/33719300999",
+          "run_id": 34234181454,
+          "run_number": 122,
+          "run_url": "https://github.com/portyu9/qa-automation-visual-and-accessibility-playwright-axe/actions/runs/34234181454",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "15acb3a9c7196ff07599e1c0131cf22444831a39",
+      "subject_revision": "f0a131ccfe7ab69749df3c8e330910c3bd22ae6c",
       "title": "VISUAL + ACCESSIBILITY QE"
     },
     {
@@ -660,13 +659,13 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T13:35:27Z",
+          "completed_at_utc": "2026-09-08T13:38:16Z",
           "freshness": "SAME_DAY",
           "head_sha": "91c538029f08969b6fd84c497adae470b28681a4",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "RUNNING",
+          "result": "PASSING",
           "run_id": 34232895153,
           "run_number": 123,
           "run_url": "https://github.com/portyu9/qa-automation-load-k6/actions/runs/34232895153",
@@ -676,13 +675,13 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T13:35:27Z",
+          "completed_at_utc": "2026-09-08T13:37:17Z",
           "freshness": "SAME_DAY",
           "head_sha": "91c538029f08969b6fd84c497adae470b28681a4",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
-          "result": "RUNNING",
+          "result": "PASSING",
           "run_id": 34232894953,
           "run_number": 111,
           "run_url": "https://github.com/portyu9/qa-automation-load-k6/actions/runs/34232894953",
