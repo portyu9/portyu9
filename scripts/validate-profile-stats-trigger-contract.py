@@ -9,7 +9,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/profile-stats.yml"
 CADENCE = ROOT / ".github/REFRESH_CADENCE.md"
-MAIN_REF_GUARD = "if: github.ref == 'refs/heads/main'"
+MAIN_REF_EXPR = "github.ref == 'refs/heads/main'"
+JOB_IF_LINE = re.compile(r"(?m)^    if:\s*(?P<expr>.+?)\s*$")
 REVIEW_SENTINELS = (
     "scripts/set-signal-field-refresh-cadence.py",
     "scripts/signal_field_pipeline.py",
@@ -65,8 +66,47 @@ def job_block(workflow: str, key: str, next_key: str | None) -> str:
     return workflow[start.start(): start.end() + end.start()]
 
 
+def exact_job_if(block: str, label: str) -> str:
+    expressions = [match.group("expr") for match in JOB_IF_LINE.finditer(block)]
+    require(len(expressions) == 1, f"{label} must contain exactly one job-level if condition")
+    return expressions[0]
+
+
+def self_test() -> None:
+    canonical = (
+        "  generate:\n"
+        f"    if: {MAIN_REF_EXPR}\n"
+        "    runs-on: ubuntu-24.04\n"
+    )
+    require(exact_job_if(canonical, "fixture generation") == MAIN_REF_EXPR,
+            "job-level if parser rejected canonical main guard")
+
+    commented = (
+        "  generate:\n"
+        f"    # if: {MAIN_REF_EXPR}\n"
+        "    if: always()\n"
+        "    runs-on: ubuntu-24.04\n"
+    )
+    require(exact_job_if(commented, "fixture generation") == "always()",
+            "job-level if parser treated a comment as authority")
+
+    duplicate = (
+        "  generate:\n"
+        f"    if: {MAIN_REF_EXPR}\n"
+        "    if: always()\n"
+    )
+    try:
+        exact_job_if(duplicate, "fixture generation")
+    except ValueError as exc:
+        require("exactly one job-level if condition" in str(exc),
+                f"duplicate job-level if self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("job-level if parser accepted duplicate generation authority")
+
+
 def main() -> int:
     try:
+        self_test()
         workflow = WORKFLOW.read_text(encoding="utf-8")
         cadence = CADENCE.read_text(encoding="utf-8")
         paths = push_paths(workflow)
@@ -82,8 +122,8 @@ def main() -> int:
         attest = job_block(workflow, "attest", "stage")
         stage = job_block(workflow, "stage", "publish")
         publish = job_block(workflow, "publish", "dispatch")
-        require(MAIN_REF_GUARD in generate, "production generation must be guarded to refs/heads/main")
-        require(workflow.count(MAIN_REF_GUARD) == 1, "main source-ref guard must exist exactly once at the generation authority boundary")
+        require(exact_job_if(generate, "production generation") == MAIN_REF_EXPR,
+                "production generation job-level if must be the exact refs/heads/main guard")
         require("needs: generate" in attest, "attestation must remain downstream of main-guarded generation")
         require("needs: [generate, attest]" in stage, "publication staging must remain downstream of main-guarded generation and attestation")
         require("needs: stage" in publish, "terminal publication must remain downstream of read-only publication staging")
@@ -95,7 +135,7 @@ def main() -> int:
         )
         print(
             "Profile stats trigger contract passed: scripts/** closes the trusted production source surface; "
-            "pushes are main-only, manual dispatch remains available but generation is gated to refs/heads/main, "
+            "pushes are main-only, manual dispatch remains available but generation is gated by one exact job-level refs/heads/main guard, "
             "and attestation/read-only publication staging/terminal publication stay downstream of that source-ref guard."
         )
         return 0
