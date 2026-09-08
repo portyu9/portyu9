@@ -42,6 +42,31 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def exact_int(value: Any, *, minimum: int = 0) -> bool:
+    """Accept JSON integers only; bool is a distinct primitive even though bool subclasses int."""
+    return type(value) is int and value >= minimum
+
+
+def validate_count_summary(actual: Any, expected: dict[str, int], label: str) -> None:
+    require(isinstance(actual, dict) and set(actual) == set(expected), f"Ledger {label} summary keys changed")
+    for key, count in expected.items():
+        value = actual[key]
+        require(exact_int(value) and value == count, f"Ledger {label} summary count is invalid for {key}: {value!r}")
+
+
+def numeric_self_test() -> None:
+    for value in (True, False, 1.0, "1", None):
+        require(not exact_int(value), f"exact integer contract accepted non-integer primitive: {value!r}")
+    require(exact_int(0) and exact_int(1, minimum=1) and not exact_int(0, minimum=1),
+            "exact integer minimum contract changed")
+    try:
+        validate_count_summary({"PASSING": True}, {"PASSING": 1}, "result")
+    except ValueError as exc:
+        require("summary count is invalid" in str(exc), f"summary type self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("summary type self-test accepted boolean count as integer one")
+
+
 def canonical_digest(payload: dict[str, Any]) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     return hashlib.sha256(encoded).hexdigest()
@@ -162,12 +187,12 @@ def validate_dimensions(repository: str, subject: str, signal: dict[str, Any], r
     run_id = signal.get("run_id")
     run_number = signal.get("run_number")
     completed = signal.get("completed_at_utc")
-    require(isinstance(age, int) and age >= 0, f"{repository} {label}: age is invalid")
-    require(isinstance(ordinal, int) and ordinal >= 1, f"{repository} {label}: ordinal is invalid")
+    require(exact_int(age), f"{repository} {label}: age is invalid")
+    require(exact_int(ordinal, minimum=1), f"{repository} {label}: ordinal is invalid")
     require(isinstance(offline, bool), f"{repository} {label}: offline marker is invalid")
     require(isinstance(head, str) and SHA40.fullmatch(head) is not None, f"{repository} {label}: workflow head SHA is malformed")
-    require(isinstance(run_id, int) and run_id >= 0, f"{repository} {label}: run id is invalid")
-    require(isinstance(run_number, int) and run_number >= 0, f"{repository} {label}: run number is invalid")
+    require(exact_int(run_id), f"{repository} {label}: run id is invalid")
+    require(exact_int(run_number), f"{repository} {label}: run number is invalid")
     require(isinstance(completed, str), f"{repository} {label}: evidence timestamp is invalid")
 
     if binding == "SYNTHETIC":
@@ -232,6 +257,23 @@ def validate_live_binding_contract() -> None:
     else:
         raise ValueError("live binding contract accepted DIFFERENT_SUBJECT evidence")
 
+    boolean_cases = {
+        "age_days": False,
+        "ordinal": True,
+        "run_id": True,
+        "run_number": True,
+    }
+    for field, value in boolean_cases.items():
+        mutated = {**current, field: value}
+        if field == "run_id":
+            mutated["run_url"] = f"https://github.com/{repository}/actions/runs/True"
+        try:
+            validate_dimensions(repository, subject, mutated, False)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"numeric evidence self-test accepted boolean {field}")
+
 
 def summary(systems: list[dict[str, Any]], field: str) -> dict[str, int]:
     result: dict[str, int] = {}
@@ -256,6 +298,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         json_contract.self_test()
+        numeric_self_test()
         validate_retry_contract()
         validate_live_binding_contract()
         reviewed = registry.system_by_repo()
@@ -291,20 +334,20 @@ def main() -> int:
             require(system.get("evidence_contract") == expected_contract(reviewed_entry), f"{repository}: evidence contract differs from registry")
             subject = system.get("subject_revision")
             require(isinstance(subject, str) and SHA40.fullmatch(subject) is not None, f"{repository}: subject revision is malformed")
-            require(isinstance(system.get("evidence_max_age_days"), int) and system["evidence_max_age_days"] >= 0, f"{repository}: evidence age is invalid")
+            require(exact_int(system.get("evidence_max_age_days")), f"{repository}: evidence age is invalid")
             contract = system["evidence_contract"]
             signals = system.get("signals")
             require(isinstance(signals, list) and len(signals) == len(contract), f"{repository}: evidence contract/record count diverged")
             require([(e.get("label"), e.get("workflow"), e.get("scope")) for e in contract] == [(e.get("label"), e.get("workflow"), e.get("scope")) for e in signals], f"{repository}: evidence records do not match declared contract")
             require(len({entry.get("label") for entry in signals}) == len(signals), f"{repository}: evidence labels must be distinct")
-            available_ages = [int(signal["age_days"]) for signal in signals if signal.get("freshness") != "UNAVAILABLE"]
-            require(system["evidence_max_age_days"] == max(available_ages, default=0), f"{repository}: maximum evidence age is inconsistent")
             for signal in signals:
                 validate_dimensions(repository, str(subject), signal, args.require_live)
+            available_ages = [signal["age_days"] for signal in signals if signal.get("freshness") != "UNAVAILABLE"]
+            require(system["evidence_max_age_days"] == max(available_ages, default=0), f"{repository}: maximum evidence age is inconsistent")
 
-        require(ledger.get("result_summary") == summary(systems, "result"), "Ledger result summary does not match records")
-        require(ledger.get("binding_summary") == summary(systems, "binding"), "Ledger binding summary does not match records")
-        require(ledger.get("freshness_summary") == summary(systems, "freshness"), "Ledger freshness summary does not match records")
+        validate_count_summary(ledger.get("result_summary"), summary(systems, "result"), "result")
+        validate_count_summary(ledger.get("binding_summary"), summary(systems, "binding"), "binding")
+        validate_count_summary(ledger.get("freshness_summary"), summary(systems, "freshness"), "freshness")
         evidence_id = ledger.get("evidence_id")
         evidence_digest = ledger.get("evidence_digest")
         require(isinstance(evidence_id, str) and EVIDENCE_ID.fullmatch(evidence_id) is not None, "Portfolio Evidence ID is malformed")
@@ -312,7 +355,7 @@ def main() -> int:
         core = {key: value for key, value in ledger.items() if key not in {"evidence_id", "evidence_digest"}}
         digest = canonical_digest(core)
         require(evidence_digest == f"sha256:{digest}" and evidence_id == f"PL2-{digest[:16].upper()}", "Portfolio Evidence ID/digest do not match canonical ledger semantics")
-        print(f"Portfolio evidence ledger v2 validation passed: {evidence_id} · 13 registry-bound systems · {registry.registry_digest()} · duplicate JSON members rejected")
+        print(f"Portfolio evidence ledger v2 validation passed: {evidence_id} · 13 registry-bound systems · {registry.registry_digest()} · duplicate JSON members and boolean/numeric coercion rejected")
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError, IndexError, KeyError) as exc:
         print(f"ERROR: {exc}")

@@ -65,6 +65,18 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def exact_int(value: Any, *, minimum: int = 0) -> bool:
+    """Accept JSON integers only; bool is a distinct primitive even though bool subclasses int."""
+    return type(value) is int and value >= minimum
+
+
+def numeric_self_test() -> None:
+    for value in (True, False, 1.0, "1", None):
+        require(not exact_int(value), f"exact integer contract accepted non-integer primitive: {value!r}")
+    require(exact_int(0) and exact_int(1, minimum=1) and not exact_int(0, minimum=1),
+            "exact integer minimum contract changed")
+
+
 def require_well_formed_svg(content: str, label: str) -> None:
     """Reject malformed XML before regex-based Spotlight evidence interpretation."""
     try:
@@ -145,10 +157,10 @@ def validate_record(repository: str, subject: str, record: dict[str, Any], requi
     require(binding in BINDINGS, f"{repository} {label}: binding is invalid")
     require(freshness in FRESHNESS, f"{repository} {label}: freshness is invalid")
     require("signal" not in record, f"{repository} {label}: legacy conflated signal field is forbidden")
-    require(isinstance(run_id, int) and run_id >= 0, f"{repository} {label}: run id is invalid")
-    require(isinstance(run_number, int) and run_number >= 0, f"{repository} {label}: run number is invalid")
+    require(exact_int(run_id), f"{repository} {label}: run id is invalid")
+    require(exact_int(run_number), f"{repository} {label}: run number is invalid")
     require(isinstance(head_sha, str) and SHA40.fullmatch(head_sha) is not None, f"{repository} {label}: workflow head sha is invalid")
-    require(isinstance(age, int) and age >= 0, f"{repository} {label}: freshness age is invalid")
+    require(exact_int(age), f"{repository} {label}: freshness age is invalid")
     require(isinstance(completed, str), f"{repository} {label}: evidence timestamp is invalid")
     require(isinstance(offline, bool), f"{repository} {label}: offline marker is invalid")
 
@@ -239,8 +251,8 @@ def validate_manifest(
     for slot, selected_system in zip(slots, expected_systems):
         require(isinstance(slot, dict), "Spotlight slot must be an object")
         number = slot.get("slot")
-        require(number in (1, 2, 3), "Spotlight slot number is invalid")
-        slot_by_number[int(number)] = slot
+        require(exact_int(number, minimum=1) and number in (1, 2, 3), "Spotlight slot number is invalid")
+        slot_by_number[number] = slot
         repository = str(slot.get("repository"))
         require(repository in ledger_by_repo, f"{repository}: selected repository is missing from Portfolio Ledger")
         ledger_entry = ledger_by_repo[repository]
@@ -350,6 +362,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         json_contract.self_test()
+        numeric_self_test()
         xml_self_test()
         root = args.directory
         require(root.is_dir(), f"Spotlight directory is missing: {root}")
@@ -358,7 +371,7 @@ def main() -> int:
         validate_svgs(root, slot_by_number)
         print(
             "Engineering spotlight v2.1 validation passed: three deterministic rotating slots are an exact Ledger v2 projection; "
-            "execution result, current-subject binding, freshness, run provenance, explicit-theme visuals, well-formed XML, safe SVG contracts, and duplicate-member-safe JSON boundaries remain independent and fail-closed."
+            "execution result, current-subject binding, freshness, run provenance, exact JSON numeric primitives, explicit-theme visuals, well-formed XML, safe SVG contracts, and duplicate-member-safe JSON boundaries remain independent and fail-closed."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError) as exc:
