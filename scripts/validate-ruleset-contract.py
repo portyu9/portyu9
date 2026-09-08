@@ -47,14 +47,33 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def load_contract() -> dict[str, Any]:
-    payload = json.loads(CONTRACT.read_text(encoding="utf-8"))
-    require(payload.get("schemaVersion") == 1, "ruleset contract schema version changed")
+def exact_json_equal(observed: Any, expected: Any) -> bool:
+    """Compare reviewed JSON values without Python bool/int/float coercion."""
+    if type(observed) is not type(expected):
+        return False
+    if isinstance(expected, list):
+        return len(observed) == len(expected) and all(
+            exact_json_equal(left, right) for left, right in zip(observed, expected, strict=True)
+        )
+    if isinstance(expected, dict):
+        return set(observed) == set(expected) and all(
+            exact_json_equal(observed[key], value) for key, value in expected.items()
+        )
+    return observed == expected
+
+
+def validate_contract_root(payload: Any) -> dict[str, Any]:
+    require(isinstance(payload, dict), "ruleset contract root must be a JSON object")
+    require(exact_json_equal(payload.get("schemaVersion"), 1), "ruleset contract schema version changed")
     require(payload.get("repository") == REPOSITORY, "ruleset contract repository changed")
     rulesets = payload.get("rulesets")
     require(isinstance(rulesets, dict), "ruleset contract inventory is missing")
     require(set(rulesets) == set(EXPECTED_RULESET_NAMES), "ruleset contract inventory changed")
     return payload
+
+
+def load_contract() -> dict[str, Any]:
+    return validate_contract_root(json.loads(CONTRACT.read_text(encoding="utf-8")))
 
 
 def validate_source(payload: dict[str, Any]) -> None:
@@ -73,7 +92,7 @@ def validate_source(payload: dict[str, Any]) -> None:
 
     pr = main_rules.get("pull_request")
     require(isinstance(pr, dict), "Protect Main pull-request parameters are missing")
-    require(pr.get("required_approving_review_count") == 0, "solo-maintainer review-count contract changed")
+    require(exact_json_equal(pr.get("required_approving_review_count"), 0), "solo-maintainer review-count contract changed")
     require(pr.get("required_review_thread_resolution") is True, "Protect Main must require review-thread resolution")
     require(pr.get("dismiss_stale_reviews_on_push") is False, "stale-review policy changed")
     require(pr.get("require_code_owner_review") is False, "code-owner review policy changed")
@@ -84,7 +103,7 @@ def validate_source(payload: dict[str, Any]) -> None:
     require(isinstance(checks, dict), "Protect Main status-check parameters are missing")
     require(checks.get("strict_required_status_checks_policy") is True, "Protect Main must require a current head")
     require(checks.get("do_not_enforce_on_create") is False, "required checks must be enforced on branch creation")
-    require(checks.get("integration_id") == EXPECTED_INTEGRATION_ID,
+    require(exact_json_equal(checks.get("integration_id"), EXPECTED_INTEGRATION_ID),
             f"required checks must bind to GitHub Actions integration_id {EXPECTED_INTEGRATION_ID}")
     contexts = checks.get("contexts")
     require(isinstance(contexts, list) and set(contexts) == EXPECTED_CONTEXTS and len(contexts) == 5, "Protect Main required status contexts changed")
@@ -93,7 +112,10 @@ def validate_source(payload: dict[str, Any]) -> None:
     require(generated.get("include") == ["refs/heads/generated"] and generated.get("exclude") == [], "Protect generated target changed")
     require(generated.get("bypassActors") == [], "Protect generated must have no bypass actors")
     generated_rules = generated.get("rules")
-    require(generated_rules == {"deletion": True, "non_fast_forward": True}, "Protect generated must contain only deletion/non-fast-forward protection")
+    require(
+        exact_json_equal(generated_rules, {"deletion": True, "non_fast_forward": True}),
+        "Protect generated must contain only deletion/non-fast-forward protection",
+    )
 
     doc = DOC.read_text(encoding="utf-8")
     for phrase in (
@@ -277,7 +299,7 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
         ruleset_id = item["id"]
         detail = request_json(f"{API}/{ruleset_id}")
         require(isinstance(detail, dict), f"live ruleset detail is malformed: {name}")
-        require(detail.get("id") == ruleset_id, f"{name}: live ruleset detail id differs from collection identity")
+        require(exact_json_equal(detail.get("id"), ruleset_id), f"{name}: live ruleset detail id differs from collection identity")
         require(detail.get("name") == name, f"{name}: live ruleset detail name differs from collection identity")
         details[name] = detail
         ids[name] = ruleset_id
@@ -310,7 +332,10 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
         "require_last_push_approval",
         "allowed_merge_methods",
     ):
-        require(pr.get(key) == desired_pr[key], f"Protect Main: live {key}={pr.get(key)!r}, expected {desired_pr[key]!r}")
+        require(
+            exact_json_equal(pr.get(key), desired_pr[key]),
+            f"Protect Main: live {key}={pr.get(key)!r}, expected {desired_pr[key]!r}",
+        )
 
     status = main_rules["required_status_checks"].get("parameters", {})
     desired_status = expected["Protect Main"]["rules"]["required_status_checks"]
@@ -324,8 +349,10 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
     require(set(observed) == EXPECTED_CONTEXTS and len(observed) == 5,
             "Protect Main: live required status contexts differ from contract")
     expected_integration = desired_status["integration_id"]
-    require(all(value == expected_integration for value in observed.values()),
-            f"Protect Main: required status integration identity differs; expected integration_id={expected_integration}, observed={observed}")
+    require(
+        all(exact_json_equal(value, expected_integration) for value in observed.values()),
+        f"Protect Main: required status integration identity differs; expected integration_id={expected_integration}, observed={observed}",
+    )
 
     generated_rules = rule_map(details["Protect generated"])
     require(set(generated_rules) == {"deletion", "non_fast_forward"}, "Protect generated: live rule inventory differs from contract")
@@ -350,25 +377,54 @@ def expect_collection_failure(collection: Any, expected: str) -> None:
         raise ValueError(f"ruleset collection self-test accepted ambiguous inventory: {expected}")
 
 
+def expect_source_failure(payload: dict[str, Any], expected: str) -> None:
+    try:
+        validate_contract_root(payload)
+        validate_source(payload)
+    except ValueError as exc:
+        require(expected in str(exc), f"ruleset source self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"ruleset source self-test accepted type/value drift: {expected}")
+
+
 def self_test(payload: dict[str, Any]) -> None:
     encoded = json.dumps(payload)
+
+    for observed, expected in (
+        (True, 1),
+        (False, 0),
+        (1, True),
+        (0, False),
+        (15368.0, 15368),
+    ):
+        require(
+            not exact_json_equal(observed, expected),
+            f"exact JSON comparison self-test accepted cross-type equality: {observed!r} == {expected!r}",
+        )
+
+    schema_boolean = json.loads(encoded)
+    schema_boolean["schemaVersion"] = True
+    expect_source_failure(schema_boolean, "schema version")
+
+    review_count_boolean = json.loads(encoded)
+    review_count_boolean["rulesets"]["Protect Main"]["rules"]["pull_request"]["required_approving_review_count"] = False
+    expect_source_failure(review_count_boolean, "review-count")
+
+    generated_boolean_numeric = json.loads(encoded)
+    generated_boolean_numeric["rulesets"]["Protect generated"]["rules"]["deletion"] = 1
+    expect_source_failure(generated_boolean_numeric, "Protect generated")
+
     mutation = json.loads(encoded)
     mutation["rulesets"]["Protect Main"]["rules"]["pull_request"]["required_review_thread_resolution"] = False
-    try:
-        validate_source(mutation)
-    except ValueError as exc:
-        require("review-thread resolution" in str(exc), f"ruleset self-test failed for wrong reason: {exc}")
-    else:
-        raise ValueError("ruleset self-test accepted disabled review-thread resolution")
+    expect_source_failure(mutation, "review-thread resolution")
 
     integration_drift = json.loads(encoded)
     integration_drift["rulesets"]["Protect Main"]["rules"]["required_status_checks"]["integration_id"] = 1
-    try:
-        validate_source(integration_drift)
-    except ValueError as exc:
-        require("integration_id" in str(exc), f"ruleset integration self-test failed for wrong reason: {exc}")
-    else:
-        raise ValueError("ruleset self-test accepted required-check integration identity drift")
+    expect_source_failure(integration_drift, "integration_id")
+
+    integration_float = json.loads(encoded)
+    integration_float["rulesets"]["Protect Main"]["rules"]["required_status_checks"]["integration_id"] = float(EXPECTED_INTEGRATION_ID)
+    expect_source_failure(integration_float, "integration_id")
 
     canonical_collection = [
         {"id": 1, "name": "Protect Main"},
@@ -473,7 +529,7 @@ def main() -> int:
         suffix = " + live observable GitHub control-plane state" if args.live else ""
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
-            f"five required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; observable drift fails closed."
+            f"five required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive types and observable drift fail closed."
         )
         if unobservable:
             print(
