@@ -4,13 +4,13 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:6fa6286c874274ff3dd5fccd684b5a20fdbd3e1973cc7b64630ac67b3984e72b",
-  "evidence_id": "PL2-6FA6286C874274FF",
+  "evidence_digest": "sha256:cd3e947ed933e027c0650e11a7826121f7db2e49ffc3ba41f4de94e2e70eff53",
+  "evidence_id": "PL2-CD3E947ED933E027",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 20,
-    "SAME_DAY": 5
+    "AGED": 18,
+    "SAME_DAY": 7
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -19,7 +19,8 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 25
+    "PASSING": 23,
+    "RUNNING": 2
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -388,43 +389,43 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 6,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/qa-automation-ui-cypress",
       "signals": [
         {
-          "age_days": 6,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-02T16:37:42Z",
-          "freshness": "AGED",
-          "head_sha": "4329768f6f5868db80c215fd096f570834c3743d",
+          "completed_at_utc": "2026-09-08T03:19:20Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "3cb5c182606911b21db8951e90f7255cd723aca4",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "PASSING",
-          "run_id": 33655978280,
-          "run_number": 101,
-          "run_url": "https://github.com/portyu9/qa-automation-ui-cypress/actions/runs/33655978280",
+          "result": "RUNNING",
+          "run_id": 34183100109,
+          "run_number": 106,
+          "run_url": "https://github.com/portyu9/qa-automation-ui-cypress/actions/runs/34183100109",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 6,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-02T16:38:14Z",
-          "freshness": "AGED",
-          "head_sha": "4329768f6f5868db80c215fd096f570834c3743d",
+          "completed_at_utc": "2026-09-08T03:19:32Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "3cb5c182606911b21db8951e90f7255cd723aca4",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
-          "result": "PASSING",
-          "run_id": 33655978406,
-          "run_number": 69,
-          "run_url": "https://github.com/portyu9/qa-automation-ui-cypress/actions/runs/33655978406",
+          "result": "RUNNING",
+          "run_id": 34183100051,
+          "run_number": 75,
+          "run_url": "https://github.com/portyu9/qa-automation-ui-cypress/actions/runs/34183100051",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "4329768f6f5868db80c215fd096f570834c3743d",
+      "subject_revision": "3cb5c182606911b21db8951e90f7255cd723aca4",
       "title": "CYPRESS UI QE"
     },
     {
