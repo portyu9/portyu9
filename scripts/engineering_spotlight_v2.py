@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import engineering_spotlight_renderer as renderer
 import portfolio_evidence_helpers as helpers
@@ -27,6 +27,9 @@ OWNER = registry.OWNER
 VERSION = "engineering-spotlight-v2"
 EVIDENCE_MODEL = "per-system-evidence-contract-v2"
 SHA40_ZERO = "0" * 40
+API_ORIGIN = "https://api.github.com"
+API_REPO_PREFIX = f"/repos/{OWNER}/"
+API_TIMEOUT_SECONDS = 12
 POOL = registry.legacy_spotlight_pool()
 _BY_REPO = registry.system_by_repo()
 DEFAULT_EVIDENCE = tuple(dict(item) for item in _BY_REPO["qa-automation-graphql"]["evidence"])
@@ -37,6 +40,11 @@ conclusion_signal = helpers.conclusion_signal
 aggregate_jobs = helpers.aggregate_jobs
 evidence_scope = helpers.evidence_scope
 evidence_age_days = helpers.evidence_age_days
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ValueError(message)
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,12 +64,109 @@ def select_systems(day: dt.date) -> list[dict[str, Any]]:
     return random.Random(seed).sample(list(POOL), 2)
 
 
-def fetch_json(url: str, token: str | None) -> dict[str, Any]:
-    with urllib.request.urlopen(urllib.request.Request(url, headers=request_headers(token)), timeout=12) as response:
+def validate_api_url(url: str) -> str:
+    """Allow credentialed legacy collection only inside the reviewed GitHub repo namespace."""
+    parsed = urllib.parse.urlsplit(url)
+    require(parsed.scheme == "https", f"GitHub API URL must use https: {url}")
+    require(parsed.netloc == "api.github.com", f"GitHub API origin changed: {url}")
+    require(parsed.username is None and parsed.password is None, f"GitHub API URL must not contain userinfo: {url}")
+    require(parsed.port is None, f"GitHub API URL must not contain a port override: {url}")
+    require(parsed.fragment == "", f"GitHub API URL must not contain a fragment: {url}")
+    decoded_path = parsed.path
+    while True:
+        require(decoded_path.startswith(API_REPO_PREFIX), f"GitHub API path escaped {OWNER} repositories: {url}")
+        segments = decoded_path.split("/")
+        require("." not in segments and ".." not in segments, f"GitHub API URL contains a dot-segment path: {url}")
+        require("\\" not in decoded_path, f"GitHub API URL contains a backslash path separator: {url}")
+        next_path = urllib.parse.unquote(decoded_path)
+        if next_path == decoded_path:
+            break
+        decoded_path = next_path
+    return url
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Reject redirects so a token-bearing request cannot be replayed to another URL."""
+
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+        return None
+
+
+def open_no_redirect(request: urllib.request.Request, *, timeout: float) -> Any:
+    return urllib.request.build_opener(NoRedirect()).open(request, timeout=timeout)
+
+
+def api_request(url: str, token: str | None) -> urllib.request.Request:
+    safe_url = validate_api_url(url)
+    request = urllib.request.Request(safe_url, headers=request_headers(None))
+    if token:
+        request.add_unredirected_header("Authorization", f"Bearer {token}")
+    return request
+
+
+def fetch_json(
+    url: str,
+    token: str | None,
+    *,
+    opener: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    request = api_request(url, token)
+    transport = opener or open_no_redirect
+    with transport(request, timeout=API_TIMEOUT_SECONDS) as response:
         payload = json.load(response)
     if not isinstance(payload, dict):
         raise ValueError("GitHub API response must be an object")
     return payload
+
+
+def transport_self_test() -> None:
+    """Regression-proof the compatibility collector's credential and redirect boundary."""
+    good = f"{API_ORIGIN}/repos/{OWNER}/fixture-repo/actions/runs?branch=main"
+    require(validate_api_url(good) == good, "legacy Spotlight transport rejected the canonical GitHub API namespace")
+    for unsafe in (
+        f"http://api.github.com/repos/{OWNER}/fixture-repo",
+        f"https://api.github.com.evil.example/repos/{OWNER}/fixture-repo",
+        f"https://api.github.com:443/repos/{OWNER}/fixture-repo",
+        f"https://user@api.github.com/repos/{OWNER}/fixture-repo",
+        f"https://api.github.com/repos/{OWNER}/fixture-repo#fragment",
+        "https://api.github.com/repos/other-owner/fixture-repo",
+        f"https://api.github.com/repos/%70ortyu9/fixture-repo",
+        f"https://api.github.com/repos/{OWNER}/%2e%2e/other-owner/fixture-repo",
+        f"https://api.github.com/repos/{OWNER}/%252e%252e/other-owner/fixture-repo",
+        f"https://api.github.com/repos/{OWNER}/fixture-repo/../other",
+        f"https://api.github.com/repos/{OWNER}/fixture-repo/%252e%252e/other",
+        f"https://api.github.com/repos/{OWNER}/fixture-repo/%255cother",
+    ):
+        try:
+            validate_api_url(unsafe)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"legacy Spotlight transport accepted unsafe GitHub API URL: {unsafe}")
+
+    request = api_request(good, "fixture-token")
+    unredirected = {name.lower(): value for name, value in request.unredirected_hdrs.items()}
+    ordinary = {name.lower(): value for name, value in request.headers.items()}
+    require(unredirected.get("authorization") == "Bearer fixture-token",
+            "legacy Spotlight token must be an unredirected-only request header")
+    require("authorization" not in ordinary,
+            "legacy Spotlight token must not be a redirect-copyable ordinary header")
+    require(NoRedirect().redirect_request(None, None, 302, "fixture", {}, "https://example.com") is None,
+            "legacy Spotlight redirect handler must refuse redirects")
+
+    opened: list[str] = []
+
+    def should_not_open(request: urllib.request.Request, *, timeout: float) -> Any:
+        opened.append(request.full_url)
+        raise AssertionError(f"unsafe URL reached transport with timeout={timeout}")
+
+    try:
+        fetch_json("https://api.github.com/repos/other-owner/fixture-repo", "fixture-token", opener=should_not_open)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("legacy Spotlight fetch accepted a URL outside the reviewed repository namespace")
+    require(not opened, "legacy Spotlight URL validation must run before credentialed transport")
 
 
 def main_revision(repo: str, token: str | None) -> str:
@@ -106,7 +211,7 @@ def collect_evidence(system: dict[str, Any], day: dt.date, token: str | None, of
         return subject, [offline_evidence(repo, spec, day, index) for index, spec in enumerate(specs, 1)]
     try:
         subject = main_revision(repo, token)
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+    except (urllib.error.URLError, TimeoutError, ConnectionResetError, json.JSONDecodeError, ValueError):
         subject = SHA40_ZERO
     run_cache: dict[str, dict[str, Any]] = {}
     jobs_cache: dict[int, list[dict[str, Any]]] = {}
@@ -117,7 +222,7 @@ def collect_evidence(system: dict[str, Any], day: dt.date, token: str | None, of
             if workflow not in run_cache:
                 run_cache[workflow] = latest_workflow_run(repo, workflow, token)
             run = run_cache[workflow]
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError, json.JSONDecodeError, ValueError):
             run = {}
         if not run:
             results.append({
@@ -139,7 +244,7 @@ def collect_evidence(system: dict[str, Any], day: dt.date, token: str | None, of
                 if run_id not in jobs_cache:
                     jobs_cache[run_id] = workflow_jobs(repo, run_id, token)
                 signal = aggregate_jobs(spec, jobs_cache[run_id])
-            except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
+            except (urllib.error.URLError, TimeoutError, ConnectionResetError, json.JSONDecodeError, ValueError):
                 signal = "UNAVAILABLE"
         results.append({
             "label": spec["label"], "workflow": workflow, "scope": evidence_scope(spec), "signal": signal,
@@ -155,6 +260,7 @@ def render_card(system: dict[str, Any], slot: int, day: dt.date, subject: str, e
 
 
 def validate_pool() -> None:
+    transport_self_test()
     registry.load_registry()
     repos = [str(system["repo"]) for system in POOL]
     if len(POOL) != 10 or len(set(repos)) != 10:
