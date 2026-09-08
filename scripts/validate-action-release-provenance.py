@@ -124,6 +124,23 @@ def validate_lock_closure(
                 f"canonical action identity mismatch for {action}: workflow={observed[action]} lock={expected}")
 
 
+def parse_ls_remote_refs(output: str, repository: str, tag: str) -> dict[str, str]:
+    """Parse exactly one direct tag ref and optional peeled ref without last-wins ambiguity."""
+    direct_ref = f"refs/tags/{tag}"
+    peeled_ref = f"{direct_ref}^{{}}"
+    refs: dict[str, str] = {}
+    for raw in output.splitlines():
+        fields = raw.split("\t", 1)
+        require(len(fields) == 2, f"Unexpected ls-remote output for {repository}@{tag}: {raw}")
+        sha, ref = fields
+        require(SHA40.fullmatch(sha) is not None, f"Invalid remote SHA for {repository}@{tag}: {sha}")
+        require(ref in {direct_ref, peeled_ref}, f"Unexpected remote ref for {repository}@{tag}: {ref}")
+        require(ref not in refs, f"Duplicate remote ref for {repository}@{tag}: {ref}")
+        refs[ref] = sha
+    require(direct_ref in refs, f"Reviewed release tag does not exist: {repository}@{tag}")
+    return refs
+
+
 def resolve_public_tag(repository: str, tag: str) -> str:
     url = f"https://github.com/{repository}.git"
     direct_ref = f"refs/tags/{tag}"
@@ -143,16 +160,7 @@ def resolve_public_tag(repository: str, tag: str) -> str:
         f"git ls-remote failed for {repository}@{tag}: {completed.stderr.strip() or 'unknown error'}",
     )
 
-    refs: dict[str, str] = {}
-    for raw in completed.stdout.splitlines():
-        fields = raw.split("\t", 1)
-        require(len(fields) == 2, f"Unexpected ls-remote output for {repository}@{tag}: {raw}")
-        sha, ref = fields
-        require(SHA40.fullmatch(sha) is not None, f"Invalid remote SHA for {repository}@{tag}: {sha}")
-        require(ref in {direct_ref, peeled_ref}, f"Unexpected remote ref for {repository}@{tag}: {ref}")
-        refs[ref] = sha
-
-    require(direct_ref in refs, f"Reviewed release tag does not exist: {repository}@{tag}")
+    refs = parse_ls_remote_refs(completed.stdout, repository, tag)
     return refs.get(peeled_ref, refs[direct_ref])
 
 
@@ -245,6 +253,15 @@ def expect_parse_failure(text: str, expected_fragment: str) -> None:
         fail(f"Parser self-test accepted forbidden provenance drift: {expected_fragment}")
 
 
+def expect_remote_failure(output: str, expected_fragment: str) -> None:
+    try:
+        parse_ls_remote_refs(output, "actions/example", "v1.2.3")
+    except ValueError as exc:
+        require(expected_fragment in str(exc), f"ls-remote self-test failed for wrong reason: {exc}")
+    else:
+        fail(f"ls-remote self-test accepted ambiguous output: {expected_fragment}")
+
+
 def self_test() -> None:
     action_lock_self_test()
     a = "a" * 40
@@ -282,6 +299,14 @@ def self_test() -> None:
     else:
         fail("lock-closure self-test accepted an unlocked workflow action")
 
+    direct = "refs/tags/v1.2.3"
+    peeled = f"{direct}^{{}}"
+    canonical_remote = f"{a}\t{direct}\n{b}\t{peeled}\n"
+    parsed_remote = parse_ls_remote_refs(canonical_remote, "actions/example", "v1.2.3")
+    require(parsed_remote == {direct: a, peeled: b}, "ls-remote self-test changed canonical annotated-tag parsing")
+    expect_remote_failure(f"{a}\t{direct}\n{b}\t{direct}\n", "Duplicate remote ref")
+    expect_remote_failure(f"{a}\t{direct}\n{a}\t{direct}\n", "Duplicate remote ref")
+
 
 def main() -> int:
     try:
@@ -305,7 +330,7 @@ def main() -> int:
         print(
             f"Action release provenance validation passed for {len(locked)} exact action paths: "
             "workflow identities are closed to the canonical lock, local action execution is forbidden, "
-            "governance constants are bound to it, and every unique public release tag resolves to the locked immutable SHA."
+            "governance constants are bound to it, and every unique public release tag resolves to one unambiguous locked immutable SHA."
         )
         return 0
     except (OSError, ValueError) as exc:
