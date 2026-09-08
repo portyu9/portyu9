@@ -4,8 +4,8 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:9238e324c9b93a31ef6cfb93b8516ce29a5594457777323935ea253a49650c6a",
-  "evidence_id": "PL2-9238E324C9B93A31",
+  "evidence_digest": "sha256:7b291a4315da542c30092d3c6a1423442ee4b810f0527b1be7d816a164b135d3",
+  "evidence_id": "PL2-7B291A4315DA542C",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -18,7 +18,8 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 25
+    "PASSING": 23,
+    "RUNNING": 2
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -340,37 +341,37 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T22:29:24Z",
+          "completed_at_utc": "2026-09-08T23:36:59Z",
           "freshness": "SAME_DAY",
-          "head_sha": "4ad1b35c3c54467de4b0915bfd626bc4428f89ba",
+          "head_sha": "6e27ffef77fe732298454a1d2a2b4dc9facf5e4c",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "PASSING",
-          "run_id": 34286083823,
-          "run_number": 42,
-          "run_url": "https://github.com/portyu9/qa-automation-mobile-appium/actions/runs/34286083823",
+          "result": "RUNNING",
+          "run_id": 34291436266,
+          "run_number": 44,
+          "run_url": "https://github.com/portyu9/qa-automation-mobile-appium/actions/runs/34291436266",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T22:29:52Z",
+          "completed_at_utc": "2026-09-08T23:37:03Z",
           "freshness": "SAME_DAY",
-          "head_sha": "4ad1b35c3c54467de4b0915bfd626bc4428f89ba",
+          "head_sha": "6e27ffef77fe732298454a1d2a2b4dc9facf5e4c",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
-          "result": "PASSING",
-          "run_id": 34286083818,
-          "run_number": 43,
-          "run_url": "https://github.com/portyu9/qa-automation-mobile-appium/actions/runs/34286083818",
+          "result": "RUNNING",
+          "run_id": 34291436298,
+          "run_number": 45,
+          "run_url": "https://github.com/portyu9/qa-automation-mobile-appium/actions/runs/34291436298",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "4ad1b35c3c54467de4b0915bfd626bc4428f89ba",
+      "subject_revision": "6e27ffef77fe732298454a1d2a2b4dc9facf5e4c",
       "title": "APPIUM MOBILE QE"
     },
     {
