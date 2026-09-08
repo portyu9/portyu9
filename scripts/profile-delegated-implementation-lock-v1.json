@@ -10,7 +10,7 @@
     "scripts/portfolio-systems-v1.json": "fe8b4c12061b3e6c8b803e78e97a08fe43f98ad2",
     "scripts/portfolio_evidence_helpers.py": "d9c7b10f0b6485137c49d198cd8f54a55a6c9f4d",
     "scripts/portfolio_evidence_ledger.py": "d18662e430f9c51a297f3f025e50c2423b6bffdb",
-    "scripts/portfolio_system_registry.py": "3786e0b019125a2526bc80e002157cad4aacff0b",
+    "scripts/portfolio_system_registry.py": "a29d8b743d3c115550a15683f50948193f6ab483",
     "scripts/validate-engineering-spotlight.py": "388991c414a74569da749867929a97705ad67f9e",
     "scripts/validate-portfolio-evidence-ledger.py": "9855e3497967a36bae534aed65ca573489a1fbaa",
     "scripts/validate_engineering_spotlight_registry.py": "8db80dfb7395d284b5b844c39f28feb0db5a1147",

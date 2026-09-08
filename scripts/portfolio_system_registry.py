@@ -25,6 +25,19 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate object members before normal JSON object construction can erase them."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        require(key not in result, f"portfolio registry JSON contains duplicate object key: {key}")
+        result[key] = value
+    return result
+
+
+def parse_registry_json(text: str) -> Any:
+    return json.loads(text, object_pairs_hook=unique_json_object)
+
+
 def evidence_scope(spec: dict[str, Any]) -> str:
     if spec.get("jobs"):
         return "jobs:" + "|".join(str(item) for item in spec["jobs"])
@@ -108,7 +121,7 @@ def validate_rotating_accent_palette(entries: list[tuple[str, str]]) -> None:
 def load_registry() -> dict[str, Any]:
     evidence_helpers.self_test()
     require(REGISTRY_PATH.is_file(), f"portfolio registry is missing: {REGISTRY_PATH.relative_to(ROOT)}")
-    data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    data = parse_registry_json(REGISTRY_PATH.read_text(encoding="utf-8"))
     require(isinstance(data, dict), "portfolio registry root must be an object")
     require(data.get("version") == VERSION, "portfolio registry version changed")
     require(data.get("owner") == OWNER, "portfolio registry owner changed")
@@ -208,6 +221,15 @@ def expect_evidence_failure(spec: dict[str, Any], expected: str) -> None:
         raise ValueError(f"evidence-scope self-test accepted ambiguous contract: {expected}")
 
 
+def expect_json_failure(text: str, expected: str) -> None:
+    try:
+        parse_registry_json(text)
+    except ValueError as exc:
+        require(expected in str(exc), f"registry JSON self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"registry JSON self-test accepted ambiguous object members: {expected}")
+
+
 def self_test() -> None:
     data = load_registry()
     require(len(permanent_systems()) == 4, "permanent registry projection changed")
@@ -235,7 +257,18 @@ def self_test() -> None:
         {"label": "LAB", "workflow": "ci.yml", "unexpected": "scope"},
         "unknown keys",
     )
-    print(f"Portfolio system registry passed: {data['version']} · 13 systems · unambiguous job evidence scopes · {registry_digest()}")
+    require(parse_registry_json('{"repo":"one","evidence":[{"workflow":"ci.yml"}]}')["repo"] == "one",
+            "registry JSON self-test rejected canonical object members")
+    expect_json_failure('{"repo":"one","repo":"two"}', "duplicate object key: repo")
+    expect_json_failure(
+        '{"repo":"one","evidence":[{"workflow":"ci.yml","workflow":"security.yml"}]}',
+        "duplicate object key: workflow",
+    )
+    expect_json_failure(
+        '{"repo":"one","evidence":[{"jobs":["one"],"jobs":["two"]}]}',
+        "duplicate object key: jobs",
+    )
+    print(f"Portfolio system registry passed: {data['version']} · 13 systems · unambiguous JSON object members and job evidence scopes · {registry_digest()}")
 
 
 def main() -> int:
