@@ -121,6 +121,10 @@ def validate_quality_binding(text: str) -> None:
         "Profile Quality must execute the workflow shell-safety validator",
     )
     require(
+        "python3 scripts/validate-workflow-source-shape.py" in text,
+        "Profile Quality must execute the canonical workflow YAML source-shape gate before shell parsing is trusted",
+    )
+    require(
         '- ".github/workflows/**"' in text,
         "Profile Quality push paths must cover every workflow shell-safety change",
     )

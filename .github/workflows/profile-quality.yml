@@ -115,6 +115,9 @@ jobs:
       - name: Validate Dependency Review governance contract
         run: python3 scripts/validate-dependency-review-contract.py
 
+      - name: Validate workflow YAML source shape
+        run: python3 scripts/validate-workflow-source-shape.py
+
       - name: Validate workflow authority firewall
         run: python3 scripts/validate-workflow-authority-contract.py
 
