@@ -16,6 +16,25 @@ MERGE_IF_EXPR = (
     "&& needs.approve.result == 'success'"
 )
 JOB_IF_LINE = re.compile(r"(?m)^    if:\s*(?P<expr>.+?)\s*$")
+DISPATCH_HEADER = (
+    "  dispatch:\n"
+    "    name: dispatch-spotlight-link-sync\n"
+    "    needs: publish\n"
+    "    runs-on: ubuntu-24.04\n"
+    "    timeout-minutes: 2\n"
+    "    permissions:\n"
+    "      actions: write\n"
+)
+DISPATCH_STEP = (
+    "      - name: Dispatch exact Spotlight reconciliation workflow\n"
+    "        env:\n"
+    "          GH_TOKEN: ${{ github.token }}\n"
+    "        run: |\n"
+    "          set -euo pipefail\n"
+    "          gh api --method POST \\\n"
+    "            \"repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches\" \\\n"
+    "            -f ref=main"
+)
 
 
 def fail(message: str) -> None:
@@ -44,6 +63,26 @@ def exact_job_if(block: str, label: str) -> str:
     return expressions[0]
 
 
+def validate_dispatch_job(stats: str) -> None:
+    """Bind post-publication authority to one exact fixed-workflow, ref-only dispatch step."""
+    dispatch = job_block(stats, "dispatch", None)
+    require(dispatch.startswith(DISPATCH_HEADER),
+            "Profile-stats dispatcher job metadata/authority changed")
+    require(dispatch.count("      - name: ") == 1,
+            "Profile-stats dispatcher must contain exactly one reviewed step")
+    require(dispatch.count(DISPATCH_STEP) == 1,
+            "Profile-stats dispatcher must remain one exact ref-only fixed-workflow reconciliation dispatch")
+    for forbidden in (
+        "repository_dispatch",
+        "workflow_id=",
+        "-f inputs",
+        "-F inputs",
+        "pull_request_target",
+    ):
+        require(forbidden not in dispatch,
+                f"Profile-stats dispatcher contains unauthorized alternate dispatch authority: {forbidden}")
+
+
 def validate(sync: str, stats: str, policy: str) -> None:
     require("  workflow_dispatch:\n" in sync,
             "Spotlight synchronization must retain a manual recovery dispatch")
@@ -69,11 +108,7 @@ def validate(sync: str, stats: str, policy: str) -> None:
         require(forbidden not in merge,
                 f"Spotlight merge job contains an unauthorized alternate/manual authority gate: {forbidden}")
 
-    require(
-        '"repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches"' in stats
-        and "-f ref=main" in stats,
-        "Profile-stats dispatcher must remain a ref-only fixed-workflow reconciliation dispatch",
-    )
+    validate_dispatch_job(stats)
 
     policy_lower = policy.lower()
     for phrase in (
@@ -137,6 +172,32 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         policy,
         "exactly one canonical job-level if predicate",
     )
+
+    dispatch_comment_shadow = stats.replace(
+        '          gh api --method POST \\\n            "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \\\n            -f ref=main',
+        '          # gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" -f ref=main\n'
+        '          gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches"',
+        1,
+    )
+    expect_failure(
+        sync,
+        dispatch_comment_shadow,
+        policy,
+        "one exact ref-only fixed-workflow reconciliation dispatch",
+    )
+    duplicate_dispatch_step = stats.replace(
+        "      - name: Dispatch exact Spotlight reconciliation workflow\n",
+        "      - name: Unreviewed dispatch step\n        run: echo unreviewed\n\n"
+        "      - name: Dispatch exact Spotlight reconciliation workflow\n",
+        1,
+    )
+    expect_failure(
+        sync,
+        duplicate_dispatch_step,
+        policy,
+        "exactly one reviewed step",
+    )
+
     expect_failure(
         sync,
         stats + "\nmerge_ui_after_checks: true\n",
@@ -169,7 +230,7 @@ def main() -> int:
         print(
             "Spotlight UI merge authorization validation passed: the fixed deterministic README-only synchronization class "
             "has standing auto-merge authority after one exact parsed plan/propose/approval job guard and the five protected-main checks; "
-            "scheduled/post-publication runs may converge automatically without authorizing arbitrary UI or dependency PRs."
+            "post-publication reconciliation remains one exact fixed-workflow, ref-only dispatch."
         )
         return 0
     except (OSError, ValueError) as exc:
