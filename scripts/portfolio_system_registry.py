@@ -9,12 +9,15 @@ from pathlib import Path
 import sys
 from typing import Any
 
+import portfolio_evidence_helpers as evidence_helpers
+
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "scripts" / "portfolio-systems-v1.json"
 VERSION = "portfolio-systems-v1"
 OWNER = "portyu9"
 CLASSIFICATION_POLICY = "four permanent profile systems plus nine rotating Spotlight systems"
 MIN_ROTATING_ACCENT_HUE_DISTANCE = 30.0
+EVIDENCE_KEYS = {"label", "workflow", "jobs", "job_prefixes", "required_steps"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -43,16 +46,30 @@ def validate_evidence(repo: str, evidence: Any) -> None:
     labels: list[str] = []
     for index, spec in enumerate(evidence, start=1):
         require(isinstance(spec, dict), f"{repo}: evidence entry {index} must be an object")
+        unexpected = set(spec) - EVIDENCE_KEYS
+        require(not unexpected, f"{repo}: evidence entry {index} contains unknown keys: {sorted(unexpected)}")
         label = spec.get("label")
         workflow = spec.get("workflow")
         require(isinstance(label, str) and label, f"{repo}: evidence entry {index} label is missing")
-        require(isinstance(workflow, str) and workflow.endswith((".yml", ".yaml")), f"{repo} {label}: workflow must be an explicit YAML filename")
+        require(
+            isinstance(workflow, str)
+            and Path(workflow).name == workflow
+            and workflow.endswith((".yml", ".yaml")),
+            f"{repo} {label}: workflow must be an explicit YAML filename",
+        )
         labels.append(label)
         for key in ("jobs", "job_prefixes", "required_steps"):
             value = spec.get(key)
             if value is not None:
                 require(isinstance(value, list) and value, f"{repo} {label}: {key} must be a non-empty array when present")
                 require(all(isinstance(item, str) and item for item in value), f"{repo} {label}: {key} entries must be non-empty strings")
+                require(len(value) == len(set(value)), f"{repo} {label}: {key} entries must be distinct")
+
+        exact = spec.get("jobs")
+        prefixes = spec.get("job_prefixes")
+        required_steps = spec.get("required_steps")
+        require(not (exact and prefixes), f"{repo} {label}: exact jobs and job prefixes are mutually exclusive")
+        require(not required_steps or prefixes, f"{repo} {label}: required_steps require a job_prefixes scope")
     require(len(labels) == len(set(labels)), f"{repo}: evidence labels must be distinct")
 
 
@@ -89,6 +106,7 @@ def validate_rotating_accent_palette(entries: list[tuple[str, str]]) -> None:
 
 
 def load_registry() -> dict[str, Any]:
+    evidence_helpers.self_test()
     require(REGISTRY_PATH.is_file(), f"portfolio registry is missing: {REGISTRY_PATH.relative_to(ROOT)}")
     data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     require(isinstance(data, dict), "portfolio registry root must be an object")
@@ -181,13 +199,43 @@ def legacy_spotlight_pool() -> tuple[dict[str, Any], ...]:
     return tuple(spotlight_system(item) for item in systems() if item.get("spotlight") is not None)
 
 
+def expect_evidence_failure(spec: dict[str, Any], expected: str) -> None:
+    try:
+        validate_evidence("fixture-repo", [spec])
+    except ValueError as exc:
+        require(expected in str(exc), f"evidence-scope self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"evidence-scope self-test accepted ambiguous contract: {expected}")
+
+
 def self_test() -> None:
     data = load_registry()
     require(len(permanent_systems()) == 4, "permanent registry projection changed")
     require(len(rotating_systems()) == 9, "rotating registry projection changed")
     require(len(rotating_spotlight_pool()) == 9, "rotating Spotlight projection changed")
     require(len(legacy_spotlight_pool()) == 10, "legacy Spotlight projection changed")
-    print(f"Portfolio system registry passed: {data['version']} · 13 systems · {registry_digest()}")
+
+    expect_evidence_failure(
+        {"label": "LAB", "workflow": "ci.yml", "jobs": ["one", "one"]},
+        "jobs entries must be distinct",
+    )
+    expect_evidence_failure(
+        {"label": "LAB", "workflow": "ci.yml", "jobs": ["one"], "job_prefixes": ["Lab "]},
+        "mutually exclusive",
+    )
+    expect_evidence_failure(
+        {"label": "LAB", "workflow": "ci.yml", "jobs": ["one"], "required_steps": ["Tests"]},
+        "required_steps require a job_prefixes scope",
+    )
+    expect_evidence_failure(
+        {"label": "LAB", "workflow": "../ci.yml"},
+        "explicit YAML filename",
+    )
+    expect_evidence_failure(
+        {"label": "LAB", "workflow": "ci.yml", "unexpected": "scope"},
+        "unknown keys",
+    )
+    print(f"Portfolio system registry passed: {data['version']} · 13 systems · unambiguous job evidence scopes · {registry_digest()}")
 
 
 def main() -> int:
