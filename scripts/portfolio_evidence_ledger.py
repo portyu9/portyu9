@@ -30,6 +30,7 @@ API_TIMEOUT_SECONDS = 12
 API_BACKOFF_SECONDS = (1.0, 2.0)
 API_MAX_RETRY_AFTER_SECONDS = 5.0
 RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+JOB_PAGE_SIZE = 100
 
 
 def require(condition: bool, message: str) -> None:
@@ -185,9 +186,139 @@ def latest_workflow_run(repo: str, workflow: str, subject: str, token: str | Non
     return select_workflow_run(recent.get("workflow_runs") or [], subject)
 
 
-def workflow_jobs(repo: str, run_id: int, token: str | None) -> list[dict[str, Any]]:
-    payload = fetch_json(f"https://api.github.com/repos/{OWNER}/{repo}/actions/runs/{run_id}/jobs?per_page=100", token)
-    return [job for job in (payload.get("jobs") or []) if isinstance(job, dict)]
+def workflow_jobs(
+    repo: str,
+    run_id: int,
+    token: str | None,
+    *,
+    fetcher: Callable[[str, str | None], dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch every job page and reject incomplete or internally inconsistent snapshots."""
+    base = f"https://api.github.com/repos/{OWNER}/{repo}/actions/runs/{run_id}/jobs"
+    fetch_page = fetcher or fetch_json
+    first = fetch_page(f"{base}?per_page={JOB_PAGE_SIZE}&page=1", token)
+    total = first.get("total_count")
+    require(
+        isinstance(total, int) and not isinstance(total, bool) and total >= 0,
+        f"{repo}: workflow job total_count is malformed for run {run_id}",
+    )
+    expected_pages = max(1, (total + JOB_PAGE_SIZE - 1) // JOB_PAGE_SIZE)
+    collected: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
+
+    for page in range(1, expected_pages + 1):
+        payload = first if page == 1 else fetch_page(
+            f"{base}?per_page={JOB_PAGE_SIZE}&page={page}", token
+        )
+        page_total = payload.get("total_count")
+        require(
+            isinstance(page_total, int) and not isinstance(page_total, bool) and page_total == total,
+            f"{repo}: workflow job total_count changed while paging run {run_id}",
+        )
+        page_jobs = payload.get("jobs")
+        require(isinstance(page_jobs, list), f"{repo}: workflow jobs page {page} is malformed for run {run_id}")
+        expected_size = (
+            0
+            if total == 0
+            else JOB_PAGE_SIZE
+            if page < expected_pages
+            else total - JOB_PAGE_SIZE * (expected_pages - 1)
+        )
+        require(
+            len(page_jobs) == expected_size,
+            f"{repo}: workflow jobs page {page} is incomplete for run {run_id}: "
+            f"expected {expected_size}, observed {len(page_jobs)}",
+        )
+        for job in page_jobs:
+            require(isinstance(job, dict), f"{repo}: workflow job entry is malformed for run {run_id}")
+            job_id = job.get("id")
+            require(
+                isinstance(job_id, int) and not isinstance(job_id, bool) and job_id > 0,
+                f"{repo}: workflow job id is malformed for run {run_id}",
+            )
+            require(job_id not in seen_ids, f"{repo}: duplicate workflow job id {job_id} for run {run_id}")
+            seen_ids.add(job_id)
+            collected.append(job)
+
+    require(
+        len(collected) == total,
+        f"{repo}: workflow job pagination did not close for run {run_id}: expected {total}, observed {len(collected)}",
+    )
+    return collected
+
+
+def workflow_jobs_self_test() -> None:
+    """Regression-proof pagination completeness before job-scoped evidence aggregation."""
+    first_page = [
+        {
+            "id": index,
+            "name": "Required" if index == 1 else f"Filler {index}",
+            "status": "completed",
+            "conclusion": "success",
+        }
+        for index in range(1, JOB_PAGE_SIZE + 1)
+    ]
+    second_page = [{
+        "id": JOB_PAGE_SIZE + 1,
+        "name": "Required",
+        "status": "completed",
+        "conclusion": "failure",
+    }]
+    pages = {
+        1: {"total_count": JOB_PAGE_SIZE + 1, "jobs": first_page},
+        2: {"total_count": JOB_PAGE_SIZE + 1, "jobs": second_page},
+    }
+    requested: list[int] = []
+
+    def fixture_fetch(url: str, token: str | None) -> dict[str, Any]:
+        require(token is None, "workflow jobs fixture unexpectedly received a token")
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        page = int((query.get("page") or ["0"])[0])
+        requested.append(page)
+        return pages[page]
+
+    jobs = workflow_jobs("fixture-repo", 7, None, fetcher=fixture_fetch)
+    require(requested == [1, 2], "workflow jobs pagination fixture did not fetch every page")
+    require(len(jobs) == JOB_PAGE_SIZE + 1, "workflow jobs pagination fixture lost a job")
+    require(
+        evidence.aggregate_jobs({"jobs": ["Required"]}, jobs) == "NO SIGNAL",
+        "page-two duplicate job name must remain visible to ambiguity aggregation",
+    )
+
+    failure_cases = (
+        (
+            {
+                1: {"total_count": JOB_PAGE_SIZE + 1, "jobs": first_page[:-1]},
+                2: pages[2],
+            },
+            "incomplete",
+        ),
+        (
+            {
+                1: pages[1],
+                2: {"total_count": JOB_PAGE_SIZE + 2, "jobs": second_page},
+            },
+            "total_count changed",
+        ),
+        (
+            {
+                1: pages[1],
+                2: {"total_count": JOB_PAGE_SIZE + 1, "jobs": [dict(second_page[0], id=1)]},
+            },
+            "duplicate workflow job id",
+        ),
+    )
+    for fixture_pages, expected in failure_cases:
+        def failing_fetch(url: str, token: str | None, *, data: dict[int, dict[str, Any]] = fixture_pages) -> dict[str, Any]:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+            return data[int((query.get("page") or ["0"])[0])]
+
+        try:
+            workflow_jobs("fixture-repo", 8, None, fetcher=failing_fetch)
+        except ValueError as exc:
+            require(expected in str(exc), f"workflow jobs pagination failed for wrong reason: {exc}")
+        else:
+            raise ValueError(f"workflow jobs pagination self-test accepted malformed pagination: {expected}")
 
 
 def binding_state(subject: str, head_sha: str, has_run: bool) -> str:
@@ -319,6 +450,7 @@ def summarize(systems: list[dict[str, Any]], field: str) -> dict[str, int]:
 
 def build_ledger(day: dt.date, token: str | None, offline: bool) -> dict[str, Any]:
     transport_self_test()
+    workflow_jobs_self_test()
     reviewed = registry.systems()
     if len(reviewed) != 13:
         raise ValueError("portfolio registry must contain exactly 13 reviewed systems")
