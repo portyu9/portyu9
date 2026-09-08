@@ -93,6 +93,7 @@ def validate_manifest(data: dict[str, Any]) -> dict[str, Any]:
         require(isinstance(stage, dict), f"stage {index} must be an object")
         stage_id = expected[0]
         require(set(stage) == STAGE_KEYS, f"{stage_id}: stage keys changed")
+        require(type(stage.get("self_test")) is bool, f"{stage_id}: self_test must be a JSON boolean")
         require(stage_authority(stage) == expected, f"{stage_id}: reviewed stage authority changed")
 
         script = stage["script"]
@@ -177,6 +178,11 @@ def self_test() -> None:
     mutation = json.loads(json.dumps(data))
     mutation["stages"][0]["unexpected"] = "value"
     expect_manifest_failure(mutation, "stage keys changed")
+
+    for value, index in ((1, 0), (1.0, 0), (0, 14), (0.0, 14)):
+        mutation = json.loads(json.dumps(data))
+        mutation["stages"][index]["self_test"] = value
+        expect_manifest_failure(mutation, "self_test must be a JSON boolean")
 
     selected = [stage for stage in stages if isinstance(stage, dict) and stage["self_test"]]
     for index, stage in enumerate(selected, start=1):
