@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Verify every external GitHub Action against one canonical reviewed identity lock.
+"""Verify every GitHub Action execution surface against one reviewed identity policy.
 
-Workflow-local exact SHAs still prevent floating execution, but the repository now keeps
-one versioned lock for every allowed external Action path, reviewed semantic-version tag,
-and immutable commit SHA. This validator requires exact closure between that lock and all
-workflow ``uses:`` entries, resolves each locked public release tag, and verifies legacy
-governance constants cannot silently disagree with the canonical lock.
+Workflow-local exact SHAs still prevent floating external execution, while the repository
+keeps one versioned lock for every allowed external Action path, reviewed semantic-version
+tag, and immutable commit SHA. Local/composite Actions are not part of that reviewed
+identity model, so they are forbidden until a deliberate governance change introduces a
+separate local-action execution contract. This validator requires exact closure between
+the external lock and all workflow ``uses:`` entries, resolves each locked public release
+tag, and verifies legacy governance constants cannot silently disagree with the canonical
+lock.
 """
 from __future__ import annotations
 
@@ -60,8 +63,10 @@ def parse_uses_text(text: str, label: str) -> dict[str, tuple[str, str]]:
         value = match.group(1).strip()
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
             value = value[1:-1].strip()
-        if value.startswith("./"):
-            continue
+        require(
+            not value.startswith("./"),
+            f"{label}:{line_number}: local action execution is forbidden until a reviewed local-action contract exists: {value}",
+        )
         require(not value.startswith("docker://"),
                 f"{label}:{line_number}: external Docker action is outside the canonical identity lock")
 
@@ -247,7 +252,6 @@ def self_test() -> None:
     good = (
         f"steps:\n  - uses: actions/checkout@{a} # v7.0.1\n"
         f"  - uses: github/codeql-action/init@{b} # v4.37.9\n"
-        "  - uses: ./.github/actions/local\n"
     )
     observed = parse_uses_text(good, "self-test-good.yml")
     require(observed == {
@@ -257,6 +261,10 @@ def self_test() -> None:
     expect_parse_failure(f"steps:\n  - uses: actions/checkout@{a}\n", "same-line exact release tag")
     expect_parse_failure("steps:\n  - uses: actions/checkout@v7\n", "same-line exact release tag")
     expect_parse_failure(f"steps:\n  - uses: actions/checkout@{a} # v7\n", "same-line exact release tag")
+    expect_parse_failure(
+        "steps:\n  - uses: ./.github/actions/local\n",
+        "local action execution is forbidden",
+    )
     expect_parse_failure(
         f"steps:\n  - uses: actions/checkout@{a} # v7.0.1\n  - uses: actions/checkout@{b} # v7.0.1\n",
         "conflicting identities",
@@ -296,8 +304,8 @@ def main() -> int:
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
         print(
             f"Action release provenance validation passed for {len(locked)} exact action paths: "
-            "workflow identities are closed to the canonical lock, governance constants are bound to it, "
-            "and every unique public release tag resolves to the locked immutable SHA."
+            "workflow identities are closed to the canonical lock, local action execution is forbidden, "
+            "governance constants are bound to it, and every unique public release tag resolves to the locked immutable SHA."
         )
         return 0
     except (OSError, ValueError) as exc:
