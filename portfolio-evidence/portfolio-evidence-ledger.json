@@ -4,13 +4,13 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:5d5512ed017eb28681482b0fa555752a5531347e85100b72b2a5a8ff6b4070c5",
-  "evidence_id": "PL2-5D5512ED017EB286",
+  "evidence_digest": "sha256:05164115cb372bb7e0c04e1514fc32b1d6bbb6cf8cee729415ba7e7dad1b48c7",
+  "evidence_id": "PL2-05164115CB372BB7",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 12,
-    "SAME_DAY": 13
+    "AGED": 10,
+    "SAME_DAY": 15
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -19,7 +19,8 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 25
+    "PASSING": 23,
+    "RUNNING": 2
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -39,21 +40,21 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T12:34:10Z",
+          "completed_at_utc": "2026-09-08T13:08:31Z",
           "freshness": "SAME_DAY",
-          "head_sha": "9bb90679f76e1ac89793c70a111622fb5fe02611",
+          "head_sha": "c66672d3c7870acdee7a56953726182558edc49c",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 34226428853,
-          "run_number": 1466,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34226428853",
+          "run_id": 34229699199,
+          "run_number": 1468,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34229699199",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "9bb90679f76e1ac89793c70a111622fb5fe02611",
+      "subject_revision": "c66672d3c7870acdee7a56953726182558edc49c",
       "title": "AI QA CONTROL PLANE"
     },
     {
@@ -653,43 +654,43 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 6,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/qa-automation-load-k6",
       "signals": [
         {
-          "age_days": 6,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-02T18:10:58Z",
-          "freshness": "AGED",
-          "head_sha": "0e78b2b298c5409ec7aad2f6c71e19df0c052a9b",
+          "completed_at_utc": "2026-09-08T13:12:17Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "be2c1f921553f4e663666288c36bbf9fed20510c",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "PASSING",
-          "run_id": 33665333568,
-          "run_number": 112,
-          "run_url": "https://github.com/portyu9/qa-automation-load-k6/actions/runs/33665333568",
+          "result": "RUNNING",
+          "run_id": 34230527277,
+          "run_number": 119,
+          "run_url": "https://github.com/portyu9/qa-automation-load-k6/actions/runs/34230527277",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 6,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-02T18:09:52Z",
-          "freshness": "AGED",
-          "head_sha": "0e78b2b298c5409ec7aad2f6c71e19df0c052a9b",
+          "completed_at_utc": "2026-09-08T13:12:24Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "be2c1f921553f4e663666288c36bbf9fed20510c",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
-          "result": "PASSING",
-          "run_id": 33665333496,
-          "run_number": 99,
-          "run_url": "https://github.com/portyu9/qa-automation-load-k6/actions/runs/33665333496",
+          "result": "RUNNING",
+          "run_id": 34230527323,
+          "run_number": 107,
+          "run_url": "https://github.com/portyu9/qa-automation-load-k6/actions/runs/34230527323",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "0e78b2b298c5409ec7aad2f6c71e19df0c052a9b",
+      "subject_revision": "be2c1f921553f4e663666288c36bbf9fed20510c",
       "title": "K6 PERFORMANCE QE"
     }
   ],
