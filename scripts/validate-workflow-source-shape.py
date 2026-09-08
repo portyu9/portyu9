@@ -25,7 +25,9 @@ FLOW_NEEDS = re.compile(
     r"^\s*needs:\s*\[\s*[A-Za-z0-9_-]+(?:\s*,\s*[A-Za-z0-9_-]+)*\s*\]\s*$"
 )
 QUOTED_KEY = re.compile(r"^\s*(?:-\s*)?['\"][^'\"\n]+['\"]\s*:")
-FORBIDDEN_TOKEN = re.compile(r"(?:^|[\s,:])(?:&[A-Za-z0-9_.-]+|\*[A-Za-z0-9_.-]+|![^\s]+|<<\s*:)")
+FORBIDDEN_TOKEN = re.compile(
+    r"(?:^|[\s,:])(?:&[A-Za-z0-9_.-]+|\*[A-Za-z0-9_.-]+|!(?!=)[^\s]+|<<\s*:)"
+)
 
 
 def require(condition: bool, message: str) -> None:
