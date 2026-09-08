@@ -121,6 +121,9 @@ jobs:
       - name: Validate exact Python runtime contract
         run: python3 scripts/validate-python-runtime-contract.py
 
+      - name: Check Python maintenance freshness
+        run: python3 scripts/check-python-maintenance-freshness.py
+
       - name: Validate Spotlight UI merge authorization
         run: python3 scripts/validate-spotlight-ui-merge-authorization.py
 
