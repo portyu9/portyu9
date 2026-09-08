@@ -90,7 +90,7 @@ The canonical workflow-authority validator locks each workflow's trigger set, jo
 | Workflow / job | Additional authority | Purpose |
 | --- | --- | --- |
 | CodeQL / `analyze` | `security-events: write` | publish code-scanning results |
-| Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint the profile evidence attestation without repository write |
+| Profile stats / `attest-validated-evidence` | `id-token: write`, `attestations: write` | mint my profile evidence attestation without repository write |
 | Profile stats / `publish-write-only` | `contents: write` | push only the already sealed generated publication commit |
 | Profile stats / `dispatch-spotlight-link-sync` | `actions: write` | dispatch only the fixed Spotlight reconciliation workflow after publication |
 | Spotlight link sync / `propose-readme-only-write` | `contents: write`, `pull-requests: write` | update the fixed automation branch and create/update its README-only PR |
