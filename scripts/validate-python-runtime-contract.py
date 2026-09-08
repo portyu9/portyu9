@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
 RUNTIME_PROBE = ROOT / "scripts/verify-python-runtime.py"
+FRESHNESS_CHECKER = ROOT / "scripts/check-python-maintenance-freshness.py"
 EXPECTED_VERSION = "3.13.15"
 EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 EXPECTED_WORKFLOWS = {
@@ -26,6 +27,12 @@ VERIFY_STEP_NAME = "      - name: Verify resolved Python runtime"
 SETUP_PYTHON = re.compile(r"(?m)^\s*(?:-\s*)?uses:\s*actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*$")
 VERSION_LINE = f'  PYTHON_VERSION: "{EXPECTED_VERSION}"'
 VERSION_INPUT = "          python-version: ${{ env.PYTHON_VERSION }}"
+FRESHNESS_SEQUENCE = (
+    "      - name: Validate exact Python runtime contract\n"
+    "        run: python3 scripts/validate-python-runtime-contract.py\n\n"
+    "      - name: Check Python maintenance freshness\n"
+    "        run: python3 scripts/check-python-maintenance-freshness.py"
+)
 
 
 def fail(message: str) -> None:
@@ -86,6 +93,7 @@ def validate_text(text: str, label: str) -> bool:
 
 def validate_repository() -> None:
     require(RUNTIME_PROBE.is_file(), "exact Python runtime probe is missing")
+    require(FRESHNESS_CHECKER.is_file(), "Python maintenance freshness checker is missing")
     observed: set[str] = set()
     for path in workflow_files():
         text = path.read_text(encoding="utf-8")
@@ -110,6 +118,8 @@ def validate_repository() -> None:
     quality = QUALITY.read_text(encoding="utf-8")
     require("python3 scripts/validate-python-runtime-contract.py" in quality,
             "Profile Quality must execute the Python runtime reproducibility contract")
+    require(quality.count(FRESHNESS_SEQUENCE) == 1,
+            "Profile Quality must run the reviewed maintenance freshness checker immediately after the exact runtime contract")
 
 
 def expect_failure(text: str, expected: str) -> None:
@@ -168,6 +178,7 @@ def main() -> int:
             "Python runtime contract passed: authored setup-python execution is closed to "
             f"{EXPECTED_VERSION} across exactly {len(EXPECTED_WORKFLOWS)} reviewed workflows; "
             f"all six setup jobs execute the reviewed runtime probe immediately after setup; "
+            "Profile Quality also owns the maintenance-line freshness gate; "
             f"observed interpreter=CPython {observed_version}."
         )
         return 0
