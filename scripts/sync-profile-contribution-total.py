@@ -12,7 +12,9 @@ The layer also normalizes card-wide evidence/source wording after all visual pas
 - no private/restricted contribution subset is persisted or logged.
 
 All 30-day activity geometry, daily raw counts, and reviewed visual treatment remain
-unchanged. Unexpected SVG or GitHub API structure fails closed.
+unchanged. Unexpected SVG or GitHub API structure fails closed. Token-bearing GraphQL
+transport is pinned to the exact GitHub endpoint, rejects redirects, and keeps bearer
+authorization out of redirect-copyable ordinary request headers.
 """
 
 from __future__ import annotations
@@ -23,11 +25,15 @@ import os
 from pathlib import Path
 import re
 import sys
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from typing import Any, Callable
+import urllib.error
+import urllib.parse
+import urllib.request
 
 SYNC_ID = "signal-field-v2.9"
 GRAPHQL_URL = "https://api.github.com/graphql"
+GRAPHQL_TIMEOUT_SECONDS = 20
+REDIRECT_STATUS = frozenset({301, 302, 303, 307, 308})
 DEFAULT_USERNAME = "portyu9"
 EXPECTED_FILES = (
     "signal-field-wide-light.svg",
@@ -84,6 +90,11 @@ query ProfileVisibleContributionTotal($login: String!) {
 """.strip()
 
 
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ValueError(message)
+
+
 def format_count(value: int) -> str:
     if value < 0:
         raise ValueError("contribution counts cannot be negative")
@@ -103,33 +114,109 @@ def parse_github_datetime(value: object, label: str) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
-def fetch_profile_visible_total(token: str, username: str) -> tuple[int, str, str]:
+def validate_graphql_url(url: str) -> str:
+    """Return the one exact token-bearing GitHub GraphQL endpoint or fail closed."""
+    parsed = urllib.parse.urlsplit(url)
+    require(parsed.scheme == "https", f"GitHub GraphQL URL must use https: {url}")
+    require(parsed.netloc == "api.github.com", f"GitHub GraphQL origin changed: {url}")
+    require(parsed.username is None and parsed.password is None, f"GitHub GraphQL URL must not contain userinfo: {url}")
+    require(parsed.port is None, f"GitHub GraphQL URL must not contain a port override: {url}")
+    require(parsed.path == "/graphql", f"GitHub GraphQL path changed: {url}")
+    require(parsed.query == "", f"GitHub GraphQL URL must not contain a query string: {url}")
+    require(parsed.fragment == "", f"GitHub GraphQL URL must not contain a fragment: {url}")
+    return url
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Reject redirects so a bearer token cannot be replayed to another URL."""
+
+    def redirect_request(
+        self,
+        req: Any,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        return None
+
+
+def open_no_redirect(request: urllib.request.Request, *, timeout: float) -> Any:
+    return urllib.request.build_opener(NoRedirect()).open(request, timeout=timeout)
+
+
+def graphql_request(token: str, payload: bytes) -> urllib.request.Request:
     if not token:
         raise ValueError("GITHUB_TOKEN is required for GitHub GraphQL contribution sync")
-    payload = json.dumps(
-        {"query": QUERY, "variables": {"login": username}},
-        separators=(",", ":"),
-    ).encode("utf-8")
-    request = Request(
-        GRAPHQL_URL,
+    request = urllib.request.Request(
+        validate_graphql_url(GRAPHQL_URL),
         data=payload,
         headers={
-            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "User-Agent": "portyu9-signal-field-profile-total-sync",
             "X-GitHub-Api-Version": "2022-11-28",
         },
         method="POST",
     )
+    request.add_unredirected_header("Authorization", f"Bearer {token}")
+    return request
+
+
+def transport_self_test() -> None:
+    require(validate_graphql_url(GRAPHQL_URL) == GRAPHQL_URL, "GraphQL transport self-test rejected canonical endpoint")
+    for unsafe in (
+        "http://api.github.com/graphql",
+        "https://api.github.com.evil.example/graphql",
+        "https://api.github.com:443/graphql",
+        "https://user@api.github.com/graphql",
+        "https://api.github.com/graphql?query=forbidden",
+        "https://api.github.com/graphql#fragment",
+        "https://api.github.com/repos/portyu9/portyu9",
+    ):
+        try:
+            validate_graphql_url(unsafe)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"GraphQL transport self-test accepted unsafe endpoint: {unsafe}")
+
+    request = graphql_request("fixture-token", b"{}")
+    ordinary = {name.lower(): value for name, value in request.headers.items()}
+    unredirected = {name.lower(): value for name, value in request.unredirected_hdrs.items()}
+    require(unredirected.get("authorization") == "Bearer fixture-token",
+            "GraphQL bearer token must be attached as an unredirected-only header")
+    require("authorization" not in ordinary,
+            "GraphQL bearer token must not be attached as a redirect-copyable ordinary header")
+    require(NoRedirect().redirect_request(None, None, 302, "fixture", {}, "https://example.com") is None,
+            "GraphQL redirect handler must refuse every redirect request")
+
+
+def fetch_profile_visible_total(
+    token: str,
+    username: str,
+    *,
+    opener: Callable[..., Any] | None = None,
+) -> tuple[int, str, str]:
+    payload = json.dumps(
+        {"query": QUERY, "variables": {"login": username}},
+        separators=(",", ":"),
+    ).encode("utf-8")
+    request = graphql_request(token, payload)
+    transport = opener or open_no_redirect
     try:
-        with urlopen(request, timeout=20) as response:
+        with transport(request, timeout=GRAPHQL_TIMEOUT_SECONDS) as response:
             data = json.load(response)
-    except HTTPError as exc:
+    except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        if exc.code in REDIRECT_STATUS:
+            raise ValueError(f"GitHub GraphQL redirect rejected with HTTP {exc.code}") from exc
         raise ValueError(f"GitHub GraphQL request failed with HTTP {exc.code}: {detail}") from exc
-    except URLError as exc:
+    except urllib.error.URLError as exc:
         raise ValueError(f"GitHub GraphQL request failed: {exc.reason}") from exc
 
+    if not isinstance(data, dict):
+        raise ValueError("GitHub GraphQL response must be an object")
     if data.get("errors"):
         raise ValueError(f"GitHub GraphQL returned errors: {data['errors']}")
     user = data.get("data", {}).get("user")
@@ -350,6 +437,7 @@ def fixture(filename: str) -> str:
 
 
 def self_test() -> None:
+    transport_self_test()
     calendar_total = 5_030
     period_from = "2025-09-05"
     period_to = "2026-09-04"
@@ -372,7 +460,8 @@ def self_test() -> None:
         assert "data-refresh-cadence=" not in synced
     print(
         f"Signal Field profile evidence self-test passed: {SYNC_ID}; "
-        "one GitHub collection drives total + displayed period; no restricted aggregate is published"
+        "one GitHub collection drives total + displayed period; no restricted aggregate is published; "
+        "GraphQL bearer transport is exact-endpoint and no-redirect"
     )
 
 
