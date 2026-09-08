@@ -20,6 +20,19 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate JSON members before dict construction can erase prior values."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        require(key not in result, f"action identity lock JSON contains duplicate object key: {key}")
+        result[key] = value
+    return result
+
+
+def parse_action_lock_json(text: str) -> Any:
+    return json.loads(text, object_pairs_hook=unique_json_object)
+
+
 def repository_for_action(action: str) -> str:
     parts = action.split("/")
     require(len(parts) >= 2, f"invalid GitHub Action identity: {action}")
@@ -61,7 +74,7 @@ def validate_payload(payload: Any) -> dict[str, dict[str, str]]:
 
 def load_action_lock(path: Path = LOCK) -> dict[str, dict[str, str]]:
     require(path.is_file(), f"action identity lock is missing: {path}")
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = parse_action_lock_json(path.read_text(encoding="utf-8"))
     return validate_payload(payload)
 
 
@@ -70,6 +83,15 @@ def action_identity(action: str, path: Path = LOCK) -> tuple[str, str]:
     require(action in actions, f"action is not present in canonical identity lock: {action}")
     entry = actions[action]
     return entry["sha"], entry["tag"]
+
+
+def expect_json_failure(text: str, expected: str) -> None:
+    try:
+        parse_action_lock_json(text)
+    except ValueError as exc:
+        require(expected in str(exc), f"action-lock JSON self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"action-lock JSON self-test accepted ambiguous object members: {expected}")
 
 
 def self_test() -> None:
@@ -115,6 +137,20 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("action lock self-test accepted nondeterministic action ordering")
+
+    a = "a" * 40
+    expect_json_failure(
+        '{"version":"github-actions-identity-lock-v1","version":"other","actions":{}}',
+        "duplicate object key: version",
+    )
+    expect_json_failure(
+        '{"version":"github-actions-identity-lock-v1","actions":{"actions/checkout":{"sha":"' + a + '","tag":"v1.2.3"},"actions/checkout":{"sha":"' + a + '","tag":"v1.2.3"}}}',
+        "duplicate object key: actions/checkout",
+    )
+    expect_json_failure(
+        '{"version":"github-actions-identity-lock-v1","actions":{"actions/checkout":{"sha":"' + a + '","sha":"' + a + '","tag":"v1.2.3"}}}',
+        "duplicate object key: sha",
+    )
 
 
 if __name__ == "__main__":
