@@ -12,6 +12,7 @@ import urllib.error
 from pathlib import Path
 from typing import Any
 
+import json_object_contract as json_contract
 import portfolio_system_registry as registry
 
 VERSION = "portfolio-evidence-ledger-v2"
@@ -254,12 +255,13 @@ def main() -> int:
     parser.add_argument("--require-live", action="store_true")
     args = parser.parse_args()
     try:
+        json_contract.self_test()
         validate_retry_contract()
         validate_live_binding_contract()
         reviewed = registry.system_by_repo()
         path = args.directory / FILENAME
         require(path.is_file(), "Portfolio evidence ledger is missing")
-        ledger = json.loads(path.read_text(encoding="utf-8"))
+        ledger = json_contract.load_path(path, label="Portfolio evidence ledger")
         require(isinstance(ledger, dict), "Portfolio evidence ledger must be a JSON object")
         require(ledger.get("version") == VERSION and ledger.get("kind") == KIND and ledger.get("owner") == OWNER, "Portfolio ledger identity changed")
         require(re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(ledger.get("as_of_date_utc") or "")) is not None, "Ledger UTC date is invalid")
@@ -310,7 +312,7 @@ def main() -> int:
         core = {key: value for key, value in ledger.items() if key not in {"evidence_id", "evidence_digest"}}
         digest = canonical_digest(core)
         require(evidence_digest == f"sha256:{digest}" and evidence_id == f"PL2-{digest[:16].upper()}", "Portfolio Evidence ID/digest do not match canonical ledger semantics")
-        print(f"Portfolio evidence ledger v2 validation passed: {evidence_id} · 13 registry-bound systems · {registry.registry_digest()}")
+        print(f"Portfolio evidence ledger v2 validation passed: {evidence_id} · 13 registry-bound systems · {registry.registry_digest()} · duplicate JSON members rejected")
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError, IndexError, KeyError) as exc:
         print(f"ERROR: {exc}")
