@@ -75,9 +75,17 @@ def validate_directory(directory: Path) -> tuple[str, str]:
 
 
 def self_test() -> None:
-    # Transformer self-tests are owned by their explicit pipeline stages. The v2.14
-    # validator keeps only the identity-contract self-test and remains mutation-free.
-    identifier.self_test()
+    # Exercise the identifier's pure semantic/string path only. The transformer's
+    # filesystem-mutating self-test remains owned by its explicit generation stage.
+    path = Path("signal-field-wide-light.svg")
+    source = identifier.fixture("wide", "light")
+    evidence_id, digest, _ = identifier.evidence_identity(source)
+    stamped = identifier.stamp_text(source, path, evidence_id, digest)
+    identifier.validate_stamped(stamped, path, evidence_id, digest)
+    if not re.fullmatch(r"SF1-[0-9A-F]{16}", evidence_id):
+        raise AssertionError("Evidence ID format changed")
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        raise AssertionError("Evidence digest format changed")
     print("Signal Field v2.14 identity + v2.15/v2.16 read-only validator self-test passed")
 
 
