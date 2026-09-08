@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 import sys
+import xml.etree.ElementTree as ET
 
 EXPECTED_FILES = (
     "signal-field-wide-light.svg",
@@ -86,6 +87,29 @@ def fail(message: str) -> None:
     raise ValueError(message)
 
 
+def validate_xml_structure(text: str, label: str) -> None:
+    """Require well-formed XML so duplicate/malformed SVG attributes cannot be collapsed by regex parsing."""
+    try:
+        ET.fromstring(text)
+    except ET.ParseError as exc:
+        fail(f"{label}: malformed SVG XML: {exc}")
+
+
+def xml_structure_self_test() -> None:
+    validate_xml_structure('<svg xmlns="http://www.w3.org/2000/svg" data-x="1"/>', "xml-self-test-valid")
+    for invalid in (
+        '<svg xmlns="http://www.w3.org/2000/svg" data-x="1" data-x="2"/>',
+        '<svg xmlns="http://www.w3.org/2000/svg"><g></svg>',
+    ):
+        try:
+            validate_xml_structure(invalid, "xml-self-test-invalid")
+        except ValueError as exc:
+            if "malformed SVG XML" not in str(exc):
+                fail(f"SVG XML self-test failed for wrong reason: {exc}")
+        else:
+            fail("SVG XML self-test accepted malformed or duplicate-attribute XML")
+
+
 def attrs_of(tag: str) -> dict[str, str]:
     return dict(ATTR.findall(tag))
 
@@ -118,6 +142,7 @@ def validate_file(path: Path) -> None:
     if not path.is_file() or path.stat().st_size == 0:
         fail(f"missing or empty generated artifact: {path.name}")
     text = path.read_text(encoding="utf-8")
+    validate_xml_structure(text, path.name)
     root = ROOT.search(text)
     if not root:
         fail(f"SVG root missing: {path.name}")
@@ -292,12 +317,13 @@ def validate_directory(directory: Path) -> None:
         "Final Signal Field validation passed: four responsive artifacts preserve one measured evidence set "
         f"({evidence_id}), source-accurate authored-Issues semantics with a peer-scale BUGS FOUND label, "
         "outline-only leading context, maximum-contrast month markers, a phosphorescent-red current-day ring, "
-        "balanced glyph geometry, and best-effort hourly refresh."
+        "balanced glyph geometry, well-formed XML, and best-effort hourly refresh."
     )
 
 
 def main() -> int:
     try:
+        xml_structure_self_test()
         if len(sys.argv) != 2:
             raise ValueError("usage: validate-generated-signal-field.py <generated-directory>")
         validate_directory(Path(sys.argv[1])); return 0
