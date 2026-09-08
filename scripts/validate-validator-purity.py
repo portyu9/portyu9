@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Fail closed when validators or their reachable helper imports can mutate evidence.
+"""Fail closed when validators or their reachable helper execution can mutate evidence.
 
 Validator modules are observers. Production validation paths may read files, parse
 contracts, perform bounded network reads, and fail, but they must not rewrite evidence
 or launch arbitrary child processes. Explicit transformer/generator scripts own mutation.
 
-The full body of every validator is inspected. In addition, every reachable local Python
-helper import is inspected for *import-time* side effects, including module/class bodies,
-decorators, and default expressions, while ordinary helper function bodies remain outside
-that import-time rule until invoked by a validator. This closes the case where importing a
-seemingly read-only helper could mutate files or launch a process before validation starts.
+Every validator body is inspected. Reachable local helper imports are inspected for
+import-time side effects, and production calls into those helpers are followed through a
+static local-function call graph and inspected recursively. Two legacy Signal Field
+validators dynamically execute exact transformer modules because their filenames contain
+hyphens; those dynamic targets and callable surfaces are closed here to an explicit
+reviewed allowlist, their import-time code is inspected, and every allowed delegated
+function closure is proven read-only.
 
 Self-tests may create isolated temporary fixtures only inside
 ``tempfile.TemporaryDirectory()`` scopes. Process execution is never exempt merely
@@ -20,8 +22,10 @@ profile-evidence validation runner dispatching manifest-declared validator scrip
 from __future__ import annotations
 
 import ast
+from collections import defaultdict
 from pathlib import Path
 import sys
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -68,7 +72,57 @@ PROCESS_EXECUTORS = {
     "os.popen",
     "pty.spawn",
 }
+DYNAMIC_CODE_EXECUTORS = {
+    "exec",
+    "eval",
+    "compile",
+    "__import__",
+    "importlib.import_module",
+    "runpy.run_module",
+    "runpy.run_path",
+}
 WRITE_MODE_MARKERS = frozenset("wax+")
+
+# Exact dynamic execution that remains necessary only because these reviewed transformer
+# filenames contain hyphens. Each alias is bound to one target file and one exact callable
+# surface. All target import-time code and the full local closure of these functions are
+# inspected below; adding a new target or delegated function requires review here.
+REVIEWED_DYNAMIC_DELEGATES: dict[str, dict[str, tuple[str, frozenset[str]]]] = {
+    "validate-signal-field-v213.py": {
+        "clarity": (
+            "clarify-signal-field-evidence-window.py",
+            frozenset({"attrs_of", "layout_of", "validate"}),
+        ),
+    },
+    "validate-signal-field-v214.py": {
+        "identifier": (
+            "identify-signal-field-evidence.py",
+            frozenset({"root_attrs", "validate_stamped", "fixture", "evidence_identity", "stamp_text"}),
+        ),
+        "presentation": (
+            "polish-signal-field-evidence-v215.py",
+            frozenset({"validate"}),
+        ),
+        "issues_balance": (
+            "balance-signal-field-issues-label.py",
+            frozenset({"validate"}),
+        ),
+    },
+}
+DYNAMIC_TARGET_SNIPPETS = {
+    "validate-signal-field-v213.py": (
+        'CLARITY_SCRIPT = ROOT / "clarify-signal-field-evidence-window.py"',
+    ),
+    "validate-signal-field-v214.py": (
+        'IDENTIFIER_PATH = ROOT / "scripts/identify-signal-field-evidence.py"',
+        'PRESENTATION_PATH = ROOT / "scripts/polish-signal-field-evidence-v215.py"',
+        'ISSUES_BALANCE_PATH = ROOT / "scripts/balance-signal-field-issues-label.py"',
+    ),
+}
+REVIEWED_DYNAMIC_LOADERS = {
+    ("validate-signal-field-v213.py", "load_clarity"),
+    ("validate-signal-field-v214.py", "load_module"),
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -168,6 +222,27 @@ def helper_import_closure(validators: list[Path]) -> list[Path]:
     return sorted(observed)
 
 
+def local_import_bindings(source: str, *, filename: str) -> tuple[dict[str, Path], dict[str, tuple[Path, str]]]:
+    """Return local module aliases and directly imported local function aliases."""
+    tree = ast.parse(source, filename=filename)
+    modules: dict[str, Path] = {}
+    symbols: dict[str, tuple[Path, str]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                candidate = local_module_path(alias.name)
+                if candidate is not None:
+                    modules[alias.asname or alias.name.split(".", 1)[0]] = candidate
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            candidate = local_module_path(node.module)
+            if candidate is None:
+                continue
+            for alias in node.names:
+                require(alias.name != "*", f"{filename}: local star imports are forbidden in purity-tracked code")
+                symbols[alias.asname or alias.name] = (candidate, alias.name)
+    return modules, symbols
+
+
 class PurityVisitor(ast.NodeVisitor):
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -255,6 +330,13 @@ class PurityVisitor(ast.NodeVisitor):
                 return True
         return False
 
+    def allowed_dynamic_exec(self, name: str) -> bool:
+        return (
+            name.endswith(".exec_module")
+            and self.current_function is not None
+            and (self.path.name, self.current_function) in REVIEWED_DYNAMIC_LOADERS
+        )
+
     def visit_Call(self, node: ast.Call) -> None:
         name = dotted_name(node.func) or ""
         leaf = name.rsplit(".", 1)[-1]
@@ -301,6 +383,10 @@ class PurityVisitor(ast.NodeVisitor):
 
         if name in PROCESS_EXECUTORS and not self.allowed_process(node, name):
             self.report(node, f"unreviewed process execution is forbidden in validators: {name}()")
+        if name in DYNAMIC_CODE_EXECUTORS:
+            self.report(node, f"dynamic code execution is forbidden in validators/helpers: {name}()")
+        if leaf == "exec_module" and not self.allowed_dynamic_exec(name):
+            self.report(node, f"unreviewed dynamic module execution is forbidden: {name}()")
 
         self.generic_visit(node)
 
@@ -349,6 +435,188 @@ def inspect_import_time_source(path: Path, source: str) -> list[str]:
     return visitor.violations
 
 
+def top_level_functions(source: str, *, filename: str) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
+    tree = ast.parse(source, filename=filename)
+    return {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def function_calls(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    *,
+    local_functions: set[str],
+    modules: dict[str, Path],
+    symbols: dict[str, tuple[Path, str]],
+) -> tuple[set[str], set[tuple[Path, str]]]:
+    """Return directly called same-module and imported-local helper functions."""
+    same_module: set[str] = set()
+    imported: set[tuple[Path, str]] = set()
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        name = dotted_name(child.func) or ""
+        if name in local_functions:
+            same_module.add(name)
+            continue
+        if name in symbols:
+            imported.add(symbols[name])
+            continue
+        parts = name.split(".")
+        if len(parts) == 2 and parts[0] in modules:
+            imported.add((modules[parts[0]], parts[1]))
+    return same_module, imported
+
+
+class ProductionHelperCallVisitor(ast.NodeVisitor):
+    """Collect local-helper calls outside validator self-test functions."""
+
+    def __init__(self, modules: dict[str, Path], symbols: dict[str, tuple[Path, str]]) -> None:
+        self.modules = modules
+        self.symbols = symbols
+        self.functions: list[str] = []
+        self.calls: set[tuple[Path, str]] = set()
+
+    @property
+    def in_self_test(self) -> bool:
+        return any(name == "self_test" or name.startswith("self_test_") for name in self.functions)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if not self.in_self_test:
+            name = dotted_name(node.func) or ""
+            if name in self.symbols:
+                self.calls.add(self.symbols[name])
+            else:
+                parts = name.split(".")
+                if len(parts) == 2 and parts[0] in self.modules:
+                    self.calls.add((self.modules[parts[0]], parts[1]))
+        self.generic_visit(node)
+
+
+def production_helper_entrypoints(validators: list[Path]) -> set[tuple[Path, str]]:
+    result: set[tuple[Path, str]] = set()
+    for validator in validators:
+        source = validator.read_text(encoding="utf-8")
+        modules, symbols = local_import_bindings(source, filename=str(validator))
+        visitor = ProductionHelperCallVisitor(modules, symbols)
+        visitor.visit(ast.parse(source, filename=str(validator)))
+        result.update(visitor.calls)
+    return result
+
+
+def inspect_function_closure(entrypoints: set[tuple[Path, str]]) -> tuple[list[str], set[tuple[Path, str]]]:
+    """Inspect all statically reachable local helper function bodies from entrypoints."""
+    pending = list(entrypoints)
+    observed: set[tuple[Path, str]] = set()
+    violations: list[str] = []
+    cache: dict[Path, tuple[str, dict[str, ast.FunctionDef | ast.AsyncFunctionDef], dict[str, Path], dict[str, tuple[Path, str]]]] = {}
+
+    while pending:
+        path, function = pending.pop()
+        key = (path, function)
+        if key in observed:
+            continue
+        require(path.is_file() and not path.is_symlink(), f"delegated helper is missing or aliased: {path}")
+        require(path.absolute() == path.resolve(strict=True), f"delegated helper resolves through an alias: {path}")
+        if path not in cache:
+            source = path.read_text(encoding="utf-8")
+            functions = top_level_functions(source, filename=str(path))
+            modules, symbols = local_import_bindings(source, filename=str(path))
+            cache[path] = (source, functions, modules, symbols)
+        _source, functions, modules, symbols = cache[path]
+        require(function in functions, f"delegated helper function is missing: {path.name}:{function}")
+        node = functions[function]
+        visitor = PurityVisitor(path)
+        visitor.visit(node)
+        violations.extend(visitor.violations)
+        observed.add(key)
+
+        same_module, imported = function_calls(
+            node,
+            local_functions=set(functions),
+            modules=modules,
+            symbols=symbols,
+        )
+        pending.extend((path, name) for name in same_module if (path, name) not in observed)
+        pending.extend(item for item in imported if item not in observed)
+    return violations, observed
+
+
+def dynamic_exec_inventory(validators: list[Path]) -> dict[str, int]:
+    result: dict[str, int] = {}
+    for validator in validators:
+        tree = ast.parse(validator.read_text(encoding="utf-8"), filename=str(validator))
+        count = sum(
+            1
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and (dotted_name(node.func) or "").endswith(".exec_module")
+        )
+        if count:
+            result[validator.name] = count
+    return result
+
+
+def dynamic_alias_calls(source: str, aliases: set[str], *, filename: str) -> dict[str, set[str]]:
+    result: dict[str, set[str]] = {alias: set() for alias in aliases}
+    tree = ast.parse(source, filename=filename)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        name = dotted_name(node.func) or ""
+        parts = name.split(".")
+        if len(parts) == 2 and parts[0] in result:
+            result[parts[0]].add(parts[1])
+    return result
+
+
+def validate_dynamic_delegates(validators: list[Path]) -> tuple[set[tuple[Path, str]], list[str]]:
+    """Close exact dynamic targets, call surfaces, import-time execution, and pure calls."""
+    inventory = dynamic_exec_inventory(validators)
+    require(
+        inventory == {name: 1 for name in REVIEWED_DYNAMIC_DELEGATES},
+        f"dynamic validator execution inventory changed: {inventory!r}",
+    )
+
+    by_name = {path.name: path for path in validators}
+    entrypoints: set[tuple[Path, str]] = set()
+    violations: list[str] = []
+    for validator_name, delegates in REVIEWED_DYNAMIC_DELEGATES.items():
+        require(validator_name in by_name, f"reviewed dynamic validator is missing: {validator_name}")
+        validator = by_name[validator_name]
+        source = validator.read_text(encoding="utf-8")
+        for snippet in DYNAMIC_TARGET_SNIPPETS[validator_name]:
+            require(source.count(snippet) == 1,
+                    f"{validator_name}: reviewed dynamic target binding changed: {snippet}")
+
+        observed_calls = dynamic_alias_calls(source, set(delegates), filename=str(validator))
+        for alias, (target_name, expected_calls) in delegates.items():
+            require(
+                observed_calls[alias] == set(expected_calls),
+                f"{validator_name}: dynamic delegate call surface changed for {alias}: {sorted(observed_calls[alias])}",
+            )
+            target = SCRIPTS / target_name
+            require(target.is_file() and not target.is_symlink(),
+                    f"{validator_name}: dynamic target is missing or aliased: {target_name}")
+            require(target.absolute() == target.resolve(strict=True),
+                    f"{validator_name}: dynamic target resolves through an alias: {target_name}")
+            target_source = target.read_text(encoding="utf-8")
+            violations.extend(inspect_import_time_source(target, target_source))
+            entrypoints.update((target, function) for function in expected_calls)
+    return entrypoints, violations
+
+
 def self_test() -> None:
     fixture = Path("validate-fixture.py")
     require(not inspect_source(fixture, "def validate(p):\n    return p.read_text()\n"), "read-only fixture must pass")
@@ -376,6 +644,15 @@ def self_test() -> None:
         inspect_source(fixture, "def self_test():\n    subprocess.run(['git', 'status'])\n"),
         "self-test process execution must not receive a blanket exemption",
     )
+    require(
+        inspect_source(fixture, "def validate():\n    exec('value = 1')\n"),
+        "dynamic builtin execution must fail",
+    )
+    require(
+        inspect_source(fixture, "def validate(spec, module):\n    spec.loader.exec_module(module)\n"),
+        "unreviewed dynamic module execution must fail",
+    )
+
     release_fixture = Path("validate-action-release-provenance.py")
     release_source = (
         "import subprocess\n"
@@ -420,7 +697,34 @@ def self_test() -> None:
         inspect_import_time_source(helper, "class Config:\n    marker = Path('x').write_text('x')\n"),
         "helper class body executes at import time and must fail",
     )
-    print("Validator purity firewall self-test passed: validator bodies closed; helper import-time execution closed")
+
+    # Synthetic reachable-function closure: mutation/process execution hidden behind a
+    # neutral helper name must be found, while a read-only nested helper remains clean.
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_root = Path(tmp)
+        pure = tmp_root / "pure_helper.py"
+        pure.write_text("def read(p):\n    return normalize(p.read_text())\ndef normalize(v):\n    return v.strip()\n", encoding="utf-8")
+        violations, reached = inspect_function_closure({(pure, "read")})
+        require(not violations and {(pure, "read"), (pure, "normalize")} <= reached,
+                "read-only delegated helper closure must pass and follow same-module calls")
+
+        mutating = tmp_root / "mutating_helper.py"
+        mutating.write_text("def read(p):\n    return persist(p)\ndef persist(p):\n    p.write_text('x')\n", encoding="utf-8")
+        violations, _ = inspect_function_closure({(mutating, "read")})
+        require(any("write_text" in item for item in violations),
+                "delegated helper filesystem mutation must be discovered transitively")
+
+        process = tmp_root / "process_helper.py"
+        process.write_text("import subprocess\ndef read():\n    return execute()\ndef execute():\n    subprocess.run(['git', 'status'])\n", encoding="utf-8")
+        violations, _ = inspect_function_closure({(process, "read")})
+        require(any("process execution" in item for item in violations),
+                "delegated helper subprocess execution must be discovered transitively")
+
+    print(
+        "Validator purity firewall self-test passed: validator bodies, dynamic code execution, helper import-time execution, "
+        "and transitive delegated function bodies are closed"
+    )
 
 
 def main() -> int:
@@ -434,12 +738,21 @@ def main() -> int:
             violations.extend(inspect_source(path, path.read_text(encoding="utf-8")))
         for path in helpers:
             violations.extend(inspect_import_time_source(path, path.read_text(encoding="utf-8")))
+
+        dynamic_entrypoints, dynamic_violations = validate_dynamic_delegates(paths)
+        violations.extend(dynamic_violations)
+        production_entrypoints = production_helper_entrypoints(paths)
+        delegated_violations, reached = inspect_function_closure(production_entrypoints | dynamic_entrypoints)
+        violations.extend(delegated_violations)
+
         if violations:
             raise ValueError("validator purity violations:\n  " + "\n  ".join(violations))
+        dynamic_target_count = len({path for path, _function in dynamic_entrypoints})
         print(
             f"Validator purity passed: {len(paths)} validator modules are production read-only; "
-            f"{len(helpers)} reachable local helper modules have mutation/process-free import-time execution; "
-            "self-test mutation is temp-isolated, and process execution is closed to reviewed read-only boundaries"
+            f"{len(helpers)} statically imported local helpers and {dynamic_target_count} exact dynamic targets have pure import-time execution; "
+            f"{len(reached)} reachable delegated local functions are mutation/process-free; "
+            "self-test mutation is temp-isolated, dynamic execution is closed to reviewed targets, and process execution is closed to reviewed read-only boundaries"
         )
         return 0
     except (OSError, SyntaxError, ValueError) as exc:
