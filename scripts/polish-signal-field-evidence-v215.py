@@ -4,7 +4,8 @@
 This pass changes presentation only. It preserves measured counts, contribution levels,
 30-day membership, Evidence ID/digest, metric values, source provenance, and the
 BUGS FOUND display wording for the authored-public GitHub Issues metric while:
-- encoding leading calendar context with an outline instead of opacity,
+- encoding leading calendar context with an outline instead of opacity when context exists,
+- accepting a valid zero-context calendar when the measured window already starts Monday-aligned,
 - restoring maximum-contrast month markers,
 - simplifying the latest-day state to one outer ring,
 - replacing implementation wording DIM CONTEXT with LEADING CONTEXT, and
@@ -127,7 +128,9 @@ def outline_context(text: str, scheme: str) -> str:
     context = THEMES[scheme]["context"]
     matches = list(CONTEXT_RECT.finditer(text))
     if not matches:
-        raise ValueError("expected at least one leading-context tile")
+        if CONTEXT_DAY.search(text):
+            raise ValueError("leading-context day label exists without a context tile")
+        return text
 
     def tile(match: re.Match[str]) -> str:
         tag = remove_attr(match.group("tag"), "opacity")
@@ -242,8 +245,6 @@ def validate(text: str, path: Path) -> None:
 
     context = THEMES[scheme_for(path)]["context"]
     tiles = [m.group("tag") for m in CONTEXT_RECT.finditer(text)]
-    if not tiles:
-        raise ValueError("leading-context tiles disappeared")
     for tag in tiles:
         a = attrs_of(tag)
         if "opacity" in a:
@@ -314,15 +315,17 @@ def self_test() -> None:
             filename = Path(f"signal-field-{layout}-{scheme}.svg")
             viewbox = "0 0 640 425" if layout == "wide" else "0 0 320 500"
             footer = f"<text>{OLD_FOOTER}</text>" if layout == "wide" else ""
+            context_tile = '<rect data-evidence-window-role="context" data-date="2026-08-03" opacity="0.50"/>'
+            context_day = '<text data-day-label="2026-08-03" opacity="0.58" data-evidence-context-label="calendar-leading">03</text>'
             text = (
                 f'<svg viewBox="{viewbox}" data-evidence-identity="{PREVIOUS}" '
                 'data-evidence-id="SF1-0123456789ABCDEF" '
                 'data-evidence-digest="sha256:' + 'a' * 64 + '" '
                 'data-calendar-context-visual="dimmed" data-issues-display-alias="bug-found">'
                 f'<desc>calendar display includes context {OLD_DESC}</desc>'
-                '<rect data-evidence-window-role="context" data-date="2026-08-03" opacity="0.50"/>'
-                '<text data-day-label="2026-08-03" opacity="0.58" data-evidence-context-label="calendar-leading">03</text>'
-                '<text data-month-boundary="AUG" opacity="0.58" data-evidence-context-label="calendar-leading">AUG</text>'
+                + context_tile
+                + context_day
+                + '<text data-month-boundary="AUG" opacity="0.58" data-evidence-context-label="calendar-leading">AUG</text>'
                 '<text data-month-boundary="SEP">SEP</text>'
                 '<rect data-latest-day="true" stroke="#F8FAFC" stroke-width="1"/>'
                 '<rect data-latest-outline="outer" stroke="#00AEEF" stroke-width="1.25" opacity="0.68"/>'
@@ -332,6 +335,12 @@ def self_test() -> None:
             validate(transformed, filename)
             if transform(transformed, filename) != transformed:
                 raise AssertionError("v2.15 transform must be idempotent")
+
+            no_context = text.replace(context_tile, "").replace(context_day, "")
+            no_context_transformed = transform(no_context, filename)
+            validate(no_context_transformed, filename)
+            if CONTEXT_RECT.search(no_context_transformed) or CONTEXT_DAY.search(no_context_transformed):
+                raise AssertionError("zero-context fixture unexpectedly gained calendar-leading tiles")
 
             successor_root = SVG_OPEN.search(transformed)
             assert successor_root is not None
@@ -344,7 +353,7 @@ def self_test() -> None:
             outline_tag = set_attr(outline_tag, "opacity", FINAL_LATEST_OPACITY)
             successor = successor[:successor_outline.start()] + outline_tag + successor[successor_outline.end():]
             validate(successor, filename)
-    print("Signal Field v2.15 evidence-presentation self-test passed")
+    print("Signal Field v2.15 evidence-presentation self-test passed: leading context may be present or naturally zero")
 
 
 def apply(directory: Path) -> None:
@@ -354,7 +363,7 @@ def apply(directory: Path) -> None:
             raise ValueError(f"missing generated Signal Field artifact: {filename}")
         transformed = transform(path.read_text(encoding="utf-8"), path)
         path.write_text(transformed, encoding="utf-8")
-        print(f"polished {filename}: outlined context, bright months, single latest ring, BUGS FOUND label")
+        print(f"polished {filename}: optional outlined context, bright months, single latest ring, BUGS FOUND label")
 
 
 def main() -> int:
