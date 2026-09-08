@@ -150,12 +150,19 @@ def fetch_json(
     raise RuntimeError("unreachable GitHub API retry state")
 
 
+def main_revision_from_payload(payload: dict[str, Any], repo: str) -> str:
+    object_value = payload.get("object")
+    require(isinstance(object_value, dict), f"{repo}: current main revision object is malformed")
+    sha = object_value.get("sha")
+    require(isinstance(sha, str), f"{repo}: current main revision primitive is malformed")
+    require(len(sha) == 40 and all(ch in "0123456789abcdef" for ch in sha),
+            f"{repo}: current main revision is malformed")
+    return sha
+
+
 def main_revision(repo: str, token: str | None) -> str:
     payload = fetch_json(f"https://api.github.com/repos/{OWNER}/{repo}/git/ref/heads/main", token)
-    sha = str((payload.get("object") or {}).get("sha") or "")
-    if len(sha) != 40 or any(ch not in "0123456789abcdef" for ch in sha):
-        raise ValueError(f"{repo}: current main revision is malformed")
-    return sha
+    return main_revision_from_payload(payload, repo)
 
 
 def select_workflow_run(runs: Any, subject: str | None) -> dict[str, Any]:
@@ -164,12 +171,16 @@ def select_workflow_run(runs: Any, subject: str | None) -> dict[str, Any]:
         return {}
     trusted = [
         run for run in runs
-        if isinstance(run, dict) and str(run.get("event") or "") in TRUSTED_WORKFLOW_EVENTS
+        if isinstance(run, dict)
+        and isinstance(run.get("event"), str)
+        and run["event"] in TRUSTED_WORKFLOW_EVENTS
+        and isinstance(run.get("created_at"), str)
+        and bool(run["created_at"])
     ]
-    trusted.sort(key=lambda run: str(run.get("created_at") or ""), reverse=True)
+    trusted.sort(key=lambda run: run["created_at"], reverse=True)
     if subject and subject != SHA40_ZERO:
         for run in trusted:
-            if str(run.get("head_sha") or "") == subject:
+            if run.get("head_sha") == subject:
                 return run
     return trusted[0] if trusted else {}
 
@@ -184,6 +195,90 @@ def latest_workflow_run(repo: str, workflow: str, subject: str, token: str | Non
             return selected
     recent = fetch_json(f"{base}?branch=main&per_page=20", token)
     return select_workflow_run(recent.get("workflow_runs") or [], subject)
+
+
+def validate_workflow_run_primitives(run: dict[str, Any], repo: str, workflow: str) -> tuple[int, int, str]:
+    """Keep GitHub run primitives typed before evidence normalization can erase distinctions."""
+    run_id = run.get("id")
+    run_number = run.get("run_number")
+    status = run.get("status")
+    require(type(run_id) is int and run_id > 0,
+            f"{repo} {workflow}: workflow run id is malformed: {run_id!r}")
+    require(type(run_number) is int and run_number > 0,
+            f"{repo} {workflow}: workflow run number is malformed: {run_number!r}")
+    require(isinstance(status, str) and status,
+            f"{repo} {workflow}: workflow run status is malformed: {status!r}")
+    conclusion = run.get("conclusion")
+    if status == "completed":
+        require(isinstance(conclusion, str) and conclusion,
+                f"{repo} {workflow}: completed workflow conclusion is malformed: {conclusion!r}")
+    else:
+        require(conclusion is None or isinstance(conclusion, str),
+                f"{repo} {workflow}: workflow conclusion primitive is malformed: {conclusion!r}")
+    require(isinstance(run.get("head_sha"), str),
+            f"{repo} {workflow}: workflow head SHA primitive is malformed")
+    require(isinstance(run.get("html_url"), str) and bool(run.get("html_url")),
+            f"{repo} {workflow}: workflow run URL primitive is malformed")
+    require(isinstance(run.get("created_at"), str) and bool(run.get("created_at")),
+            f"{repo} {workflow}: workflow created timestamp primitive is malformed")
+    for field in ("updated_at", "run_started_at"):
+        value = run.get(field)
+        require(value is None or isinstance(value, str),
+                f"{repo} {workflow}: workflow {field} primitive is malformed: {value!r}")
+    return run_id, run_number, status
+
+
+def workflow_run_primitive_self_test() -> None:
+    subject = "1" * 40
+    good = {
+        "id": 123,
+        "run_number": 7,
+        "status": "completed",
+        "conclusion": "success",
+        "event": "push",
+        "head_sha": subject,
+        "html_url": "https://github.com/portyu9/fixture-repo/actions/runs/123",
+        "created_at": "2026-09-08T00:00:00Z",
+        "updated_at": "2026-09-08T00:01:00Z",
+        "run_started_at": "2026-09-08T00:00:30Z",
+    }
+    require(validate_workflow_run_primitives(good, "fixture-repo", "ci.yml") == (123, 7, "completed"),
+            "workflow run primitive fixture changed")
+    for field, value in (
+        ("id", True),
+        ("run_number", True),
+        ("status", True),
+        ("conclusion", True),
+        ("head_sha", 1),
+        ("html_url", True),
+        ("created_at", 20260908),
+        ("updated_at", True),
+    ):
+        mutated = {**good, field: value}
+        try:
+            validate_workflow_run_primitives(mutated, "fixture-repo", "ci.yml")
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"workflow run primitive self-test accepted malformed {field}")
+    in_progress = {**good, "status": "in_progress", "conclusion": None}
+    require(validate_workflow_run_primitives(in_progress, "fixture-repo", "ci.yml") == (123, 7, "in_progress"),
+            "in-progress workflow run primitive fixture changed")
+    malformed_created = {**good, "id": 124, "created_at": 20260908}
+    require(select_workflow_run([malformed_created, good], subject) == good,
+            "trusted run selection accepted a non-string creation timestamp")
+    require(select_workflow_run([{**good, "event": True}, good], subject) == good,
+            "trusted run selection accepted a non-string event primitive")
+
+    require(main_revision_from_payload({"object": {"sha": subject}}, "fixture-repo") == subject,
+            "main revision primitive fixture changed")
+    for bad in (True, int("1" * 40)):
+        try:
+            main_revision_from_payload({"object": {"sha": bad}}, "fixture-repo")
+        except ValueError:
+            pass
+        else:
+            raise ValueError("main revision primitive self-test accepted non-string SHA")
 
 
 def workflow_jobs(
@@ -396,12 +491,11 @@ def collect_evidence_dimensions(
             })
             continue
 
-        run_id = int(run.get("id") or 0)
-        raw_head = str(run.get("head_sha") or "")
+        run_id, run_number, status = validate_workflow_run_primitives(run, repo, workflow)
+        raw_head = run.get("head_sha") or ""
         head_sha = raw_head if len(raw_head) == 40 and all(ch in "0123456789abcdef" for ch in raw_head) else SHA40_ZERO
-        status = str(run.get("status") or "")
-        completed = str(run.get("updated_at") or run.get("run_started_at") or run.get("created_at") or "")
-        result = "RUNNING" if status != "completed" else evidence.conclusion_signal(str(run.get("conclusion") or ""))
+        completed = run.get("updated_at") or run.get("run_started_at") or run.get("created_at") or ""
+        result = "RUNNING" if status != "completed" else evidence.conclusion_signal(run["conclusion"])
         if result == "PASSING" and (spec.get("jobs") or spec.get("job_prefixes")):
             try:
                 if run_id not in jobs_cache:
@@ -414,7 +508,7 @@ def collect_evidence_dimensions(
             "label": spec["label"], "workflow": workflow, "scope": evidence.evidence_scope(spec),
             "result": result, "binding": binding_state(subject, head_sha, True),
             "freshness": freshness_state(completed, age, False), "run_id": run_id,
-            "run_number": int(run.get("run_number") or 0), "run_url": str(run.get("html_url") or ""),
+            "run_number": run_number, "run_url": run.get("html_url") or "",
             "head_sha": head_sha, "completed_at_utc": completed, "age_days": age,
             "offline": False, "ordinal": index,
         })
@@ -450,7 +544,9 @@ def summarize(systems: list[dict[str, Any]], field: str) -> dict[str, int]:
 
 def build_ledger(day: dt.date, token: str | None, offline: bool) -> dict[str, Any]:
     transport_self_test()
+    workflow_run_primitive_self_test()
     workflow_jobs_self_test()
+    evidence.self_test()
     reviewed = registry.systems()
     if len(reviewed) != 13:
         raise ValueError("portfolio registry must contain exactly 13 reviewed systems")
