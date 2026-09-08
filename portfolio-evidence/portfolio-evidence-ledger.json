@@ -4,8 +4,8 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:d04a6d3671085402c346291e299d2b812f7ee5cfa78a95e9ae1fdcca63f338ab",
-  "evidence_id": "PL2-D04A6D3671085402",
+  "evidence_digest": "sha256:9559897053bab876f963d14537e645b22f4206973275a977babf5ce55b0f6c2e",
+  "evidence_id": "PL2-9559897053BAB876",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -19,7 +19,8 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 25
+    "PASSING": 23,
+    "RUNNING": 2
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -235,37 +236,37 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T11:59:37Z",
+          "completed_at_utc": "2026-09-08T22:08:15Z",
           "freshness": "SAME_DAY",
-          "head_sha": "837c27fcb20d7d3e3fca7b2dd6e8182328ad3163",
+          "head_sha": "6b5bb33229a12c4ad85082f28061ca2fe98a2adf",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "PASSING",
-          "run_id": 34223505550,
-          "run_number": 173,
-          "run_url": "https://github.com/portyu9/qa-automation-dotnet-selenium/actions/runs/34223505550",
+          "result": "RUNNING",
+          "run_id": 34284316297,
+          "run_number": 175,
+          "run_url": "https://github.com/portyu9/qa-automation-dotnet-selenium/actions/runs/34284316297",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T12:00:19Z",
+          "completed_at_utc": "2026-09-08T22:08:14Z",
           "freshness": "SAME_DAY",
-          "head_sha": "837c27fcb20d7d3e3fca7b2dd6e8182328ad3163",
+          "head_sha": "6b5bb33229a12c4ad85082f28061ca2fe98a2adf",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
-          "result": "PASSING",
-          "run_id": 34223505536,
-          "run_number": 91,
-          "run_url": "https://github.com/portyu9/qa-automation-dotnet-selenium/actions/runs/34223505536",
+          "result": "RUNNING",
+          "run_id": 34284316249,
+          "run_number": 93,
+          "run_url": "https://github.com/portyu9/qa-automation-dotnet-selenium/actions/runs/34284316249",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "837c27fcb20d7d3e3fca7b2dd6e8182328ad3163",
+      "subject_revision": "6b5bb33229a12c4ad85082f28061ca2fe98a2adf",
       "title": ".NET + SELENIUM QE"
     },
     {
