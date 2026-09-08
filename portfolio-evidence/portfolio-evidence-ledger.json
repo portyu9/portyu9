@@ -1,16 +1,16 @@
 {
   "as_of_date_utc": "2026-09-08",
   "binding_summary": {
-    "CURRENT_SUBJECT": 21,
-    "DIFFERENT_SUBJECT": 4
+    "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:24fcadc672dffa2431a5df6698e39a0499b536dae4612d99594d7507bfea435d",
-  "evidence_id": "PL2-24FCADC672DFFA24",
+  "evidence_digest": "sha256:2990f19a8638e5b261b594ed033a3e5f0e34be5fe5e78785df1dbe96d0e7d8cc",
+  "evidence_id": "PL2-2990F19A8638E5B2",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 25
+    "AGED": 22,
+    "SAME_DAY": 3
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -33,27 +33,27 @@
           "workflow": "ci.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/ai-qa-automation",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-07T23:25:57Z",
-          "freshness": "AGED",
-          "head_sha": "966b28b1d22d43b1755421690d5777cb22f7f71b",
+          "completed_at_utc": "2026-09-08T01:18:16Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "62bfd4a3a3d795716a695261e488e15449924f2b",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 34169767804,
-          "run_number": 1449,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34169767804",
+          "run_id": 34175964165,
+          "run_number": 1454,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34175964165",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "966b28b1d22d43b1755421690d5777cb22f7f71b",
+      "subject_revision": "62bfd4a3a3d795716a695261e488e15449924f2b",
       "title": "AI QA CONTROL PLANE"
     },
     {
@@ -70,43 +70,43 @@
           "workflow": "ci.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/qa-automation-ai-agent-evals",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-07T23:08:59Z",
-          "freshness": "AGED",
-          "head_sha": "812b6cf406fd4c3e7b261f0f02b670da167a655e",
+          "completed_at_utc": "2026-09-08T01:17:25Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "44d2ed801391400cdf7fc8559fa859dd24acc779",
           "label": "QUALITY+SEC",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 34168995119,
-          "run_number": 863,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34168995119",
+          "run_id": 34176108157,
+          "run_number": 865,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34176108157",
           "scope": "job-prefix:Quality / Python ;steps:Tests|Bandit|Dependency audit",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-07T23:08:59Z",
-          "freshness": "AGED",
-          "head_sha": "812b6cf406fd4c3e7b261f0f02b670da167a655e",
+          "completed_at_utc": "2026-09-08T01:17:25Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "44d2ed801391400cdf7fc8559fa859dd24acc779",
           "label": "AGENT LABS",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 34168995119,
-          "run_number": 863,
-          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34168995119",
+          "run_id": 34176108157,
+          "run_number": 865,
+          "run_url": "https://github.com/portyu9/qa-automation-ai-agent-evals/actions/runs/34176108157",
           "scope": "jobs:OpenAI adapter / deterministic SDK|MCP fault lab / deterministic protocol|MCP remote auth / loopback HTTP|MCP OAuth flow / separated AS-RS|Package integrity",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "812b6cf406fd4c3e7b261f0f02b670da167a655e",
+      "subject_revision": "44d2ed801391400cdf7fc8559fa859dd24acc779",
       "title": "AGENT EVALUATION + TEVV"
     },
     {
@@ -494,38 +494,38 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 5,
+      "evidence_max_age_days": 1,
       "repository": "portyu9/qa-automation-node-supertest",
       "signals": [
         {
-          "age_days": 5,
-          "binding": "DIFFERENT_SUBJECT",
-          "completed_at_utc": "2026-09-03T05:33:24Z",
+          "age_days": 1,
+          "binding": "CURRENT_SUBJECT",
+          "completed_at_utc": "2026-09-07T13:25:44Z",
           "freshness": "AGED",
-          "head_sha": "19d73d35d902aff477f031ff1da19a1faa5bd6bb",
+          "head_sha": "621c17838f55c907589da01408e0ee6811899301",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 33719288260,
-          "run_number": 153,
-          "run_url": "https://github.com/portyu9/qa-automation-node-supertest/actions/runs/33719288260",
+          "run_id": 34127246792,
+          "run_number": 155,
+          "run_url": "https://github.com/portyu9/qa-automation-node-supertest/actions/runs/34127246792",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 5,
-          "binding": "DIFFERENT_SUBJECT",
-          "completed_at_utc": "2026-09-03T05:33:41Z",
+          "age_days": 1,
+          "binding": "CURRENT_SUBJECT",
+          "completed_at_utc": "2026-09-07T13:25:57Z",
           "freshness": "AGED",
-          "head_sha": "19d73d35d902aff477f031ff1da19a1faa5bd6bb",
+          "head_sha": "621c17838f55c907589da01408e0ee6811899301",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 33719288259,
-          "run_number": 98,
-          "run_url": "https://github.com/portyu9/qa-automation-node-supertest/actions/runs/33719288259",
+          "run_id": 34127250918,
+          "run_number": 101,
+          "run_url": "https://github.com/portyu9/qa-automation-node-supertest/actions/runs/34127250918",
           "scope": "workflow",
           "workflow": "security.yml"
         }
@@ -600,38 +600,38 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 5,
+      "evidence_max_age_days": 1,
       "repository": "portyu9/qa-automation-node-playwright",
       "signals": [
         {
-          "age_days": 5,
-          "binding": "DIFFERENT_SUBJECT",
-          "completed_at_utc": "2026-09-03T04:20:55Z",
+          "age_days": 1,
+          "binding": "CURRENT_SUBJECT",
+          "completed_at_utc": "2026-09-07T13:26:11Z",
           "freshness": "AGED",
-          "head_sha": "e30dd76ed3f3b61b2ea4aff6a3fac90669d4e277",
+          "head_sha": "603097d02b8a7e73cf01468480dd2e40b67cc55e",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 33714594338,
-          "run_number": 120,
-          "run_url": "https://github.com/portyu9/qa-automation-node-playwright/actions/runs/33714594338",
+          "run_id": 34127199341,
+          "run_number": 122,
+          "run_url": "https://github.com/portyu9/qa-automation-node-playwright/actions/runs/34127199341",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 5,
-          "binding": "DIFFERENT_SUBJECT",
-          "completed_at_utc": "2026-09-03T04:20:42Z",
+          "age_days": 1,
+          "binding": "CURRENT_SUBJECT",
+          "completed_at_utc": "2026-09-07T13:25:45Z",
           "freshness": "AGED",
-          "head_sha": "e30dd76ed3f3b61b2ea4aff6a3fac90669d4e277",
+          "head_sha": "603097d02b8a7e73cf01468480dd2e40b67cc55e",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 33714594520,
-          "run_number": 76,
-          "run_url": "https://github.com/portyu9/qa-automation-node-playwright/actions/runs/33714594520",
+          "run_id": 34127203146,
+          "run_number": 79,
+          "run_url": "https://github.com/portyu9/qa-automation-node-playwright/actions/runs/34127203146",
           "scope": "workflow",
           "workflow": "security.yml"
         }
