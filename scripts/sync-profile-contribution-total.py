@@ -95,10 +95,15 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def normalize_contribution_count(value: object) -> int:
+    """Accept only the exact non-negative JSON integer shape used by GitHub."""
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError("contribution count must be a non-negative integer")
+    return value
+
+
 def format_count(value: int) -> str:
-    if value < 0:
-        raise ValueError("contribution counts cannot be negative")
-    return f"{value:,}"
+    return f"{normalize_contribution_count(value):,}"
 
 
 def parse_github_datetime(value: object, label: str) -> datetime:
@@ -224,9 +229,7 @@ def fetch_profile_visible_total(
         raise ValueError(f"GitHub user not found: {username}")
     collection = user.get("contributionsCollection") or {}
     calendar = collection.get("contributionCalendar") or {}
-    calendar_total = calendar.get("totalContributions")
-    if not isinstance(calendar_total, int) or calendar_total < 0:
-        raise ValueError("GitHub GraphQL contribution total is missing or invalid")
+    calendar_total = normalize_contribution_count(calendar.get("totalContributions"))
 
     started = parse_github_datetime(collection.get("startedAt"), "startedAt")
     ended = parse_github_datetime(collection.get("endedAt"), "endedAt")
@@ -438,6 +441,16 @@ def fixture(filename: str) -> str:
 
 def self_test() -> None:
     transport_self_test()
+    require(normalize_contribution_count(0) == 0, "contribution-count self-test rejected zero")
+    require(normalize_contribution_count(5_030) == 5_030, "contribution-count self-test rejected a positive integer")
+    for invalid_count in (True, False, -1, 1.0, "1", None):
+        try:
+            normalize_contribution_count(invalid_count)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"contribution-count self-test accepted invalid JSON primitive: {invalid_count!r}")
+
     calendar_total = 5_030
     period_from = "2025-09-05"
     period_to = "2026-09-04"
@@ -460,8 +473,8 @@ def self_test() -> None:
         assert "data-refresh-cadence=" not in synced
     print(
         f"Signal Field profile evidence self-test passed: {SYNC_ID}; "
-        "one GitHub collection drives total + displayed period; no restricted aggregate is published; "
-        "GraphQL bearer transport is exact-endpoint and no-redirect"
+        "one GitHub collection drives total + displayed period; exact non-negative integer typing is enforced; "
+        "no restricted aggregate is published; GraphQL bearer transport is exact-endpoint and no-redirect"
     )
 
 
