@@ -40,6 +40,23 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate authority members before dict construction erases prior values."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        require(
+            key not in result,
+            f"delegated implementation authority JSON contains duplicate object key: {key}",
+        )
+        result[key] = value
+    return result
+
+
+def strict_json_loads(text: str) -> Any:
+    """Parse delegated authority JSON with duplicate-member rejection at every depth."""
+    return json.loads(text, object_pairs_hook=unique_json_object)
+
+
 def require_real_repository_file(relative: str) -> Path:
     rel = Path(relative)
     require(not rel.is_absolute() and ".." not in rel.parts, f"implementation path escaped repository: {relative}")
@@ -108,7 +125,7 @@ def local_references(relative: str) -> set[str]:
                 if candidate:
                     references.add(candidate)
     elif path.suffix == ".json":
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = strict_json_loads(path.read_text(encoding="utf-8"))
         for value in walk_json_strings(payload):
             candidate = local_literal_path(value)
             if candidate:
@@ -133,7 +150,7 @@ def derive_closure(entrypoint: str) -> tuple[str, ...]:
 
 
 def generation_entrypoints() -> dict[str, str]:
-    payload = json.loads(GENERATION_MANIFEST.read_text(encoding="utf-8"))
+    payload = strict_json_loads(GENERATION_MANIFEST.read_text(encoding="utf-8"))
     require(isinstance(payload, dict) and isinstance(payload.get("stages"), list), "generation manifest is malformed")
     result: dict[str, str] = {}
     for stage in payload["stages"]:
@@ -185,7 +202,7 @@ def validate_lock(payload: Any, *, verify_blobs: bool = True) -> dict[str, Any]:
 
 def load_lock() -> dict[str, Any]:
     require(LOCK_PATH.is_file() and not LOCK_PATH.is_symlink(), "delegated implementation lock is missing or aliased")
-    payload = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
+    payload = strict_json_loads(LOCK_PATH.read_text(encoding="utf-8"))
     return validate_lock(payload)
 
 
@@ -200,6 +217,15 @@ def expect_failure(payload: dict[str, Any], expected: str, *, verify_blobs: bool
         require(expected in str(exc), f"implementation-lock self-test failed for wrong reason: {exc}")
     else:
         raise ValueError(f"implementation-lock self-test accepted drift: {expected}")
+
+
+def expect_json_failure(text: str, expected: str) -> None:
+    try:
+        strict_json_loads(text)
+    except ValueError as exc:
+        require(expected in str(exc), f"delegated-authority JSON self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"delegated-authority JSON self-test accepted ambiguous object members: {expected}")
 
 
 def self_test() -> None:
@@ -218,9 +244,22 @@ def self_test() -> None:
     stage_drift["stages"]["unexpected-stage"] = list(stage_drift["stages"]["portfolio-ledger-generate"])
     expect_failure(stage_drift, "stage inventory changed", verify_blobs=False)
 
+    expect_json_failure(
+        '{"version":"profile-delegated-implementation-lock-v1","version":"other","files":{},"stages":{}}',
+        "duplicate object key: version",
+    )
+    expect_json_failure(
+        '{"files":{"scripts/a.py":"1111111111111111111111111111111111111111","scripts/a.py":"2222222222222222222222222222222222222222"}}',
+        "duplicate object key: scripts/a.py",
+    )
+    expect_json_failure(
+        '{"stages":[{"id":"portfolio-ledger-generate","id":"other","script":"generate-portfolio-evidence-ledger.py"}]}',
+        "duplicate object key: id",
+    )
+
     print(
         f"Delegated implementation authority passed: {VERSION} · {len(payload['stages'])} stages · "
-        f"{len(payload['files'])} exact local files · lock_sha256={lock_digest()}"
+        f"{len(payload['files'])} exact local files · lock_sha256={lock_digest()} · duplicate JSON members rejected"
     )
 
 
