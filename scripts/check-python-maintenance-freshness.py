@@ -28,7 +28,8 @@ def require(condition: bool, message: str) -> None:
 def parse_version(value: str) -> tuple[int, int, int]:
     match = VERSION_RE.fullmatch(value)
     require(match is not None, f"PYTHON_VERSION must be exact X.Y.Z; got {value!r}")
-    return tuple(int(part) for part in match.groups())
+    major, minor, patch = (int(part) for part in match.groups())
+    return major, minor, patch
 
 
 def successor_version(value: str) -> str:
@@ -52,6 +53,7 @@ def probe_release(
     version: str,
     *,
     opener: Callable[..., object] = urllib.request.urlopen,
+    warning: Callable[[str], None] = warn,
 ) -> bool | None:
     """Return True if published, False if definitively absent, None if uncertain."""
     url = release_url(version)
@@ -66,15 +68,15 @@ def probe_release(
             status = int(getattr(response, "status", 0))
         if status == 200:
             return True
-        warn(f"python.org returned unexpected HTTP {status} for {url}; freshness remains advisory")
+        warning(f"python.org returned unexpected HTTP {status} for {url}; freshness remains advisory")
         return None
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             return False
-        warn(f"python.org returned HTTP {exc.code} for {url}; freshness remains advisory")
+        warning(f"python.org returned HTTP {exc.code} for {url}; freshness remains advisory")
         return None
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        warn(f"could not verify {url}: {exc}; freshness remains advisory")
+        warning(f"could not verify {url}: {exc}; freshness remains advisory")
         return None
 
 
@@ -102,18 +104,29 @@ def self_test() -> None:
     else:
         raise ValueError("floating runtime was accepted by freshness checker")
 
-    published = probe_release("3.13.16", opener=lambda *_args, **_kwargs: _FakeResponse(200))
+    quiet = lambda _message: None
+    published = probe_release(
+        "3.13.16",
+        opener=lambda *_args, **_kwargs: _FakeResponse(200),
+        warning=quiet,
+    )
     require(published is True, "self-test failed to detect a published successor")
 
     def missing(*_args: object, **_kwargs: object) -> object:
         raise urllib.error.HTTPError(release_url("3.13.16"), 404, "not found", None, None)
 
-    require(probe_release("3.13.16", opener=missing) is False, "self-test failed to accept absent successor")
+    require(
+        probe_release("3.13.16", opener=missing, warning=quiet) is False,
+        "self-test failed to accept absent successor",
+    )
 
     def unavailable(*_args: object, **_kwargs: object) -> object:
         raise urllib.error.URLError("offline")
 
-    require(probe_release("3.13.16", opener=unavailable) is None, "self-test made network uncertainty blocking")
+    require(
+        probe_release("3.13.16", opener=unavailable, warning=quiet) is None,
+        "self-test made network uncertainty blocking",
+    )
 
 
 def main() -> int:
