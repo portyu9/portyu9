@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 
 import profile_evidence_subjects as subjects
 import profile_evidence_validation as validation_contract
@@ -45,8 +46,7 @@ DIGITS = re.compile(r"^[0-9]+$")
 EVIDENCE_ID = re.compile(r"^SF1-[0-9A-F]{16}$")
 EVIDENCE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 PORTFOLIO_EVIDENCE_ID = re.compile(r"^PL2-[0-9A-F]{16}$")
-SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
-ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
+SVG_ROOT_TAGS = {"svg", "{http://www.w3.org/2000/svg}svg"}
 
 PUBLISHED_PATHS = subjects.published_paths()
 SIGNAL_FIELD_FILENAMES = subjects.source_basenames("signal_field")
@@ -78,10 +78,31 @@ def predicate_schema_identity() -> dict[str, str]:
 
 
 def root_attrs(text: str) -> dict[str, str]:
-    match = SVG_OPEN.search(text)
-    if not match:
-        raise ValueError("Signal Field SVG root is missing")
-    return dict(ATTR.findall(match.group(0)))
+    """Return root SVG attributes only after the complete document is well-formed XML."""
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError as exc:
+        raise ValueError(f"Signal Field SVG is not well-formed XML: {exc}") from exc
+    if root.tag not in SVG_ROOT_TAGS:
+        raise ValueError(f"Signal Field root must be SVG in the standard namespace: {root.tag!r}")
+    return dict(root.attrib)
+
+
+def unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate Ledger members before dict construction can erase prior values."""
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Portfolio Evidence Ledger contains duplicate object key: {key}")
+        result[key] = value
+    return result
+
+
+def parse_ledger_json(text: str) -> dict[str, object]:
+    payload = json.loads(text, object_pairs_hook=unique_json_object)
+    if not isinstance(payload, dict):
+        raise ValueError("Portfolio Evidence Ledger root must be an object")
+    return payload
 
 
 def read_signal_field_evidence(directory: Path) -> dict[str, str]:
@@ -117,7 +138,7 @@ def read_portfolio_ledger_evidence(directory: Path) -> dict[str, object]:
     subjects.require_regular_file(path, "attestation Portfolio Evidence Ledger subject")
     if path.stat().st_size == 0:
         raise ValueError("attestation Portfolio Evidence Ledger subject is empty")
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = parse_ledger_json(path.read_text(encoding="utf-8"))
     if payload.get("version") != PORTFOLIO_LEDGER_VERSION:
         raise ValueError("Portfolio Evidence Ledger version changed")
     if payload.get("kind") != "portfolio-evidence-ledger":
@@ -133,8 +154,8 @@ def read_portfolio_ledger_evidence(directory: Path) -> dict[str, object]:
         raise ValueError("Portfolio Evidence Ledger ID is malformed")
     if not isinstance(digest, str) or not EVIDENCE_DIGEST.fullmatch(digest):
         raise ValueError("Portfolio evidence digest is malformed")
-    if system_count != 13:
-        raise ValueError("Portfolio Evidence Ledger system count changed")
+    if type(system_count) is not int or system_count != 13:
+        raise ValueError("Portfolio Evidence Ledger system count must be exact integer 13")
     return {
         "version": PORTFOLIO_LEDGER_VERSION,
         "semantics": PORTFOLIO_EVIDENCE_SEMANTICS,
@@ -189,8 +210,9 @@ def build_predicate(env: dict[str, str], signal_field_dir: Path, portfolio_ledge
 
 
 def validate_predicate(predicate: dict[str, object]) -> None:
-    if predicate.get("schemaVersion") != SCHEMA_VERSION:
-        raise ValueError("schemaVersion changed")
+    schema_version = predicate.get("schemaVersion")
+    if type(schema_version) is not int or schema_version != SCHEMA_VERSION:
+        raise ValueError("schemaVersion must be exact integer 3")
     if predicate.get("kind") != KIND or predicate.get("repository") != REPOSITORY:
         raise ValueError("predicate identity changed")
     revision = predicate.get("sourceRevision")
@@ -221,14 +243,17 @@ def validate_predicate(predicate: dict[str, object]) -> None:
     signal = predicate.get("signalFieldEvidence")
     if not isinstance(signal, dict) or signal.get("schema") != EVIDENCE_SCHEMA:
         raise ValueError("Signal Field evidence block changed")
-    if not isinstance(signal.get("id"), str) or not EVIDENCE_ID.fullmatch(str(signal["id"])):
+    if not isinstance(signal.get("id"), str) or not EVIDENCE_ID.fullmatch(signal["id"]):
         raise ValueError("Signal Field Evidence ID is malformed")
-    if not isinstance(signal.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(str(signal["digest"])):
+    if not isinstance(signal.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(signal["digest"]):
         raise ValueError("Signal Field evidence digest is malformed")
 
     portfolio = predicate.get("portfolioEvidenceLedger")
     if not isinstance(portfolio, dict):
         raise ValueError("portfolioEvidenceLedger is missing")
+    system_count = portfolio.get("systemCount")
+    if type(system_count) is not int or system_count != 13:
+        raise ValueError("Portfolio Evidence Ledger predicate systemCount must be exact integer 13")
     expected_portfolio = {
         "version": PORTFOLIO_LEDGER_VERSION,
         "semantics": PORTFOLIO_EVIDENCE_SEMANTICS,
@@ -238,9 +263,9 @@ def validate_predicate(predicate: dict[str, object]) -> None:
     }
     if portfolio != expected_portfolio:
         raise ValueError("Portfolio Evidence Ledger predicate block changed")
-    if not isinstance(portfolio.get("id"), str) or not PORTFOLIO_EVIDENCE_ID.fullmatch(str(portfolio["id"])):
+    if not isinstance(portfolio.get("id"), str) or not PORTFOLIO_EVIDENCE_ID.fullmatch(portfolio["id"]):
         raise ValueError("Portfolio Evidence Ledger ID is malformed")
-    if not isinstance(portfolio.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(str(portfolio["digest"])):
+    if not isinstance(portfolio.get("digest"), str) or not EVIDENCE_DIGEST.fullmatch(portfolio["digest"]):
         raise ValueError("Portfolio Evidence Ledger digest is malformed")
 
     validation = predicate.get("validation")
@@ -283,6 +308,16 @@ def expect_build_failure(env: dict[str, str], signal_dir: Path, ledger_dir: Path
             raise AssertionError(f"attestation builder self-test failed for wrong reason: {exc}") from exc
     else:
         raise AssertionError(f"attestation builder self-test accepted unsafe identity/input: {expected}")
+
+
+def expect_predicate_failure(predicate: dict[str, object], expected: str) -> None:
+    try:
+        validate_predicate(predicate)
+    except ValueError as exc:
+        if expected not in str(exc):
+            raise AssertionError(f"attestation predicate self-test failed for wrong reason: {exc}") from exc
+    else:
+        raise AssertionError(f"attestation predicate self-test accepted malformed predicate: {expected}")
 
 
 def self_test() -> None:
@@ -333,6 +368,14 @@ def self_test() -> None:
         }:
             raise AssertionError("predicate validation inventory did not derive from canonical boundary contract")
 
+        schema_float = dict(reparsed)
+        schema_float["schemaVersion"] = 3.0
+        expect_predicate_failure(schema_float, "exact integer 3")
+        portfolio_float = dict(reparsed)
+        portfolio_float["portfolioEvidenceLedger"] = dict(reparsed["portfolioEvidenceLedger"])
+        portfolio_float["portfolioEvidenceLedger"]["systemCount"] = 13.0
+        expect_predicate_failure(portfolio_float, "exact integer 13")
+
         forged_env = fixture_env()
         forged_env["GITHUB_WORKFLOW_REF"] = f"evil/{WORKFLOW_REF}/suffix"
         expect_build_failure(forged_env, signal_dir, ledger_dir, "exact production workflow ref")
@@ -345,6 +388,25 @@ def self_test() -> None:
 
         signal_leaf = signal_dir / SIGNAL_FIELD_FILENAMES[0]
         signal_bytes = signal_leaf.read_bytes()
+        signal_text = signal_leaf.read_text(encoding="utf-8")
+        duplicate_attr = signal_text.replace(
+            'data-evidence-id="SF1-0123456789ABCDEF"',
+            'data-evidence-id="SF1-0123456789ABCDEF" data-evidence-id="SF1-FFFFFFFFFFFFFFFF"',
+            1,
+        )
+        signal_leaf.write_text(duplicate_attr, encoding="utf-8")
+        expect_build_failure(fixture_env(), signal_dir, ledger_dir, "well-formed XML")
+        signal_leaf.write_bytes(signal_bytes)
+
+        alternate_namespace = signal_text.replace(
+            "<svg ",
+            '<evil:svg xmlns:evil="https://example.invalid/not-svg" ',
+            1,
+        ).replace("</svg>", "</evil:svg>")
+        signal_leaf.write_text(alternate_namespace, encoding="utf-8")
+        expect_build_failure(fixture_env(), signal_dir, ledger_dir, "standard namespace")
+        signal_leaf.write_bytes(signal_bytes)
+
         external_signal = root / "external-signal.svg"
         external_signal.write_bytes(signal_bytes)
         signal_leaf.unlink()
@@ -354,6 +416,22 @@ def self_test() -> None:
         signal_leaf.write_bytes(signal_bytes)
 
         ledger_bytes = ledger_path.read_bytes()
+        ledger_text = ledger_path.read_text(encoding="utf-8")
+        duplicate_ledger = ledger_text.replace(
+            '"system_count": 13',
+            '"system_count": 13, "system_count": 13',
+            1,
+        )
+        ledger_path.write_text(duplicate_ledger, encoding="utf-8")
+        expect_build_failure(fixture_env(), signal_dir, ledger_dir, "duplicate object key: system_count")
+        ledger_path.write_bytes(ledger_bytes)
+
+        float_ledger = json.loads(ledger_text)
+        float_ledger["system_count"] = 13.0
+        ledger_path.write_text(json.dumps(float_ledger), encoding="utf-8")
+        expect_build_failure(fixture_env(), signal_dir, ledger_dir, "exact integer 13")
+        ledger_path.write_bytes(ledger_bytes)
+
         external_ledger = root / "external-ledger.json"
         external_ledger.write_bytes(ledger_bytes)
         ledger_path.unlink()
@@ -361,6 +439,7 @@ def self_test() -> None:
         expect_build_failure(fixture_env(), signal_dir, ledger_dir, "real regular file")
     print(
         "Profile evidence attestation predicate v3 self-test passed: exact workflow/run identity + real evidence inputs + "
+        "well-formed standard-namespace Signal Field XML + duplicate-safe Ledger JSON + exact numeric predicate identity + "
         "immutable schema + canonical validation boundary + Signal Field + Portfolio Evidence Ledger v2"
     )
 
