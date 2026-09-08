@@ -112,10 +112,16 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         policy,
         "must not introduce a separate merge input",
     )
+    policy_without_standing_authorization = re.sub(
+        r"standing authorization",
+        "standing permission",
+        policy,
+        flags=re.IGNORECASE,
+    )
     expect_failure(
         sync,
         stats,
-        policy.replace("standing authorization", "standing permission"),
+        policy_without_standing_authorization,
         "standing authorization",
     )
 
