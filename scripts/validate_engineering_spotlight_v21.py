@@ -12,6 +12,7 @@ from typing import Any
 
 import engineering_spotlight_v2 as base
 import engineering_spotlight_v21 as v21
+import json_object_contract as json_contract
 
 VERSION = "engineering-spotlight-v2.1"
 EVIDENCE_MODEL = "per-system-evidence-contract-v3"
@@ -70,7 +71,7 @@ def canonical_digest(payload: dict[str, Any]) -> str:
 
 def load_ledger(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     require(path.is_file(), f"Portfolio Evidence Ledger is missing: {path}")
-    ledger = json.loads(path.read_text(encoding="utf-8"))
+    ledger = json_contract.load_path(path, label="Portfolio Evidence Ledger")
     require(isinstance(ledger, dict), "Portfolio Evidence Ledger must be an object")
     require(ledger.get("version") == EVIDENCE_SOURCE, "Portfolio Evidence Ledger version changed")
     require(ledger.get("kind") == "portfolio-evidence-ledger", "Portfolio Evidence Ledger kind changed")
@@ -173,7 +174,8 @@ def validate_manifest(
 ) -> tuple[dict[str, Any], dict[int, dict[str, Any]]]:
     manifest_path = root / MANIFEST
     require(manifest_path.is_file(), "Spotlight manifest is missing")
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest = json_contract.load_path(manifest_path, label="Engineering Spotlight manifest")
+    require(isinstance(manifest, dict), "Spotlight manifest root must be an object")
     require(manifest.get("version") == VERSION, "Spotlight manifest version changed")
     require(manifest.get("evidence_model") == EVIDENCE_MODEL, "Spotlight evidence model changed")
     require(manifest.get("evidence_source") == EVIDENCE_SOURCE, "Spotlight must identify Ledger v2 as its evidence source")
@@ -323,6 +325,7 @@ def main() -> int:
     parser.add_argument("--require-live", action="store_true")
     args = parser.parse_args()
     try:
+        json_contract.self_test()
         root = args.directory
         require(root.is_dir(), f"Spotlight directory is missing: {root}")
         ledger, by_repo = load_ledger(args.ledger)
@@ -330,7 +333,7 @@ def main() -> int:
         validate_svgs(root, slot_by_number)
         print(
             "Engineering spotlight v2.1 validation passed: three deterministic rotating slots are an exact Ledger v2 projection; "
-            "execution result, current-subject binding, freshness, run provenance, explicit-theme visuals, and safe SVG contracts remain independent and fail-closed."
+            "execution result, current-subject binding, freshness, run provenance, explicit-theme visuals, safe SVG contracts, and duplicate-member-safe JSON boundaries remain independent and fail-closed."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError) as exc:
