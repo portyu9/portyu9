@@ -31,6 +31,10 @@ GOV_REQUIRED = (
     "generate-read-only",
     "attest-validated-evidence",
     "publish-write-only",
+    "dispatch-spotlight-link-sync",
+    "propose-readme-only-write",
+    "approve-bot-pr-checks-only",
+    "merge-readme-only-after-required-checks",
     "id-token: write",
     "attestations: write",
     "validate-ruleset-contract.py --live",
@@ -40,7 +44,7 @@ GOV_REQUIRED = (
 )
 
 THREAT_REQUIRED = (
-    "**Checkpoint:** 2026-09-05",
+    "**Checkpoint:** 2026-09-08",
     "one Portfolio Evidence Ledger snapshot",
     "exactly 11 files",
     "Ledger-backed Spotlight projection",
@@ -62,6 +66,14 @@ THREAT_REQUIRED = (
     "redact",
     "spotlight-manifest.json",
     "generated",
+    "exactly five workflows",
+    "spotlight-link-sync.yml",
+    "dispatch-spotlight-link-sync",
+    "propose-readme-only-write",
+    "approve-bot-pr-checks-only",
+    "merge-readme-only-after-required-checks",
+    "stage-publication-read-only",
+    "Local/composite `uses: ./...` execution is currently forbidden",
 )
 
 FORBIDDEN = (
@@ -75,6 +87,8 @@ FORBIDDEN = (
     "audited separately from source-controlled validators",
     "inspect repository rulesets separately from source-controlled validation",
     "redacted bypass actors are empty",
+    "closed allowlist of exactly four workflows",
+    "Reviewed write-capable exceptions are limited to CodeQL",
 )
 
 
@@ -95,9 +109,9 @@ def main() -> int:
         for phrase in FORBIDDEN:
             require(phrase not in joined, f"stale assurance statement remains: {phrase}")
         print(
-            "Assurance documentation contract passed: governance and threat model match Ledger v2 orthogonal evidence semantics, "
-            "predicate v3 issuance, historical schema immutability, cache boundaries, authority separation, live observable ruleset drift verification, "
-            "and the explicit admin-scope bypass-actor audit boundary."
+            "Assurance documentation contract passed: governance and threat model match the five-workflow authority graph, "
+            "Ledger v2 orthogonal evidence semantics, predicate v3 issuance, historical schema immutability, cache boundaries, "
+            "authority separation, live observable ruleset drift verification, and the explicit admin-scope bypass-actor audit boundary."
         )
         return 0
     except (OSError, ValueError) as exc:
