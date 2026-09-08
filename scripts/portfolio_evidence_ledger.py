@@ -22,6 +22,7 @@ KIND = "portfolio-evidence-ledger"
 OUTPUT = "portfolio-evidence-ledger.json"
 EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 SHA40_ZERO = "0" * 40
+API_ORIGIN = "https://api.github.com"
 
 API_ATTEMPTS = 3
 API_TIMEOUT_SECONDS = 12
@@ -30,9 +31,73 @@ API_MAX_RETRY_AFTER_SECONDS = 5.0
 RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
 
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ValueError(message)
+
+
 def canonical_digest(payload: dict[str, Any]) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
     return hashlib.sha256(encoded).hexdigest()
+
+
+def validate_api_url(url: str) -> str:
+    """Return an exact-origin GitHub API URL or fail before attaching credentials."""
+    parsed = urllib.parse.urlsplit(url)
+    require(parsed.scheme == "https", f"GitHub API URL must use https: {url}")
+    require(parsed.netloc == "api.github.com", f"GitHub API origin changed: {url}")
+    require(parsed.username is None and parsed.password is None, f"GitHub API URL must not contain userinfo: {url}")
+    require(parsed.port is None, f"GitHub API URL must not contain a port override: {url}")
+    require(parsed.fragment == "", f"GitHub API URL must not contain a fragment: {url}")
+    require(parsed.path.startswith("/"), f"GitHub API URL path is malformed: {url}")
+    return url
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Reject redirects so a token-bearing request cannot be replayed to another URL."""
+
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+        return None
+
+
+def open_no_redirect(request: urllib.request.Request, *, timeout: float) -> Any:
+    return urllib.request.build_opener(NoRedirect()).open(request, timeout=timeout)
+
+
+def api_request(url: str, token: str | None) -> urllib.request.Request:
+    safe_url = validate_api_url(url)
+    request = urllib.request.Request(safe_url, headers=evidence.request_headers(None))
+    if token:
+        request.add_unredirected_header("Authorization", f"Bearer {token}")
+    return request
+
+
+def transport_self_test() -> None:
+    good = "https://api.github.com/repos/portyu9/example/actions/runs?branch=main"
+    require(validate_api_url(good) == good, "GitHub API origin self-test rejected the canonical endpoint")
+    for unsafe in (
+        "http://api.github.com/repos/portyu9/example",
+        "https://api.github.com.evil.example/repos/portyu9/example",
+        "https://api.github.com:443/repos/portyu9/example",
+        "https://user@api.github.com/repos/portyu9/example",
+        "https://api.github.com/repos/portyu9/example#fragment",
+    ):
+        try:
+            validate_api_url(unsafe)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"GitHub API origin self-test accepted unsafe URL: {unsafe}")
+
+    request = api_request(good, "fixture-token")
+    auth = {name.lower(): value for name, value in request.unredirected_hdrs.items()}
+    ordinary = {name.lower(): value for name, value in request.headers.items()}
+    require(auth.get("authorization") == "Bearer fixture-token",
+            "bearer token must be attached as an unredirected-only header")
+    require("authorization" not in ordinary,
+            "bearer token must not be attached as a redirect-copyable ordinary header")
+    require(NoRedirect().redirect_request(None, None, 302, "fixture", {}, "https://example.com") is None,
+            "redirect handler must refuse every redirect request")
 
 
 def retryable_http_error(exc: urllib.error.HTTPError) -> bool:
@@ -60,13 +125,14 @@ def fetch_json(
     url: str,
     token: str | None,
     *,
-    opener: Callable[..., Any] = urllib.request.urlopen,
+    opener: Callable[..., Any] | None = None,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
-    request = urllib.request.Request(url, headers=evidence.request_headers(token))
+    request = api_request(url, token)
+    transport = opener or open_no_redirect
     for attempt in range(API_ATTEMPTS):
         try:
-            with opener(request, timeout=API_TIMEOUT_SECONDS) as response:
+            with transport(request, timeout=API_TIMEOUT_SECONDS) as response:
                 payload = json.load(response)
             if not isinstance(payload, dict):
                 raise ValueError("GitHub API response must be an object")
@@ -234,6 +300,7 @@ def summarize(systems: list[dict[str, Any]], field: str) -> dict[str, int]:
 
 
 def build_ledger(day: dt.date, token: str | None, offline: bool) -> dict[str, Any]:
+    transport_self_test()
     reviewed = registry.systems()
     if len(reviewed) != 13:
         raise ValueError("portfolio registry must contain exactly 13 reviewed systems")
