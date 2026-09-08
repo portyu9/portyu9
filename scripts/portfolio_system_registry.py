@@ -9,6 +9,8 @@ from pathlib import Path
 import sys
 from typing import Any
 
+import portfolio_evidence_helpers as evidence_helpers
+
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "scripts" / "portfolio-systems-v1.json"
 VERSION = "portfolio-systems-v1"
@@ -104,6 +106,7 @@ def validate_rotating_accent_palette(entries: list[tuple[str, str]]) -> None:
 
 
 def load_registry() -> dict[str, Any]:
+    evidence_helpers.self_test()
     require(REGISTRY_PATH.is_file(), f"portfolio registry is missing: {REGISTRY_PATH.relative_to(ROOT)}")
     data = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
     require(isinstance(data, dict), "portfolio registry root must be an object")
