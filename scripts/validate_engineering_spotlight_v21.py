@@ -7,6 +7,7 @@ import datetime as dt
 import hashlib
 import json
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,28 @@ FRESHNESS = {"SAME_DAY", "AGED", "UNAVAILABLE", "SYNTHETIC"}
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def require_well_formed_svg(content: str, label: str) -> None:
+    """Reject malformed XML before regex-based Spotlight evidence interpretation."""
+    try:
+        ET.fromstring(content)
+    except ET.ParseError as exc:
+        raise ValueError(f"{label}: malformed SVG XML: {exc}") from exc
+
+
+def xml_self_test() -> None:
+    require_well_formed_svg('<svg xmlns="http://www.w3.org/2000/svg" data-slot="1"><g/></svg>', "self-test-valid.svg")
+    for malformed in (
+        '<svg xmlns="http://www.w3.org/2000/svg" data-slot="1" data-slot="2"></svg>',
+        '<svg xmlns="http://www.w3.org/2000/svg"><g></svg>',
+    ):
+        try:
+            require_well_formed_svg(malformed, "self-test-invalid.svg")
+        except ValueError as exc:
+            require("malformed SVG XML" in str(exc), f"SVG XML self-test failed for wrong reason: {exc}")
+        else:
+            raise ValueError("SVG XML self-test accepted malformed or duplicate-attribute XML")
 
 
 def canonical_digest(payload: dict[str, Any]) -> str:
@@ -260,6 +283,7 @@ def validate_svgs(root: Path, slot_by_number: dict[int, dict[str, Any]]) -> None
         require(path.is_file(), f"Missing spotlight SVG: {name}")
         content = path.read_text(encoding="utf-8")
         require(len(content.encode()) <= 38000, f"Spotlight SVG exceeds 38 KB: {name}")
+        require_well_formed_svg(content, name)
         require(f'data-spotlight="{VERSION}"' in content, f"Spotlight provenance missing: {name}")
         require('data-layout="evidence-v2"' in content, f"Spotlight layout provenance missing: {name}")
         require('data-status-presentation="external-clickable-only"' in content, f"Spotlight visible status presentation regressed: {name}")
@@ -326,6 +350,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         json_contract.self_test()
+        xml_self_test()
         root = args.directory
         require(root.is_dir(), f"Spotlight directory is missing: {root}")
         ledger, by_repo = load_ledger(args.ledger)
@@ -333,7 +358,7 @@ def main() -> int:
         validate_svgs(root, slot_by_number)
         print(
             "Engineering spotlight v2.1 validation passed: three deterministic rotating slots are an exact Ledger v2 projection; "
-            "execution result, current-subject binding, freshness, run provenance, explicit-theme visuals, safe SVG contracts, and duplicate-member-safe JSON boundaries remain independent and fail-closed."
+            "execution result, current-subject binding, freshness, run provenance, explicit-theme visuals, well-formed XML, safe SVG contracts, and duplicate-member-safe JSON boundaries remain independent and fail-closed."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError) as exc:
