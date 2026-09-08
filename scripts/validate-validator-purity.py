@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Fail closed when validators can mutate evidence or execute unreviewed processes.
+"""Fail closed when validators or their reachable helper imports can mutate evidence.
 
 Validator modules are observers. Production validation paths may read files, parse
 contracts, perform bounded network reads, and fail, but they must not rewrite evidence
 or launch arbitrary child processes. Explicit transformer/generator scripts own mutation.
+
+The full body of every validator is inspected. In addition, every reachable local Python
+helper import is inspected for *import-time* side effects, including module/class bodies,
+decorators, and default expressions, while ordinary helper function bodies remain outside
+that import-time rule until invoked by a validator. This closes the case where importing a
+seemingly read-only helper could mutate files or launch a process before validation starts.
 
 Self-tests may create isolated temporary fixtures only inside
 ``tempfile.TemporaryDirectory()`` scopes. Process execution is never exempt merely
@@ -110,6 +116,56 @@ def list_prefix(node: ast.AST | None) -> tuple[str, ...]:
             break
         result.append(value)
     return tuple(result)
+
+
+def local_module_path(module: str) -> Path | None:
+    """Resolve a top-level import name to one real scripts/*.py module when present."""
+    root_name = module.split(".", 1)[0]
+    if not root_name or root_name == Path(SELF).stem:
+        return None
+    candidate = SCRIPTS / f"{root_name}.py"
+    if not candidate.is_file() or candidate.is_symlink():
+        return None
+    if candidate.absolute() != candidate.resolve(strict=True):
+        return None
+    return candidate
+
+
+def local_imports(source: str, *, filename: str) -> set[Path]:
+    """Return every local module named by an import anywhere in the source tree."""
+    tree = ast.parse(source, filename=filename)
+    result: set[Path] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                candidate = local_module_path(alias.name)
+                if candidate is not None:
+                    result.add(candidate)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            candidate = local_module_path(node.module)
+            if candidate is not None:
+                result.add(candidate)
+    return result
+
+
+def helper_import_closure(validators: list[Path]) -> list[Path]:
+    """Derive the transitive local helper import closure reachable from validators."""
+    validator_set = set(validators)
+    pending: list[Path] = []
+    for validator in validators:
+        pending.extend(local_imports(validator.read_text(encoding="utf-8"), filename=str(validator)))
+
+    observed: set[Path] = set()
+    while pending:
+        path = pending.pop()
+        if path in observed or path in validator_set or path.name == SELF:
+            continue
+        observed.add(path)
+        source = path.read_text(encoding="utf-8")
+        for imported in local_imports(source, filename=str(path)):
+            if imported not in observed and imported not in validator_set:
+                pending.append(imported)
+    return sorted(observed)
 
 
 class PurityVisitor(ast.NodeVisitor):
@@ -249,9 +305,46 @@ class PurityVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+class ImportTimePurityVisitor(PurityVisitor):
+    """Inspect code that can execute while a helper module is being imported."""
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        # Function bodies are dormant at import time, but decorators/defaults execute.
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        for default in (*node.args.defaults, *node.args.kw_defaults):
+            if default is not None:
+                self.visit(default)
+        for arg in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
+            if arg.annotation is not None:
+                self.visit(arg.annotation)
+        if node.args.vararg is not None and node.args.vararg.annotation is not None:
+            self.visit(node.args.vararg.annotation)
+        if node.args.kwarg is not None and node.args.kwarg.annotation is not None:
+            self.visit(node.args.kwarg.annotation)
+        if node.returns is not None:
+            self.visit(node.returns)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self.visit_FunctionDef(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        # The lambda body is dormant until the lambda is invoked.
+        for default in (*node.args.defaults, *node.args.kw_defaults):
+            if default is not None:
+                self.visit(default)
+
+
 def inspect_source(path: Path, source: str) -> list[str]:
     tree = ast.parse(source, filename=str(path))
     visitor = PurityVisitor(path)
+    visitor.visit(tree)
+    return visitor.violations
+
+
+def inspect_import_time_source(path: Path, source: str) -> list[str]:
+    tree = ast.parse(source, filename=str(path))
+    visitor = ImportTimePurityVisitor(path)
     visitor.visit(tree)
     return visitor.violations
 
@@ -305,7 +398,29 @@ def self_test() -> None:
         inspect_source(runner_fixture, runner_source.replace("check=True", "check=False")),
         "canonical validator dispatch must fail closed when check=True is removed",
     )
-    print("Validator purity firewall self-test passed: mutations isolated; process execution closed")
+
+    helper = Path("helper.py")
+    require(
+        inspect_import_time_source(helper, "from pathlib import Path\nPath('x').write_text('x')\n"),
+        "helper import-time filesystem mutation must fail",
+    )
+    require(
+        inspect_import_time_source(helper, "import subprocess\nsubprocess.run(['git', 'status'])\n"),
+        "helper import-time process execution must fail",
+    )
+    require(
+        not inspect_import_time_source(helper, "def dormant(p):\n    p.write_text('x')\n"),
+        "dormant helper function body must not be misclassified as import-time execution",
+    )
+    require(
+        inspect_import_time_source(helper, "def configured(value=Path('x').write_text('x')):\n    return value\n"),
+        "helper default expression executes at import time and must fail",
+    )
+    require(
+        inspect_import_time_source(helper, "class Config:\n    marker = Path('x').write_text('x')\n"),
+        "helper class body executes at import time and must fail",
+    )
+    print("Validator purity firewall self-test passed: validator bodies closed; helper import-time execution closed")
 
 
 def main() -> int:
@@ -313,13 +428,17 @@ def main() -> int:
         self_test()
         paths = validator_paths()
         require(paths, "no validator modules discovered")
+        helpers = helper_import_closure(paths)
         violations: list[str] = []
         for path in paths:
             violations.extend(inspect_source(path, path.read_text(encoding="utf-8")))
+        for path in helpers:
+            violations.extend(inspect_import_time_source(path, path.read_text(encoding="utf-8")))
         if violations:
             raise ValueError("validator purity violations:\n  " + "\n  ".join(violations))
         print(
-            f"Validator purity passed: {len(paths)} validator modules are production read-only, "
+            f"Validator purity passed: {len(paths)} validator modules are production read-only; "
+            f"{len(helpers)} reachable local helper modules have mutation/process-free import-time execution; "
             "self-test mutation is temp-isolated, and process execution is closed to reviewed read-only boundaries"
         )
         return 0
