@@ -50,8 +50,8 @@ def aggregate_jobs(spec: dict[str, Any], jobs: list[dict[str, Any]]) -> str:
     if exact:
         by_name: dict[str, list[dict[str, Any]]] = {name: [] for name in exact}
         for job in jobs:
-            name = str(job.get("name") or "")
-            if name in by_name:
+            name = job.get("name")
+            if isinstance(name, str) and name in by_name:
                 by_name[name].append(job)
         # Exact evidence means exact identity: zero matches is missing evidence and more
         # than one match is ambiguous evidence. Never silently choose one duplicate job.
@@ -60,7 +60,11 @@ def aggregate_jobs(spec: dict[str, Any], jobs: list[dict[str, Any]]) -> str:
         selected.extend(by_name[name][0] for name in exact)
 
     if prefixes:
-        matched = [job for job in jobs if any(str(job.get("name") or "").startswith(prefix) for prefix in prefixes)]
+        matched = [
+            job for job in jobs
+            if isinstance(job.get("name"), str)
+            and any(job["name"].startswith(prefix) for prefix in prefixes)
+        ]
         if not matched:
             return "NO SIGNAL"
         selected.extend(matched)
@@ -68,10 +72,16 @@ def aggregate_jobs(spec: dict[str, Any], jobs: list[dict[str, Any]]) -> str:
     if not exact and not prefixes:
         return "PASSING"
 
-    if any(str(job.get("status") or "") != "completed" for job in selected):
+    statuses = [job.get("status") for job in selected]
+    if any(not isinstance(status, str) or not status for status in statuses):
+        return "NO SIGNAL"
+    if any(status != "completed" for status in statuses):
         return "RUNNING"
 
-    conclusions = [conclusion_signal(str(job.get("conclusion") or "")) for job in selected]
+    raw_conclusions = [job.get("conclusion") for job in selected]
+    if any(not isinstance(conclusion, str) or not conclusion for conclusion in raw_conclusions):
+        return "NO SIGNAL"
+    conclusions = [conclusion_signal(conclusion) for conclusion in raw_conclusions]
     if any(value == "FAILING" for value in conclusions):
         return "FAILING"
     if any(value != "PASSING" for value in conclusions):
@@ -79,13 +89,19 @@ def aggregate_jobs(spec: dict[str, Any], jobs: list[dict[str, Any]]) -> str:
 
     if required_steps:
         for job in selected:
+            steps = job.get("steps")
+            if not isinstance(steps, list):
+                return "NO SIGNAL"
             by_step_name: dict[str, list[str]] = {name: [] for name in required_steps}
-            for step in (job.get("steps") or []):
+            for step in steps:
                 if not isinstance(step, dict):
                     continue
-                name = str(step.get("name") or "")
-                if name in by_step_name:
-                    by_step_name[name].append(str(step.get("conclusion") or ""))
+                name = step.get("name")
+                conclusion = step.get("conclusion")
+                if isinstance(name, str) and name in by_step_name:
+                    if not isinstance(conclusion, str) or not conclusion:
+                        return "NO SIGNAL"
+                    by_step_name[name].append(conclusion)
             # Required step identities are exact within each selected job. A duplicate
             # display name is ambiguous just like a duplicate exact job display name.
             if any(len(by_step_name[name]) != 1 for name in required_steps):
@@ -116,7 +132,7 @@ def evidence_age_days(day: dt.date, timestamp: str) -> int:
 
 
 def self_test() -> None:
-    """Regression-proof exact job and required-step ambiguity handling."""
+    """Regression-proof exact job/step ambiguity and API primitive handling."""
     exact = {"jobs": ["Lab A", "Lab B"]}
     exact_jobs = [
         {"id": 1, "name": "Lab A", "status": "completed", "conclusion": "success"},
@@ -133,6 +149,16 @@ def self_test() -> None:
         raise ValueError("duplicate exact-job contract entries must fail closed")
     if aggregate_jobs({"jobs": ["Lab A"], "job_prefixes": ["Lab "]}, exact_jobs) != "NO SIGNAL":
         raise ValueError("mixed exact/prefix job scope must fail closed")
+
+    malformed_status = [dict(exact_jobs[0], status=True), exact_jobs[1]]
+    if aggregate_jobs(exact, malformed_status) != "NO SIGNAL":
+        raise ValueError("boolean job status must fail closed as NO SIGNAL")
+    malformed_conclusion = [dict(exact_jobs[0], conclusion=True), exact_jobs[1]]
+    if aggregate_jobs(exact, malformed_conclusion) != "NO SIGNAL":
+        raise ValueError("boolean job conclusion must fail closed as NO SIGNAL")
+    running = [dict(exact_jobs[0], status="in_progress"), exact_jobs[1]]
+    if aggregate_jobs(exact, running) != "RUNNING":
+        raise ValueError("valid non-completed job status must remain RUNNING")
 
     prefix = {"job_prefixes": ["Quality / Python "], "required_steps": ["Tests", "Bandit"]}
     prefix_jobs = [
@@ -156,5 +182,11 @@ def self_test() -> None:
     ])]
     if aggregate_jobs(prefix, duplicate_step) != "NO SIGNAL":
         raise ValueError("duplicate required-step names must fail closed as NO SIGNAL")
+    malformed_step = [dict(prefix_jobs[0], steps=[
+        {"name": "Tests", "conclusion": True},
+        {"name": "Bandit", "conclusion": "success"},
+    ])]
+    if aggregate_jobs(prefix, malformed_step) != "NO SIGNAL":
+        raise ValueError("boolean required-step conclusion must fail closed as NO SIGNAL")
     if aggregate_jobs({"jobs": ["Lab A"], "required_steps": ["Tests"]}, exact_jobs) != "NO SIGNAL":
         raise ValueError("required steps without prefix scope must fail closed")
