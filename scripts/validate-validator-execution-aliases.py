@@ -283,11 +283,13 @@ class PathMutationVisitor(ast.NodeVisitor):
         if isinstance(node, ast.Attribute):
             if node.attr == "parent":
                 return self.is_path_expr(node.value)
-            if node.attr == "parents":
-                return self.is_path_expr(node.value)
             return False
         if isinstance(node, ast.Subscript):
-            if isinstance(node.value, ast.Attribute) and node.value.attr == "parents":
+            if (
+                isinstance(node.value, ast.Attribute)
+                and node.value.attr == "parents"
+                and not isinstance(node.slice, ast.Slice)
+            ):
                 return self.is_path_expr(node.value.value)
             return False
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
@@ -303,6 +305,15 @@ class PathMutationVisitor(ast.NodeVisitor):
             return any(self.is_path_iter_expr(value) for value in node.values)
         if isinstance(node, ast.IfExp):
             return self.is_path_iter_expr(node.body) or self.is_path_iter_expr(node.orelse)
+        if isinstance(node, ast.Attribute) and node.attr == "parents":
+            return self.is_path_expr(node.value)
+        if (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Attribute)
+            and node.value.attr == "parents"
+            and isinstance(node.slice, ast.Slice)
+        ):
+            return self.is_path_expr(node.value.value)
         if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
             for item in node.elts:
                 if isinstance(item, ast.Starred):
@@ -1225,6 +1236,76 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    for child in [p]:\n        child.read_text()\n",
         ),
         "read-only Path literal iteration must remain valid",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for ancestor in p.parents:\n        ancestor.replace('b')\n",
+        ),
+        "Path.parents sequence iteration must preserve concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    ancestors = p.parents\n    for ancestor in ancestors:\n        ancestor.replace('b')\n",
+        ),
+        "aliased Path.parents sequence must preserve yielded concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    p.parents[0].replace('b')\n",
+        ),
+        "Path.parents scalar index must remain a concrete Path",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    p.parents[-1].replace('b')\n",
+        ),
+        "Path.parents negative scalar index must remain a concrete Path",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for ancestor in p.parents[:2]:\n        ancestor.replace('b')\n",
+        ),
+        "Path.parents slice must preserve Path-yielding tuple identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    ancestors = p.parents[1:]\n    for ancestor in ancestors:\n        ancestor.replace('b')\n",
+        ),
+        "aliased Path.parents slice must preserve Path-yielding tuple identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    next(iter(p.parents)).replace('b')\n",
+        ),
+        "next(iter(Path.parents)) must preserve concrete-Path extraction identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for ancestor in p.parents:\n        ancestor.read_text()\n",
+        ),
+        "read-only Path.parents iteration must remain valid",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    ancestors = p.parents\n    return ancestors.replace('a', 'b')\n",
+        ),
+        "Path.parents sequence object itself must not be misclassified as a concrete Path",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    ancestors = p.parents[:2]\n    return ancestors.replace('a', 'b')\n",
+        ),
+        "Path.parents slice tuple itself must not be misclassified as a concrete Path",
     )
     require(
         not inspect_source(
