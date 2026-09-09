@@ -253,6 +253,8 @@ class PathMutationVisitor(ast.NodeVisitor):
             return True
         if isinstance(node, ast.Name):
             return node.id in self.paths
+        if isinstance(node, ast.IfExp):
+            return self.is_path_expr(node.body) or self.is_path_expr(node.orelse)
         if isinstance(node, ast.Call):
             name = resolved_name(node.func, self.modules, self.symbols)
             if name in CONCRETE_PATH_TYPES:
@@ -283,6 +285,8 @@ class PathMutationVisitor(ast.NodeVisitor):
     def is_path_iter_expr(self, node: ast.AST) -> bool:
         if isinstance(node, ast.Name):
             return node.id in self.path_iters
+        if isinstance(node, ast.IfExp):
+            return self.is_path_iter_expr(node.body) or self.is_path_iter_expr(node.orelse)
         if not isinstance(node, ast.Call):
             return False
         if (
@@ -317,6 +321,16 @@ class PathMutationVisitor(ast.NodeVisitor):
         elif isinstance(target, (ast.Tuple, ast.List)):
             for item in target.elts:
                 self.bind_iter_target(item, False)
+
+    def flow_state(self) -> tuple[set[str], set[str]]:
+        return set(self.paths), set(self.path_iters)
+
+    def restore_flow_state(self, state: tuple[set[str], set[str]]) -> None:
+        paths, path_iters = state
+        self.paths.clear()
+        self.paths.update(paths)
+        self.path_iters.clear()
+        self.path_iters.update(path_iters)
 
     def visit_Module(self, node: ast.Module) -> None:
         changed = True
@@ -385,6 +399,18 @@ class PathMutationVisitor(ast.NodeVisitor):
             is_path_iter = self.is_path_iter_expr(node.value)
         self.bind_target(node.target, is_path)
         self.bind_iter_target(node.target, is_path_iter)
+
+    def visit_If(self, node: ast.If) -> None:
+        self.visit(node.test)
+        before = self.flow_state()
+        for statement in node.body:
+            self.visit(statement)
+        body_state = self.flow_state()
+        self.restore_flow_state(before)
+        for statement in node.orelse:
+            self.visit(statement)
+        else_state = self.flow_state()
+        self.restore_flow_state((body_state[0] | else_state[0], body_state[1] | else_state[1]))
 
     def visit_For(self, node: ast.For) -> None:
         self.visit(node.iter)
@@ -689,6 +715,55 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    children = p.iterdir()\n    children = ['alpha']\n    for child in children:\n        child.replace('a', 'b')\n",
         ),
         "Path iterator alias rebound to a string collection must stop carrying concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    q = p\n    if flag:\n        q = 'alpha'\n    q.replace('b')\n",
+        ),
+        "optional conditional reassignment must not erase concrete-path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    q = p\n    if flag:\n        q = 'alpha'\n    else:\n        q = 'beta'\n    return q.replace('a', 'b')\n",
+        ),
+        "all conditional branches rebinding to strings must clear concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    children = p.iterdir()\n    if flag:\n        children = ['alpha']\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "optional conditional iterator reassignment must not erase yielded concrete-path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    children = p.iterdir()\n    if flag:\n        children = ['alpha']\n    else:\n        children = ['beta']\n    for child in children:\n        child.replace('a', 'b')\n",
+        ),
+        "all conditional branches rebinding iterator aliases to strings must clear yielded-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    q = p if flag else 'alpha'\n    q.replace('b')\n",
+        ),
+        "conditional expression with a concrete-path arm must retain concrete-path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f(flag):\n    q = 'alpha' if flag else 'beta'\n    return q.replace('a', 'b')\n",
+        ),
+        "all-string conditional expression must remain ordinary string replacement",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    children = p.iterdir() if flag else ['alpha']\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "conditional expression with a Path iterator arm must retain yielded concrete-path identity",
     )
     require(
         inspect_source(
