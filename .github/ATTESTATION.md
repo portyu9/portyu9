@@ -2,13 +2,15 @@
 
 My profile treats generated evidence as a supply-chain artifact rather than decorative output.
 
-My production profile workflow separates three authorities:
+My production profile workflow separates five relevant authorities:
 
 1. `generate-read-only` collects GitHub evidence and applies repository-defined transformation and validation contracts with `contents: read` only.
-2. `attest-validated-evidence` downloads the immutable validated artifacts into a fresh job, revalidates them, and creates a GitHub artifact attestation using a short-lived Sigstore-backed workflow identity. This job has `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission.
-3. `publish-write-only` may update only the generated artifact branch after generation and attestation have both succeeded. It revalidates the downloaded artifact set again before staging and publication.
+2. `prepare-attestation-read-only` downloads the immutable validated artifacts into a fresh read-only job, revalidates them, computes the scheduled-delta decision, builds the reviewed predicate, and uploads that predicate as a short-lived workflow artifact. It has `contents: read` only and no OIDC or attestation-write authority.
+3. `attest-write-only` owns the short-lived Sigstore-backed signing authority. It has `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission. It performs only four digest-checked `actions/download-artifact` transports and one pinned `actions/attest` invocation: no checkout, no setup-python, no repository-authored shell, no repository-authored Python, and no alternate GitHub/network client.
+4. `stage-publication-read-only` independently downloads and revalidates the evidence, constructs the exact generated-tree candidate, and seals that candidate into one Git bundle with `contents: read` only.
+5. `publish-write-only` may update only the generated artifact branch after generation, read-only attestation preparation, terminal attestation, and publication staging have all succeeded. It has no OIDC or attestation-write authority.
 
-The third-party Signal Field generator therefore never receives repository write or attestation authority, and the publication job never creates the attestation it relies on.
+The third-party Signal Field generator therefore never receives repository write or attestation authority. Repository-authored validation/predicate code never executes in the OIDC-capable terminal attestation job, and the terminal publication job never creates the attestation it relies on. Post-publication Spotlight reconciliation remains a separate Actions-write-only dispatcher.
 
 ## Predicate schema versioning
 
@@ -53,11 +55,13 @@ The canonical source for that inventory is `scripts/profile-evidence-subjects-v1
 
 ## Canonical validation boundary
 
-`scripts/profile-evidence-validation-boundary-v1.json` is the versioned `profile-evidence-validation-boundary-v1` contract for candidate evidence revalidation. It owns the exact read-only validator order, live-evidence flags, predicate validator identities, and the `attest-validated-evidence` boundary name. `profile_evidence_validation.py` loads that contract, and `validate-profile-evidence-boundary.py` executes its six ordered stages.
+`scripts/profile-evidence-validation-boundary-v1.json` is the versioned `profile-evidence-validation-boundary-v1` contract for candidate evidence revalidation. It owns the exact read-only validator order, live-evidence flags, predicate validator identities, and the frozen semantic boundary name `attest-validated-evidence`. That boundary string remains part of the immutable v3 predicate contract even though workflow job authority is now split into `prepare-attestation-read-only` and `attest-write-only`. `profile_evidence_validation.py` loads the contract, and `validate-profile-evidence-boundary.py` executes its six ordered stages.
 
-Both `attest-validated-evidence` and `publish-write-only` invoke `validate-profile-evidence-boundary.py` instead of maintaining separate copies of Signal Field, Portfolio Ledger, Spotlight, and subject-closure commands. The v3 predicate builder derives its `validation.signalField`, `validation.engineeringSpotlight`, `validation.portfolioEvidenceLedger`, and `validation.boundary` values from the same contract. The immutable v3 schema bytes remain unchanged; the attestation contract validator requires the frozen schema's validator arrays to equal the canonical boundary contract.
+Both `prepare-attestation-read-only` and `stage-publication-read-only` invoke `validate-profile-evidence-boundary.py` instead of maintaining separate copies of Signal Field, Portfolio Ledger, Spotlight, and subject-closure commands. The v3 predicate builder derives its `validation.signalField`, `validation.engineeringSpotlight`, `validation.portfolioEvidenceLedger`, and `validation.boundary` values from the same contract. The immutable v3 schema bytes remain unchanged; the attestation contract validator requires the frozen schema's validator arrays to equal the canonical boundary contract.
 
-This does not collapse authority boundaries. Attestation and publication still run as distinct jobs with different permissions and independently execute the same read-only candidate validation contract after downloading their own immutable artifact copies.
+The terminal `attest-write-only` job does not re-run repository-authored validators. It consumes the already reviewed predicate plus the same three immutable evidence artifacts through four independent digest-checked workflow-artifact downloads, then invokes only pinned `actions/attest`. This deliberately separates predicate/subject computation from the OIDC capability that can issue the attestation.
+
+This does not weaken publication validation. `stage-publication-read-only` independently downloads and revalidates the same evidence before constructing the exact generated candidate, while publication cannot begin until `attest-write-only` succeeds. The generated and attested inventories therefore remain exactly the same eleven subjects.
 
 `engineering-spotlight/spotlight-manifest.json` is internal generation/validation metadata. It remains inside the immutable workflow artifact long enough for the Spotlight validator to prove manifest/SVG provenance agreement, but it is deliberately excluded from the public `generated` branch and from the attestation glob. The published generated evidence set is therefore **exactly the same eleven subjects** named by the attestation contract.
 
