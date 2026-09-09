@@ -1,4 +1,11 @@
 <p align="center">
+<picture>
+  <source media="(max-width: 640px)" srcset="assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg">
+  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/quantum-apex-signal-crown-hero.svg" width="100%">
+</picture>
+</p>
+
+<p align="center">
 <img alt="Quality Engineering Automation Systems" src="assets/profile-badges/quality-engineering-automation-systems.png">
 </p>
 
@@ -162,4 +169,8 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub><br>
 <sub>Except where a specific file or component expressly states otherwise, no license is granted to copy, modify, redistribute, or reuse original README text and composition, branding, artwork, or custom Signal Field modifications and visual treatment.</sub><br>
 <sub>Third-party components remain subject to their respective licenses and terms.</sub>
+</p>
+
+<p align="center">
+<img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">
 </p>

@@ -46,6 +46,11 @@ FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-visual-accessibility-qe-light.svg",
     "assets/profile-systems/qualification-visual-accessibility-qe-dark.svg",
 )
+PROFILE_BANNER_SVGS = (
+    "assets/profile-banners/quantum-apex-signal-crown-hero.svg",
+    "assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg",
+    "assets/profile-banners/elite-evidence-horizon-bottom.svg",
+)
 RETIRED_FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-ai-qa-control-plane.svg",
     "assets/profile-systems/qualification-graphql-qe.svg",
@@ -96,7 +101,7 @@ def validate_references(readme: str) -> None:
             spotlight_refs.append((spotlight.group(1), spotlight.group(2)))
         else:
             references.append(cleaned)
-    allowed = set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(DESKTOP_PRINCIPLE_SVGS) | set(THESIS_HEADER_REFS) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS)
+    allowed = set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(DESKTOP_PRINCIPLE_SVGS) | set(THESIS_HEADER_REFS) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS) | set(PROFILE_BANNER_SVGS)
     unexpected=sorted(set(references)-allowed); missing=sorted(allowed-set(references))
     require(not unexpected, "README contains unapproved SVG references: " + ", ".join(unexpected))
     require(not missing, "README is missing approved SVG references: " + ", ".join(missing))
@@ -274,6 +279,8 @@ def main() -> int:
     for retired in legacy.RETIRED_ASSETS:
         require(not (ROOT/retired).exists(), f"Retired asset must remain removed: {retired}")
         require(retired not in readme, f"README references retired asset: {retired}")
+    for relative in PROFILE_BANNER_SVGS:
+        require((ROOT / relative).is_file(), f"Approved profile banner is missing: {relative}")
     require(legacy.HERO_IMAGE.is_file(), f"Profile hero image is missing: {legacy.HERO_REFERENCE}")
     hero_bytes=legacy.HERO_IMAGE.read_bytes()
     require(len(hero_bytes)==legacy.HERO_SIZE, f"Profile hero image size changed: expected {legacy.HERO_SIZE}, got {len(hero_bytes)}")
