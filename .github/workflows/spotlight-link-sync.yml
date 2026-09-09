@@ -193,13 +193,13 @@ jobs:
     name: approve-bot-pr-checks-only
     needs: [plan, propose]
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 12
     permissions:
       contents: read
       actions: write
 
     steps:
-      - name: Approve only the exact README-only automation head and canonical workflows
+      - name: Approve and wait for only the exact README-only automation checks
         env:
           GH_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ needs.propose.outputs.base_sha }}
@@ -233,46 +233,61 @@ jobs:
             --argjson profile "$PROFILE_WORKFLOW_ID" \
             '[{"name":"CodeQL","workflow_id":$codeql},{"name":"Dependency review","workflow_id":$dependency},{"name":"Profile quality","workflow_id":$profile}] | sort_by(.name)')"
 
-          for attempt in $(seq 1 30); do
+          # Keep the long-lived wait under Actions-only authority. The terminal merge job
+          # receives repository/PR write authority only after all three canonical workflows
+          # have completed successfully for the exact reviewed head.
+          for attempt in $(seq 1 60); do
             RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
             OBSERVED_IDENTITIES="$(jq -c '[.[("workflow" + "_runs")][] | {name,workflow_id}] | unique | sort_by(.name)' <<<"$RUNS")"
-            if [ "$OBSERVED_IDENTITIES" = "$EXPECTED_IDENTITIES" ]; then
+            ALL_SUCCESS=true
+            if [ "$OBSERVED_IDENTITIES" != "$EXPECTED_IDENTITIES" ]; then
+              ALL_SUCCESS=false
+            else
+              for NAME in "CodeQL" "Dependency review" "Profile quality"; do
+                case "$NAME" in
+                  "CodeQL") EXPECTED_ID="$CODEQL_WORKFLOW_ID" ;;
+                  "Dependency review") EXPECTED_ID="$DEPENDENCY_WORKFLOW_ID" ;;
+                  "Profile quality") EXPECTED_ID="$PROFILE_WORKFLOW_ID" ;;
+                  *) exit 1 ;;
+                esac
+                RUN="$(jq -c --arg name "$NAME" --argjson workflow_id "$EXPECTED_ID" '[.[("workflow" + "_runs")][] | select(.name == $name and .workflow_id == $workflow_id)] | sort_by(.created_at) | last' <<<"$RUNS")"
+                RUN_ID="$(jq -r .id <<<"$RUN")"
+                STATUS="$(jq -r .status <<<"$RUN")"
+                CONCLUSION="$(jq -r '.conclusion // ""' <<<"$RUN")"
+                test "$RUN_ID" != "null"
+                if [ "$STATUS" = "action_required" ] || [ "$STATUS" = "waiting" ] || [ "$CONCLUSION" = "action_required" ]; then
+                  gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null
+                  ALL_SUCCESS=false
+                elif [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
+                  :
+                elif [ "$STATUS" = "completed" ]; then
+                  echo "Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION)." >&2
+                  exit 1
+                else
+                  ALL_SUCCESS=false
+                fi
+              done
+            fi
+            if [ "$ALL_SUCCESS" = "true" ]; then
               break
             fi
-            test "$attempt" -lt 30
-            sleep 2
-          done
-
-          for NAME in "CodeQL" "Dependency review" "Profile quality"; do
-            case "$NAME" in
-              "CodeQL") EXPECTED_ID="$CODEQL_WORKFLOW_ID" ;;
-              "Dependency review") EXPECTED_ID="$DEPENDENCY_WORKFLOW_ID" ;;
-              "Profile quality") EXPECTED_ID="$PROFILE_WORKFLOW_ID" ;;
-              *) exit 1 ;;
-            esac
-            RUN="$(jq -c --arg name "$NAME" --argjson workflow_id "$EXPECTED_ID" '[.[("workflow" + "_runs")][] | select(.name == $name and .workflow_id == $workflow_id)] | sort_by(.created_at) | last' <<<"$RUNS")"
-            RUN_ID="$(jq -r .id <<<"$RUN")"
-            STATUS="$(jq -r .status <<<"$RUN")"
-            CONCLUSION="$(jq -r '.conclusion // ""' <<<"$RUN")"
-            test "$RUN_ID" != "null"
-            if [ "$STATUS" = "action_required" ] || [ "$STATUS" = "waiting" ] || [ "$CONCLUSION" = "action_required" ]; then
-              gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null
-            fi
+            test "$attempt" -lt 60
+            sleep 10
           done
 
   merge:
     if: needs.plan.outputs.changed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'
-    name: merge-readme-only-after-required-checks
+    name: merge-readme-only-terminal-write
     needs: [plan, propose, approve]
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 3
     permissions:
       contents: write
       pull-requests: write
       checks: read
 
     steps:
-      - name: Merge only after the exact required GitHub Actions checks succeed
+      - name: Merge exact approved head and clean up bot branch
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ needs.propose.outputs.pr_number }}
@@ -281,6 +296,9 @@ jobs:
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
         run: |
           set -euo pipefail
+
+          # Revalidate the exact PR, mutable roots, README-only closure, and required checks
+          # after the Actions-only wait. This job performs no polling or authored execution.
           PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .state <<<"$PR")" = "open"
           test "$(jq -r .base.ref <<<"$PR")" = "main"
@@ -293,22 +311,11 @@ jobs:
           test "$(jq -r '.[0].filename' <<<"$FILES")" = "README.md"
 
           REQUIRED='["analyze-actions","analyze-python","dependency-review","integration-pinned-upstream","validate-contracts"]'
-          for attempt in $(seq 1 60); do
-            CHECKS="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
-            OBSERVED="$(jq -c '[.check_runs[] | select(.app.id == 15368) | .name] | unique | sort' <<<"$CHECKS")"
-            if [ "$OBSERVED" = "$REQUIRED" ]; then
-              CONCLUSIONS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | select(.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts") | .conclusion] | unique' <<<"$CHECKS")"
-              if [ "$CONCLUSIONS" = '["success"]' ]; then
-                break
-              fi
-              if jq -e '[.check_runs[] | select(.app.id == 15368) | select(.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts") | .conclusion] | any(. == "failure" or . == "cancelled" or . == "timed_out" or . == "action_required")' <<<"$CHECKS" >/dev/null; then
-                echo "A required Spotlight-link PR check failed." >&2
-                exit 1
-              fi
-            fi
-            test "$attempt" -lt 60
-            sleep 10
-          done
+          CHECKS="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          OBSERVED="$(jq -c '[.check_runs[] | select(.app.id == 15368) | .name] | unique | sort' <<<"$CHECKS")"
+          test "$OBSERVED" = "$REQUIRED"
+          CONCLUSIONS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | select(.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts") | .conclusion] | unique' <<<"$CHECKS")"
+          test "$CONCLUSIONS" = '["success"]'
 
           # Revalidate both mutable roots immediately before the exact-head merge request.
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
