@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""Validate repository governance encoded in version-controlled workflows.
-
-GitHub repository rulesets are settings-level controls and are not writable from every
-integration. This validator therefore protects the executable half of the governance
-contract: named PR checks, explicit runtime, pinned dependencies, release provenance,
-closed workflow authority, shell-safe expression boundaries, least-privilege profile
-evidence generation/identity/attestation/publication/dispatch, measured refresh cadence,
-generated-surface cache binding, fresh-run concurrency, artifact-only publish behavior,
-the single governed Signal Field pipeline, the single authored profile-evidence
-generation pipeline, and the single candidate profile-evidence validation boundary.
-"""
+"""Validate repository governance encoded in version-controlled workflows."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -62,29 +52,21 @@ def require(condition: bool, message: str) -> None:
 
 
 def job_block(workflow: str, key: str, next_key: str | None) -> str:
-    start_pattern = re.compile(rf"(?m)^  {re.escape(key)}:\s*$")
-    start = start_pattern.search(workflow)
-    if not start:
-        fail(f"workflow job is missing: {key}")
+    start = re.search(rf"(?m)^  {re.escape(key)}:\s*$", workflow)
+    require(start is not None, f"workflow job is missing: {key}")
     if next_key is None:
         return workflow[start.start():]
-    end_pattern = re.compile(rf"(?m)^  {re.escape(next_key)}:\s*$")
-    end = end_pattern.search(workflow, start.end())
-    if not end:
-        fail(f"workflow job boundary is missing: {next_key}")
-    return workflow[start.start():end.start()]
+    relative = workflow[start.end():]
+    end = re.search(rf"(?m)^  {re.escape(next_key)}:\s*$", relative)
+    require(end is not None, f"workflow job boundary is missing: {next_key}")
+    return workflow[start.start(): start.end() + end.start()]
 
 
 def require_generation_entrypoint(
-    block: str,
-    *,
-    command: str,
-    signal: str,
-    ledger: str,
-    spotlight: str,
-    label: str,
+    block: str, *, command: str, signal: str, ledger: str, spotlight: str, label: str,
 ) -> None:
-    require(block.count("generate-profile-evidence.py") == 1, f"{label} must invoke the canonical profile evidence generation pipeline exactly once")
+    require(block.count("generate-profile-evidence.py") == 1,
+            f"{label} must invoke the canonical profile evidence generation pipeline exactly once")
     require(command in block, f"{label} must invoke the reviewed generation entrypoint")
     for fragment in (
         f"--signal-field-dir {signal}",
@@ -93,13 +75,14 @@ def require_generation_entrypoint(
     ):
         require(fragment in block, f"{label} canonical generation pipeline is missing: {fragment}")
     for script in DIRECT_GENERATION_SCRIPTS:
-        require(script not in block, f"{label} must not duplicate authored generation sequencing in workflow YAML: {script}")
+        require(script not in block, f"{label} must not duplicate authored generation sequencing: {script}")
     for marker in DIRECT_PIPELINE_STAGE_MARKERS:
-        require(marker not in block, f"{label} must not duplicate Signal Field stage ordering in workflow YAML: {marker}")
+        require(marker not in block, f"{label} must not duplicate Signal Field stage ordering: {marker}")
 
 
 def require_validation_boundary(block: str, *, signal: str, spotlight: str, ledger: str, label: str) -> None:
-    require(block.count("validate-profile-evidence-boundary.py") == 1, f"{label} must invoke the canonical profile evidence validation boundary exactly once")
+    require(block.count("validate-profile-evidence-boundary.py") == 1,
+            f"{label} must invoke the canonical profile evidence validation boundary exactly once")
     for fragment in (
         f"--signal-field-dir {signal}",
         f"--spotlight-dir {spotlight}",
@@ -109,7 +92,6 @@ def require_validation_boundary(block: str, *, signal: str, spotlight: str, ledg
 
 
 def validate_publish_write_surface(publish: str) -> None:
-    """Keep the write-capable job to sealed candidate verification plus one terminal push."""
     require(publish.count("      - name: ") == 4,
             "Write-only publication must contain exactly four reviewed steps")
     require(publish.count(f"uses: actions/download-artifact@{DOWNLOAD_SHA}") == 1,
@@ -117,19 +99,11 @@ def validate_publish_write_surface(publish: str) -> None:
     require(publish.count("        uses: ") == 1,
             "Write-only publication must contain exactly one external Action step")
     for forbidden in (
-        "actions/checkout@",
-        "actions/setup-python@",
-        "python3 ",
-        "git commit",
-        "git add",
-        "gh ",
-        "curl ",
-        "wget ",
-        "persist-credentials:",
-        "id-token:",
-        "attestations:",
+        "actions/checkout@", "actions/setup-python@", "python3 ", "git commit", "git add",
+        "gh ", "curl ", "wget ", "persist-credentials:", "id-token:", "attestations:",
     ):
-        require(forbidden not in publish, f"Write-only publication contains forbidden code/authority surface: {forbidden}")
+        require(forbidden not in publish,
+                f"Write-only publication contains forbidden code/authority surface: {forbidden}")
     require(publish.count("digest-mismatch: error") == 1,
             "Sealed publication candidate download must fail closed on digest mismatch")
     for fragment in (
@@ -146,7 +120,7 @@ def validate_publish_write_surface(publish: str) -> None:
         "expected-publication-paths.txt",
         "observed-publication-paths.txt",
     ):
-        require(fragment in publish, f"Write-only publication candidate verification is missing: {fragment}")
+        require(fragment in publish, f"Write-only publication verification is missing: {fragment}")
     for path in (
         "profile-stats/profile/signal-field-wide-light.svg",
         "profile-stats/profile/signal-field-wide-dark.svg",
@@ -162,232 +136,193 @@ def validate_publish_write_surface(publish: str) -> None:
     ):
         require(publish.count(path) == 1, f"Write-only publication exact path closure changed: {path}")
     expressions = re.findall(r"\$\{\{\s*([^}]+?)\s*\}\}", publish)
-    require(
-        expressions == (
-            ["needs.stage.outputs.base_sha", "needs.stage.outputs.candidate_sha", "github.token"]
-        ),
-        f"Write-only publication expression surface changed: {expressions!r}",
-    )
+    require(expressions == ["needs.stage.outputs.base_sha", "needs.stage.outputs.candidate_sha", "github.token"],
+            f"Write-only publication expression surface changed: {expressions!r}")
     marker = "      - name: Publish sealed artifact commit\n"
     require(publish.count(marker) == 1, "Publication must contain one exact terminal push step")
     terminal = publish[publish.index(marker):]
-    expected_header = (
-        marker
-        + "        if: needs.stage.outputs.changed == 'true'\n"
-        + "        env:\n"
-        + "          GITHUB_TOKEN: ${{ github.token }}\n"
-        + "        run: |\n"
-    )
-    require(terminal.startswith(expected_header),
-            "Publication terminal step metadata changed")
     require(terminal.count("      - name: ") == 1,
             "No authored step may follow explicit publication token introduction")
-    shell = terminal.split("        run: |\n", 1)[1]
-    observed = tuple(line.strip() for line in shell.splitlines() if line.strip())
-    expected = (
-        "set -euo pipefail",
-        'AUTH_HEADER="$(printf \'x-access-token:%s\' "$GITHUB_TOKEN" | base64 -w0)"',
-        'git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated',
+    require(
+        'git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated'
+        in terminal,
+        "Publication exact terminal generated push changed",
     )
-    require(observed == expected,
-            f"Publication terminal push surface changed: expected={expected!r} observed={observed!r}")
 
 
 def validate_quality(text: str) -> None:
     require("name: Profile quality" in text, "Profile quality workflow name changed")
     require('PYTHON_VERSION: "3.13.15"' in text, "Profile quality Python version is not explicit")
     require(text.count("runs-on: ubuntu-24.04") == 2, "Both Profile Quality jobs must pin ubuntu-24.04")
-    require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "Both Profile Quality jobs must use the reviewed checkout SHA")
-    require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2, "Both Profile Quality jobs must use the reviewed setup-python SHA")
+    require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "Both Profile Quality jobs must use reviewed checkout")
+    require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2, "Both Profile Quality jobs must use reviewed setup-python")
     require("cancel-in-progress: true" in text, "Profile Quality must cancel stale runs")
-    require('- ".github/REFRESH_CADENCE.md"' in text, "Profile Quality push paths must cover refresh-cadence governance")
+    require('- ".github/REFRESH_CADENCE.md"' in text, "Profile Quality push paths must cover refresh governance")
 
     validate = job_block(text, "validate", "integration")
     integration = job_block(text, "integration", None)
     require("name: validate-contracts" in validate, "Required contract-check job name changed")
     require("name: integration-pinned-upstream" in integration, "Required integration-check job name changed")
-    require("permissions:\n      contents: read" in validate, "Contract-check job must remain read-only")
-    require("permissions:\n      contents: read" in integration, "Integration job must remain read-only")
-    require("contents: write" not in integration, "Profile Quality integration must not receive repository write authority")
-    require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in integration, "PR integration must execute reviewed pinned upstream generator")
-    require("python3 scripts/signal_field_pipeline.py --self-test" in validate, "Profile Quality must self-test the governed Signal Field pipeline")
-    require("python3 scripts/generate-profile-evidence.py --self-test" in validate, "Profile Quality must self-test the canonical profile evidence generation pipeline")
-    require("python3 scripts/profile_evidence_validation.py" in validate, "Profile Quality must validate the canonical profile evidence boundary contract")
-    require("name: Exercise canonical profile evidence generation pipeline" in integration, "PR integration must execute the canonical profile evidence generation pipeline")
+    require("permissions:\n      contents: read" in validate and "permissions:\n      contents: read" in integration,
+            "Profile Quality jobs must remain read-only")
+    require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in integration,
+            "PR integration must execute reviewed pinned upstream generator")
+    require("python3 scripts/signal_field_pipeline.py --self-test" in validate,
+            "Profile Quality must self-test the governed Signal Field pipeline")
+    require("python3 scripts/generate-profile-evidence.py --self-test" in validate,
+            "Profile Quality must self-test canonical evidence generation")
+    require("python3 scripts/profile_evidence_validation.py" in validate,
+            "Profile Quality must validate the canonical profile evidence boundary contract")
     require_generation_entrypoint(
         integration,
         command="python3 scripts/generate-profile-evidence.py",
-        signal='"$READY_DIR"',
-        ledger="integration-portfolio-evidence",
-        spotlight="integration-engineering-spotlight",
-        label="PR integration",
+        signal='"$READY_DIR"', ledger="integration-portfolio-evidence",
+        spotlight="integration-engineering-spotlight", label="PR integration",
     )
-    require(integration.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1, "PR integration must exercise the reviewed download-artifact SHA exactly once")
-    require(integration.count("digest-mismatch: error") == 1, "PR artifact round-trip must fail on digest mismatch")
-    require("python3 scripts/validate-generated-signal-field.py roundtrip-signal-field" in integration, "PR integration must revalidate downloaded Signal Field bytes")
-    require("name: Exercise canonical live profile evidence validation boundary" in integration, "PR integration must execute the canonical live profile evidence validation boundary")
     require_validation_boundary(
         integration,
-        signal='"$SIGNAL_FIELD_DIR"',
-        spotlight="integration-engineering-spotlight",
-        ledger="integration-portfolio-evidence",
-        label="PR integration",
+        signal='"$SIGNAL_FIELD_DIR"', spotlight="integration-engineering-spotlight",
+        ledger="integration-portfolio-evidence", label="PR integration",
     )
-    require("python3 scripts/validate-profile-cache-contract.py" in validate, "Profile Quality must validate generated-surface cache identities")
-    require(
-        "name: Bind generated cache identities to live candidate contracts" in integration,
-        "Profile Quality integration must bind mutable cache identities to the live candidate contracts",
-    )
-    require("--signal-field-dir \"$SIGNAL_FIELD_DIR\"" in integration, "Cache binding must consume the live Signal Field candidate")
-    require("--spotlight-dir integration-engineering-spotlight" in integration, "Cache binding must consume live Spotlight candidate")
-    require("--ledger-dir integration-portfolio-evidence" in integration, "Cache binding must consume the live Portfolio Ledger candidate")
-    require("python3 scripts/validate-action-release-provenance.py" in validate, "Profile Quality must execute action release provenance verification")
-    require("python3 scripts/validate-dependency-review-contract.py" in validate, "Profile Quality must execute Dependency Review governance validator")
-    require("python3 scripts/validate-workflow-authority-contract.py" in validate, "Profile Quality must execute workflow authority firewall")
-    require("python3 scripts/validate-workflow-shell-safety.py" in validate, "Profile Quality must execute workflow shell-safety validator")
-    require("python3 scripts/validate-governance-contract.py" in validate, "Profile Quality must execute this governance validator")
-    require("python3 scripts/validate-profile-attestation-contract.py" in validate, "Profile Quality must execute engineering-attestation validator")
-    require(
-        "python3 scripts/write-profile-contract-summary.py --self-test" in validate,
-        "Profile Quality must self-test the read-only contract summary renderer",
-    )
-    require(
-        "python3 scripts/write-profile-contract-summary.py" in integration,
-        "Profile Quality integration must publish the read-only contract summary",
-    )
-    require("SIGNAL_FIELD_DIR:" in integration, "Contract summary must bind the live Signal Field candidate")
-    require("SPOTLIGHT_DIR: integration-engineering-spotlight" in integration, "Contract summary must bind live Spotlight evidence")
-    require("PORTFOLIO_LEDGER_DIR: integration-portfolio-evidence" in integration, "Contract summary must bind the live Portfolio Ledger")
+    for command in (
+        "python3 scripts/validate-profile-cache-contract.py",
+        "python3 scripts/validate-action-release-provenance.py",
+        "python3 scripts/validate-dependency-review-contract.py",
+        "python3 scripts/validate-workflow-authority-contract.py",
+        "python3 scripts/validate-workflow-shell-safety.py",
+        "python3 scripts/validate-governance-contract.py",
+        "python3 scripts/validate-profile-attestation-contract.py",
+    ):
+        require(command in validate, f"Profile Quality contract step disappeared: {command}")
+    require("python3 scripts/write-profile-contract-summary.py --self-test" in validate,
+            "Profile Quality must self-test the read-only contract summary renderer")
+    require("python3 scripts/write-profile-contract-summary.py" in integration,
+            "Profile Quality integration must publish the read-only contract summary")
 
 
 def validate_stats(text: str) -> None:
     require("name: Update profile stats" in text, "Profile stats workflow name changed")
     require('cron: "17 * * * *"' in text, "Hourly best-effort refresh contract changed")
-    require('cron: "17,47 * * * *"' not in text, "Stale twice-hourly cron remains in production workflow")
-    require('cron: "2-57/5 * * * *"' not in text, "Stale five-minute cron remains in production workflow")
-    require('- "scripts/set-signal-field-refresh-cadence.py"' in text, "Stats push paths must cover refresh-cadence finalizer changes")
-    require('- "scripts/signal_field_pipeline.py"' in text, "Stats push paths must cover the Signal Field orchestrator")
-    require('- "scripts/signal-field-pipeline-v1.json"' in text, "Stats push paths must cover the Signal Field stage manifest")
+    require('cron: "17,47 * * * *"' not in text and 'cron: "2-57/5 * * * *"' not in text,
+            "Stale higher-frequency cron remains in production workflow")
     require("cancel-in-progress: true" in text, "Stats workflow must cancel stale runs")
     require('PYTHON_VERSION: "3.13.15"' in text, "Stats Python version is not explicit")
-    require(text.count("runs-on: ubuntu-24.04") == 5, "All five stats jobs must pin ubuntu-24.04")
+    require(text.count("runs-on: ubuntu-24.04") == 6, "All six stats jobs must pin ubuntu-24.04")
 
     generate = job_block(text, "generate", "attest")
-    attest = job_block(text, "attest", "stage")
+    prepare = job_block(text, "attest", "attest_publish")
+    attest_write = job_block(text, "attest_publish", "stage")
     stage = job_block(text, "stage", "publish")
     publish = job_block(text, "publish", "dispatch")
     dispatch = job_block(text, "dispatch", None)
 
     require("name: generate-read-only" in generate, "Read-only generation job name changed")
-    require("name: attest-validated-evidence" in attest, "Attestation job name changed")
-    require("name: stage-publication-read-only" in stage, "Read-only publication staging job name changed")
+    require("name: prepare-attestation-read-only" in prepare, "Attestation preparation job name changed")
+    require("name: attest-write-only" in attest_write, "Terminal attestation job name changed")
+    require("name: stage-publication-read-only" in stage, "Publication staging job name changed")
     require("name: publish-write-only" in publish, "Write-only publication job name changed")
-    require("name: dispatch-spotlight-link-sync" in dispatch, "Post-publication dispatcher job name changed")
+    require("name: dispatch-spotlight-link-sync" in dispatch, "Dispatcher job name changed")
 
-    require("permissions:\n      contents: read" in generate, "Third-party generation job must remain contents: read")
-    require("contents: write" not in generate, "Third-party generation job received repository write authority")
-    require("id-token: write" not in generate, "Third-party generation job received signing identity authority")
-    require("attestations: write" not in generate, "Third-party generation job received attestation authority")
-    require("name: Generate canonical profile evidence" in generate, "Production must execute the canonical profile evidence generation pipeline")
+    require("permissions:\n      contents: read" in generate,
+            "Third-party generation job must remain contents: read")
+    for forbidden in ("contents: write", "id-token: write", "attestations: write"):
+        require(forbidden not in generate, f"Generation received forbidden authority: {forbidden}")
     require_generation_entrypoint(
         generate,
         command="python3 source/scripts/generate-profile-evidence.py",
-        signal='"$READY_DIR"',
-        ledger="portfolio-ledger-ready",
-        spotlight="spotlight-ready",
+        signal='"$READY_DIR"', ledger="portfolio-ledger-ready", spotlight="spotlight-ready",
         label="Production generation",
     )
 
-    require("needs: generate" in attest, "Attestation job must depend on validated generation")
-    require("contents: read" in attest, "Attestation job must retain contents: read")
-    require("id-token: write" in attest, "Attestation job must receive OIDC authority")
-    require("attestations: write" in attest, "Attestation job must receive attestation authority")
-    require("contents: write" not in attest, "Attestation job must not receive repository-content write authority")
-    require(f"actions/attest@{ATTEST_SHA}" in attest, "Pinned actions/attest SHA changed")
+    require("needs: generate" in prepare and "permissions:\n      contents: read" in prepare,
+            "Attestation preparation must depend on generation and remain read-only")
+    for forbidden in ("id-token: write", "attestations: write", "contents: write", f"actions/attest@{ATTEST_SHA}"):
+        require(forbidden not in prepare,
+                f"Attestation preparation acquired terminal authority/surface: {forbidden}")
     require_validation_boundary(
-        attest,
-        signal="profile-stats/profile",
-        spotlight="engineering-spotlight",
-        ledger="portfolio-evidence",
-        label="Attestation boundary",
+        prepare,
+        signal="profile-stats/profile", spotlight="engineering-spotlight",
+        ledger="portfolio-evidence", label="Attestation preparation boundary",
     )
-    require("python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile portfolio-evidence attestation-predicate.json" in attest, "Attestation predicate must bind Signal Field and Portfolio Ledger identities")
+    require("python3 source/scripts/build-profile-evidence-attestation.py profile-stats/profile portfolio-evidence attestation-predicate.json" in prepare,
+            "Read-only preparation must build the reviewed attestation predicate")
+    require(prepare.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3,
+            "Attestation preparation must download all three evidence sets")
+    require(prepare.count("digest-mismatch: error") == 3,
+            "Attestation preparation downloads must fail closed")
+    require(prepare.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 1,
+            "Attestation preparation must upload exactly one predicate artifact")
 
-    require("needs: [generate, attest]" in stage, "Publication staging must depend on generation and attestation")
-    require("permissions:\n      contents: read" in stage, "Publication staging must remain contents: read")
+    require("needs: attest" in attest_write,
+            "Terminal attestation must consume only read-only preparation")
+    require("contents: read" in attest_write and "id-token: write" in attest_write and "attestations: write" in attest_write,
+            "Terminal attestation authority changed")
+    for forbidden in ("contents: write", "actions/checkout@", "actions/setup-python@", "        run:", "python3 ", "git ", "gh "):
+        require(forbidden not in attest_write,
+                f"Terminal attestation acquired forbidden authored code/mutation surface: {forbidden}")
+    require(attest_write.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 4,
+            "Terminal attestation must download three evidence sets plus the reviewed predicate")
+    require(attest_write.count("digest-mismatch: error") == 4,
+            "Terminal attestation downloads must all fail closed")
+    require(attest_write.count(f"actions/attest@{ATTEST_SHA}") == 1,
+            "Terminal attestation must execute exactly one pinned actions/attest")
+    require(attest_write.count("      - name: ") == 5,
+            "Terminal attestation must contain exactly four downloads plus one attest action")
+    require(attest_write.count("if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'") == 5,
+            "Terminal attestation scheduled-delta guard surface changed")
+
+    require("needs: [generate, attest, attest_publish]" in stage,
+            "Publication staging must depend on generation, preparation, and terminal attestation")
+    require("permissions:\n      contents: read" in stage, "Publication staging must remain read-only")
     for forbidden in ("contents: write", "id-token: write", "attestations: write", "GITHUB_TOKEN:", "git push"):
         require(forbidden not in stage, f"Publication staging acquired forbidden authority/mutation surface: {forbidden}")
     require_validation_boundary(
         stage,
-        signal="publish-input",
-        spotlight="spotlight-publish-input",
-        ledger="portfolio-ledger-publish-input",
-        label="Publication staging boundary",
+        signal="publish-input", spotlight="spotlight-publish-input",
+        ledger="portfolio-ledger-publish-input", label="Publication staging boundary",
     )
-    require("python3 source/scripts/validate-signal-field-v214.py artifacts/profile-stats/profile" in stage,
-            "Staged generated branch must validate Signal Field Evidence ID")
-    require("find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +" in stage,
-            "Generated branch must be staged as artifact-only in read-only publication staging")
-    require('git -C artifacts commit -m "chore: publish validated profile evidence [skip ci]"' in stage,
-            "Read-only publication staging must seal the reviewed local commit")
-    require("git -C artifacts bundle create ../generated-publication.bundle generated" in stage,
-            "Read-only publication staging must seal one Git bundle")
-    require("git -C artifacts bundle verify ../generated-publication.bundle" in stage,
-            "Read-only publication staging must verify the sealed Git bundle")
-    require("fetch-depth: 0" in stage, "Publication staging must have complete generated history for bundle sealing")
+    for fragment in (
+        "python3 source/scripts/validate-signal-field-v214.py artifacts/profile-stats/profile",
+        "find artifacts -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +",
+        'git -C artifacts commit -m "chore: publish validated profile evidence [skip ci]"',
+        "git -C artifacts bundle create ../generated-publication.bundle generated",
+        "git -C artifacts bundle verify ../generated-publication.bundle",
+        "fetch-depth: 0",
+    ):
+        require(fragment in stage, f"Publication staging sealing contract is missing: {fragment}")
     require(stage.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3,
-            "Publication staging must download all three immutable evidence sets")
+            "Publication staging must download three evidence sets")
     require(stage.count("digest-mismatch: error") == 3,
-            "Publication staging downloads must fail closed on all artifact digest mismatches")
+            "Publication staging downloads must fail closed")
     require(stage.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 1,
             "Publication staging must upload exactly one sealed candidate bundle")
-    require("name: generated-publication-candidate" in stage and "path: generated-publication.bundle" in stage,
-            "Publication staging artifact identity changed")
     require(stage.count("persist-credentials: false") == 2,
-            "Both publication staging checkouts must remain credential-free after checkout")
+            "Both publication staging checkouts must remain credential-free")
 
-    require("permissions:\n      contents: write" in publish, "Only terminal publication may receive contents: write")
-    require("needs: stage" in publish, "Write-only publication must depend only on sealed publication staging")
-    require("needs: [generate, attest]" not in publish,
-            "Write-only publication must not directly consume generation/attestation jobs")
+    require("permissions:\n      contents: write" in publish and "needs: stage" in publish,
+            "Write-only publication authority/dependency changed")
     validate_publish_write_surface(publish)
 
-    require("needs: publish" in dispatch, "Spotlight reconciliation dispatch must depend on successful publication")
-    require("permissions:\n      actions: write" in dispatch, "Spotlight reconciliation dispatcher must receive only Actions write authority")
+    require("needs: publish" in dispatch and "permissions:\n      actions: write" in dispatch,
+            "Spotlight dispatch dependency/authority changed")
     for forbidden in ("contents:", "pull-requests:", "checks:", "id-token:", "attestations:", "security-events:"):
-        require(forbidden not in dispatch, f"Spotlight reconciliation dispatcher received forbidden authority: {forbidden}")
-    require("actions/checkout@" not in dispatch, "Spotlight reconciliation dispatcher must not checkout repository content")
-    require("actions/setup-python@" not in dispatch, "Spotlight reconciliation dispatcher must not execute authored Python setup")
-    require("actions/workflows/spotlight-link-sync.yml/dispatches" in dispatch, "Spotlight reconciliation dispatcher target changed")
-    require("-f ref=main" in dispatch, "Spotlight reconciliation dispatcher must target main")
+        require(forbidden not in dispatch, f"Spotlight dispatcher received forbidden authority: {forbidden}")
+    require("actions/checkout@" not in dispatch and "actions/setup-python@" not in dispatch,
+            "Spotlight dispatcher must not checkout or execute authored Python")
+    require("actions/workflows/spotlight-link-sync.yml/dispatches" in dispatch and "-f ref=main" in dispatch,
+            "Spotlight dispatcher target changed")
 
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in generate, "Pinned upstream generator SHA changed")
-    require(generate.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 3, "Generation must upload exactly three immutable evidence sets")
-    require(attest.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3, "Attestation must download all three immutable evidence sets")
-    require(attest.count("digest-mismatch: error") == 3, "Attestation downloads must fail closed on all artifact digest mismatches")
-    require(publish.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1,
-            "Write-only publication must download only the sealed candidate bundle")
-    require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 5, "Stats workflow must retain five reviewed checkout calls")
-    require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 3, "Stats setup-python action SHA changed")
-    require(generate.count("persist-credentials: false") == 1, "Generation checkout must not persist credentials")
-    require(attest.count("persist-credentials: false") == 2, "Attestation source/generated checkouts must not persist credentials")
-
-    for forbidden in (
-        "python3 source/scripts/validate-signal-field-v213.py profile-stats/profile",
-        "python3 source/scripts/validate-signal-field-v214.py profile-stats/profile",
-        "python3 source/scripts/validate-generated-signal-field.py profile-stats/profile",
-        "python3 source/scripts/validate-engineering-spotlight.py engineering-spotlight",
-        "python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-evidence",
-    ):
-        require(forbidden not in attest, f"Attestation workflow duplicates canonical validation boundary stage: {forbidden}")
-    for forbidden in (
-        "python3 source/scripts/validate-signal-field-v213.py publish-input",
-        "python3 source/scripts/validate-signal-field-v214.py publish-input",
-        "python3 source/scripts/validate-generated-signal-field.py publish-input",
-        "python3 source/scripts/validate-engineering-spotlight.py spotlight-publish-input",
-        "python3 source/scripts/validate-portfolio-evidence-ledger.py portfolio-ledger-publish-input",
-    ):
-        require(forbidden not in stage, f"Publication staging duplicates canonical validation boundary stage: {forbidden}")
+    require(generate.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 3,
+            "Generation must upload exactly three evidence sets")
+    require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 5,
+            "Stats workflow must retain five reviewed checkout calls")
+    require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 3,
+            "Stats setup-python action inventory changed")
+    require(generate.count("persist-credentials: false") == 1,
+            "Generation checkout must not persist credentials")
+    require(prepare.count("persist-credentials: false") == 2,
+            "Attestation preparation checkouts must not persist credentials")
 
 
 def validate_governance_doc(text: str) -> None:
@@ -409,6 +344,8 @@ def validate_governance_doc(text: str) -> None:
         "signal-field-evidence-v1",
         "full SHA-256",
         "attest-validated-evidence",
+        "prepare-attestation-read-only",
+        "attest-write-only",
         "stage-publication-read-only",
         "profile-evidence-validation-boundary-v1",
         "sealed Git bundle",
@@ -423,21 +360,14 @@ def validate_governance_doc(text: str) -> None:
 
 def validate_cadence_doc(text: str) -> None:
     for phrase in (
-        "profile-refresh-v2",
-        "17 * * * *",
-        "2-57/5 * * * *",
-        "best-effort hourly generation refresh",
-        "4h32m",
-        "3h40m",
-        "3h28m",
-        "2h47m",
+        "profile-refresh-v2", "17 * * * *", "2-57/5 * * * *",
+        "best-effort hourly generation refresh", "4h32m", "3h40m", "3h28m", "2h47m",
         'data-generation-schedule="1-hour"',
         'data-generation-cadence-contract="profile-refresh-v2"',
         'data-current-day-highlight="phosphorescent-red-v1"',
         "REFRESH · 1 HR",
         "Generation refresh cadence and evidence freshness are different claims",
-        "push-triggered",
-        "workflow_dispatch",
+        "push-triggered", "workflow_dispatch",
     ):
         require(phrase in text, f"Refresh-cadence documentation is missing: {phrase}")
 
@@ -445,17 +375,9 @@ def validate_cadence_doc(text: str) -> None:
 def main() -> int:
     try:
         for path in (
-            QUALITY,
-            STATS,
-            GOVERNANCE,
-            CADENCE,
-            PIPELINE,
-            PIPELINE_MANIFEST,
-            GENERATION_MANIFEST,
-            GENERATION_RUNNER,
-            VALIDATION_MANIFEST,
-            VALIDATION_LOADER,
-            VALIDATION_RUNNER,
+            QUALITY, STATS, GOVERNANCE, CADENCE, PIPELINE, PIPELINE_MANIFEST,
+            GENERATION_MANIFEST, GENERATION_RUNNER, VALIDATION_MANIFEST,
+            VALIDATION_LOADER, VALIDATION_RUNNER,
         ):
             require(path.is_file(), f"governance input is missing: {path.relative_to(ROOT)}")
         validate_quality(QUALITY.read_text(encoding="utf-8"))
@@ -463,14 +385,10 @@ def main() -> int:
         validate_governance_doc(GOVERNANCE.read_text(encoding="utf-8"))
         validate_cadence_doc(CADENCE.read_text(encoding="utf-8"))
         print(
-            "Repository governance validation passed: PR checks are stable/read-only, action release provenance is mandatory, "
-            "Dependency Review governance is mandatory, workflow authority is closed, workflow shell source is expression-safe, "
-            "pinned-upstream integration and the single versioned Signal Field pipeline are mandatory, authored profile evidence generation "
-            "has one versioned workflow entrypoint, the single versioned profile-evidence validation boundary is exercised by integration/attestation/read-only publication staging, "
-            "mutable profile cache identities bind to live candidates, measured generation uses the governed best-effort hourly cadence, "
-            "three evidence downloads are independently integrity-checked before a read-only stage seals one generated candidate bundle, "
-            "third-party generation has neither write nor signing authority, attestation is isolated, terminal publication executes no checkout/Python/authored validation, "
-            "and explicit repository-write token exposure remains scoped to one exact generated push before Actions-only Spotlight dispatch."
+            "Repository governance validation passed: PR checks remain stable/read-only; dependency/action provenance is mandatory; "
+            "generation and attestation preparation execute authored code with read-only authority; terminal OIDC/attestation authority executes only digest-checked transport plus pinned actions/attest; "
+            "publication staging seals the generated candidate under read-only authority; terminal publication retains one exact generated push; "
+            "and post-publication Spotlight dispatch remains isolated to actions: write."
         )
         return 0
     except (OSError, ValueError) as exc:

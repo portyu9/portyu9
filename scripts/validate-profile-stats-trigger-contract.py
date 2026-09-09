@@ -119,14 +119,20 @@ def main() -> int:
         require("  push:\n    branches:\n      - main\n" in workflow, "push-triggered production refresh must remain restricted to main")
         require("pull_request:" not in workflow, "production refresh workflow must never run from pull_request events")
         generate = job_block(workflow, "generate", "attest")
-        attest = job_block(workflow, "attest", "stage")
+        attest = job_block(workflow, "attest", "attest_publish")
+        attest_publish = job_block(workflow, "attest_publish", "stage")
         stage = job_block(workflow, "stage", "publish")
         publish = job_block(workflow, "publish", "dispatch")
         require(exact_job_if(generate, "production generation") == MAIN_REF_EXPR,
                 "production generation job-level if must be the exact refs/heads/main guard")
-        require("needs: generate" in attest, "attestation must remain downstream of main-guarded generation")
-        require("needs: [generate, attest]" in stage, "publication staging must remain downstream of main-guarded generation and attestation")
-        require("needs: stage" in publish, "terminal publication must remain downstream of read-only publication staging")
+        require("needs: generate" in attest,
+                "read-only attestation preparation must remain downstream of main-guarded generation")
+        require("needs: attest" in attest_publish,
+                "terminal attestation authority must consume only reviewed attestation preparation")
+        require("needs: [generate, attest, attest_publish]" in stage,
+                "publication staging must remain downstream of generation, attestation preparation, and terminal attestation")
+        require("needs: stage" in publish,
+                "terminal publication must remain downstream of read-only publication staging")
 
         require("scripts/**" in cadence, "refresh cadence rationale must document the trusted scripts/** trigger surface")
         require(
@@ -136,7 +142,7 @@ def main() -> int:
         print(
             "Profile stats trigger contract passed: scripts/** closes the trusted production source surface; "
             "pushes are main-only, manual dispatch remains available but generation is gated by one exact job-level refs/heads/main guard, "
-            "and attestation/read-only publication staging/terminal publication stay downstream of that source-ref guard."
+            "and read-only attestation preparation, terminal attestation, publication staging, and terminal publication remain downstream of that source-ref guard."
         )
         return 0
     except (OSError, ValueError, StopIteration, IndexError) as exc:
