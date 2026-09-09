@@ -57,6 +57,7 @@ PATH_ITERATOR_METHODS = {"glob", "iterdir", "rglob"}
 PATH_ITERATOR_MATERIALIZERS = {"frozenset", "iter", "list", "reversed", "set", "sorted", "tuple"}
 PATH_CLASS_RETURNING_METHODS = {"cwd", "home", "from_uri"}
 PATH_ALWAYS_MUTATION_METHODS = {"lchmod", "replace"}
+PATH_NEXT_CALLABLES = {"next", "builtins.next"}
 WRITE_MODE_MARKERS = frozenset("wax+")
 MUTATING_OS_OPEN_FLAGS = {
     "O_APPEND", "O_CREAT", "O_RDWR", "O_TMPFILE", "O_TRUNC", "O_WRONLY",
@@ -259,6 +260,11 @@ class PathMutationVisitor(ast.NodeVisitor):
             name = resolved_name(node.func, self.modules, self.symbols)
             if name in CONCRETE_PATH_TYPES:
                 return True
+            if name in PATH_NEXT_CALLABLES and 1 <= len(node.args) <= 2:
+                if self.is_path_iter_expr(node.args[0]):
+                    return True
+                if len(node.args) == 2 and self.is_path_expr(node.args[1]):
+                    return True
             if isinstance(node.func, ast.Attribute):
                 if (
                     node.func.attr in PATH_CLASS_RETURNING_METHODS
@@ -1020,6 +1026,62 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    return [child.read_text() for child in p.iterdir()]\n",
         ),
         "read-only Path comprehension must remain valid",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    next(p.iterdir()).replace('b')\n",
+        ),
+        "next() of a Path iterator must preserve concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    child = next(iter(p.iterdir()))\n    child.replace('b')\n",
+        ),
+        "next() of a wrapped Path iterator must bind a concrete Path",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    child = next((item.resolve() for item in p.iterdir()))\n    child.replace('b')\n",
+        ),
+        "next() of a Path-yielding generator expression must preserve concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "import builtins\nfrom pathlib import Path\ndef f(p: Path):\n    builtins.next(p.iterdir()).replace('b')\n",
+        ),
+        "builtins.next() of a Path iterator must preserve concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from builtins import next as advance\nfrom pathlib import Path\ndef f(p: Path):\n    advance(p.iterdir()).replace('b')\n",
+        ),
+        "imported builtins.next alias must preserve Path extraction identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    next(iter(()), p).replace('b')\n",
+        ),
+        "Path-valued next() default must conservatively preserve concrete-path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    return next(iter(['alpha'])).replace('a', 'b')\n",
+        ),
+        "string next() extraction must remain ordinary string replacement",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return next(p.iterdir()).read_text()\n",
+        ),
+        "read-only next() Path extraction must remain valid",
     )
     require(
         inspect_source(
