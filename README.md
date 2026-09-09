@@ -6,7 +6,10 @@
 </p>
 
 <p align="center">
-<img alt="Quality Engineering Automation Systems" src="assets/profile-badges/quality-engineering-automation-systems.png">
+<picture>
+  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated.svg">
+  <img alt="Quality Engineering Automation Systems" src="assets/profile-badges/quality-engineering-automation-systems.png">
+</picture>
 </p>
 
 <p align="center">
