@@ -124,6 +124,9 @@ jobs:
       - name: Validate action release provenance
         run: python3 scripts/validate-action-release-provenance.py
 
+      - name: Validate pinned upstream retry contract
+        run: python3 scripts/validate-profile-upstream-retry.py
+
       - name: Validate Dependency Review governance contract
         run: python3 scripts/validate-dependency-review-contract.py
 
@@ -184,12 +187,46 @@ jobs:
         run: python3 scripts/verify-python-runtime.py
 
       - name: Generate actual pinned upstream Signal Field
-        id: stats
+        id: stats_primary
+        continue-on-error: true
         uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
         with:
           username: portyu9
           token: ${{ github.token }}
           profile: signal-field
+
+      - name: Back off before one exact pinned upstream retry
+        if: steps.stats_primary.outcome == 'failure'
+        run: sleep 60
+
+      - name: Retry exact pinned upstream Signal Field once
+        id: stats_retry
+        if: steps.stats_primary.outcome == 'failure'
+        uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
+        with:
+          username: portyu9
+          token: ${{ github.token }}
+          profile: signal-field
+
+      - name: Select successful exact pinned upstream output
+        id: stats
+        env:
+          PRIMARY_OUTCOME: ${{ steps.stats_primary.outcome }}
+          PRIMARY_READY_DIR: ${{ steps.stats_primary.outputs.ready-dir }}
+          RETRY_OUTCOME: ${{ steps.stats_retry.outcome }}
+          RETRY_READY_DIR: ${{ steps.stats_retry.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          if [ "$PRIMARY_OUTCOME" = "success" ]; then
+            test -n "$PRIMARY_READY_DIR"
+            READY_DIR="$PRIMARY_READY_DIR"
+          else
+            test "$PRIMARY_OUTCOME" = "failure"
+            test "$RETRY_OUTCOME" = "success"
+            test -n "$RETRY_READY_DIR"
+            READY_DIR="$RETRY_READY_DIR"
+          fi
+          echo "ready-dir=$READY_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Exercise canonical profile evidence generation pipeline
         env:
