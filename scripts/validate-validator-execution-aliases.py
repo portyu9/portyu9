@@ -343,14 +343,14 @@ class PathMutationVisitor(ast.NodeVisitor):
             path_iters.update(state_iters)
         return paths, path_iters
 
-    def visit_loop_block(self, statements: list[ast.stmt]) -> tuple[set[str], set[str]]:
+    def visit_flow_block(self, statements: list[ast.stmt]) -> tuple[set[str], set[str]]:
         observed = self.flow_state()
         for statement in statements:
             self.visit(statement)
             observed = self.merge_flow_states(observed, self.flow_state())
         return observed
 
-    def dedupe_loop_violations(self, start: int) -> None:
+    def dedupe_violations(self, start: int) -> None:
         seen: set[str] = set()
         unique: list[str] = []
         for violation in self.violations[start:]:
@@ -449,14 +449,14 @@ class PathMutationVisitor(ast.NodeVisitor):
             self.restore_flow_state(head)
             self.bind_target(node.target, yields_path)
             self.bind_iter_target(node.target, False)
-            observed = self.merge_flow_states(self.flow_state(), self.visit_loop_block(node.body))
+            observed = self.merge_flow_states(self.flow_state(), self.visit_flow_block(node.body))
             next_head = self.merge_flow_states(head, before, observed)
             if next_head == head:
                 break
             head = next_head
         self.restore_flow_state(head)
-        self.restore_flow_state(self.visit_loop_block(node.orelse))
-        self.dedupe_loop_violations(violation_start)
+        self.restore_flow_state(self.visit_flow_block(node.orelse))
+        self.dedupe_violations(violation_start)
 
     def visit_While(self, node: ast.While) -> None:
         before = self.flow_state()
@@ -465,14 +465,65 @@ class PathMutationVisitor(ast.NodeVisitor):
         while True:
             self.restore_flow_state(head)
             self.visit(node.test)
-            observed = self.merge_flow_states(self.flow_state(), self.visit_loop_block(node.body))
+            observed = self.merge_flow_states(self.flow_state(), self.visit_flow_block(node.body))
             next_head = self.merge_flow_states(head, before, observed)
             if next_head == head:
                 break
             head = next_head
         self.restore_flow_state(head)
-        self.restore_flow_state(self.visit_loop_block(node.orelse))
-        self.dedupe_loop_violations(violation_start)
+        self.restore_flow_state(self.visit_flow_block(node.orelse))
+        self.dedupe_violations(violation_start)
+
+    def visit_try_like(self, node: ast.Try | ast.TryStar) -> None:
+        violation_start = len(self.violations)
+        before = self.flow_state()
+
+        self.restore_flow_state(before)
+        body_observed = self.visit_flow_block(node.body)
+        body_end = self.flow_state()
+
+        self.restore_flow_state(body_end)
+        else_observed = self.visit_flow_block(node.orelse)
+        normal_end = self.flow_state()
+
+        handler_ends: list[tuple[set[str], set[str]]] = []
+        handler_observed: list[tuple[set[str], set[str]]] = []
+        for handler in node.handlers:
+            self.restore_flow_state(body_observed)
+            if handler.type is not None:
+                self.visit(handler.type)
+            if handler.name is not None:
+                self.paths.discard(handler.name)
+                self.path_iters.discard(handler.name)
+            handler_observed.append(self.visit_flow_block(handler.body))
+            if handler.name is not None:
+                self.paths.discard(handler.name)
+                self.path_iters.discard(handler.name)
+            handler_ends.append(self.flow_state())
+
+        continuation = self.merge_flow_states(normal_end, *handler_ends)
+        if node.finalbody:
+            final_entry = self.merge_flow_states(
+                body_observed,
+                else_observed,
+                continuation,
+                *handler_observed,
+            )
+            self.restore_flow_state(final_entry)
+            self.visit_flow_block(node.finalbody)
+
+            self.restore_flow_state(continuation)
+            self.visit_flow_block(node.finalbody)
+            continuation = self.flow_state()
+
+        self.restore_flow_state(continuation)
+        self.dedupe_violations(violation_start)
+
+    def visit_Try(self, node: ast.Try) -> None:
+        self.visit_try_like(node)
+
+    def visit_TryStar(self, node: ast.TryStar) -> None:
+        self.visit_try_like(node)
 
     def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Attribute) and node.func.attr in PATH_ALWAYS_MUTATION_METHODS:
@@ -866,6 +917,62 @@ def self_test() -> None:
             "def f(flag):\n    q = 'alpha'\n    while flag:\n        q = 'beta'\n    return q.replace('a', 'b')\n",
         ),
         "all-string loop state must remain ordinary string replacement",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    try:\n        int('not-an-int')\n        q = 'alpha'\n    except ValueError:\n        pass\n    q.replace('b')\n",
+        ),
+        "exception before try-body reassignment must preserve concrete-path handler state",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    try:\n        int('not-an-int')\n        q = 'alpha'\n    except ValueError:\n        q.replace('b')\n",
+        ),
+        "try handler must observe concrete-path state possible at the exception point",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = p.iterdir()\n    try:\n        int('not-an-int')\n        children = ['alpha']\n    except ValueError:\n        pass\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "exception before try-body reassignment must preserve Path-iterator handler state",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = 'alpha'\n    try:\n        q = p\n    except Exception:\n        q = 'beta'\n    else:\n        q.replace('b')\n",
+        ),
+        "try else block must start from normal body completion rather than handler state",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    try:\n        int('not-an-int')\n        q = 'alpha'\n    finally:\n        q.replace('b')\n",
+        ),
+        "finally block must observe concrete-path state from exceptional try-body exits",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    try:\n        q = 'alpha'\n    except Exception:\n        q = 'beta'\n    finally:\n        q = 'gamma'\n    return q.replace('a', 'b')\n",
+        ),
+        "unconditional finally string reassignment must clear concrete-path continuation state",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    q = 'alpha'\n    try:\n        q = 'beta'\n    except Exception:\n        q = 'gamma'\n    return q.replace('a', 'b')\n",
+        ),
+        "all-string try state must remain ordinary string replacement",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    try:\n        raise ExceptionGroup('x', [ValueError()])\n        q = 'alpha'\n    except* ValueError:\n        q.replace('b')\n",
+        ),
+        "except-star handler must conservatively preserve concrete-path exception-entry state",
     )
     require(
         inspect_source(
