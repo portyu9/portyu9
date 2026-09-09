@@ -359,6 +359,63 @@ class PathMutationVisitor(ast.NodeVisitor):
                 unique.append(violation)
         self.violations[start:] = unique
 
+    @staticmethod
+    def match_pattern_names(pattern: ast.pattern) -> set[str]:
+        names: set[str] = set()
+        for node in ast.walk(pattern):
+            if isinstance(node, ast.MatchAs) and node.name is not None:
+                names.add(node.name)
+            elif isinstance(node, ast.MatchStar) and node.name is not None:
+                names.add(node.name)
+            elif isinstance(node, ast.MatchMapping) and node.rest is not None:
+                names.add(node.rest)
+        return names
+
+    @staticmethod
+    def match_pattern_subject_names(pattern: ast.pattern, whole_subject: bool = True) -> set[str]:
+        names: set[str] = set()
+        if isinstance(pattern, ast.MatchAs):
+            if whole_subject and pattern.name is not None:
+                names.add(pattern.name)
+            if pattern.pattern is not None:
+                names.update(PathMutationVisitor.match_pattern_subject_names(pattern.pattern, whole_subject))
+        elif isinstance(pattern, ast.MatchOr):
+            for item in pattern.patterns:
+                names.update(PathMutationVisitor.match_pattern_subject_names(item, whole_subject))
+        elif isinstance(pattern, ast.MatchSequence):
+            for item in pattern.patterns:
+                names.update(PathMutationVisitor.match_pattern_subject_names(item, False))
+        elif isinstance(pattern, ast.MatchMapping):
+            for item in pattern.patterns:
+                names.update(PathMutationVisitor.match_pattern_subject_names(item, False))
+        elif isinstance(pattern, ast.MatchClass):
+            for item in (*pattern.patterns, *pattern.kwd_patterns):
+                names.update(PathMutationVisitor.match_pattern_subject_names(item, False))
+        return names
+
+    @staticmethod
+    def match_pattern_is_irrefutable(pattern: ast.pattern) -> bool:
+        if isinstance(pattern, ast.MatchAs):
+            return pattern.pattern is None or PathMutationVisitor.match_pattern_is_irrefutable(pattern.pattern)
+        if isinstance(pattern, ast.MatchOr):
+            return any(PathMutationVisitor.match_pattern_is_irrefutable(item) for item in pattern.patterns)
+        return False
+
+    def bind_match_pattern(
+        self,
+        pattern: ast.pattern,
+        subject_is_path: bool,
+        subject_is_path_iter: bool,
+    ) -> None:
+        bound = self.match_pattern_names(pattern)
+        whole_subject = self.match_pattern_subject_names(pattern)
+        self.paths.difference_update(bound)
+        self.path_iters.difference_update(bound)
+        if subject_is_path:
+            self.paths.update(whole_subject)
+        if subject_is_path_iter:
+            self.path_iters.update(whole_subject)
+
     def visit_Module(self, node: ast.Module) -> None:
         changed = True
         while changed:
@@ -524,6 +581,37 @@ class PathMutationVisitor(ast.NodeVisitor):
 
     def visit_TryStar(self, node: ast.TryStar) -> None:
         self.visit_try_like(node)
+
+    def visit_Match(self, node: ast.Match) -> None:
+        self.visit(node.subject)
+        subject_is_path = self.is_path_expr(node.subject)
+        subject_is_path_iter = self.is_path_iter_expr(node.subject)
+        fallthrough: tuple[set[str], set[str]] | None = self.flow_state()
+        completed: list[tuple[set[str], set[str]]] = []
+
+        for case in node.cases:
+            if fallthrough is None:
+                break
+            entry = fallthrough
+            self.restore_flow_state(entry)
+            self.bind_match_pattern(case.pattern, subject_is_path, subject_is_path_iter)
+            if case.guard is not None:
+                self.visit(case.guard)
+            guarded = self.flow_state()
+            self.visit_flow_block(case.body)
+            completed.append(self.flow_state())
+
+            irrefutable = self.match_pattern_is_irrefutable(case.pattern)
+            if case.guard is not None:
+                fallthrough = guarded if irrefutable else self.merge_flow_states(entry, guarded)
+            elif irrefutable:
+                fallthrough = None
+            else:
+                fallthrough = entry
+
+        if fallthrough is not None:
+            completed.append(fallthrough)
+        self.restore_flow_state(self.merge_flow_states(*completed))
 
     def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Attribute) and node.func.attr in PATH_ALWAYS_MUTATION_METHODS:
@@ -973,6 +1061,62 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    q = p\n    try:\n        raise ExceptionGroup('x', [ValueError()])\n        q = 'alpha'\n    except* ValueError:\n        q.replace('b')\n",
         ),
         "except-star handler must conservatively preserve concrete-path exception-entry state",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, value):\n    q = p\n    match value:\n        case 0:\n            q = 'alpha'\n        case _:\n            pass\n    q.replace('b')\n",
+        ),
+        "mutually exclusive match cases must preserve a concrete-path alternative",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, value):\n    q = p\n    match value:\n        case 0:\n            q = 'alpha'\n        case _:\n            q = 'beta'\n    return q.replace('a', 'b')\n",
+        ),
+        "exhaustive all-string match cases must clear concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, value):\n    q = p\n    match value:\n        case 0:\n            q = 'alpha'\n    q.replace('b')\n",
+        ),
+        "non-exhaustive match must retain unmatched incoming concrete-path state",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    match 'alpha':\n        case q:\n            return q.replace('a', 'b')\n",
+        ),
+        "whole-subject string capture must clear a prior concrete-path binding",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    match p:\n        case q:\n            q.replace('b')\n",
+        ),
+        "whole-subject capture must preserve concrete-path subject identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    match ['alpha']:\n        case [q]:\n            return q.replace('a', 'b')\n",
+        ),
+        "nested pattern capture must not inherit whole-subject concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = 'alpha'\n    match p:\n        case q if False:\n            pass\n        case _:\n            q.replace('b')\n",
+        ),
+        "guard-false match fallthrough must preserve successful Path capture binding",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = p.iterdir()\n    match children:\n        case items:\n            for child in items:\n                child.replace('b')\n",
+        ),
+        "whole-subject match capture must preserve Path-iterator identity",
     )
     require(
         inspect_source(
