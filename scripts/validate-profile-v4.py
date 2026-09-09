@@ -286,7 +286,7 @@ def main() -> int:
     hero_bytes=legacy.HERO_IMAGE.read_bytes()
     require(len(hero_bytes)==legacy.HERO_SIZE, f"Profile hero image size changed: expected {legacy.HERO_SIZE}, got {len(hero_bytes)}")
     require(hashlib.sha256(hero_bytes).hexdigest()==legacy.HERO_SHA256, "Profile hero image bytes differ from the reviewed original")
-    require(readme.find(legacy.HERO_REFERENCE)<readme.find("Ƴunior Ƥortal"), "Hero image must appear before the profile name")
+    require(readme.count(legacy.HERO_REFERENCE)==1, "Profile hero fallback reference must appear exactly once")
     require(len(re.findall(r'<h2\s+align="center">\s*✦ Engineering Thesis\s*</h2>', readme, re.I))==1, "Engineering Thesis must remain one centered H2")
     require(readme.count('<h2 align="center">◉ Activity Metrics</h2>')==1, "Activity Metrics must remain one centered H2")
     require(readme.count('<h2 align="center">◇ Selected Engineering Systems</h2>')==1, "Selected Engineering Systems must remain one centered H2")

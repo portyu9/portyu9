@@ -6,13 +6,6 @@
 </p>
 
 <p align="center">
-<picture>
-  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg">
-  <img alt="Quality Engineering Automation Systems" src="assets/profile-badges/quality-engineering-automation-systems.png">
-</picture>
-</p>
-
-<p align="center">
 <picture><img alt="Ƴunior Ƥortal" height="68" src="assets/profile-badges/nameplate-yunior-portal-v2.svg?text=black-v2"></picture>
 </p>
 
@@ -39,6 +32,13 @@
 </p>
 
 <p align="center"><big>Designed for Reproducibility · Attribution · Evidence-backed Decisions</big></p>
+
+<p align="center">
+<picture>
+  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg">
+  <img alt="Quality Engineering Automation Systems" src="assets/profile-badges/quality-engineering-automation-systems.png">
+</picture>
+</p>
 
 ---
 
