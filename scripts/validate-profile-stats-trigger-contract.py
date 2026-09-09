@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/profile-stats.yml"
 CADENCE = ROOT / ".github/REFRESH_CADENCE.md"
 MAIN_REF_EXPR = "github.ref == 'refs/heads/main'"
+ATTEST_DELTA_EXPR = "github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'"
 JOB_IF_LINE = re.compile(r"(?m)^    if:\s*(?P<expr>.+?)\s*$")
 REVIEW_SENTINELS = (
     "scripts/set-signal-field-refresh-cadence.py",
@@ -81,6 +82,14 @@ def self_test() -> None:
     require(exact_job_if(canonical, "fixture generation") == MAIN_REF_EXPR,
             "job-level if parser rejected canonical main guard")
 
+    canonical_attestation = (
+        "  attest_publish:\n"
+        f"    if: {ATTEST_DELTA_EXPR}\n"
+        "    needs: attest\n"
+    )
+    require(exact_job_if(canonical_attestation, "fixture terminal attestation") == ATTEST_DELTA_EXPR,
+            "job-level if parser rejected canonical attestation delta guard")
+
     commented = (
         "  generate:\n"
         f"    # if: {MAIN_REF_EXPR}\n"
@@ -129,8 +138,12 @@ def main() -> int:
                 "read-only attestation preparation must remain downstream of main-guarded generation")
         require("needs: attest" in attest_publish,
                 "terminal attestation authority must consume only reviewed attestation preparation")
+        require(exact_job_if(attest_publish, "terminal attestation") == ATTEST_DELTA_EXPR,
+                "terminal attestation job-level if must be the exact scheduled-delta guard")
         require("needs: [generate, attest, attest_publish]" in stage,
                 "publication staging must remain downstream of generation, attestation preparation, and terminal attestation")
+        require(exact_job_if(stage, "publication staging") == ATTEST_DELTA_EXPR,
+                "publication staging job-level if must remain aligned with the exact attestation scheduled-delta guard")
         require("needs: stage" in publish,
                 "terminal publication must remain downstream of read-only publication staging")
 
@@ -141,8 +154,8 @@ def main() -> int:
         )
         print(
             "Profile stats trigger contract passed: scripts/** closes the trusted production source surface; "
-            "pushes are main-only, manual dispatch remains available but generation is gated by one exact job-level refs/heads/main guard, "
-            "and read-only attestation preparation, terminal attestation, publication staging, and terminal publication remain downstream of that source-ref guard."
+            "pushes are main-only, generation is gated by the exact refs/heads/main guard, terminal OIDC/attestation authority is gated by the exact scheduled-delta job condition, "
+            "and publication staging remains aligned with that same delta boundary before terminal publication."
         )
         return 0
     except (OSError, ValueError, StopIteration, IndexError) as exc:

@@ -306,8 +306,10 @@ def validate_workflow() -> None:
             "terminal attestation predicate path changed")
 
     guard = "if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'"
-    require(attest_write.count(guard) == 5,
-            "all terminal attestation steps must share the exact scheduled-delta guard")
+    require(attest_write.startswith(f"  attest_publish:\n    {guard}\n"),
+            "terminal attestation job must use the exact scheduled-delta guard at the job boundary")
+    require(attest_write.count(guard) == 6,
+            "terminal attestation job and all five terminal steps must share the exact scheduled-delta guard")
     require("python3 source/scripts/stage-profile-evidence.py candidate-profile-evidence" in prepare,
             "scheduled delta comparison must stage canonical subject set")
     require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root published" in prepare,
