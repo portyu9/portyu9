@@ -233,6 +233,8 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.global_path_iters: set[str] = set()
         self.scopes: list[set[str]] = []
         self.iter_scopes: list[set[str]] = []
+        self.comprehension_namedexpr_targets: list[tuple[set[str], set[str]]] = []
+        self.comprehension_scope_states: list[tuple[set[str], set[str]]] = []
         self.violations: list[str] = []
 
     @property
@@ -254,6 +256,10 @@ class PathMutationVisitor(ast.NodeVisitor):
             return True
         if isinstance(node, ast.Name):
             return node.id in self.paths
+        if isinstance(node, ast.NamedExpr):
+            return self.is_path_expr(node.value)
+        if isinstance(node, ast.BoolOp):
+            return any(self.is_path_expr(value) for value in node.values)
         if isinstance(node, ast.IfExp):
             return self.is_path_expr(node.body) or self.is_path_expr(node.orelse)
         if isinstance(node, ast.Call):
@@ -291,6 +297,10 @@ class PathMutationVisitor(ast.NodeVisitor):
     def is_path_iter_expr(self, node: ast.AST) -> bool:
         if isinstance(node, ast.Name):
             return node.id in self.path_iters
+        if isinstance(node, ast.NamedExpr):
+            return self.is_path_iter_expr(node.value)
+        if isinstance(node, ast.BoolOp):
+            return any(self.is_path_iter_expr(value) for value in node.values)
         if isinstance(node, ast.IfExp):
             return self.is_path_iter_expr(node.body) or self.is_path_iter_expr(node.orelse)
         if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
@@ -524,6 +534,10 @@ class PathMutationVisitor(ast.NodeVisitor):
             if annotation_mentions_path(parameter.annotation, self.modules, self.symbols):
                 local.add(parameter.arg)
 
+        saved_namedexpr_targets = self.comprehension_namedexpr_targets
+        saved_comprehension_scopes = self.comprehension_scope_states
+        self.comprehension_namedexpr_targets = []
+        self.comprehension_scope_states = []
         self.scopes.append(local)
         self.iter_scopes.append(local_iters)
         try:
@@ -532,6 +546,8 @@ class PathMutationVisitor(ast.NodeVisitor):
         finally:
             self.iter_scopes.pop()
             self.scopes.pop()
+            self.comprehension_namedexpr_targets = saved_namedexpr_targets
+            self.comprehension_scope_states = saved_comprehension_scopes
 
         self.paths.discard(node.name)
         self.path_iters.discard(node.name)
@@ -552,6 +568,10 @@ class PathMutationVisitor(ast.NodeVisitor):
         local_iters.difference_update(parameter_names)
         local.update(default_paths)
         local_iters.update(default_iters)
+        saved_namedexpr_targets = self.comprehension_namedexpr_targets
+        saved_comprehension_scopes = self.comprehension_scope_states
+        self.comprehension_namedexpr_targets = []
+        self.comprehension_scope_states = []
         self.scopes.append(local)
         self.iter_scopes.append(local_iters)
         try:
@@ -559,6 +579,8 @@ class PathMutationVisitor(ast.NodeVisitor):
         finally:
             self.iter_scopes.pop()
             self.scopes.pop()
+            self.comprehension_namedexpr_targets = saved_namedexpr_targets
+            self.comprehension_scope_states = saved_comprehension_scopes
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self.visit(node.value)
@@ -578,6 +600,70 @@ class PathMutationVisitor(ast.NodeVisitor):
             is_path_iter = self.is_path_iter_expr(node.value)
         self.bind_target(node.target, is_path)
         self.bind_iter_target(node.target, is_path_iter)
+
+    def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
+        self.visit(node.value)
+        is_path = self.is_path_expr(node.value)
+        is_path_iter = self.is_path_iter_expr(node.value)
+        if self.comprehension_namedexpr_targets and isinstance(node.target, ast.Name):
+            name = node.target.id
+            target_paths, target_iters = self.comprehension_namedexpr_targets[-1]
+            if is_path:
+                target_paths.add(name)
+            if is_path_iter:
+                target_iters.add(name)
+            for paths, path_iters in self.comprehension_scope_states[:-1]:
+                if is_path:
+                    paths.add(name)
+                if is_path_iter:
+                    path_iters.add(name)
+        self.bind_target(node.target, is_path)
+        self.bind_iter_target(node.target, is_path_iter)
+
+    def visit_BoolOp(self, node: ast.BoolOp) -> None:
+        if not node.values:
+            return
+        self.visit(node.values[0])
+        state = self.flow_state()
+        for value in node.values[1:]:
+            entry = state
+            self.restore_flow_state(entry)
+            self.visit(value)
+            evaluated = self.flow_state()
+            state = self.merge_flow_states(entry, evaluated)
+        self.restore_flow_state(state)
+
+    def visit_IfExp(self, node: ast.IfExp) -> None:
+        self.visit(node.test)
+        before = self.flow_state()
+        self.restore_flow_state(before)
+        self.visit(node.body)
+        body_state = self.flow_state()
+        self.restore_flow_state(before)
+        self.visit(node.orelse)
+        else_state = self.flow_state()
+        self.restore_flow_state(self.merge_flow_states(body_state, else_state))
+
+    def visit_Compare(self, node: ast.Compare) -> None:
+        self.visit(node.left)
+        if not node.comparators:
+            return
+        self.visit(node.comparators[0])
+        state = self.flow_state()
+        for comparator in node.comparators[1:]:
+            entry = state
+            self.restore_flow_state(entry)
+            self.visit(comparator)
+            evaluated = self.flow_state()
+            state = self.merge_flow_states(entry, evaluated)
+        self.restore_flow_state(state)
+
+    def visit_Assert(self, node: ast.Assert) -> None:
+        self.visit(node.test)
+        continuation = self.flow_state()
+        if node.msg is not None:
+            self.visit(node.msg)
+            self.restore_flow_state(continuation)
 
     def visit_If(self, node: ast.If) -> None:
         self.visit(node.test)
@@ -713,8 +799,17 @@ class PathMutationVisitor(ast.NodeVisitor):
         node: ast.ListComp | ast.SetComp | ast.GeneratorExp | ast.DictComp,
         yielded_nodes: tuple[ast.AST, ...],
     ) -> None:
-        self.scopes.append(set(self.paths))
-        self.iter_scopes.append(set(self.path_iters))
+        namedexpr_target = (
+            self.comprehension_namedexpr_targets[-1]
+            if self.comprehension_namedexpr_targets
+            else (self.paths, self.path_iters)
+        )
+        local_paths = set(self.paths)
+        local_iters = set(self.path_iters)
+        self.scopes.append(local_paths)
+        self.iter_scopes.append(local_iters)
+        self.comprehension_namedexpr_targets.append(namedexpr_target)
+        self.comprehension_scope_states.append((local_paths, local_iters))
         try:
             for generator in node.generators:
                 self.visit(generator.iter)
@@ -726,6 +821,8 @@ class PathMutationVisitor(ast.NodeVisitor):
             for yielded in yielded_nodes:
                 self.visit(yielded)
         finally:
+            self.comprehension_scope_states.pop()
+            self.comprehension_namedexpr_targets.pop()
             self.iter_scopes.pop()
             self.scopes.pop()
 
@@ -1231,6 +1328,111 @@ def self_test() -> None:
             "from pathlib import Path\ndef outer(p: Path):\n    def inner():\n        return p.read_text()\n    return inner\n",
         ),
         "read-only nested concrete-Path closure must remain valid",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    (q := p).replace('b')\n",
+        ),
+        "Path-valued assignment expression result must retain concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    (q := p)\n    q.replace('b')\n",
+        ),
+        "assignment expression must bind a concrete Path for subsequent use",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    (children := p.iterdir())\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "assignment expression must bind a Path-yielding iterator for subsequent use",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    (q := 'alpha')\n    return q.replace('a', 'b')\n",
+        ),
+        "definitely executed string assignment expression must clear concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    q = p\n    flag and (q := 'alpha')\n    q.replace('b')\n",
+        ),
+        "short-circuit optional string walrus must not erase an incoming concrete-Path alternative",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    q = 'alpha'\n    flag or (q := p)\n    q.replace('b')\n",
+        ),
+        "short-circuit optional Path walrus must introduce a concrete-Path alternative",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    q = p\n    p if flag else (q := 'alpha')\n    q.replace('b')\n",
+        ),
+        "conditional-expression walrus arm must merge receiver state with the unselected arm",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, first):\n    q = p\n    first < 0 < (q := 'alpha')\n    q.replace('b')\n",
+        ),
+        "later chained-comparison walrus must preserve the short-circuit incoming Path alternative",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = 'alpha'\n    [(q := child) for child in p.iterdir()]\n    q.replace('b')\n",
+        ),
+        "comprehension walrus must bind into the containing callable scope",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    [(q := 'alpha') for _ in []]\n    q.replace('b')\n",
+        ),
+        "possibly empty comprehension walrus must not erase an incoming concrete-Path alternative",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = 'alpha'\n    [q.replace('b') for child in p.iterdir() if (q := child)]\n",
+        ),
+        "comprehension expressions after a Path walrus must see the assigned concrete Path",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = 'alpha'\n    [[None for _ in [0] if (q := p)] for _ in [0]]\n    q.replace('b')\n",
+        ),
+        "nested comprehension walrus must propagate a possible Path to the containing callable",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    fn = lambda: (q := 'alpha')\n    q.replace('b')\n",
+        ),
+        "lambda-local walrus must not mutate the enclosing receiver state",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    q = 'alpha'\n    (q := 'beta')\n    return q.replace('a', 'b')\n",
+        ),
+        "ordinary string assignment expression must remain ordinary string replacement",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    q = 'alpha'\n    [(q := name) for name in ['beta']]\n    return q.replace('a', 'b')\n",
+        ),
+        "ordinary string comprehension walrus must remain ordinary string replacement",
     )
     require(
         inspect_source(
