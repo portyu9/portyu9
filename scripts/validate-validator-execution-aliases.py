@@ -50,8 +50,8 @@ CONCRETE_PATH_TYPES = {
     "WindowsPath", "pathlib.WindowsPath",
 }
 PATH_RETURNING_METHODS = {
-    "absolute", "expanduser", "joinpath", "relative_to", "resolve",
-    "with_name", "with_stem", "with_suffix",
+    "absolute", "expanduser", "joinpath", "readlink", "relative_to", "resolve",
+    "with_name", "with_segments", "with_stem", "with_suffix",
 }
 PATH_CLASS_RETURNING_METHODS = {"cwd", "home", "from_uri"}
 PATH_ALWAYS_MUTATION_METHODS = {"lchmod", "replace"}
@@ -548,6 +548,34 @@ def self_test() -> None:
             "from pathlib import Path\ndef f():\n    Path.from_uri('file:///tmp/a').replace('b')\n",
         ),
         "Path.from_uri concrete factory fixture must fail",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return p.readlink()\n",
+        ),
+        "read-only Path.readlink fixture must pass",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    p.readlink().replace('b')\n",
+        ),
+        "Path.readlink derived-path replace fixture must fail",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return p.with_segments('a', 'b')\n",
+        ),
+        "read-only Path.with_segments fixture must pass",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    p.with_segments('a').replace('b')\n",
+        ),
+        "Path.with_segments derived-path replace fixture must fail",
     )
     require(
         inspect_source(
