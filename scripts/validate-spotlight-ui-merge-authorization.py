@@ -109,7 +109,7 @@ def validate(sync: str, stats: str, policy: str) -> None:
             "Spotlight terminal merge dependency changed")
     require("timeout-minutes: 3" in merge,
             "Spotlight terminal merge authority window changed")
-    require("permissions:\n      contents: write\n      pull-requests: write\n      checks: read" in merge,
+    require("permissions:\n      contents: write\n      pull-requests: read\n      checks: read" in merge,
             "Spotlight terminal merge authority changed")
     for forbidden in ("for attempt in ", "sleep 10", "actions/checkout@", "actions/setup-python@", "python3 "):
         require(forbidden not in merge,
@@ -180,6 +180,14 @@ def self_test(sync: str, stats: str, policy: str) -> None:
     expect_failure(
         terminal_polling, stats, policy, "polling/authored execution surface",
     )
+    terminal_pr_write = sync.replace(
+        "      pull-requests: read\n      checks: read\n",
+        "      pull-requests: write\n      checks: read\n",
+        1,
+    )
+    expect_failure(
+        terminal_pr_write, stats, policy, "terminal merge authority changed",
+    )
 
     dispatch_comment_shadow = stats.replace(
         '          gh api --method POST \\\n            "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \\\n            -f ref=main',
@@ -222,7 +230,7 @@ def main() -> int:
         self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: the fixed deterministic README-only synchronization class "
-            "keeps canonical workflow waiting under Actions-only approval authority and starts terminal repository/PR write authority "
+            "keeps canonical workflow waiting under Actions-only approval authority and starts terminal repository-content write plus pull-request read authority "
             "only for a fresh exact-check snapshot, exact-head merge, and cleanup; post-publication reconciliation remains one exact fixed-workflow, ref-only dispatch."
         )
         return 0
