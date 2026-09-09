@@ -4,13 +4,12 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:681e1e72e2a45a5a83643408a09bb2786469c3172b27cb84c187e6fe4ec74e6e",
-  "evidence_id": "PL2-681E1E72E2A45A5A",
+  "evidence_digest": "sha256:be0cbbfb0546ac34628f92bbae33eff8c80f86c53dc07ae62542712c560309f6",
+  "evidence_id": "PL2-BE0CBBFB0546AC34",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 1,
-    "SAME_DAY": 24
+    "SAME_DAY": 25
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -33,27 +32,27 @@
           "workflow": "ci.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/ai-qa-automation",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-08T17:57:52Z",
-          "freshness": "AGED",
-          "head_sha": "977fe93ca7f227b5e3aa1b1ab9963b53f3e0f555",
+          "completed_at_utc": "2026-09-09T11:51:22Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "fb63c8a14fc65bfd0526ddbdec2b90bb8e8f0bd6",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 34259792977,
-          "run_number": 1501,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34259792977",
+          "run_id": 34347346209,
+          "run_number": 1504,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34347346209",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "977fe93ca7f227b5e3aa1b1ab9963b53f3e0f555",
+      "subject_revision": "fb63c8a14fc65bfd0526ddbdec2b90bb8e8f0bd6",
       "title": "AI QA CONTROL PLANE"
     },
     {
