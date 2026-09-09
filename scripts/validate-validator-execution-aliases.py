@@ -468,25 +468,97 @@ class PathMutationVisitor(ast.NodeVisitor):
         for statement in node.body:
             self.visit(statement)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        local = set(self.global_paths)
-        local_iters = set(self.global_path_iters)
-        for arg in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
-            if annotation_mentions_path(arg.annotation, self.modules, self.symbols):
-                local.add(arg.arg)
-        if node.args.vararg and annotation_mentions_path(node.args.vararg.annotation, self.modules, self.symbols):
-            local.add(node.args.vararg.arg)
-        if node.args.kwarg and annotation_mentions_path(node.args.kwarg.annotation, self.modules, self.symbols):
-            local.add(node.args.kwarg.arg)
+    @staticmethod
+    def callable_parameters(arguments: ast.arguments) -> tuple[ast.arg, ...]:
+        parameters = [*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs]
+        if arguments.vararg is not None:
+            parameters.append(arguments.vararg)
+        if arguments.kwarg is not None:
+            parameters.append(arguments.kwarg)
+        return tuple(parameters)
+
+    def callable_default_state(self, arguments: ast.arguments) -> tuple[set[str], set[str]]:
+        default_paths: set[str] = set()
+        default_iters: set[str] = set()
+        positional = [*arguments.posonlyargs, *arguments.args]
+        positional_defaults = positional[len(positional) - len(arguments.defaults):]
+        for parameter, default in zip(positional_defaults, arguments.defaults):
+            self.visit(default)
+            if self.is_path_expr(default):
+                default_paths.add(parameter.arg)
+            if self.is_path_iter_expr(default):
+                default_iters.add(parameter.arg)
+        for parameter, default in zip(arguments.kwonlyargs, arguments.kw_defaults):
+            if default is None:
+                continue
+            self.visit(default)
+            if self.is_path_expr(default):
+                default_paths.add(parameter.arg)
+            if self.is_path_iter_expr(default):
+                default_iters.add(parameter.arg)
+        return default_paths, default_iters
+
+    def visit_function_definition(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        default_paths, default_iters = self.callable_default_state(node.args)
+        parameters = self.callable_parameters(node.args)
+        for parameter in parameters:
+            if parameter.annotation is not None:
+                self.visit(parameter.annotation)
+        if node.returns is not None:
+            self.visit(node.returns)
+        for type_param in getattr(node, "type_params", ()):
+            self.visit(type_param)
+
+        local = set(self.paths)
+        local_iters = set(self.path_iters)
+        parameter_names = {parameter.arg for parameter in parameters}
+        local.difference_update(parameter_names)
+        local_iters.difference_update(parameter_names)
+        local.discard(node.name)
+        local_iters.discard(node.name)
+        local.update(default_paths)
+        local_iters.update(default_iters)
+        for parameter in parameters:
+            if annotation_mentions_path(parameter.annotation, self.modules, self.symbols):
+                local.add(parameter.arg)
+
         self.scopes.append(local)
         self.iter_scopes.append(local_iters)
-        for statement in node.body:
-            self.visit(statement)
-        self.iter_scopes.pop()
-        self.scopes.pop()
+        try:
+            for statement in node.body:
+                self.visit(statement)
+        finally:
+            self.iter_scopes.pop()
+            self.scopes.pop()
+
+        self.paths.discard(node.name)
+        self.path_iters.discard(node.name)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self.visit_function_definition(node)
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        self.visit_FunctionDef(node)
+        self.visit_function_definition(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        default_paths, default_iters = self.callable_default_state(node.args)
+        parameters = self.callable_parameters(node.args)
+        local = set(self.paths)
+        local_iters = set(self.path_iters)
+        parameter_names = {parameter.arg for parameter in parameters}
+        local.difference_update(parameter_names)
+        local_iters.difference_update(parameter_names)
+        local.update(default_paths)
+        local_iters.update(default_iters)
+        self.scopes.append(local)
+        self.iter_scopes.append(local_iters)
+        try:
+            self.visit(node.body)
+        finally:
+            self.iter_scopes.pop()
+            self.scopes.pop()
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self.visit(node.value)
@@ -1082,6 +1154,83 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    return next(p.iterdir()).read_text()\n",
         ),
         "read-only next() Path extraction must remain valid",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    def inner():\n        p.replace('b')\n    return inner\n",
+        ),
+        "nested function closure must inherit concrete-Path receiver state",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    children = p.iterdir()\n    def inner():\n        for child in children:\n            child.replace('b')\n    return inner\n",
+        ),
+        "nested function closure must inherit Path-iterator receiver state",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    def inner(p):\n        return p.replace('a', 'b')\n    return inner\n",
+        ),
+        "nested unannotated parameter must shadow an enclosing concrete-Path name",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    def inner(q=p):\n        q.replace('b')\n    return inner\n",
+        ),
+        "Path-valued nested function default must preserve possible concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    def inner(children=p.iterdir()):\n        for child in children:\n            child.replace('b')\n    return inner\n",
+        ),
+        "Path-iterator nested function default must preserve yielded concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    def inner(q=p.replace('b')):\n        return q\n    return inner\n",
+        ),
+        "nested function defaults must be inspected in the enclosing receiver scope",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    @p.replace('b')\n    def inner():\n        return None\n    return inner\n",
+        ),
+        "nested function decorators must be inspected in the enclosing receiver scope",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    return lambda: p.replace('b')\n",
+        ),
+        "lambda closure must inherit concrete-Path receiver state",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    return lambda p: p.replace('a', 'b')\n",
+        ),
+        "lambda parameter must shadow an enclosing concrete-Path name",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    return lambda q=p: q.replace('b')\n",
+        ),
+        "Path-valued lambda default must preserve possible concrete-Path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    def inner():\n        return p.read_text()\n    return inner\n",
+        ),
+        "read-only nested concrete-Path closure must remain valid",
     )
     require(
         inspect_source(
