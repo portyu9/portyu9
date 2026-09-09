@@ -1,81 +1,44 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="150" viewBox="0 0 1280 150" fill="none" role="img" aria-labelledby="title desc">
   <title id="title">Animated evidence horizon</title>
-  <desc id="desc">A converging animated evidence horizon using aqua, magenta, and green.</desc>
+  <desc id="desc">A seamless converging evidence horizon using aqua, magenta, and green.</desc>
   <defs>
     <linearGradient id="tri" x1="0" y1="0" x2="1280" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#00E6FF"/>
-      <stop offset="0.25" stop-color="#00FBCC"/>
-      <stop offset="0.5" stop-color="#E328FC"/>
-      <stop offset="0.75" stop-color="#00FBCC"/>
-      <stop offset="1" stop-color="#00E6FF"/>
+      <stop offset="0" stop-color="#00E6FF"/><stop offset=".25" stop-color="#00FBCC"/><stop offset=".5" stop-color="#E328FC"/><stop offset=".75" stop-color="#00FBCC"/><stop offset="1" stop-color="#00E6FF"/>
     </linearGradient>
     <radialGradient id="pulse" cx="0" cy="0" r="1" gradientTransform="translate(640 87) rotate(90) scale(48 210)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#00FBCC" stop-opacity="0.28"/>
-      <stop offset="0.4" stop-color="#E328FC" stop-opacity="0.16"/>
-      <stop offset="1" stop-color="#00E6FF" stop-opacity="0"/>
+      <stop stop-color="#00FBCC" stop-opacity=".24"/><stop offset=".42" stop-color="#E328FC" stop-opacity=".14"/><stop offset="1" stop-color="#00E6FF" stop-opacity="0"/>
     </radialGradient>
-    <filter id="glow" x="-30%" y="-60%" width="160%" height="220%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="4" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <filter id="glow" x="-30%" y="-60%" width="160%" height="220%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <style>.motion{display:inline}.fine{opacity:.5}.ambient{opacity:.9}@media (prefers-color-scheme: light){.fine{opacity:.38}.ambient{opacity:.72}}@media (prefers-reduced-motion: reduce){.motion{display:none}.ambient{opacity:.82}}</style>
   </defs>
-
-  <ellipse cx="640" cy="87" rx="200" ry="45" fill="url(#pulse)">
-    <animate attributeName="rx" values="170;215;170" dur="6.5s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values="0.55;1;0.55" dur="5s" repeatCount="indefinite"/>
-  </ellipse>
-
-  <g fill="none" stroke-linecap="round">
-    <path d="M0 30C194 30 286 47 402 69C500 88 554 96 640 96C726 96 780 88 878 69C994 47 1086 30 1280 30" stroke="url(#tri)" stroke-width="1.2" opacity="0.36" stroke-dasharray="3 16">
-      <animate attributeName="stroke-dashoffset" values="0;-190" dur="12s" repeatCount="indefinite"/>
-    </path>
-    <path d="M0 55C166 55 278 63 394 80C502 96 568 108 640 108C712 108 778 96 886 80C1002 63 1114 55 1280 55" stroke="url(#tri)" stroke-width="2" opacity="0.82" filter="url(#glow)" stroke-dasharray="42 14 8 16">
-      <animate attributeName="stroke-dashoffset" values="0;520" dur="11s" repeatCount="indefinite"/>
-      <animate attributeName="opacity" values="0.55;0.96;0.55" dur="4.6s" repeatCount="indefinite"/>
-    </path>
-    <path d="M64 87C236 87 324 90 438 102C526 112 584 119 640 119C696 119 754 112 842 102C956 90 1044 87 1216 87" stroke="url(#tri)" stroke-width="1.1" opacity="0.5" stroke-dasharray="7 15">
-      <animate attributeName="stroke-dashoffset" values="0;-360" dur="9.5s" repeatCount="indefinite"/>
-    </path>
-    <path d="M170 122C340 122 428 118 520 124C574 128 611 134 640 140C669 134 706 128 760 124C852 118 940 122 1110 122" stroke="url(#tri)" stroke-width="1" opacity="0.28" stroke-dasharray="2 14">
-      <animate attributeName="stroke-dashoffset" values="0;160" dur="14s" repeatCount="indefinite"/>
-    </path>
+  <ellipse class="ambient" cx="640" cy="87" rx="190" ry="44" fill="url(#pulse)"/>
+  <g class="fine" fill="none" stroke-linecap="round">
+    <path d="M0 31C194 31 286 47 402 69C500 88 554 96 640 96C726 96 780 88 878 69C994 47 1086 31 1280 31" stroke="url(#tri)" stroke-width="1"/>
+    <path d="M0 56C166 56 278 63 394 80C502 96 568 108 640 108C712 108 778 96 886 80C1002 63 1114 56 1280 56" stroke="url(#tri)" stroke-width="1.5"/>
+    <path d="M64 88C236 88 324 90 438 102C526 112 584 119 640 119C696 119 754 112 842 102C956 90 1044 88 1216 88" stroke="url(#tri)" stroke-width=".9"/>
   </g>
-
-  <g transform="translate(640 93)" filter="url(#glow)">
-    <g fill="none">
-      <path d="M0-29 25-14 25 14 0 29-25 14-25-14Z" stroke="#E328FC" stroke-width="1.4" stroke-dasharray="7 8" opacity="0.88"/>
-      <path d="M0-19 16-9 16 9 0 19-16 9-16-9Z" stroke="#00E6FF" stroke-width="1.2" opacity="0.8"/>
-      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="18s" repeatCount="indefinite"/>
+  <g transform="translate(640 93)" fill="none" filter="url(#glow)">
+    <path d="M0-29 25-14 25 14 0 29-25 14-25-14Z" stroke="#E328FC" stroke-width="1.3" opacity=".7"/>
+    <path d="M0-19 16-9 16 9 0 19-16 9-16-9Z" stroke="#00E6FF" stroke-width="1.1" opacity=".68"/>
+    <circle r="4.8" fill="#00FBCC"/>
+  </g>
+  <g class="motion">
+    <g fill="none" stroke-linecap="round">
+      <path d="M0 31C194 31 286 47 402 69C500 88 554 96 640 96C726 96 780 88 878 69C994 47 1086 31 1280 31" stroke="url(#tri)" stroke-width="1.2" opacity=".38" stroke-dasharray="3 15"><animate attributeName="stroke-dashoffset" values="0;-360" dur="13.3s" repeatCount="indefinite"/></path>
+      <path d="M0 56C166 56 278 63 394 80C502 96 568 108 640 108C712 108 778 96 886 80C1002 63 1114 56 1280 56" stroke="url(#tri)" stroke-width="2" opacity=".82" filter="url(#glow)" stroke-dasharray="42 14 8 8"><animate attributeName="stroke-dashoffset" values="0;720" dur="11.7s" repeatCount="indefinite"/></path>
+      <path d="M64 88C236 88 324 90 438 102C526 112 584 119 640 119C696 119 754 112 842 102C956 90 1044 88 1216 88" stroke="url(#tri)" stroke-width="1.1" opacity=".5" stroke-dasharray="7 17"><animate attributeName="stroke-dashoffset" values="0;-480" dur="17.9s" repeatCount="indefinite"/></path>
+      <path d="M170 122C340 122 428 118 520 124C574 128 611 134 640 140C669 134 706 128 760 124C852 118 940 122 1110 122" stroke="url(#tri)" stroke-width="1" opacity=".28" stroke-dasharray="2 14"><animate attributeName="stroke-dashoffset" values="0;320" dur="23.3s" repeatCount="indefinite"/></path>
     </g>
-    <circle r="4.8" fill="#00FBCC">
-      <animate attributeName="r" values="3.8;6.2;3.8" dur="2.6s" repeatCount="indefinite"/>
-      <animate attributeName="opacity" values="0.55;1;0.55" dur="2.6s" repeatCount="indefinite"/>
-    </circle>
-    <circle r="10" fill="none" stroke="#00FBCC" stroke-width="1">
-      <animate attributeName="r" values="8;26;8" dur="4s" repeatCount="indefinite"/>
-      <animate attributeName="opacity" values="0.75;0.05;0.75" dur="4s" repeatCount="indefinite"/>
-    </circle>
+    <g transform="translate(640 93)" fill="none" filter="url(#glow)">
+      <g><path d="M0-29 25-14 25 14 0 29-25 14-25-14Z" stroke="#E328FC" stroke-width="1.4" stroke-dasharray="7 8"/><path d="M0-19 16-9 16 9 0 19-16 9-16-9Z" stroke="#00E6FF" stroke-width="1.2"/><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="19.7s" repeatCount="indefinite"/></g>
+      <circle r="4.8" fill="#00FBCC"><animate attributeName="r" values="4;6.1;4" dur="3.9s" repeatCount="indefinite"/><animate attributeName="opacity" values=".58;1;.58" dur="3.9s" repeatCount="indefinite"/></circle>
+      <circle r="10" stroke="#00FBCC" stroke-width="1"><animate attributeName="r" values="8;25;8" dur="5.1s" repeatCount="indefinite"/><animate attributeName="opacity" values=".68;.04;.68" dur="5.1s" repeatCount="indefinite"/></circle>
+    </g>
+    <g filter="url(#glow)">
+      <circle r="2.8" fill="#00E6FF"><animateMotion path="M42 55C240 55 340 70 470 90C550 102 600 108 640 108" dur="8.9s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.07;.18;.82;.93;1" dur="8.9s" repeatCount="indefinite"/></circle>
+      <circle r="2.8" fill="#00E6FF"><animateMotion path="M1238 55C1040 55 940 70 810 90C730 102 680 108 640 108" dur="10.7s" begin="-4.8s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.07;.18;.82;.93;1" dur="10.7s" begin="-4.8s" repeatCount="indefinite"/></circle>
+      <circle r="2.4" fill="#00FBCC"><animateMotion path="M108 88C290 88 390 94 492 107C562 116 606 119 640 119" dur="9.7s" begin="-2.1s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.06;.17;.83;.94;1" dur="9.7s" begin="-2.1s" repeatCount="indefinite"/></circle>
+      <circle r="2.4" fill="#00FBCC"><animateMotion path="M1172 88C990 88 890 94 788 107C718 116 674 119 640 119" dur="11.3s" begin="-6.7s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="0;.06;.17;.83;.94;1" dur="11.3s" begin="-6.7s" repeatCount="indefinite"/></circle>
+    </g>
   </g>
-
-  <g filter="url(#glow)">
-    <circle r="2.8" fill="#00E6FF"><animateMotion path="M42 54C240 54 340 70 470 90C550 102 600 108 640 108" dur="7.8s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="7.8s" repeatCount="indefinite"/></circle>
-    <circle r="2.8" fill="#00E6FF"><animateMotion path="M1238 54C1040 54 940 70 810 90C730 102 680 108 640 108" dur="7.8s" begin="-3.9s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="7.8s" begin="-3.9s" repeatCount="indefinite"/></circle>
-    <circle r="2.4" fill="#00FBCC"><animateMotion path="M108 87C290 87 390 94 492 107C562 116 606 119 640 119" dur="9.4s" begin="-1.7s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="9.4s" begin="-1.7s" repeatCount="indefinite"/></circle>
-    <circle r="2.4" fill="#00FBCC"><animateMotion path="M1172 87C990 87 890 94 788 107C718 116 674 119 640 119" dur="9.4s" begin="-6.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="9.4s" begin="-6.4s" repeatCount="indefinite"/></circle>
-    <circle r="2.2" fill="#E328FC"><animateMotion path="M180 121C356 121 456 119 538 126C586 130 617 136 640 140" dur="11.5s" begin="-4.2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="11.5s" begin="-4.2s" repeatCount="indefinite"/></circle>
-    <circle r="2.2" fill="#E328FC"><animateMotion path="M1100 121C924 121 824 119 742 126C694 130 663 136 640 140" dur="11.5s" begin="-9.6s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="11.5s" begin="-9.6s" repeatCount="indefinite"/></circle>
-  </g>
-
-  <g opacity="0.72">
-    <circle cx="238" cy="53" r="2.3" fill="#00E6FF"><animate attributeName="opacity" values="0.2;1;0.2" dur="3s" repeatCount="indefinite"/></circle>
-    <circle cx="392" cy="79" r="2.3" fill="#00FBCC"><animate attributeName="opacity" values="1;0.2;1" dur="3.8s" begin="-1.2s" repeatCount="indefinite"/></circle>
-    <circle cx="505" cy="101" r="2.3" fill="#E328FC"><animate attributeName="opacity" values="0.2;1;0.2" dur="2.7s" begin="-0.8s" repeatCount="indefinite"/></circle>
-    <circle cx="775" cy="101" r="2.3" fill="#E328FC"><animate attributeName="opacity" values="1;0.2;1" dur="2.7s" begin="-1.4s" repeatCount="indefinite"/></circle>
-    <circle cx="888" cy="79" r="2.3" fill="#00FBCC"><animate attributeName="opacity" values="0.2;1;0.2" dur="3.8s" begin="-2s" repeatCount="indefinite"/></circle>
-    <circle cx="1042" cy="53" r="2.3" fill="#00E6FF"><animate attributeName="opacity" values="1;0.2;1" dur="3s" begin="-1.5s" repeatCount="indefinite"/></circle>
-  </g>
-
-  <path d="M410 146H870" stroke="url(#tri)" stroke-width="1.4" opacity="0.4" stroke-dasharray="1 11">
-    <animate attributeName="stroke-dashoffset" values="0;-72" dur="5.2s" repeatCount="indefinite"/>
-  </path>
 </svg>
