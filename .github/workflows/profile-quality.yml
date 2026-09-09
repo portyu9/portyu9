@@ -65,6 +65,9 @@ jobs:
       - name: Validate validator purity
         run: python3 scripts/validate-validator-purity.py
 
+      - name: Validate validator execution alias closure
+        run: python3 scripts/validate-validator-execution-aliases.py
+
       - name: Validate profile asset contract
         run: python3 scripts/validate-profile-v4.py
 
