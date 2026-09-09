@@ -73,11 +73,7 @@ def validate_dispatch_job(stats: str) -> None:
     require(dispatch.count(DISPATCH_STEP) == 1,
             "Profile-stats dispatcher must remain one exact ref-only fixed-workflow reconciliation dispatch")
     for forbidden in (
-        "repository_dispatch",
-        "workflow_id=",
-        "-f inputs",
-        "-F inputs",
-        "pull_request_target",
+        "repository_dispatch", "workflow_id=", "-f inputs", "-F inputs", "pull_request_target",
     ):
         require(forbidden not in dispatch,
                 f"Profile-stats dispatcher contains unauthorized alternate dispatch authority: {forbidden}")
@@ -93,35 +89,48 @@ def validate(sync: str, stats: str, policy: str) -> None:
     require("merge_ui_after_checks" not in stats,
             "Profile-stats post-publication dispatch must not introduce a separate merge input")
 
+    approve = job_block(sync, "approve", "merge")
     merge = job_block(sync, "merge", None)
     require(
         exact_job_if(merge, "Spotlight merge job") == MERGE_IF_EXPR,
         "Spotlight merge job must require the exact guarded plan/propose/approve prerequisites",
     )
-    for forbidden in (
-        "github.event_name == 'workflow_dispatch'",
-        "inputs.merge_ui_after_checks",
-        "pull_request_target",
-        "issue_comment",
-        "repository_dispatch",
-    ):
+    require("name: approve-bot-pr-checks-only" in approve,
+            "Spotlight approval job identity changed")
+    require("permissions:\n      contents: read\n      actions: write" in approve,
+            "Spotlight approval must retain only contents-read plus Actions-write authority")
+    require("timeout-minutes: 12" in approve,
+            "Spotlight approval/check-wait boundary changed")
+    require("for attempt in $(seq 1 60); do" in approve and "sleep 10" in approve,
+            "Spotlight Actions-only approval job must own canonical workflow waiting")
+    require("name: merge-readme-only-terminal-write" in merge,
+            "Spotlight terminal merge job identity changed")
+    require("needs: [plan, propose, approve]" in merge,
+            "Spotlight terminal merge dependency changed")
+    require("timeout-minutes: 3" in merge,
+            "Spotlight terminal merge authority window changed")
+    require("permissions:\n      contents: write\n      pull-requests: write\n      checks: read" in merge,
+            "Spotlight terminal merge authority changed")
+    for forbidden in ("for attempt in ", "sleep 10", "actions/checkout@", "actions/setup-python@", "python3 "):
         require(forbidden not in merge,
-                f"Spotlight merge job contains an unauthorized alternate/manual authority gate: {forbidden}")
+                f"Spotlight terminal merge acquired polling/authored execution surface: {forbidden}")
+    for check in ("analyze-actions", "analyze-python", "dependency-review", "integration-pinned-upstream", "validate-contracts"):
+        require(check in merge, f"Spotlight terminal merge lost required-check revalidation: {check}")
+    for forbidden in (
+        "github.event_name == 'workflow_dispatch'", "inputs.merge_ui_after_checks", "pull_request_target",
+        "issue_comment", "repository_dispatch",
+    ):
+        require(forbidden not in approve and forbidden not in merge,
+                f"Spotlight merge path contains an unauthorized alternate/manual authority gate: {forbidden}")
 
     validate_dispatch_job(stats)
 
     policy_lower = policy.lower()
     for phrase in (
-        "standing authorization",
-        "automation/spotlight-links",
-        "scheduled reconciliation",
-        "post-publication bot dispatch",
-        "readme-only",
-        "five protected-main checks",
-        "integration id `15368`",
-        "no bypass actor",
-        "does not authorize arbitrary readme/ui",
-        "dependabot",
+        "standing authorization", "automation/spotlight-links", "scheduled reconciliation",
+        "post-publication bot dispatch", "readme-only", "actions-only approval job",
+        "terminal merge job", "five protected-main checks", "integration id `15368`",
+        "no bypass actor", "does not authorize arbitrary readme/ui", "dependabot",
     ):
         require(phrase.lower() in policy_lower,
                 f"Spotlight standing auto-merge policy is missing: {phrase}")
@@ -139,38 +148,37 @@ def expect_failure(sync: str, stats: str, policy: str, expected: str) -> None:
 def self_test(sync: str, stats: str, policy: str) -> None:
     expect_failure(
         sync.replace("  workflow_dispatch:\n", "  workflow_dispatch:\n    inputs:\n      merge_ui_after_checks:\n        type: boolean\n", 1),
-        stats,
-        policy,
-        "must not depend on a manual merge input",
+        stats, policy, "must not depend on a manual merge input",
     )
     expect_failure(
         sync.replace(" && needs.approve.result == 'success'", "", 1),
-        stats,
-        policy,
-        "exact guarded plan/propose/approve prerequisites",
+        stats, policy, "exact guarded plan/propose/approve prerequisites",
     )
     guarded_line = f"    if: {MERGE_IF_EXPR}"
     comment_shadow = sync.replace(
-        guarded_line,
-        f"    # if: {MERGE_IF_EXPR}\n    if: always()",
-        1,
+        guarded_line, f"    # if: {MERGE_IF_EXPR}\n    if: always()", 1,
     )
     expect_failure(
-        comment_shadow,
-        stats,
-        policy,
-        "exact guarded plan/propose/approve prerequisites",
+        comment_shadow, stats, policy, "exact guarded plan/propose/approve prerequisites",
     )
     duplicate_job_if = sync.replace(
-        guarded_line,
-        guarded_line + "\n    if: always()",
+        guarded_line, guarded_line + "\n    if: always()", 1,
+    )
+    expect_failure(
+        duplicate_job_if, stats, policy, "exactly one canonical job-level if predicate",
+    )
+    missing_wait = sync.replace("          for attempt in $(seq 1 60); do\n", "          for attempt in $(seq 1 1); do\n", 1)
+    expect_failure(
+        missing_wait, stats, policy, "Actions-only approval job must own canonical workflow waiting",
+    )
+    terminal_polling = sync.replace(
+        "          # Revalidate the exact PR, mutable roots, README-only closure, and required checks\n",
+        "          for attempt in $(seq 1 60); do\n            sleep 10\n          done\n"
+        "          # Revalidate the exact PR, mutable roots, README-only closure, and required checks\n",
         1,
     )
     expect_failure(
-        duplicate_job_if,
-        stats,
-        policy,
-        "exactly one canonical job-level if predicate",
+        terminal_polling, stats, policy, "polling/authored execution surface",
     )
 
     dispatch_comment_shadow = stats.replace(
@@ -180,10 +188,7 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         1,
     )
     expect_failure(
-        sync,
-        dispatch_comment_shadow,
-        policy,
-        "one exact ref-only fixed-workflow reconciliation dispatch",
+        sync, dispatch_comment_shadow, policy, "one exact ref-only fixed-workflow reconciliation dispatch",
     )
     duplicate_dispatch_step = stats.replace(
         "      - name: Dispatch exact Spotlight reconciliation workflow\n",
@@ -192,29 +197,17 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         1,
     )
     expect_failure(
-        sync,
-        duplicate_dispatch_step,
-        policy,
-        "exactly one reviewed step",
+        sync, duplicate_dispatch_step, policy, "exactly one reviewed step",
     )
-
     expect_failure(
-        sync,
-        stats + "\nmerge_ui_after_checks: true\n",
-        policy,
+        sync, stats + "\nmerge_ui_after_checks: true\n", policy,
         "must not introduce a separate merge input",
     )
     policy_without_standing_authorization = re.sub(
-        r"standing authorization",
-        "standing permission",
-        policy,
-        flags=re.IGNORECASE,
+        r"standing authorization", "standing permission", policy, flags=re.IGNORECASE,
     )
     expect_failure(
-        sync,
-        stats,
-        policy_without_standing_authorization,
-        "standing authorization",
+        sync, stats, policy_without_standing_authorization, "standing authorization",
     )
 
 
@@ -229,8 +222,8 @@ def main() -> int:
         self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: the fixed deterministic README-only synchronization class "
-            "has standing auto-merge authority after one exact parsed plan/propose/approval job guard and the five protected-main checks; "
-            "post-publication reconciliation remains one exact fixed-workflow, ref-only dispatch."
+            "keeps canonical workflow waiting under Actions-only approval authority and starts terminal repository/PR write authority "
+            "only for a fresh exact-check snapshot, exact-head merge, and cleanup; post-publication reconciliation remains one exact fixed-workflow, ref-only dispatch."
         )
         return 0
     except (OSError, ValueError) as exc:
