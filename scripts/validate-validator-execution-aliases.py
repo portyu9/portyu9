@@ -287,6 +287,8 @@ class PathMutationVisitor(ast.NodeVisitor):
             return node.id in self.path_iters
         if isinstance(node, ast.IfExp):
             return self.is_path_iter_expr(node.body) or self.is_path_iter_expr(node.orelse)
+        if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+            return self.comprehension_yields_path(node)
         if not isinstance(node, ast.Call):
             return False
         if (
@@ -301,6 +303,21 @@ class PathMutationVisitor(ast.NodeVisitor):
             and len(node.args) == 1
             and self.is_path_iter_expr(node.args[0])
         )
+
+    def comprehension_yields_path(
+        self,
+        node: ast.ListComp | ast.SetComp | ast.GeneratorExp | ast.DictComp,
+    ) -> bool:
+        before = self.flow_state()
+        try:
+            for generator in node.generators:
+                yields_path = self.is_path_iter_expr(generator.iter)
+                self.bind_target(generator.target, yields_path)
+                self.bind_iter_target(generator.target, False)
+            yielded = node.key if isinstance(node, ast.DictComp) else node.elt
+            return self.is_path_expr(yielded)
+        finally:
+            self.restore_flow_state(before)
 
     def bind_target(self, target: ast.AST, is_path: bool) -> None:
         if isinstance(target, ast.Name):
@@ -613,6 +630,39 @@ class PathMutationVisitor(ast.NodeVisitor):
             completed.append(fallthrough)
         self.restore_flow_state(self.merge_flow_states(*completed))
 
+    def visit_comprehension(
+        self,
+        node: ast.ListComp | ast.SetComp | ast.GeneratorExp | ast.DictComp,
+        yielded_nodes: tuple[ast.AST, ...],
+    ) -> None:
+        self.scopes.append(set(self.paths))
+        self.iter_scopes.append(set(self.path_iters))
+        try:
+            for generator in node.generators:
+                self.visit(generator.iter)
+                yields_path = self.is_path_iter_expr(generator.iter)
+                self.bind_target(generator.target, yields_path)
+                self.bind_iter_target(generator.target, False)
+                for condition in generator.ifs:
+                    self.visit(condition)
+            for yielded in yielded_nodes:
+                self.visit(yielded)
+        finally:
+            self.iter_scopes.pop()
+            self.scopes.pop()
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self.visit_comprehension(node, (node.elt,))
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self.visit_comprehension(node, (node.elt,))
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self.visit_comprehension(node, (node.elt,))
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self.visit_comprehension(node, (node.key, node.value))
+
     def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Attribute) and node.func.attr in PATH_ALWAYS_MUTATION_METHODS:
             if self.is_path_expr(node.func.value):
@@ -907,6 +957,69 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    children = p.iterdir()\n    children = ['alpha']\n    for child in children:\n        child.replace('a', 'b')\n",
         ),
         "Path iterator alias rebound to a string collection must stop carrying concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return [child.replace('b') for child in p.iterdir()]\n",
+        ),
+        "comprehension target from Path.iterdir must be treated as a concrete Path",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = [child for child in p.iterdir()]\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "list comprehension yielding Paths must preserve Path-iterable identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = (child.resolve() for child in p.iterdir())\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "generator expression yielding derived Paths must preserve Path-iterable identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = [grand for child in p.iterdir() for grand in child.iterdir()]\n    for grand in children:\n        grand.replace('b')\n",
+        ),
+        "nested comprehension generators must see prior concrete-Path targets",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return [child for child in p.iterdir() if child.replace('b')]\n",
+        ),
+        "comprehension filters must be visited with concrete-Path target state",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = {child: child.name for child in p.iterdir()}\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "dict comprehension Path keys must preserve Path-iterable identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    children = [name for name in ['alpha', 'beta']]\n    return [child.replace('a', 'b') for child in children]\n",
+        ),
+        "all-string comprehensions must remain ordinary string replacement",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    child = 'alpha'\n    [child.read_text() for child in p.iterdir()]\n    return child.replace('a', 'b')\n",
+        ),
+        "comprehension target Path identity must not leak into the enclosing scope",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return [child.read_text() for child in p.iterdir()]\n",
+        ),
+        "read-only Path comprehension must remain valid",
     )
     require(
         inspect_source(
