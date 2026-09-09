@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Lock terminal write/Actions workflow source to exact reviewed Git blob identities.
+"""Lock mutation-authority and required-assurance workflows to exact reviewed Git blobs.
 
 Granular workflow validators remain responsible for useful structural diagnostics, but
-raw shell text cannot prove that reviewed command-looking lines are actually executable.
-These two workflows contain the repository's terminal contents/pull-request/Actions
-mutation authority, so their complete bytes are part of the reviewed authority contract.
-Any future workflow-byte change must deliberately advance this lock in the same review.
+raw source scans cannot prove that reviewed command-looking lines are the exact bytes
+GitHub Actions will execute. Profile stats and Spotlight sync contain terminal mutation
+authority, while Profile Quality defines the required repository-authored validation
+path. Their complete workflow bytes are therefore part of the reviewed authority and
+assurance contract. Any future workflow-byte change must deliberately advance this lock
+in the same review.
 """
 from __future__ import annotations
 
@@ -15,8 +17,9 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "privileged-workflow-byte-identity-v1"
+VERSION = "governed-workflow-byte-identity-v2"
 EXPECTED = {
+    ".github/workflows/profile-quality.yml": "a7824194821155e22503093c43cad5cf023c6dc3",
     ".github/workflows/profile-stats.yml": "a01febb5174db50e977d7f580e02a9db7ebc2437",
     ".github/workflows/spotlight-link-sync.yml": "098d123dbd432ce9d34f095bdf2dc8138f22aa4c",
 }
@@ -34,12 +37,12 @@ def git_blob_sha_bytes(payload: bytes) -> str:
 
 def git_blob_sha(path: Path) -> str:
     relative = path.relative_to(ROOT)
-    require(path.exists() or path.is_symlink(), f"privileged workflow is missing: {relative}")
+    require(path.exists() or path.is_symlink(), f"governed workflow is missing: {relative}")
     require(path.absolute() == path.resolve(strict=True),
-            f"privileged workflow resolves through an alias: {relative}")
+            f"governed workflow resolves through an alias: {relative}")
     mode = path.lstat().st_mode
     require(stat.S_ISREG(mode) and not path.is_symlink(),
-            f"privileged workflow must be a real regular file: {relative}")
+            f"governed workflow must be a real regular file: {relative}")
     return git_blob_sha_bytes(path.read_bytes())
 
 
@@ -59,12 +62,12 @@ def main() -> int:
         for relative, expected in EXPECTED.items():
             actual = git_blob_sha(ROOT / relative)
             require(actual == expected,
-                    f"{relative}: privileged workflow bytes changed; expected Git blob {expected}, got {actual}")
+                    f"{relative}: governed workflow bytes changed; expected Git blob {expected}, got {actual}")
             observed[relative] = actual
-        require(set(observed) == set(EXPECTED), "privileged workflow identity inventory changed")
+        require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
         print(
-            f"Privileged workflow byte identity passed: {VERSION} · "
-            f"{len(observed)} exact reviewed workflow blobs · terminal mutation source is byte-locked"
+            f"Governed workflow byte identity passed: {VERSION} · "
+            f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked"
         )
         return 0
     except (OSError, ValueError) as exc:

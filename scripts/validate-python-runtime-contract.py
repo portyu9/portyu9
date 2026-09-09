@@ -24,6 +24,8 @@ VERIFY_COMMANDS = {
     "spotlight-link-sync.yml": "python3 source/scripts/verify-python-runtime.py",
 }
 VERIFY_STEP_NAME = "      - name: Verify resolved Python runtime"
+QUALITY_IDENTITY_STEP_NAME = "      - name: Validate privileged workflow byte identity"
+QUALITY_IDENTITY_COMMAND = "python3 scripts/validate-privileged-workflow-identity.py"
 SETUP_PYTHON = re.compile(r"(?m)^\s*(?:-\s*)?uses:\s*actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*$")
 VERSION_LINE = f'  PYTHON_VERSION: "{EXPECTED_VERSION}"'
 VERSION_INPUT = "          python-version: ${{ env.PYTHON_VERSION }}"
@@ -50,6 +52,19 @@ def runtime_probe_pair(command: str) -> re.Pattern[str]:
         r"        uses: actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*\n"
         r"        with:\n"
         r"          python-version: \$\{\{ env\.PYTHON_VERSION \}\}\n\n"
+        r"      - name: Verify resolved Python runtime\n"
+        rf"        run: {re.escape(command)}$"
+    )
+
+
+def quality_identity_probe_pair(command: str) -> re.Pattern[str]:
+    return re.compile(
+        r"(?m)^      - name: Set up Python\n"
+        r"        uses: actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*\n"
+        r"        with:\n"
+        r"          python-version: \$\{\{ env\.PYTHON_VERSION \}\}\n\n"
+        r"      - name: Validate privileged workflow byte identity\n"
+        rf"        run: {re.escape(QUALITY_IDENTITY_COMMAND)}\n\n"
         r"      - name: Verify resolved Python runtime\n"
         rf"        run: {re.escape(command)}$"
     )
@@ -107,10 +122,24 @@ def validate_repository() -> None:
                     f"{path.name}: every setup-python execution must be followed by one named runtime probe")
             require(text.count(f"        run: {command}") == setup_count,
                     f"{path.name}: every setup-python execution must invoke the reviewed runtime probe")
-            pair_count = len(runtime_probe_pair(command).findall(text))
-            require(pair_count == setup_count,
-                    f"{path.name}: runtime probe must immediately follow every setup-python step: "
-                    f"paired={pair_count} setup={setup_count}")
+            direct_pair_count = len(runtime_probe_pair(command).findall(text))
+            if path.name == "profile-quality.yml":
+                require(text.count(QUALITY_IDENTITY_STEP_NAME) == 1,
+                        "profile-quality.yml: exact workflow identity gate must appear once")
+                require(text.count(f"        run: {QUALITY_IDENTITY_COMMAND}") == 1,
+                        "profile-quality.yml: exact workflow identity gate command changed")
+                gated_pair_count = len(quality_identity_probe_pair(command).findall(text))
+                require(gated_pair_count == 1,
+                        "profile-quality.yml: exactly one setup-python step must be followed immediately by the "
+                        "reviewed workflow identity gate and then the runtime probe")
+                require(direct_pair_count + gated_pair_count == setup_count,
+                        "profile-quality.yml: every setup-python step must reach the runtime probe either directly "
+                        "or through the single exact workflow identity gate: "
+                        f"direct={direct_pair_count} gated={gated_pair_count} setup={setup_count}")
+            else:
+                require(direct_pair_count == setup_count,
+                        f"{path.name}: runtime probe must immediately follow every setup-python step: "
+                        f"paired={direct_pair_count} setup={setup_count}")
     require(observed == EXPECTED_WORKFLOWS,
             "Python-bearing workflow inventory changed: "
             f"observed={sorted(observed)} expected={sorted(EXPECTED_WORKFLOWS)}")
@@ -149,16 +178,31 @@ def self_test() -> None:
     )
 
     command = "python3 scripts/verify-python-runtime.py"
-    exact_pair = (
+    setup_block = (
         "      - name: Set up Python\n"
         + "        uses: actions/setup-python@" + ("a" * 40) + " # v7.0.0\n"
         + "        with:\n"
         + "          python-version: ${{ env.PYTHON_VERSION }}\n\n"
+    )
+    exact_pair = (
+        setup_block
         + "      - name: Verify resolved Python runtime\n"
         + f"        run: {command}\n"
     )
     require(len(runtime_probe_pair(command).findall(exact_pair)) == 1,
             "self-test rejected immediate runtime probe ordering")
+    exact_gated_pair = (
+        setup_block
+        + "      - name: Validate privileged workflow byte identity\n"
+        + f"        run: {QUALITY_IDENTITY_COMMAND}\n\n"
+        + "      - name: Verify resolved Python runtime\n"
+        + f"        run: {command}\n"
+    )
+    require(len(quality_identity_probe_pair(command).findall(exact_gated_pair)) == 1,
+            "self-test rejected the single reviewed identity gate before runtime proof")
+    altered_gate = exact_gated_pair.replace(QUALITY_IDENTITY_COMMAND, "python3 scripts/other.py", 1)
+    require(len(quality_identity_probe_pair(command).findall(altered_gate)) == 0,
+            "self-test accepted an altered identity gate before runtime proof")
     intervening = exact_pair.replace(
         "\n      - name: Verify resolved Python runtime\n",
         "\n      - name: Intervening action\n"
@@ -166,7 +210,9 @@ def self_test() -> None:
         "      - name: Verify resolved Python runtime\n",
     )
     require(len(runtime_probe_pair(command).findall(intervening)) == 0,
-            "self-test accepted an intervening step before the runtime probe")
+            "self-test accepted an arbitrary intervening step before the runtime probe")
+    require(len(quality_identity_probe_pair(command).findall(intervening)) == 0,
+            "self-test confused an arbitrary intervening step with the reviewed identity gate")
 
 
 def main() -> int:
@@ -177,7 +223,8 @@ def main() -> int:
         print(
             "Python runtime contract passed: authored setup-python execution is closed to "
             f"{EXPECTED_VERSION} across exactly {len(EXPECTED_WORKFLOWS)} reviewed workflows; "
-            f"all six setup jobs execute the reviewed runtime probe immediately after setup; "
+            "all setup jobs execute the reviewed runtime probe immediately after setup except the single "
+            "Profile Quality path that first executes the exact governed-workflow byte gate; "
             "Profile Quality also owns the maintenance-line freshness gate; "
             f"observed interpreter=CPython {observed_version}."
         )
