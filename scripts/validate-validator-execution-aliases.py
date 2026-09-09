@@ -4,8 +4,9 @@
 The validator-purity firewall intentionally recognizes canonical call spellings so its
 small reviewed process allowlist can remain auditable. This companion contract prevents
 repository Python from hiding those sensitive callables behind import aliases, direct
-callable aliases, reflective lookup, or receiver-typed ambiguous mutation methods before
-a call reaches the purity firewall.
+callable aliases, reflective lookup, receiver-typed ambiguous mutation methods, or
+low-level descriptor/file-metadata mutation surfaces before a call reaches the purity
+firewall.
 """
 from __future__ import annotations
 
@@ -17,6 +18,15 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 SELF = Path(__file__).name
 
+VALIDATOR_ALWAYS_FORBIDDEN_CALLABLES = {
+    "os.chflags", "os.chown", "os.copy_file_range", "os.fchmod", "os.fchown",
+    "os.ftruncate", "os.lchflags", "os.lchown", "os.link", "os.mkfifo", "os.mknod",
+    "os.posix_fallocate", "os.pwrite", "os.removexattr", "os.renames", "os.sendfile",
+    "os.setxattr", "os.splice", "os.symlink", "os.utime", "os.write", "os.writev",
+    "shutil.chown", "shutil.copyfileobj", "shutil.copymode", "shutil.copystat",
+    "shutil.make_archive", "shutil.unpack_archive",
+}
+MODE_SENSITIVE_CANONICAL_CALLABLES = {"io.open", "os.fdopen", "os.open"}
 FORBIDDEN_CANONICAL_CALLABLES = {
     "subprocess.run", "subprocess.Popen", "subprocess.call", "subprocess.check_call",
     "subprocess.check_output", "subprocess.getoutput", "subprocess.getstatusoutput",
@@ -29,14 +39,19 @@ FORBIDDEN_CANONICAL_CALLABLES = {
     "os.rmdir", "os.removedirs", "os.chmod", "os.truncate",
     "shutil.copy", "shutil.copy2", "shutil.copyfile", "shutil.copytree",
     "shutil.move", "shutil.rmtree",
-}
+} | VALIDATOR_ALWAYS_FORBIDDEN_CALLABLES | MODE_SENSITIVE_CANONICAL_CALLABLES
 FORBIDDEN_METHOD_LEAVES = {
     "write_text", "write_bytes", "touch", "mkdir", "unlink", "rename", "rmdir",
-    "chmod", "symlink_to", "hardlink_to", "apply",
+    "chmod", "lchmod", "symlink_to", "hardlink_to", "apply",
 }
 PATH_RETURNING_METHODS = {
     "absolute", "expanduser", "joinpath", "relative_to", "resolve",
     "with_name", "with_stem", "with_suffix",
+}
+PATH_ALWAYS_MUTATION_METHODS = {"lchmod", "replace"}
+WRITE_MODE_MARKERS = frozenset("wax+")
+MUTATING_OS_OPEN_FLAGS = {
+    "O_APPEND", "O_CREAT", "O_RDWR", "O_TMPFILE", "O_TRUNC", "O_WRONLY",
 }
 SENSITIVE_MODULE_ROOTS = {
     name.split(".", 1)[0]
@@ -56,6 +71,12 @@ def dotted_name(node: ast.AST) -> str | None:
     if isinstance(node, ast.Attribute):
         left = dotted_name(node.value)
         return f"{left}.{node.attr}" if left else node.attr
+    return None
+
+
+def literal_string(node: ast.AST | None) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
     return None
 
 
@@ -130,6 +151,33 @@ def direct_call_target(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> bool:
     return isinstance(parent, ast.Call) and parent.func is node
 
 
+def call_argument(node: ast.Call, index: int, keyword_name: str) -> ast.AST | None:
+    result: ast.AST | None = node.args[index] if len(node.args) > index else None
+    for keyword in node.keywords:
+        if keyword.arg == keyword_name:
+            result = keyword.value
+    return result
+
+
+def os_open_flag_terms(
+    node: ast.AST | None,
+    modules: dict[str, str],
+    symbols: dict[str, str],
+) -> tuple[set[str], bool]:
+    if node is None:
+        return set(), False
+    if isinstance(node, ast.Constant) and type(node.value) is int:
+        return set(), node.value == 0
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        left, left_static = os_open_flag_terms(node.left, modules, symbols)
+        right, right_static = os_open_flag_terms(node.right, modules, symbols)
+        return left | right, left_static and right_static
+    resolved = resolved_name(node, modules, symbols)
+    if resolved and resolved.startswith("os.O_"):
+        return {resolved.rsplit(".", 1)[-1]}, True
+    return set(), False
+
+
 def annotation_mentions_path(
     node: ast.AST | None,
     modules: dict[str, str],
@@ -156,7 +204,7 @@ def annotation_mentions_path(
 
 
 class PathMutationVisitor(ast.NodeVisitor):
-    """Resolve unambiguous pathlib receivers without conflating str.replace()."""
+    """Resolve pathlib receivers without conflating same-named string/object methods."""
 
     def __init__(
         self,
@@ -180,7 +228,12 @@ class PathMutationVisitor(ast.NodeVisitor):
     def report(self, node: ast.AST, message: str) -> None:
         self.violations.append(f"line {getattr(node, 'lineno', '?')}: {message}")
 
+    def is_path_type_expr(self, node: ast.AST) -> bool:
+        return resolved_name(node, self.modules, self.symbols) in {"Path", "pathlib.Path"}
+
     def is_path_expr(self, node: ast.AST) -> bool:
+        if self.is_path_type_expr(node):
+            return True
         if isinstance(node, ast.Name):
             return node.id in self.paths
         if isinstance(node, ast.Call):
@@ -215,8 +268,6 @@ class PathMutationVisitor(ast.NodeVisitor):
                 self.bind_target(item, False)
 
     def visit_Module(self, node: ast.Module) -> None:
-        # Establish module-level Path bindings before function bodies are inspected so
-        # functions may safely reference constants such as ROOT and SCRIPTS.
         changed = True
         while changed:
             before = set(self.global_paths)
@@ -269,12 +320,20 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.bind_target(node.target, is_path)
 
     def visit_Call(self, node: ast.Call) -> None:
-        if isinstance(node.func, ast.Attribute) and node.func.attr == "replace":
+        if isinstance(node.func, ast.Attribute) and node.func.attr in PATH_ALWAYS_MUTATION_METHODS:
             if self.is_path_expr(node.func.value):
                 self.report(
                     node,
-                    "pathlib.Path.replace() filesystem mutation is forbidden in validator production code",
+                    f"pathlib.Path.{node.func.attr}() filesystem mutation is forbidden in validator production code",
                 )
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "open" and self.is_path_expr(node.func.value):
+            mode_index = 1 if self.is_path_type_expr(node.func.value) else 0
+            mode_node = call_argument(node, mode_index, "mode")
+            mode = literal_string(mode_node) if mode_node is not None else "r"
+            if mode is None:
+                self.report(node, "dynamic pathlib.Path.open() mode is forbidden in validators")
+            elif any(marker in mode for marker in WRITE_MODE_MARKERS):
+                self.report(node, f"write-capable pathlib.Path.open() is forbidden in validators: {mode!r}")
         call_name = resolved_name(node.func, self.modules, self.symbols)
         if call_name == "getattr" and len(node.args) >= 2:
             attribute = (
@@ -282,21 +341,24 @@ class PathMutationVisitor(ast.NodeVisitor):
                 if isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str)
                 else None
             )
-            if attribute == "replace" and self.is_path_expr(node.args[0]):
+            if attribute in PATH_ALWAYS_MUTATION_METHODS and self.is_path_expr(node.args[0]):
                 self.report(
                     node,
-                    "reflective pathlib.Path.replace lookup is forbidden in validator production code",
+                    f"reflective pathlib.Path.{attribute} lookup is forbidden in validator production code",
                 )
+            if attribute == "open" and self.is_path_expr(node.args[0]):
+                self.report(node, "reflective pathlib.Path.open lookup is forbidden in validators")
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
-        if node.attr == "replace" and self.is_path_expr(node.value):
-            # Direct calls are reported by visit_Call; this catches bound-method aliasing.
+        if node.attr in PATH_ALWAYS_MUTATION_METHODS and self.is_path_expr(node.value):
             if not direct_call_target(node, self.parents):
                 self.report(
                     node,
-                    "pathlib.Path.replace bound method must not be aliased in validators",
+                    f"pathlib.Path.{node.attr} bound method must not be aliased in validators",
                 )
+        if node.attr == "open" and self.is_path_expr(node.value) and not direct_call_target(node, self.parents):
+            self.report(node, "pathlib.Path.open bound method must not be aliased in validators")
         self.generic_visit(node)
 
 
@@ -318,6 +380,7 @@ def inspect_source(path: Path, source: str) -> list[str]:
     tree = ast.parse(source, filename=str(path))
     modules, symbols, violations = import_bindings(tree)
     parents = parent_map(tree)
+    validator = is_validator_path(path)
 
     for node in ast.walk(tree):
         if isinstance(node, (ast.Name, ast.Attribute)):
@@ -345,6 +408,29 @@ def inspect_source(path: Path, source: str) -> list[str]:
         if not isinstance(node, ast.Call):
             continue
         call_name = resolved_name(node.func, modules, symbols)
+        if validator and call_name in VALIDATOR_ALWAYS_FORBIDDEN_CALLABLES:
+            violations.append(
+                f"line {node.lineno}: validator filesystem mutation callable is forbidden: {call_name}()"
+            )
+        if validator and call_name in {"io.open", "os.fdopen"}:
+            mode_node = call_argument(node, 1, "mode")
+            mode = literal_string(mode_node) if mode_node is not None else "r"
+            if mode is None:
+                violations.append(f"line {node.lineno}: dynamic {call_name} mode is forbidden in validators")
+            elif any(marker in mode for marker in WRITE_MODE_MARKERS):
+                violations.append(
+                    f"line {node.lineno}: write-capable {call_name} mode is forbidden in validators: {mode!r}"
+                )
+        if validator and call_name == "os.open":
+            flags_node = call_argument(node, 1, "flags")
+            flag_terms, static = os_open_flag_terms(flags_node, modules, symbols)
+            if not static:
+                violations.append(f"line {node.lineno}: dynamic os.open flags are forbidden in validators")
+            elif flag_terms & MUTATING_OS_OPEN_FLAGS:
+                violations.append(
+                    f"line {node.lineno}: mutating os.open flags are forbidden in validators: "
+                    f"{sorted(flag_terms & MUTATING_OS_OPEN_FLAGS)}"
+                )
         if call_name == "getattr" and len(node.args) >= 2:
             target = resolved_name(node.args[0], modules, symbols)
             attribute = (
@@ -428,11 +514,100 @@ def self_test() -> None:
         "reflective Path.replace fixture must fail",
     )
     require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    p.lchmod(0o600)\n",
+        ),
+        "Path.lchmod fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    opener = p.open\n    return opener('r')\n",
+        ),
+        "Path.open bound-method alias fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return p.open('w')\n",
+        ),
+        "write-capable Path.open fixture must fail",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return p.open('r')\n",
+        ),
+        "read-only Path.open fixture must pass",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    mover = Path.replace\n    return mover(p, 'b')\n",
+        ),
+        "Path class-method alias fixture must fail",
+    )
+    require(
+        inspect_source(validator, "import os\ndef f(p):\n    os.chown(p, 1, 1)\n"),
+        "direct os.chown fixture must fail",
+    )
+    require(
+        inspect_source(validator, "import shutil\ndef f(a, b):\n    shutil.copystat(a, b)\n"),
+        "direct shutil.copystat fixture must fail",
+    )
+    require(
+        inspect_source(validator, "from os import utime as touch_time\ndef f(p):\n    touch_time(p)\n"),
+        "aliased os.utime fixture must fail",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "import os\ndef f(p):\n    return os.open(p, os.O_RDONLY | os.O_CLOEXEC)\n",
+        ),
+        "read-only os.open fixture must pass",
+    )
+    require(
+        inspect_source(
+            validator,
+            "import os\ndef f(p):\n    return os.open(p, os.O_RDONLY | os.O_CREAT)\n",
+        ),
+        "mutating os.open fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
+            "import os\ndef f(p, flags):\n    return os.open(p, flags)\n",
+        ),
+        "dynamic os.open flags fixture must fail",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "import os\ndef f(fd):\n    return os.fdopen(fd, 'r')\n",
+        ),
+        "read-only os.fdopen fixture must pass",
+    )
+    require(
+        inspect_source(
+            validator,
+            "import os\ndef f(fd):\n    return os.fdopen(fd, 'wb')\n",
+        ),
+        "write-capable os.fdopen fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
+            "import io\ndef f(p, mode):\n    return io.open(p, mode)\n",
+        ),
+        "dynamic io.open mode fixture must fail",
+    )
+    require(
         not inspect_source(
             Path("generate-fixture.py"),
-            "from pathlib import Path\ndef f():\n    Path('a').replace('b')\n",
+            "from pathlib import Path\nimport os\ndef f():\n    Path('a').replace('b')\n    os.chown('x', 1, 1)\n",
         ),
-        "transformer/generator Path.replace fixture must remain outside validator purity scope",
+        "transformer/generator direct filesystem mutation fixture must remain outside validator purity scope",
     )
 
 
@@ -452,7 +627,7 @@ def main() -> int:
         print(
             f"Validator execution alias contract passed: {len(paths)} repository Python scripts "
             "use mutation/execution-sensitive callables only through canonical auditable spellings; "
-            "validator Path.replace mutation is receiver-aware and closed without conflating str.replace"
+            "validator Path/open/fd and unambiguous filesystem mutation surfaces are fail-closed"
         )
         return 0
     except (OSError, SyntaxError, ValueError) as exc:
