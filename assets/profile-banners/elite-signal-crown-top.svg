@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="190" viewBox="0 0 1280 190" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Animated signal crown</title>
+  <desc id="desc">A precision animated signal field using aqua, magenta, and green.</desc>
+  <defs>
+    <linearGradient id="tri" x1="0" y1="0" x2="1280" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00E6FF"/>
+      <stop offset="0.28" stop-color="#00FBCC"/>
+      <stop offset="0.52" stop-color="#E328FC"/>
+      <stop offset="0.76" stop-color="#00FBCC"/>
+      <stop offset="1" stop-color="#00E6FF"/>
+    </linearGradient>
+    <linearGradient id="triReverse" x1="1280" y1="0" x2="0" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#00E6FF"/>
+      <stop offset="0.34" stop-color="#E328FC"/>
+      <stop offset="0.68" stop-color="#00FBCC"/>
+      <stop offset="1" stop-color="#00E6FF"/>
+    </linearGradient>
+    <radialGradient id="core" cx="0" cy="0" r="1" gradientTransform="translate(640 91) rotate(90) scale(72 170)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E328FC" stop-opacity="0.34"/>
+      <stop offset="0.46" stop-color="#00E6FF" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#00FBCC" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-50%" width="160%" height="200%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="4.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft" x="-20%" y="-50%" width="140%" height="200%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="640" cy="91" rx="175" ry="72" fill="url(#core)">
+    <animate attributeName="rx" values="160;188;160" dur="7s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.62;1;0.62" dur="5.5s" repeatCount="indefinite"/>
+  </ellipse>
+
+  <g opacity="0.18">
+    <path d="M0 36H1280" stroke="url(#tri)" stroke-width="1" stroke-dasharray="2 18">
+      <animate attributeName="stroke-dashoffset" values="0;-160" dur="11s" repeatCount="indefinite"/>
+    </path>
+    <path d="M0 148H1280" stroke="url(#triReverse)" stroke-width="1" stroke-dasharray="2 16">
+      <animate attributeName="stroke-dashoffset" values="0;144" dur="9s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <g fill="none" stroke-linecap="round">
+    <path d="M0 112C156 112 208 60 340 60C464 60 494 101 590 101C616 101 630 91 640 76C650 91 664 101 690 101C786 101 816 60 940 60C1072 60 1124 112 1280 112" stroke="url(#tri)" stroke-width="2.2" opacity="0.92" filter="url(#glow)" stroke-dasharray="54 20 8 18">
+      <animate attributeName="stroke-dashoffset" values="0;-600" dur="10s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.62;1;0.62" dur="4.8s" repeatCount="indefinite"/>
+    </path>
+    <path d="M0 129C152 129 228 82 354 82C477 82 521 119 596 119C618 119 632 109 640 95C648 109 662 119 684 119C759 119 803 82 926 82C1052 82 1128 129 1280 129" stroke="url(#triReverse)" stroke-width="1.3" opacity="0.52" stroke-dasharray="8 18">
+      <animate attributeName="stroke-dashoffset" values="0;420" dur="13s" repeatCount="indefinite"/>
+    </path>
+    <path d="M72 158C236 146 276 108 398 108C496 108 554 137 610 137M670 137C726 137 784 108 882 108C1004 108 1044 146 1208 158" stroke="url(#tri)" stroke-width="1" opacity="0.3" stroke-dasharray="3 12">
+      <animate attributeName="stroke-dashoffset" values="0;-250" dur="16s" repeatCount="indefinite"/>
+    </path>
+  </g>
+
+  <g transform="translate(640 91)" fill="none" filter="url(#glow)">
+    <g>
+      <path d="M0-44 38-22 38 22 0 44-38 22-38-22Z" stroke="url(#tri)" stroke-width="1.8" stroke-dasharray="18 9"/>
+      <path d="M0-32 28-16 28 16 0 32-28 16-28-16Z" stroke="url(#triReverse)" stroke-width="1.2" stroke-dasharray="6 8" opacity="0.8"/>
+      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="22s" repeatCount="indefinite"/>
+    </g>
+    <g>
+      <ellipse cx="0" cy="0" rx="58" ry="18" stroke="#00E6FF" stroke-width="1" stroke-dasharray="4 11" opacity="0.72"/>
+      <ellipse cx="0" cy="0" rx="18" ry="58" stroke="#00FBCC" stroke-width="1" stroke-dasharray="4 11" opacity="0.62"/>
+      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="16s" repeatCount="indefinite"/>
+    </g>
+    <circle r="5.5" fill="#E328FC">
+      <animate attributeName="r" values="4;7;4" dur="2.8s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.55;1;0.55" dur="2.8s" repeatCount="indefinite"/>
+    </circle>
+    <circle r="13" stroke="#00E6FF" stroke-width="1.2" opacity="0.72">
+      <animate attributeName="r" values="10;21;10" dur="3.8s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.8;0.08;0.8" dur="3.8s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <g filter="url(#glow)">
+    <circle r="3" fill="#00E6FF"><animateMotion path="M70 111C228 111 258 61 390 61C510 61 568 92 640 92" dur="7s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="7s" repeatCount="indefinite"/></circle>
+    <circle r="2.6" fill="#00FBCC"><animateMotion path="M1210 128C1060 128 1022 82 900 82C790 82 718 109 640 109" dur="8.7s" begin="-2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="8.7s" begin="-2.4s" repeatCount="indefinite"/></circle>
+    <circle r="2.3" fill="#E328FC"><animateMotion path="M118 157C276 147 326 108 430 108C526 108 586 130 640 130" dur="10.8s" begin="-4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="10.8s" begin="-4s" repeatCount="indefinite"/></circle>
+    <circle r="2.3" fill="#E328FC"><animateMotion path="M1162 157C1004 147 954 108 850 108C754 108 694 130 640 130" dur="10.8s" begin="-8s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" dur="10.8s" begin="-8s" repeatCount="indefinite"/></circle>
+  </g>
+
+  <g opacity="0.78" filter="url(#glow)">
+    <circle cx="210" cy="60" r="2.8" fill="#00E6FF"><animate attributeName="opacity" values="0.25;1;0.25" dur="3.2s" begin="-1s" repeatCount="indefinite"/></circle>
+    <circle cx="340" cy="82" r="2.4" fill="#00FBCC"><animate attributeName="opacity" values="1;0.25;1" dur="4s" repeatCount="indefinite"/></circle>
+    <circle cx="492" cy="104" r="2.6" fill="#E328FC"><animate attributeName="opacity" values="0.2;1;0.2" dur="2.7s" begin="-0.7s" repeatCount="indefinite"/></circle>
+    <circle cx="788" cy="104" r="2.6" fill="#E328FC"><animate attributeName="opacity" values="1;0.2;1" dur="2.7s" begin="-1.2s" repeatCount="indefinite"/></circle>
+    <circle cx="940" cy="82" r="2.4" fill="#00FBCC"><animate attributeName="opacity" values="0.25;1;0.25" dur="4s" begin="-2s" repeatCount="indefinite"/></circle>
+    <circle cx="1070" cy="60" r="2.8" fill="#00E6FF"><animate attributeName="opacity" values="1;0.25;1" dur="3.2s" begin="-1.6s" repeatCount="indefinite"/></circle>
+  </g>
+
+  <path d="M224 173H1056" stroke="url(#tri)" stroke-width="1" opacity="0.16" filter="url(#soft)"/>
+  <path d="M360 174H920" stroke="url(#tri)" stroke-width="2" opacity="0.34" stroke-dasharray="2 12">
+    <animate attributeName="stroke-dashoffset" values="0;-84" dur="5s" repeatCount="indefinite"/>
+  </path>
+</svg>
