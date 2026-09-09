@@ -44,10 +44,16 @@ FORBIDDEN_METHOD_LEAVES = {
     "write_text", "write_bytes", "touch", "mkdir", "unlink", "rename", "rmdir",
     "chmod", "lchmod", "symlink_to", "hardlink_to", "apply",
 }
+CONCRETE_PATH_TYPES = {
+    "Path", "pathlib.Path",
+    "PosixPath", "pathlib.PosixPath",
+    "WindowsPath", "pathlib.WindowsPath",
+}
 PATH_RETURNING_METHODS = {
     "absolute", "expanduser", "joinpath", "relative_to", "resolve",
     "with_name", "with_stem", "with_suffix",
 }
+PATH_CLASS_RETURNING_METHODS = {"cwd", "home", "from_uri"}
 PATH_ALWAYS_MUTATION_METHODS = {"lchmod", "replace"}
 WRITE_MODE_MARKERS = frozenset("wax+")
 MUTATING_OS_OPEN_FLAGS = {
@@ -186,10 +192,13 @@ def annotation_mentions_path(
     if node is None:
         return False
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        compact = node.value.replace(" ", "")
-        return compact == "Path" or "Path" in compact.split("|")
+        try:
+            parsed = ast.parse(node.value, mode="eval").body
+        except SyntaxError:
+            return False
+        return annotation_mentions_path(parsed, modules, symbols)
     resolved = resolved_name(node, modules, symbols)
-    if resolved in {"Path", "pathlib.Path"}:
+    if resolved in CONCRETE_PATH_TYPES:
         return True
     if isinstance(node, ast.Subscript):
         return annotation_mentions_path(node.slice, modules, symbols)
@@ -204,7 +213,7 @@ def annotation_mentions_path(
 
 
 class PathMutationVisitor(ast.NodeVisitor):
-    """Resolve pathlib receivers without conflating same-named string/object methods."""
+    """Resolve concrete pathlib receivers without conflating same-named string/object methods."""
 
     def __init__(
         self,
@@ -229,7 +238,7 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.violations.append(f"line {getattr(node, 'lineno', '?')}: {message}")
 
     def is_path_type_expr(self, node: ast.AST) -> bool:
-        return resolved_name(node, self.modules, self.symbols) in {"Path", "pathlib.Path"}
+        return resolved_name(node, self.modules, self.symbols) in CONCRETE_PATH_TYPES
 
     def is_path_expr(self, node: ast.AST) -> bool:
         if self.is_path_type_expr(node):
@@ -238,10 +247,16 @@ class PathMutationVisitor(ast.NodeVisitor):
             return node.id in self.paths
         if isinstance(node, ast.Call):
             name = resolved_name(node.func, self.modules, self.symbols)
-            if name in {"Path", "pathlib.Path"}:
+            if name in CONCRETE_PATH_TYPES:
                 return True
-            if isinstance(node.func, ast.Attribute) and node.func.attr in PATH_RETURNING_METHODS:
-                return self.is_path_expr(node.func.value)
+            if isinstance(node.func, ast.Attribute):
+                if (
+                    node.func.attr in PATH_CLASS_RETURNING_METHODS
+                    and self.is_path_type_expr(node.func.value)
+                ):
+                    return True
+                if node.func.attr in PATH_RETURNING_METHODS:
+                    return self.is_path_expr(node.func.value)
             return False
         if isinstance(node, ast.Attribute):
             if node.attr == "parent":
@@ -324,16 +339,16 @@ class PathMutationVisitor(ast.NodeVisitor):
             if self.is_path_expr(node.func.value):
                 self.report(
                     node,
-                    f"pathlib.Path.{node.func.attr}() filesystem mutation is forbidden in validator production code",
+                    f"pathlib concrete-path {node.func.attr}() filesystem mutation is forbidden in validator production code",
                 )
         if isinstance(node.func, ast.Attribute) and node.func.attr == "open" and self.is_path_expr(node.func.value):
             mode_index = 1 if self.is_path_type_expr(node.func.value) else 0
             mode_node = call_argument(node, mode_index, "mode")
             mode = literal_string(mode_node) if mode_node is not None else "r"
             if mode is None:
-                self.report(node, "dynamic pathlib.Path.open() mode is forbidden in validators")
+                self.report(node, "dynamic pathlib concrete-path open() mode is forbidden in validators")
             elif any(marker in mode for marker in WRITE_MODE_MARKERS):
-                self.report(node, f"write-capable pathlib.Path.open() is forbidden in validators: {mode!r}")
+                self.report(node, f"write-capable pathlib concrete-path open() is forbidden in validators: {mode!r}")
         call_name = resolved_name(node.func, self.modules, self.symbols)
         if call_name == "getattr" and len(node.args) >= 2:
             attribute = (
@@ -344,10 +359,10 @@ class PathMutationVisitor(ast.NodeVisitor):
             if attribute in PATH_ALWAYS_MUTATION_METHODS and self.is_path_expr(node.args[0]):
                 self.report(
                     node,
-                    f"reflective pathlib.Path.{attribute} lookup is forbidden in validator production code",
+                    f"reflective pathlib concrete-path {attribute} lookup is forbidden in validator production code",
                 )
             if attribute == "open" and self.is_path_expr(node.args[0]):
-                self.report(node, "reflective pathlib.Path.open lookup is forbidden in validators")
+                self.report(node, "reflective pathlib concrete-path open lookup is forbidden in validators")
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
@@ -355,10 +370,10 @@ class PathMutationVisitor(ast.NodeVisitor):
             if not direct_call_target(node, self.parents):
                 self.report(
                     node,
-                    f"pathlib.Path.{node.attr} bound method must not be aliased in validators",
+                    f"pathlib concrete-path {node.attr} bound method must not be aliased in validators",
                 )
         if node.attr == "open" and self.is_path_expr(node.value) and not direct_call_target(node, self.parents):
-            self.report(node, "pathlib.Path.open bound method must not be aliased in validators")
+            self.report(node, "pathlib concrete-path open bound method must not be aliased in validators")
         self.generic_visit(node)
 
 
@@ -495,6 +510,48 @@ def self_test() -> None:
     require(
         inspect_source(
             validator,
+            "from pathlib import PosixPath\ndef f():\n    PosixPath('a').replace('b')\n",
+        ),
+        "direct PosixPath.replace fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import WindowsPath\ndef f(p: WindowsPath):\n    p.replace('b')\n",
+        ),
+        "annotated WindowsPath.replace fixture must fail without platform instantiation",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import PosixPath\ndef f(p: 'PosixPath | None'):\n    if p is not None:\n        p.replace('b')\n",
+        ),
+        "quoted concrete-path annotation fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f():\n    Path.cwd().replace('b')\n",
+        ),
+        "Path.cwd concrete factory fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f():\n    Path.home().open('w')\n",
+        ),
+        "Path.home write-open fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f():\n    Path.from_uri('file:///tmp/a').replace('b')\n",
+        ),
+        "Path.from_uri concrete factory fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
             "from pathlib import Path\ndef f(p: Path):\n    p.replace(Path('b'))\n",
         ),
         "annotated Path.replace fixture must fail",
@@ -627,7 +684,7 @@ def main() -> int:
         print(
             f"Validator execution alias contract passed: {len(paths)} repository Python scripts "
             "use mutation/execution-sensitive callables only through canonical auditable spellings; "
-            "validator Path/open/fd and unambiguous filesystem mutation surfaces are fail-closed"
+            "validator concrete pathlib/open/fd and unambiguous filesystem mutation surfaces are fail-closed"
         )
         return 0
     except (OSError, SyntaxError, ValueError) as exc:
