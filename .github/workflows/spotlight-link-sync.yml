@@ -316,3 +316,19 @@ jobs:
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
           RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"
           test "$(jq -r .merged <<<"$RESULT")" = "true"
+          MERGE_SHA="$(jq -r .sha <<<"$RESULT")"
+          test "$MERGE_SHA" != "null"
+
+          # Close the bot branch only after proving the exact reviewed head merged and
+          # main still points at that merge. If GitHub auto-deleted it first, do nothing.
+          MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .merged <<<"$MERGED_PR")" = "true"
+          test "$(jq -r .state <<<"$MERGED_PR")" = "closed"
+          test "$(jq -r .base.ref <<<"$MERGED_PR")" = "main"
+          test "$(jq -r .head.ref <<<"$MERGED_PR")" = "$BOT_BRANCH"
+          test "$(jq -r .head.sha <<<"$MERGED_PR")" = "$HEAD_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"
+          if BRANCH_REF="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BOT_BRANCH}" 2>/dev/null)"; then
+            test "$(jq -r .object.sha <<<"$BRANCH_REF")" = "$HEAD_SHA"
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" >/dev/null
+          fi

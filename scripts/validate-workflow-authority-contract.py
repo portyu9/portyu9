@@ -421,9 +421,14 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
             'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
             'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"',
             'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
+            'MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"',
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"',
+            'if BRANCH_REF="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BOT_BRANCH}" 2>/dev/null)"; then',
+            'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" >/dev/null',
         ),
         required_snippets=(
             'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
+            'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" >/dev/null',
         ),
     )
     for block, label in ((propose, "propose"), (approve, "approve"), (merge, "merge")):
@@ -471,6 +476,19 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
         require(check in merge, f"Spotlight merge is missing required check: {check}")
     require('merge_method:"merge"' in merge and 'sha:$sha' in merge,
             "Spotlight merge must use exact-head merge-commit semantics")
+    for fragment in (
+        'MERGE_SHA="$(jq -r .sha <<<"$RESULT")"',
+        'test "$MERGE_SHA" != "null"',
+        'test "$(jq -r .merged <<<"$MERGED_PR")" = "true"',
+        'test "$(jq -r .state <<<"$MERGED_PR")" = "closed"',
+        'test "$(jq -r .base.ref <<<"$MERGED_PR")" = "main"',
+        'test "$(jq -r .head.ref <<<"$MERGED_PR")" = "$BOT_BRANCH"',
+        'test "$(jq -r .head.sha <<<"$MERGED_PR")" = "$HEAD_SHA"',
+        'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"',
+        'test "$(jq -r .object.sha <<<"$BRANCH_REF")" = "$HEAD_SHA"',
+        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" >/dev/null',
+    ):
+        require(fragment in merge, f"Spotlight merge lost exact-head bot-branch cleanup closure: {fragment}")
 
     require(readme.count(spotlight_links.START) == 1 and readme.count(spotlight_links.END) == 1,
             "README must contain exactly one guarded Spotlight direct-link block")
