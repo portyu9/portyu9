@@ -74,7 +74,7 @@ EXPECTED = {
             "plan": {"contents": "read"},
             "propose": {"contents": "write", "pull-requests": "write"},
             "approve": {"contents": "read", "actions": "write"},
-            "merge": {"contents": "write", "pull-requests": "write", "checks": "read"},
+            "merge": {"contents": "write", "pull-requests": "read", "checks": "read"},
         },
     },
 }

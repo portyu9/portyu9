@@ -234,8 +234,8 @@ jobs:
             '[{"name":"CodeQL","workflow_id":$codeql},{"name":"Dependency review","workflow_id":$dependency},{"name":"Profile quality","workflow_id":$profile}] | sort_by(.name)')"
 
           # Keep the long-lived wait under Actions-only authority. The terminal merge job
-          # receives repository/PR write authority only after all three canonical workflows
-          # have completed successfully for the exact reviewed head.
+          # receives repository-content write plus pull-request read authority only after all
+          # three canonical workflows have completed successfully for the exact reviewed head.
           for attempt in $(seq 1 60); do
             RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
             OBSERVED_IDENTITIES="$(jq -c '[.[("workflow" + "_runs")][] | {name,workflow_id}] | unique | sort_by(.name)' <<<"$RUNS")"
@@ -283,7 +283,7 @@ jobs:
     timeout-minutes: 3
     permissions:
       contents: write
-      pull-requests: write
+      pull-requests: read
       checks: read
 
     steps:
