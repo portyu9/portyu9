@@ -106,6 +106,9 @@ jobs:
       - name: Validate engineering attestation predicate builder
         run: python3 scripts/build-profile-evidence-attestation.py --self-test
 
+      - name: Validate attestation builder/schema identity binding
+        run: python3 scripts/validate-profile-attestation-schema-binding.py
+
       - name: Validate engineering attestation trust boundary
         run: python3 scripts/validate-profile-attestation-contract.py
 
