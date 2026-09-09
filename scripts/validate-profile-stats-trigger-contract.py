@@ -11,6 +11,7 @@ WORKFLOW = ROOT / ".github/workflows/profile-stats.yml"
 CADENCE = ROOT / ".github/REFRESH_CADENCE.md"
 MAIN_REF_EXPR = "github.ref == 'refs/heads/main'"
 ATTEST_DELTA_EXPR = "github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'"
+PUBLICATION_DELTA_EXPR = "needs.stage.outputs.changed == 'true'"
 JOB_IF_LINE = re.compile(r"(?m)^    if:\s*(?P<expr>.+?)\s*$")
 REVIEW_SENTINELS = (
     "scripts/set-signal-field-refresh-cadence.py",
@@ -90,6 +91,14 @@ def self_test() -> None:
     require(exact_job_if(canonical_attestation, "fixture terminal attestation") == ATTEST_DELTA_EXPR,
             "job-level if parser rejected canonical attestation delta guard")
 
+    canonical_publication = (
+        "  publish:\n"
+        f"    if: {PUBLICATION_DELTA_EXPR}\n"
+        "    needs: stage\n"
+    )
+    require(exact_job_if(canonical_publication, "fixture terminal publication") == PUBLICATION_DELTA_EXPR,
+            "job-level if parser rejected canonical publication delta guard")
+
     commented = (
         "  generate:\n"
         f"    # if: {MAIN_REF_EXPR}\n"
@@ -146,6 +155,8 @@ def main() -> int:
                 "publication staging job-level if must remain aligned with the exact attestation scheduled-delta guard")
         require("needs: stage" in publish,
                 "terminal publication must remain downstream of read-only publication staging")
+        require(exact_job_if(publish, "terminal publication") == PUBLICATION_DELTA_EXPR,
+                "terminal publication job-level if must be the exact staged-candidate delta guard")
 
         require("scripts/**" in cadence, "refresh cadence rationale must document the trusted scripts/** trigger surface")
         require(
@@ -155,7 +166,7 @@ def main() -> int:
         print(
             "Profile stats trigger contract passed: scripts/** closes the trusted production source surface; "
             "pushes are main-only, generation is gated by the exact refs/heads/main guard, terminal OIDC/attestation authority is gated by the exact scheduled-delta job condition, "
-            "and publication staging remains aligned with that same delta boundary before terminal publication."
+            "publication staging remains aligned with that delta boundary, and terminal contents-write publication is gated by the exact staged-candidate delta condition."
         )
         return 0
     except (OSError, ValueError, StopIteration, IndexError) as exc:
