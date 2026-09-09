@@ -50,7 +50,7 @@ PROFILE_BANNER_SVGS = (
     "assets/profile-banners/quantum-apex-signal-crown-hero.svg",
     "assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg",
     "assets/profile-banners/elite-evidence-horizon-bottom.svg",
-    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated.svg",
+    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg",
 )
 RETIRED_FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-ai-qa-control-plane.svg",
