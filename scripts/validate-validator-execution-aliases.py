@@ -59,6 +59,7 @@ PATH_SHAPE_MATERIALIZERS = {"list", "tuple"}
 PATH_CLASS_RETURNING_METHODS = {"cwd", "home", "from_uri"}
 PATH_ALWAYS_MUTATION_METHODS = {"lchmod", "replace"}
 PATH_NEXT_CALLABLES = {"next", "builtins.next"}
+PATH_TRANSPARENT_CONTEXT_MANAGERS = {"contextlib.nullcontext"}
 PATH_VALUE_MASK = 1
 PATH_ITER_VALUE_MASK = 2
 ReceiverShape = tuple[object, ...]
@@ -545,6 +546,34 @@ class PathMutationVisitor(ast.NodeVisitor):
         for index, item in enumerate(target.elts):
             self.bind_receiver_slots(item, [shape[index] for shape in matching])
 
+    def transparent_context_result(self, node: ast.AST) -> tuple[bool, ast.AST | None]:
+        if not isinstance(node, ast.Call):
+            return False, None
+        if resolved_name(node.func, self.modules, self.symbols) not in PATH_TRANSPARENT_CONTEXT_MANAGERS:
+            return False, None
+        if len(node.args) > 1 or any(keyword.arg is None for keyword in node.keywords):
+            return False, None
+        if any(keyword.arg != "enter_result" for keyword in node.keywords):
+            return False, None
+        if node.args and node.keywords:
+            return False, None
+        if node.args:
+            return True, node.args[0]
+        if node.keywords:
+            return True, node.keywords[0].value
+        return True, None
+
+    def bind_context_target(self, target: ast.AST, context_expr: ast.AST) -> None:
+        transparent, result = self.transparent_context_result(context_expr)
+        if transparent and result is not None:
+            self.bind_target(target, self.is_path_expr(result))
+            self.bind_iter_target(target, self.is_path_iter_expr(result))
+            self.bind_structured_target(target, self.structured_shapes(result))
+            return
+        self.bind_target(target, False)
+        self.bind_iter_target(target, False)
+        self.bind_structured_target(target, set())
+
     def flow_state(self) -> FlowState:
         return (
             set(self.paths),
@@ -926,6 +955,20 @@ class PathMutationVisitor(ast.NodeVisitor):
             self.visit(statement)
         else_state = self.flow_state()
         self.restore_flow_state(self.merge_flow_states(body_state, else_state))
+
+    def visit_with_like(self, node: ast.With | ast.AsyncWith) -> None:
+        for item in node.items:
+            self.visit(item.context_expr)
+            if item.optional_vars is not None:
+                self.bind_context_target(item.optional_vars, item.context_expr)
+        for statement in node.body:
+            self.visit(statement)
+
+    def visit_With(self, node: ast.With) -> None:
+        self.visit_with_like(node)
+
+    def visit_AsyncWith(self, node: ast.AsyncWith) -> None:
+        self.visit_with_like(node)
 
     def visit_For(self, node: ast.For) -> None:
         self.visit(node.iter)
@@ -1747,6 +1790,62 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    return pair[0].read_text()\n",
         ),
         "read-only fixed index Path extraction must remain valid",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from contextlib import nullcontext\nfrom pathlib import Path\ndef f(p: Path):\n    with nullcontext(p) as q:\n        q.replace('b')\n",
+        ),
+        "nullcontext positional enter result must preserve concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "import contextlib as ctx\nfrom pathlib import Path\ndef f(p: Path):\n    with ctx.nullcontext(enter_result=p) as q:\n        q.replace('b')\n",
+        ),
+        "resolved nullcontext keyword enter result must preserve concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from contextlib import nullcontext as keep\nfrom pathlib import Path\ndef f(p: Path):\n    with keep(p.iterdir()) as children:\n        for child in children:\n            child.replace('b')\n",
+        ),
+        "nullcontext binding must preserve Path-iterator identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from contextlib import nullcontext\nfrom pathlib import Path\ndef f(p: Path):\n    with nullcontext((p, 'alpha')) as pair:\n        pair[0].replace('b')\n",
+        ),
+        "nullcontext binding must preserve fixed receiver-shape identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from contextlib import nullcontext\nfrom pathlib import Path\ndef f(p: Path):\n    with nullcontext(p) as q, nullcontext((q, 'alpha')) as pair:\n        pair[0].replace('b')\n",
+        ),
+        "multi-item with bindings must propagate nullcontext identity left-to-right",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from contextlib import nullcontext\nfrom pathlib import Path\nasync def f(p: Path):\n    async with nullcontext(p) as q:\n        q.replace('b')\n",
+        ),
+        "async-with nullcontext binding must preserve concrete-Path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\nclass Strings:\n    def __enter__(self):\n        return 'alpha'\n    def __exit__(self, *args):\n        return False\ndef f(p: Path):\n    q = p\n    with Strings() as q:\n        return q.replace('a', 'b')\n",
+        ),
+        "unknown context-manager target must clear stale concrete-Path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from contextlib import nullcontext\nfrom pathlib import Path\ndef f(p: Path):\n    with nullcontext(p) as q:\n        return q.read_text()\n",
+        ),
+        "read-only nullcontext Path binding must remain valid",
     )
     require(
         not inspect_source(
