@@ -53,6 +53,7 @@ PATH_RETURNING_METHODS = {
     "absolute", "expanduser", "joinpath", "readlink", "relative_to", "resolve",
     "with_name", "with_segments", "with_stem", "with_suffix",
 }
+PATH_ITERATOR_METHODS = {"glob", "iterdir", "rglob"}
 PATH_CLASS_RETURNING_METHODS = {"cwd", "home", "from_uri"}
 PATH_ALWAYS_MUTATION_METHODS = {"lchmod", "replace"}
 WRITE_MODE_MARKERS = frozenset("wax+")
@@ -272,6 +273,14 @@ class PathMutationVisitor(ast.NodeVisitor):
             return self.is_path_expr(node.left)
         return False
 
+    def is_path_iter_expr(self, node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in PATH_ITERATOR_METHODS
+            and self.is_path_expr(node.func.value)
+        )
+
     def bind_target(self, target: ast.AST, is_path: bool) -> None:
         if isinstance(target, ast.Name):
             if is_path:
@@ -333,6 +342,14 @@ class PathMutationVisitor(ast.NodeVisitor):
         if node.value is not None:
             is_path = is_path or self.is_path_expr(node.value)
         self.bind_target(node.target, is_path)
+
+    def visit_For(self, node: ast.For) -> None:
+        self.visit(node.iter)
+        self.bind_target(node.target, self.is_path_iter_expr(node.iter))
+        for statement in node.body:
+            self.visit(statement)
+        for statement in node.orelse:
+            self.visit(statement)
 
     def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Attribute) and node.func.attr in PATH_ALWAYS_MUTATION_METHODS:
@@ -577,6 +594,21 @@ def self_test() -> None:
         ),
         "Path.with_segments derived-path replace fixture must fail",
     )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for child in p.iterdir():\n        child.read_text()\n",
+        ),
+        "read-only Path.iterdir loop fixture must pass",
+    )
+    for method, call in (("iterdir", "p.iterdir()"), ("glob", "p.glob('*.txt')"), ("rglob", "p.rglob('*.txt')")):
+        require(
+            inspect_source(
+                validator,
+                f"from pathlib import Path\ndef f(p: Path):\n    for child in {call}:\n        child.replace('b')\n",
+            ),
+            f"Path.{method} yielded-path replace fixture must fail",
+        )
     require(
         inspect_source(
             validator,
