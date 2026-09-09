@@ -327,7 +327,8 @@ jobs:
           test "$MERGE_SHA" != "null"
 
           # Close the bot branch only after proving the exact reviewed head merged and
-          # main still points at that merge. If GitHub auto-deleted it first, do nothing.
+          # main still points at that merge. Accept only an explicit 404 if GitHub already
+          # auto-deleted it; every other lookup failure must fail the terminal job closed.
           MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .merged <<<"$MERGED_PR")" = "true"
           test "$(jq -r .state <<<"$MERGED_PR")" = "closed"
@@ -338,4 +339,6 @@ jobs:
           if BRANCH_REF="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BOT_BRANCH}" 2>/dev/null)"; then
             test "$(jq -r .object.sha <<<"$BRANCH_REF")" = "$HEAD_SHA"
             gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" >/dev/null
+          else
+            test "$(jq -r '.status // empty' <<<"$BRANCH_REF")" = "404"
           fi

@@ -35,6 +35,11 @@ DISPATCH_STEP = (
     "            \"repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches\" \\\n"
     "            -f ref=main"
 )
+CLEANUP_404_GATE = (
+    "          else\n"
+    "            test \"$(jq -r '.status // empty' <<<\"$BRANCH_REF\")\" = \"404\"\n"
+    "          fi"
+)
 
 
 def fail(message: str) -> None:
@@ -111,6 +116,8 @@ def validate(sync: str, stats: str, policy: str) -> None:
             "Spotlight terminal merge authority window changed")
     require("permissions:\n      contents: write\n      pull-requests: read\n      checks: read" in merge,
             "Spotlight terminal merge authority changed")
+    require(CLEANUP_404_GATE in merge,
+            "Spotlight terminal branch cleanup must fail closed on every lookup failure except explicit 404")
     for forbidden in ("for attempt in ", "sleep 10", "actions/checkout@", "actions/setup-python@", "python3 "):
         require(forbidden not in merge,
                 f"Spotlight terminal merge acquired polling/authored execution surface: {forbidden}")
@@ -188,6 +195,14 @@ def self_test(sync: str, stats: str, policy: str) -> None:
     expect_failure(
         terminal_pr_write, stats, policy, "terminal merge authority changed",
     )
+    cleanup_fail_open = sync.replace(
+        CLEANUP_404_GATE,
+        "          else\n            :\n          fi",
+        1,
+    )
+    expect_failure(
+        cleanup_fail_open, stats, policy, "fail closed on every lookup failure except explicit 404",
+    )
 
     dispatch_comment_shadow = stats.replace(
         '          gh api --method POST \\\n            "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \\\n            -f ref=main',
@@ -231,7 +246,7 @@ def main() -> int:
         print(
             "Spotlight UI merge authorization validation passed: the fixed deterministic README-only synchronization class "
             "keeps canonical workflow waiting under Actions-only approval authority and starts terminal repository-content write plus pull-request read authority "
-            "only for a fresh exact-check snapshot, exact-head merge, and cleanup; post-publication reconciliation remains one exact fixed-workflow, ref-only dispatch."
+            "only for a fresh exact-check snapshot, exact-head merge, and fail-closed cleanup; post-publication reconciliation remains one exact fixed-workflow, ref-only dispatch."
         )
         return 0
     except (OSError, ValueError) as exc:
