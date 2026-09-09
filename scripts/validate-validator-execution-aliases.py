@@ -303,6 +303,22 @@ class PathMutationVisitor(ast.NodeVisitor):
             return any(self.is_path_iter_expr(value) for value in node.values)
         if isinstance(node, ast.IfExp):
             return self.is_path_iter_expr(node.body) or self.is_path_iter_expr(node.orelse)
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            for item in node.elts:
+                if isinstance(item, ast.Starred):
+                    if self.is_path_iter_expr(item.value):
+                        return True
+                elif self.is_path_expr(item):
+                    return True
+            return False
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if key is None:
+                    if self.is_path_iter_expr(value):
+                        return True
+                elif self.is_path_expr(key):
+                    return True
+            return False
         if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
             return self.comprehension_yields_path(node)
         if not isinstance(node, ast.Call):
@@ -1126,6 +1142,90 @@ def self_test() -> None:
             ),
             f"Path iterator {wrapper} materializer must preserve yielded concrete-path identity",
         )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for child in [p]:\n        child.replace('b')\n",
+        ),
+        "Path-valued list literal must preserve yielded concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for child in ('alpha', p):\n        child.replace('b')\n",
+        ),
+        "mixed tuple literal with a Path arm must preserve possible concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for child in {p}:\n        child.replace('b')\n",
+        ),
+        "Path-valued set literal must preserve yielded concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = [p]\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "aliased Path-valued literal collection must preserve yielded concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = [*p.iterdir()]\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "starred Path iterator expansion must preserve yielded concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for child in {p: 'value'}:\n        child.replace('b')\n",
+        ),
+        "Path-valued dict key must preserve normal dict-iteration identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    original = {p: 1}\n    copied = {**original}\n    for child in copied:\n        child.replace('b')\n",
+        ),
+        "dict unpacking must preserve possible concrete-Path key identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return [child.replace('b') for child in [p]]\n",
+        ),
+        "comprehension over a Path-valued literal must bind a concrete Path target",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    next(iter([p])).replace('b')\n",
+        ),
+        "next(iter(Path-valued literal)) must preserve concrete-Path extraction identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for name in {'alpha': p}:\n        name.replace('a', 'b')\n",
+        ),
+        "Path-valued dict values must not taint ordinary key iteration",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    for name in ['alpha', 'beta']:\n        name.replace('a', 'b')\n",
+        ),
+        "all-string literal collections must remain ordinary string replacement",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for child in [p]:\n        child.read_text()\n",
+        ),
+        "read-only Path literal iteration must remain valid",
+    )
     require(
         not inspect_source(
             validator,
