@@ -277,6 +277,24 @@ class PathMutationVisitor(ast.NodeVisitor):
             return True, sign * int(node.value)
         return False, 0
 
+    def structured_slice_shapes(self, node: ast.Subscript) -> set[ReceiverShape]:
+        if not isinstance(node.slice, ast.Slice):
+            return set()
+        components: list[int | None] = []
+        for component in (node.slice.lower, node.slice.upper, node.slice.step):
+            if component is None:
+                components.append(None)
+                continue
+            static, value = self.static_sequence_index(component)
+            if not static:
+                return set()
+            components.append(value)
+        lower, upper, step = components
+        if step == 0:
+            return set()
+        projection = slice(lower, upper, step)
+        return {shape[projection] for shape in self.structured_shapes(node.value)}
+
     def structured_index_slots(self, node: ast.Subscript) -> set[object]:
         if isinstance(node.slice, ast.Slice):
             return set()
@@ -367,6 +385,12 @@ class PathMutationVisitor(ast.NodeVisitor):
         ):
             return self.is_path_expr(node.value.value)
         if isinstance(node, ast.Subscript):
+            if isinstance(node.slice, ast.Slice):
+                return any(
+                    isinstance(slot, int) and slot & PATH_VALUE_MASK
+                    for shape in self.structured_slice_shapes(node)
+                    for slot in shape
+                )
             return any(
                 isinstance(slot, int) and slot & PATH_ITER_VALUE_MASK
                 for slot in self.structured_index_slots(node)
@@ -425,6 +449,8 @@ class PathMutationVisitor(ast.NodeVisitor):
         if isinstance(node, ast.IfExp):
             return self.structured_shapes(node.body) | self.structured_shapes(node.orelse)
         if isinstance(node, ast.Subscript):
+            if isinstance(node.slice, ast.Slice):
+                return self.structured_slice_shapes(node)
             return {
                 slot
                 for slot in self.structured_index_slots(node)
@@ -1790,6 +1816,76 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    return pair[0].read_text()\n",
         ),
         "read-only fixed index Path extraction must remain valid",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    for q in pair[:1]:\n        q.replace('b')\n",
+        ),
+        "static fixed-shape slice iteration must preserve a concrete-Path slot",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    prefix = pair[:1]\n    q, = prefix\n    q.replace('b')\n",
+        ),
+        "aliased static slice must preserve exact receiver shape for destructuring",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = ('alpha', p)\n    tail = pair[-1:]\n    q, = tail\n    q.replace('b')\n",
+        ),
+        "negative static slice bound must preserve concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = ('alpha', p, 'beta')\n    middle = pair[1::2]\n    q, = middle\n    q.replace('b')\n",
+        ),
+        "static slice stride must preserve selected concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    payload = ((p, 'alpha'), 'beta')\n    prefix = payload[:1]\n    pair, = prefix\n    pair[0].replace('b')\n",
+        ),
+        "static slice must preserve nested receiver shapes",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p.iterdir(), 'alpha')\n    prefix = pair[:1]\n    children, = prefix\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "static slice must preserve Path-iterator leaves through later destructuring",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    pair = (p, 'alpha') if flag else ('beta', 'gamma')\n    prefix = pair[:1]\n    q, = prefix\n    q.replace('b')\n",
+        ),
+        "static slice must preserve Path alternatives across joined fixed shapes",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    tail = pair[1:]\n    name, = tail\n    return name.replace('a', 'b')\n",
+        ),
+        "static sibling-only slice must not inherit an excluded Path slot",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    pair = ('alpha', 'beta')\n    for name in pair[::-1]:\n        name.replace('a', 'b')\n",
+        ),
+        "all-string reverse static slice must remain ordinary string replacement",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    return [q.read_text() for q in pair[:1]]\n",
+        ),
+        "read-only Path use through a static fixed-shape slice must remain valid",
     )
     require(
         inspect_source(
