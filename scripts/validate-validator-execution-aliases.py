@@ -54,6 +54,7 @@ PATH_RETURNING_METHODS = {
     "with_name", "with_segments", "with_stem", "with_suffix",
 }
 PATH_ITERATOR_METHODS = {"glob", "iterdir", "rglob"}
+PATH_ITERATOR_MATERIALIZERS = {"frozenset", "iter", "list", "reversed", "set", "sorted", "tuple"}
 PATH_CLASS_RETURNING_METHODS = {"cwd", "home", "from_uri"}
 PATH_ALWAYS_MUTATION_METHODS = {"lchmod", "replace"}
 WRITE_MODE_MARKERS = frozenset("wax+")
@@ -228,12 +229,18 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.symbols = symbols
         self.parents = parents
         self.global_paths: set[str] = set()
+        self.global_path_iters: set[str] = set()
         self.scopes: list[set[str]] = []
+        self.iter_scopes: list[set[str]] = []
         self.violations: list[str] = []
 
     @property
     def paths(self) -> set[str]:
         return self.scopes[-1] if self.scopes else self.global_paths
+
+    @property
+    def path_iters(self) -> set[str]:
+        return self.iter_scopes[-1] if self.iter_scopes else self.global_path_iters
 
     def report(self, node: ast.AST, message: str) -> None:
         self.violations.append(f"line {getattr(node, 'lineno', '?')}: {message}")
@@ -274,11 +281,21 @@ class PathMutationVisitor(ast.NodeVisitor):
         return False
 
     def is_path_iter_expr(self, node: ast.AST) -> bool:
-        return (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
+        if isinstance(node, ast.Name):
+            return node.id in self.path_iters
+        if not isinstance(node, ast.Call):
+            return False
+        if (
+            isinstance(node.func, ast.Attribute)
             and node.func.attr in PATH_ITERATOR_METHODS
             and self.is_path_expr(node.func.value)
+        ):
+            return True
+        name = resolved_name(node.func, self.modules, self.symbols)
+        return (
+            name in PATH_ITERATOR_MATERIALIZERS
+            and len(node.args) == 1
+            and self.is_path_iter_expr(node.args[0])
         )
 
     def bind_target(self, target: ast.AST, is_path: bool) -> None:
@@ -291,29 +308,48 @@ class PathMutationVisitor(ast.NodeVisitor):
             for item in target.elts:
                 self.bind_target(item, False)
 
+    def bind_iter_target(self, target: ast.AST, is_path_iter: bool) -> None:
+        if isinstance(target, ast.Name):
+            if is_path_iter:
+                self.path_iters.add(target.id)
+            else:
+                self.path_iters.discard(target.id)
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for item in target.elts:
+                self.bind_iter_target(item, False)
+
     def visit_Module(self, node: ast.Module) -> None:
         changed = True
         while changed:
-            before = set(self.global_paths)
+            before_paths = set(self.global_paths)
+            before_iters = set(self.global_path_iters)
             for statement in node.body:
                 if isinstance(statement, ast.Assign):
                     is_path = self.is_path_expr(statement.value)
+                    is_path_iter = self.is_path_iter_expr(statement.value)
                     for target in statement.targets:
                         if isinstance(target, ast.Name) and is_path:
                             self.global_paths.add(target.id)
+                        if isinstance(target, ast.Name) and is_path_iter:
+                            self.global_path_iters.add(target.id)
                 elif isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
                     is_path = annotation_mentions_path(statement.annotation, self.modules, self.symbols)
+                    is_path_iter = False
                     if statement.value is not None:
                         is_path = is_path or self.is_path_expr(statement.value)
+                        is_path_iter = self.is_path_iter_expr(statement.value)
                     if is_path:
                         self.global_paths.add(statement.target.id)
-            changed = before != self.global_paths
+                    if is_path_iter:
+                        self.global_path_iters.add(statement.target.id)
+            changed = before_paths != self.global_paths or before_iters != self.global_path_iters
 
         for statement in node.body:
             self.visit(statement)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         local = set(self.global_paths)
+        local_iters = set(self.global_path_iters)
         for arg in (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs):
             if annotation_mentions_path(arg.annotation, self.modules, self.symbols):
                 local.add(arg.arg)
@@ -322,8 +358,10 @@ class PathMutationVisitor(ast.NodeVisitor):
         if node.args.kwarg and annotation_mentions_path(node.args.kwarg.annotation, self.modules, self.symbols):
             local.add(node.args.kwarg.arg)
         self.scopes.append(local)
+        self.iter_scopes.append(local_iters)
         for statement in node.body:
             self.visit(statement)
+        self.iter_scopes.pop()
         self.scopes.pop()
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
@@ -332,20 +370,26 @@ class PathMutationVisitor(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign) -> None:
         self.visit(node.value)
         is_path = self.is_path_expr(node.value)
+        is_path_iter = self.is_path_iter_expr(node.value)
         for target in node.targets:
             self.bind_target(target, is_path)
+            self.bind_iter_target(target, is_path_iter)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         if node.value is not None:
             self.visit(node.value)
         is_path = annotation_mentions_path(node.annotation, self.modules, self.symbols)
+        is_path_iter = False
         if node.value is not None:
             is_path = is_path or self.is_path_expr(node.value)
+            is_path_iter = self.is_path_iter_expr(node.value)
         self.bind_target(node.target, is_path)
+        self.bind_iter_target(node.target, is_path_iter)
 
     def visit_For(self, node: ast.For) -> None:
         self.visit(node.iter)
         self.bind_target(node.target, self.is_path_iter_expr(node.iter))
+        self.bind_iter_target(node.target, False)
         for statement in node.body:
             self.visit(statement)
         for statement in node.orelse:
@@ -609,6 +653,43 @@ def self_test() -> None:
             ),
             f"Path.{method} yielded-path replace fixture must fail",
         )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = p.iterdir()\n    for child in children:\n        child.read_text()\n",
+        ),
+        "read-only aliased Path iterator loop fixture must pass",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = p.iterdir()\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "aliased Path iterator yielded-path replace fixture must fail",
+    )
+    for wrapper, call in (
+        ("iter", "iter(p.iterdir())"),
+        ("list", "list(p.iterdir())"),
+        ("tuple", "tuple(p.glob('*.txt'))"),
+        ("set", "set(p.rglob('*.txt'))"),
+        ("frozenset", "frozenset(p.iterdir())"),
+        ("sorted", "sorted(p.glob('*.txt'))"),
+        ("reversed", "reversed(list(p.iterdir()))"),
+    ):
+        require(
+            inspect_source(
+                validator,
+                f"from pathlib import Path\ndef f(p: Path):\n    for child in {call}:\n        child.replace('b')\n",
+            ),
+            f"Path iterator {wrapper} materializer must preserve yielded concrete-path identity",
+        )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = p.iterdir()\n    children = ['alpha']\n    for child in children:\n        child.replace('a', 'b')\n",
+        ),
+        "Path iterator alias rebound to a string collection must stop carrying concrete-path identity",
+    )
     require(
         inspect_source(
             validator,
