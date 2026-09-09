@@ -332,6 +332,33 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.path_iters.clear()
         self.path_iters.update(path_iters)
 
+    @staticmethod
+    def merge_flow_states(
+        *states: tuple[set[str], set[str]],
+    ) -> tuple[set[str], set[str]]:
+        paths: set[str] = set()
+        path_iters: set[str] = set()
+        for state_paths, state_iters in states:
+            paths.update(state_paths)
+            path_iters.update(state_iters)
+        return paths, path_iters
+
+    def visit_loop_block(self, statements: list[ast.stmt]) -> tuple[set[str], set[str]]:
+        observed = self.flow_state()
+        for statement in statements:
+            self.visit(statement)
+            observed = self.merge_flow_states(observed, self.flow_state())
+        return observed
+
+    def dedupe_loop_violations(self, start: int) -> None:
+        seen: set[str] = set()
+        unique: list[str] = []
+        for violation in self.violations[start:]:
+            if violation not in seen:
+                seen.add(violation)
+                unique.append(violation)
+        self.violations[start:] = unique
+
     def visit_Module(self, node: ast.Module) -> None:
         changed = True
         while changed:
@@ -414,12 +441,38 @@ class PathMutationVisitor(ast.NodeVisitor):
 
     def visit_For(self, node: ast.For) -> None:
         self.visit(node.iter)
-        self.bind_target(node.target, self.is_path_iter_expr(node.iter))
-        self.bind_iter_target(node.target, False)
-        for statement in node.body:
-            self.visit(statement)
-        for statement in node.orelse:
-            self.visit(statement)
+        before = self.flow_state()
+        yields_path = self.is_path_iter_expr(node.iter)
+        head = before
+        violation_start = len(self.violations)
+        while True:
+            self.restore_flow_state(head)
+            self.bind_target(node.target, yields_path)
+            self.bind_iter_target(node.target, False)
+            observed = self.merge_flow_states(self.flow_state(), self.visit_loop_block(node.body))
+            next_head = self.merge_flow_states(head, before, observed)
+            if next_head == head:
+                break
+            head = next_head
+        self.restore_flow_state(head)
+        self.restore_flow_state(self.visit_loop_block(node.orelse))
+        self.dedupe_loop_violations(violation_start)
+
+    def visit_While(self, node: ast.While) -> None:
+        before = self.flow_state()
+        head = before
+        violation_start = len(self.violations)
+        while True:
+            self.restore_flow_state(head)
+            self.visit(node.test)
+            observed = self.merge_flow_states(self.flow_state(), self.visit_loop_block(node.body))
+            next_head = self.merge_flow_states(head, before, observed)
+            if next_head == head:
+                break
+            head = next_head
+        self.restore_flow_state(head)
+        self.restore_flow_state(self.visit_loop_block(node.orelse))
+        self.dedupe_loop_violations(violation_start)
 
     def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Attribute) and node.func.attr in PATH_ALWAYS_MUTATION_METHODS:
@@ -764,6 +817,55 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path, flag):\n    children = p.iterdir() if flag else ['alpha']\n    for child in children:\n        child.replace('b')\n",
         ),
         "conditional expression with a Path iterator arm must retain yielded concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    for _ in []:\n        q = 'alpha'\n    q.replace('b')\n",
+        ),
+        "zero-iteration for-loop reassignment must not erase concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    q = p\n    while flag:\n        q = 'alpha'\n    q.replace('b')\n",
+        ),
+        "zero-iteration while-loop reassignment must not erase concrete-path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children = p.iterdir()\n    for _ in []:\n        children = ['alpha']\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "zero-iteration loop reassignment must not erase Path-iterator identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    q = 'alpha'\n    while flag:\n        if isinstance(q, Path):\n            q.replace('b')\n        q = p\n",
+        ),
+        "second loop iteration must observe concrete-path state introduced by the prior iteration",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    children = ['alpha']\n    while flag:\n        for child in children:\n            child.replace('b')\n        children = p.iterdir()\n",
+        ),
+        "second loop iteration must observe Path-iterator state introduced by the prior iteration",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    q = 'alpha'\n    while flag:\n        q = p\n        break\n        q = 'beta'\n    q.replace('b')\n",
+        ),
+        "loop intermediate state before break must preserve concrete-path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f(flag):\n    q = 'alpha'\n    while flag:\n        q = 'beta'\n    return q.replace('a', 'b')\n",
+        ),
+        "all-string loop state must remain ordinary string replacement",
     )
     require(
         inspect_source(
