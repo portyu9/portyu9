@@ -1,9 +1,8 @@
 <p align="center">
-<img alt="Animated quantum apex command lattice" src="assets/profile-banners/quantum-apex-command-lattice-top.svg" width="100%">
-</p>
-
-<p align="center">
-<img alt="Animated signal crown" src="assets/profile-banners/elite-signal-crown-top.svg" width="100%">
+<picture>
+  <source media="(max-width: 640px)" srcset="assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg">
+  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/quantum-apex-signal-crown-hero.svg" width="100%">
+</picture>
 </p>
 
 <p align="center">
