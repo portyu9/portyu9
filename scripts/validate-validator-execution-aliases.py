@@ -266,6 +266,33 @@ class PathMutationVisitor(ast.NodeVisitor):
     ) -> dict[str, set[ReceiverShape]]:
         return {name: set(shapes) for name, shapes in shape_map.items()}
 
+    @staticmethod
+    def static_sequence_index(node: ast.AST) -> tuple[bool, int]:
+        sign = 1
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            sign = -1 if isinstance(node.op, ast.USub) else 1
+            node = node.operand
+        if isinstance(node, ast.Constant) and isinstance(node.value, int):
+            return True, sign * int(node.value)
+        return False, 0
+
+    def structured_index_slots(self, node: ast.Subscript) -> set[object]:
+        if isinstance(node.slice, ast.Slice):
+            return set()
+        shapes = self.structured_shapes(node.value)
+        if not shapes:
+            return set()
+        static, index = self.static_sequence_index(node.slice)
+        slots: set[object] = set()
+        for shape in shapes:
+            if not static:
+                slots.update(shape)
+                continue
+            normalized = index if index >= 0 else len(shape) + index
+            if 0 <= normalized < len(shape):
+                slots.add(shape[normalized])
+        return slots
+
     def report(self, node: ast.AST, message: str) -> None:
         self.violations.append(f"line {getattr(node, 'lineno', '?')}: {message}")
 
@@ -312,7 +339,10 @@ class PathMutationVisitor(ast.NodeVisitor):
                 and not isinstance(node.slice, ast.Slice)
             ):
                 return self.is_path_expr(node.value.value)
-            return False
+            return any(
+                isinstance(slot, int) and slot & PATH_VALUE_MASK
+                for slot in self.structured_index_slots(node)
+            )
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
             return self.is_path_expr(node.left)
         return False
@@ -335,6 +365,11 @@ class PathMutationVisitor(ast.NodeVisitor):
             and isinstance(node.slice, ast.Slice)
         ):
             return self.is_path_expr(node.value.value)
+        if isinstance(node, ast.Subscript):
+            return any(
+                isinstance(slot, int) and slot & PATH_ITER_VALUE_MASK
+                for slot in self.structured_index_slots(node)
+            )
         if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
             for item in node.elts:
                 if isinstance(item, ast.Starred):
@@ -388,6 +423,12 @@ class PathMutationVisitor(ast.NodeVisitor):
             return shapes
         if isinstance(node, ast.IfExp):
             return self.structured_shapes(node.body) | self.structured_shapes(node.orelse)
+        if isinstance(node, ast.Subscript):
+            return {
+                slot
+                for slot in self.structured_index_slots(node)
+                if isinstance(slot, tuple)
+            }
         if isinstance(node, ast.Call):
             name = resolved_name(node.func, self.modules, self.symbols)
             if name in PATH_SHAPE_MATERIALIZERS and len(node.args) == 1 and not node.keywords:
@@ -1629,6 +1670,83 @@ def self_test() -> None:
             "def f():\n    q, label = ('alpha', 'beta')\n    return q.replace('a', 'b')\n",
         ),
         "ordinary all-string structured destructuring must remain valid",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    (p, 'alpha')[0].replace('b')\n",
+        ),
+        "direct fixed tuple index must preserve concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    pair[0].replace('b')\n",
+        ),
+        "aliased fixed tuple index must preserve concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = ('alpha', p)\n    pair[-1].replace('b')\n",
+        ),
+        "negative fixed tuple index must preserve concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    payload = ((p, 'alpha'), 'beta')\n    payload[0][0].replace('b')\n",
+        ),
+        "nested fixed index extraction must preserve concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p.iterdir(), 'alpha')\n    for child in pair[0]:\n        child.replace('b')\n",
+        ),
+        "fixed index extraction must preserve Path-iterator leaves",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, index):\n    pair = (p, 'alpha')\n    pair[index].replace('b')\n",
+        ),
+        "dynamic fixed-sequence index must conservatively preserve a Path alternative",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    pair = (p, 'alpha') if flag else ('beta', 'gamma')\n    pair[0].replace('b')\n",
+        ),
+        "fixed index extraction must preserve Path alternatives across conditional shapes",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    tuple((p, 'alpha'))[0].replace('b')\n",
+        ),
+        "fixed-shape tuple materialization must preserve indexed concrete-Path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    return pair[1].replace('a', 'b')\n",
+        ),
+        "static string slot selection must not inherit sibling Path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f(index):\n    pair = ('alpha', 'beta')\n    return pair[index].replace('a', 'b')\n",
+        ),
+        "dynamic indexing of an all-string fixed shape must remain ordinary string replacement",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    return pair[0].read_text()\n",
+        ),
+        "read-only fixed index Path extraction must remain valid",
     )
     require(
         not inspect_source(
