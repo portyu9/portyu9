@@ -288,8 +288,11 @@ def validate_profile_stats_contract(workflow: str) -> None:
     require("name: profile-evidence-attestation-predicate" in attest_write and
             "predicate-path: attestation-input/attestation-predicate.json" in attest_write,
             "Terminal attestation predicate transport/path changed")
-    require(attest_write.count("if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'") == 5,
-            "Every terminal attestation step must share the exact reviewed scheduled-delta guard")
+    guard = "if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'"
+    require(attest_write.startswith(f"  attest_publish:\n    {guard}\n"),
+            "Terminal attestation must use the exact reviewed scheduled-delta guard at the job boundary")
+    require(attest_write.count(guard) == 6,
+            "Terminal attestation job and all five terminal steps must share the exact reviewed scheduled-delta guard")
 
     require("name: stage-publication-read-only" in stage and
             "needs: [generate, attest, attest_publish]" in stage,

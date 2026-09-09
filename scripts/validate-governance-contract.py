@@ -268,8 +268,11 @@ def validate_stats(text: str) -> None:
             "Terminal attestation must execute exactly one pinned actions/attest")
     require(attest_write.count("      - name: ") == 5,
             "Terminal attestation must contain exactly four downloads plus one attest action")
-    require(attest_write.count("if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'") == 5,
-            "Terminal attestation scheduled-delta guard surface changed")
+    guard = "if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'"
+    require(attest_write.startswith(f"  attest_publish:\n    {guard}\n"),
+            "Terminal attestation must use the exact scheduled-delta guard at the job boundary")
+    require(attest_write.count(guard) == 6,
+            "Terminal attestation job and all five terminal steps must share the exact scheduled-delta guard")
 
     require("needs: [generate, attest, attest_publish]" in stage,
             "Publication staging must depend on generation, preparation, and terminal attestation")

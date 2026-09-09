@@ -191,6 +191,7 @@ jobs:
           retention-days: 1
 
   attest_publish:
+    if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
     name: attest-write-only
     needs: attest
     runs-on: ubuntu-24.04
