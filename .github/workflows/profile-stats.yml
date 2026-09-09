@@ -363,6 +363,7 @@ jobs:
           retention-days: 1
 
   publish:
+    if: needs.stage.outputs.changed == 'true'
     name: publish-write-only
     needs: stage
     runs-on: ubuntu-24.04

@@ -304,6 +304,11 @@ def validate_stats(text: str) -> None:
 
     require("permissions:\n      contents: write" in publish and "needs: stage" in publish,
             "Write-only publication authority/dependency changed")
+    publication_guard = "if: needs.stage.outputs.changed == 'true'"
+    require(publish.startswith(f"  publish:\n    {publication_guard}\n"),
+            "Write-only publication must use the exact staged-candidate guard at the job boundary")
+    require(publish.count(publication_guard) == 4,
+            "Write-only publication job and all three changed-candidate steps must share the exact staged-candidate guard")
     validate_publish_write_surface(publish)
 
     require("needs: publish" in dispatch and "permissions:\n      actions: write" in dispatch,
@@ -390,7 +395,7 @@ def main() -> int:
         print(
             "Repository governance validation passed: PR checks remain stable/read-only; dependency/action provenance is mandatory; "
             "generation and attestation preparation execute authored code with read-only authority; terminal OIDC/attestation authority executes only digest-checked transport plus pinned actions/attest; "
-            "publication staging seals the generated candidate under read-only authority; terminal publication retains one exact generated push; "
+            "publication staging seals the generated candidate under read-only authority; terminal contents-write publication is eligible only for a sealed changed candidate and retains one exact generated push; "
             "and post-publication Spotlight dispatch remains isolated to actions: write."
         )
         return 0

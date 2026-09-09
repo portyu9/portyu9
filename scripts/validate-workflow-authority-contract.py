@@ -307,6 +307,11 @@ def validate_profile_stats_contract(workflow: str) -> None:
             "Terminal publisher identity/dependency changed")
     require("permissions:\n      contents: write" in publish,
             "Terminal publisher must retain only repository-content write authority")
+    publish_guard = "if: needs.stage.outputs.changed == 'true'"
+    require(publish.startswith(f"  publish:\n    {publish_guard}\n"),
+            "Terminal publisher must use the exact staged-candidate guard at the job boundary")
+    require(publish.count(publish_guard) == 4,
+            "Terminal publisher job and all three changed-candidate steps must share the exact staged-candidate guard")
     for forbidden in (
         "actions/checkout@", "actions/setup-python@", "python3 ", "id-token:", "attestations:",
         "actions:", "pull-requests:", "checks:", "security-events:", "packages:",
@@ -488,7 +493,7 @@ def main() -> int:
         print(
             "Workflow authority validation passed: five workflows form a closed authority inventory; "
             "attestation preparation is read-only and terminal OIDC/attestation authority executes no authored shell/code; "
-            "publication staging remains isolated from terminal repository-write authority; post-publication dispatch remains actions-only; "
+            "publication staging remains isolated from terminal repository-write authority and terminal contents-write publication is job-gated on a sealed changed candidate; post-publication dispatch remains actions-only; "
             "Spotlight synchronization stays PR-gated with closed gh api surfaces and exact-head branch cleanup."
         )
         return 0

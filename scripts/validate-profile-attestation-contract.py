@@ -218,6 +218,11 @@ def validate_workflow() -> None:
             "publication dependency changed")
     require("permissions:\n      contents: write" in publish and "id-token: write" not in publish and "attestations: write" not in publish,
             "publication authority changed")
+    publish_guard = "if: needs.stage.outputs.changed == 'true'"
+    require(publish.startswith(f"  publish:\n    {publish_guard}\n"),
+            "terminal publication must use the exact staged-candidate guard at the job boundary")
+    require(publish.count(publish_guard) == 4,
+            "terminal publication job and all three changed-candidate steps must share the exact staged-candidate guard")
     require("actions/checkout@" not in publish and "actions/setup-python@" not in publish and "python3 " not in publish,
             "terminal publication must not execute checkout/setup/authored Python")
 
@@ -370,7 +375,7 @@ def main() -> int:
         print(
             "Engineering attestation validation passed: predicate v1/v2/v3 bytes are frozen; read-only preparation owns validation/predicate construction; "
             "terminal OIDC/attestation authority executes only digest-checked artifact transport plus pinned actions/attest; "
-            "the eleven-subject contract remains closed and the claim remains provenance/contract conformance rather than certification."
+            "terminal contents-write publication is eligible only for a sealed changed candidate; the eleven-subject contract remains closed and the claim remains provenance/contract conformance rather than certification."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError) as exc:

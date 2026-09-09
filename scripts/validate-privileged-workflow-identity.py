@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v4"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "a7824194821155e22503093c43cad5cf023c6dc3",
-    ".github/workflows/profile-stats.yml": "78faa7b888bf637a02269f6c772f8554d550cacc",
+    ".github/workflows/profile-stats.yml": "c8b9ad62b93477c69f13d637a4daea6023fe2b4c",
     ".github/workflows/spotlight-link-sync.yml": "79ebe8a87f8a118bb10aef53042a4db1d0b3ec4b",
 }
 
