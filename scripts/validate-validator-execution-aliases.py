@@ -55,9 +55,14 @@ PATH_RETURNING_METHODS = {
 }
 PATH_ITERATOR_METHODS = {"glob", "iterdir", "rglob"}
 PATH_ITERATOR_MATERIALIZERS = {"frozenset", "iter", "list", "reversed", "set", "sorted", "tuple"}
+PATH_SHAPE_MATERIALIZERS = {"list", "tuple"}
 PATH_CLASS_RETURNING_METHODS = {"cwd", "home", "from_uri"}
 PATH_ALWAYS_MUTATION_METHODS = {"lchmod", "replace"}
 PATH_NEXT_CALLABLES = {"next", "builtins.next"}
+PATH_VALUE_MASK = 1
+PATH_ITER_VALUE_MASK = 2
+ReceiverShape = tuple[object, ...]
+FlowState = tuple[set[str], set[str], dict[str, set[ReceiverShape]]]
 WRITE_MODE_MARKERS = frozenset("wax+")
 MUTATING_OS_OPEN_FLAGS = {
     "O_APPEND", "O_CREAT", "O_RDWR", "O_TMPFILE", "O_TRUNC", "O_WRONLY",
@@ -231,10 +236,16 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.parents = parents
         self.global_paths: set[str] = set()
         self.global_path_iters: set[str] = set()
+        self.global_receiver_shapes: dict[str, set[ReceiverShape]] = {}
         self.scopes: list[set[str]] = []
         self.iter_scopes: list[set[str]] = []
-        self.comprehension_namedexpr_targets: list[tuple[set[str], set[str]]] = []
-        self.comprehension_scope_states: list[tuple[set[str], set[str]]] = []
+        self.shape_scopes: list[dict[str, set[ReceiverShape]]] = []
+        self.comprehension_namedexpr_targets: list[
+            tuple[set[str], set[str], dict[str, set[ReceiverShape]]]
+        ] = []
+        self.comprehension_scope_states: list[
+            tuple[set[str], set[str], dict[str, set[ReceiverShape]]]
+        ] = []
         self.violations: list[str] = []
 
     @property
@@ -244,6 +255,16 @@ class PathMutationVisitor(ast.NodeVisitor):
     @property
     def path_iters(self) -> set[str]:
         return self.iter_scopes[-1] if self.iter_scopes else self.global_path_iters
+
+    @property
+    def receiver_shapes(self) -> dict[str, set[ReceiverShape]]:
+        return self.shape_scopes[-1] if self.shape_scopes else self.global_receiver_shapes
+
+    @staticmethod
+    def copy_shape_map(
+        shape_map: dict[str, set[ReceiverShape]],
+    ) -> dict[str, set[ReceiverShape]]:
+        return {name: set(shapes) for name, shapes in shape_map.items()}
 
     def report(self, node: ast.AST, message: str) -> None:
         self.violations.append(f"line {getattr(node, 'lineno', '?')}: {message}")
@@ -347,6 +368,55 @@ class PathMutationVisitor(ast.NodeVisitor):
             and self.is_path_iter_expr(node.args[0])
         )
 
+    def receiver_mask(self, node: ast.AST) -> int:
+        mask = 0
+        if self.is_path_expr(node):
+            mask |= PATH_VALUE_MASK
+        if self.is_path_iter_expr(node):
+            mask |= PATH_ITER_VALUE_MASK
+        return mask
+
+    def structured_shapes(self, node: ast.AST) -> set[ReceiverShape]:
+        if isinstance(node, ast.Name):
+            return set(self.receiver_shapes.get(node.id, set()))
+        if isinstance(node, ast.NamedExpr):
+            return self.structured_shapes(node.value)
+        if isinstance(node, ast.BoolOp):
+            shapes: set[ReceiverShape] = set()
+            for value in node.values:
+                shapes.update(self.structured_shapes(value))
+            return shapes
+        if isinstance(node, ast.IfExp):
+            return self.structured_shapes(node.body) | self.structured_shapes(node.orelse)
+        if isinstance(node, ast.Call):
+            name = resolved_name(node.func, self.modules, self.symbols)
+            if name in PATH_SHAPE_MATERIALIZERS and len(node.args) == 1 and not node.keywords:
+                return self.structured_shapes(node.args[0])
+            return set()
+        if not isinstance(node, (ast.Tuple, ast.List)):
+            return set()
+        if any(isinstance(item, ast.Starred) for item in node.elts):
+            return set()
+
+        shapes: set[ReceiverShape] = {()}
+        for item in node.elts:
+            nested = self.structured_shapes(item)
+            slots: set[object] = set(nested) if nested else {self.receiver_mask(item)}
+            shapes = {
+                prefix + (slot,)
+                for prefix in shapes
+                for slot in slots
+            }
+        return shapes
+
+    def iter_structured_shapes(self, node: ast.AST) -> set[ReceiverShape]:
+        yielded: set[ReceiverShape] = set()
+        for shape in self.structured_shapes(node):
+            for slot in shape:
+                if isinstance(slot, tuple):
+                    yielded.add(slot)
+        return yielded
+
     def comprehension_yields_path(
         self,
         node: ast.ListComp | ast.SetComp | ast.GeneratorExp | ast.DictComp,
@@ -355,8 +425,10 @@ class PathMutationVisitor(ast.NodeVisitor):
         try:
             for generator in node.generators:
                 yields_path = self.is_path_iter_expr(generator.iter)
+                yielded_shapes = self.iter_structured_shapes(generator.iter)
                 self.bind_target(generator.target, yields_path)
                 self.bind_iter_target(generator.target, False)
+                self.bind_structured_target(generator.target, yielded_shapes)
             yielded = node.key if isinstance(node, ast.DictComp) else node.elt
             return self.is_path_expr(yielded)
         finally:
@@ -370,7 +442,7 @@ class PathMutationVisitor(ast.NodeVisitor):
                 self.paths.discard(target.id)
         elif isinstance(target, (ast.Tuple, ast.List)):
             for item in target.elts:
-                self.bind_target(item, False)
+                self.bind_target(item.value if isinstance(item, ast.Starred) else item, False)
 
     def bind_iter_target(self, target: ast.AST, is_path_iter: bool) -> None:
         if isinstance(target, ast.Name):
@@ -380,30 +452,87 @@ class PathMutationVisitor(ast.NodeVisitor):
                 self.path_iters.discard(target.id)
         elif isinstance(target, (ast.Tuple, ast.List)):
             for item in target.elts:
-                self.bind_iter_target(item, False)
+                self.bind_iter_target(item.value if isinstance(item, ast.Starred) else item, False)
 
-    def flow_state(self) -> tuple[set[str], set[str]]:
-        return set(self.paths), set(self.path_iters)
+    def clear_shape_target(self, target: ast.AST) -> None:
+        if isinstance(target, ast.Name):
+            self.receiver_shapes.pop(target.id, None)
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for item in target.elts:
+                self.clear_shape_target(item.value if isinstance(item, ast.Starred) else item)
 
-    def restore_flow_state(self, state: tuple[set[str], set[str]]) -> None:
-        paths, path_iters = state
+    def bind_receiver_slots(self, target: ast.AST, slots: list[object]) -> None:
+        self.clear_shape_target(target)
+        self.bind_target(target, False)
+        self.bind_iter_target(target, False)
+        if isinstance(target, ast.Name):
+            nested = {slot for slot in slots if isinstance(slot, tuple)}
+            if nested:
+                self.receiver_shapes[target.id] = nested
+            if any(isinstance(slot, int) and slot & PATH_VALUE_MASK for slot in slots):
+                self.paths.add(target.id)
+            if any(isinstance(slot, int) and slot & PATH_ITER_VALUE_MASK for slot in slots):
+                self.path_iters.add(target.id)
+            return
+        if not isinstance(target, (ast.Tuple, ast.List)):
+            return
+        if any(isinstance(item, ast.Starred) for item in target.elts):
+            return
+        matching = [
+            slot
+            for slot in slots
+            if isinstance(slot, tuple) and len(slot) == len(target.elts)
+        ]
+        for index, item in enumerate(target.elts):
+            self.bind_receiver_slots(item, [shape[index] for shape in matching])
+
+    def bind_structured_target(
+        self,
+        target: ast.AST,
+        shapes: set[ReceiverShape],
+    ) -> None:
+        self.clear_shape_target(target)
+        if isinstance(target, ast.Name):
+            if shapes:
+                self.receiver_shapes[target.id] = set(shapes)
+            return
+        if not isinstance(target, (ast.Tuple, ast.List)):
+            return
+        if any(isinstance(item, ast.Starred) for item in target.elts):
+            return
+        matching = [shape for shape in shapes if len(shape) == len(target.elts)]
+        for index, item in enumerate(target.elts):
+            self.bind_receiver_slots(item, [shape[index] for shape in matching])
+
+    def flow_state(self) -> FlowState:
+        return (
+            set(self.paths),
+            set(self.path_iters),
+            self.copy_shape_map(self.receiver_shapes),
+        )
+
+    def restore_flow_state(self, state: FlowState) -> None:
+        paths, path_iters, receiver_shapes = state
         self.paths.clear()
         self.paths.update(paths)
         self.path_iters.clear()
         self.path_iters.update(path_iters)
+        self.receiver_shapes.clear()
+        self.receiver_shapes.update(self.copy_shape_map(receiver_shapes))
 
     @staticmethod
-    def merge_flow_states(
-        *states: tuple[set[str], set[str]],
-    ) -> tuple[set[str], set[str]]:
+    def merge_flow_states(*states: FlowState) -> FlowState:
         paths: set[str] = set()
         path_iters: set[str] = set()
-        for state_paths, state_iters in states:
+        receiver_shapes: dict[str, set[ReceiverShape]] = {}
+        for state_paths, state_iters, state_shapes in states:
             paths.update(state_paths)
             path_iters.update(state_iters)
-        return paths, path_iters
+            for name, shapes in state_shapes.items():
+                receiver_shapes.setdefault(name, set()).update(shapes)
+        return paths, path_iters, receiver_shapes
 
-    def visit_flow_block(self, statements: list[ast.stmt]) -> tuple[set[str], set[str]]:
+    def visit_flow_block(self, statements: list[ast.stmt]) -> FlowState:
         observed = self.flow_state()
         for statement in statements:
             self.visit(statement)
@@ -466,41 +595,59 @@ class PathMutationVisitor(ast.NodeVisitor):
         pattern: ast.pattern,
         subject_is_path: bool,
         subject_is_path_iter: bool,
+        subject_shapes: set[ReceiverShape],
     ) -> None:
         bound = self.match_pattern_names(pattern)
         whole_subject = self.match_pattern_subject_names(pattern)
         self.paths.difference_update(bound)
         self.path_iters.difference_update(bound)
+        for name in bound:
+            self.receiver_shapes.pop(name, None)
         if subject_is_path:
             self.paths.update(whole_subject)
         if subject_is_path_iter:
             self.path_iters.update(whole_subject)
+        if subject_shapes:
+            for name in whole_subject:
+                self.receiver_shapes[name] = set(subject_shapes)
 
     def visit_Module(self, node: ast.Module) -> None:
         changed = True
         while changed:
             before_paths = set(self.global_paths)
             before_iters = set(self.global_path_iters)
+            before_shapes = self.copy_shape_map(self.global_receiver_shapes)
             for statement in node.body:
                 if isinstance(statement, ast.Assign):
                     is_path = self.is_path_expr(statement.value)
                     is_path_iter = self.is_path_iter_expr(statement.value)
+                    shapes = self.structured_shapes(statement.value)
                     for target in statement.targets:
                         if isinstance(target, ast.Name) and is_path:
                             self.global_paths.add(target.id)
                         if isinstance(target, ast.Name) and is_path_iter:
                             self.global_path_iters.add(target.id)
+                        if isinstance(target, ast.Name) and shapes:
+                            self.global_receiver_shapes.setdefault(target.id, set()).update(shapes)
                 elif isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
                     is_path = annotation_mentions_path(statement.annotation, self.modules, self.symbols)
                     is_path_iter = False
+                    shapes: set[ReceiverShape] = set()
                     if statement.value is not None:
                         is_path = is_path or self.is_path_expr(statement.value)
                         is_path_iter = self.is_path_iter_expr(statement.value)
+                        shapes = self.structured_shapes(statement.value)
                     if is_path:
                         self.global_paths.add(statement.target.id)
                     if is_path_iter:
                         self.global_path_iters.add(statement.target.id)
-            changed = before_paths != self.global_paths or before_iters != self.global_path_iters
+                    if shapes:
+                        self.global_receiver_shapes.setdefault(statement.target.id, set()).update(shapes)
+            changed = (
+                before_paths != self.global_paths
+                or before_iters != self.global_path_iters
+                or before_shapes != self.global_receiver_shapes
+            )
 
         for statement in node.body:
             self.visit(statement)
@@ -514,9 +661,13 @@ class PathMutationVisitor(ast.NodeVisitor):
             parameters.append(arguments.kwarg)
         return tuple(parameters)
 
-    def callable_default_state(self, arguments: ast.arguments) -> tuple[set[str], set[str]]:
+    def callable_default_state(
+        self,
+        arguments: ast.arguments,
+    ) -> tuple[set[str], set[str], dict[str, set[ReceiverShape]]]:
         default_paths: set[str] = set()
         default_iters: set[str] = set()
+        default_shapes: dict[str, set[ReceiverShape]] = {}
         positional = [*arguments.posonlyargs, *arguments.args]
         positional_defaults = positional[len(positional) - len(arguments.defaults):]
         for parameter, default in zip(positional_defaults, arguments.defaults):
@@ -525,6 +676,9 @@ class PathMutationVisitor(ast.NodeVisitor):
                 default_paths.add(parameter.arg)
             if self.is_path_iter_expr(default):
                 default_iters.add(parameter.arg)
+            shapes = self.structured_shapes(default)
+            if shapes:
+                default_shapes[parameter.arg] = shapes
         for parameter, default in zip(arguments.kwonlyargs, arguments.kw_defaults):
             if default is None:
                 continue
@@ -533,12 +687,15 @@ class PathMutationVisitor(ast.NodeVisitor):
                 default_paths.add(parameter.arg)
             if self.is_path_iter_expr(default):
                 default_iters.add(parameter.arg)
-        return default_paths, default_iters
+            shapes = self.structured_shapes(default)
+            if shapes:
+                default_shapes[parameter.arg] = shapes
+        return default_paths, default_iters, default_shapes
 
     def visit_function_definition(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         for decorator in node.decorator_list:
             self.visit(decorator)
-        default_paths, default_iters = self.callable_default_state(node.args)
+        default_paths, default_iters, default_shapes = self.callable_default_state(node.args)
         parameters = self.callable_parameters(node.args)
         for parameter in parameters:
             if parameter.annotation is not None:
@@ -550,13 +707,18 @@ class PathMutationVisitor(ast.NodeVisitor):
 
         local = set(self.paths)
         local_iters = set(self.path_iters)
+        local_shapes = self.copy_shape_map(self.receiver_shapes)
         parameter_names = {parameter.arg for parameter in parameters}
         local.difference_update(parameter_names)
         local_iters.difference_update(parameter_names)
+        for name in parameter_names:
+            local_shapes.pop(name, None)
         local.discard(node.name)
         local_iters.discard(node.name)
+        local_shapes.pop(node.name, None)
         local.update(default_paths)
         local_iters.update(default_iters)
+        local_shapes.update(self.copy_shape_map(default_shapes))
         for parameter in parameters:
             if annotation_mentions_path(parameter.annotation, self.modules, self.symbols):
                 local.add(parameter.arg)
@@ -567,10 +729,12 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.comprehension_scope_states = []
         self.scopes.append(local)
         self.iter_scopes.append(local_iters)
+        self.shape_scopes.append(local_shapes)
         try:
             for statement in node.body:
                 self.visit(statement)
         finally:
+            self.shape_scopes.pop()
             self.iter_scopes.pop()
             self.scopes.pop()
             self.comprehension_namedexpr_targets = saved_namedexpr_targets
@@ -578,6 +742,7 @@ class PathMutationVisitor(ast.NodeVisitor):
 
         self.paths.discard(node.name)
         self.path_iters.discard(node.name)
+        self.receiver_shapes.pop(node.name, None)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self.visit_function_definition(node)
@@ -586,24 +751,30 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.visit_function_definition(node)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
-        default_paths, default_iters = self.callable_default_state(node.args)
+        default_paths, default_iters, default_shapes = self.callable_default_state(node.args)
         parameters = self.callable_parameters(node.args)
         local = set(self.paths)
         local_iters = set(self.path_iters)
+        local_shapes = self.copy_shape_map(self.receiver_shapes)
         parameter_names = {parameter.arg for parameter in parameters}
         local.difference_update(parameter_names)
         local_iters.difference_update(parameter_names)
+        for name in parameter_names:
+            local_shapes.pop(name, None)
         local.update(default_paths)
         local_iters.update(default_iters)
+        local_shapes.update(self.copy_shape_map(default_shapes))
         saved_namedexpr_targets = self.comprehension_namedexpr_targets
         saved_comprehension_scopes = self.comprehension_scope_states
         self.comprehension_namedexpr_targets = []
         self.comprehension_scope_states = []
         self.scopes.append(local)
         self.iter_scopes.append(local_iters)
+        self.shape_scopes.append(local_shapes)
         try:
             self.visit(node.body)
         finally:
+            self.shape_scopes.pop()
             self.iter_scopes.pop()
             self.scopes.pop()
             self.comprehension_namedexpr_targets = saved_namedexpr_targets
@@ -613,39 +784,50 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.visit(node.value)
         is_path = self.is_path_expr(node.value)
         is_path_iter = self.is_path_iter_expr(node.value)
+        shapes = self.structured_shapes(node.value)
         for target in node.targets:
             self.bind_target(target, is_path)
             self.bind_iter_target(target, is_path_iter)
+            self.bind_structured_target(target, shapes)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         if node.value is not None:
             self.visit(node.value)
         is_path = annotation_mentions_path(node.annotation, self.modules, self.symbols)
         is_path_iter = False
+        shapes: set[ReceiverShape] = set()
         if node.value is not None:
             is_path = is_path or self.is_path_expr(node.value)
             is_path_iter = self.is_path_iter_expr(node.value)
+            shapes = self.structured_shapes(node.value)
         self.bind_target(node.target, is_path)
         self.bind_iter_target(node.target, is_path_iter)
+        self.bind_structured_target(node.target, shapes)
 
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
         self.visit(node.value)
         is_path = self.is_path_expr(node.value)
         is_path_iter = self.is_path_iter_expr(node.value)
+        shapes = self.structured_shapes(node.value)
         if self.comprehension_namedexpr_targets and isinstance(node.target, ast.Name):
             name = node.target.id
-            target_paths, target_iters = self.comprehension_namedexpr_targets[-1]
+            target_paths, target_iters, target_shapes = self.comprehension_namedexpr_targets[-1]
             if is_path:
                 target_paths.add(name)
             if is_path_iter:
                 target_iters.add(name)
-            for paths, path_iters in self.comprehension_scope_states[:-1]:
+            if shapes:
+                target_shapes.setdefault(name, set()).update(shapes)
+            for paths, path_iters, receiver_shapes in self.comprehension_scope_states[:-1]:
                 if is_path:
                     paths.add(name)
                 if is_path_iter:
                     path_iters.add(name)
+                if shapes:
+                    receiver_shapes.setdefault(name, set()).update(shapes)
         self.bind_target(node.target, is_path)
         self.bind_iter_target(node.target, is_path_iter)
+        self.bind_structured_target(node.target, shapes)
 
     def visit_BoolOp(self, node: ast.BoolOp) -> None:
         if not node.values:
@@ -702,18 +884,20 @@ class PathMutationVisitor(ast.NodeVisitor):
         for statement in node.orelse:
             self.visit(statement)
         else_state = self.flow_state()
-        self.restore_flow_state((body_state[0] | else_state[0], body_state[1] | else_state[1]))
+        self.restore_flow_state(self.merge_flow_states(body_state, else_state))
 
     def visit_For(self, node: ast.For) -> None:
         self.visit(node.iter)
         before = self.flow_state()
         yields_path = self.is_path_iter_expr(node.iter)
+        yielded_shapes = self.iter_structured_shapes(node.iter)
         head = before
         violation_start = len(self.violations)
         while True:
             self.restore_flow_state(head)
             self.bind_target(node.target, yields_path)
             self.bind_iter_target(node.target, False)
+            self.bind_structured_target(node.target, yielded_shapes)
             observed = self.merge_flow_states(self.flow_state(), self.visit_flow_block(node.body))
             next_head = self.merge_flow_states(head, before, observed)
             if next_head == head:
@@ -751,8 +935,8 @@ class PathMutationVisitor(ast.NodeVisitor):
         else_observed = self.visit_flow_block(node.orelse)
         normal_end = self.flow_state()
 
-        handler_ends: list[tuple[set[str], set[str]]] = []
-        handler_observed: list[tuple[set[str], set[str]]] = []
+        handler_ends: list[FlowState] = []
+        handler_observed: list[FlowState] = []
         for handler in node.handlers:
             self.restore_flow_state(body_observed)
             if handler.type is not None:
@@ -760,10 +944,12 @@ class PathMutationVisitor(ast.NodeVisitor):
             if handler.name is not None:
                 self.paths.discard(handler.name)
                 self.path_iters.discard(handler.name)
+                self.receiver_shapes.pop(handler.name, None)
             handler_observed.append(self.visit_flow_block(handler.body))
             if handler.name is not None:
                 self.paths.discard(handler.name)
                 self.path_iters.discard(handler.name)
+                self.receiver_shapes.pop(handler.name, None)
             handler_ends.append(self.flow_state())
 
         continuation = self.merge_flow_states(normal_end, *handler_ends)
@@ -794,15 +980,21 @@ class PathMutationVisitor(ast.NodeVisitor):
         self.visit(node.subject)
         subject_is_path = self.is_path_expr(node.subject)
         subject_is_path_iter = self.is_path_iter_expr(node.subject)
-        fallthrough: tuple[set[str], set[str]] | None = self.flow_state()
-        completed: list[tuple[set[str], set[str]]] = []
+        subject_shapes = self.structured_shapes(node.subject)
+        fallthrough: FlowState | None = self.flow_state()
+        completed: list[FlowState] = []
 
         for case in node.cases:
             if fallthrough is None:
                 break
             entry = fallthrough
             self.restore_flow_state(entry)
-            self.bind_match_pattern(case.pattern, subject_is_path, subject_is_path_iter)
+            self.bind_match_pattern(
+                case.pattern,
+                subject_is_path,
+                subject_is_path_iter,
+                subject_shapes,
+            )
             if case.guard is not None:
                 self.visit(case.guard)
             guarded = self.flow_state()
@@ -829,20 +1021,24 @@ class PathMutationVisitor(ast.NodeVisitor):
         namedexpr_target = (
             self.comprehension_namedexpr_targets[-1]
             if self.comprehension_namedexpr_targets
-            else (self.paths, self.path_iters)
+            else (self.paths, self.path_iters, self.receiver_shapes)
         )
         local_paths = set(self.paths)
         local_iters = set(self.path_iters)
+        local_shapes = self.copy_shape_map(self.receiver_shapes)
         self.scopes.append(local_paths)
         self.iter_scopes.append(local_iters)
+        self.shape_scopes.append(local_shapes)
         self.comprehension_namedexpr_targets.append(namedexpr_target)
-        self.comprehension_scope_states.append((local_paths, local_iters))
+        self.comprehension_scope_states.append((local_paths, local_iters, local_shapes))
         try:
             for generator in node.generators:
                 self.visit(generator.iter)
                 yields_path = self.is_path_iter_expr(generator.iter)
+                yielded_shapes = self.iter_structured_shapes(generator.iter)
                 self.bind_target(generator.target, yields_path)
                 self.bind_iter_target(generator.target, False)
+                self.bind_structured_target(generator.target, yielded_shapes)
                 for condition in generator.ifs:
                     self.visit(condition)
             for yielded in yielded_nodes:
@@ -850,6 +1046,7 @@ class PathMutationVisitor(ast.NodeVisitor):
         finally:
             self.comprehension_scope_states.pop()
             self.comprehension_namedexpr_targets.pop()
+            self.shape_scopes.pop()
             self.iter_scopes.pop()
             self.scopes.pop()
 
@@ -1306,6 +1503,132 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    ancestors = p.parents[:2]\n    return ancestors.replace('a', 'b')\n",
         ),
         "Path.parents slice tuple itself must not be misclassified as a concrete Path",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q, label = (p, 'alpha')\n    q.replace('b')\n",
+        ),
+        "fixed tuple destructuring must preserve a concrete-Path element",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    [q, label] = [p, 'alpha']\n    q.replace('b')\n",
+        ),
+        "fixed list destructuring must preserve a concrete-Path element",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    q, label = pair\n    q.replace('b')\n",
+        ),
+        "aliased fixed receiver shape must survive later destructuring",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    payload = ((p, 'alpha'), 'beta')\n    (q, label), other = payload\n    q.replace('b')\n",
+        ),
+        "nested fixed receiver shapes must bind recursively",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    children, label = (p.iterdir(), 'alpha')\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "structured binding must preserve Path-iterator leaves",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    for q, label in [(p, 'alpha')]:\n        q.replace('b')\n",
+        ),
+        "for-loop tuple target must receive a fixed structured element shape",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    rows = [(p, 'alpha')]\n    for q, label in rows:\n        q.replace('b')\n",
+        ),
+        "aliased iterable of fixed receiver shapes must bind a for-loop tuple target",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return [q.replace('b') for q, label in [(p, 'alpha')]]\n",
+        ),
+        "comprehension tuple targets must receive fixed structured element shapes",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    pair = ('beta', 'gamma')\n    q, label = pair\n    return q.replace('b', 'c')\n",
+        ),
+        "definite all-string structured reassignment must clear prior Path shape state",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    pair = (p, 'alpha')\n    if flag:\n        pair = ('beta', 'gamma')\n    q, label = pair\n    q.replace('b')\n",
+        ),
+        "optional all-string structured reassignment must preserve an incoming Path shape alternative",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    pair = (p, 'alpha')\n    if flag:\n        pair = ('beta', 'gamma')\n    else:\n        pair = ('delta', 'epsilon')\n    q, label = pair\n    return q.replace('a', 'b')\n",
+        ),
+        "exhaustive all-string structured branches must clear concrete-Path shape state",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    pair = ('alpha', 'beta')\n    while flag:\n        pair = (p, 'gamma')\n    q, label = pair\n    q.replace('b')\n",
+        ),
+        "loop-introduced structured Path state must survive the zero-or-more iteration join",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    pair = (p, 'alpha')\n    def inner():\n        q, label = pair\n        q.replace('b')\n    return inner\n",
+        ),
+        "nested callable closures must inherit fixed receiver-shape aliases",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef outer(p: Path):\n    def inner(pair=(p, 'alpha')):\n        q, label = pair\n        q.replace('b')\n    return inner\n",
+        ),
+        "fixed receiver-shape callable defaults must preserve element identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = ('alpha', 'beta')\n    (pair := (p, 'gamma'))\n    q, label = pair\n    q.replace('b')\n",
+        ),
+        "assignment expressions must bind fixed receiver shapes",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = ('alpha', 'beta')\n    [(pair := (p, 'gamma')) for _ in [0]]\n    q, label = pair\n    q.replace('b')\n",
+        ),
+        "comprehension walrus fixed shapes must propagate into the containing callable",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    match pair:\n        case captured:\n            q, label = captured\n            q.replace('b')\n",
+        ),
+        "whole-subject match captures must preserve fixed receiver-shape aliases",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    q, label = ('alpha', 'beta')\n    return q.replace('a', 'b')\n",
+        ),
+        "ordinary all-string structured destructuring must remain valid",
     )
     require(
         not inspect_source(
