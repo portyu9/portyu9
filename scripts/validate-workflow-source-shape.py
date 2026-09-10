@@ -203,6 +203,7 @@ def validate_execution_semantics(text: str, label: str) -> int:
     current_job: str | None = None
     current_runner_count = 0
     jobs = 0
+    steps_indent: int | None = None
 
     def finish_job() -> None:
         if current_job is None:
@@ -251,24 +252,40 @@ def validate_execution_semantics(text: str, label: str) -> int:
                 in_jobs = True
                 current_job = None
                 current_runner_count = 0
+                steps_indent = None
             elif in_jobs:
                 finish_job()
                 in_jobs = False
                 current_job = None
                 current_runner_count = 0
+                steps_indent = None
 
         if not in_jobs:
             if BLOCK_HEADER.search(skeleton):
                 block_indent = indentation(line)
             continue
 
+        if steps_indent is not None:
+            physical_indent = indentation(line)
+            if physical_indent <= steps_indent:
+                steps_indent = None
+            elif sequence_mapping is not None:
+                dash_indent = len(sequence_mapping.group("indent"))
+                require(
+                    dash_indent == steps_indent + 2,
+                    f"{label}:{line_number}: workflow steps must use canonical sequence indentation",
+                )
+
         if logical_indent == 2:
             finish_job()
             current_job = key
             current_runner_count = 0
+            steps_indent = None
             jobs += 1
         elif current_job is not None and logical_indent == 4:
-            if key == "runs-on":
+            if key == "steps":
+                steps_indent = logical_indent
+            elif key == "runs-on":
                 current_runner_count += 1
                 require(
                     line.strip() == f"runs-on: {REVIEWED_RUNNER}",
@@ -433,7 +450,7 @@ jobs:
         (safe.replace("permissions:\n  contents: read", "permissions: &shared\n  contents: read"), "anchors, aliases"),
         (safe.replace("permissions:\n  contents: read", "permissions:\n  <<: *shared"), "anchors, aliases"),
         ("---\n" + safe, "document markers"),
-        (safe.replace("jobs:", '\"jobs\":'), "quoted mapping keys"),
+        (safe.replace("jobs:", '"jobs":'), "quoted mapping keys"),
         (safe.replace("jobs:", "? jobs\n:"), "complex mapping keys"),
         (safe.replace("  pull_request:\n", "  pull_request:\n  pull_request:\n"), "duplicate mapping key"),
         (safe.replace("  plan:\n", "  plan:\n  plan:\n", 1), "duplicate mapping key"),
@@ -446,6 +463,7 @@ jobs:
         (safe.replace("  plan:\n    runs-on:", "  plan:\n    defaults:\n      run:\n        shell: bash\n    runs-on:", 1), "job-level defaults are forbidden"),
         (safe.replace("      - run: echo safe", "      - run: echo safe\n        shell: python", 1), "explicit step shell overrides are forbidden"),
         (safe.replace("      - run: echo safe", "      - shell: python\n        run: echo safe", 1), "explicit step shell overrides are forbidden"),
+        (safe.replace("      - run: echo safe", "        - shell: python\n          run: echo safe", 1), "canonical sequence indentation"),
         (safe.replace("    runs-on: ubuntu-24.04", "    container: alpine:3.20\n    runs-on: ubuntu-24.04", 1), "job containers are forbidden"),
         (safe.replace("    runs-on: ubuntu-24.04", "    uses: octo/repo/.github/workflows/reuse.yml@0123456789012345678901234567890123456789\n    runs-on: ubuntu-24.04", 1), "job-level uses: reusable-workflow call authority is forbidden"),
         (safe.replace("    runs-on: ubuntu-24.04", "    with:\n      mode: unsafe\n    runs-on: ubuntu-24.04", 1), "job-level with: reusable-workflow call authority is forbidden"),
