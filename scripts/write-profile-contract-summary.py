@@ -17,10 +17,11 @@ import sys
 import tempfile
 from typing import Any
 
+import automation_policy
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 SCHEMA = ROOT / ".github" / "attestation" / "profile-evidence-v3.schema.json"
-AUTHORITY = ROOT / "scripts" / "validate-workflow-authority-contract.py"
 BUILDER = ROOT / "scripts" / "build-profile-evidence-attestation.py"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 EVIDENCE_ID = re.compile(r"^SF1-[0-9A-F]{16}$")
@@ -81,19 +82,24 @@ def action_identities() -> list[tuple[str, str, str]]:
 
 
 def privileged_authority() -> list[tuple[str, str, str]]:
-    namespace = runpy.run_path(str(AUTHORITY))
-    expected = namespace.get("EXPECTED")
-    require(isinstance(expected, dict), "workflow authority manifest is unavailable")
+    policy = automation_policy.load_policy()
     rows: list[tuple[str, str, str]] = []
-    for workflow, spec in sorted(expected.items()):
-        require(isinstance(spec, dict), f"authority manifest entry is invalid: {workflow}")
-        permissions = spec.get("permissions")
-        require(isinstance(permissions, dict), f"authority permissions are invalid: {workflow}")
-        for scope, grants in sorted(permissions.items()):
-            require(isinstance(grants, dict), f"authority grant is invalid: {workflow}/{scope}")
+    workflows = policy["workflows"]
+    require(isinstance(workflows, dict), "Automation Policy IR workflow graph is unavailable")
+    for workflow_id, workflow in sorted(workflows.items()):
+        require(isinstance(workflow, dict), f"Automation Policy IR workflow entry is invalid: {workflow_id}")
+        path = workflow.get("path")
+        jobs = workflow.get("jobs")
+        require(isinstance(path, str) and isinstance(jobs, dict),
+                f"Automation Policy IR workflow authority is invalid: {workflow_id}")
+        workflow_name = Path(path).name
+        for job_id, job in sorted(jobs.items()):
+            require(isinstance(job, dict), f"Automation Policy IR job authority is invalid: {workflow_id}/{job_id}")
+            grants = job.get("permissions")
+            require(isinstance(grants, dict), f"Automation Policy IR permissions are invalid: {workflow_id}/{job_id}")
             writes = [f"{name}:write" for name, value in sorted(grants.items()) if value == "write"]
             if writes:
-                rows.append((workflow, str(scope), ", ".join(writes)))
+                rows.append((workflow_name, str(job_id), ", ".join(writes)))
     return rows
 
 
@@ -220,6 +226,17 @@ def render_summary(env: dict[str, str], signal_dir: Path, spotlight_dir: Path, l
 
 
 def self_test() -> None:
+    authority = privileged_authority()
+    require(("profile-stats.yml", "attest_publish", "attestations:write, id-token:write") in authority,
+            "summary Policy IR authority lost terminal attestation grants")
+    require(("profile-stats.yml", "publish", "contents:write") in authority,
+            "summary Policy IR authority lost generated publication grant")
+    require(("spotlight-link-sync.yml", "merge", "contents:write") in authority,
+            "summary Policy IR authority lost terminal Spotlight write grant")
+    require(all("pull-requests:write" not in grants for workflow, scope, grants in authority
+                if workflow == "spotlight-link-sync.yml" and scope == "merge"),
+            "summary Policy IR authority overstated terminal Spotlight PR authority")
+
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         signal = root / "signal"
@@ -266,6 +283,8 @@ def self_test() -> None:
             "engineering-spotlight-v2.1",
             "Reviewed write-capable authority boundaries",
             "Immutable external Action identities",
+            "`profile-stats.yml` | `publish` | `contents:write`",
+            "`spotlight-link-sync.yml` | `merge` | `contents:write`",
             "`" + "c" * 40 + "`",
         ):
             require(phrase in text, f"summary self-test is missing: {phrase}")
@@ -288,7 +307,7 @@ def main() -> int:
         Path(summary_path).write_text(text, encoding="utf-8")
         print(f"wrote read-only Profile Quality contract summary: {summary_path}")
         return 0
-    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
