@@ -15,6 +15,7 @@ SCHEMA = ROOT / ".github/attestation/profile-evidence-v3.schema.json"
 WORKFLOW = ROOT / ".github/workflows/profile-stats.yml"
 BUILDER = ROOT / "scripts/build-profile-evidence-attestation.py"
 STAGER = ROOT / "scripts/stage-profile-evidence.py"
+SOURCE_EPOCH = ROOT / "scripts/profile-stats-source-epoch-v1.json"
 
 
 def require(condition: bool, message: str) -> None:
@@ -121,17 +122,14 @@ def validate_workflow() -> None:
     require("cp spotlight-publish-input/spotlight-*.svg" not in text, "publication still duplicates Spotlight subject selection in shell")
     require("cp portfolio-ledger-publish-input/portfolio-evidence-ledger.json" not in text, "publication still duplicates Ledger subject selection in shell")
     require("find artifacts/profile-stats/profile artifacts/engineering-spotlight artifacts/portfolio-evidence -type f | wc -l" not in text, "publication still encodes an independent eleven-file count")
-    require('      - "scripts/**"' in text, "production push trigger must cover the complete trusted scripts source surface")
-    for path in (
-        "scripts/profile-evidence-subjects-v1.json",
-        "scripts/profile_evidence_subjects.py",
-        "scripts/stage-profile-evidence.py",
-        "scripts/validate-profile-evidence-subjects.py",
-        "scripts/profile-evidence-validation-boundary-v1.json",
-        "scripts/profile_evidence_validation.py",
-        "scripts/validate-profile-evidence-boundary.py",
-    ):
-        require(path.startswith("scripts/"), f"subject/validation-contract source moved outside the closed scripts trigger surface: {path}")
+
+    require('      - ".github/workflows/profile-stats.yml"' in text,
+            "production workflow must remain a direct push invalidation token")
+    require('      - "scripts/profile-stats-source-epoch-v1.json"' in text,
+            "compiled production source epoch must remain a push invalidation token")
+    require('      - "scripts/**"' not in text,
+            "retired broad scripts trigger returned")
+    require(SOURCE_EPOCH.is_file(), "compiled production source epoch is missing")
 
 
 def validate_builder() -> None:
@@ -148,7 +146,7 @@ def main() -> int:
     try:
         subjects.load_manifest()
         validate_boundary_contract()
-        for path in (SCHEMA, WORKFLOW, BUILDER, STAGER):
+        for path in (SCHEMA, WORKFLOW, BUILDER, STAGER, SOURCE_EPOCH):
             require(path.is_file(), f"subject-closure contract input is missing: {path.relative_to(ROOT)}")
         validate_schema()
         validate_workflow()
@@ -166,7 +164,8 @@ def main() -> int:
         print(
             f"Profile evidence subject closure passed: {subjects.VERSION} · "
             f"11 exact published subjects · structural filesystem closure · "
-            f"candidate closure owned by {validation_contract.VERSION} · sha256:{subjects.manifest_digest()}"
+            f"candidate closure owned by {validation_contract.VERSION} · source-epoch trigger bound · "
+            f"sha256:{subjects.manifest_digest()}"
         )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
