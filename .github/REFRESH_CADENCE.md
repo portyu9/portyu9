@@ -13,7 +13,7 @@ The scheduled path is deliberately a fallback. It is not the primary response to
 
 ## Push-trigger source closure
 
-The production push trigger is intentionally narrow: `.github/workflows/profile-stats.yml` and `scripts/profile-stats-source-epoch-v1.json` are the only two invalidation tokens. The workflow token makes any change to the privileged execution graph self-invalidating. The second token is a content-addressed source epoch compiled from the complete reviewed production source closure.
+My production push trigger is intentionally narrow: `.github/workflows/profile-stats.yml` and `scripts/profile-stats-source-epoch-v1.json` are the only two invalidation tokens. The workflow token makes any change to the privileged execution graph self-invalidating. The second token is a content-addressed source epoch compiled from the complete reviewed production source closure.
 
 `scripts/validate-profile-stats-trigger-contract.py` derives that production source closure from the versioned generation, Signal Field, validation-boundary, subject, and delegated-implementation authorities, plus the workflow's direct production script roots and the active attestation schema. The epoch records the exact closure size and one deterministic digest over every member identity. A production source change therefore cannot merge with a stale token: required Profile Quality recomputes the closure and fails closed until the source epoch is deliberately advanced in the same review.
 
