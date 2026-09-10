@@ -14,69 +14,58 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: profile-animation-v3
-      - name: Inspect V3 SVG target candidates
+      - name: Shortlist original SVG targets
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
-          import re
 
-          files = [
-              Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg'),
-              Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg'),
-          ]
-          out = []
-          for path in files:
-              out.append(f'=== {path} ===')
-              root = ET.parse(path).getroot()
-              parent = {c: p for p in root.iter() for c in p}
+          src = Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg')
+          root = ET.parse(src).getroot()
+          parent = {c:p for p in root.iter() for c in p}
+          v3 = next((e for e in root.iter() if e.attrib.get('id') == 'v3-cinematic-refinement'), None)
+          v3set = set(v3.iter()) if v3 is not None else set()
+          rows=[]
 
-              def ancestry(el):
-                  bits=[]
-                  cur=parent.get(el)
-                  while cur is not None and cur is not root:
-                      a=cur.attrib
-                      useful=[]
-                      for k in ('id','class','transform','opacity','fill','stroke'):
-                          if a.get(k): useful.append(f'{k}={a[k]}')
-                      if useful: bits.append('g[' + ', '.join(useful) + ']')
-                      cur=parent.get(cur)
-                  return ' <- '.join(bits[:5])
+          def tag(e): return e.tag.rsplit('}',1)[-1]
+          def desc(e):
+              a=dict(e.attrib)
+              if 'd' in a and len(a['d']) > 180: a['d']=a['d'][:180]+'...'
+              return f'{tag(e)} {a}'
+          def pdesc(e):
+              p=parent.get(e)
+              return dict(p.attrib) if p is not None else {}
 
-              out.append('--- elements carrying v3 ids/classes/refs ---')
-              for el in root.iter():
-                  attrs=' '.join(f'{k}={v}' for k,v in el.attrib.items())
-                  if 'v3' in attrs.lower():
-                      tag=el.tag.rsplit('}',1)[-1]
-                      a=dict(el.attrib)
-                      if 'd' in a and len(a['d'])>220: a['d']=a['d'][:220]+'...'
-                      out.append(f'{tag}: {a} | ancestors: {ancestry(el)}')
+          rows.append('=== CIRCLE GROUPS WITH PATH/LINES (likely icon glyph containers) ===')
+          for c in root.iter():
+              if c in v3set or tag(c) != 'circle': continue
+              try: r=float(c.attrib.get('r','0'))
+              except: r=0
+              if r < 8: continue
+              p=parent.get(c)
+              if p is None: continue
+              siblings=[s for s in list(p) if s not in v3set and tag(s) in {'path','polyline','polygon','line','circle'}]
+              glyphs=[s for s in siblings if s is not c and tag(s) in {'path','polyline','polygon','line'}]
+              if glyphs:
+                  rows.append(f'CIRCLE {desc(c)} | parent={pdesc(c)}')
+                  for g in glyphs[:8]: rows.append('  sibling '+desc(g))
 
-              out.append('--- compact base vector candidates outside v3 refinement ---')
-              v3group=next((e for e in root.iter() if e.attrib.get('id')=='v3-cinematic-refinement'),None)
-              v3desc=set(v3group.iter()) if v3group is not None else set()
-              for el in root.iter():
-                  if el in v3desc: continue
-                  tag=el.tag.rsplit('}',1)[-1]
-                  a=el.attrib
-                  if tag=='path':
-                      d=a.get('d','')
-                      if d and len(d)<=220:
-                          nums=[float(x) for x in re.findall(r'-?\d+(?:\.\d+)?',d)]
-                          if len(nums)>=4:
-                              out.append(f'path d={d!r} attrs={dict(a)} | ancestors: {ancestry(el)}')
-                  elif tag in {'circle','ellipse','line','polyline','polygon'}:
-                      out.append(f'{tag} attrs={dict(a)} | ancestors: {ancestry(el)}')
-              out.append('')
+          rows.append('\n=== SHORT CYAN/GREEN DIAGONAL/STROKED PATHS OUTSIDE V3 ===')
+          for e in root.iter():
+              if e in v3set or tag(e)!='path': continue
+              a=e.attrib; d=a.get('d',''); stroke=a.get('stroke','')
+              if not d or len(d)>220: continue
+              if stroke in {'#00E6FF','#00FBCC','url(#tri)','url(#triReverse)','url(#v2t)'}:
+                  rows.append(desc(e)+' | parent='+str(pdesc(e)))
 
-          Path('v3-animation-candidates.txt').write_text('\n'.join(out),encoding='utf-8')
+          Path('v3-target-shortlist.txt').write_text('\n'.join(rows[:220]), encoding='utf-8')
           PY
-      - name: Commit candidate report
+      - name: Commit shortlist
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add v3-animation-candidates.txt
-          git commit -m "chore: capture v3 target candidates" || exit 0
+          git add v3-target-shortlist.txt
+          git commit -m "chore: capture original v3 target shortlist" || exit 0
           git push origin HEAD:profile-animation-v3
