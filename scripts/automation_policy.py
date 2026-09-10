@@ -6,7 +6,7 @@ import copy
 import json
 from pathlib import Path
 import re
-from typing import Any, Callable
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / ".github" / "automation-policy-v1.json"
@@ -104,10 +104,27 @@ def validate_policy(payload: Any) -> dict[str, Any]:
         "automation policy rulesetContract path is invalid",
     )
 
-    branches = exact_keys(root["branches"], {"main", "generated", "spotlightBot"}, "automation policy branches")
+    branches = exact_keys(
+        root["branches"],
+        {"main", "generated", "spotlightCandidatePrefix"},
+        "automation policy branches",
+    )
     require(all(isinstance(value, str) and value for value in branches.values()),
             "automation policy branch identities must be non-empty strings")
-    require(len(set(branches.values())) == len(branches), "automation policy branch identities must be distinct")
+    main_branch = branches["main"]
+    generated_branch = branches["generated"]
+    candidate_prefix = branches["spotlightCandidatePrefix"]
+    require(main_branch != generated_branch, "automation policy mutable branch identities must be distinct")
+    require(
+        candidate_prefix.startswith("automation/")
+        and candidate_prefix.endswith("/")
+        and not candidate_prefix.startswith("refs/")
+        and ".." not in candidate_prefix.split("/")
+        and "//" not in candidate_prefix,
+        "automation policy Spotlight candidate prefix is invalid",
+    )
+    require(not main_branch.startswith(candidate_prefix) and not generated_branch.startswith(candidate_prefix),
+            "automation policy Spotlight candidate prefix overlaps a mutable branch identity")
 
     workflows = root["workflows"]
     require(isinstance(workflows, dict) and workflows, "automation policy workflows must be a non-empty object")
@@ -212,6 +229,14 @@ def self_test(policy: dict[str, Any]) -> None:
     wrong_type = copy.deepcopy(policy)
     wrong_type["githubActionsAppId"] = True
     expect_policy_failure(wrong_type, "positive integer")
+
+    invalid_candidate_prefix = copy.deepcopy(policy)
+    invalid_candidate_prefix["branches"]["spotlightCandidatePrefix"] = "automation/spotlight-links"
+    expect_policy_failure(invalid_candidate_prefix, "candidate prefix is invalid")
+
+    mutable_candidate_branch = copy.deepcopy(policy)
+    mutable_candidate_branch["branches"]["spotlightBot"] = mutable_candidate_branch["branches"].pop("spotlightCandidatePrefix")
+    expect_policy_failure(mutable_candidate_branch, "branches keys changed")
 
     workflow_ids = list(policy["workflows"])
     require(len(workflow_ids) >= 2, "automation policy self-test requires at least two workflows")
