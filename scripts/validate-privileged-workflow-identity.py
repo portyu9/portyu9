@@ -17,12 +17,27 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v8"
+VERSION = "governed-workflow-byte-identity-v9"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "d196c4eddb4b8f24c2f0823dfd355cf62386f1ee",
-    ".github/workflows/profile-stats.yml": "c8b9ad62b93477c69f13d637a4daea6023fe2b4c",
+    ".github/workflows/profile-stats.yml": "820066fcd49d59fdb8849ece0d2528c2d2d691e6",
     ".github/workflows/spotlight-link-sync.yml": "3e1f3b860dd2de12bb0f50c0114cf629d151717f",
 }
+
+PROFILE_STATS_FRESHNESS_SEQUENCE = (
+    'source_sha: ${{ steps.seal.outputs.source_sha }}',
+    'source_sha="$(git -C source rev-parse HEAD)"',
+    'test "$source_sha" = "$GITHUB_SHA"',
+    "      - name: Publish sealed artifact commit\n"
+    "        if: needs.stage.outputs.changed == 'true'\n"
+    "        env:\n"
+    "          GITHUB_TOKEN: ${{ github.token }}\n"
+    "          SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}",
+    'REMOTE_MAIN="$(git -C artifacts ls-remote --exit-code origin refs/heads/main)"',
+    '[[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
+    'test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
+    'push origin HEAD:generated',
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -46,6 +61,18 @@ def git_blob_sha(path: Path) -> str:
     return git_blob_sha_bytes(path.read_bytes())
 
 
+def validate_profile_stats_freshness(text: str) -> None:
+    """Keep the source-generation epoch bound to the final generated-branch push."""
+    cursor = -1
+    for fragment in PROFILE_STATS_FRESHNESS_SEQUENCE:
+        require(text.count(fragment) == 1,
+                f"profile-stats source-freshness contract must contain exactly one reviewed fragment: {fragment}")
+        position = text.index(fragment)
+        require(position > cursor,
+                f"profile-stats source-freshness contract is out of reviewed order: {fragment}")
+        cursor = position
+
+
 def self_test() -> None:
     require(git_blob_sha_bytes(b"") == "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
             "Git blob identity self-test failed for empty bytes")
@@ -53,6 +80,15 @@ def self_test() -> None:
             "Git blob identity self-test failed for canonical text bytes")
     require(git_blob_sha_bytes(b"test") != git_blob_sha_bytes(b"test\n"),
             "Git blob identity self-test lost byte-level sensitivity")
+
+    synthetic = "\n".join(PROFILE_STATS_FRESHNESS_SEQUENCE)
+    validate_profile_stats_freshness(synthetic)
+    try:
+        validate_profile_stats_freshness(synthetic.replace(PROFILE_STATS_FRESHNESS_SEQUENCE[-2], "", 1))
+    except ValueError:
+        pass
+    else:
+        raise ValueError("profile-stats source-freshness self-test accepted a missing terminal equality guard")
 
 
 def main() -> int:
@@ -65,9 +101,13 @@ def main() -> int:
                     f"{relative}: governed workflow bytes changed; expected Git blob {expected}, got {actual}")
             observed[relative] = actual
         require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
+        validate_profile_stats_freshness(
+            (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+        )
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
-            f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked"
+            f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
+            "generated publication is source-epoch freshness bound"
         )
         return 0
     except (OSError, ValueError) as exc:

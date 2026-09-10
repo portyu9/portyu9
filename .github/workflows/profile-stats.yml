@@ -258,6 +258,7 @@ jobs:
       changed: ${{ steps.seal.outputs.changed }}
       base_sha: ${{ steps.seal.outputs.base_sha }}
       candidate_sha: ${{ steps.seal.outputs.candidate_sha }}
+      source_sha: ${{ steps.seal.outputs.source_sha }}
 
     steps:
       - name: Checkout trusted source without credentials
@@ -315,7 +316,10 @@ jobs:
         id: seal
         run: |
           set -euo pipefail
+          source_sha="$(git -C source rev-parse HEAD)"
           base_sha="$(git -C artifacts rev-parse HEAD)"
+          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$source_sha" = "$GITHUB_SHA"
           test "$(git -C artifacts rev-parse refs/remotes/origin/generated)" = "$base_sha"
           test "$(git -C artifacts rev-parse --abbrev-ref HEAD)" = "generated"
           if git -C artifacts config --local --get-regexp '^(credential\.|http\..*\.extraheader|includeif\.)' >/dev/null; then
@@ -333,6 +337,7 @@ jobs:
           python3 source/scripts/validate-generated-signal-field.py artifacts/profile-stats/profile
           python3 source/scripts/validate-portfolio-evidence-ledger.py artifacts/portfolio-evidence --require-live
           git -C artifacts add -A
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
           echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
           if git -C artifacts diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -389,10 +394,12 @@ jobs:
         env:
           BASE_SHA: ${{ needs.stage.outputs.base_sha }}
           CANDIDATE_SHA: ${{ needs.stage.outputs.candidate_sha }}
+          SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}
         run: |
           set -euo pipefail
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$BASE_SHA" != "$CANDIDATE_SHA"
           test "$(find publication-candidate -mindepth 1 -maxdepth 1 -type f -printf '%f\n')" = "generated-publication.bundle"
           test "$(git bundle list-heads publication-candidate/generated-publication.bundle)" = "$CANDIDATE_SHA refs/heads/generated"
@@ -436,8 +443,13 @@ jobs:
         if: needs.stage.outputs.changed == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}
         run: |
           set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          REMOTE_MAIN="$(git -C artifacts ls-remote --exit-code origin refs/heads/main)"
+          [[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]
+          test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"
           AUTH_HEADER="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated
 
