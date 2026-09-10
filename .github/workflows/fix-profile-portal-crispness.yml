@@ -2,8 +2,7 @@ name: Apply crisp profile portal fix
 
 on:
   push:
-    branches:
-      - profile-animation-v3
+    branches: [profile-animation-v3]
 
 permissions:
   contents: write
@@ -17,45 +16,55 @@ jobs:
           ref: profile-animation-v3
           fetch-depth: 0
 
-      - name: Patch portal animation and mobile source
+      - name: Patch native checkmark portal motion and mobile source
         shell: bash
         run: |
-          python3 - <<'PY'
+          python -B - <<'PY'
           from pathlib import Path
           import re
+          import xml.etree.ElementTree as ET
 
           svg_path = Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg')
+          workflow_path = Path('.github/workflows/fix-profile-portal-crispness.yml')
           svg = svg_path.read_text(encoding='utf-8')
 
-          outer_pattern = re.compile(
-              r'<ellipse rx="360" ry="300" fill="none" stroke="url\(#energyGrad\)" stroke-width="3\.5" stroke-dasharray="14 18" opacity="\.34" vector-effect="non-scaling-stroke">\s*'
-              r'<animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="10s" repeatCount="indefinite"/>\s*'
-              r'</ellipse>'
-          )
-          outer_replacement = (
-              '<ellipse rx="360" ry="300" fill="none" stroke="url(#energyGrad)" stroke-width="2.25" '
-              'stroke-linecap="round" stroke-dasharray="14 18" opacity=".46" vector-effect="non-scaling-stroke">\n'
-              '      <animate attributeName="stroke-dashoffset" values="0;-64" dur="5.5s" repeatCount="indefinite"/>\n'
-              '    </ellipse>'
-          )
-          svg, outer_count = outer_pattern.subn(outer_replacement, svg, count=1)
+          start_marker = '<!-- Portal system integrated around the existing shield/pedestal. -->'
+          end_marker = '<!-- Orbiting energy packets; fade completely before positional reset to avoid loop flicker. -->'
+          start = svg.find(start_marker)
+          end = svg.find(end_marker, start)
+          if start < 0 or end < 0 or end <= start:
+              raise SystemExit('Could not isolate the native checkmark portal system')
 
-          inner_pattern = re.compile(
-              r'<ellipse rx="270" ry="225" fill="none" stroke="rgba\(34,211,238,\.28\)" stroke-width="1\.8" stroke-dasharray="5 13" opacity="\.45" vector-effect="non-scaling-stroke">\s*'
-              r'<animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="8s" repeatCount="indefinite"/>\s*'
-              r'</ellipse>'
-          )
-          inner_replacement = (
-              '<ellipse rx="270" ry="225" fill="none" stroke="rgba(34,211,238,.42)" stroke-width="1.5" '
-              'stroke-linecap="round" stroke-dasharray="5 13" opacity=".54" vector-effect="non-scaling-stroke">\n'
-              '      <animate attributeName="stroke-dashoffset" values="0;36" dur="4.8s" repeatCount="indefinite"/>\n'
-              '    </ellipse>'
-          )
-          svg, inner_count = inner_pattern.subn(inner_replacement, svg, count=1)
+          portal = svg[start:end]
+          if 'transform="translate(972 790)" shape-rendering="geometricPrecision"' not in portal:
+              raise SystemExit('Expected sharpened native portal group was not found')
 
-          if outer_count != 1 or inner_count != 1:
-              raise SystemExit(f'Portal patch mismatch: outer={outer_count}, inner={inner_count}')
+          rotate_re = re.compile(
+              r'<animateTransform attributeName="transform" type="rotate" '
+              r'from="(-?[0-9.]+)" to="(-?[0-9.]+)" dur="([^"]+)"([^>]*)/>'
+          )
 
+          def replace_rotation(match):
+              src = float(match.group(1))
+              dst = float(match.group(2))
+              dur = match.group(3)
+              suffix = match.group(4)
+              offset = '-108' if dst > src else '108'
+              return (
+                  '<animate attributeName="stroke-dashoffset" values="0;' + offset + '" '
+                  'dur="' + dur + '"' + suffix + '/>'
+              )
+
+          crisp_portal, rotation_count = rotate_re.subn(replace_rotation, portal)
+          if rotation_count < 2:
+              raise SystemExit(f'Expected at least two native rotating portal rings, found {rotation_count}')
+          if '<animateTransform attributeName="transform" type="rotate"' in crisp_portal:
+              raise SystemExit('Transform-driven portal ring rotation remains')
+
+          # Keep the ring geometry fixed and animate dash phase instead. This prevents
+          # sub-pixel transform resampling while preserving the same orbital motion.
+          svg = svg[:start] + crisp_portal + svg[end:]
+          ET.fromstring(svg)
           svg_path.write_text(svg, encoding='utf-8')
 
           readme_path = Path('README.md')
@@ -65,15 +74,30 @@ jobs:
           if old_mobile not in readme:
               raise SystemExit('Expected V2 mobile source was not found in README.md')
           readme = readme.replace(old_mobile, new_mobile, 1)
+          if readme.count('quality-engineering-automation-systems-nebula-portal-animated-v3.svg') < 2:
+              raise SystemExit('Desktop/mobile V3 source parity check failed')
           readme_path.write_text(readme, encoding='utf-8')
+
+          workflow_path.unlink()
+          print(f'Replaced {rotation_count} transform-driven native portal ring animations with crisp dash-phase motion.')
+          print('Mobile and desktop now use the same V3 SVG.')
           PY
 
-      - name: Commit corrected files
+      - name: Validate corrected profile animation
         shell: bash
         run: |
-          rm -f .github/workflows/fix-profile-portal-crispness.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git diff --check
+          test ! -e .github/workflows/fix-profile-portal-crispness.yml
+          grep -q 'srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg"' README.md
+          ! grep -q 'srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg"' README.md
+          grep -q 'attributeName="stroke-dashoffset"' assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg
+          PYTHONDONTWRITEBYTECODE=1 python -B scripts/validate-profile-v4.py
+
+      - name: Commit corrected animation
+        shell: bash
+        run: |
+          git config user.name "Ƴunior Ƥortal"
+          git config user.email "35150859+portyu9@users.noreply.github.com"
           git add -A
-          git commit -m "fix: sharpen checkmark portal animation across breakpoints"
+          git commit -m "fix(profile): crisp checkmark portal motion on desktop and mobile"
           git push origin HEAD:profile-animation-v3
