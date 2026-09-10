@@ -108,13 +108,13 @@
   <!-- Portal system integrated around the existing shield/pedestal. -->
   <g class="motion" transform="translate(972 790)" shape-rendering="geometricPrecision">
     <ellipse rx="118" ry="92" fill="none" stroke="url(#tri)" stroke-width="3.5" stroke-dasharray="16 11" opacity=".72">
-      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="19.7s" repeatCount="indefinite"/>
+      <animate attributeName="stroke-dashoffset" values="0;-108" dur="19.7s" repeatCount="indefinite"/>
     </ellipse>
     <ellipse rx="138" ry="108" fill="none" stroke="url(#triReverse)" stroke-width="2" stroke-dasharray="4 14 28 12" opacity=".58">
-      <animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="27.1s" repeatCount="indefinite"/>
+      <animate attributeName="stroke-dashoffset" values="0;108" dur="27.1s" repeatCount="indefinite"/>
     </ellipse>
     <ellipse rx="160" ry="124" fill="none" stroke="#00E6FF" stroke-width="1" stroke-dasharray="2 18" opacity=".34">
-      <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="38.3s" repeatCount="indefinite"/>
+      <animate attributeName="stroke-dashoffset" values="0;-108" dur="38.3s" repeatCount="indefinite"/>
     </ellipse>
     <ellipse rx="102" ry="78" fill="url(#portalA)" opacity=".16">
       <animate attributeName="opacity" values=".10;.24;.14;.22;.10" dur="6.7s" repeatCount="indefinite"/>
