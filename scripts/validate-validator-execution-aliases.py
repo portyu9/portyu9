@@ -1340,6 +1340,16 @@ class PathMutationVisitor(ast.NodeVisitor):
                 )
             if attribute == "open" and self.is_path_expr(node.args[0]):
                 self.report(node, "reflective pathlib concrete-path open lookup is forbidden in validators")
+            if attribute in PATH_RETURNING_METHODS and self.is_path_expr(node.args[0]):
+                self.report(
+                    node,
+                    f"reflective pathlib concrete-path {attribute} producer lookup is forbidden in validators",
+                )
+            if attribute in PATH_CLASS_RETURNING_METHODS and self.is_path_type_expr(node.args[0]):
+                self.report(
+                    node,
+                    f"reflective pathlib concrete-path type {attribute} producer lookup is forbidden in validators",
+                )
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
@@ -1351,6 +1361,24 @@ class PathMutationVisitor(ast.NodeVisitor):
                 )
         if node.attr == "open" and self.is_path_expr(node.value) and not direct_call_target(node, self.parents):
             self.report(node, "pathlib concrete-path open bound method must not be aliased in validators")
+        if (
+            node.attr in PATH_RETURNING_METHODS
+            and self.is_path_expr(node.value)
+            and not direct_call_target(node, self.parents)
+        ):
+            self.report(
+                node,
+                f"pathlib concrete-path {node.attr} producer must remain a direct call target in validators",
+            )
+        if (
+            node.attr in PATH_CLASS_RETURNING_METHODS
+            and self.is_path_type_expr(node.value)
+            and not direct_call_target(node, self.parents)
+        ):
+            self.report(
+                node,
+                f"pathlib concrete-path type {node.attr} producer must remain a direct call target in validators",
+            )
         self.generic_visit(node)
 
 
@@ -1525,6 +1553,62 @@ def self_test() -> None:
             "from pathlib import Path\ndef f():\n    Path.from_uri('file:///tmp/a').replace('b')\n",
         ),
         "Path.from_uri concrete factory fixture must fail",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    resolver = p.resolve\n    resolver().replace('b')\n",
+        ),
+        "Path-returning bound producer aliases must fail closed",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f():\n    factory = Path.cwd\n    factory().replace('b')\n",
+        ),
+        "Path class producer aliases must fail closed",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    getattr(p, 'resolve')().replace('b')\n",
+        ),
+        "reflective Path-returning producer lookup must fail closed",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f():\n    getattr(Path, 'cwd')().replace('b')\n",
+        ),
+        "reflective Path class producer lookup must fail closed",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    producer = p.readlink\n    return producer()\n",
+        ),
+        "read-only Path-producing methods must remain direct auditable call targets",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    return p.resolve().read_text()\n",
+        ),
+        "direct read-only Path producer calls must remain valid",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f():\n    return Path.cwd().read_text()\n",
+        ),
+        "direct read-only Path class producer calls must remain valid",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "class Box:\n    def resolve(self):\n        return 'alpha'\ndef f(box):\n    resolver = box.resolve\n    return resolver().replace('a', 'b')\n",
+        ),
+        "same-named producer methods on non-Path receivers must remain valid",
     )
     require(
         not inspect_source(
