@@ -17,11 +17,11 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v9"
+VERSION = "governed-workflow-byte-identity-v10"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "d196c4eddb4b8f24c2f0823dfd355cf62386f1ee",
     ".github/workflows/profile-stats.yml": "820066fcd49d59fdb8849ece0d2528c2d2d691e6",
-    ".github/workflows/spotlight-link-sync.yml": "3e1f3b860dd2de12bb0f50c0114cf629d151717f",
+    ".github/workflows/spotlight-link-sync.yml": "ec466f2b5aab6cbf2dc01af89dbbf975ea20410b",
 }
 
 PROFILE_STATS_FRESHNESS_SEQUENCE = (
@@ -37,6 +37,21 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
     '[[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
     'test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
     'push origin HEAD:generated',
+)
+
+SPOTLIGHT_PROVENANCE_SEQUENCE = (
+    'codeql_check_suite_id: ${{ steps.authorize.outputs.codeql_check_suite_id }}',
+    'RUNS_TOTAL="$(jq -r \' .total_count // empty\' <<<"$RUNS")"'.replace("' ", "'"),
+    'test "$RUNS_TOTAL" = "$RUNS_COUNT" || {',
+    'test "$RUNS_TOTAL" -le 3 || {',
+    'test "$(jq -r .head_sha <<<"$RUN")" = "$HEAD_SHA"',
+    'test "$(jq -r .repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"',
+    'echo "codeql_check_suite_id=$CODEQL_CHECK_SUITE_ID" >> "$GITHUB_OUTPUT"',
+    'CODEQL_CHECK_SUITE_ID: ${{ needs.approve.outputs.codeql_check_suite_id }}',
+    'CHECKS_TOTAL="$(jq -r \' .total_count // empty\' <<<"$CHECKS")"'.replace("' ", "'"),
+    'test "$CHECKS_TOTAL" = "$CHECKS_COUNT" || {',
+    'check_suite_id:.check_suite.id',
+    'test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"',
 )
 
 
@@ -61,16 +76,26 @@ def git_blob_sha(path: Path) -> str:
     return git_blob_sha_bytes(path.read_bytes())
 
 
+def validate_ordered_contract(text: str, fragments: tuple[str, ...], label: str) -> None:
+    cursor = -1
+    for fragment in fragments:
+        require(text.count(fragment) == 1,
+                f"{label} must contain exactly one reviewed fragment: {fragment}")
+        position = text.index(fragment)
+        require(position > cursor, f"{label} is out of reviewed order: {fragment}")
+        cursor = position
+
+
 def validate_profile_stats_freshness(text: str) -> None:
     """Keep the source-generation epoch bound to the final generated-branch push."""
-    cursor = -1
-    for fragment in PROFILE_STATS_FRESHNESS_SEQUENCE:
-        require(text.count(fragment) == 1,
-                f"profile-stats source-freshness contract must contain exactly one reviewed fragment: {fragment}")
-        position = text.index(fragment)
-        require(position > cursor,
-                f"profile-stats source-freshness contract is out of reviewed order: {fragment}")
-        cursor = position
+    validate_ordered_contract(text, PROFILE_STATS_FRESHNESS_SEQUENCE,
+                              "profile-stats source-freshness contract")
+
+
+def validate_spotlight_provenance(text: str) -> None:
+    """Bind exact canonical workflow runs to the required checks consumed by merge authority."""
+    validate_ordered_contract(text, SPOTLIGHT_PROVENANCE_SEQUENCE,
+                              "Spotlight workflow/check provenance contract")
 
 
 def self_test() -> None:
@@ -90,6 +115,15 @@ def self_test() -> None:
     else:
         raise ValueError("profile-stats source-freshness self-test accepted a missing terminal equality guard")
 
+    synthetic = "\n".join(SPOTLIGHT_PROVENANCE_SEQUENCE)
+    validate_spotlight_provenance(synthetic)
+    try:
+        validate_spotlight_provenance(synthetic.replace(SPOTLIGHT_PROVENANCE_SEQUENCE[-1], "", 1))
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight provenance self-test accepted a missing exact check-map equality guard")
+
 
 def main() -> int:
     try:
@@ -104,10 +138,13 @@ def main() -> int:
         validate_profile_stats_freshness(
             (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         )
+        validate_spotlight_provenance(
+            (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        )
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
-            "generated publication is source-epoch freshness bound"
+            "generated publication is source-epoch freshness bound · Spotlight merge checks are exact-run/suite provenance bound"
         )
         return 0
     except (OSError, ValueError) as exc:
