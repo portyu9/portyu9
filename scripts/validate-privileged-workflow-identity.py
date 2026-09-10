@@ -28,7 +28,11 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
     'source_sha: ${{ steps.seal.outputs.source_sha }}',
     'source_sha="$(git -C source rev-parse HEAD)"',
     'test "$source_sha" = "$GITHUB_SHA"',
-    'SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}',
+    "      - name: Publish sealed artifact commit\n"
+    "        if: needs.stage.outputs.changed == 'true'\n"
+    "        env:\n"
+    "          GITHUB_TOKEN: ${{ github.token }}\n"
+    "          SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}",
     'REMOTE_MAIN="$(git -C artifacts ls-remote --exit-code origin refs/heads/main)"',
     '[[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
     'test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
