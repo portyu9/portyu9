@@ -227,13 +227,18 @@ def validate_execution_semantics(text: str, label: str) -> int:
             continue
 
         mapping = PLAIN_MAPPING_KEY.fullmatch(skeleton)
-        if mapping is None:
+        sequence_mapping = SEQUENCE_MAPPING_KEY.fullmatch(skeleton)
+        if mapping is None and sequence_mapping is None:
             if BLOCK_HEADER.search(skeleton):
                 block_indent = indentation(line)
             continue
 
-        logical_indent = len(mapping.group("indent"))
-        key = mapping.group("key")
+        if sequence_mapping is not None:
+            logical_indent = len(sequence_mapping.group("indent")) + 2
+            key = sequence_mapping.group("key")
+        else:
+            logical_indent = len(mapping.group("indent"))
+            key = mapping.group("key")
 
         if logical_indent == 0 and key == "defaults":
             raise ValueError(
@@ -440,6 +445,7 @@ jobs:
         ("defaults:\n  run:\n    shell: bash\n" + safe, "workflow-level defaults are forbidden"),
         (safe.replace("  plan:\n    runs-on:", "  plan:\n    defaults:\n      run:\n        shell: bash\n    runs-on:", 1), "job-level defaults are forbidden"),
         (safe.replace("      - run: echo safe", "      - run: echo safe\n        shell: python", 1), "explicit step shell overrides are forbidden"),
+        (safe.replace("      - run: echo safe", "      - shell: python\n        run: echo safe", 1), "explicit step shell overrides are forbidden"),
         (safe.replace("    runs-on: ubuntu-24.04", "    container: alpine:3.20\n    runs-on: ubuntu-24.04", 1), "job containers are forbidden"),
         (safe.replace("    runs-on: ubuntu-24.04", "    uses: octo/repo/.github/workflows/reuse.yml@0123456789012345678901234567890123456789\n    runs-on: ubuntu-24.04", 1), "job-level uses: reusable-workflow call authority is forbidden"),
         (safe.replace("    runs-on: ubuntu-24.04", "    with:\n      mode: unsafe\n    runs-on: ubuntu-24.04", 1), "job-level with: reusable-workflow call authority is forbidden"),
