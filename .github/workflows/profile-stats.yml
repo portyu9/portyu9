@@ -7,16 +7,7 @@ on:
       - main
     paths:
       - ".github/workflows/profile-stats.yml"
-      - ".github/ATTESTATION.md"
-      - ".github/attestation/**"
-      - "scripts/**"
-      - "scripts/set-signal-field-refresh-cadence.py"
-      - "scripts/signal_field_pipeline.py"
-      - "scripts/signal-field-pipeline-v1.json"
-      - "scripts/profile-evidence-subjects-v1.json"
-      - "scripts/profile_evidence_subjects.py"
-      - "scripts/stage-profile-evidence.py"
-      - "scripts/validate-profile-evidence-subjects.py"
+      - "scripts/profile-stats-source-epoch-v1.json"
   schedule:
     # One best-effort hourly fallback, offset from top-of-hour scheduler congestion.
     - cron: "17 * * * *"
