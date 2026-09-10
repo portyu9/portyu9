@@ -14,6 +14,9 @@ POLICY_ID = "automation-policy-v1"
 REPOSITORY = "portyu9/portyu9"
 PERMISSION_VALUES = {"read", "write", "none"}
 JOB_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+STATE_ID = re.compile(r"^[a-z][a-z0-9-]*$")
+TRANSACTION_PHASES = ("propose", "approve", "mutate", "verify", "terminalize")
+TRANSACTION_WORKFLOWS = {"profile-stats", "spotlight-link-sync"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -84,10 +87,141 @@ def validate_job_graph(workflow_id: str, jobs: dict[str, Any]) -> None:
         visit(job_id)
 
 
+def validate_transaction_machine(workflow_id: str, value: Any, workflows: dict[str, Any]) -> None:
+    label = f"automation policy transaction machine {workflow_id}"
+    require(workflow_id in workflows, f"{label} references unknown workflow")
+    machine = exact_keys(value, {"initialState", "states", "terminalStates", "transitions"}, label)
+
+    states = string_list(machine["states"], f"{label} states")
+    require(all(STATE_ID.fullmatch(state) is not None for state in states),
+            f"{label} contains an invalid state identity")
+    initial = machine["initialState"]
+    require(isinstance(initial, str) and initial in states, f"{label} initialState must reference a declared state")
+    terminals = string_list(machine["terminalStates"], f"{label} terminalStates")
+    require(set(terminals) <= set(states), f"{label} terminalStates must reference declared states")
+    require(initial not in terminals, f"{label} initialState cannot be terminal")
+
+    transitions = machine["transitions"]
+    require(isinstance(transitions, list) and transitions, f"{label} transitions must be a non-empty array")
+    outgoing: dict[str, list[tuple[str, int]]] = {state: [] for state in states}
+    incoming: dict[str, list[tuple[str, int]]] = {state: [] for state in states}
+    covered_jobs: set[str] = set()
+    observed_phases: set[str] = set()
+    identities: set[tuple[str, str, str, tuple[str, ...]]] = set()
+    phase_rank = {phase: rank for rank, phase in enumerate(TRANSACTION_PHASES)}
+    workflow_jobs = workflows[workflow_id]["jobs"]
+    job_phase_ranks: dict[str, set[int]] = {job_id: set() for job_id in workflow_jobs}
+
+    for index, transition_value in enumerate(transitions):
+        transition_label = f"{label} transitions[{index}]"
+        transition = exact_keys(transition_value, {"from", "to", "phase", "jobs"}, transition_label)
+        source = transition["from"]
+        target = transition["to"]
+        phase = transition["phase"]
+        require(isinstance(source, str) and source in states,
+                f"{transition_label} from references unknown state")
+        require(isinstance(target, str) and target in states,
+                f"{transition_label} to references unknown state")
+        require(source != target, f"{transition_label} cannot self-loop")
+        require(phase in TRANSACTION_PHASES, f"{transition_label} has unsupported lifecycle phase: {phase!r}")
+        jobs = string_list(transition["jobs"], f"{transition_label} jobs")
+        for job_id in jobs:
+            require(job_id in workflow_jobs, f"{transition_label} references unknown workflow job: {job_id}")
+        identity = (source, target, phase, tuple(jobs))
+        require(identity not in identities, f"{label} contains a duplicate transition: {identity!r}")
+        identities.add(identity)
+        rank = phase_rank[phase]
+        outgoing[source].append((target, rank))
+        incoming[target].append((source, rank))
+        covered_jobs.update(jobs)
+        observed_phases.add(phase)
+        for job_id in jobs:
+            job_phase_ranks[job_id].add(rank)
+
+        if phase == "mutate":
+            require(any("write" in workflow_jobs[job_id]["permissions"].values() for job_id in jobs),
+                    f"{transition_label} mutate phase must contain a write-capable job")
+        if phase == "terminalize":
+            require(target in terminals, f"{transition_label} terminalize must enter a terminal state")
+        else:
+            require(target not in terminals,
+                    f"{transition_label} nonterminal phase cannot enter a terminal state")
+
+    require(observed_phases == set(TRANSACTION_PHASES),
+            f"{label} lifecycle phases changed: expected={list(TRANSACTION_PHASES)} observed={sorted(observed_phases)}")
+    require(covered_jobs == set(workflow_jobs),
+            f"{label} job closure changed: expected={sorted(workflow_jobs)} observed={sorted(covered_jobs)}")
+    require(outgoing[initial] and all(rank == phase_rank["propose"] for _, rank in outgoing[initial]),
+            f"{label} initial transitions must be propose phase")
+
+    # The earliest phase assigned to a dependent job may never precede the
+    # earliest phase assigned to one of its declared workflow dependencies.
+    for job_id, job in workflow_jobs.items():
+        for dependency in job["needs"]:
+            require(min(job_phase_ranks[job_id]) >= min(job_phase_ranks[dependency]),
+                    f"{label} job dependency phase regresses: {dependency} -> {job_id}")
+
+    for terminal in terminals:
+        require(not outgoing[terminal], f"{label} terminal state has outgoing transitions: {terminal}")
+    for state in states:
+        if state not in terminals:
+            require(outgoing[state], f"{label} reachable nonterminal state cannot be a dead end: {state}")
+
+    # Phase progression is monotonic on every path. Terminal side paths may jump
+    # directly to terminalize, but no later edge may regress lifecycle authority.
+    for state in states:
+        if state == initial or state in terminals:
+            continue
+        for _, inbound_rank in incoming[state]:
+            for _, outbound_rank in outgoing[state]:
+                require(outbound_rank >= inbound_rank,
+                        f"{label} lifecycle phase regresses through state: {state}")
+
+    # Every state must be reachable from the initial state.
+    reachable: set[str] = set()
+    stack = [initial]
+    while stack:
+        state = stack.pop()
+        if state in reachable:
+            continue
+        reachable.add(state)
+        stack.extend(target for target, _ in outgoing[state])
+    require(reachable == set(states),
+            f"{label} contains unreachable states: {sorted(set(states) - reachable)}")
+
+    # The transaction graph must be acyclic. Combined with nonterminal
+    # out-degree and terminal absorption, this proves every path terminates.
+    colors: dict[str, int] = {state: 0 for state in states}
+
+    def visit(state: str) -> None:
+        require(colors[state] != 1, f"{label} contains a nonterminal transaction cycle at {state}")
+        if colors[state] == 2:
+            return
+        colors[state] = 1
+        for target, _ in outgoing[state]:
+            visit(target)
+        colors[state] = 2
+
+    visit(initial)
+
+    # Independently prove every reachable nonterminal has a path to a terminal.
+    convergent = set(terminals)
+    changed = True
+    while changed:
+        changed = False
+        for state in states:
+            if state not in convergent and any(target in convergent for target, _ in outgoing[state]):
+                convergent.add(state)
+                changed = True
+    require(convergent == set(states),
+            f"{label} contains states without terminal convergence: {sorted(set(states) - convergent)}")
+
+
 def validate_policy(payload: Any) -> dict[str, Any]:
     root = exact_keys(
         payload,
-        {"schemaVersion", "policyId", "repository", "branches", "githubActionsAppId", "rulesetContract", "workflows", "requiredChecks"},
+        {"schemaVersion", "policyId", "repository", "branches", "githubActionsAppId", "rulesetContract",
+         "workflows", "transactionMachines", "requiredChecks"},
         "automation policy root",
     )
     require(exact_int(root["schemaVersion"]) and root["schemaVersion"] == 1,
@@ -151,7 +285,8 @@ def validate_policy(payload: Any) -> dict[str, Any]:
         validate_permissions(workflow["permissions"], f"automation policy workflow {workflow_id}")
 
         jobs = workflow["jobs"]
-        require(isinstance(jobs, dict) and jobs, f"automation policy workflow {workflow_id} jobs must be a non-empty object")
+        require(isinstance(jobs, dict) and jobs,
+                f"automation policy workflow {workflow_id} jobs must be a non-empty object")
         for job_id, job_value in jobs.items():
             require(isinstance(job_id, str) and JOB_ID.fullmatch(job_id) is not None,
                     f"automation policy workflow {workflow_id} job id is invalid: {job_id!r}")
@@ -162,6 +297,15 @@ def validate_policy(payload: Any) -> dict[str, Any]:
             string_list(job["needs"], f"automation policy workflow {workflow_id} job {job_id} needs", allow_empty=True)
             validate_permissions(job["permissions"], f"automation policy workflow {workflow_id} job {job_id}")
         validate_job_graph(workflow_id, jobs)
+
+    machines = root["transactionMachines"]
+    require(isinstance(machines, dict) and machines,
+            "automation policy transactionMachines must be a non-empty object")
+    require(set(machines) == TRANSACTION_WORKFLOWS,
+            f"automation policy transaction workflow set changed: expected={sorted(TRANSACTION_WORKFLOWS)} "
+            f"observed={sorted(machines)}")
+    for workflow_id, machine in machines.items():
+        validate_transaction_machine(workflow_id, machine, workflows)
 
     checks = root["requiredChecks"]
     require(isinstance(checks, list) and checks, "automation policy requiredChecks must be a non-empty array")
@@ -199,7 +343,8 @@ def load_policy(path: Path = POLICY_PATH) -> dict[str, Any]:
 
 
 def workflow_by_path(policy: dict[str, Any], path: str) -> tuple[str, dict[str, Any]]:
-    matches = [(workflow_id, workflow) for workflow_id, workflow in policy["workflows"].items() if workflow["path"] == path]
+    matches = [(workflow_id, workflow) for workflow_id, workflow in policy["workflows"].items()
+               if workflow["path"] == path]
     require(len(matches) == 1, f"automation policy must contain exactly one workflow for path: {path}")
     return matches[0]
 
@@ -264,6 +409,67 @@ def self_test(policy: dict[str, Any]) -> None:
     cycle["workflows"]["profile-stats"]["jobs"]["generate"]["needs"] = ["dispatch"]
     expect_policy_failure(cycle, "needs cycle")
 
+    missing_machine = copy.deepcopy(policy)
+    del missing_machine["transactionMachines"]["profile-stats"]
+    expect_policy_failure(missing_machine, "transaction workflow set changed")
+
+    missing_phase = copy.deepcopy(policy)
+    missing_phase["transactionMachines"]["profile-stats"]["transitions"] = [
+        transition for transition in missing_phase["transactionMachines"]["profile-stats"]["transitions"]
+        if transition["phase"] != "verify"
+    ]
+    expect_policy_failure(missing_phase, "lifecycle phases changed")
+
+    unknown_transaction_job = copy.deepcopy(policy)
+    unknown_transaction_job["transactionMachines"]["spotlight-link-sync"]["transitions"][0]["jobs"] = ["missing-job"]
+    expect_policy_failure(unknown_transaction_job, "references unknown workflow job")
+
+    unmodeled_job = copy.deepcopy(policy)
+    unmodeled_job["transactionMachines"]["spotlight-link-sync"]["transitions"] = [
+        transition for transition in unmodeled_job["transactionMachines"]["spotlight-link-sync"]["transitions"]
+        if "quarantine" not in transition["jobs"]
+    ]
+    expect_policy_failure(unmodeled_job, "job closure changed")
+
+    read_only_mutation = copy.deepcopy(policy)
+    for transition in read_only_mutation["transactionMachines"]["profile-stats"]["transitions"]:
+        if transition["phase"] == "mutate":
+            transition["jobs"] = ["stage"]
+            break
+    expect_policy_failure(read_only_mutation, "mutate phase must contain a write-capable job")
+
+    dead_end = copy.deepcopy(policy)
+    dead_end["transactionMachines"]["profile-stats"]["states"].append("stalled")
+    dead_end["transactionMachines"]["profile-stats"]["transitions"].append(
+        {"from": "proposed", "to": "stalled", "phase": "approve", "jobs": ["attest"]}
+    )
+    expect_policy_failure(dead_end, "reachable nonterminal state cannot be a dead end")
+
+    unreachable = copy.deepcopy(policy)
+    unreachable["transactionMachines"]["profile-stats"]["states"].append("orphaned")
+    unreachable["transactionMachines"]["profile-stats"]["transitions"].append(
+        {"from": "orphaned", "to": "completed", "phase": "terminalize", "jobs": ["dispatch"]}
+    )
+    expect_policy_failure(unreachable, "contains unreachable states")
+
+    terminal_escape = copy.deepcopy(policy)
+    terminal_escape["transactionMachines"]["profile-stats"]["transitions"].append(
+        {"from": "completed", "to": "proposed", "phase": "approve", "jobs": ["attest"]}
+    )
+    expect_policy_failure(terminal_escape, "terminal state has outgoing transitions")
+
+    phase_regression = copy.deepcopy(policy)
+    phase_regression["transactionMachines"]["profile-stats"]["transitions"].append(
+        {"from": "mutated", "to": "approved", "phase": "approve", "jobs": ["attest"]}
+    )
+    expect_policy_failure(phase_regression, "lifecycle phase regresses")
+
+    transaction_cycle = copy.deepcopy(policy)
+    transaction_cycle["transactionMachines"]["profile-stats"]["transitions"].append(
+        {"from": "mutated", "to": "approved", "phase": "mutate", "jobs": ["publish"]}
+    )
+    expect_policy_failure(transaction_cycle, "nonterminal transaction cycle")
+
     duplicate_check = copy.deepcopy(policy)
     duplicate_check["requiredChecks"][1]["context"] = duplicate_check["requiredChecks"][0]["context"]
     expect_policy_failure(duplicate_check, "required check context is duplicated")
@@ -283,6 +489,7 @@ def main() -> int:
     print(
         f"Automation Policy IR passed: {policy['policyId']} · {len(policy['workflows'])} workflows · "
         f"{sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs · "
+        f"{len(policy['transactionMachines'])} finite-state transactions · "
         f"{len(policy['requiredChecks'])} protected required-check bindings"
     )
     return 0
