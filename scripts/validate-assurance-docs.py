@@ -3,15 +3,40 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 GOV = ROOT / ".github" / "GOVERNANCE.md"
 THREAT = ROOT / ".github" / "THREAT_MODEL.md"
+SYNC = ROOT / ".github" / "workflows" / "spotlight-link-sync.yml"
 
 SEMANTICS = "execution-result-subject-binding-freshness-v1"
+CHECKPOINT = "**Checkpoint:** 2026-09-10"
+
+# Ordered permission tuples are both the executable expectation and the canonical
+# documentation rendering. The assurance documents are accepted only after the
+# actual workflow job graph has independently matched these semantics.
+SPOTLIGHT_JOBS = {
+    "plan": ("plan-direct-links-read-only", (("contents", "read"),)),
+    "budget": ("mutation-budget-read-only", (("actions", "read"),)),
+    "quarantine": ("mutation-budget-quarantine-read-only", (("contents", "read"),)),
+    "propose": (
+        "propose-readme-only-write",
+        (("contents", "write"), ("pull-requests", "write")),
+    ),
+    "approve": (
+        "approve-bot-pr-checks-only",
+        (("contents", "read"), ("actions", "write")),
+    ),
+    "merge": (
+        "merge-readme-only-terminal-write",
+        (("contents", "write"), ("pull-requests", "read"), ("checks", "read")),
+    ),
+}
 
 GOV_REQUIRED = (
+    CHECKPOINT,
     "Portfolio Evidence Ledger v2",
     "GitHub evidence → Portfolio Evidence Ledger → validated Engineering Spotlight projection",
     "exactly **11 subjects**",
@@ -33,9 +58,8 @@ GOV_REQUIRED = (
     "attest-write-only",
     "publish-write-only",
     "dispatch-spotlight-link-sync",
-    "propose-readme-only-write",
-    "approve-bot-pr-checks-only",
-    "merge-readme-only-after-required-checks",
+    "source-epoch mutation budget",
+    "diagnostic-only quarantine",
     "id-token: write",
     "attestations: write",
     "no repository-authored shell",
@@ -46,7 +70,7 @@ GOV_REQUIRED = (
 )
 
 THREAT_REQUIRED = (
-    "**Checkpoint:** 2026-09-09",
+    CHECKPOINT,
     "one Portfolio Evidence Ledger snapshot",
     "exactly 11 files",
     "Ledger-backed Spotlight projection",
@@ -71,9 +95,8 @@ THREAT_REQUIRED = (
     "exactly five workflows",
     "spotlight-link-sync.yml",
     "dispatch-spotlight-link-sync",
-    "propose-readme-only-write",
-    "approve-bot-pr-checks-only",
-    "merge-readme-only-after-required-checks",
+    "source-epoch mutation budget",
+    "diagnostic-only quarantine",
     "prepare-attestation-read-only",
     "attest-write-only",
     "stage-publication-read-only",
@@ -82,6 +105,7 @@ THREAT_REQUIRED = (
 )
 
 FORBIDDEN = (
+    "merge-readme-only-after-required-checks",
     "Baseline: `main` after PR #65",
     "root is expected to contain only the generated Signal Field and Engineering Spotlight artifact trees",
     "revalidates both evidence sets",
@@ -96,28 +120,161 @@ FORBIDDEN = (
     "Reviewed write-capable exceptions are limited to CodeQL",
 )
 
+JOB_KEY = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
+NAME_KEY = re.compile(r"^    name:\s+([^#]+?)\s*$")
+PERMISSION_KEY = re.compile(r"^      ([A-Za-z0-9-]+):\s*(read|write|none)\s*$")
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
 
 
+def indentation(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def job_blocks(workflow: str) -> dict[str, str]:
+    lines = workflow.splitlines()
+    starts = [i for i, line in enumerate(lines) if line == "jobs:"]
+    require(len(starts) == 1, "Spotlight workflow must contain exactly one jobs: block")
+    blocks: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in lines[starts[0] + 1 :]:
+        if line and indentation(line) == 0:
+            break
+        match = JOB_KEY.fullmatch(line)
+        if match:
+            current = match.group(1)
+            require(current not in blocks, f"duplicate Spotlight job identity: {current}")
+            blocks[current] = [line]
+            continue
+        if current is not None:
+            blocks[current].append(line)
+    require(blocks, "Spotlight workflow job graph is empty")
+    return {key: "\n".join(value) for key, value in blocks.items()}
+
+
+def parse_job_semantics(block: str, job_id: str) -> tuple[str, tuple[tuple[str, str], ...]]:
+    lines = block.splitlines()
+    names = [match.group(1).strip() for line in lines if (match := NAME_KEY.fullmatch(line))]
+    require(len(names) == 1, f"Spotlight job {job_id} must expose exactly one canonical name")
+
+    permission_starts = [i for i, line in enumerate(lines) if line == "    permissions:"]
+    require(len(permission_starts) == 1, f"Spotlight job {job_id} must expose exactly one permissions block")
+    permissions: list[tuple[str, str]] = []
+    for line in lines[permission_starts[0] + 1 :]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if indentation(line) <= 4:
+            break
+        entry = PERMISSION_KEY.fullmatch(line)
+        require(entry is not None, f"Spotlight job {job_id} contains unsupported permission syntax: {line.strip()}")
+        pair = entry.groups()
+        require(pair[0] not in {key for key, _ in permissions},
+                f"Spotlight job {job_id} contains duplicate permission: {pair[0]}")
+        permissions.append(pair)
+    require(permissions, f"Spotlight job {job_id} permissions are empty")
+    return names[0], tuple(permissions)
+
+
+def validate_spotlight_workflow(workflow: str) -> None:
+    blocks = job_blocks(workflow)
+    require(set(blocks) == set(SPOTLIGHT_JOBS),
+            f"Spotlight assurance job inventory changed: {sorted(blocks)}")
+    observed = {job_id: parse_job_semantics(blocks[job_id], job_id) for job_id in blocks}
+    require(observed == SPOTLIGHT_JOBS,
+            f"Spotlight assurance authority graph changed: observed={observed!r}")
+
+
+def permission_markdown(permissions: tuple[tuple[str, str], ...]) -> str:
+    return ", ".join(f"`{key}: {value}`" for key, value in permissions)
+
+
+def validate_doc_job_graph(text: str, *, label: str, table_scope: str) -> None:
+    lines = text.splitlines()
+    for _job_id, (name, permissions) in SPOTLIGHT_JOBS.items():
+        rows = [line for line in lines if line.startswith(f"| {table_scope} / ") and f"`{name}`" in line]
+        require(len(rows) == 1, f"{label} must contain exactly one authority-table row for {name}")
+        expected = f"| {table_scope} / `{name}` | {permission_markdown(permissions)} |"
+        require(rows[0].startswith(expected),
+                f"{label} authority-table permissions drifted for {name}: {rows[0]}")
+
+
+def validate_required_phrases(governance: str, threat: str) -> None:
+    for phrase in GOV_REQUIRED:
+        require(phrase in governance, f"governance contract is missing current architecture phrase: {phrase}")
+    for phrase in THREAT_REQUIRED:
+        require(phrase in threat, f"threat model is missing current architecture phrase: {phrase}")
+    joined = governance + "\n" + threat
+    for phrase in FORBIDDEN:
+        require(phrase not in joined, f"stale assurance statement remains: {phrase}")
+
+
+def remove_authority_row(text: str, name: str) -> str:
+    return "\n".join(line for line in text.splitlines() if not (line.startswith("| ") and f"`{name}`" in line)) + "\n"
+
+
+def expect_failure(action, expected: str) -> None:
+    try:
+        action()
+    except ValueError as exc:
+        require(expected in str(exc), f"assurance self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"assurance self-test accepted forbidden drift: {expected}")
+
+
+def self_test(workflow: str, governance: str, threat: str) -> None:
+    stale_workflow = workflow.replace(
+        "name: merge-readme-only-terminal-write",
+        "name: merge-readme-only-after-required-checks",
+        1,
+    )
+    expect_failure(lambda: validate_spotlight_workflow(stale_workflow), "authority graph changed")
+
+    merge_permissions = permission_markdown(SPOTLIGHT_JOBS["merge"][1])
+    overstated = governance.replace(
+        merge_permissions,
+        "`contents: write`, `pull-requests: write`, `checks: read`",
+        1,
+    )
+    expect_failure(
+        lambda: validate_doc_job_graph(overstated, label="governance", table_scope="Spotlight link sync"),
+        "permissions drifted for merge-readme-only-terminal-write",
+    )
+
+    missing_budget = remove_authority_row(governance, "mutation-budget-read-only")
+    expect_failure(
+        lambda: validate_doc_job_graph(missing_budget, label="governance", table_scope="Spotlight link sync"),
+        "mutation-budget-read-only",
+    )
+
+    missing_quarantine = remove_authority_row(threat, "mutation-budget-quarantine-read-only")
+    expect_failure(
+        lambda: validate_doc_job_graph(missing_quarantine, label="threat model", table_scope="Spotlight"),
+        "mutation-budget-quarantine-read-only",
+    )
+
+
 def main() -> int:
     try:
+        for path in (GOV, THREAT, SYNC):
+            require(path.is_file(), f"assurance input is missing: {path.relative_to(ROOT)}")
         governance = GOV.read_text(encoding="utf-8")
         threat = THREAT.read_text(encoding="utf-8")
-        for phrase in GOV_REQUIRED:
-            require(phrase in governance, f"governance contract is missing current architecture phrase: {phrase}")
-        for phrase in THREAT_REQUIRED:
-            require(phrase in threat, f"threat model is missing current architecture phrase: {phrase}")
-        joined = governance + "\n" + threat
-        for phrase in FORBIDDEN:
-            require(phrase not in joined, f"stale assurance statement remains: {phrase}")
+        workflow = SYNC.read_text(encoding="utf-8")
+
+        validate_spotlight_workflow(workflow)
+        validate_doc_job_graph(governance, label="governance", table_scope="Spotlight link sync")
+        validate_doc_job_graph(threat, label="threat model", table_scope="Spotlight")
+        validate_required_phrases(governance, threat)
+        self_test(workflow, governance, threat)
+
         print(
-            "Assurance documentation contract passed: governance and threat model match the five-workflow authority graph, "
-            "Ledger v2 orthogonal evidence semantics, predicate v3 issuance, historical schema immutability, cache boundaries, "
-            "read-only predicate preparation, terminal Action-only OIDC/attestation authority, live observable ruleset drift verification, "
-            "and the explicit admin-scope bypass-actor audit boundary."
+            "Assurance documentation contract passed: governance and threat model match the six-job Spotlight authority graph, "
+            "including Actions-read-only source-epoch mutation admission, diagnostic-only quarantine, PR-write proposal, "
+            "Actions-only approval, and terminal contents-write/PR-read/check-read merge authority; Ledger v2, predicate v3, "
+            "historical schema immutability, cache boundaries, live ruleset drift verification, and admin-scope audit semantics remain intact."
         )
         return 0
     except (OSError, ValueError) as exc:
