@@ -37,7 +37,7 @@ FIRST_PERSON_REQUIRED = {
     ),
     ROOT / ".github" / "REFRESH_CADENCE.md": (
         "My profile evidence pipeline has three refresh paths:",
-        "My production push trigger covers the complete trusted `scripts/**` tree",
+        "My production push trigger is intentionally narrow:",
     ),
     ROOT / ".github" / "RULESETS.md": (
         "used for my repository",
