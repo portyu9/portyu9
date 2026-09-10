@@ -41,14 +41,14 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
 
 SPOTLIGHT_PROVENANCE_SEQUENCE = (
     'codeql_check_suite_id: ${{ steps.authorize.outputs.codeql_check_suite_id }}',
-    'RUNS_TOTAL="$(jq -r \' .total_count // empty\' <<<"$RUNS")"'.replace("' ", "'"),
+    "RUNS_TOTAL=\"$(jq -r '.total_count // empty' <<<\"$RUNS\")\"",
     'test "$RUNS_TOTAL" = "$RUNS_COUNT" || {',
     'test "$RUNS_TOTAL" -le 3 || {',
     'test "$(jq -r .head_sha <<<"$RUN")" = "$HEAD_SHA"',
     'test "$(jq -r .repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"',
     'echo "codeql_check_suite_id=$CODEQL_CHECK_SUITE_ID" >> "$GITHUB_OUTPUT"',
     'CODEQL_CHECK_SUITE_ID: ${{ needs.approve.outputs.codeql_check_suite_id }}',
-    'CHECKS_TOTAL="$(jq -r \' .total_count // empty\' <<<"$CHECKS")"'.replace("' ", "'"),
+    "CHECKS_TOTAL=\"$(jq -r '.total_count // empty' <<<\"$CHECKS\")\"",
     'test "$CHECKS_TOTAL" = "$CHECKS_COUNT" || {',
     'check_suite_id:.check_suite.id',
     'test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"',
