@@ -345,8 +345,8 @@ def validate_profile_stats_contract(workflow: str) -> None:
 
 
 def validate_sync_contract(workflow: str, readme: str) -> None:
-    for forbidden in ("pull_request_target", "workflow_run", "repository_dispatch", "issues: write", "id-token: write", "attestations: write"):
-        require(forbidden not in workflow, f"Spotlight direct-link sync contains forbidden authority/trigger: {forbidden}")
+    for forbidden in ("pull_request_target", "  workflow_run:", "repository_dispatch", "issues: write", "id-token: write", "attestations: write"):
+        require(forbidden not in workflow, f"Spotlight direct-link sync contains forbidden authority/trigger: {forbidden.strip()}")
     require('BOT_BRANCH: "automation/spotlight-links"' in workflow, "Spotlight bot branch identity changed")
     require('ref: generated' in workflow and 'persist-credentials: false' in workflow,
             "Spotlight plan must read generated evidence without persisted credentials")
@@ -537,6 +537,10 @@ jobs:
     expect_failure(good.replace("  pull_request:\n", "  pull_request:\n  pull_request_target:\n"), "trigger authority changed")
     expect_failure(good.replace("jobs:\n", "jobs:\n  publish:\n    runs-on: ubuntu-24.04\n"), "job inventory changed")
     expect_failure(good.replace("permissions:\n  contents: read", "permissions: write-all", 1), "scalar/inline permissions")
+    require("  workflow_run:" not in '.workflow_run.repository_id != $repo',
+            "workflow_run API response fields must remain distinguishable from the canonical trigger key")
+    require("  workflow_run:" in "on:\n  workflow_run:\n",
+            "canonical workflow_run trigger-key detector self-test failed")
     spotlight_links.self_test()
 
 
