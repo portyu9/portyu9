@@ -184,6 +184,7 @@
         {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["generate"]},
         {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["attest"]},
         {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["attest", "attest_publish", "stage"]},
+        {"from": "approved", "to": "no-change", "phase": "terminalize", "jobs": ["stage"]},
         {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["publish"]},
         {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["publish"]},
         {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["dispatch"]}
