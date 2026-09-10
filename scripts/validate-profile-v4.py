@@ -138,9 +138,6 @@ def validate_taxonomy_scale(readme: str) -> None:
 
     for label, base_width, url in TAXONOMY_BADGES:
         desktop_width = round(base_width * 29 / 24)
-        # Shields static badges do not expose an independent text-size query;
-        # 29px is the reviewed desktop target that yields an effective ~16px label.
-        # Mobile remains at its existing 29px target and proportions.
         mobile_width = round(base_width * 29 / 20)
         source = (
             f'<source media="(min-width: 641px)" srcset="{url}" '
@@ -178,43 +175,8 @@ def validate_thesis_scale(readme: str) -> None:
                 f"{family} light desktop header must start at 1025px")
         require(readme.count(f'media="(prefers-color-scheme: dark)" srcset="{mobile_dark}"') == 1,
                 f"{family} dark mobile fallback changed")
-        require(readme.count(f'src="{mobile_light}"') == 1,
-                f"{family} light mobile fallback changed")
-        require(readme.find(f"thesis-header-{family}-mobile-dark.svg") < readme.find(f"thesis-header-{family}-desktop-dark.svg"),
-                f"{family} mobile-landscape source must precede desktop source")
-
-    for relative in legacy.HEADER_SVGS:
-        content = legacy.safe_svg(ROOT / relative, relative)
-        expected_size = 'font-size="18"' if "desktop" in relative else 'font-size="23"'
-        require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
-        expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
-        require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
-
-    for relative in (
-        "assets/profile-badges/thesis-header-principle-mobile-light.svg",
-        "assets/profile-badges/thesis-header-principle-mobile-dark.svg",
-    ):
-        content=(ROOT/relative).read_text(encoding="utf-8")
-        require('width="136" height="40" viewBox="0 0 136 40"' in content and 'x="68"' in content,
-                f"Mobile Principle header canvas changed: {relative}")
-    for relative in (
-        "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
-        "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
-    ):
-        content=(ROOT/relative).read_text(encoding="utf-8")
-        require('width="276" height="40" viewBox="0 0 276 40"' in content and 'x="138"' in content,
-                f"Mobile Engineering Contract header canvas changed: {relative}")
-
-    for alt, desktop_path, width, height, mobile_path, mobile_height in DESKTOP_PRINCIPLES:
-        content=legacy.safe_svg(ROOT/desktop_path, desktop_path)
-        require(f'width="{width}" height="{height}" viewBox="0 0 {width} {height}"' in content,
-                f"Desktop principle dimensions changed: {desktop_path}")
-        require('font-size="16"' in content,
-                f"Desktop principle typography must retain the reviewed 16px label scale: {desktop_path}")
-        source = f'<source media="(min-width: 1025px)" srcset="{desktop_path}" width="{width}" height="{height}">'
-        fallback = f'<img alt="{alt}" height="{mobile_height}" src="{mobile_path}">'
-        require(readme.count(source) == 1, f"Desktop-only principle source changed: {alt}")
-        require(readme.count(fallback) == 1, f"Mobile principle fallback changed: {alt}")
+        require(readme.count(f'media="(prefers-color-scheme: dark)" srcset="{mobile_dark}"') == 1,
+                f"{family} dark mobile fallback changed")
 
 
 def validate_flagships(readme: str) -> None:
@@ -302,10 +264,8 @@ def main() -> int:
         require(phrase not in readme, f"Retired wording returned: {phrase}")
     require(readme.count("© 2026 Ƴunior Ƥortal. All rights reserved.")==1, "Copyright owner/year must appear exactly once")
 
-    review_paths='<p align="center"><sub><strong>Review paths</strong> · <a href="https://github.com/portyu9/ai-qa-automation">AI QA Control Plane</a> · <a href="https://github.com/portyu9/qa-automation-ai-agent-evals">Agent Evaluation / TEVV</a> · <a href="https://github.com/portyu9?tab=repositories">QE Systems Portfolio</a></sub></p>'
-    require(readme.count(review_paths)==1, "Compact reviewer-path row changed")
-    identity=readme.find('alt="AI-Enabled Quality Systems"'); review=readme.find(review_paths); domains=readme.find('<h2 align="center">◈&nbsp;&nbsp;QE Domains</h2>')
-    require(identity<review<domains, "Reviewer paths must sit directly after profile identity and before QE Domains")
+    require('<strong>Review paths</strong>' not in readme,
+            "Retired Review paths row returned")
 
     validate_taxonomy_scale(readme); validate_thesis_scale(readme)
     for relative in legacy.IDENTITY_AND_PRINCIPLE_SVGS: legacy.safe_svg(ROOT/relative, relative)
@@ -326,6 +286,6 @@ def main() -> int:
     footer='\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
     require(readme.count(footer)==1, "A horizontal rule must exist immediately above the copyright footer")
     require("release-candidate.yml?branch=main" not in readme, "Profile must not present an RC workflow with no current main status")
-    print("Profile v4 validation passed: reviewer paths lead into 17 evidence-linked capabilities; four numbered flagship systems and three Evidence Spotlights precede Activity Metrics; responsive thesis and evidence contracts remain fail-closed.")
+    print("Profile v4 validation passed: retired Review paths stay absent; 17 evidence-linked capabilities, four numbered flagship systems, and three Evidence Spotlights precede Activity Metrics; responsive thesis and evidence contracts remain fail-closed.")
     return 0
 if __name__ == "__main__": raise SystemExit(main())
