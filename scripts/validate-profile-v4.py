@@ -54,8 +54,14 @@ PROFILE_BANNER_SVGS = (
 )
 BOTTOM_HORIZON_BLOCK = (
     '<p align="center">\n'
-    '<img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">\n'
+    '<picture>\n'
+    '  <img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">\n'
+    '</picture>\n'
     '</p>'
+)
+BOTTOM_HORIZON_ANCHOR = re.compile(
+    r'<a\b[^>]*>(?:(?!</a>).)*elite-evidence-horizon-bottom\.svg(?:(?!</a>).)*</a>',
+    re.I | re.S,
 )
 RETIRED_FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-ai-qa-control-plane.svg",
@@ -288,7 +294,9 @@ def main() -> int:
     for relative in PROFILE_BANNER_SVGS:
         require((ROOT / relative).is_file(), f"Approved profile banner is missing: {relative}")
     require(readme.count(BOTTOM_HORIZON_BLOCK) == 1,
-            "Bottom evidence horizon must remain visible exactly once as a plain image")
+            "Bottom evidence horizon must remain visible exactly once in non-linked picture markup")
+    require(BOTTOM_HORIZON_ANCHOR.search(readme) is None,
+            "Bottom evidence horizon must never be wrapped by a clickable anchor")
     require('<strong>Review paths</strong>' not in readme,
             "Retired Review paths row returned")
     require(legacy.HERO_IMAGE.is_file(), f"Profile hero image is missing: {legacy.HERO_REFERENCE}")
@@ -326,6 +334,6 @@ def main() -> int:
     footer='\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
     require(readme.count(footer)==1, "A horizontal rule must exist immediately above the copyright footer")
     require("release-candidate.yml?branch=main" not in readme, "Profile must not present an RC workflow with no current main status")
-    print("Profile v4 validation passed: Review paths are retired; the non-clickable bottom evidence horizon remains visible; 17 evidence-linked capabilities, four numbered flagship systems, and three Evidence Spotlights precede Activity Metrics; responsive thesis and evidence contracts remain fail-closed.")
+    print("Profile v4 validation passed: Review paths are retired; the bottom evidence horizon is visible in non-anchor picture markup; 17 evidence-linked capabilities, four numbered flagship systems, and three Evidence Spotlights precede Activity Metrics; responsive thesis and evidence contracts remain fail-closed.")
     return 0
 if __name__ == "__main__": raise SystemExit(main())
