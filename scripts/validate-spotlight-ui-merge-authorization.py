@@ -281,7 +281,7 @@ def self_test(sync: str, stats: str, policy: str) -> None:
             'test -n "$CANDIDATE_BRANCH"',
             1,
         ),
-        stats, policy, "re-prove immutable ref-to-head identity",
+        stats, policy, "first publication must bind the created ref",
     )
     expect_failure(
         sync.replace(CLEANUP_404_GATE, "          else\n            :\n          fi", 1),
