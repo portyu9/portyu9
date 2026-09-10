@@ -62,7 +62,7 @@ def require(condition: bool, message: str) -> None:
 
 def git_blob_sha_bytes(payload: bytes) -> str:
     header = f"blob {len(payload)}\0".encode("ascii")
-    return hashlib.sha1(header + payload, usedforsecurity=False).hexdigest()
+    return hashlib.sha1(header + payload).hexdigest()
 
 
 def git_blob_sha(path: Path) -> str:
