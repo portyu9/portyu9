@@ -1,0 +1,47 @@
+name: Inspect profile V3 geometry
+
+on:
+  push:
+    branches: [profile-animation-v3]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect SVG geometry and V3 paint usage
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          for rel in [
+              'assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg',
+              'assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg',
+          ]:
+              p = Path(rel)
+              print(f'\n===== {rel} =====')
+              text = p.read_text(encoding='utf-8')
+              print('bytes', len(text.encode()), 'lines', text.count('\n') + 1)
+              for token in ['v3TitleSpecular','v3PortalEnergy','v3DataBeam','v3MotionStyle']:
+                  print(token, 'occurrences=', text.count(token))
+              root = ET.fromstring(text)
+              ns = '{http://www.w3.org/2000/svg}'
+
+              def walk(el, ancestry=()):
+                  label = el.attrib.get('id') or el.attrib.get('class') or el.tag.split('}')[-1]
+                  anc = ancestry + (label,)
+                  tag = el.tag.split('}')[-1]
+                  if tag == 'path' and el.attrib.get('d'):
+                      d = el.attrib['d']
+                      nums = [float(x) for x in re.findall(r'-?\d+(?:\.\d+)?', d)]
+                      print('PATH', 'anc=', '/'.join(anc[-4:]), 'stroke=', el.attrib.get('stroke'), 'sw=', el.attrib.get('stroke-width'), 'opacity=', el.attrib.get('opacity'), 'fill=', el.attrib.get('fill'), 'd=', d[:240])
+                  if tag in ('circle','ellipse'):
+                      print(tag.upper(), 'anc=', '/'.join(anc[-4:]), 'cx=', el.attrib.get('cx'), 'cy=', el.attrib.get('cy'), 'r=', el.attrib.get('r'), 'rx=', el.attrib.get('rx'), 'ry=', el.attrib.get('ry'), 'stroke=', el.attrib.get('stroke'), 'fill=', el.attrib.get('fill'), 'opacity=', el.attrib.get('opacity'), 'transform=', el.attrib.get('transform'))
+                  for child in list(el):
+                      walk(child, anc)
+              walk(root)
