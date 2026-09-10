@@ -4,8 +4,8 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:6159881941aa51ecc7a321e454f50d7f617b9d675843de705b9ae962dc7c08ae",
-  "evidence_id": "PL2-6159881941AA51EC",
+  "evidence_digest": "sha256:7085d449138e6c75ba989e91619434cca1bce75fe834ad9a850b8c8774b0dc49",
+  "evidence_id": "PL2-7085D449138E6C75",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -39,21 +39,21 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-10T13:02:44Z",
+          "completed_at_utc": "2026-09-10T17:25:48Z",
           "freshness": "SAME_DAY",
-          "head_sha": "a906cb4e4c9c7dafb2637bcadf76009a41e7e0e6",
+          "head_sha": "3fa30bcb8b9833aa7e0732407ee2528948f072fe",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 34479743053,
-          "run_number": 1580,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34479743053",
+          "run_id": 34507685130,
+          "run_number": 1603,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34507685130",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "a906cb4e4c9c7dafb2637bcadf76009a41e7e0e6",
+      "subject_revision": "3fa30bcb8b9833aa7e0732407ee2528948f072fe",
       "title": "AI QA CONTROL PLANE"
     },
     {
