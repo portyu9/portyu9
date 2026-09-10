@@ -90,15 +90,117 @@ jobs:
         if: steps.render.outputs.changed == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: spotlight-link-plan
+          name: spotlight-link-plan-${{ steps.render.outputs.base_sha }}-${{ steps.render.outputs.generated_sha }}
           path: spotlight-link-plan/*
           if-no-files-found: error
           retention-days: 1
 
-  propose:
+  budget:
     if: needs.plan.outputs.changed == 'true'
-    name: propose-readme-only-write
+    name: mutation-budget-read-only
     needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      actions: read
+    outputs:
+      allowed: ${{ steps.admit.outputs.allowed }}
+      attempt_count: ${{ steps.admit.outputs.attempt_count }}
+
+    steps:
+      - name: Admit exact source epoch within bounded mutation budget
+        id: admit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_REPOSITORY_ID" =~ ^[1-9][0-9]*$ ]]
+          ARTIFACT_NAME="spotlight-link-plan-${BASE_SHA}-${GENERATED_SHA}"
+          MAX_ATTEMPTS=2
+          ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"
+          TOTAL="$(jq -r '.total_count // empty' <<<"$ARTIFACTS")"
+          COUNT="$(jq '.artifacts | length' <<<"$ARTIFACTS")"
+          [[ "$TOTAL" =~ ^[0-9]+$ ]]
+          [[ "$COUNT" =~ ^[0-9]+$ ]]
+          test "$TOTAL" = "$COUNT" || {
+            echo "Spotlight mutation-budget artifact history is incomplete." >&2
+            exit 1
+          }
+          test "$TOTAL" -le 100 || {
+            echo "Spotlight mutation-budget artifact history exceeds one complete reviewed page." >&2
+            exit 1
+          }
+          INVALID="$(jq \
+            --arg name "$ARTIFACT_NAME" \
+            --arg base "$BASE_SHA" \
+            --argjson repo "$GITHUB_REPOSITORY_ID" \
+            '[.artifacts[] | select(
+              .name != $name or
+              .expired != false or
+              .workflow_run == null or
+              .workflow_run.repository_id != $repo or
+              .workflow_run.head_repository_id != $repo or
+              .workflow_run.head_branch != "main" or
+              .workflow_run.head_sha != $base
+            )] | length' <<<"$ARTIFACTS")"
+          test "$INVALID" = "0"
+          CURRENT="$(jq --argjson run_id "$GITHUB_RUN_ID" '[.artifacts[] | select(.workflow_run.id == $run_id)] | length' <<<"$ARTIFACTS")"
+          test "$CURRENT" = "1" || {
+            echo "Current Spotlight mutation-attempt artifact is missing or ambiguous." >&2
+            exit 1
+          }
+          if [ "$TOTAL" -le "$MAX_ATTEMPTS" ]; then
+            ALLOWED=true
+            REASON="within-budget"
+          else
+            ALLOWED=false
+            REASON="source-epoch-budget-exhausted"
+          fi
+          echo "allowed=$ALLOWED" >> "$GITHUB_OUTPUT"
+          echo "attempt_count=$TOTAL" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Spotlight mutation budget"
+            echo "- source main: \`$BASE_SHA\`"
+            echo "- generated: \`$GENERATED_SHA\`"
+            echo "- immutable changed-plan attempts in current 24h artifact window: **$TOTAL / $MAX_ATTEMPTS**"
+            echo "- admission: **$ALLOWED** ($REASON)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  quarantine:
+    if: always() && needs.plan.outputs.changed == 'true' && needs.budget.result == 'success' && needs.budget.outputs.allowed != 'true'
+    name: mutation-budget-quarantine-read-only
+    needs: [plan, budget]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    permissions:
+      contents: read
+
+    steps:
+      - name: Report fail-closed mutation quarantine
+        env:
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          ATTEMPT_COUNT: ${{ needs.budget.outputs.attempt_count }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Spotlight mutation quarantine"
+            echo "Mutation authority is disabled for source epoch \`$BASE_SHA / $GENERATED_SHA\`."
+            echo "Observed changed-plan attempts: **$ATTEMPT_COUNT**."
+            echo "No bot branch, pull request, workflow approval, merge, or cleanup mutation was authorized by this run."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Spotlight source-epoch mutation budget exhausted; remaining diagnostic-only." >&2
+          exit 1
+
+  propose:
+    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true'
+    name: propose-readme-only-write
+    needs: [plan, budget]
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     permissions:
@@ -113,7 +215,7 @@ jobs:
       - name: Download reviewed direct-link proposal
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: spotlight-link-plan
+          name: spotlight-link-plan-${{ needs.plan.outputs.base_sha }}-${{ needs.plan.outputs.generated_sha }}
           path: spotlight-link-plan
           digest-mismatch: error
 
@@ -189,9 +291,9 @@ jobs:
           echo "base_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
   approve:
-    if: needs.plan.outputs.changed == 'true' && needs.propose.result == 'success'
+    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success'
     name: approve-bot-pr-checks-only
-    needs: [plan, propose]
+    needs: [plan, budget, propose]
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     permissions:
@@ -244,6 +346,7 @@ jobs:
           # Keep the long-lived wait under Actions-only authority. The terminal merge job
           # receives repository-content write plus pull-request read authority only after all
           # three canonical workflows have completed successfully for the exact reviewed head.
+          APPROVAL_REQUESTED_RUN_IDS=""
           for attempt in $(seq 1 60); do
             RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
             RUNS_TOTAL="$(jq -r '.total_count // empty' <<<"$RUNS")"
@@ -298,7 +401,13 @@ jobs:
                   *) exit 1 ;;
                 esac
                 if [ "$STATUS" = "action_required" ] || [ "$STATUS" = "waiting" ] || [ "$CONCLUSION" = "action_required" ]; then
-                  gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null
+                  case " $APPROVAL_REQUESTED_RUN_IDS " in
+                    *" $RUN_ID "*) : ;;
+                    *)
+                      gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null
+                      APPROVAL_REQUESTED_RUN_IDS="${APPROVAL_REQUESTED_RUN_IDS} ${RUN_ID}"
+                      ;;
+                  esac
                   ALL_SUCCESS=false
                 elif [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
                   :
@@ -325,9 +434,9 @@ jobs:
           echo "profile_check_suite_id=$PROFILE_CHECK_SUITE_ID" >> "$GITHUB_OUTPUT"
 
   merge:
-    if: needs.plan.outputs.changed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'
+    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'
     name: merge-readme-only-terminal-write
-    needs: [plan, propose, approve]
+    needs: [plan, budget, propose, approve]
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions:

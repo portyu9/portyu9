@@ -68,10 +68,12 @@ EXPECTED = {
     },
     "spotlight-link-sync.yml": {
         "triggers": {"workflow_dispatch", "schedule"},
-        "jobs": {"plan", "propose", "approve", "merge"},
+        "jobs": {"plan", "budget", "quarantine", "propose", "approve", "merge"},
         "permissions": {
             WORKFLOW_SCOPE: {"contents": "read"},
             "plan": {"contents": "read"},
+            "budget": {"actions": "read"},
+            "quarantine": {"contents": "read"},
             "propose": {"contents": "write", "pull-requests": "write"},
             "approve": {"contents": "read", "actions": "write"},
             "merge": {"contents": "write", "pull-requests": "read", "checks": "read"},
@@ -343,17 +345,75 @@ def validate_profile_stats_contract(workflow: str) -> None:
 
 
 def validate_sync_contract(workflow: str, readme: str) -> None:
-    for forbidden in ("pull_request_target", "workflow_run", "repository_dispatch", "issues: write", "id-token: write", "attestations: write"):
-        require(forbidden not in workflow, f"Spotlight direct-link sync contains forbidden authority/trigger: {forbidden}")
+    for forbidden in ("pull_request_target", "  workflow_run:", "repository_dispatch", "issues: write", "id-token: write", "attestations: write"):
+        require(forbidden not in workflow, f"Spotlight direct-link sync contains forbidden authority/trigger: {forbidden.strip()}")
     require('BOT_BRANCH: "automation/spotlight-links"' in workflow, "Spotlight bot branch identity changed")
     require('ref: generated' in workflow and 'persist-credentials: false' in workflow,
             "Spotlight plan must read generated evidence without persisted credentials")
     require("validate-portfolio-evidence-ledger.py published/portfolio-evidence --require-live" in workflow,
             "Spotlight plan must revalidate published Ledger evidence")
 
+    budget = job_block(workflow, "budget", "quarantine")
+    quarantine = job_block(workflow, "quarantine", "propose")
     propose = job_block(workflow, "propose", "approve")
     approve = job_block(workflow, "approve", "merge")
     merge = job_block(workflow, "merge", None)
+
+    require("name: mutation-budget-read-only" in budget and "needs: plan" in budget,
+            "Spotlight mutation budget identity/dependency changed")
+    require("permissions:\n      actions: read" in budget,
+            "Spotlight mutation budget must retain Actions-read-only authority")
+    require("contents: write" not in budget and "pull-requests: write" not in budget and "actions: write" not in budget,
+            "Spotlight mutation budget acquired write authority")
+    require("MAX_ATTEMPTS=2" in budget,
+            "Spotlight source-epoch mutation budget changed")
+    require('ARTIFACT_NAME="spotlight-link-plan-${BASE_SHA}-${GENERATED_SHA}"' in budget,
+            "Spotlight mutation budget lost exact main/generated epoch identity")
+    require('test "$TOTAL" = "$COUNT" || {' in budget and 'test "$TOTAL" -le 100 || {' in budget,
+            "Spotlight mutation budget must prove complete one-page artifact history")
+    require('.workflow_run.repository_id != $repo' in budget and '.workflow_run.head_repository_id != $repo' in budget,
+            "Spotlight mutation budget lost repository provenance binding")
+    require('.workflow_run.head_branch != "main"' in budget and '.workflow_run.head_sha != $base' in budget,
+            "Spotlight mutation budget lost exact source-main binding")
+    require('test "$CURRENT" = "1" || {' in budget,
+            "Spotlight mutation budget must bind exactly one current-run attempt token")
+    require('echo "allowed=$ALLOWED" >> "$GITHUB_OUTPUT"' in budget,
+            "Spotlight mutation budget must seal its admission decision")
+    require_exact_gh_api_surface(
+        budget,
+        label="Spotlight mutation budget",
+        expected_lines=(
+            'ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"',
+        ),
+    )
+
+    require("name: mutation-budget-quarantine-read-only" in quarantine,
+            "Spotlight mutation quarantine identity changed")
+    require("needs: [plan, budget]" in quarantine and "needs.budget.outputs.allowed != 'true'" in quarantine,
+            "Spotlight mutation quarantine must be gated on an exhausted successful budget decision")
+    require("permissions:\n      contents: read" in quarantine,
+            "Spotlight mutation quarantine must remain read-only")
+    require("GH_TOKEN:" not in quarantine and "gh api " not in quarantine,
+            "Spotlight mutation quarantine must not receive GitHub mutation/API authority")
+    require("exit 1" in quarantine and "GITHUB_STEP_SUMMARY" in quarantine,
+            "Spotlight mutation quarantine must fail visibly while retaining read-only diagnostics")
+
+    require("needs: [plan, budget]" in propose and "needs.budget.outputs.allowed == 'true'" in propose,
+            "Spotlight proposal mutation must require positive budget admission")
+    require("needs: [plan, budget, propose]" in approve and "needs.budget.outputs.allowed == 'true'" in approve,
+            "Spotlight approval mutation must require positive budget admission")
+    require("needs: [plan, budget, propose, approve]" in merge and "needs.budget.outputs.allowed == 'true'" in merge,
+            "Spotlight terminal merge must require positive budget admission")
+    require('APPROVAL_REQUESTED_RUN_IDS=""' in approve and 'case " $APPROVAL_REQUESTED_RUN_IDS " in' in approve,
+            "Spotlight approval loop must locally de-duplicate approval mutations")
+    require('APPROVAL_REQUESTED_RUN_IDS="${APPROVAL_REQUESTED_RUN_IDS} ${RUN_ID}"' in approve,
+            "Spotlight approval loop must record each requested approval identity")
+
+    require("spotlight-link-plan-${{ steps.render.outputs.base_sha }}-${{ steps.render.outputs.generated_sha }}" in workflow,
+            "Spotlight changed-plan artifact must be content-addressed by source epoch")
+    require("spotlight-link-plan-${{ needs.plan.outputs.base_sha }}-${{ needs.plan.outputs.generated_sha }}" in propose,
+            "Spotlight proposal must download only its exact epoch plan artifact")
+
     require_exact_gh_api_surface(
         propose,
         label="Spotlight propose",
@@ -402,7 +462,7 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
             'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" >/dev/null',
         ),
     )
-    for block, label in ((propose, "propose"), (approve, "approve"), (merge, "merge")):
+    for block, label in ((budget, "budget"), (quarantine, "quarantine"), (propose, "propose"), (approve, "approve"), (merge, "merge")):
         require("actions/checkout@" not in block and "actions/setup-python@" not in block,
                 f"Spotlight {label} authority job must not checkout or execute authored Python")
     require('compare/${BASE_SHA}...${HEAD_SHA}' in approve,
@@ -477,6 +537,10 @@ jobs:
     expect_failure(good.replace("  pull_request:\n", "  pull_request:\n  pull_request_target:\n"), "trigger authority changed")
     expect_failure(good.replace("jobs:\n", "jobs:\n  publish:\n    runs-on: ubuntu-24.04\n"), "job inventory changed")
     expect_failure(good.replace("permissions:\n  contents: read", "permissions: write-all", 1), "scalar/inline permissions")
+    require("  workflow_run:" not in '.workflow_run.repository_id != $repo',
+            "workflow_run API response fields must remain distinguishable from the canonical trigger key")
+    require("  workflow_run:" in "on:\n  workflow_run:\n",
+            "canonical workflow_run trigger-key detector self-test failed")
     spotlight_links.self_test()
 
 
@@ -494,7 +558,7 @@ def main() -> int:
             "Workflow authority validation passed: five workflows form a closed authority inventory; "
             "attestation preparation is read-only and terminal OIDC/attestation authority executes no authored shell/code; "
             "publication staging remains isolated from terminal repository-write authority and terminal contents-write publication is job-gated on a sealed changed candidate; post-publication dispatch remains actions-only; "
-            "Spotlight synchronization stays PR-gated with closed gh api surfaces and exact-head branch cleanup."
+            "Spotlight synchronization is mutation-budget-admitted, quarantine fails closed under read-only authority, and PR/approval/merge mutation surfaces retain exact-head closure."
         )
         return 0
     except (OSError, ValueError) as exc:
