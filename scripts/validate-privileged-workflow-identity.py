@@ -17,11 +17,11 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v13"
+VERSION = "governed-workflow-byte-identity-v14"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
     ".github/workflows/profile-stats.yml": "625f0ba3cc0cd081cf2d55a0799650fd180200b3",
-    ".github/workflows/spotlight-link-sync.yml": "baea6e171145148429f7764141870fcd971979be",
+    ".github/workflows/spotlight-link-sync.yml": "69c83de375adef9aeed70c0d9cedf63d3af46551",
 }
 
 PROFILE_STATS_FRESHNESS_SEQUENCE = (
@@ -78,6 +78,23 @@ SPOTLIGHT_PROVENANCE_SEQUENCE = (
     'test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"',
 )
 
+SPOTLIGHT_IMMUTABLE_CANDIDATE_SEQUENCE = (
+    'BOT_BRANCH_PREFIX: "automation/spotlight-links/"',
+    'readme_sha256_after: ${{ steps.render.outputs.readme_sha256_after }}',
+    'candidate_branch: ${{ steps.propose.outputs.candidate_branch }}',
+    'CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$SOURCE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d\' \' -f1)"',
+    'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',
+    'BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"',
+    'TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"',
+    'CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"',
+    '# Validate the complete candidate object before first publication or retry reuse.',
+    'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
+    'echo "candidate_branch=$CANDIDATE_BRANCH" >> "$GITHUB_OUTPUT"',
+    'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"',
+    '# Revalidate both mutable roots and the immutable candidate ref immediately before merge.',
+    'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null',
+)
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -128,6 +145,20 @@ def validate_spotlight_provenance(text: str) -> None:
                               "Spotlight workflow/check provenance contract")
 
 
+def validate_spotlight_immutable_candidates(text: str) -> None:
+    """Keep candidate refs content-addressed, create-once, and exact-head consumed."""
+    validate_ordered_contract(text, SPOTLIGHT_IMMUTABLE_CANDIDATE_SEQUENCE,
+                              "Spotlight immutable-candidate contract")
+    for forbidden in (
+        'gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/',
+        '-F force=true',
+        'gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/README.md"',
+        'BOT_BRANCH: "automation/spotlight-links"',
+    ):
+        require(forbidden not in text,
+                f"Spotlight immutable-candidate contract regained mutable branch publication: {forbidden}")
+
+
 def self_test() -> None:
     require(git_blob_sha_bytes(b"") == "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
             "Git blob identity self-test failed for empty bytes")
@@ -163,6 +194,17 @@ def self_test() -> None:
     else:
         raise ValueError("Spotlight provenance self-test accepted a missing exact check-map equality guard")
 
+    synthetic = "\n".join(SPOTLIGHT_IMMUTABLE_CANDIDATE_SEQUENCE)
+    validate_spotlight_immutable_candidates(synthetic)
+    try:
+        validate_spotlight_immutable_candidates(
+            synthetic + '\ngh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/x"'
+        )
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight immutable-candidate self-test accepted mutable ref PATCH authority")
+
 
 def main() -> int:
     try:
@@ -180,10 +222,11 @@ def main() -> int:
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         validate_spotlight_mutation_budget(spotlight)
         validate_spotlight_provenance(spotlight)
+        validate_spotlight_immutable_candidates(spotlight)
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
-            "generated publication is source-epoch freshness bound · Spotlight mutations are source-epoch budget admitted before exact-run/suite authorization"
+            "generated publication is source-epoch freshness bound · Spotlight mutations are source-epoch budget admitted, immutable-candidate bound, and exact-run/suite authorized"
         )
         return 0
     except (OSError, ValueError) as exc:
