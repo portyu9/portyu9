@@ -110,6 +110,7 @@ def validate_transaction_machine(workflow_id: str, value: Any, workflows: dict[s
     identities: set[tuple[str, str, str, tuple[str, ...]]] = set()
     phase_rank = {phase: rank for rank, phase in enumerate(TRANSACTION_PHASES)}
     workflow_jobs = workflows[workflow_id]["jobs"]
+    job_phase_ranks: dict[str, set[int]] = {job_id: set() for job_id in workflow_jobs}
 
     for index, transition_value in enumerate(transitions):
         transition_label = f"{label} transitions[{index}]"
@@ -134,7 +135,12 @@ def validate_transaction_machine(workflow_id: str, value: Any, workflows: dict[s
         incoming[target].append((source, rank))
         covered_jobs.update(jobs)
         observed_phases.add(phase)
+        for job_id in jobs:
+            job_phase_ranks[job_id].add(rank)
 
+        if phase == "mutate":
+            require(any("write" in workflow_jobs[job_id]["permissions"].values() for job_id in jobs),
+                    f"{transition_label} mutate phase must contain a write-capable job")
         if phase == "terminalize":
             require(target in terminals, f"{transition_label} terminalize must enter a terminal state")
         else:
@@ -147,6 +153,13 @@ def validate_transaction_machine(workflow_id: str, value: Any, workflows: dict[s
             f"{label} job closure changed: expected={sorted(workflow_jobs)} observed={sorted(covered_jobs)}")
     require(outgoing[initial] and all(rank == phase_rank["propose"] for _, rank in outgoing[initial]),
             f"{label} initial transitions must be propose phase")
+
+    # The earliest phase assigned to a dependent job may never precede the
+    # earliest phase assigned to one of its declared workflow dependencies.
+    for job_id, job in workflow_jobs.items():
+        for dependency in job["needs"]:
+            require(min(job_phase_ranks[job_id]) >= min(job_phase_ranks[dependency]),
+                    f"{label} job dependency phase regresses: {dependency} -> {job_id}")
 
     for terminal in terminals:
         require(not outgoing[terminal], f"{label} terminal state has outgoing transitions: {terminal}")
@@ -418,9 +431,26 @@ def self_test(policy: dict[str, Any]) -> None:
     ]
     expect_policy_failure(unmodeled_job, "job closure changed")
 
+    read_only_mutation = copy.deepcopy(policy)
+    for transition in read_only_mutation["transactionMachines"]["profile-stats"]["transitions"]:
+        if transition["phase"] == "mutate":
+            transition["jobs"] = ["stage"]
+            break
+    expect_policy_failure(read_only_mutation, "mutate phase must contain a write-capable job")
+
+    dead_end = copy.deepcopy(policy)
+    dead_end["transactionMachines"]["profile-stats"]["states"].append("stalled")
+    dead_end["transactionMachines"]["profile-stats"]["transitions"].append(
+        {"from": "proposed", "to": "stalled", "phase": "approve", "jobs": ["attest"]}
+    )
+    expect_policy_failure(dead_end, "reachable nonterminal state cannot be a dead end")
+
     unreachable = copy.deepcopy(policy)
     unreachable["transactionMachines"]["profile-stats"]["states"].append("orphaned")
-    expect_policy_failure(unreachable, "reachable nonterminal state cannot be a dead end")
+    unreachable["transactionMachines"]["profile-stats"]["transitions"].append(
+        {"from": "orphaned", "to": "completed", "phase": "terminalize", "jobs": ["dispatch"]}
+    )
+    expect_policy_failure(unreachable, "contains unreachable states")
 
     terminal_escape = copy.deepcopy(policy)
     terminal_escape["transactionMachines"]["profile-stats"]["transitions"].append(
