@@ -1,0 +1,71 @@
+name: V3 animation diagnostic
+
+on:
+  push:
+    branches: [profile-animation-v3]
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: profile-animation-v3
+      - name: Inspect V3 SVG geometry
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          files = [
+              Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg'),
+              Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg'),
+          ]
+          out = []
+          for path in files:
+              out.append(f'=== {path} ===')
+              tree = ET.parse(path)
+              root = tree.getroot()
+              parent = {c: p for p in root.iter() for c in p}
+              target = None
+              for el in root.iter():
+                  if el.attrib.get('id') == 'v3-cinematic-refinement':
+                      target = el
+                      break
+              if target is None:
+                  out.append('NO v3-cinematic-refinement group found')
+                  continue
+              desc = set(target.iter())
+              out.append('--- V3 refinement elements ---')
+              for el in target.iter():
+                  tag = el.tag.rsplit('}', 1)[-1]
+                  attrs = dict(el.attrib)
+                  if 'd' in attrs and len(attrs['d']) > 260:
+                      attrs['d'] = attrs['d'][:260] + '...'
+                  out.append(f'{tag}: {attrs}')
+              out.append('--- Base circles/ellipses/lines/polylines and named paths (outside V3) ---')
+              for el in root.iter():
+                  if el in desc:
+                      continue
+                  tag = el.tag.rsplit('}', 1)[-1]
+                  a = el.attrib
+                  if tag in {'circle','ellipse','line','polyline','polygon'} or (tag == 'path' and (a.get('id') or a.get('class') or a.get('stroke'))):
+                      attrs = dict(a)
+                      if 'd' in attrs and len(attrs['d']) > 260:
+                          attrs['d'] = attrs['d'][:260] + '...'
+                      out.append(f'{tag}: {attrs}')
+              out.append('')
+          Path('v3-animation-diagnostic.txt').write_text('\n'.join(out), encoding='utf-8')
+          PY
+      - name: Commit diagnostic report
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add v3-animation-diagnostic.txt
+          git commit -m "chore: capture v3 animation diagnostic" || exit 0
+          git push origin HEAD:profile-animation-v3
