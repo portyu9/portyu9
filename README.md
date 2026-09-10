@@ -171,3 +171,7 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <sub>Except where a specific file or component expressly states otherwise, no license is granted to copy, modify, redistribute, or reuse original README text and composition, branding, artwork, or custom Signal Field modifications and visual treatment.</sub><br>
 <sub>Third-party components remain subject to their respective licenses and terms.</sub>
 </p>
+
+<p align="center">
+<img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">
+</p>
