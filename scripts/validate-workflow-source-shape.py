@@ -11,6 +11,12 @@ not YAML structure. The only reviewed flow collection is a simple ``needs: [job,
 sequence; flow mappings and every other flow sequence remain forbidden. Every structural
 mapping scope must also use unique keys so source scanners and GitHub's YAML loader can
 never disagree through duplicate-key/last-value-wins semantics.
+
+Interpreter and workflow-call semantics are part of the same source contract. Every job
+must remain an ordinary GitHub-hosted ``ubuntu-24.04`` job using the reviewed implicit
+Linux shell semantics. Workflow/job ``defaults`` shell substitution, step-level ``shell``
+overrides, job containers, and job-level reusable-workflow ``uses``/``with``/``secrets``
+authority are rejected unless a future policy explicitly models them.
 """
 from __future__ import annotations
 
@@ -38,6 +44,9 @@ SEQUENCE_MAPPING_KEY = re.compile(
     r"^(?P<indent> *)-\s+(?P<key>[A-Za-z0-9_.-]+)\s*:(?:\s.*)?$"
 )
 SEQUENCE_ITEM = re.compile(r"^(?P<indent> *)-\s+.*$")
+
+REVIEWED_RUNNER = "ubuntu-24.04"
+JOB_CALL_AUTHORITY_KEYS = {"uses", "with", "secrets"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -186,6 +195,131 @@ def reject_duplicate_mapping_key(
     return sequence_serial
 
 
+def validate_execution_semantics(text: str, label: str) -> int:
+    """Lock the workflow interpreter and job-call model without evaluating YAML."""
+    lines = text.splitlines()
+    block_indent: int | None = None
+    in_jobs = False
+    current_job: str | None = None
+    current_runner_count = 0
+    jobs = 0
+    steps_indent: int | None = None
+
+    def finish_job() -> None:
+        if current_job is None:
+            return
+        require(
+            current_runner_count == 1,
+            f"{label}: job {current_job} must define exactly one literal runs-on: {REVIEWED_RUNNER}",
+        )
+
+    for line_number, line in enumerate(lines, start=1):
+        if block_indent is not None:
+            if not line.strip() or indentation(line) > block_indent:
+                continue
+            block_indent = None
+
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+
+        skeleton = structural_skeleton(line)
+        stripped = skeleton.strip()
+        if not stripped:
+            continue
+
+        mapping = PLAIN_MAPPING_KEY.fullmatch(skeleton)
+        sequence_mapping = SEQUENCE_MAPPING_KEY.fullmatch(skeleton)
+        if mapping is None and sequence_mapping is None:
+            if BLOCK_HEADER.search(skeleton):
+                block_indent = indentation(line)
+            continue
+
+        if sequence_mapping is not None:
+            logical_indent = len(sequence_mapping.group("indent")) + 2
+            key = sequence_mapping.group("key")
+        else:
+            logical_indent = len(mapping.group("indent"))
+            key = mapping.group("key")
+
+        if logical_indent == 0 and key == "defaults":
+            raise ValueError(
+                f"{label}:{line_number}: workflow-level defaults are forbidden; reviewed run-shell semantics are implicit"
+            )
+
+        if logical_indent == 0:
+            if key == "jobs":
+                finish_job()
+                in_jobs = True
+                current_job = None
+                current_runner_count = 0
+                steps_indent = None
+            elif in_jobs:
+                finish_job()
+                in_jobs = False
+                current_job = None
+                current_runner_count = 0
+                steps_indent = None
+
+        if not in_jobs:
+            if BLOCK_HEADER.search(skeleton):
+                block_indent = indentation(line)
+            continue
+
+        if steps_indent is not None:
+            physical_indent = indentation(line)
+            if physical_indent <= steps_indent:
+                steps_indent = None
+            elif sequence_mapping is not None:
+                dash_indent = len(sequence_mapping.group("indent"))
+                require(
+                    dash_indent == steps_indent + 2,
+                    f"{label}:{line_number}: workflow steps must use canonical sequence indentation",
+                )
+
+        if logical_indent == 2:
+            finish_job()
+            current_job = key
+            current_runner_count = 0
+            steps_indent = None
+            jobs += 1
+        elif current_job is not None and logical_indent == 4:
+            if key == "steps":
+                steps_indent = logical_indent
+            elif key == "runs-on":
+                current_runner_count += 1
+                require(
+                    line.strip() == f"runs-on: {REVIEWED_RUNNER}",
+                    f"{label}:{line_number}: job {current_job} must use literal runs-on: {REVIEWED_RUNNER}",
+                )
+                require(
+                    current_runner_count == 1,
+                    f"{label}:{line_number}: job {current_job} defines multiple runner authorities",
+                )
+            elif key in JOB_CALL_AUTHORITY_KEYS:
+                raise ValueError(
+                    f"{label}:{line_number}: job-level {key}: reusable-workflow call authority is forbidden"
+                )
+            elif key == "defaults":
+                raise ValueError(
+                    f"{label}:{line_number}: job-level defaults are forbidden; reviewed run-shell semantics are implicit"
+                )
+            elif key == "container":
+                raise ValueError(
+                    f"{label}:{line_number}: job containers are forbidden because they substitute runner/interpreter semantics"
+                )
+        elif current_job is not None and logical_indent == 8 and key == "shell":
+            raise ValueError(
+                f"{label}:{line_number}: explicit step shell overrides are forbidden; use the reviewed implicit Linux shell"
+            )
+
+        if BLOCK_HEADER.search(skeleton):
+            block_indent = indentation(line)
+
+    finish_job()
+    require(jobs > 0, f"{label}: workflow contains no ordinary jobs")
+    return jobs
+
+
 def validate_text(text: str, label: str) -> int:
     lines = text.splitlines()
     block_indent: int | None = None
@@ -249,6 +383,7 @@ def validate_text(text: str, label: str) -> int:
     # Keep these focused diagnostics in addition to generalized mapping-key uniqueness.
     reject_duplicate_authority_identities(text, label, "on")
     reject_duplicate_authority_identities(text, label, "jobs")
+    validate_execution_semantics(text, label)
     return structural_lines
 
 
@@ -281,7 +416,29 @@ def expect_failure(text: str, fragment: str) -> None:
 
 
 def self_test() -> None:
-    safe = """name: Safe\non:\n  pull_request:\npermissions:\n  contents: read\njobs:\n  plan:\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Safe expression\n        env:\n          VALUE: ${{ github.ref }}\n        run: |\n          set -euo pipefail\n          data='{"k":[1,2]}'\n          [[ -n "$VALUE" ]]\n      - run: echo safe\n  merge:\n    needs: [plan, approve]\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo safe\n"""
+    safe = """name: Safe
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Safe expression
+        env:
+          VALUE: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          data='{"k":[1,2]}'
+          [[ -n "$VALUE" ]]
+      - run: echo safe
+  merge:
+    needs: [plan, approve]
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo safe
+"""
     validate_text(safe, "self-test-safe.yml")
 
     cases = (
@@ -293,7 +450,7 @@ def self_test() -> None:
         (safe.replace("permissions:\n  contents: read", "permissions: &shared\n  contents: read"), "anchors, aliases"),
         (safe.replace("permissions:\n  contents: read", "permissions:\n  <<: *shared"), "anchors, aliases"),
         ("---\n" + safe, "document markers"),
-        (safe.replace("jobs:", '\"jobs\":'), "quoted mapping keys"),
+        (safe.replace("jobs:", '"jobs":'), "quoted mapping keys"),
         (safe.replace("jobs:", "? jobs\n:"), "complex mapping keys"),
         (safe.replace("  pull_request:\n", "  pull_request:\n  pull_request:\n"), "duplicate mapping key"),
         (safe.replace("  plan:\n", "  plan:\n  plan:\n", 1), "duplicate mapping key"),
@@ -301,6 +458,16 @@ def self_test() -> None:
         (safe.replace("    runs-on: ubuntu-24.04\n    steps:", "    runs-on: ubuntu-24.04\n    runs-on: ubuntu-24.04\n    steps:", 1), "duplicate mapping key"),
         (safe.replace("          VALUE: ${{ github.ref }}", "          VALUE: ${{ github.ref }}\n          VALUE: fixed"), "duplicate mapping key"),
         (safe.replace("      - name: Safe expression", "      - name: Safe expression\n        name: Shadowed expression"), "duplicate mapping key"),
+        (safe.replace("runs-on: ubuntu-24.04", "runs-on: ubuntu-latest", 1), "must use literal runs-on: ubuntu-24.04"),
+        ("defaults:\n  run:\n    shell: bash\n" + safe, "workflow-level defaults are forbidden"),
+        (safe.replace("  plan:\n    runs-on:", "  plan:\n    defaults:\n      run:\n        shell: bash\n    runs-on:", 1), "job-level defaults are forbidden"),
+        (safe.replace("      - run: echo safe", "      - run: echo safe\n        shell: python", 1), "explicit step shell overrides are forbidden"),
+        (safe.replace("      - run: echo safe", "      - shell: python\n        run: echo safe", 1), "explicit step shell overrides are forbidden"),
+        (safe.replace("      - run: echo safe", "        - shell: python\n          run: echo safe", 1), "canonical sequence indentation"),
+        (safe.replace("    runs-on: ubuntu-24.04", "    container: alpine:3.20\n    runs-on: ubuntu-24.04", 1), "job containers are forbidden"),
+        (safe.replace("    runs-on: ubuntu-24.04", "    uses: octo/repo/.github/workflows/reuse.yml@0123456789012345678901234567890123456789\n    runs-on: ubuntu-24.04", 1), "job-level uses: reusable-workflow call authority is forbidden"),
+        (safe.replace("    runs-on: ubuntu-24.04", "    with:\n      mode: unsafe\n    runs-on: ubuntu-24.04", 1), "job-level with: reusable-workflow call authority is forbidden"),
+        (safe.replace("    runs-on: ubuntu-24.04", "    secrets: inherit\n    runs-on: ubuntu-24.04", 1), "job-level secrets: reusable-workflow call authority is forbidden"),
     )
     for mutated, fragment in cases:
         expect_failure(mutated, fragment)
@@ -323,7 +490,8 @@ def main() -> int:
         print(
             f"Workflow source-shape validation passed: {workflow_count} workflows · {structural_lines} structural lines · "
             "block-style canonical YAML enforced, every structural mapping scope uses unique keys, trigger/job authority identities are unique, "
-            "flow mappings/structural aliases rejected, and only reviewed simple needs sequences allowed."
+            "flow mappings/structural aliases rejected, only reviewed simple needs sequences allowed, and every job remains an ordinary "
+            f"{REVIEWED_RUNNER} job with reviewed implicit shell semantics and no reusable-workflow/secret-inheritance call authority."
         )
         return 0
     except (OSError, ValueError) as exc:
