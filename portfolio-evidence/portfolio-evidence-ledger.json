@@ -4,12 +4,13 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:ff9885e172ec922e494a9773249127474b89535003dac7395f1f23be5e4c571b",
-  "evidence_id": "PL2-FF9885E172EC922E",
+  "evidence_digest": "sha256:6159881941aa51ecc7a321e454f50d7f617b9d675843de705b9ae962dc7c08ae",
+  "evidence_id": "PL2-6159881941AA51EC",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 25
+    "AGED": 24,
+    "SAME_DAY": 1
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -32,27 +33,27 @@
           "workflow": "ci.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/ai-qa-automation",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-09T23:38:41Z",
-          "freshness": "AGED",
-          "head_sha": "fe28169a8230eb5eb2c03ffed2101b8609caa662",
+          "completed_at_utc": "2026-09-10T13:02:44Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "a906cb4e4c9c7dafb2637bcadf76009a41e7e0e6",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 34417499888,
-          "run_number": 1558,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34417499888",
+          "run_id": 34479743053,
+          "run_number": 1580,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/34479743053",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "fe28169a8230eb5eb2c03ffed2101b8609caa662",
+      "subject_revision": "a906cb4e4c9c7dafb2637bcadf76009a41e7e0e6",
       "title": "AI QA CONTROL PLANE"
     },
     {
