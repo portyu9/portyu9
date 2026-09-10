@@ -29,23 +29,14 @@ jobs:
               Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg'),
           ]
 
-          def remove_element_by_id(text: str, tag: str, element_id: str):
+          def remove_group_by_id(text: str, element_id: str):
               marker = f'id="{element_id}"'
               pos = text.find(marker)
               if pos < 0:
                   return text, False
-              start = text.rfind(f'<{tag}', 0, pos)
+              start = text.rfind('<g', 0, pos)
               if start < 0:
-                  raise RuntimeError(f'opening <{tag}> for {element_id} not found')
-
-              if tag != 'g':
-                  end_token = f'</{tag}>'
-                  end = text.find(end_token, pos)
-                  if end < 0:
-                      raise RuntimeError(f'closing </{tag}> for {element_id} not found')
-                  end += len(end_token)
-                  return text[:start] + text[end:], True
-
+                  raise RuntimeError(f'opening group for {element_id} not found')
               token_re = re.compile(r'<g(?:\s|>)|</g>')
               depth = 0
               for m in token_re.finditer(text, start):
@@ -56,19 +47,15 @@ jobs:
                       depth -= 1
                       if depth == 0:
                           return text[:start] + text[m.end():], True
-              raise RuntimeError(f'unbalanced <g> for {element_id}')
+              raise RuntimeError(f'unbalanced group for {element_id}')
 
           for path in files:
               text = path.read_text(encoding='utf-8')
-              text, removed_group = remove_element_by_id(text, 'g', 'v3-cinematic-refinement')
-              text, removed_defs = remove_element_by_id(text, 'defs', 'v3-cinematic-defs')
-              if not removed_group:
+              text, removed = remove_group_by_id(text, 'v3-cinematic-refinement')
+              if not removed:
                   raise RuntimeError(f'{path}: v3-cinematic-refinement not found')
-              if not removed_defs:
-                  raise RuntimeError(f'{path}: v3-cinematic-defs not found')
-              for forbidden in ('v3-cinematic-refinement', 'v3DataBeam', 'v3TitleTrail', 'v3PortalEnergy'):
-                  if forbidden in text:
-                      raise RuntimeError(f'{path}: residual synthetic V3 hook {forbidden}')
+              if 'v3-cinematic-refinement' in text:
+                  raise RuntimeError(f'{path}: residual rendered V3 refinement group')
               path.write_text(text, encoding='utf-8')
               ET.parse(path)
               print(f'cleaned and parsed: {path}')
@@ -107,9 +94,8 @@ jobs:
               Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg'),
           ):
               ET.parse(p)
-              s=p.read_text(encoding='utf-8')
+              s = p.read_text(encoding='utf-8')
               assert 'v3-cinematic-refinement' not in s
-              assert 'v3DataBeam' not in s
           PY
 
           git config user.name "github-actions[bot]"
