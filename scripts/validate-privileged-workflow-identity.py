@@ -17,9 +17,9 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v12"
+VERSION = "governed-workflow-byte-identity-v13"
 EXPECTED = {
-    ".github/workflows/profile-quality.yml": "d196c4eddb4b8f24c2f0823dfd355cf62386f1ee",
+    ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
     ".github/workflows/profile-stats.yml": "625f0ba3cc0cd081cf2d55a0799650fd180200b3",
     ".github/workflows/spotlight-link-sync.yml": "baea6e171145148429f7764141870fcd971979be",
 }
