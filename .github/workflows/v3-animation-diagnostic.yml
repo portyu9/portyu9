@@ -14,58 +14,68 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: profile-animation-v3
-      - name: Shortlist original SVG targets
+      - name: Match original check and diagonal targets
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
+          import re, math
 
-          src = Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg')
-          root = ET.parse(src).getroot()
-          parent = {c:p for p in root.iter() for c in p}
-          v3 = next((e for e in root.iter() if e.attrib.get('id') == 'v3-cinematic-refinement'), None)
-          v3set = set(v3.iter()) if v3 is not None else set()
-          rows=[]
-
+          src=Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg')
+          root=ET.parse(src).getroot()
+          parent={c:p for p in root.iter() for c in p}
+          v3=next((e for e in root.iter() if e.attrib.get('id')=='v3-cinematic-refinement'),None)
+          v3set=set(v3.iter()) if v3 is not None else set()
+          circles=[]; paths=[]
           def tag(e): return e.tag.rsplit('}',1)[-1]
-          def desc(e):
-              a=dict(e.attrib)
-              if 'd' in a and len(a['d']) > 180: a['d']=a['d'][:180]+'...'
-              return f'{tag(e)} {a}'
-          def pdesc(e):
-              p=parent.get(e)
-              return dict(p.attrib) if p is not None else {}
-
-          rows.append('=== CIRCLE GROUPS WITH PATH/LINES (likely icon glyph containers) ===')
-          for c in root.iter():
-              if c in v3set or tag(c) != 'circle': continue
-              try: r=float(c.attrib.get('r','0'))
-              except: r=0
-              if r < 8: continue
-              p=parent.get(c)
-              if p is None: continue
-              siblings=[s for s in list(p) if s not in v3set and tag(s) in {'path','polyline','polygon','line','circle'}]
-              glyphs=[s for s in siblings if s is not c and tag(s) in {'path','polyline','polygon','line'}]
-              if glyphs:
-                  rows.append(f'CIRCLE {desc(c)} | parent={pdesc(c)}')
-                  for g in glyphs[:8]: rows.append('  sibling '+desc(g))
-
-          rows.append('\n=== SHORT CYAN/GREEN DIAGONAL/STROKED PATHS OUTSIDE V3 ===')
           for e in root.iter():
-              if e in v3set or tag(e)!='path': continue
-              a=e.attrib; d=a.get('d',''); stroke=a.get('stroke','')
-              if not d or len(d)>220: continue
-              if stroke in {'#00E6FF','#00FBCC','url(#tri)','url(#triReverse)','url(#v2t)'}:
-                  rows.append(desc(e)+' | parent='+str(pdesc(e)))
+              if e in v3set: continue
+              if tag(e)=='circle' and e.attrib.get('cx') and e.attrib.get('cy'):
+                  try: circles.append((float(e.attrib['cx']),float(e.attrib['cy']),float(e.attrib.get('r','0')),e))
+                  except: pass
+              if tag(e)=='path': paths.append(e)
 
-          Path('v3-target-shortlist.txt').write_text('\n'.join(rows[:220]), encoding='utf-8')
+          rows=['=== SIMPLE CHECK-LIKE PATHS + NEARBY CIRCLES ===']
+          for e in paths:
+              d=e.attrib.get('d','')
+              commands=re.findall(r'[A-Za-z]',d)
+              if not d or len(d)>140 or not commands: continue
+              # check glyphs are normally short open polylines, not curves/arcs/closed fills
+              if any(c.upper() in {'C','S','Q','T','A','Z'} for c in commands): continue
+              nums=[float(x) for x in re.findall(r'-?\d+(?:\.\d+)?',d)]
+              if len(nums)<4: continue
+              pts=list(zip(nums[0::2],nums[1::2]))
+              if len(pts)<2: continue
+              xs=[p[0] for p in pts]; ys=[p[1] for p in pts]
+              w=max(xs)-min(xs); h=max(ys)-min(ys)
+              if w>120 or h>120 or (w<4 and h<4): continue
+              cx=(min(xs)+max(xs))/2; cy=(min(ys)+max(ys))/2
+              near=[(x,y,r,c) for x,y,r,c in circles if 8<=r<=80 and math.hypot(x-cx,y-cy)<=95]
+              if near:
+                  rows.append(f'PATH d={d!r} attrs={dict(e.attrib)} bbox=({min(xs):.1f},{min(ys):.1f})-({max(xs):.1f},{max(ys):.1f}) center=({cx:.1f},{cy:.1f})')
+                  for x,y,r,c in near[:6]: rows.append(f'  NEAR CIRCLE cx={x:g} cy={y:g} r={r:g} attrs={dict(c.attrib)}')
+
+          rows.append('\n=== SHORT DIAGONAL CYAN/GREEN PATHS ===')
+          for e in paths:
+              d=e.attrib.get('d',''); stroke=e.attrib.get('stroke','')
+              if stroke not in {'#00E6FF','#00FBCC','url(#tri)','url(#triReverse)','url(#v2t)'} or not d or len(d)>180: continue
+              nums=[float(x) for x in re.findall(r'-?\d+(?:\.\d+)?',d)]
+              if len(nums)<4: continue
+              pts=list(zip(nums[0::2],nums[1::2]))
+              if len(pts)<2: continue
+              xs=[p[0] for p in pts]; ys=[p[1] for p in pts]
+              w=max(xs)-min(xs); h=max(ys)-min(ys)
+              if 8<=w<=500 and 8<=h<=300:
+                  rows.append(f'PATH d={d!r} attrs={dict(e.attrib)} bbox=({min(xs):.1f},{min(ys):.1f})-({max(xs):.1f},{max(ys):.1f})')
+
+          Path('v3-exact-targets.txt').write_text('\n'.join(rows[:140]),encoding='utf-8')
           PY
-      - name: Commit shortlist
+      - name: Commit target match
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add v3-target-shortlist.txt
-          git commit -m "chore: capture original v3 target shortlist" || exit 0
+          git add v3-exact-targets.txt
+          git commit -m "chore: capture exact v3 target match" || exit 0
           git push origin HEAD:profile-animation-v3
