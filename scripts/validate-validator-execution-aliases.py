@@ -737,6 +737,83 @@ class PathMutationVisitor(ast.NodeVisitor):
             return any(PathMutationVisitor.match_pattern_is_irrefutable(item) for item in pattern.patterns)
         return False
 
+    def collect_match_shape_bindings(
+        self,
+        pattern: ast.pattern,
+        slots: set[object],
+        bindings: dict[str, set[object]],
+    ) -> None:
+        if isinstance(pattern, ast.MatchAs):
+            if pattern.name is not None:
+                bindings.setdefault(pattern.name, set()).update(slots)
+            if pattern.pattern is not None:
+                self.collect_match_shape_bindings(pattern.pattern, slots, bindings)
+            return
+        if isinstance(pattern, ast.MatchOr):
+            for arm in pattern.patterns:
+                self.collect_match_shape_bindings(arm, slots, bindings)
+            return
+        if isinstance(pattern, ast.MatchStar):
+            if pattern.name is not None:
+                bindings.setdefault(pattern.name, set()).update(slots)
+            return
+        if not isinstance(pattern, ast.MatchSequence):
+            return
+
+        shapes = [slot for slot in slots if isinstance(slot, tuple)]
+        starred = [
+            index
+            for index, item in enumerate(pattern.patterns)
+            if isinstance(item, ast.MatchStar)
+        ]
+        if not starred:
+            matching = [shape for shape in shapes if len(shape) == len(pattern.patterns)]
+            for index, item in enumerate(pattern.patterns):
+                self.collect_match_shape_bindings(
+                    item,
+                    {shape[index] for shape in matching},
+                    bindings,
+                )
+            return
+        if len(starred) != 1:
+            return
+
+        star_index = starred[0]
+        prefix_count = star_index
+        suffix_count = len(pattern.patterns) - star_index - 1
+        minimum_length = prefix_count + suffix_count
+        matching = [shape for shape in shapes if len(shape) >= minimum_length]
+        for index in range(prefix_count):
+            self.collect_match_shape_bindings(
+                pattern.patterns[index],
+                {shape[index] for shape in matching},
+                bindings,
+            )
+
+        middle_shapes = {
+            shape[
+                prefix_count:
+                len(shape) - suffix_count if suffix_count else len(shape)
+            ]
+            for shape in matching
+        }
+        star_slots: set[object] = set(middle_shapes)
+        if any(self.shape_yields_path(shape) for shape in middle_shapes):
+            star_slots.add(PATH_ITER_VALUE_MASK)
+        self.collect_match_shape_bindings(
+            pattern.patterns[star_index],
+            star_slots,
+            bindings,
+        )
+
+        for index in range(star_index + 1, len(pattern.patterns)):
+            from_end = len(pattern.patterns) - index
+            self.collect_match_shape_bindings(
+                pattern.patterns[index],
+                {shape[-from_end] for shape in matching},
+                bindings,
+            )
+
     def bind_match_pattern(
         self,
         pattern: ast.pattern,
@@ -757,6 +834,17 @@ class PathMutationVisitor(ast.NodeVisitor):
         if subject_shapes:
             for name in whole_subject:
                 self.receiver_shapes[name] = set(subject_shapes)
+
+        shape_bindings: dict[str, set[object]] = {}
+        self.collect_match_shape_bindings(pattern, set(subject_shapes), shape_bindings)
+        for name, slots in shape_bindings.items():
+            nested = {slot for slot in slots if isinstance(slot, tuple)}
+            if nested:
+                self.receiver_shapes.setdefault(name, set()).update(nested)
+            if any(isinstance(slot, int) and slot & PATH_VALUE_MASK for slot in slots):
+                self.paths.add(name)
+            if any(isinstance(slot, int) and slot & PATH_ITER_VALUE_MASK for slot in slots):
+                self.path_iters.add(name)
 
     def visit_Module(self, node: ast.Module) -> None:
         changed = True
@@ -2595,6 +2683,90 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    children = p.iterdir()\n    match children:\n        case items:\n            for child in items:\n                child.replace('b')\n",
         ),
         "whole-subject match capture must preserve Path-iterator identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    match pair:\n        case (q, label):\n            q.replace('b')\n",
+        ),
+        "fixed match-sequence capture must preserve concrete-Path slot identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    payload = ((p, 'alpha'), 'beta')\n    match payload:\n        case ((q, label), other):\n            q.replace('b')\n",
+        ),
+        "nested match-sequence capture must preserve concrete-Path identity recursively",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p.iterdir(), 'alpha')\n    match pair:\n        case (children, label):\n            for child in children:\n                child.replace('b')\n",
+        ),
+        "match-sequence capture must preserve Path-iterator leaves",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = ('alpha', p)\n    match pair:\n        case (label, *rest):\n            for q in rest:\n                q.replace('b')\n",
+        ),
+        "match-sequence star capture must become Path-yielding for a concrete-Path middle",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    payload = ((p, 'alpha'), 'beta')\n    match payload:\n        case (*rest, tail):\n            pair, = rest\n            pair[0].replace('b')\n",
+        ),
+        "match-sequence star capture must preserve nested fixed receiver shapes",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    pair = (p, 'alpha') if flag else ('alpha', p)\n    match pair:\n        case (q, 'alpha') | ('alpha', q):\n            q.replace('b')\n",
+        ),
+        "match-or sequence arms must union concrete-Path capture alternatives",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    match pair:\n        case (q, label) as captured:\n            captured[0].replace('b')\n",
+        ),
+        "match-as around a sequence must preserve the whole fixed receiver shape",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    match pair:\n        case (_, name):\n            return name.replace('a', 'b')\n",
+        ),
+        "match-sequence capture must not inherit excluded sibling Path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    pair = ('alpha', 'beta')\n    match pair:\n        case (left, right):\n            return left.replace('a', 'b') + right\n",
+        ),
+        "all-string match-sequence captures must remain ordinary strings",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    q = p\n    pair = ('alpha', 'beta')\n    match pair:\n        case (q, label):\n            return q.replace('a', 'b')\n",
+        ),
+        "fixed string match-sequence capture must clear stale concrete-Path identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    match pair:\n        case (q, label):\n            return q.read_text()\n",
+        ),
+        "read-only concrete-Path use through a fixed match-sequence capture must remain valid",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    rest = [p]\n    pair = ('alpha',)\n    match pair:\n        case (*rest,):\n            return [name.replace('a', 'b') for name in rest]\n",
+        ),
+        "empty match-sequence star capture must clear stale Path-yielding identity",
     )
     require(
         inspect_source(
