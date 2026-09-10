@@ -17,11 +17,11 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v11"
+VERSION = "governed-workflow-byte-identity-v12"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "d196c4eddb4b8f24c2f0823dfd355cf62386f1ee",
     ".github/workflows/profile-stats.yml": "625f0ba3cc0cd081cf2d55a0799650fd180200b3",
-    ".github/workflows/spotlight-link-sync.yml": "ec466f2b5aab6cbf2dc01af89dbbf975ea20410b",
+    ".github/workflows/spotlight-link-sync.yml": "baea6e171145148429f7764141870fcd971979be",
 }
 
 PROFILE_STATS_FRESHNESS_SEQUENCE = (
@@ -37,6 +37,30 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
     '[[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
     'test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
     'push origin HEAD:generated',
+)
+
+SPOTLIGHT_MUTATION_BUDGET_SEQUENCE = (
+    'name: spotlight-link-plan-${{ steps.render.outputs.base_sha }}-${{ steps.render.outputs.generated_sha }}',
+    "  budget:\n"
+    "    if: needs.plan.outputs.changed == 'true'\n"
+    "    name: mutation-budget-read-only",
+    "    permissions:\n      actions: read",
+    'ARTIFACT_NAME="spotlight-link-plan-${BASE_SHA}-${GENERATED_SHA}"',
+    "MAX_ATTEMPTS=2",
+    'ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"',
+    'test "$TOTAL" = "$COUNT" || {',
+    'test "$CURRENT" = "1" || {',
+    'echo "allowed=$ALLOWED" >> "$GITHUB_OUTPUT"',
+    "  quarantine:\n"
+    "    if: always() && needs.plan.outputs.changed == 'true' && needs.budget.result == 'success' && needs.budget.outputs.allowed != 'true'\n"
+    "    name: mutation-budget-quarantine-read-only",
+    "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true'\n"
+    "    name: propose-readme-only-write",
+    'APPROVAL_REQUESTED_RUN_IDS=""',
+    'case " $APPROVAL_REQUESTED_RUN_IDS " in',
+    'APPROVAL_REQUESTED_RUN_IDS="${APPROVAL_REQUESTED_RUN_IDS} ${RUN_ID}"',
+    "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'\n"
+    "    name: merge-readme-only-terminal-write",
 )
 
 SPOTLIGHT_PROVENANCE_SEQUENCE = (
@@ -92,6 +116,12 @@ def validate_profile_stats_freshness(text: str) -> None:
                               "profile-stats source-freshness contract")
 
 
+def validate_spotlight_mutation_budget(text: str) -> None:
+    """Keep read-only source-epoch admission before every Spotlight mutation boundary."""
+    validate_ordered_contract(text, SPOTLIGHT_MUTATION_BUDGET_SEQUENCE,
+                              "Spotlight source-epoch mutation-budget contract")
+
+
 def validate_spotlight_provenance(text: str) -> None:
     """Bind exact canonical workflow runs to the required checks consumed by merge authority."""
     validate_ordered_contract(text, SPOTLIGHT_PROVENANCE_SEQUENCE,
@@ -114,6 +144,15 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("profile-stats source-freshness self-test accepted a missing terminal equality guard")
+
+    synthetic = "\n".join(SPOTLIGHT_MUTATION_BUDGET_SEQUENCE)
+    validate_spotlight_mutation_budget(synthetic)
+    try:
+        validate_spotlight_mutation_budget(synthetic.replace(SPOTLIGHT_MUTATION_BUDGET_SEQUENCE[7], "", 1))
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight mutation-budget self-test accepted a missing current-run attempt binding")
 
     synthetic = "\n".join(SPOTLIGHT_PROVENANCE_SEQUENCE)
     validate_spotlight_provenance(synthetic)
@@ -138,13 +177,13 @@ def main() -> int:
         validate_profile_stats_freshness(
             (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         )
-        validate_spotlight_provenance(
-            (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
-        )
+        spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        validate_spotlight_mutation_budget(spotlight)
+        validate_spotlight_provenance(spotlight)
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
-            "generated publication is source-epoch freshness bound · Spotlight merge checks are exact-run/suite provenance bound"
+            "generated publication is source-epoch freshness bound · Spotlight mutations are source-epoch budget admitted before exact-run/suite authorization"
         )
         return 0
     except (OSError, ValueError) as exc:
