@@ -1,6 +1,6 @@
 # Security threat model and control inventory
 
-**Checkpoint:** 2026-09-09  
+**Checkpoint:** 2026-09-10  
 **Repository:** `portyu9/portyu9`
 
 This document records the current trust graph, enforced repository controls, accepted residual risk, and verification points for my profile evidence system. It is an assurance checkpoint, not a runtime permission grant.
@@ -23,7 +23,8 @@ The architecture is intended to ensure that:
 10. published predicate schemas cannot be retroactively redefined;
 11. mutable generated profile image URLs carry explicit reviewed cache identities;
 12. every ruleset field observable to the read-only workflow identity must match source-controlled intent before the required Profile Quality gate passes, while admin-redacted bypass actors remain separately audited;
-13. new workflows, local Actions, trigger families, jobs, and write-capable token grants fail closed unless they enter the reviewed authority model first.
+13. new workflows, local Actions, trigger families, jobs, and write-capable token grants fail closed unless they enter the reviewed authority model first;
+14. a pathological Spotlight reconciliation cannot mutate indefinitely for one exact source epoch: a read-only source-epoch mutation budget precedes all mutation and exhausted epochs enter diagnostic-only quarantine.
 
 ## Protected assets
 
@@ -44,7 +45,8 @@ The architecture is intended to ensure that:
 | `generated` branch | exact artifact-only public evidence history |
 | README generated-asset cache identities | presentation identity aligned with current generated evidence |
 | Repository ruleset control plane | observable live enforcement must match reviewed desired state |
-| GitHub Actions token capabilities | separated read, Actions-mutation, PR/content mutation, signing, and publication authority |
+| GitHub Actions token capabilities | separated read, Actions-read admission, Actions-mutation, PR/content mutation, signing, and publication authority |
+| Spotlight mutation-attempt artifacts | one-day immutable exact `(main SHA, generated SHA)` attempt tokens used only for fail-closed mutation admission |
 
 ## Trust boundaries
 
@@ -78,7 +80,7 @@ The GitHub Actions surface is a closed allowlist of **exactly five workflows**:
 - `profile-stats.yml`
 - `spotlight-link-sync.yml`
 
-Read-only is the default. Reviewed elevated jobs are split by terminal purpose:
+Read-only is the default. Spotlight planning, source-epoch admission, quarantine, proposal, approval, and terminal merge are explicit separate jobs so the authority graph itself is inspectable:
 
 | Workflow / job | Additional authority | Purpose |
 | --- | --- | --- |
@@ -86,11 +88,16 @@ Read-only is the default. Reviewed elevated jobs are split by terminal purpose:
 | Profile stats / `attest-write-only` | `id-token: write`, `attestations: write` | consume digest-checked reviewed evidence/predicate and mint the attestation |
 | Profile stats / `publish-write-only` | `contents: write` | push only the already sealed generated publication commit |
 | Profile stats / `dispatch-spotlight-link-sync` | `actions: write` | dispatch only the fixed Spotlight reconciliation workflow after publication |
-| Spotlight / `propose-readme-only-write` | `contents: write`, `pull-requests: write` | update the fixed bot branch and create/update its README-only PR |
-| Spotlight / `approve-bot-pr-checks-only` | `contents: read`, `actions: write` | approve only exact canonical required workflow runs after fail-closed head/base/file checks |
-| Spotlight / `merge-readme-only-after-required-checks` | `contents: write`, `pull-requests: write`, `checks: read` | merge only the exact README-only head after the five required checks succeed and mutable roots remain bound |
+| Spotlight / `plan-direct-links-read-only` | `contents: read` | reconstruct and validate the exact published projection before any mutation |
+| Spotlight / `mutation-budget-read-only` | `actions: read` | prove the complete exact-source-epoch changed-plan artifact history and decide whether mutation remains admissible |
+| Spotlight / `mutation-budget-quarantine-read-only` | `contents: read` | emit diagnostic-only quarantine output for an exhausted successful budget decision without GitHub mutation/API authority |
+| Spotlight / `propose-readme-only-write` | `contents: write`, `pull-requests: write` | update the fixed bot branch and create/update its README-only PR after positive budget admission |
+| Spotlight / `approve-bot-pr-checks-only` | `contents: read`, `actions: write` | approve only exact canonical required workflow runs after fail-closed source/head/file checks and de-duplicate approval requests |
+| Spotlight / `merge-readme-only-terminal-write` | `contents: write`, `pull-requests: read`, `checks: read` | revalidate and merge only the exact README-only head after the five required checks succeed and mutable roots remain bound |
 
 `prepare-attestation-read-only` and `stage-publication-read-only` deliberately remain read-only. No job combines repository-content write with OIDC/attestation authority. More importantly, `attest-write-only` contains no checkout, no setup-python, no `run:` step, and no repository-authored shell/Python at all.
+
+The Spotlight graph similarly prevents authority collapse. `mutation-budget-read-only` can observe only Actions history; it cannot mutate repository content, PRs, or workflow runs. `mutation-budget-quarantine-read-only` can only report and fail. The terminal merger can write repository contents through the expected-head merge endpoint but can only read PR/check metadata and has no Actions authority.
 
 ### 5. Shell/data boundary
 
@@ -109,6 +116,8 @@ A successful run on another revision remains `PASSING` in execution result while
 ### 8. Artifact transport boundary
 
 Reviewed SHA-pinned upload/download Actions move immutable evidence between authority-isolated jobs. `digest-mismatch: error` fails closed where configured. Transport success is not authorization; read-only downstream preparation/staging jobs independently revalidate what they consume.
+
+Spotlight changed-plan artifacts have a separate authority purpose: their immutable one-day names contain the exact source `main` and `generated` SHAs. `mutation-budget-read-only` treats them as attempt tokens, not as authorization by themselves. It accepts the history only when `total_count` equals the returned page length, the set fits the reviewed one-page bound, every artifact belongs to the exact repository/source epoch, and exactly one artifact belongs to the current run. Ambiguous or incomplete history fails before any mutation-capable job can start.
 
 ### 9. Attestation boundary
 
@@ -132,9 +141,11 @@ The canonical validation manifest retains the frozen semantic boundary identity 
 
 ### 12. Spotlight reconciliation boundary
 
-`dispatch-spotlight-link-sync` has only `actions: write` and dispatches the fixed reconciliation workflow after successful publication. The synchronizer's planning job is read-only. PR proposal, Actions approval, and final merge authority are separated into `propose-readme-only-write`, `approve-bot-pr-checks-only`, and `merge-readme-only-after-required-checks`.
+`dispatch-spotlight-link-sync` has only `actions: write` and dispatches the fixed reconciliation workflow after successful publication. The synchronizer's planning job is read-only and uploads a changed plan under an exact source-epoch artifact name.
 
-The merger revalidates the exact PR head, `main` base, `generated` snapshot, one-file README diff, and five required checks immediately before merge. After a successful merge it deletes the fixed bot branch only if that branch still points to the reviewed head.
+Before any branch, PR, workflow-approval, merge, or cleanup mutation can start, `mutation-budget-read-only` uses `actions: read` to enforce the **source-epoch mutation budget**. For one exact `(main SHA, generated SHA)` epoch, the first changed-plan attempt and at most one retry are admitted while the one-day attempt artifacts remain live. A third changed-plan attempt yields `allowed=false`; `mutation-budget-quarantine-read-only` enters **diagnostic-only quarantine**, writes a job summary, and fails without a GitHub API mutation token surface. If history is incomplete or malformed, the budget job itself fails closed and no mutation job is authorized.
+
+After positive admission, `propose-readme-only-write` may mutate only the fixed bot branch/README-only PR. `approve-bot-pr-checks-only` revalidates both source roots and the one-commit README-only topology, binds the three canonical default-branch workflow identities, and locally de-duplicates each `/approve` mutation while waiting for success. `merge-readme-only-terminal-write` receives `contents: write`, `pull-requests: read`, and `checks: read` only. It revalidates the exact PR head, `main` base, `generated` snapshot, one-file README diff, and five required checks immediately before the expected-head merge. After a successful merge it deletes the fixed bot branch only if that branch still points to the reviewed head.
 
 ### 13. Generated branch boundary
 
@@ -166,12 +177,13 @@ The **Profile image cache boundary** is presentation/version hygiene, not eviden
 | Historical predicate semantics change | frozen schema bytes + v3 | `predicateSchema.digest` | verifier must select intended schema version |
 | Signer publishes arbitrary content | signer lacks `contents: write` | separate sealed publisher | platform compromise out of scope |
 | Publisher forges attestation | publisher lacks OIDC/attestation authority | publication waits for signer | platform credential compromise out of scope |
+| Repeated Spotlight reconciliation loops mutate one source epoch | two-attempt exact-epoch mutation budget | read-only diagnostic quarantine + approval de-duplication | artifact-history availability can conservatively block mutation |
 | Force-push/delete generated history | `Protect generated` | artifact-only exact tree | authorized fast-forward publisher remains powerful |
 | Evidence claim overstates assurance | bounded predicate claim | governance/threat-model documentation | human interpretation risk remains |
 
 ## Trusted computing base
 
-The design trusts the GitHub platform and hosted runners, reviewed immutable Action commits, repository validators/generators, GitHub evidence semantics returned by the API, and repository rulesets/token behavior.
+The design trusts the GitHub platform and hosted runners, reviewed immutable Action commits, repository validators/generators, GitHub evidence semantics returned by the API, GitHub Actions artifact-history semantics used by the mutation budget, and repository rulesets/token behavior.
 
 ## Accepted residual risks
 
@@ -180,7 +192,8 @@ The design trusts the GitHub platform and hosted runners, reviewed immutable Act
 - A compromised GitHub-hosted runner or GitHub control plane is outside repository-level mitigation.
 - `attest-write-only` intentionally holds OIDC/attestation authority; safety depends on exact Action identity, digest-checked input transport, zero authored shell/code, and GitHub's attestation implementation.
 - `publish-write-only` intentionally holds `contents: write`; safety depends on source protection, authority isolation, sealed-candidate verification, and exact terminal push closure.
-- Spotlight proposal/approval/merge jobs intentionally hold narrow mutation capabilities; safety depends on exact branch/file/head/workflow/check predicates and the server-side no-bypass Main ruleset.
+- Spotlight proposal/approval/merge jobs intentionally hold narrow mutation capabilities; safety depends on positive source-epoch budget admission, exact branch/file/head/workflow/check predicates, and the server-side no-bypass Main ruleset.
+- Spotlight mutation admission intentionally depends on GitHub artifact-history availability and completeness. Ambiguous, incomplete, malformed, or unavailable history causes fail-closed availability loss rather than permitting additional mutations.
 - Attestation proves provenance and repository-defined contract conformance, not universal behavioral correctness.
 - Public GitHub API/network outages can block live evidence refresh or live ruleset verification; integrity is preferred over availability.
 - Settings can drift between Profile Quality executions, and admin-redacted bypass actors require periodic administration-capable audit rather than silent inference.
@@ -199,7 +212,7 @@ After a material workflow, evidence, or governance change:
 8. confirm historical schema bytes remain frozen and current issuance uses v3 with `predicateSchema.digest`;
 9. confirm generation has no write/signing authority and `prepare-attestation-read-only` has no OIDC/attestation authority;
 10. confirm `attest-write-only` contains exactly four digest-checked downloads plus one pinned `actions/attest`, with no checkout/setup-python/`run:`/authored Python;
-11. confirm `stage-publication-read-only` remains read-only, publication has no signing authority, and dispatcher/proposer/approver/merger authority remains separated;
+11. confirm `stage-publication-read-only` remains read-only, publication has no signing authority, and Spotlight planning → source-epoch mutation budget → diagnostic-only quarantine/proposal → approval → terminal merge authority remains separated with the exact six-job graph;
 12. confirm a real production `Update profile stats` run succeeds after production-path changes;
 13. confirm `generated` contains only the four Signal Field SVGs, six Spotlight SVGs, and Portfolio Ledger JSON;
 14. confirm generated README images pass the cache-identity contract.
