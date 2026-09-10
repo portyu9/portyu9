@@ -136,18 +136,36 @@ def validate_publish_write_surface(publish: str) -> None:
     ):
         require(publish.count(path) == 1, f"Write-only publication exact path closure changed: {path}")
     expressions = re.findall(r"\$\{\{\s*([^}]+?)\s*\}\}", publish)
-    require(expressions == ["needs.stage.outputs.base_sha", "needs.stage.outputs.candidate_sha", "github.token"],
-            f"Write-only publication expression surface changed: {expressions!r}")
+    require(
+        expressions == [
+            "needs.stage.outputs.base_sha",
+            "needs.stage.outputs.candidate_sha",
+            "needs.stage.outputs.source_sha",
+            "github.token",
+            "needs.stage.outputs.source_sha",
+        ],
+        f"Write-only publication expression surface changed: {expressions!r}",
+    )
     marker = "      - name: Publish sealed artifact commit\n"
     require(publish.count(marker) == 1, "Publication must contain one exact terminal push step")
     terminal = publish[publish.index(marker):]
     require(terminal.count("      - name: ") == 1,
             "No authored step may follow explicit publication token introduction")
-    require(
-        'git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated'
-        in terminal,
-        "Publication exact terminal generated push changed",
-    )
+    for fragment in (
+        "          SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}",
+        '          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        '          REMOTE_MAIN="$(git -C artifacts ls-remote --exit-code origin refs/heads/main)"',
+        '          [[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
+        '          test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
+    ):
+        require(terminal.count(fragment) == 1,
+                f"Publication terminal source-freshness contract changed: {fragment}")
+    freshness_guard = '          test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"'
+    auth_intro = '          AUTH_HEADER="$(printf \'x-access-token:%s\' "$GITHUB_TOKEN" | base64 -w0)"'
+    push = 'git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated'
+    require(terminal.index(freshness_guard) < terminal.index(auth_intro) < terminal.index(push),
+            "Publication must prove current main source before token derivation and exact generated push")
+    require(push in terminal, "Publication exact terminal generated push changed")
 
 
 def validate_quality(text: str) -> None:
@@ -291,6 +309,10 @@ def validate_stats(text: str) -> None:
         "git -C artifacts bundle create ../generated-publication.bundle generated",
         "git -C artifacts bundle verify ../generated-publication.bundle",
         "fetch-depth: 0",
+        'source_sha="$(git -C source rev-parse HEAD)"',
+        'test "$source_sha" = "$GITHUB_SHA"',
+        'echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"',
+        'source_sha: ${{ steps.seal.outputs.source_sha }}',
     ):
         require(fragment in stage, f"Publication staging sealing contract is missing: {fragment}")
     require(stage.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3,
@@ -395,7 +417,7 @@ def main() -> int:
         print(
             "Repository governance validation passed: PR checks remain stable/read-only; dependency/action provenance is mandatory; "
             "generation and attestation preparation execute authored code with read-only authority; terminal OIDC/attestation authority executes only digest-checked transport plus pinned actions/attest; "
-            "publication staging seals the generated candidate under read-only authority; terminal contents-write publication is eligible only for a sealed changed candidate and retains one exact generated push; "
+            "publication staging seals the generated candidate and trusted source epoch under read-only authority; terminal contents-write publication re-proves current main source before token derivation and one exact generated push; "
             "and post-publication Spotlight dispatch remains isolated to actions: write."
         )
         return 0
