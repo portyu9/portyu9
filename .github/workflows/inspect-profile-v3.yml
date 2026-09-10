@@ -38,23 +38,27 @@ jobs:
           if len(matches) != 1:
               raise SystemExit(f'Expected exactly one original diagonal beam, found {len(matches)}')
 
-          beam = f'''<path id="v3-diagonal-evidence-beam" d="{target_d}" fill="none" stroke="url(#v3DataBeam)" stroke-width="7.5" opacity=".74" stroke-linecap="round" filter="url(#softGlow)">
-    <animate attributeName="opacity" values=".34;.88;.52;.82;.34" dur="7.6s" repeatCount="indefinite"/>
-    <animate attributeName="stroke-width" values="5.5;8.5;6;8;5.5" dur="7.6s" repeatCount="indefinite"/>
-  </path>'''
+          beam = '\n'.join([
+              f'<path id="v3-diagonal-evidence-beam" d="{target_d}" fill="none" stroke="url(#v3DataBeam)" stroke-width="7.5" opacity=".74" stroke-linecap="round" filter="url(#softGlow)">',
+              '  <animate attributeName="opacity" values=".34;.88;.52;.82;.34" dur="7.6s" repeatCount="indefinite"/>',
+              '  <animate attributeName="stroke-width" values="5.5;8.5;6;8;5.5" dur="7.6s" repeatCount="indefinite"/>',
+              '</path>',
+          ])
           text = beam_re.sub(beam, text, count=1)
 
           marker = '<!-- V3 visible desktop sweep; deliberately adds no circle/portal geometry. -->'
           if marker not in text:
-              sweep = '''
-  <!-- V3 visible desktop sweep; deliberately adds no circle/portal geometry. -->
-  <g id="v3-visible-desktop-sweep" class="v3-motion v3-specular" clip-path="url(#v3TitleRegion)" pointer-events="none">
-    <rect x="-520" y="28" width="360" height="450" rx="28" fill="url(#v3TitleSpecular)" opacity="0" filter="url(#softGlow)">
-      <animate attributeName="x" values="-520;-520;1690;1690" keyTimes="0;.14;.86;1" dur="8.8s" repeatCount="indefinite"/>
-      <animate attributeName="opacity" values="0;.76;.76;0" keyTimes="0;.16;.84;1" dur="8.8s" repeatCount="indefinite"/>
-    </rect>
-  </g>
-'''
+              sweep = '\n'.join([
+                  '',
+                  '  <!-- V3 visible desktop sweep; deliberately adds no circle/portal geometry. -->',
+                  '  <g id="v3-visible-desktop-sweep" class="v3-motion v3-specular" clip-path="url(#v3TitleRegion)" pointer-events="none">',
+                  '    <rect x="-520" y="28" width="360" height="450" rx="28" fill="url(#v3TitleSpecular)" opacity="0" filter="url(#softGlow)">',
+                  '      <animate attributeName="x" values="-520;-520;1690;1690" keyTimes="0;.14;.86;1" dur="8.8s" repeatCount="indefinite"/>',
+                  '      <animate attributeName="opacity" values="0;.76;.76;0" keyTimes="0;.16;.84;1" dur="8.8s" repeatCount="indefinite"/>',
+                  '    </rect>',
+                  '  </g>',
+                  '',
+              ])
               if '</svg>' not in text:
                   raise SystemExit('Missing closing </svg>')
               text = text.replace('</svg>', sweep + '</svg>', 1)
@@ -71,20 +75,27 @@ jobs:
           desktop.write_text(text, encoding='utf-8')
 
           rm = readme.read_text(encoding='utf-8')
-          old = '''  <source media="(max-width: 640px)" type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg">
-  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg">'''
-          new = '''  <source media="(max-width: 640px)" type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg">
-  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg">'''
+          old = '\n'.join([
+              '  <source media="(max-width: 640px)" type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg">',
+              '  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg">',
+          ])
+          new = '\n'.join([
+              '  <source media="(max-width: 640px)" type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg">',
+              '  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg">',
+          ])
           if old not in rm:
               raise SystemExit('Expected V3 mobile README source block not found')
-          rm = rm.replace(old, new, 1)
-          readme.write_text(rm, encoding='utf-8')
+          readme.write_text(rm.replace(old, new, 1), encoding='utf-8')
 
           vt = validator.read_text(encoding='utf-8')
-          vold = '''    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg",
-    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg",'''
-          vnew = '''    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg",
-    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg",'''
+          vold = '\n'.join([
+              '    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg",',
+              '    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg",',
+          ])
+          vnew = '\n'.join([
+              '    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg",',
+              '    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg",',
+          ])
           if vold not in vt:
               raise SystemExit('Expected validator mobile/V3 tuple not found')
           validator.write_text(vt.replace(vold, vnew, 1), encoding='utf-8')
@@ -98,7 +109,7 @@ jobs:
           print('desktop v3TitleSpecular refs:', text.count('v3TitleSpecular'))
           print('circle count preserved:', circles_before)
           print('ellipse count preserved:', ellipses_before)
-          print('mobile source restored to V2:', 'animated-v2.svg' in rm)
+          print('mobile source restored to V2:', 'animated-v2.svg' in readme.read_text(encoding='utf-8'))
       - name: Validate profile changes
         run: |
           git diff --check
