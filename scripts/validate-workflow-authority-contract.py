@@ -399,7 +399,7 @@ def validate_profile_stats_contract(workflow: str) -> None:
     require_exact_gh_api_surface(
         dispatch,
         label="Profile stats Spotlight dispatcher",
-        expected_lines=("gh api --method POST \\",),
+        expected_lines=("gh api --method POST " + chr(92),),
     )
     for forbidden in (
         "actions/checkout@", "actions/setup-python@", "contents:", "pull-requests:", "checks:",
@@ -484,10 +484,10 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
         label="Spotlight propose",
         expected_lines=(
             'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"',
-            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content \\\',
+            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content ' + chr(92),
             'if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BOT_BRANCH}" >/dev/null 2>&1; then',
-            'gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" \\\',
-            'gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \\\',
+            'gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" ' + chr(92),
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" ' + chr(92),
             'README_BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BOT_BRANCH}" --jq .sha)"',
             'gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/README.md" --input update.json > update-response.json',
             'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BOT_BRANCH}&base=main&per_page=10")"',
