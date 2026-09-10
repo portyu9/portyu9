@@ -11,9 +11,19 @@ SYNC = ROOT / ".github/workflows/spotlight-link-sync.yml"
 STATS = ROOT / ".github/workflows/profile-stats.yml"
 POLICY = ROOT / ".github/SPOTLIGHT_UI_MERGE_AUTHORIZATION.md"
 
+BUDGET_IF_EXPR = "needs.plan.outputs.changed == 'true'"
+QUARANTINE_IF_EXPR = (
+    "always() && needs.plan.outputs.changed == 'true' && needs.budget.result == 'success' "
+    "&& needs.budget.outputs.allowed != 'true'"
+)
+PROPOSE_IF_EXPR = "needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true'"
+APPROVE_IF_EXPR = (
+    "needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' "
+    "&& needs.propose.result == 'success'"
+)
 MERGE_IF_EXPR = (
-    "needs.plan.outputs.changed == 'true' && needs.propose.result == 'success' "
-    "&& needs.approve.result == 'success'"
+    "needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' "
+    "&& needs.propose.result == 'success' && needs.approve.result == 'success'"
 )
 JOB_IF_LINE = re.compile(r"(?m)^    if:\s*(?P<expr>.+?)\s*$")
 DISPATCH_HEADER = (
@@ -43,6 +53,8 @@ CLEANUP_404_GATE = (
 RUN_COMPLETENESS_GATE = 'test "$RUNS_TOTAL" = "$RUNS_COUNT" || {'
 CHECK_COMPLETENESS_GATE = 'test "$CHECKS_TOTAL" = "$CHECKS_COUNT" || {'
 CHECK_BINDING_GATE = 'test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"'
+BUDGET_COMPLETENESS_GATE = 'test "$TOTAL" = "$COUNT" || {'
+BUDGET_CURRENT_GATE = 'test "$CURRENT" = "1" || {'
 
 
 def fail(message: str) -> None:
@@ -85,6 +97,87 @@ def validate_dispatch_job(stats: str) -> None:
     ):
         require(forbidden not in dispatch,
                 f"Profile-stats dispatcher contains unauthorized alternate dispatch authority: {forbidden}")
+
+
+def validate_mutation_budget(sync: str) -> None:
+    """Require an exact read-only per-source-epoch circuit breaker before every mutation job."""
+    plan = job_block(sync, "plan", "budget")
+    budget = job_block(sync, "budget", "quarantine")
+    quarantine = job_block(sync, "quarantine", "propose")
+    propose = job_block(sync, "propose", "approve")
+    approve = job_block(sync, "approve", "merge")
+    merge = job_block(sync, "merge", None)
+
+    require(exact_job_if(budget, "Spotlight mutation budget job") == BUDGET_IF_EXPR,
+            "Spotlight mutation budget must execute only for a changed reviewed plan")
+    require("name: mutation-budget-read-only" in budget and "needs: plan" in budget,
+            "Spotlight mutation budget identity/dependency changed")
+    require("permissions:\n      actions: read" in budget,
+            "Spotlight mutation budget must retain only Actions-read authority")
+    for forbidden in (
+        "contents: write", "pull-requests: write", "actions: write", "checks: write",
+        "id-token: write", "attestations: write", "actions/checkout@", "actions/setup-python@", "python3 ",
+    ):
+        require(forbidden not in budget,
+                f"Spotlight mutation budget acquired forbidden authority/code surface: {forbidden}")
+    require(budget.count("gh api ") == 1,
+            "Spotlight mutation budget must contain exactly one reviewed GitHub API read")
+    require('ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"' in budget,
+            "Spotlight mutation budget artifact-history API identity changed")
+    for fragment in (
+        'ARTIFACT_NAME="spotlight-link-plan-${BASE_SHA}-${GENERATED_SHA}"',
+        "MAX_ATTEMPTS=2",
+        BUDGET_COMPLETENESS_GATE,
+        'test "$TOTAL" -le 100 || {',
+        '.workflow_run.repository_id != $repo',
+        '.workflow_run.head_repository_id != $repo',
+        '.workflow_run.head_branch != "main"',
+        '.workflow_run.head_sha != $base',
+        BUDGET_CURRENT_GATE,
+        'echo "allowed=$ALLOWED" >> "$GITHUB_OUTPUT"',
+        'echo "attempt_count=$TOTAL" >> "$GITHUB_OUTPUT"',
+    ):
+        require(fragment in budget,
+                f"Spotlight mutation-budget fail-closed contract is missing: {fragment}")
+    require("spotlight-link-plan-${{ steps.render.outputs.base_sha }}-${{ steps.render.outputs.generated_sha }}" in plan,
+            "Spotlight changed-plan attempt token must be content-addressed by main/generated source epoch")
+
+    require(exact_job_if(quarantine, "Spotlight mutation quarantine job") == QUARANTINE_IF_EXPR,
+            "Spotlight mutation quarantine predicate changed")
+    require("name: mutation-budget-quarantine-read-only" in quarantine and "needs: [plan, budget]" in quarantine,
+            "Spotlight mutation quarantine identity/dependency changed")
+    require("permissions:\n      contents: read" in quarantine,
+            "Spotlight mutation quarantine must remain read-only")
+    for forbidden in ("GH_TOKEN:", "gh api ", "contents: write", "pull-requests:", "actions:", "checks:"):
+        require(forbidden not in quarantine,
+                f"Spotlight mutation quarantine acquired forbidden API/authority surface: {forbidden}")
+    require("GITHUB_STEP_SUMMARY" in quarantine and "exit 1" in quarantine,
+            "Spotlight mutation quarantine must retain diagnostics and fail visibly")
+
+    require(exact_job_if(propose, "Spotlight propose job") == PROPOSE_IF_EXPR,
+            "Spotlight proposal must require exact positive mutation-budget admission")
+    require("needs: [plan, budget]" in propose,
+            "Spotlight proposal dependency must include mutation-budget admission")
+    require("spotlight-link-plan-${{ needs.plan.outputs.base_sha }}-${{ needs.plan.outputs.generated_sha }}" in propose,
+            "Spotlight proposal must consume only the exact source-epoch plan artifact")
+
+    require(exact_job_if(approve, "Spotlight approve job") == APPROVE_IF_EXPR,
+            "Spotlight approval must require exact positive mutation-budget admission")
+    require("needs: [plan, budget, propose]" in approve,
+            "Spotlight approval dependency must include mutation-budget admission")
+    for fragment in (
+        'APPROVAL_REQUESTED_RUN_IDS=""',
+        'case " $APPROVAL_REQUESTED_RUN_IDS " in',
+        '*" $RUN_ID "*) : ;;',
+        'APPROVAL_REQUESTED_RUN_IDS="${APPROVAL_REQUESTED_RUN_IDS} ${RUN_ID}"',
+    ):
+        require(fragment in approve,
+                f"Spotlight approval mutation de-duplication contract is missing: {fragment}")
+
+    require(exact_job_if(merge, "Spotlight merge job") == MERGE_IF_EXPR,
+            "Spotlight merge job must require the exact mutation-budget/plan/propose/approve prerequisites")
+    require("needs: [plan, budget, propose, approve]" in merge,
+            "Spotlight terminal merge dependency must include mutation-budget admission")
 
 
 def validate_run_provenance(approve: str) -> None:
@@ -161,12 +254,9 @@ def validate(sync: str, stats: str, policy: str) -> None:
     require("merge_ui_after_checks" not in stats,
             "Profile-stats post-publication dispatch must not introduce a separate merge input")
 
+    validate_mutation_budget(sync)
     approve = job_block(sync, "approve", "merge")
     merge = job_block(sync, "merge", None)
-    require(
-        exact_job_if(merge, "Spotlight merge job") == MERGE_IF_EXPR,
-        "Spotlight merge job must require the exact guarded plan/propose/approve prerequisites",
-    )
     require("name: approve-bot-pr-checks-only" in approve,
             "Spotlight approval job identity changed")
     require("permissions:\n      contents: read\n      actions: write" in approve,
@@ -179,8 +269,6 @@ def validate(sync: str, stats: str, policy: str) -> None:
 
     require("name: merge-readme-only-terminal-write" in merge,
             "Spotlight terminal merge job identity changed")
-    require("needs: [plan, propose, approve]" in merge,
-            "Spotlight terminal merge dependency changed")
     require("timeout-minutes: 3" in merge,
             "Spotlight terminal merge authority window changed")
     require("permissions:\n      contents: write\n      pull-requests: read\n      checks: read" in merge,
@@ -206,9 +294,9 @@ def validate(sync: str, stats: str, policy: str) -> None:
     policy_lower = policy.lower()
     for phrase in (
         "standing authorization", "automation/spotlight-links", "scheduled reconciliation",
-        "post-publication bot dispatch", "readme-only", "actions-only approval job",
-        "terminal merge job", "five protected-main checks", "integration id `15368`",
-        "no bypass actor", "does not authorize arbitrary readme/ui", "dependabot",
+        "post-publication bot dispatch", "readme-only", "mutation budget", "quarantine",
+        "actions-only approval job", "terminal merge job", "five protected-main checks",
+        "integration id `15368`", "no bypass actor", "does not authorize arbitrary readme/ui", "dependabot",
     ):
         require(phrase.lower() in policy_lower,
                 f"Spotlight standing auto-merge policy is missing: {phrase}")
@@ -229,21 +317,47 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         stats, policy, "must not depend on a manual merge input",
     )
     expect_failure(
-        sync.replace(" && needs.approve.result == 'success'", "", 1),
-        stats, policy, "exact guarded plan/propose/approve prerequisites",
+        sync.replace(MERGE_IF_EXPR, MERGE_IF_EXPR.replace("needs.budget.outputs.allowed == 'true' && ", ""), 1),
+        stats, policy, "exact mutation-budget/plan/propose/approve prerequisites",
     )
     guarded_line = f"    if: {MERGE_IF_EXPR}"
     comment_shadow = sync.replace(
         guarded_line, f"    # if: {MERGE_IF_EXPR}\n    if: always()", 1,
     )
     expect_failure(
-        comment_shadow, stats, policy, "exact guarded plan/propose/approve prerequisites",
+        comment_shadow, stats, policy, "exact mutation-budget/plan/propose/approve prerequisites",
     )
     duplicate_job_if = sync.replace(
         guarded_line, guarded_line + "\n    if: always()", 1,
     )
     expect_failure(
         duplicate_job_if, stats, policy, "exactly one canonical job-level if predicate",
+    )
+    budget_widened = sync.replace("          MAX_ATTEMPTS=2\n", "          MAX_ATTEMPTS=3\n", 1)
+    expect_failure(
+        budget_widened, stats, policy, "mutation-budget fail-closed contract is missing",
+    )
+    budget_incomplete = sync.replace(BUDGET_COMPLETENESS_GATE, 'test "$TOTAL" -ge "$COUNT" || {', 1)
+    expect_failure(
+        budget_incomplete, stats, policy, "mutation-budget fail-closed contract is missing",
+    )
+    budget_unbound_current = sync.replace(BUDGET_CURRENT_GATE, 'test "$CURRENT" -ge "0" || {', 1)
+    expect_failure(
+        budget_unbound_current, stats, policy, "mutation-budget fail-closed contract is missing",
+    )
+    quarantine_fail_open = sync.replace(
+        "          exit 1\n\n  propose:", "          :\n\n  propose:", 1,
+    )
+    expect_failure(
+        quarantine_fail_open, stats, policy, "quarantine must retain diagnostics and fail visibly",
+    )
+    propose_bypass = sync.replace(PROPOSE_IF_EXPR, "needs.plan.outputs.changed == 'true'", 1)
+    expect_failure(
+        propose_bypass, stats, policy, "proposal must require exact positive mutation-budget admission",
+    )
+    approval_rededupe = sync.replace('          APPROVAL_REQUESTED_RUN_IDS=""\n', "", 1)
+    expect_failure(
+        approval_rededupe, stats, policy, "approval mutation de-duplication contract is missing",
     )
     missing_wait = sync.replace("          for attempt in $(seq 1 60); do\n", "          for attempt in $(seq 1 1); do\n", 1)
     expect_failure(
@@ -323,6 +437,8 @@ def self_test(sync: str, stats: str, policy: str) -> None:
     expect_failure(
         sync, stats, policy_without_standing_authorization, "standing authorization",
     )
+    policy_without_budget = re.sub(r"mutation budget", "attempt allowance", policy, flags=re.IGNORECASE)
+    expect_failure(sync, stats, policy_without_budget, "mutation budget")
 
 
 def main() -> int:
@@ -335,9 +451,8 @@ def main() -> int:
         validate(sync, stats, policy)
         self_test(sync, stats, policy)
         print(
-            "Spotlight UI merge authorization validation passed: the fixed deterministic README-only synchronization class "
-            "keeps canonical workflow waiting under Actions-only approval authority, proves complete exact-run/check-suite provenance, and starts terminal repository-content write plus pull-request read authority "
-            "only for a fresh suite-bound exact-check snapshot, exact-head merge, and fail-closed cleanup; post-publication reconciliation remains one exact fixed-workflow, ref-only dispatch."
+            "Spotlight UI merge authorization validation passed: changed source epochs cross an Actions-read-only two-attempt mutation budget before any write; exhausted epochs enter read-only quarantine; "
+            "canonical workflow waiting remains under de-duplicated Actions-only approval authority, exact run/check-suite provenance remains complete, and terminal merge authority stays exact-head/fail-closed."
         )
         return 0
     except (OSError, ValueError) as exc:
