@@ -40,8 +40,7 @@ jobs:
               token_re = re.compile(r'<g(?:\s|>)|</g>')
               depth = 0
               for m in token_re.finditer(text, start):
-                  token = m.group(0)
-                  if token.startswith('<g'):
+                  if m.group(0).startswith('<g'):
                       depth += 1
                   else:
                       depth -= 1
@@ -58,18 +57,17 @@ jobs:
                   raise RuntimeError(f'{path}: residual rendered V3 refinement group')
               path.write_text(text, encoding='utf-8')
               ET.parse(path)
-              print(f'cleaned and parsed: {path}')
           PY
 
-      - name: Restore unrelated files from main
+      - name: Restore unrelated PR files from main
         shell: bash
         run: |
           git fetch origin main
           git checkout origin/main -- \
-            assets/github-profile-top-nebula-animated.svg \
-            assets/github-profile-bottom-nebula-animated.svg \
-            assets/profile-badges/robotic-automation-neural-interface-nebula-portal-animated.svg \
-            scripts/validate_profile_animation.py
+            assets/profile-banners/elite-evidence-horizon-bottom.svg \
+            assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg \
+            assets/profile-banners/quantum-apex-signal-crown-hero.svg \
+            scripts/validate-profile-v4.py
 
       - name: Remove temporary diagnostics
         shell: bash
@@ -94,8 +92,7 @@ jobs:
               Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg'),
           ):
               ET.parse(p)
-              s = p.read_text(encoding='utf-8')
-              assert 'v3-cinematic-refinement' not in s
+              assert 'v3-cinematic-refinement' not in p.read_text(encoding='utf-8')
           PY
 
           git config user.name "github-actions[bot]"
