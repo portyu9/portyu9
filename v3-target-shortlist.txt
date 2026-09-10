@@ -1,0 +1,204 @@
+=== CIRCLE GROUPS WITH PATH/LINES (likely icon glyph containers) ===
+CIRCLE circle {'cx': '836', 'cy': '434', 'r': '31', 'fill': 'none', 'stroke': '#9C4DFF', 'stroke-width': '1.4', 'stroke-dasharray': '4 11', 'opacity': '.26'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '957', 'cy': '434', 'r': '31', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.4', 'stroke-dasharray': '5 12', 'opacity': '.26'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '1089', 'cy': '434', 'r': '31', 'fill': 'none', 'stroke': '#00FBCC', 'stroke-width': '1.4', 'stroke-dasharray': '6 13', 'opacity': '.26'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '1227', 'cy': '434', 'r': '31', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.4', 'stroke-dasharray': '7 14', 'opacity': '.26'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '1370', 'cy': '434', 'r': '31', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.4', 'stroke-dasharray': '8 15', 'opacity': '.26'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '84', 'cy': '719', 'r': '47', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.45', 'stroke-dasharray': '4 15', 'opacity': '.30'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '84', 'cy': '719', 'r': '39', 'fill': 'none', 'stroke': '#E328FC', 'opacity': '.08'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '181', 'cy': '719', 'r': '47', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.45', 'stroke-dasharray': '5 16', 'opacity': '.30'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '181', 'cy': '719', 'r': '39', 'fill': 'none', 'stroke': '#E328FC', 'opacity': '.08'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '276', 'cy': '719', 'r': '47', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.45', 'stroke-dasharray': '6 17', 'opacity': '.30'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '276', 'cy': '719', 'r': '39', 'fill': 'none', 'stroke': '#00E6FF', 'opacity': '.08'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '374', 'cy': '719', 'r': '47', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.45', 'stroke-dasharray': '7 18', 'opacity': '.30'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '374', 'cy': '719', 'r': '39', 'fill': 'none', 'stroke': '#00E6FF', 'opacity': '.08'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '469', 'cy': '719', 'r': '47', 'fill': 'none', 'stroke': '#00FBCC', 'stroke-width': '1.45', 'stroke-dasharray': '8 19', 'opacity': '.30'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '469', 'cy': '719', 'r': '39', 'fill': 'none', 'stroke': '#00FBCC', 'opacity': '.08'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '565', 'cy': '719', 'r': '47', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.45', 'stroke-dasharray': '9 20', 'opacity': '.30'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '565', 'cy': '719', 'r': '39', 'fill': 'none', 'stroke': '#00E6FF', 'opacity': '.08'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '97', 'cy': '901', 'r': '34', 'fill': 'url(#v2p)', 'opacity': '.12'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '326', 'cy': '901', 'r': '34', 'fill': 'url(#v2p)', 'opacity': '.12'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '565', 'cy': '901', 'r': '34', 'fill': 'url(#v2p)', 'opacity': '.12'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+CIRCLE circle {'cx': '780', 'cy': '901', 'r': '34', 'fill': 'url(#v2p)', 'opacity': '.12'} | parent={'class': 'motion'}
+  sibling path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'}
+  sibling path {'d': 'M875 446H920', 'stroke': '#E328FC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'}
+  sibling path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M948 663C962 678 972 640 986 664S1008 646 1020 660S1045 646 1072 657', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'}
+  sibling path {'d': 'M1122 642A58 58 0 0 1 1238 642', 'fill': 'none', 'stroke': '#E328FC', 'stroke-width': '3', 'pathLength': '100', 'stroke-dasharray': '26 74', 'opacity': '.62'}
+
+=== SHORT CYAN/GREEN DIAGONAL/STROKED PATHS OUTSIDE V3 ===
+path {'d': 'M610 998 C760 920 880 896 990 898 C1115 900 1230 936 1388 1000', 'stroke': 'url(#tri)', 'stroke-width': '2', 'opacity': '.32', 'stroke-dasharray': '34 18 6 18'} | parent={'class': 'motion', 'fill': 'none', 'stroke-linecap': 'round'}
+path {'d': 'M0 598 C120 550 240 548 360 588', 'stroke': 'url(#triReverse)', 'stroke-width': '1.4', 'opacity': '.28', 'stroke-dasharray': '12 16'} | parent={'class': 'motion', 'fill': 'none', 'stroke-linecap': 'round'}
+path {'d': 'M90 427H744', 'stroke': 'url(#v2t)', 'stroke-width': '1.3', 'stroke-dasharray': '18 34', 'opacity': '.28'} | parent={'class': 'motion'}
+path {'d': 'M1148 286L1175 255L1204 260L1235 208L1267 251L1303 222L1335 245L1364 220L1394 150L1427 214L1453 188', 'stroke': 'url(#v2t)', 'stroke-width': '2.2', 'pathLength': '100', 'stroke-dasharray': '14 86', 'opacity': '.72'} | parent={'fill': 'none'}
+path {'d': 'M1000 446H1044', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'} | parent={'class': 'motion'}
+path {'d': 'M1130 446H1179', 'stroke': '#00FBCC', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'} | parent={'class': 'motion'}
+path {'d': 'M1268 446H1319', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'stroke-dasharray': '8 12', 'opacity': '.62'} | parent={'class': 'motion'}
+path {'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'} | parent={'class': 'motion'}
+path {'d': 'M20 615C180 680 325 585 500 620C635 648 735 735 900 780', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.5', 'stroke-dasharray': '12 24', 'opacity': '.32'} | parent={'class': 'motion'}
+path {'d': 'M70 846C300 840 500 835 710 845C830 850 910 875 1000 918C1115 968 1280 976 1510 942', 'fill': 'none', 'stroke': '#00FBCC', 'stroke-width': '1.5', 'stroke-dasharray': '12 24', 'opacity': '.32'} | parent={'class': 'motion'}
+path {'d': 'M130 972H540C720 972 790 915 915 900C1050 885 1160 940 1450 945', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.5', 'stroke-dasharray': '12 24', 'opacity': '.32'} | parent={'class': 'motion'}
+path {'d': 'M972 948V1002', 'stroke': '#00E6FF', 'stroke-width': '2', 'stroke-dasharray': '8 12', 'opacity': '.32'} | parent={'fill': 'none'}
