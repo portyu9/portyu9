@@ -173,5 +173,7 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 </p>
 
 <p align="center">
-<img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">
+<picture>
+  <img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">
+</picture>
 </p>
