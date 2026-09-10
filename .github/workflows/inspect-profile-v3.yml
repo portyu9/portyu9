@@ -1,47 +1,116 @@
-name: Inspect profile V3 geometry
+name: Finalize profile V3 corrections
 
 on:
   push:
     branches: [profile-animation-v3]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inspect:
+  fix-v3:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect SVG geometry and V3 paint usage
+        with:
+          ref: profile-animation-v3
+          fetch-depth: 1
+      - name: Patch V3 in place and restore mobile V2
         shell: python
         run: |
           import re
           from pathlib import Path
           import xml.etree.ElementTree as ET
 
-          for rel in [
-              'assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg',
-              'assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg',
-          ]:
-              p = Path(rel)
-              print(f'\n===== {rel} =====')
-              text = p.read_text(encoding='utf-8')
-              print('bytes', len(text.encode()), 'lines', text.count('\n') + 1)
-              for token in ['v3TitleSpecular','v3PortalEnergy','v3DataBeam','v3MotionStyle']:
-                  print(token, 'occurrences=', text.count(token))
-              root = ET.fromstring(text)
-              ns = '{http://www.w3.org/2000/svg}'
+          desktop = Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg')
+          mobile = Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg')
+          readme = Path('README.md')
+          validator = Path('scripts/validate-profile-v4.py')
+          workflow = Path('.github/workflows/inspect-profile-v3.yml')
 
-              def walk(el, ancestry=()):
-                  label = el.attrib.get('id') or el.attrib.get('class') or el.tag.split('}')[-1]
-                  anc = ancestry + (label,)
-                  tag = el.tag.split('}')[-1]
-                  if tag == 'path' and el.attrib.get('d'):
-                      d = el.attrib['d']
-                      nums = [float(x) for x in re.findall(r'-?\d+(?:\.\d+)?', d)]
-                      print('PATH', 'anc=', '/'.join(anc[-4:]), 'stroke=', el.attrib.get('stroke'), 'sw=', el.attrib.get('stroke-width'), 'opacity=', el.attrib.get('opacity'), 'fill=', el.attrib.get('fill'), 'd=', d[:240])
-                  if tag in ('circle','ellipse'):
-                      print(tag.upper(), 'anc=', '/'.join(anc[-4:]), 'cx=', el.attrib.get('cx'), 'cy=', el.attrib.get('cy'), 'r=', el.attrib.get('r'), 'rx=', el.attrib.get('rx'), 'ry=', el.attrib.get('ry'), 'stroke=', el.attrib.get('stroke'), 'fill=', el.attrib.get('fill'), 'opacity=', el.attrib.get('opacity'), 'transform=', el.attrib.get('transform'))
-                  for child in list(el):
-                      walk(child, anc)
-              walk(root)
+          text = desktop.read_text(encoding='utf-8')
+          circles_before = text.count('<circle')
+          ellipses_before = text.count('<ellipse')
+
+          target_d = 'M0 595C150 650 290 560 470 598C620 630 700 705 835 754'
+          beam_re = re.compile(r'<path\b(?=[^>]*\bd="' + re.escape(target_d) + r'")[^>]*/>')
+          matches = beam_re.findall(text)
+          if len(matches) != 1:
+              raise SystemExit(f'Expected exactly one original diagonal beam, found {len(matches)}')
+
+          beam = f'''<path id="v3-diagonal-evidence-beam" d="{target_d}" fill="none" stroke="url(#v3DataBeam)" stroke-width="7.5" opacity=".74" stroke-linecap="round" filter="url(#softGlow)">
+    <animate attributeName="opacity" values=".34;.88;.52;.82;.34" dur="7.6s" repeatCount="indefinite"/>
+    <animate attributeName="stroke-width" values="5.5;8.5;6;8;5.5" dur="7.6s" repeatCount="indefinite"/>
+  </path>'''
+          text = beam_re.sub(beam, text, count=1)
+
+          marker = '<!-- V3 visible desktop sweep; deliberately adds no circle/portal geometry. -->'
+          if marker not in text:
+              sweep = '''
+  <!-- V3 visible desktop sweep; deliberately adds no circle/portal geometry. -->
+  <g id="v3-visible-desktop-sweep" class="v3-motion v3-specular" clip-path="url(#v3TitleRegion)" pointer-events="none">
+    <rect x="-520" y="28" width="360" height="450" rx="28" fill="url(#v3TitleSpecular)" opacity="0" filter="url(#softGlow)">
+      <animate attributeName="x" values="-520;-520;1690;1690" keyTimes="0;.14;.86;1" dur="8.8s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;.76;.76;0" keyTimes="0;.16;.84;1" dur="8.8s" repeatCount="indefinite"/>
+    </rect>
+  </g>
+'''
+              if '</svg>' not in text:
+                  raise SystemExit('Missing closing </svg>')
+              text = text.replace('</svg>', sweep + '</svg>', 1)
+
+          if text.count('<circle') != circles_before or text.count('<ellipse') != ellipses_before:
+              raise SystemExit('V3 patch unexpectedly changed circle/ellipse count')
+          if text.count('v3DataBeam') < 2:
+              raise SystemExit('V3 data beam is still definition-only')
+          if text.count('v3TitleSpecular') < 2:
+              raise SystemExit('V3 title sweep is still definition-only')
+          if text.count('id="v3-diagonal-evidence-beam"') != 1:
+              raise SystemExit('Diagonal beam was not replaced in place exactly once')
+          ET.fromstring(text)
+          desktop.write_text(text, encoding='utf-8')
+
+          rm = readme.read_text(encoding='utf-8')
+          old = '''  <source media="(max-width: 640px)" type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg">
+  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg">'''
+          new = '''  <source media="(max-width: 640px)" type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg">
+  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg">'''
+          if old not in rm:
+              raise SystemExit('Expected V3 mobile README source block not found')
+          rm = rm.replace(old, new, 1)
+          readme.write_text(rm, encoding='utf-8')
+
+          vt = validator.read_text(encoding='utf-8')
+          vold = '''    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg",
+    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg",'''
+          vnew = '''    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg",
+    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg",'''
+          if vold not in vt:
+              raise SystemExit('Expected validator mobile/V3 tuple not found')
+          validator.write_text(vt.replace(vold, vnew, 1), encoding='utf-8')
+
+          if mobile.exists():
+              mobile.unlink()
+          if workflow.exists():
+              workflow.unlink()
+
+          print('desktop v3DataBeam refs:', text.count('v3DataBeam'))
+          print('desktop v3TitleSpecular refs:', text.count('v3TitleSpecular'))
+          print('circle count preserved:', circles_before)
+          print('ellipse count preserved:', ellipses_before)
+          print('mobile source restored to V2:', 'animated-v2.svg' in rm)
+      - name: Validate profile changes
+        run: |
+          git diff --check
+          python scripts/validate-profile-v4.py
+          test ! -e assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg
+          grep -q 'media="(max-width: 640px)" type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg"' README.md
+          grep -q 'id="v3-diagonal-evidence-beam"' assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg
+          grep -q 'id="v3-visible-desktop-sweep"' assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg
+      - name: Commit corrected V3
+        run: |
+          git config user.name "Ƴunior Ƥortal"
+          git config user.email "35150859+portyu9@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(profile): restore mobile and activate desktop v3"
+          git push origin HEAD:profile-animation-v3
