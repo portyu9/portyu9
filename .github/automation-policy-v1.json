@@ -5,7 +5,7 @@
   "branches": {
     "main": "main",
     "generated": "generated",
-    "spotlightBot": "automation/spotlight-links"
+    "spotlightCandidatePrefix": "automation/spotlight-links/"
   },
   "githubActionsAppId": 15368,
   "rulesetContract": ".github/rulesets/repository-rulesets-v1.json",
