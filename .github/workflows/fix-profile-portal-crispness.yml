@@ -61,8 +61,6 @@ jobs:
           if '<animateTransform attributeName="transform" type="rotate"' in crisp_portal:
               raise SystemExit('Transform-driven portal ring rotation remains')
 
-          # Keep the ring geometry fixed and animate dash phase instead. This prevents
-          # sub-pixel transform resampling while preserving the same orbital motion.
           svg = svg[:start] + crisp_portal + svg[end:]
           ET.fromstring(svg)
           svg_path.write_text(svg, encoding='utf-8')
@@ -78,9 +76,18 @@ jobs:
               raise SystemExit('Desktop/mobile V3 source parity check failed')
           readme_path.write_text(readme, encoding='utf-8')
 
+          validator_path = Path('scripts/validate-profile-v4.py')
+          validator = validator_path.read_text(encoding='utf-8')
+          v2_contract = '    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg",\n'
+          if validator.count(v2_contract) != 1:
+              raise SystemExit('Expected one legacy V2 responsive validation contract')
+          validator = validator.replace(v2_contract, '', 1)
+          validator_path.write_text(validator, encoding='utf-8')
+
           workflow_path.unlink()
           print(f'Replaced {rotation_count} transform-driven native portal ring animations with crisp dash-phase motion.')
           print('Mobile and desktop now use the same V3 SVG.')
+          print('Responsive validator now enforces the shared V3 asset contract.')
           PY
 
       - name: Validate corrected profile animation
@@ -91,6 +98,7 @@ jobs:
           grep -q 'srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg"' README.md
           ! grep -q 'srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg"' README.md
           grep -q 'attributeName="stroke-dashoffset"' assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg
+          ! grep -q '"assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg",' scripts/validate-profile-v4.py
           PYTHONDONTWRITEBYTECODE=1 python -B scripts/validate-profile-v4.py
 
       - name: Commit corrected animation
