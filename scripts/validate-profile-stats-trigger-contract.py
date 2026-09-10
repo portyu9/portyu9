@@ -10,6 +10,8 @@ import stat
 import sys
 from typing import Any
 
+import profile_delegated_implementation_lock as local_closure
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 WORKFLOW = ROOT / ".github/workflows/profile-stats.yml"
@@ -50,6 +52,8 @@ STATIC_SOURCE_ROOTS = {
 CLOSURE_SENTINELS = {
     "scripts/generate-profile-evidence.py",
     "scripts/signal_field_pipeline.py",
+    "scripts/set-signal-field-refresh-cadence.py",
+    "scripts/finalize-signal-field-wide-alignment.py",
     "scripts/sync-profile-contribution-total.py",
     "scripts/portfolio_evidence_ledger.py",
     "scripts/engineering_spotlight_renderer.py",
@@ -132,8 +136,20 @@ def direct_workflow_scripts(workflow: str) -> set[str]:
     return scripts
 
 
+def transitive_local_files(roots: set[str]) -> set[str]:
+    """Expand every scripts root through the reviewed AST/literal local dependency walker."""
+    expanded: set[str] = set()
+    for relative in sorted(roots):
+        if not relative.startswith("scripts/"):
+            continue
+        for discovered in local_closure.derive_closure(relative):
+            repository_path(discovered)
+            expanded.add(discovered)
+    return expanded
+
+
 def source_components(workflow: str) -> dict[str, set[str]]:
-    return {
+    components = {
         "static": set(STATIC_SOURCE_ROOTS),
         "direct-workflow": direct_workflow_scripts(workflow),
         "generation": manifest_scripts(GENERATION_MANIFEST, "generation"),
@@ -141,6 +157,9 @@ def source_components(workflow: str) -> dict[str, set[str]]:
         "validation": manifest_scripts(VALIDATION_MANIFEST, "validation boundary"),
         "delegated": delegated_files(),
     }
+    roots = set().union(*components.values())
+    components["transitive-local"] = transitive_local_files(roots)
+    return components
 
 
 def derive_source_closure(workflow: str) -> tuple[str, ...]:
@@ -262,6 +281,8 @@ def self_test(workflow: str) -> None:
     delegated_example = "scripts/portfolio_evidence_ledger.py"
     require(delegated_example in components["delegated"],
             "self-test delegated production fixture disappeared")
+    require("scripts/finalize-signal-field-wide-alignment.py" in components["transitive-local"],
+            "self-test transitive production helper disappeared")
     incomplete = closure - {delegated_example}
     expect_failure(
         lambda: require(CLOSURE_SENTINELS <= incomplete and components["delegated"] <= incomplete,
