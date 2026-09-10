@@ -529,6 +529,66 @@ class PathMutationVisitor(ast.NodeVisitor):
             for item in target.elts:
                 self.clear_shape_target(item.value if isinstance(item, ast.Starred) else item)
 
+    @staticmethod
+    def shape_yields_path(shape: ReceiverShape) -> bool:
+        return any(
+            isinstance(slot, int) and slot & PATH_VALUE_MASK
+            for slot in shape
+        )
+
+    def bind_sequence_target_shapes(
+        self,
+        target: ast.Tuple | ast.List,
+        shapes: list[ReceiverShape],
+    ) -> None:
+        starred = [
+            index
+            for index, item in enumerate(target.elts)
+            if isinstance(item, ast.Starred)
+        ]
+        if not starred:
+            matching = [shape for shape in shapes if len(shape) == len(target.elts)]
+            for index, item in enumerate(target.elts):
+                self.bind_receiver_slots(item, [shape[index] for shape in matching])
+            return
+        if len(starred) != 1:
+            return
+
+        star_index = starred[0]
+        prefix_count = star_index
+        suffix_count = len(target.elts) - star_index - 1
+        minimum_length = prefix_count + suffix_count
+        matching = [shape for shape in shapes if len(shape) >= minimum_length]
+
+        for index in range(prefix_count):
+            self.bind_receiver_slots(
+                target.elts[index],
+                [shape[index] for shape in matching],
+            )
+
+        starred_target = target.elts[star_index]
+        require(isinstance(starred_target, ast.Starred), "starred target index must resolve to ast.Starred")
+        middle_shapes = [
+            shape[
+                prefix_count:
+                len(shape) - suffix_count if suffix_count else len(shape)
+            ]
+            for shape in matching
+        ]
+        self.bind_receiver_slots(starred_target.value, list(middle_shapes))
+        if (
+            isinstance(starred_target.value, ast.Name)
+            and any(self.shape_yields_path(shape) for shape in middle_shapes)
+        ):
+            self.path_iters.add(starred_target.value.id)
+
+        for index in range(star_index + 1, len(target.elts)):
+            from_end = len(target.elts) - index
+            self.bind_receiver_slots(
+                target.elts[index],
+                [shape[-from_end] for shape in matching],
+            )
+
     def bind_receiver_slots(self, target: ast.AST, slots: list[object]) -> None:
         self.clear_shape_target(target)
         self.bind_target(target, False)
@@ -544,15 +604,10 @@ class PathMutationVisitor(ast.NodeVisitor):
             return
         if not isinstance(target, (ast.Tuple, ast.List)):
             return
-        if any(isinstance(item, ast.Starred) for item in target.elts):
-            return
-        matching = [
-            slot
-            for slot in slots
-            if isinstance(slot, tuple) and len(slot) == len(target.elts)
-        ]
-        for index, item in enumerate(target.elts):
-            self.bind_receiver_slots(item, [shape[index] for shape in matching])
+        self.bind_sequence_target_shapes(
+            target,
+            [slot for slot in slots if isinstance(slot, tuple)],
+        )
 
     def bind_structured_target(
         self,
@@ -566,11 +621,7 @@ class PathMutationVisitor(ast.NodeVisitor):
             return
         if not isinstance(target, (ast.Tuple, ast.List)):
             return
-        if any(isinstance(item, ast.Starred) for item in target.elts):
-            return
-        matching = [shape for shape in shapes if len(shape) == len(target.elts)]
-        for index, item in enumerate(target.elts):
-            self.bind_receiver_slots(item, [shape[index] for shape in matching])
+        self.bind_sequence_target_shapes(target, list(shapes))
 
     def transparent_context_result(self, node: ast.AST) -> tuple[bool, ast.AST | None]:
         if not isinstance(node, ast.Call):
@@ -1886,6 +1937,90 @@ def self_test() -> None:
             "from pathlib import Path\ndef f(p: Path):\n    pair = (p, 'alpha')\n    return [q.read_text() for q in pair[:1]]\n",
         ),
         "read-only Path use through a static fixed-shape slice must remain valid",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    head, *rest = (p, 'alpha', 'beta')\n    head.replace('b')\n",
+        ),
+        "starred destructuring must preserve fixed prefix concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    label, *rest = ('alpha', p)\n    for q in rest:\n        q.replace('b')\n",
+        ),
+        "starred middle capture must become Path-yielding when it can contain a concrete Path",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    *rest, q = ('alpha', p)\n    q.replace('b')\n",
+        ),
+        "starred destructuring must preserve fixed suffix concrete-Path identity",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    head, *rest, tail = ('alpha', p, 'beta')\n    next(iter(rest)).replace('b')\n",
+        ),
+        "starred middle capture must preserve concrete-Path extraction through next(iter(...))",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    *rest, tail = ((p, 'alpha'), 'beta')\n    pair, = rest\n    pair[0].replace('b')\n",
+        ),
+        "starred capture must preserve nested fixed receiver shapes",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    *rest, tail = (p.iterdir(), 'alpha')\n    children, = rest\n    for child in children:\n        child.replace('b')\n",
+        ),
+        "starred capture must preserve Path-iterator leaves without treating them as direct Paths",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path, flag):\n    pair = ('alpha', p) if flag else ('beta', 'gamma')\n    label, *rest = pair\n    for q in rest:\n        q.replace('b')\n",
+        ),
+        "starred capture must preserve Path alternatives across joined fixed shapes",
+    )
+    require(
+        inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    rows = [('alpha', p)]\n    for label, *rest in rows:\n        for q in rest:\n            q.replace('b')\n",
+        ),
+        "for-loop starred targets must receive exact fixed element-shape provenance",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    head, *rest = (p, 'alpha', 'beta')\n    return [name.replace('a', 'b') for name in rest]\n",
+        ),
+        "starred capture must not inherit excluded concrete-Path prefix identity",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "def f():\n    head, *rest = ('alpha', 'beta', 'gamma')\n    return [name.replace('a', 'b') for name in rest]\n",
+        ),
+        "all-string starred destructuring must remain ordinary string replacement",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    label, *rest = ('alpha', p)\n    return [q.read_text() for q in rest]\n",
+        ),
+        "read-only concrete-Path use through starred capture must remain valid",
+    )
+    require(
+        not inspect_source(
+            validator,
+            "from pathlib import Path\ndef f(p: Path):\n    rest = [p]\n    *rest, tail = ('alpha',)\n    for name in rest:\n        name.replace('a', 'b')\n    return tail.replace('a', 'b')\n",
+        ),
+        "empty starred capture must clear stale Path-yielding identity",
     )
     require(
         inspect_source(
