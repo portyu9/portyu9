@@ -27,17 +27,17 @@ jobs:
           svg_path = Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg')
           svg = svg_path.read_text(encoding='utf-8')
 
-          # Keep the portal geometry stationary and animate only dash phase.
-          # This avoids transform-driven sub-pixel resampling that softened the
-          # rings when GitHub scaled the large SVG down, especially on mobile.
           outer_pattern = re.compile(
               r'<ellipse rx="360" ry="300" fill="none" stroke="url\(#energyGrad\)" stroke-width="3\.5" stroke-dasharray="14 18" opacity="\.34" vector-effect="non-scaling-stroke">\s*'
               r'<animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="10s" repeatCount="indefinite"/>\s*'
               r'</ellipse>'
           )
-          outer_replacement = '''<ellipse rx="360" ry="300" fill="none" stroke="url(#energyGrad)" stroke-width="2.25" stroke-linecap="round" stroke-dasharray="14 18" opacity=".46" vector-effect="non-scaling-stroke">
-      <animate attributeName="stroke-dashoffset" values="0;-64" dur="5.5s" repeatCount="indefinite"/>
-    </ellipse>'''
+          outer_replacement = (
+              '<ellipse rx="360" ry="300" fill="none" stroke="url(#energyGrad)" stroke-width="2.25" '
+              'stroke-linecap="round" stroke-dasharray="14 18" opacity=".46" vector-effect="non-scaling-stroke">\n'
+              '      <animate attributeName="stroke-dashoffset" values="0;-64" dur="5.5s" repeatCount="indefinite"/>\n'
+              '    </ellipse>'
+          )
           svg, outer_count = outer_pattern.subn(outer_replacement, svg, count=1)
 
           inner_pattern = re.compile(
@@ -45,9 +45,12 @@ jobs:
               r'<animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="8s" repeatCount="indefinite"/>\s*'
               r'</ellipse>'
           )
-          inner_replacement = '''<ellipse rx="270" ry="225" fill="none" stroke="rgba(34,211,238,.42)" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="5 13" opacity=".54" vector-effect="non-scaling-stroke">
-      <animate attributeName="stroke-dashoffset" values="0;36" dur="4.8s" repeatCount="indefinite"/>
-    </ellipse>'''
+          inner_replacement = (
+              '<ellipse rx="270" ry="225" fill="none" stroke="rgba(34,211,238,.42)" stroke-width="1.5" '
+              'stroke-linecap="round" stroke-dasharray="5 13" opacity=".54" vector-effect="non-scaling-stroke">\n'
+              '      <animate attributeName="stroke-dashoffset" values="0;36" dur="4.8s" repeatCount="indefinite"/>\n'
+              '    </ellipse>'
+          )
           svg, inner_count = inner_pattern.subn(inner_replacement, svg, count=1)
 
           if outer_count != 1 or inner_count != 1:
@@ -71,6 +74,6 @@ jobs:
           rm -f .github/workflows/fix-profile-portal-crispness.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg .github/workflows/fix-profile-portal-crispness.yml
+          git add -A
           git commit -m "fix: sharpen checkmark portal animation across breakpoints"
           git push origin HEAD:profile-animation-v3
