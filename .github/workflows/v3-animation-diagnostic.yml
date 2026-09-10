@@ -14,12 +14,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: profile-animation-v3
-      - name: Inspect V3 SVG geometry
+      - name: Inspect V3 SVG target candidates
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           import xml.etree.ElementTree as ET
+          import re
 
           files = [
               Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg'),
@@ -28,44 +29,54 @@ jobs:
           out = []
           for path in files:
               out.append(f'=== {path} ===')
-              tree = ET.parse(path)
-              root = tree.getroot()
+              root = ET.parse(path).getroot()
               parent = {c: p for p in root.iter() for c in p}
-              target = None
+
+              def ancestry(el):
+                  bits=[]
+                  cur=parent.get(el)
+                  while cur is not None and cur is not root:
+                      a=cur.attrib
+                      useful=[]
+                      for k in ('id','class','transform','opacity','fill','stroke'):
+                          if a.get(k): useful.append(f'{k}={a[k]}')
+                      if useful: bits.append('g[' + ', '.join(useful) + ']')
+                      cur=parent.get(cur)
+                  return ' <- '.join(bits[:5])
+
+              out.append('--- elements carrying v3 ids/classes/refs ---')
               for el in root.iter():
-                  if el.attrib.get('id') == 'v3-cinematic-refinement':
-                      target = el
-                      break
-              if target is None:
-                  out.append('NO v3-cinematic-refinement group found')
-                  continue
-              desc = set(target.iter())
-              out.append('--- V3 refinement elements ---')
-              for el in target.iter():
-                  tag = el.tag.rsplit('}', 1)[-1]
-                  attrs = dict(el.attrib)
-                  if 'd' in attrs and len(attrs['d']) > 260:
-                      attrs['d'] = attrs['d'][:260] + '...'
-                  out.append(f'{tag}: {attrs}')
-              out.append('--- Base circles/ellipses/lines/polylines and named paths (outside V3) ---')
+                  attrs=' '.join(f'{k}={v}' for k,v in el.attrib.items())
+                  if 'v3' in attrs.lower():
+                      tag=el.tag.rsplit('}',1)[-1]
+                      a=dict(el.attrib)
+                      if 'd' in a and len(a['d'])>220: a['d']=a['d'][:220]+'...'
+                      out.append(f'{tag}: {a} | ancestors: {ancestry(el)}')
+
+              out.append('--- compact base vector candidates outside v3 refinement ---')
+              v3group=next((e for e in root.iter() if e.attrib.get('id')=='v3-cinematic-refinement'),None)
+              v3desc=set(v3group.iter()) if v3group is not None else set()
               for el in root.iter():
-                  if el in desc:
-                      continue
-                  tag = el.tag.rsplit('}', 1)[-1]
-                  a = el.attrib
-                  if tag in {'circle','ellipse','line','polyline','polygon'} or (tag == 'path' and (a.get('id') or a.get('class') or a.get('stroke'))):
-                      attrs = dict(a)
-                      if 'd' in attrs and len(attrs['d']) > 260:
-                          attrs['d'] = attrs['d'][:260] + '...'
-                      out.append(f'{tag}: {attrs}')
+                  if el in v3desc: continue
+                  tag=el.tag.rsplit('}',1)[-1]
+                  a=el.attrib
+                  if tag=='path':
+                      d=a.get('d','')
+                      if d and len(d)<=220:
+                          nums=[float(x) for x in re.findall(r'-?\d+(?:\.\d+)?',d)]
+                          if len(nums)>=4:
+                              out.append(f'path d={d!r} attrs={dict(a)} | ancestors: {ancestry(el)}')
+                  elif tag in {'circle','ellipse','line','polyline','polygon'}:
+                      out.append(f'{tag} attrs={dict(a)} | ancestors: {ancestry(el)}')
               out.append('')
-          Path('v3-animation-diagnostic.txt').write_text('\n'.join(out), encoding='utf-8')
+
+          Path('v3-animation-candidates.txt').write_text('\n'.join(out),encoding='utf-8')
           PY
-      - name: Commit diagnostic report
+      - name: Commit candidate report
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add v3-animation-diagnostic.txt
-          git commit -m "chore: capture v3 animation diagnostic" || exit 0
+          git add v3-animation-candidates.txt
+          git commit -m "chore: capture v3 target candidates" || exit 0
           git push origin HEAD:profile-animation-v3
