@@ -1,11 +1,11 @@
 # Profile evidence refresh cadence
 
-**Checkpoint:** 2026-09-05  
+**Checkpoint:** 2026-09-10  
 **Contract:** `profile-refresh-v2`
 
 My profile evidence pipeline has three refresh paths:
 
-- **push-triggered:** immediate when reviewed production evidence code or workflow inputs change on `main`;
+- **push-triggered:** immediate when the reviewed production evidence source epoch or production workflow changes on `main`;
 - **manual:** `workflow_dispatch` for an explicit operator refresh;
 - **scheduled:** one best-effort opportunity per hour at minute **17**.
 
@@ -13,11 +13,13 @@ The scheduled path is deliberately a fallback. It is not the primary response to
 
 ## Push-trigger source closure
 
-My production push trigger covers the complete trusted `scripts/**` tree rather than maintaining a per-script allowlist. This is intentionally broader than the runtime import graph: validator-only changes may cause an extra refresh, but new generators, renderers, registries, helpers, transformers, or validators cannot be introduced under `scripts/` without entering the immediate production refresh path on `main`.
+My production push trigger is intentionally narrow: `.github/workflows/profile-stats.yml` and `scripts/profile-stats-source-epoch-v1.json` are the only two invalidation tokens. The workflow token makes any change to the privileged execution graph self-invalidating. The second token is a content-addressed source epoch compiled from the complete reviewed production source closure.
 
-Seven files are also named explicitly beneath the umbrella as review sentinels: three historical pipeline/refresh contract files and four profile-evidence subject-contract files. They are redundant with `scripts/**`; they do not carry source-coverage responsibility. The umbrella trigger is the fail-safe that ensures new production source modules cannot silently fall outside the immediate push-triggered refresh path.
+`scripts/validate-profile-stats-trigger-contract.py` derives that production source closure from the versioned generation, Signal Field, validation-boundary, subject, and delegated-implementation authorities, plus the workflow's direct production script roots and the active attestation schema. The epoch records the exact closure size and one deterministic digest over every member identity. A production source change therefore cannot merge with a stale token: required Profile Quality recomputes the closure and fails closed until the source epoch is deliberately advanced in the same review.
 
-Workflow, attestation documentation, and predicate-schema changes remain explicit non-script triggers because they live outside the trusted scripts tree. `scripts/validate-profile-stats-trigger-contract.py` locks this trigger shape in Profile Quality.
+This separates validation authority from publication authority. These validation-only changes do not trigger the privileged profile generation, attestation, publication, or downstream Spotlight transaction merely because they live under the scripts directory. They still run through required Profile Quality, CodeQL, and the other repository checks on their own pull request. Conversely, adding or changing a true production dependency without advancing the compiled epoch cannot satisfy the protected validation contract.
+
+Workflow changes remain a direct trigger because the workflow itself is authority-bearing and is separately byte-locked. Predicate-schema changes are part of the compiled production epoch rather than a wildcard trigger. The result is fail-closed under-trigger protection without the previous over-trigger behavior that converted unrelated validator maintenance into a publishing event.
 
 ## Measurement that retired the five-minute request
 
@@ -62,4 +64,4 @@ Generation refresh cadence and evidence freshness are different claims. The Port
 
 ## Change rule
 
-Changing the cron, the push-trigger source boundary, the published refresh provenance, the current-day highlight contract, or the refresh-contract version is a governance change. My repository governance validator and Profile Quality integration must fail closed until the workflow, trigger validator, finalizer, validator, cache identity, and this rationale agree.
+Changing the cron, the push-trigger source boundary, the source-epoch compiler, the published refresh provenance, the current-day highlight contract, or the refresh-contract version is a governance change. My repository governance validator and Profile Quality integration must fail closed until the workflow, trigger validator, finalizer, validator, source epoch, cache identity, and this rationale agree.
