@@ -17,10 +17,10 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v10"
+VERSION = "governed-workflow-byte-identity-v11"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "d196c4eddb4b8f24c2f0823dfd355cf62386f1ee",
-    ".github/workflows/profile-stats.yml": "820066fcd49d59fdb8849ece0d2528c2d2d691e6",
+    ".github/workflows/profile-stats.yml": "625f0ba3cc0cd081cf2d55a0799650fd180200b3",
     ".github/workflows/spotlight-link-sync.yml": "ec466f2b5aab6cbf2dc01af89dbbf975ea20410b",
 }
 
@@ -62,7 +62,7 @@ def require(condition: bool, message: str) -> None:
 
 def git_blob_sha_bytes(payload: bytes) -> str:
     header = f"blob {len(payload)}\0".encode("ascii")
-    return hashlib.sha1(header + payload).hexdigest()
+    return hashlib.sha1(header + payload, usedforsecurity=False).hexdigest()
 
 
 def git_blob_sha(path: Path) -> str:
