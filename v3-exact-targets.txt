@@ -1,0 +1,6 @@
+=== SIMPLE CHECK-LIKE PATHS + NEARBY CIRCLES ===
+
+=== SHORT DIAGONAL CYAN/GREEN PATHS ===
+PATH d='M0 598 C120 550 240 548 360 588' attrs={'d': 'M0 598 C120 550 240 548 360 588', 'stroke': 'url(#triReverse)', 'stroke-width': '1.4', 'opacity': '.28', 'stroke-dasharray': '12 16'} bbox=(0.0,548.0)-(360.0,598.0)
+PATH d='M1148 286L1175 255L1204 260L1235 208L1267 251L1303 222L1335 245L1364 220L1394 150L1427 214L1453 188' attrs={'d': 'M1148 286L1175 255L1204 260L1235 208L1267 251L1303 222L1335 245L1364 220L1394 150L1427 214L1453 188', 'stroke': 'url(#v2t)', 'stroke-width': '2.2', 'pathLength': '100', 'stroke-dasharray': '14 86', 'opacity': '.72'} bbox=(1148.0,150.0)-(1453.0,286.0)
+PATH d='M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649' attrs={'d': 'M794 665C808 650 817 677 830 663S851 650 862 665S884 670 905 649', 'fill': 'none', 'stroke': '#00E6FF', 'stroke-width': '1.8', 'pathLength': '100', 'stroke-dasharray': '22 78', 'opacity': '.66'} bbox=(794.0,649.0)-(905.0,677.0)
