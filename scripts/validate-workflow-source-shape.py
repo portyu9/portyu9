@@ -8,7 +8,9 @@ specialized authority, shell-safety, and Action-identity scanners run.
 
 Shell block-scalar bodies are opaque here because their contents are shell/program text,
 not YAML structure. The only reviewed flow collection is a simple ``needs: [job, ...]``
-sequence; flow mappings and every other flow sequence remain forbidden.
+sequence; flow mappings and every other flow sequence remain forbidden. Every structural
+mapping scope must also use unique keys so source scanners and GitHub's YAML loader can
+never disagree through duplicate-key/last-value-wins semantics.
 """
 from __future__ import annotations
 
@@ -29,6 +31,13 @@ FORBIDDEN_TOKEN = re.compile(
     r"(?:^|[\s,:])(?:&[A-Za-z0-9_.-]+|\*[A-Za-z0-9_.-]+|!(?!=)[^\s]+|<<\s*:)"
 )
 AUTHORITY_IDENTITY_KEY = re.compile(r"^  ([A-Za-z0-9_-]+):(?:\s*(?:#.*)?)$")
+PLAIN_MAPPING_KEY = re.compile(
+    r"^(?P<indent> *)(?P<key>[A-Za-z0-9_.-]+)\s*:(?:\s.*)?$"
+)
+SEQUENCE_MAPPING_KEY = re.compile(
+    r"^(?P<indent> *)-\s+(?P<key>[A-Za-z0-9_.-]+)\s*:(?:\s.*)?$"
+)
+SEQUENCE_ITEM = re.compile(r"^(?P<indent> *)-\s+.*$")
 
 
 def require(condition: bool, message: str) -> None:
@@ -126,10 +135,64 @@ def reject_duplicate_authority_identities(text: str, label: str, parent: str) ->
         seen.add(identity)
 
 
+def reject_duplicate_mapping_key(
+    skeleton: str,
+    label: str,
+    line_number: int,
+    stack: list[tuple[int, str]],
+    seen: dict[tuple[tuple[str, ...], int], set[str]],
+    sequence_serial: int,
+) -> int:
+    """Reject duplicate keys in every canonical mapping scope without evaluating YAML.
+
+    Canonical source has no anchors, aliases, quoted keys, flow mappings, or structural
+    block-scalar payload here. That lets indentation plus explicit sequence-item identity
+    define an unambiguous lexical mapping scope. Sequence item IDs keep repeated keys such
+    as ``name``/``uses`` in different steps independent while still detecting duplicate
+    keys inside one step.
+    """
+    sequence_mapping = SEQUENCE_MAPPING_KEY.fullmatch(skeleton)
+    sequence_item = SEQUENCE_ITEM.fullmatch(skeleton)
+    if sequence_mapping is not None or sequence_item is not None:
+        dash_indent = len((sequence_mapping or sequence_item).group("indent"))
+        while stack and stack[-1][0] >= dash_indent:
+            stack.pop()
+        sequence_serial += 1
+        stack.append((dash_indent, f"@sequence-item-{sequence_serial}"))
+
+        if sequence_mapping is None:
+            return sequence_serial
+
+        logical_indent = dash_indent + 2
+        key = sequence_mapping.group("key")
+    else:
+        mapping = PLAIN_MAPPING_KEY.fullmatch(skeleton)
+        if mapping is None:
+            return sequence_serial
+        logical_indent = len(mapping.group("indent"))
+        while stack and stack[-1][0] >= logical_indent:
+            stack.pop()
+        key = mapping.group("key")
+
+    parent = tuple(component for _, component in stack)
+    scope = (parent, logical_indent)
+    keys = seen.setdefault(scope, set())
+    require(
+        key not in keys,
+        f"{label}:{line_number}: duplicate mapping key is forbidden in canonical workflow source: {key}",
+    )
+    keys.add(key)
+    stack.append((logical_indent, key))
+    return sequence_serial
+
+
 def validate_text(text: str, label: str) -> int:
     lines = text.splitlines()
     block_indent: int | None = None
     structural_lines = 0
+    mapping_stack: list[tuple[int, str]] = []
+    seen_mapping_keys: dict[tuple[tuple[str, ...], int], set[str]] = {}
+    sequence_serial = 0
 
     for line_number, line in enumerate(lines, start=1):
         if block_indent is not None:
@@ -170,10 +233,20 @@ def validate_text(text: str, label: str) -> int:
                 f"{label}:{line_number}: flow-style YAML sequences are forbidden except simple needs: [job, ...]",
             )
 
+        sequence_serial = reject_duplicate_mapping_key(
+            skeleton,
+            label,
+            line_number,
+            mapping_stack,
+            seen_mapping_keys,
+            sequence_serial,
+        )
+
         if BLOCK_HEADER.search(skeleton):
             block_indent = indentation(line)
 
     require(structural_lines > 0, f"{label}: workflow source contains no structural YAML")
+    # Keep these focused diagnostics in addition to generalized mapping-key uniqueness.
     reject_duplicate_authority_identities(text, label, "on")
     reject_duplicate_authority_identities(text, label, "jobs")
     return structural_lines
@@ -208,7 +281,7 @@ def expect_failure(text: str, fragment: str) -> None:
 
 
 def self_test() -> None:
-    safe = """name: Safe\non:\n  pull_request:\npermissions:\n  contents: read\njobs:\n  plan:\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Safe expression\n        env:\n          VALUE: ${{ github.ref }}\n        run: |\n          set -euo pipefail\n          data='{"k":[1,2]}'\n          [[ -n "$VALUE" ]]\n  merge:\n    needs: [plan, approve]\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo safe\n"""
+    safe = """name: Safe\non:\n  pull_request:\npermissions:\n  contents: read\njobs:\n  plan:\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Safe expression\n        env:\n          VALUE: ${{ github.ref }}\n        run: |\n          set -euo pipefail\n          data='{"k":[1,2]}'\n          [[ -n "$VALUE" ]]\n      - run: echo safe\n  merge:\n    needs: [plan, approve]\n    runs-on: ubuntu-24.04\n    steps:\n      - run: echo safe\n"""
     validate_text(safe, "self-test-safe.yml")
 
     cases = (
@@ -220,13 +293,25 @@ def self_test() -> None:
         (safe.replace("permissions:\n  contents: read", "permissions: &shared\n  contents: read"), "anchors, aliases"),
         (safe.replace("permissions:\n  contents: read", "permissions:\n  <<: *shared"), "anchors, aliases"),
         ("---\n" + safe, "document markers"),
-        (safe.replace("jobs:", '"jobs":'), "quoted mapping keys"),
+        (safe.replace("jobs:", '\"jobs\":'), "quoted mapping keys"),
         (safe.replace("jobs:", "? jobs\n:"), "complex mapping keys"),
-        (safe.replace("  pull_request:\n", "  pull_request:\n  pull_request:\n"), "duplicate on authority identity"),
-        (safe.replace("  plan:\n", "  plan:\n  plan:\n", 1), "duplicate jobs authority identity"),
+        (safe.replace("  pull_request:\n", "  pull_request:\n  pull_request:\n"), "duplicate mapping key"),
+        (safe.replace("  plan:\n", "  plan:\n  plan:\n", 1), "duplicate mapping key"),
+        (safe.replace("permissions:\n  contents: read", "permissions:\n  contents: read\n  contents: write"), "duplicate mapping key"),
+        (safe.replace("    runs-on: ubuntu-24.04\n    steps:", "    runs-on: ubuntu-24.04\n    runs-on: ubuntu-24.04\n    steps:", 1), "duplicate mapping key"),
+        (safe.replace("          VALUE: ${{ github.ref }}", "          VALUE: ${{ github.ref }}\n          VALUE: fixed"), "duplicate mapping key"),
+        (safe.replace("      - name: Safe expression", "      - name: Safe expression\n        name: Shadowed expression"), "duplicate mapping key"),
     )
     for mutated, fragment in cases:
         expect_failure(mutated, fragment)
+
+    # Repeated step keys in distinct sequence items are valid mapping scopes.
+    repeated_step_keys = safe.replace(
+        "      - run: echo safe\n  merge:",
+        "      - name: second step\n        run: echo safe\n      - name: third step\n        run: echo safe\n  merge:",
+        1,
+    )
+    validate_text(repeated_step_keys, "self-test-distinct-sequence-items.yml")
 
 
 def main() -> int:
@@ -237,8 +322,8 @@ def main() -> int:
         validate_quality_binding(QUALITY.read_text(encoding="utf-8"))
         print(
             f"Workflow source-shape validation passed: {workflow_count} workflows · {structural_lines} structural lines · "
-            "block-style canonical YAML enforced, trigger/job authority identities are unique, flow mappings/structural aliases rejected, "
-            "and only reviewed simple needs sequences allowed."
+            "block-style canonical YAML enforced, every structural mapping scope uses unique keys, trigger/job authority identities are unique, "
+            "flow mappings/structural aliases rejected, and only reviewed simple needs sequences allowed."
         )
         return 0
     except (OSError, ValueError) as exc:
