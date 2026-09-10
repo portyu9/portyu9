@@ -49,8 +49,10 @@ FLAGSHIP_SVGS = (
 PROFILE_BANNER_SVGS = (
     "assets/profile-banners/quantum-apex-signal-crown-hero.svg",
     "assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg",
-    "assets/profile-banners/elite-evidence-horizon-bottom.svg",
     "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg",
+)
+RETAINED_PROFILE_BANNER_SVGS = PROFILE_BANNER_SVGS + (
+    "assets/profile-banners/elite-evidence-horizon-bottom.svg",
 )
 RETIRED_FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-ai-qa-control-plane.svg",
@@ -280,8 +282,10 @@ def main() -> int:
     for retired in legacy.RETIRED_ASSETS:
         require(not (ROOT/retired).exists(), f"Retired asset must remain removed: {retired}")
         require(retired not in readme, f"README references retired asset: {retired}")
-    for relative in PROFILE_BANNER_SVGS:
+    for relative in RETAINED_PROFILE_BANNER_SVGS:
         require((ROOT / relative).is_file(), f"Approved profile banner is missing: {relative}")
+    require("assets/profile-banners/elite-evidence-horizon-bottom.svg" not in readme,
+            "Bottom evidence horizon must remain retained but unlinked from README")
     require(legacy.HERO_IMAGE.is_file(), f"Profile hero image is missing: {legacy.HERO_REFERENCE}")
     hero_bytes=legacy.HERO_IMAGE.read_bytes()
     require(len(hero_bytes)==legacy.HERO_SIZE, f"Profile hero image size changed: expected {legacy.HERO_SIZE}, got {len(hero_bytes)}")
