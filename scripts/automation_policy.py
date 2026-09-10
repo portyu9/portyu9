@@ -6,7 +6,7 @@ import copy
 import json
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / ".github" / "automation-policy-v1.json"
@@ -187,6 +187,15 @@ def workflow_by_path(policy: dict[str, Any], path: str) -> tuple[str, dict[str, 
     return matches[0]
 
 
+def expect_policy_failure(payload: dict[str, Any], expected: str) -> None:
+    try:
+        validate_policy(payload)
+    except ValueError as exc:
+        require(expected in str(exc), f"automation policy self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"automation policy self-test accepted forbidden drift: {expected}")
+
+
 def self_test(policy: dict[str, Any]) -> None:
     validate_policy(copy.deepcopy(policy))
     try:
@@ -198,39 +207,61 @@ def self_test(policy: dict[str, Any]) -> None:
 
     unknown = copy.deepcopy(policy)
     unknown["unreviewed"] = True
-    try:
-        validate_policy(unknown)
-    except ValueError as exc:
-        require("root keys changed" in str(exc), f"automation policy unknown-key self-test failed: {exc}")
-    else:
-        raise ValueError("automation policy unknown-key self-test accepted authority drift")
+    expect_policy_failure(unknown, "root keys changed")
 
     wrong_type = copy.deepcopy(policy)
     wrong_type["githubActionsAppId"] = True
-    try:
-        validate_policy(wrong_type)
-    except ValueError as exc:
-        require("positive integer" in str(exc), f"automation policy integer-identity self-test failed: {exc}")
-    else:
-        raise ValueError("automation policy integer-identity self-test accepted boolean coercion")
+    expect_policy_failure(wrong_type, "positive integer")
 
-    first_workflow_id = next(iter(policy["workflows"]))
+    workflow_ids = list(policy["workflows"])
+    require(len(workflow_ids) >= 2, "automation policy self-test requires at least two workflows")
+    first_workflow_id, second_workflow_id = workflow_ids[:2]
     first_job_id = next(iter(policy["workflows"][first_workflow_id]["jobs"]))
+
+    duplicate_path = copy.deepcopy(policy)
+    duplicate_path["workflows"][second_workflow_id]["path"] = duplicate_path["workflows"][first_workflow_id]["path"]
+    expect_policy_failure(duplicate_path, "workflow path is duplicated")
+
+    duplicate_trigger = copy.deepcopy(policy)
+    trigger = duplicate_trigger["workflows"][first_workflow_id]["triggers"][0]
+    duplicate_trigger["workflows"][first_workflow_id]["triggers"].append(trigger)
+    expect_policy_failure(duplicate_trigger, "triggers must not contain duplicates")
+
     dangling = copy.deepcopy(policy)
     dangling["workflows"][first_workflow_id]["jobs"][first_job_id]["needs"] = ["missing-job"]
-    try:
-        validate_policy(dangling)
-    except ValueError as exc:
-        require("needs unknown job" in str(exc), f"automation policy dangling-edge self-test failed: {exc}")
-    else:
-        raise ValueError("automation policy dangling-edge self-test accepted unknown dependency")
+    expect_policy_failure(dangling, "needs unknown job")
 
-    cycle_workflow_id = "profile-stats"
+    duplicate_needs = copy.deepcopy(policy)
+    duplicate_needs["workflows"]["profile-stats"]["jobs"]["stage"]["needs"].append("generate")
+    expect_policy_failure(duplicate_needs, "needs must not contain duplicates")
+
     cycle = copy.deepcopy(policy)
-    cycle["workflows"][cycle_workflow_id]["jobs"]["generate"]["needs"] = ["dispatch"]
-    try:
-        validate_policy(cycle)
-    except ValueError as exc:
-        require("needs cycle" in str(exc), f"automation policy cycle self-test failed: {exc}")
-    else:
-        raise ValueError("automation policy cycle self-test accepted cyclic authority graph")
+    cycle["workflows"]["profile-stats"]["jobs"]["generate"]["needs"] = ["dispatch"]
+    expect_policy_failure(cycle, "needs cycle")
+
+    duplicate_check = copy.deepcopy(policy)
+    duplicate_check["requiredChecks"][1]["context"] = duplicate_check["requiredChecks"][0]["context"]
+    expect_policy_failure(duplicate_check, "required check context is duplicated")
+
+    invalid_workflow_check = copy.deepcopy(policy)
+    invalid_workflow_check["requiredChecks"][0]["workflow"] = "missing-workflow"
+    expect_policy_failure(invalid_workflow_check, "references unknown workflow")
+
+    invalid_job_check = copy.deepcopy(policy)
+    invalid_job_check["requiredChecks"][0]["job"] = "missing-job"
+    expect_policy_failure(invalid_job_check, "references unknown job")
+
+
+def main() -> int:
+    policy = load_policy()
+    self_test(policy)
+    print(
+        f"Automation Policy IR passed: {policy['policyId']} · {len(policy['workflows'])} workflows · "
+        f"{sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs · "
+        f"{len(policy['requiredChecks'])} protected required-check bindings"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
