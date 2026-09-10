@@ -17,8 +17,6 @@
 <picture><img alt="Quality Engineering" height="46" src="assets/profile-badges/identity-quality-engineering.svg?v=5"></picture> <picture><img alt="Automation Architecture" height="46" src="assets/profile-badges/identity-automation-architecture.svg?v=5"></picture> <picture><img alt="AI-Enabled Quality Systems" height="46" src="assets/profile-badges/identity-ai-quality-systems.svg?v=5"></picture>
 </p>
 
-<p align="center"><sub><strong>Review paths</strong> · <a href="https://github.com/portyu9/ai-qa-automation">AI QA Control Plane</a> · <a href="https://github.com/portyu9/qa-automation-ai-agent-evals">Agent Evaluation / TEVV</a> · <a href="https://github.com/portyu9?tab=repositories">QE Systems Portfolio</a></sub></p>
-
 <h2 align="center">◈&nbsp;&nbsp;QE Domains</h2>
 
 <p align="center">
@@ -172,4 +170,8 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub><br>
 <sub>Except where a specific file or component expressly states otherwise, no license is granted to copy, modify, redistribute, or reuse original README text and composition, branding, artwork, or custom Signal Field modifications and visual treatment.</sub><br>
 <sub>Third-party components remain subject to their respective licenses and terms.</sub>
+</p>
+
+<p align="center">
+<img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">
 </p>

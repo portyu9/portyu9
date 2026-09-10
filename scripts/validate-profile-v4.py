@@ -49,10 +49,13 @@ FLAGSHIP_SVGS = (
 PROFILE_BANNER_SVGS = (
     "assets/profile-banners/quantum-apex-signal-crown-hero.svg",
     "assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg",
+    "assets/profile-banners/elite-evidence-horizon-bottom.svg",
     "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg",
 )
-RETAINED_PROFILE_BANNER_SVGS = PROFILE_BANNER_SVGS + (
-    "assets/profile-banners/elite-evidence-horizon-bottom.svg",
+BOTTOM_HORIZON_BLOCK = (
+    '<p align="center">\n'
+    '<img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">\n'
+    '</p>'
 )
 RETIRED_FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-ai-qa-control-plane.svg",
@@ -282,10 +285,12 @@ def main() -> int:
     for retired in legacy.RETIRED_ASSETS:
         require(not (ROOT/retired).exists(), f"Retired asset must remain removed: {retired}")
         require(retired not in readme, f"README references retired asset: {retired}")
-    for relative in RETAINED_PROFILE_BANNER_SVGS:
+    for relative in PROFILE_BANNER_SVGS:
         require((ROOT / relative).is_file(), f"Approved profile banner is missing: {relative}")
-    require("assets/profile-banners/elite-evidence-horizon-bottom.svg" not in readme,
-            "Bottom evidence horizon must remain retained but unlinked from README")
+    require(readme.count(BOTTOM_HORIZON_BLOCK) == 1,
+            "Bottom evidence horizon must remain visible exactly once as a plain image")
+    require('<strong>Review paths</strong>' not in readme,
+            "Retired Review paths row returned")
     require(legacy.HERO_IMAGE.is_file(), f"Profile hero image is missing: {legacy.HERO_REFERENCE}")
     hero_bytes=legacy.HERO_IMAGE.read_bytes()
     require(len(hero_bytes)==legacy.HERO_SIZE, f"Profile hero image size changed: expected {legacy.HERO_SIZE}, got {len(hero_bytes)}")
@@ -301,11 +306,6 @@ def main() -> int:
     for phrase in legacy.FORBIDDEN_WORDING:
         require(phrase not in readme, f"Retired wording returned: {phrase}")
     require(readme.count("© 2026 Ƴunior Ƥortal. All rights reserved.")==1, "Copyright owner/year must appear exactly once")
-
-    review_paths='<p align="center"><sub><strong>Review paths</strong> · <a href="https://github.com/portyu9/ai-qa-automation">AI QA Control Plane</a> · <a href="https://github.com/portyu9/qa-automation-ai-agent-evals">Agent Evaluation / TEVV</a> · <a href="https://github.com/portyu9?tab=repositories">QE Systems Portfolio</a></sub></p>'
-    require(readme.count(review_paths)==1, "Compact reviewer-path row changed")
-    identity=readme.find('alt="AI-Enabled Quality Systems"'); review=readme.find(review_paths); domains=readme.find('<h2 align="center">◈&nbsp;&nbsp;QE Domains</h2>')
-    require(identity<review<domains, "Reviewer paths must sit directly after profile identity and before QE Domains")
 
     validate_taxonomy_scale(readme); validate_thesis_scale(readme)
     for relative in legacy.IDENTITY_AND_PRINCIPLE_SVGS: legacy.safe_svg(ROOT/relative, relative)
@@ -326,6 +326,6 @@ def main() -> int:
     footer='\n---\n\n<p align="center">\n<sub><strong>© 2026 Ƴunior Ƥortal. All rights reserved.</strong></sub>'
     require(readme.count(footer)==1, "A horizontal rule must exist immediately above the copyright footer")
     require("release-candidate.yml?branch=main" not in readme, "Profile must not present an RC workflow with no current main status")
-    print("Profile v4 validation passed: reviewer paths lead into 17 evidence-linked capabilities; four numbered flagship systems and three Evidence Spotlights precede Activity Metrics; responsive thesis and evidence contracts remain fail-closed.")
+    print("Profile v4 validation passed: Review paths are retired; the non-clickable bottom evidence horizon remains visible; 17 evidence-linked capabilities, four numbered flagship systems, and three Evidence Spotlights precede Activity Metrics; responsive thesis and evidence contracts remain fail-closed.")
     return 0
 if __name__ == "__main__": raise SystemExit(main())
