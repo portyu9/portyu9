@@ -1,4 +1,4 @@
-name: V3 animation diagnostic
+name: V3 animation surgical cleanup
 
 on:
   push:
@@ -8,37 +8,114 @@ permissions:
   contents: write
 
 jobs:
-  inspect:
+  fix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: profile-animation-v3
-      - name: Inspect status and beam hooks
+          fetch-depth: 0
+
+      - name: Remove synthetic V3 overlay geometry
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
-          src=Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg').read_text(encoding='utf-8')
-          rows=[]
-          for term in ('status','check','beam','data','beta','pi','v3-status','v3-data'):
-              rows.append(f'=== {term} ===')
-              seen=[]
-              for m in re.finditer(term,src,re.I):
-                  a=max(0,m.start()-420); b=min(len(src),m.end()+620)
-                  snippet=src[a:b].replace('\n',' ')
-                  if snippet not in seen:
-                      rows.append(snippet)
-                      seen.append(snippet)
-                  if len(seen)>=8: break
-          Path('v3-hook-snippets.txt').write_text('\n\n'.join(rows),encoding='utf-8')
+          import xml.etree.ElementTree as ET
+
+          files = [
+              Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg'),
+              Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg'),
+          ]
+
+          def remove_element_by_id(text: str, tag: str, element_id: str):
+              marker = f'id="{element_id}"'
+              pos = text.find(marker)
+              if pos < 0:
+                  return text, False
+              start = text.rfind(f'<{tag}', 0, pos)
+              if start < 0:
+                  raise RuntimeError(f'opening <{tag}> for {element_id} not found')
+
+              if tag != 'g':
+                  end_token = f'</{tag}>'
+                  end = text.find(end_token, pos)
+                  if end < 0:
+                      raise RuntimeError(f'closing </{tag}> for {element_id} not found')
+                  end += len(end_token)
+                  return text[:start] + text[end:], True
+
+              token_re = re.compile(r'<g(?:\s|>)|</g>')
+              depth = 0
+              for m in token_re.finditer(text, start):
+                  token = m.group(0)
+                  if token.startswith('<g'):
+                      depth += 1
+                  else:
+                      depth -= 1
+                      if depth == 0:
+                          return text[:start] + text[m.end():], True
+              raise RuntimeError(f'unbalanced <g> for {element_id}')
+
+          for path in files:
+              text = path.read_text(encoding='utf-8')
+              text, removed_group = remove_element_by_id(text, 'g', 'v3-cinematic-refinement')
+              text, removed_defs = remove_element_by_id(text, 'defs', 'v3-cinematic-defs')
+              if not removed_group:
+                  raise RuntimeError(f'{path}: v3-cinematic-refinement not found')
+              if not removed_defs:
+                  raise RuntimeError(f'{path}: v3-cinematic-defs not found')
+              for forbidden in ('v3-cinematic-refinement', 'v3DataBeam', 'v3TitleTrail', 'v3PortalEnergy'):
+                  if forbidden in text:
+                      raise RuntimeError(f'{path}: residual synthetic V3 hook {forbidden}')
+              path.write_text(text, encoding='utf-8')
+              ET.parse(path)
+              print(f'cleaned and parsed: {path}')
           PY
-      - name: Commit hook snippets
+
+      - name: Restore unrelated files from main
         shell: bash
         run: |
+          git fetch origin main
+          git checkout origin/main -- \
+            assets/github-profile-top-nebula-animated.svg \
+            assets/github-profile-bottom-nebula-animated.svg \
+            assets/profile-badges/robotic-automation-neural-interface-nebula-portal-animated.svg \
+            scripts/validate_profile_animation.py
+
+      - name: Remove temporary diagnostics
+        shell: bash
+        run: |
+          rm -f \
+            .github/workflows/v3-animation-diagnostic.yml \
+            v3-animation-diagnostic.txt \
+            v3-animation-candidates.txt \
+            v3-target-shortlist.txt \
+            v3-exact-targets.txt \
+            v3-hook-snippets.txt
+
+      - name: Verify surgical scope and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          for p in (
+              Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3.svg'),
+              Path('assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v3-mobile.svg'),
+          ):
+              ET.parse(p)
+              s=p.read_text(encoding='utf-8')
+              assert 'v3-cinematic-refinement' not in s
+              assert 'v3DataBeam' not in s
+          PY
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add v3-hook-snippets.txt
-          git commit -m "chore: capture v3 status and beam hooks" || exit 0
+          git add -A
+          echo "Final branch diff paths:"
+          git diff --cached --name-only
+          git commit -m "fix(profile): remove duplicate v3 animation overlays"
           git push origin HEAD:profile-animation-v3
