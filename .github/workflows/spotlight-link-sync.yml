@@ -15,7 +15,9 @@ concurrency:
 
 env:
   PYTHON_VERSION: "3.13.15"
-  BOT_BRANCH: "automation/spotlight-links"
+  BOT_BRANCH_PREFIX: "automation/spotlight-links/"
+  BOT_NAME: "github-actions[bot]"
+  BOT_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
 
 jobs:
   plan:
@@ -29,6 +31,7 @@ jobs:
       changed: ${{ steps.render.outputs.changed }}
       base_sha: ${{ steps.render.outputs.base_sha }}
       generated_sha: ${{ steps.render.outputs.generated_sha }}
+      readme_sha256_after: ${{ steps.render.outputs.readme_sha256_after }}
 
     steps:
       - name: Checkout trusted source
@@ -81,10 +84,13 @@ jobs:
             --base-sha "$GITHUB_SHA" \
             --output-dir spotlight-link-plan
           CHANGED="$(jq -r .changed spotlight-link-plan/plan.json)"
+          README_SHA256_AFTER="$(jq -r .readme_sha256_after spotlight-link-plan/plan.json)"
           test "$CHANGED" = "true" || test "$CHANGED" = "false"
+          [[ "$README_SHA256_AFTER" =~ ^[0-9a-f]{64}$ ]]
           echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
           echo "base_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           echo "generated_sha=$GENERATED_SHA" >> "$GITHUB_OUTPUT"
+          echo "readme_sha256_after=$README_SHA256_AFTER" >> "$GITHUB_OUTPUT"
 
       - name: Upload reviewed direct-link proposal
         if: steps.render.outputs.changed == 'true'
@@ -192,7 +198,7 @@ jobs:
             echo "### Spotlight mutation quarantine"
             echo "Mutation authority is disabled for source epoch \`$BASE_SHA / $GENERATED_SHA\`."
             echo "Observed changed-plan attempts: **$ATTEMPT_COUNT**."
-            echo "No bot branch, pull request, workflow approval, merge, or cleanup mutation was authorized by this run."
+            echo "No candidate branch, pull request, workflow approval, merge, or cleanup mutation was authorized by this run."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Spotlight source-epoch mutation budget exhausted; remaining diagnostic-only." >&2
           exit 1
@@ -210,6 +216,7 @@ jobs:
       pr_number: ${{ steps.propose.outputs.pr_number }}
       head_sha: ${{ steps.propose.outputs.head_sha }}
       base_sha: ${{ steps.propose.outputs.base_sha }}
+      candidate_branch: ${{ steps.propose.outputs.candidate_branch }}
 
     steps:
       - name: Download reviewed direct-link proposal
@@ -219,12 +226,13 @@ jobs:
           path: spotlight-link-plan
           digest-mismatch: error
 
-      - name: Create or update guarded README-only pull request
+      - name: Create or reuse immutable README-only candidate
         id: propose
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.plan.outputs.base_sha }}
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
         run: |
           set -euo pipefail
           PLAN="spotlight-link-plan/plan.json"
@@ -233,62 +241,116 @@ jobs:
           test "$(jq -r .version "$PLAN")" = "spotlight-profile-links-v1"
           test "$(jq -r .base_sha "$PLAN")" = "$SOURCE_SHA"
           test "$(jq -r .generated_sha "$PLAN")" = "$GENERATED_SHA"
-          test "$(sha256sum "$PROPOSED" | cut -d' ' -f1)" = "$(jq -r .readme_sha256_after "$PLAN")"
+          [[ "$README_SHA256_AFTER" =~ ^[0-9a-f]{64}$ ]]
+          test "$(jq -r .readme_sha256_after "$PLAN")" = "$README_SHA256_AFTER"
+          test "$(sha256sum "$PROPOSED" | cut -d' ' -f1)" = "$README_SHA256_AFTER"
+
+          CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$SOURCE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          CANDIDATE_BRANCH="${BOT_BRANCH_PREFIX}${CANDIDATE_ID}"
+          [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
 
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
           gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content \
             | tr -d '\n' | base64 --decode > current-readme.md
           test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
 
-          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BOT_BRANCH}" >/dev/null 2>&1; then
-            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" \
-              -f sha="$SOURCE_SHA" -F force=true >/dev/null
+          # A matching immutable ref may only be reused; it is never PATCHed or force-moved.
+          MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
+          EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$MATCHING_REFS")"
+          test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"
+          if [ "$EXACT_REF_COUNT" = "1" ]; then
+            HEAD_SHA="$(jq -r --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)][0].object.sha' <<<"$MATCHING_REFS")"
           else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
-              -f ref="refs/heads/${BOT_BRANCH}" -f sha="$SOURCE_SHA" >/dev/null
+            CONTENT="$(base64 -w0 "$PROPOSED")"
+            jq -n --arg content "$CONTENT" '{content:$content,encoding:"base64"}' > blob.json
+            BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"
+            README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"
+            [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+            BASE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}")"
+            BASE_TREE_SHA="$(jq -r .tree.sha <<<"$BASE_COMMIT")"
+            [[ "$BASE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            jq -n \
+              --arg base_tree "$BASE_TREE_SHA" \
+              --arg blob "$README_BLOB_SHA" \
+              '{base_tree:$base_tree,tree:[{path:"README.md",mode:"100644",type:"blob",sha:$blob}]}' > tree.json
+            TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"
+            CANDIDATE_TREE_SHA="$(jq -r .sha <<<"$TREE")"
+            [[ "$CANDIDATE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            test "$CANDIDATE_TREE_SHA" != "$BASE_TREE_SHA"
+
+            jq -n \
+              --arg message "chore: sync rotating Spotlight links" \
+              --arg tree "$CANDIDATE_TREE_SHA" \
+              --arg parent "$SOURCE_SHA" \
+              --arg name "$BOT_NAME" \
+              --arg email "$BOT_EMAIL" \
+              '{message:$message,tree:$tree,parents:[$parent],author:{name:$name,email:$email},committer:{name:$name,email:$email}}' > commit.json
+            CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"
+            HEAD_SHA="$(jq -r .sha <<<"$CANDIDATE_COMMIT")"
+            [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           fi
 
-          README_BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BOT_BRANCH}" --jq .sha)"
-          CONTENT="$(base64 -w0 "$PROPOSED")"
-          jq -n \
-            --arg message "chore: sync rotating Spotlight links" \
-            --arg content "$CONTENT" \
-            --arg branch "$BOT_BRANCH" \
-            --arg sha "$README_BLOB" \
-            '{message:$message,content:$content,branch:$branch,sha:$sha}' > update.json
-          gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/README.md" --input update.json > update-response.json
-          HEAD_SHA="$(jq -r .commit.sha update-response.json)"
-          test "$HEAD_SHA" != "null"
+          # Validate the complete candidate object before first publication or retry reuse.
+          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          test "$(jq '.parents | length' <<<"$CANDIDATE_COMMIT")" = "1"
+          test "$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")" = "$SOURCE_SHA"
+          test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+          test "$(jq -r .author.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+          test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+          test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+          test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
+          COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"
+          test "$(jq -r .status <<<"$COMPARE")" = "ahead"
+          test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$SOURCE_SHA"
+          test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$SOURCE_SHA"
+          test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"
+          test "$(jq -r .behind_by <<<"$COMPARE")" = "0"
+          test "$(jq -r .total_commits <<<"$COMPARE")" = "1"
+          test "$(jq '.files | length' <<<"$COMPARE")" = "1"
+          test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
+          test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content \
+            | tr -d '\n' | base64 --decode > candidate-readme.md
+          test "$(sha256sum candidate-readme.md | cut -d' ' -f1)" = "$README_SHA256_AFTER"
 
-          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BOT_BRANCH}&base=main&per_page=10")"
+          if [ "$EXACT_REF_COUNT" = "0" ]; then
+            jq -n --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg sha "$HEAD_SHA" '{ref:$ref,sha:$sha}' > ref.json
+            CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"
+            test "$(jq -r .ref <<<"$CREATED_REF")" = "refs/heads/${CANDIDATE_BRANCH}"
+            test "$(jq -r .object.sha <<<"$CREATED_REF")" = "$HEAD_SHA"
+          fi
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+
+          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
           COUNT="$(jq 'length' <<<"$PRS")"
           if [ "$COUNT" = "0" ]; then
             jq -n \
               --arg title "chore: sync rotating Spotlight links" \
-              --arg head "$BOT_BRANCH" \
+              --arg head "$CANDIDATE_BRANCH" \
               --arg base "main" \
               --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." \
-              '{title:$title,head:$head,base:$base,body:$body}' > pr.json
+              '{title:$title,head:$head,base:$base,body:$body,maintainer_can_modify:false}' > pr.json
             gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json
             PR_NUMBER="$(jq -r .number pr-response.json)"
           else
             test "$COUNT" = "1"
             PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
           fi
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .state <<<"$PR")" = "open"
+          test "$(jq -r .base.ref <<<"$PR")" = "main"
+          test "$(jq -r .head.ref <<<"$PR")" = "$CANDIDATE_BRANCH"
+          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
 
-          # GitHub's PR view can briefly lag the just-updated bot branch. Preserve the
-          # exact-head invariant while allowing only a bounded metadata-convergence window.
-          for attempt in $(seq 1 15); do
-            PR_HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)"
-            if [ "$PR_HEAD" = "$HEAD_SHA" ]; then
-              break
-            fi
-            test "$attempt" -lt 15
-            sleep 2
-          done
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
           echo "base_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "candidate_branch=$CANDIDATE_BRANCH" >> "$GITHUB_OUTPUT"
 
   approve:
     if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success'
@@ -314,14 +376,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ needs.propose.outputs.base_sha }}
           HEAD_SHA: ${{ needs.propose.outputs.head_sha }}
+          CANDIDATE_BRANCH: ${{ needs.propose.outputs.candidate_branch }}
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
         run: |
           set -euo pipefail
 
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
+          [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
+
           # Approval is authority to execute. Prove both mutable roots still match the
-          # reviewed plan, then prove the exact head is still one README-only commit.
+          # reviewed plan, the immutable ref is unchanged, and the exact head is one README-only commit.
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
           COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
           test "$(jq -r .status <<<"$COMPARE")" = "ahead"
           test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
@@ -389,7 +458,7 @@ jobs:
                 [[ "$CHECK_SUITE_ID" =~ ^[1-9][0-9]*$ ]]
                 [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
                 test "$(jq -r .head_sha <<<"$RUN")" = "$HEAD_SHA"
-                test "$(jq -r .head_branch <<<"$RUN")" = "$BOT_BRANCH"
+                test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"
                 test "$(jq -r .event <<<"$RUN")" = "pull_request"
                 test "$(jq -r .workflow_id <<<"$RUN")" = "$EXPECTED_ID"
                 test "$(jq -r .repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"
@@ -445,13 +514,15 @@ jobs:
       checks: read
 
     steps:
-      - name: Merge exact approved head and clean up bot branch
+      - name: Merge exact approved head and clean up immutable candidate branch
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ needs.propose.outputs.pr_number }}
           HEAD_SHA: ${{ needs.propose.outputs.head_sha }}
           BASE_SHA: ${{ needs.propose.outputs.base_sha }}
+          CANDIDATE_BRANCH: ${{ needs.propose.outputs.candidate_branch }}
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
           CODEQL_RUN_ID: ${{ needs.approve.outputs.codeql_run_id }}
           CODEQL_CHECK_SUITE_ID: ${{ needs.approve.outputs.codeql_check_suite_id }}
           DEPENDENCY_RUN_ID: ${{ needs.approve.outputs.dependency_run_id }}
@@ -461,18 +532,33 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Revalidate the exact PR, mutable roots, README-only closure, and required checks
-          # after the Actions-only wait. This job performs no polling or authored execution.
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
+          [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
+
+          # Revalidate the exact PR, mutable roots, immutable candidate ref, README-only closure,
+          # and required checks after the Actions-only wait. This job performs no polling.
           PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .state <<<"$PR")" = "open"
           test "$(jq -r .base.ref <<<"$PR")" = "main"
-          test "$(jq -r .head.ref <<<"$PR")" = "$BOT_BRANCH"
+          test "$(jq -r .head.ref <<<"$PR")" = "$CANDIDATE_BRANCH"
           test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
           FILES="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100")"
           test "$(jq 'length' <<<"$FILES")" = "1"
           test "$(jq -r '.[0].filename' <<<"$FILES")" = "README.md"
+
+          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          test "$(jq '.parents | length' <<<"$CANDIDATE_COMMIT")" = "1"
+          test "$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")" = "$BASE_SHA"
+          test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+          test "$(jq -r .author.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+          test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+          test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
 
           for ID in "$CODEQL_RUN_ID" "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_RUN_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_RUN_ID" "$PROFILE_CHECK_SUITE_ID"; do
             [[ "$ID" =~ ^[1-9][0-9]*$ ]]
@@ -504,28 +590,28 @@ jobs:
           OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
           test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
 
-          # Revalidate both mutable roots immediately before the exact-head merge request.
+          # Revalidate both mutable roots and the immutable candidate ref immediately before merge.
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
           RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"
           test "$(jq -r .merged <<<"$RESULT")" = "true"
           MERGE_SHA="$(jq -r .sha <<<"$RESULT")"
           test "$MERGE_SHA" != "null"
 
-          # Close the bot branch only after proving the exact reviewed head merged and
-          # main still points at that merge. Accept only an explicit 404 if GitHub already
-          # auto-deleted it; every other lookup failure must fail the terminal job closed.
+          # Delete only the consumed immutable candidate ref after proving the exact reviewed head
+          # merged and main points at that merge. The candidate ref is never moved in its lifetime.
           MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .merged <<<"$MERGED_PR")" = "true"
           test "$(jq -r .state <<<"$MERGED_PR")" = "closed"
           test "$(jq -r .base.ref <<<"$MERGED_PR")" = "main"
-          test "$(jq -r .head.ref <<<"$MERGED_PR")" = "$BOT_BRANCH"
+          test "$(jq -r .head.ref <<<"$MERGED_PR")" = "$CANDIDATE_BRANCH"
           test "$(jq -r .head.sha <<<"$MERGED_PR")" = "$HEAD_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"
-          if BRANCH_REF="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BOT_BRANCH}" 2>/dev/null)"; then
-            test "$(jq -r .object.sha <<<"$BRANCH_REF")" = "$HEAD_SHA"
-            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" >/dev/null
+          if CANDIDATE_REF="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" 2>/dev/null)"; then
+            test "$(jq -r .object.sha <<<"$CANDIDATE_REF")" = "$HEAD_SHA"
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null
           else
-            test "$(jq -r '.status // empty' <<<"$BRANCH_REF")" = "404"
+            test "$(jq -r '.status // empty' <<<"$CANDIDATE_REF")" = "404"
           fi
