@@ -12,12 +12,7 @@
   "workflows": {
     "codeql": {
       "path": ".github/workflows/codeql.yml",
-      "triggers": [
-        "pull_request",
-        "push",
-        "schedule",
-        "workflow_dispatch"
-      ],
+      "triggers": ["pull_request", "push", "schedule", "workflow_dispatch"],
       "permissions": {
         "contents": "read"
       },
@@ -34,9 +29,7 @@
     },
     "dependency-review": {
       "path": ".github/workflows/dependency-review.yml",
-      "triggers": [
-        "pull_request"
-      ],
+      "triggers": ["pull_request"],
       "permissions": {
         "contents": "read"
       },
@@ -52,10 +45,7 @@
     },
     "profile-quality": {
       "path": ".github/workflows/profile-quality.yml",
-      "triggers": [
-        "pull_request",
-        "push"
-      ],
+      "triggers": ["pull_request", "push"],
       "permissions": {
         "contents": "read"
       },
@@ -78,11 +68,7 @@
     },
     "profile-stats": {
       "path": ".github/workflows/profile-stats.yml",
-      "triggers": [
-        "push",
-        "schedule",
-        "workflow_dispatch"
-      ],
+      "triggers": ["push", "schedule", "workflow_dispatch"],
       "permissions": {
         "contents": "read"
       },
@@ -96,18 +82,14 @@
         },
         "attest": {
           "name": "prepare-attestation-read-only",
-          "needs": [
-            "generate"
-          ],
+          "needs": ["generate"],
           "permissions": {
             "contents": "read"
           }
         },
         "attest_publish": {
           "name": "attest-write-only",
-          "needs": [
-            "attest"
-          ],
+          "needs": ["attest"],
           "permissions": {
             "contents": "read",
             "id-token": "write",
@@ -116,29 +98,21 @@
         },
         "stage": {
           "name": "stage-publication-read-only",
-          "needs": [
-            "generate",
-            "attest",
-            "attest_publish"
-          ],
+          "needs": ["generate", "attest", "attest_publish"],
           "permissions": {
             "contents": "read"
           }
         },
         "publish": {
           "name": "publish-write-only",
-          "needs": [
-            "stage"
-          ],
+          "needs": ["stage"],
           "permissions": {
             "contents": "write"
           }
         },
         "dispatch": {
           "name": "dispatch-spotlight-link-sync",
-          "needs": [
-            "publish"
-          ],
+          "needs": ["publish"],
           "permissions": {
             "actions": "write"
           }
@@ -147,10 +121,7 @@
     },
     "spotlight-link-sync": {
       "path": ".github/workflows/spotlight-link-sync.yml",
-      "triggers": [
-        "schedule",
-        "workflow_dispatch"
-      ],
+      "triggers": ["schedule", "workflow_dispatch"],
       "permissions": {
         "contents": "read"
       },
@@ -164,29 +135,21 @@
         },
         "budget": {
           "name": "mutation-budget-read-only",
-          "needs": [
-            "plan"
-          ],
+          "needs": ["plan"],
           "permissions": {
             "actions": "read"
           }
         },
         "quarantine": {
           "name": "mutation-budget-quarantine-read-only",
-          "needs": [
-            "plan",
-            "budget"
-          ],
+          "needs": ["plan", "budget"],
           "permissions": {
             "contents": "read"
           }
         },
         "propose": {
           "name": "propose-readme-only-write",
-          "needs": [
-            "plan",
-            "budget"
-          ],
+          "needs": ["plan", "budget"],
           "permissions": {
             "contents": "write",
             "pull-requests": "write"
@@ -194,11 +157,7 @@
         },
         "approve": {
           "name": "approve-bot-pr-checks-only",
-          "needs": [
-            "plan",
-            "budget",
-            "propose"
-          ],
+          "needs": ["plan", "budget", "propose"],
           "permissions": {
             "contents": "read",
             "actions": "write"
@@ -206,12 +165,7 @@
         },
         "merge": {
           "name": "merge-readme-only-terminal-write",
-          "needs": [
-            "plan",
-            "budget",
-            "propose",
-            "approve"
-          ],
+          "needs": ["plan", "budget", "propose", "approve"],
           "permissions": {
             "contents": "write",
             "pull-requests": "read",
@@ -224,147 +178,29 @@
   "transactionMachines": {
     "profile-stats": {
       "initialState": "idle",
-      "states": [
-        "idle",
-        "proposed",
-        "approved",
-        "mutated",
-        "verified",
-        "completed",
-        "no-change"
-      ],
-      "terminalStates": [
-        "completed",
-        "no-change"
-      ],
+      "states": ["idle", "proposed", "approved", "mutated", "verified", "completed", "no-change"],
+      "terminalStates": ["completed", "no-change"],
       "transitions": [
-        {
-          "from": "idle",
-          "to": "proposed",
-          "phase": "propose",
-          "jobs": [
-            "generate"
-          ]
-        },
-        {
-          "from": "proposed",
-          "to": "no-change",
-          "phase": "terminalize",
-          "jobs": [
-            "attest"
-          ]
-        },
-        {
-          "from": "proposed",
-          "to": "approved",
-          "phase": "approve",
-          "jobs": [
-            "attest",
-            "attest_publish",
-            "stage"
-          ]
-        },
-        {
-          "from": "approved",
-          "to": "mutated",
-          "phase": "mutate",
-          "jobs": [
-            "publish"
-          ]
-        },
-        {
-          "from": "mutated",
-          "to": "verified",
-          "phase": "verify",
-          "jobs": [
-            "publish"
-          ]
-        },
-        {
-          "from": "verified",
-          "to": "completed",
-          "phase": "terminalize",
-          "jobs": [
-            "dispatch"
-          ]
-        }
+        {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["generate"]},
+        {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["attest"]},
+        {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["attest", "attest_publish", "stage"]},
+        {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["publish"]},
+        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["publish"]},
+        {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["dispatch"]}
       ]
     },
     "spotlight-link-sync": {
       "initialState": "idle",
-      "states": [
-        "idle",
-        "proposed",
-        "approved",
-        "mutated",
-        "verified",
-        "completed",
-        "no-change",
-        "quarantined"
-      ],
-      "terminalStates": [
-        "completed",
-        "no-change",
-        "quarantined"
-      ],
+      "states": ["idle", "proposed", "approved", "mutated", "verified", "completed", "no-change", "quarantined"],
+      "terminalStates": ["completed", "no-change", "quarantined"],
       "transitions": [
-        {
-          "from": "idle",
-          "to": "proposed",
-          "phase": "propose",
-          "jobs": [
-            "plan"
-          ]
-        },
-        {
-          "from": "proposed",
-          "to": "no-change",
-          "phase": "terminalize",
-          "jobs": [
-            "plan"
-          ]
-        },
-        {
-          "from": "proposed",
-          "to": "approved",
-          "phase": "approve",
-          "jobs": [
-            "budget"
-          ]
-        },
-        {
-          "from": "proposed",
-          "to": "quarantined",
-          "phase": "terminalize",
-          "jobs": [
-            "budget",
-            "quarantine"
-          ]
-        },
-        {
-          "from": "approved",
-          "to": "mutated",
-          "phase": "mutate",
-          "jobs": [
-            "propose"
-          ]
-        },
-        {
-          "from": "mutated",
-          "to": "verified",
-          "phase": "verify",
-          "jobs": [
-            "approve"
-          ]
-        },
-        {
-          "from": "verified",
-          "to": "completed",
-          "phase": "terminalize",
-          "jobs": [
-            "merge"
-          ]
-        }
+        {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["plan"]},
+        {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["plan"]},
+        {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["budget"]},
+        {"from": "proposed", "to": "quarantined", "phase": "terminalize", "jobs": ["budget", "quarantine"]},
+        {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["propose"]},
+        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["approve"]},
+        {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["merge"]}
       ]
     }
   },
