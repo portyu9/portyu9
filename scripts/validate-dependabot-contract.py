@@ -26,6 +26,8 @@ updates:
       interval: \"daily\"
       time: \"09:00\"
       timezone: \"America/New_York\"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     commit-message:
       prefix: \"chore(deps)\"
@@ -184,6 +186,7 @@ def main() -> int:
 
         print(
             "Dependabot governance validation passed: the canonical daily GitHub Actions update-discovery policy is locked; "
+            "ordinary version updates have an explicit seven-day release soak while security updates remain immediate; "
             "dependency updates remain individually reviewable; and every external action in every workflow "
             "is pinned to an immutable 40-character commit SHA."
         )
