@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import sys
 
+import automation_policy
+
 ROOT = Path(__file__).resolve().parents[1]
 GOV = ROOT / ".github" / "GOVERNANCE.md"
 THREAT = ROOT / ".github" / "THREAT_MODEL.md"
@@ -13,27 +15,6 @@ SYNC = ROOT / ".github" / "workflows" / "spotlight-link-sync.yml"
 
 SEMANTICS = "execution-result-subject-binding-freshness-v1"
 CHECKPOINT = "**Checkpoint:** 2026-09-10"
-
-# Ordered permission tuples are both the executable expectation and the canonical
-# documentation rendering. The assurance documents are accepted only after the
-# actual workflow job graph has independently matched these semantics.
-SPOTLIGHT_JOBS = {
-    "plan": ("plan-direct-links-read-only", (("contents", "read"),)),
-    "budget": ("mutation-budget-read-only", (("actions", "read"),)),
-    "quarantine": ("mutation-budget-quarantine-read-only", (("contents", "read"),)),
-    "propose": (
-        "propose-readme-only-write",
-        (("contents", "write"), ("pull-requests", "write")),
-    ),
-    "approve": (
-        "approve-bot-pr-checks-only",
-        (("contents", "read"), ("actions", "write")),
-    ),
-    "merge": (
-        "merge-readme-only-terminal-write",
-        (("contents", "write"), ("pull-requests", "read"), ("checks", "read")),
-    ),
-}
 
 GOV_REQUIRED = (
     CHECKPOINT,
@@ -134,6 +115,22 @@ def indentation(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
 
 
+def spotlight_jobs(policy: dict[str, object]) -> dict[str, tuple[str, tuple[tuple[str, str], ...]]]:
+    _workflow_id, workflow = automation_policy.workflow_by_path(policy, ".github/workflows/spotlight-link-sync.yml")
+    jobs = workflow["jobs"]
+    require(isinstance(jobs, dict), "Automation Policy IR Spotlight jobs are malformed")
+    model: dict[str, tuple[str, tuple[tuple[str, str], ...]]] = {}
+    for job_id, job in jobs.items():
+        require(isinstance(job_id, str) and isinstance(job, dict), "Automation Policy IR Spotlight job entry is malformed")
+        name = job.get("name")
+        permissions = job.get("permissions")
+        require(isinstance(name, str) and isinstance(permissions, dict),
+                f"Automation Policy IR Spotlight job semantics are malformed: {job_id}")
+        model[job_id] = (name, tuple(permissions.items()))
+    require(model, "Automation Policy IR Spotlight job graph is empty")
+    return model
+
+
 def job_blocks(workflow: str) -> dict[str, str]:
     lines = workflow.splitlines()
     starts = [i for i, line in enumerate(lines) if line == "jobs:"]
@@ -178,27 +175,36 @@ def parse_job_semantics(block: str, job_id: str) -> tuple[str, tuple[tuple[str, 
     return names[0], tuple(permissions)
 
 
-def validate_spotlight_workflow(workflow: str) -> None:
+def validate_spotlight_workflow(
+    workflow: str,
+    expected_jobs: dict[str, tuple[str, tuple[tuple[str, str], ...]]],
+) -> None:
     blocks = job_blocks(workflow)
-    require(set(blocks) == set(SPOTLIGHT_JOBS),
-            f"Spotlight assurance job inventory changed: {sorted(blocks)}")
+    require(set(blocks) == set(expected_jobs),
+            f"Spotlight assurance job inventory differs from Automation Policy IR: {sorted(blocks)}")
     observed = {job_id: parse_job_semantics(blocks[job_id], job_id) for job_id in blocks}
-    require(observed == SPOTLIGHT_JOBS,
-            f"Spotlight assurance authority graph changed: observed={observed!r}")
+    require(observed == expected_jobs,
+            f"Spotlight assurance authority graph differs from Automation Policy IR: observed={observed!r}")
 
 
 def permission_markdown(permissions: tuple[tuple[str, str], ...]) -> str:
     return ", ".join(f"`{key}: {value}`" for key, value in permissions)
 
 
-def validate_doc_job_graph(text: str, *, label: str, table_scope: str) -> None:
+def validate_doc_job_graph(
+    text: str,
+    expected_jobs: dict[str, tuple[str, tuple[tuple[str, str], ...]]],
+    *,
+    label: str,
+    table_scope: str,
+) -> None:
     lines = text.splitlines()
-    for _job_id, (name, permissions) in SPOTLIGHT_JOBS.items():
+    for _job_id, (name, permissions) in expected_jobs.items():
         rows = [line for line in lines if line.startswith(f"| {table_scope} / ") and f"`{name}`" in line]
         require(len(rows) == 1, f"{label} must contain exactly one authority-table row for {name}")
         expected = f"| {table_scope} / `{name}` | {permission_markdown(permissions)} |"
         require(rows[0].startswith(expected),
-                f"{label} authority-table permissions drifted for {name}: {rows[0]}")
+                f"{label} authority-table permissions drifted from Automation Policy IR for {name}: {rows[0]}")
 
 
 def validate_required_phrases(governance: str, threat: str) -> None:
@@ -224,57 +230,85 @@ def expect_failure(action, expected: str) -> None:
         raise ValueError(f"assurance self-test accepted forbidden drift: {expected}")
 
 
-def self_test(workflow: str, governance: str, threat: str) -> None:
+def self_test(
+    workflow: str,
+    governance: str,
+    threat: str,
+    expected_jobs: dict[str, tuple[str, tuple[tuple[str, str], ...]]],
+) -> None:
+    merge_name, merge_permissions = expected_jobs["merge"]
     stale_workflow = workflow.replace(
-        "name: merge-readme-only-terminal-write",
+        f"name: {merge_name}",
         "name: merge-readme-only-after-required-checks",
         1,
     )
-    expect_failure(lambda: validate_spotlight_workflow(stale_workflow), "authority graph changed")
+    expect_failure(
+        lambda: validate_spotlight_workflow(stale_workflow, expected_jobs),
+        "differs from Automation Policy IR",
+    )
 
-    merge_permissions = permission_markdown(SPOTLIGHT_JOBS["merge"][1])
     overstated = governance.replace(
-        merge_permissions,
+        permission_markdown(merge_permissions),
         "`contents: write`, `pull-requests: write`, `checks: read`",
         1,
     )
     expect_failure(
-        lambda: validate_doc_job_graph(overstated, label="governance", table_scope="Spotlight link sync"),
-        "permissions drifted for merge-readme-only-terminal-write",
+        lambda: validate_doc_job_graph(
+            overstated,
+            expected_jobs,
+            label="governance",
+            table_scope="Spotlight link sync",
+        ),
+        f"permissions drifted from Automation Policy IR for {merge_name}",
     )
 
-    missing_budget = remove_authority_row(governance, "mutation-budget-read-only")
+    budget_name = expected_jobs["budget"][0]
+    missing_budget = remove_authority_row(governance, budget_name)
     expect_failure(
-        lambda: validate_doc_job_graph(missing_budget, label="governance", table_scope="Spotlight link sync"),
-        "mutation-budget-read-only",
+        lambda: validate_doc_job_graph(
+            missing_budget,
+            expected_jobs,
+            label="governance",
+            table_scope="Spotlight link sync",
+        ),
+        budget_name,
     )
 
-    missing_quarantine = remove_authority_row(threat, "mutation-budget-quarantine-read-only")
+    quarantine_name = expected_jobs["quarantine"][0]
+    missing_quarantine = remove_authority_row(threat, quarantine_name)
     expect_failure(
-        lambda: validate_doc_job_graph(missing_quarantine, label="threat model", table_scope="Spotlight"),
-        "mutation-budget-quarantine-read-only",
+        lambda: validate_doc_job_graph(
+            missing_quarantine,
+            expected_jobs,
+            label="threat model",
+            table_scope="Spotlight",
+        ),
+        quarantine_name,
     )
 
 
 def main() -> int:
     try:
-        for path in (GOV, THREAT, SYNC):
-            require(path.is_file(), f"assurance input is missing: {path.relative_to(ROOT)}")
+        for path in (GOV, THREAT, SYNC, automation_policy.POLICY_PATH):
+            require(path.is_file() and not path.is_symlink(),
+                    f"assurance input is missing or aliased: {path.relative_to(ROOT)}")
         governance = GOV.read_text(encoding="utf-8")
         threat = THREAT.read_text(encoding="utf-8")
         workflow = SYNC.read_text(encoding="utf-8")
+        policy = automation_policy.load_policy()
+        expected_jobs = spotlight_jobs(policy)
 
-        validate_spotlight_workflow(workflow)
-        validate_doc_job_graph(governance, label="governance", table_scope="Spotlight link sync")
-        validate_doc_job_graph(threat, label="threat model", table_scope="Spotlight")
+        validate_spotlight_workflow(workflow, expected_jobs)
+        validate_doc_job_graph(governance, expected_jobs, label="governance", table_scope="Spotlight link sync")
+        validate_doc_job_graph(threat, expected_jobs, label="threat model", table_scope="Spotlight")
         validate_required_phrases(governance, threat)
-        self_test(workflow, governance, threat)
+        self_test(workflow, governance, threat, expected_jobs)
 
         print(
-            "Assurance documentation contract passed: governance and threat model match the six-job Spotlight authority graph, "
-            "including Actions-read-only source-epoch mutation admission, diagnostic-only quarantine, PR-write proposal, "
-            "Actions-only approval, and terminal contents-write/PR-read/check-read merge authority; Ledger v2, predicate v3, "
-            "historical schema immutability, cache boundaries, live ruleset drift verification, and admin-scope audit semantics remain intact."
+            "Assurance documentation contract passed: governance and threat model are compiled against the Automation Policy IR "
+            "six-job Spotlight authority graph, including Actions-read-only source-epoch mutation admission, diagnostic-only quarantine, "
+            "PR-write proposal, Actions-only approval, and terminal contents-write/PR-read/check-read merge authority; Ledger v2, "
+            "predicate v3, historical schema immutability, cache boundaries, live ruleset drift verification, and admin-scope audit semantics remain intact."
         )
         return 0
     except (OSError, ValueError) as exc:

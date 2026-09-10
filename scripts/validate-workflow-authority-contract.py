@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Fail closed on GitHub Actions workflow authority drift.
 
-The repository treats workflow token authority as a closed allowlist. Structural
-permissions, privileged command surfaces, and terminal write/signing jobs are reviewed
-independently from byte-level workflow identity so a future workflow change must satisfy
-both the exact-source lock and the least-privilege authority model.
+The Automation Policy IR owns the semantic workflow authority graph. Structural
+permissions, job identities/dependencies, privileged command surfaces, and terminal
+write/signing jobs remain reviewed independently from byte-level workflow identity so
+a future workflow change must satisfy both semantic policy and exact-source tripwires.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import sys
 
+import automation_policy
 import spotlight_profile_links as spotlight_links
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,67 +23,12 @@ PROFILE_STATS = WORKFLOWS / "profile-stats.yml"
 SYNC = WORKFLOWS / "spotlight-link-sync.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 README = ROOT / "README.md"
+POLICY_RELATIVE = ".github/automation-policy-v1.json"
 
 WORKFLOW_SCOPE = "__workflow__"
-EXPECTED = {
-    "codeql.yml": {
-        "triggers": {"pull_request", "push", "schedule", "workflow_dispatch"},
-        "jobs": {"analyze"},
-        "permissions": {
-            WORKFLOW_SCOPE: {"contents": "read"},
-            "analyze": {"contents": "read", "security-events": "write"},
-        },
-    },
-    "dependency-review.yml": {
-        "triggers": {"pull_request"},
-        "jobs": {"dependency-review"},
-        "permissions": {
-            WORKFLOW_SCOPE: {"contents": "read"},
-            "dependency-review": {"contents": "read"},
-        },
-    },
-    "profile-quality.yml": {
-        "triggers": {"pull_request", "push"},
-        "jobs": {"validate", "integration"},
-        "permissions": {
-            WORKFLOW_SCOPE: {"contents": "read"},
-            "validate": {"contents": "read"},
-            "integration": {"contents": "read"},
-        },
-    },
-    "profile-stats.yml": {
-        "triggers": {"workflow_dispatch", "push", "schedule"},
-        "jobs": {"generate", "attest", "attest_publish", "stage", "publish", "dispatch"},
-        "permissions": {
-            WORKFLOW_SCOPE: {"contents": "read"},
-            "generate": {"contents": "read"},
-            "attest": {"contents": "read"},
-            "attest_publish": {
-                "contents": "read",
-                "id-token": "write",
-                "attestations": "write",
-            },
-            "stage": {"contents": "read"},
-            "publish": {"contents": "write"},
-            "dispatch": {"actions": "write"},
-        },
-    },
-    "spotlight-link-sync.yml": {
-        "triggers": {"workflow_dispatch", "schedule"},
-        "jobs": {"plan", "budget", "quarantine", "propose", "approve", "merge"},
-        "permissions": {
-            WORKFLOW_SCOPE: {"contents": "read"},
-            "plan": {"contents": "read"},
-            "budget": {"actions": "read"},
-            "quarantine": {"contents": "read"},
-            "propose": {"contents": "write", "pull-requests": "write"},
-            "approve": {"contents": "read", "actions": "write"},
-            "merge": {"contents": "write", "pull-requests": "read", "checks": "read"},
-        },
-    },
-}
-
 JOB_KEY = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
+JOB_NAME_KEY = re.compile(r"^    name:\s*(.+?)\s*$")
+JOB_NEEDS_KEY = re.compile(r"^    needs:\s*(.+?)\s*$")
 PERMISSIONS_KEY = re.compile(r"^(\s*)permissions:\s*(.*)$")
 PERMISSION_ENTRY = re.compile(r"^([A-Za-z0-9-]+):\s*(read|write|none)\s*$")
 TRIGGER_KEY = re.compile(r"^  ([A-Za-z0-9_-]+):(?:\s.*)?$")
@@ -129,9 +76,54 @@ def parse_jobs(text: str, label: str) -> set[str]:
             break
         match = JOB_KEY.match(line)
         if match:
-            jobs.add(match.group(1))
+            job_id = match.group(1)
+            require(job_id not in jobs, f"{label}: duplicate job identity: {job_id}")
+            jobs.add(job_id)
     require(jobs, f"{label}: workflow job set is empty")
     return jobs
+
+
+def parse_job_metadata(text: str, label: str) -> tuple[dict[str, str], dict[str, list[str]]]:
+    lines = text.splitlines()
+    starts = [i for i, line in enumerate(lines) if line == "jobs:"]
+    require(len(starts) == 1, f"{label}: workflow must contain exactly one jobs: block")
+    names: dict[str, str] = {}
+    needs: dict[str, list[str]] = {}
+    current_job: str | None = None
+    for index, line in enumerate(lines[starts[0] + 1 :], start=starts[0] + 2):
+        if line and indentation(line) == 0:
+            break
+        job = JOB_KEY.fullmatch(line)
+        if job:
+            current_job = job.group(1)
+            require(current_job not in needs, f"{label}:{index}: duplicate job metadata scope: {current_job}")
+            needs[current_job] = []
+            continue
+        if current_job is None:
+            continue
+        name = JOB_NAME_KEY.fullmatch(line)
+        if name:
+            require(current_job not in names, f"{label}:{index}: duplicate job name for {current_job}")
+            value = name.group(1).strip()
+            require(value, f"{label}:{index}: empty job name for {current_job}")
+            names[current_job] = value
+            continue
+        dependency = JOB_NEEDS_KEY.fullmatch(line)
+        if dependency:
+            require(needs[current_job] == [], f"{label}:{index}: duplicate needs declaration for {current_job}")
+            value = dependency.group(1).strip()
+            if value.startswith("["):
+                require(value.endswith("]"), f"{label}:{index}: unsupported needs syntax for {current_job}")
+                inner = value[1:-1].strip()
+                parsed = [] if not inner else [item.strip() for item in inner.split(",")]
+            else:
+                parsed = [value]
+            require(parsed and all(re.fullmatch(r"[A-Za-z0-9_-]+", item) for item in parsed),
+                    f"{label}:{index}: unsupported needs identity for {current_job}")
+            require(len(parsed) == len(set(parsed)), f"{label}:{index}: duplicate needs target for {current_job}")
+            needs[current_job] = parsed
+    require(set(names) == set(needs), f"{label}: every job must expose one explicit display name")
+    return names, needs
 
 
 def parse_permissions(text: str, label: str) -> dict[str, dict[str, str]]:
@@ -183,13 +175,42 @@ def parse_permissions(text: str, label: str) -> dict[str, dict[str, str]]:
     return result
 
 
+def policy_specs(policy: dict[str, object]) -> dict[str, dict[str, object]]:
+    specs: dict[str, dict[str, object]] = {}
+    workflows = policy["workflows"]
+    require(isinstance(workflows, dict), "Automation Policy IR workflow graph is malformed")
+    for workflow in workflows.values():
+        require(isinstance(workflow, dict), "Automation Policy IR workflow entry is malformed")
+        path = workflow["path"]
+        require(isinstance(path, str), "Automation Policy IR workflow path is malformed")
+        filename = Path(path).name
+        require(filename not in specs, f"Automation Policy IR duplicates workflow filename: {filename}")
+        jobs = workflow["jobs"]
+        require(isinstance(jobs, dict), f"Automation Policy IR jobs are malformed: {filename}")
+        permissions = {WORKFLOW_SCOPE: dict(workflow["permissions"])}
+        for job_id, job in jobs.items():
+            permissions[job_id] = dict(job["permissions"])
+        specs[filename] = {
+            "triggers": set(workflow["triggers"]),
+            "jobs": set(jobs),
+            "permissions": permissions,
+            "names": {job_id: job["name"] for job_id, job in jobs.items()},
+            "needs": {job_id: list(job["needs"]) for job_id, job in jobs.items()},
+            "path": path,
+        }
+    return specs
+
+
 def validate_workflow_text(filename: str, text: str, spec: dict[str, object]) -> None:
     triggers = parse_triggers(text, filename)
     jobs = parse_jobs(text, filename)
     permissions = parse_permissions(text, filename)
+    names, needs = parse_job_metadata(text, filename)
     require(triggers == spec["triggers"], f"{filename}: trigger authority changed: {sorted(triggers)}")
     require(jobs == spec["jobs"], f"{filename}: job inventory changed: {sorted(jobs)}")
     require(permissions == spec["permissions"], f"{filename}: token authority changed: {permissions!r}")
+    require(names == spec["names"], f"{filename}: job display identity changed: {names!r}")
+    require(needs == spec["needs"], f"{filename}: job dependency graph changed: {needs!r}")
 
 
 def job_block(text: str, key: str, next_key: str | None) -> str:
@@ -217,14 +238,56 @@ def require_exact_gh_api_surface(block: str, *, label: str, expected_lines: tupl
                 f"{label}: alternate network/mutation path is forbidden: {forbidden.strip()}")
 
 
-def validate_inventory() -> None:
+def validate_inventory(policy: dict[str, object]) -> None:
     require(WORKFLOWS.is_dir(), ".github/workflows is missing")
+    specs = policy_specs(policy)
     paths = sorted({*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")})
     observed = {path.name for path in paths}
-    require(observed == set(EXPECTED),
-            f"Workflow inventory changed without authority review: expected={sorted(EXPECTED)} observed={sorted(observed)}")
+    require(observed == set(specs),
+            f"Workflow inventory changed outside Automation Policy IR: expected={sorted(specs)} observed={sorted(observed)}")
     for path in paths:
-        validate_workflow_text(path.name, path.read_text(encoding="utf-8"), EXPECTED[path.name])
+        validate_workflow_text(path.name, path.read_text(encoding="utf-8"), specs[path.name])
+
+
+def validate_policy_cross_contracts(policy: dict[str, object], profile_stats: str, sync: str) -> None:
+    ruleset_relative = policy["rulesetContract"]
+    require(isinstance(ruleset_relative, str), "Automation Policy IR ruleset contract path is malformed")
+    ruleset_path = ROOT / ruleset_relative
+    require(ruleset_path.is_file() and not ruleset_path.is_symlink(),
+            "Automation Policy IR ruleset contract is missing or aliased")
+    try:
+        rulesets = automation_policy.strict_json_loads(ruleset_path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        fail(f"Automation Policy IR ruleset cross-contract JSON is invalid: {exc}")
+    require(isinstance(rulesets, dict) and rulesets.get("repository") == policy["repository"],
+            "Automation Policy IR repository differs from ruleset desired state")
+    main = rulesets.get("rulesets", {}).get("Protect Main", {})
+    required = main.get("rules", {}).get("required_status_checks", {})
+    require(required.get("integration_id") == policy["githubActionsAppId"],
+            "Automation Policy IR GitHub Actions app id differs from Protect Main")
+    policy_contexts = [entry["context"] for entry in policy["requiredChecks"]]
+    require(required.get("contexts") == policy_contexts,
+            "Automation Policy IR required-check order/identity differs from Protect Main")
+    generated = rulesets.get("rulesets", {}).get("Protect generated", {})
+    require(generated.get("include") == [f"refs/heads/{policy['branches']['generated']}"],
+            "Automation Policy IR generated branch differs from Protect generated")
+
+    main_branch = policy["branches"]["main"]
+    generated_branch = policy["branches"]["generated"]
+    bot_branch = policy["branches"]["spotlightBot"]
+    require(f'BOT_BRANCH: "{bot_branch}"' in sync,
+            "Automation Policy IR Spotlight bot branch differs from workflow authority")
+    require(f"ref: {generated_branch}" in sync,
+            "Automation Policy IR generated branch differs from Spotlight evidence checkout")
+    require(f"refs/heads/{main_branch}" in sync,
+            "Automation Policy IR main branch differs from Spotlight source authority")
+    require(f"refs/heads/{main_branch}" in profile_stats,
+            "Automation Policy IR main branch differs from profile publication freshness authority")
+    require(f"HEAD:{generated_branch}" in profile_stats,
+            "Automation Policy IR generated branch differs from terminal publication target")
+    merge = job_block(sync, "merge", None)
+    for context in policy_contexts:
+        require(context in merge, f"Automation Policy IR required check is not consumed by Spotlight terminal merge: {context}")
 
 
 def validate_quality_contract(text: str) -> None:
@@ -232,6 +295,8 @@ def validate_quality_contract(text: str) -> None:
             "Profile Quality must execute the workflow authority firewall")
     require('- ".github/workflows/**"' in text,
             "Profile Quality push paths must cover every workflow authority change")
+    require(f'- "{POLICY_RELATIVE}"' in text,
+            "Profile Quality push paths must cover the canonical Automation Policy IR")
 
 
 def validate_profile_stats_contract(workflow: str) -> None:
@@ -334,7 +399,7 @@ def validate_profile_stats_contract(workflow: str) -> None:
     require_exact_gh_api_surface(
         dispatch,
         label="Profile stats Spotlight dispatcher",
-        expected_lines=("gh api --method POST \\",),
+        expected_lines=("gh api --method POST " + chr(92),),
     )
     for forbidden in (
         "actions/checkout@", "actions/setup-python@", "contents:", "pull-requests:", "checks:",
@@ -419,10 +484,10 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
         label="Spotlight propose",
         expected_lines=(
             'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"',
-            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content \\',
+            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content ' + chr(92),
             'if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${BOT_BRANCH}" >/dev/null 2>&1; then',
-            'gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" \\',
-            'gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \\',
+            'gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BOT_BRANCH}" ' + chr(92),
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" ' + chr(92),
             'README_BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BOT_BRANCH}" --jq .sha)"',
             'gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/README.md" --input update.json > update-response.json',
             'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BOT_BRANCH}&base=main&per_page=10")"',
@@ -507,6 +572,8 @@ def expect_failure(text: str, expected_fragment: str) -> None:
         "triggers": {"pull_request"},
         "jobs": {"scan"},
         "permissions": {WORKFLOW_SCOPE: {"contents": "read"}, "scan": {"contents": "read"}},
+        "names": {"scan": "scan"},
+        "needs": {"scan": []},
     }
     try:
         validate_workflow_text("self-test.yml", text, spec)
@@ -516,7 +583,7 @@ def expect_failure(text: str, expected_fragment: str) -> None:
         fail(f"self-test accepted forbidden workflow drift: {expected_fragment}")
 
 
-def self_test() -> None:
+def self_test(policy: dict[str, object]) -> None:
     good = """name: Self test
 on:
   pull_request:
@@ -524,44 +591,55 @@ permissions:
   contents: read
 jobs:
   scan:
+    name: scan
     permissions:
       contents: read
     runs-on: ubuntu-24.04
 """
-    validate_workflow_text(
-        "self-test.yml", good,
-        {"triggers": {"pull_request"}, "jobs": {"scan"},
-         "permissions": {WORKFLOW_SCOPE: {"contents": "read"}, "scan": {"contents": "read"}}},
-    )
+    spec = {
+        "triggers": {"pull_request"},
+        "jobs": {"scan"},
+        "permissions": {WORKFLOW_SCOPE: {"contents": "read"}, "scan": {"contents": "read"}},
+        "names": {"scan": "scan"},
+        "needs": {"scan": []},
+    }
+    validate_workflow_text("self-test.yml", good, spec)
     expect_failure(good.replace("  contents: read", "  contents: write", 1), "token authority changed")
     expect_failure(good.replace("  pull_request:\n", "  pull_request:\n  pull_request_target:\n"), "trigger authority changed")
-    expect_failure(good.replace("jobs:\n", "jobs:\n  publish:\n    runs-on: ubuntu-24.04\n"), "job inventory changed")
+    expect_failure(good.replace("jobs:\n", "jobs:\n  publish:\n    name: publish\n    runs-on: ubuntu-24.04\n"), "job inventory changed")
     expect_failure(good.replace("permissions:\n  contents: read", "permissions: write-all", 1), "scalar/inline permissions")
+    expect_failure(good.replace("    name: scan", "    name: renamed", 1), "job display identity changed")
+    expect_failure(good.replace("    name: scan\n", "    name: scan\n    needs: scan\n", 1), "job dependency graph changed")
     require("  workflow_run:" not in '.workflow_run.repository_id != $repo',
             "workflow_run API response fields must remain distinguishable from the canonical trigger key")
     require("  workflow_run:" in "on:\n  workflow_run:\n",
             "canonical workflow_run trigger-key detector self-test failed")
+    automation_policy.self_test(policy)
     spotlight_links.self_test()
 
 
 def main() -> int:
     try:
-        for path in (QUALITY, PROFILE_STATS, GOVERNANCE, README, SYNC):
+        for path in (automation_policy.POLICY_PATH, QUALITY, PROFILE_STATS, GOVERNANCE, README, SYNC):
             require(path.is_file(), f"Workflow authority input is missing: {path.relative_to(ROOT)}")
-        self_test()
-        validate_inventory()
+        policy = automation_policy.load_policy()
+        self_test(policy)
+        validate_inventory(policy)
+        profile_stats = PROFILE_STATS.read_text(encoding="utf-8")
+        sync = SYNC.read_text(encoding="utf-8")
+        validate_policy_cross_contracts(policy, profile_stats, sync)
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
-        validate_profile_stats_contract(PROFILE_STATS.read_text(encoding="utf-8"))
-        validate_sync_contract(SYNC.read_text(encoding="utf-8"), README.read_text(encoding="utf-8"))
+        validate_profile_stats_contract(profile_stats)
+        validate_sync_contract(sync, README.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
         print(
-            "Workflow authority validation passed: five workflows form a closed authority inventory; "
-            "attestation preparation is read-only and terminal OIDC/attestation authority executes no authored shell/code; "
-            "publication staging remains isolated from terminal repository-write authority and terminal contents-write publication is job-gated on a sealed changed candidate; post-publication dispatch remains actions-only; "
-            "Spotlight synchronization is mutation-budget-admitted, quarantine fails closed under read-only authority, and PR/approval/merge mutation surfaces retain exact-head closure."
+            f"Workflow authority validation passed: {policy['policyId']} is the executable semantic authority graph for "
+            f"{len(policy['workflows'])} workflows and {sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs; "
+            "workflow identities/triggers/needs/token permissions and Protect Main required-check bindings are policy-compiled; "
+            "exact workflow byte locks remain independent; terminal attestation/publication/Spotlight mutation surfaces retain specialized fail-closed guards."
         )
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
