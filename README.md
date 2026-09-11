@@ -31,6 +31,8 @@
 
 <p align="center"><big>Designed for Reproducibility · Attribution · Evidence-backed Decisions</big></p>
 
+<br>
+
 <p align="center">
 <picture>
   <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg">
