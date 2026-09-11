@@ -50,7 +50,9 @@ SPOTLIGHT_RECONCILIATION_SEQUENCE = (
     'REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}")"',
     'test "$REF_COUNT" -le 20 || {',
     '(.ref | test("^refs/heads/automation/spotlight-links/[0-9a-f]{64}$") | not)',
-    'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+    'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '            test "$(jq \' .parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+    '            PARENT_SHA="$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")"'.replace("' .parents", "'.parents"),
     'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ]; then',
     'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"',
     'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"',
