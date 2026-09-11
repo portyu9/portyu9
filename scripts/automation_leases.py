@@ -22,6 +22,7 @@ LEASE_IDENTITY_FIELDS = [
 ]
 LEASE_WORKFLOWS = {"profile-stats", "spotlight-link-sync"}
 LEASE_STEP_NAME = "Verify exact short-lived mutation lease"
+LEASE_PROOF_MARKER = "# Verify exact short-lived mutation lease."
 
 
 def require(condition: bool, message: str) -> None:
@@ -134,7 +135,8 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
         index = job_ids.index(job_id)
         next_job = job_ids[index + 1] if index + 1 < len(job_ids) else None
         block = job_block(text, job_id, next_job)
-        require(block.count(f"- name: {LEASE_STEP_NAME}") == 1,
+        proof_count = block.count(f"- name: {LEASE_STEP_NAME}") + block.count(LEASE_PROOF_MARKER)
+        require(proof_count == 1,
                 f"{label} bound job {job_id} must verify exactly one mutation lease")
         for fragment in (
             f"LEASE_TTL_SECONDS={LEASE_TTL_SECONDS}",
@@ -206,6 +208,6 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
     expect_source_failure(
         "spotlight-link-sync",
         policy["workflows"]["spotlight-link-sync"],
-        spotlight_source.replace(f"- name: {LEASE_STEP_NAME}", "- name: Retired lease gate", 1),
+        spotlight_source.replace(LEASE_PROOF_MARKER, "# Retired lease gate.", 1),
         "must verify exactly one mutation lease",
     )
