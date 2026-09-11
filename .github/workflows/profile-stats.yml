@@ -625,9 +625,147 @@ jobs:
           AUTH_HEADER="$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
           git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated
 
+  receipt:
+    if: needs.stage.outputs.changed == 'true'
+    name: prepare-publication-receipt-read-only
+    needs: [publish, stage, lease, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+    outputs:
+      subject_sha256: ${{ steps.receipt.outputs.subject_sha256 }}
+      predicate_sha256: ${{ steps.receipt.outputs.predicate_sha256 }}
+
+    steps:
+      - name: Checkout trusted source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Checkout actual published generated commit without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: generated
+          path: published
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Build exact post-publication receipt
+        id: receipt
+        env:
+          EXPECTED_GENERATED_SHA: ${{ needs.stage.outputs.candidate_sha }}
+          EXPECTED_GENERATED_PARENT_SHA: ${{ needs.stage.outputs.base_sha }}
+          TRANSACTION_CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}
+          MUTATION_LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+        run: |
+          set -euo pipefail
+          python3 source/scripts/build-profile-publication-receipt.py \
+            published generated-publication-subject.json profile-publication-receipt.json
+          SUBJECT_SHA256="$(sha256sum generated-publication-subject.json | cut -d' ' -f1)"
+          PREDICATE_SHA256="$(sha256sum profile-publication-receipt.json | cut -d' ' -f1)"
+          [[ "$SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          echo "subject_sha256=$SUBJECT_SHA256" >> "$GITHUB_OUTPUT"
+          echo "predicate_sha256=$PREDICATE_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable publication receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: profile-publication-receipt
+          path: |
+            generated-publication-subject.json
+            profile-publication-receipt.json
+          if-no-files-found: error
+          retention-days: 1
+
+  receipt_attest:
+    if: needs.stage.outputs.changed == 'true'
+    name: attest-publication-receipt-write-only
+    needs: [receipt, lease, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download reviewed publication receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: profile-publication-receipt
+          path: receipt-input
+          digest-mismatch: error
+
+      - name: Verify exact short-lived mutation lease and receipt identity
+        env:
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
+          EXPECTED_BASE_SHA: ${{ github.sha }}
+          EXPECTED_CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}
+          EXPECTED_SUBJECT_SHA256: ${{ needs.receipt.outputs.subject_sha256 }}
+          EXPECTED_RECEIPT_SHA256: ${{ needs.receipt.outputs.predicate_sha256 }}
+        run: |
+          set -euo pipefail
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=240
+          [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$LEASE_ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$LEASE_EXPIRES_AT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/profile-stats.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/profile-stats.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+          test "$(find receipt-input -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)" = $'generated-publication-subject.json\nprofile-publication-receipt.json'
+          [[ "$EXPECTED_SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_RECEIPT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum receipt-input/generated-publication-subject.json | cut -d' ' -f1)" = "$EXPECTED_SUBJECT_SHA256"
+          test "$(sha256sum receipt-input/profile-publication-receipt.json | cut -d' ' -f1)" = "$EXPECTED_RECEIPT_SHA256"
+
+      - name: Attest actual generated publication receipt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: receipt-input/generated-publication-subject.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-publication-receipt-v1.schema.json
+          predicate-path: receipt-input/profile-publication-receipt.json
+          show-summary: true
+
   dispatch:
     name: dispatch-spotlight-link-sync
-    needs: [publish, lease, attest]
+    needs: [receipt_attest, publish, lease, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     concurrency:
