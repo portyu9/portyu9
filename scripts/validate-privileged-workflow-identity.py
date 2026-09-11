@@ -17,10 +17,10 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v17"
+VERSION = "governed-workflow-byte-identity-v18"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
-    ".github/workflows/profile-stats.yml": "8f518c3718732efed42af0f39fea87dd5fe694fc",
+    ".github/workflows/profile-stats.yml": "d44f2673618bbd6194fb30220e5a6164c8a74f0e",
     ".github/workflows/spotlight-link-sync.yml": "56491024b61c6c05b1761b796a1837f08e85c0cc",
 }
 
@@ -37,6 +37,24 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
     '[[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
     'test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
     'push origin HEAD:generated',
+)
+
+PROFILE_STATS_LEASE_BINDING_SEQUENCE = (
+    'generated_sha: ${{ steps.candidate.outputs.generated_sha }}',
+    'predicate_sha256: ${{ steps.candidate.outputs.predicate_sha256 }}',
+    'candidate_id: ${{ steps.candidate.outputs.candidate_id }}',
+    'GENERATED_SHA: ${{ needs.attest.outputs.generated_sha }}',
+    'PREDICATE_SHA256: ${{ needs.attest.outputs.predicate_sha256 }}',
+    'EXPECTED_CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$BASE_SHA" "$GENERATED_SHA" "$PREDICATE_SHA256" | sha256sum | cut -d\' \' -f1)"',
+    'test "$CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"',
+    'REMOTE_GENERATED="$(git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/generated)"',
+    '[[ "$REMOTE_GENERATED" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/generated$ ]]',
+    'test "${BASH_REMATCH[1]}" = "$GENERATED_SHA"',
+    '- name: Verify leased attestation predicate identity',
+    'EXPECTED_PREDICATE_SHA256: ${{ needs.attest.outputs.predicate_sha256 }}',
+    'test "$(sha256sum attestation-input/attestation-predicate.json | cut -d\' \' -f1)" = "$EXPECTED_PREDICATE_SHA256"',
+    'LEASED_GENERATED_SHA: ${{ needs.attest.outputs.generated_sha }}',
+    'test "$base_sha" = "$LEASED_GENERATED_SHA"',
 )
 
 SPOTLIGHT_RECONCILIATION_SEQUENCE = (
@@ -186,6 +204,11 @@ def validate_profile_stats_freshness(text: str) -> None:
                               "profile-stats source-freshness contract")
 
 
+def validate_profile_stats_lease_binding(text: str) -> None:
+    validate_ordered_presence(text, PROFILE_STATS_LEASE_BINDING_SEQUENCE,
+                              "Profile Stats generated-base lease-binding contract")
+
+
 def validate_spotlight_reconciliation(text: str) -> None:
     validate_ordered_contract(text, SPOTLIGHT_RECONCILIATION_SEQUENCE,
                               "Spotlight stale-candidate reconciliation contract")
@@ -242,6 +265,17 @@ def self_test() -> None:
     else:
         raise ValueError("profile-stats source-freshness self-test accepted a missing terminal equality guard")
 
+    synthetic = "\n".join(PROFILE_STATS_LEASE_BINDING_SEQUENCE)
+    validate_profile_stats_lease_binding(synthetic)
+    try:
+        validate_profile_stats_lease_binding(
+            synthetic.replace(PROFILE_STATS_LEASE_BINDING_SEQUENCE[9], "", 1)
+        )
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Profile Stats lease-binding self-test accepted a missing generated-base equality guard")
+
     synthetic = "\n".join(SPOTLIGHT_RECONCILIATION_SEQUENCE)
     validate_spotlight_reconciliation(synthetic)
     try:
@@ -293,6 +327,7 @@ def main() -> int:
         require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
         profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         validate_profile_stats_freshness(profile)
+        validate_profile_stats_lease_binding(profile)
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         validate_spotlight_reconciliation(spotlight)
         validate_spotlight_mutation_budget(spotlight)
@@ -303,8 +338,9 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
             "generated publication is source-epoch freshness bound · autonomous planning/terminal concurrency bytes are locked · "
-            "short-lived mutation leases bind the exact run/base/candidate transaction · Spotlight retains stale-only reconciliation, "
-            "source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
+            "Profile Stats leases re-prove the generated base and predicate identity · short-lived mutation leases bind the exact "
+            "run/base/candidate transaction · Spotlight retains stale-only reconciliation, source-epoch constructive-mutation admission, "
+            "immutable candidates, and exact-run/suite authorization"
         )
         return 0
     except (OSError, ValueError) as exc:
