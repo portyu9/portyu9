@@ -326,7 +326,9 @@ def self_test(
         quarantine_name,
     )
 
-    lease_semantics_removed = governance.replace("minimum remaining lifetime", "remaining lifetime", 1)
+    require("minimum remaining lifetime" in governance,
+            "assurance self-test fixture lost minimum remaining lifetime phrase")
+    lease_semantics_removed = governance.replace("minimum remaining lifetime", "remaining lifetime")
     expect_failure(
         lambda: validate_required_phrases(lease_semantics_removed, threat),
         "minimum remaining lifetime",
