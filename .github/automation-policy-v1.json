@@ -83,8 +83,26 @@
           "group": "profile-stats-terminal",
           "cancelInProgress": false,
           "queue": "max",
-          "jobs": ["attest_publish", "stage", "publish", "dispatch"]
+          "jobs": ["lease", "attest_publish", "stage", "publish", "dispatch"]
         }
+      },
+      "lease": {
+        "job": "lease",
+        "ttlSeconds": 1800,
+        "identityFields": [
+          "repository",
+          "repositoryId",
+          "workflowPath",
+          "workflowRef",
+          "workflowSha",
+          "runId",
+          "runAttempt",
+          "baseSha",
+          "candidateId",
+          "issuedAt",
+          "expiresAt"
+        ],
+        "boundJobs": ["attest_publish", "publish", "dispatch"]
       },
       "jobs": {
         "generate": {
@@ -101,9 +119,16 @@
             "contents": "read"
           }
         },
+        "lease": {
+          "name": "mint-mutation-lease-read-only",
+          "needs": ["attest"],
+          "permissions": {
+            "actions": "read"
+          }
+        },
         "attest_publish": {
           "name": "attest-write-only",
-          "needs": ["attest"],
+          "needs": ["attest", "lease"],
           "permissions": {
             "contents": "read",
             "id-token": "write",
@@ -112,21 +137,21 @@
         },
         "stage": {
           "name": "stage-publication-read-only",
-          "needs": ["generate", "attest", "attest_publish"],
+          "needs": ["generate", "attest", "lease", "attest_publish"],
           "permissions": {
             "contents": "read"
           }
         },
         "publish": {
           "name": "publish-write-only",
-          "needs": ["stage"],
+          "needs": ["stage", "lease", "attest"],
           "permissions": {
             "contents": "write"
           }
         },
         "dispatch": {
           "name": "dispatch-spotlight-link-sync",
-          "needs": ["publish"],
+          "needs": ["publish", "lease", "attest"],
           "permissions": {
             "actions": "write"
           }
@@ -150,8 +175,26 @@
           "group": "spotlight-link-sync-terminal",
           "cancelInProgress": false,
           "queue": "max",
-          "jobs": ["reconcile", "propose", "approve", "merge"]
+          "jobs": ["lease", "reconcile", "propose", "approve", "merge"]
         }
+      },
+      "lease": {
+        "job": "lease",
+        "ttlSeconds": 1800,
+        "identityFields": [
+          "repository",
+          "repositoryId",
+          "workflowPath",
+          "workflowRef",
+          "workflowSha",
+          "runId",
+          "runAttempt",
+          "baseSha",
+          "candidateId",
+          "issuedAt",
+          "expiresAt"
+        ],
+        "boundJobs": ["reconcile", "propose", "approve", "merge"]
       },
       "jobs": {
         "plan": {
@@ -161,9 +204,16 @@
             "contents": "read"
           }
         },
+        "lease": {
+          "name": "mint-mutation-lease-read-only",
+          "needs": ["plan"],
+          "permissions": {
+            "actions": "read"
+          }
+        },
         "reconcile": {
           "name": "reconcile-stale-candidates-write",
-          "needs": ["plan"],
+          "needs": ["plan", "lease"],
           "permissions": {
             "contents": "write",
             "pull-requests": "write"
@@ -185,7 +235,7 @@
         },
         "propose": {
           "name": "propose-readme-only-write",
-          "needs": ["plan", "reconcile", "budget"],
+          "needs": ["plan", "lease", "reconcile", "budget"],
           "permissions": {
             "contents": "write",
             "pull-requests": "write"
@@ -193,7 +243,7 @@
         },
         "approve": {
           "name": "approve-bot-pr-checks-only",
-          "needs": ["plan", "reconcile", "budget", "propose"],
+          "needs": ["plan", "lease", "reconcile", "budget", "propose"],
           "permissions": {
             "contents": "read",
             "actions": "write"
@@ -201,7 +251,7 @@
         },
         "merge": {
           "name": "merge-readme-only-terminal-write",
-          "needs": ["plan", "reconcile", "budget", "propose", "approve"],
+          "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve"],
           "permissions": {
             "contents": "write",
             "pull-requests": "read",
@@ -220,7 +270,7 @@
       "transitions": [
         {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["generate"]},
         {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["attest"]},
-        {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["attest", "attest_publish", "stage"]},
+        {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["attest", "lease", "attest_publish", "stage"]},
         {"from": "approved", "to": "no-change", "phase": "terminalize", "jobs": ["stage"]},
         {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["publish"]},
         {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["publish"]},
@@ -233,7 +283,7 @@
       "terminalStates": ["completed", "no-change", "quarantined"],
       "maintenanceJobs": ["reconcile"],
       "transitions": [
-        {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["plan"]},
+        {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["plan", "lease"]},
         {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["plan"]},
         {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["budget"]},
         {"from": "proposed", "to": "quarantined", "phase": "terminalize", "jobs": ["budget", "quarantine"]},
