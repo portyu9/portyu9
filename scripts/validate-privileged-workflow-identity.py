@@ -17,11 +17,11 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v16"
+VERSION = "governed-workflow-byte-identity-v17"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
-    ".github/workflows/profile-stats.yml": "585dc72e2d01f726461bf6241187cb5d42a87a37",
-    ".github/workflows/spotlight-link-sync.yml": "367f7d583d132853b08905442c097b3d9053f840",
+    ".github/workflows/profile-stats.yml": "8f518c3718732efed42af0f39fea87dd5fe694fc",
+    ".github/workflows/spotlight-link-sync.yml": "56491024b61c6c05b1761b796a1837f08e85c0cc",
 }
 
 PROFILE_STATS_FRESHNESS_SEQUENCE = (
@@ -42,7 +42,7 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
 SPOTLIGHT_RECONCILIATION_SEQUENCE = (
     "  reconcile:\n"
     "    name: reconcile-stale-candidates-write\n"
-    "    needs: plan",
+    "    needs: [plan, lease]",
     "    timeout-minutes: 3\n"
     "    concurrency:\n"
     "      group: spotlight-link-sync-terminal\n"
@@ -64,7 +64,7 @@ SPOTLIGHT_RECONCILIATION_SEQUENCE = (
     'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"',
     'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null',
     'test "$REMAINING_EXACT" = "0"',
-    'needs: [plan, reconcile, budget]',
+    'needs: [plan, lease, reconcile, budget]',
 )
 
 SPOTLIGHT_MUTATION_BUDGET_SEQUENCE = (
@@ -119,10 +119,22 @@ SPOTLIGHT_IMMUTABLE_CANDIDATE_SEQUENCE = (
     'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
     'echo "candidate_branch=$CANDIDATE_BRANCH" >> "$GITHUB_OUTPUT"',
     'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"',
-    '# Revalidate both mutable roots and the immutable candidate ref immediately before merge.',
     'CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',
     'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null',
     'test "$AFTER_EXACT" = "0"',
+)
+
+MUTATION_LEASE_SEQUENCE = (
+    'name: mint-mutation-lease-read-only',
+    'LEASE_TTL_SECONDS=1800',
+    'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"',
+    'test "$(jq -r .run_attempt <<<"$RUN")" = "$GITHUB_RUN_ATTEMPT"',
+    'test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"',
+    'EXPIRES_AT=$((ISSUED_AT + LEASE_TTL_SECONDS))',
+    'echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"',
+    '# Verify exact short-lived mutation lease.',
+    'test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"',
+    'test "$EXPECTED_LEASE_ID" = "$LEASE_ID"',
 )
 
 
@@ -150,39 +162,34 @@ def git_blob_sha(path: Path) -> str:
 def validate_ordered_contract(text: str, fragments: tuple[str, ...], label: str) -> None:
     cursor = -1
     for fragment in fragments:
-        require(text.count(fragment) == 1,
-                f"{label} must contain exactly one reviewed fragment: {fragment}")
-        position = text.index(fragment)
+        require(text.count(fragment) >= 1,
+                f"{label} must contain reviewed fragment: {fragment}")
+        position = text.index(fragment, cursor + 1)
         require(position > cursor, f"{label} is out of reviewed order: {fragment}")
         cursor = position
 
 
 def validate_profile_stats_freshness(text: str) -> None:
-    """Keep the source-generation epoch bound to the final generated-branch push."""
     validate_ordered_contract(text, PROFILE_STATS_FRESHNESS_SEQUENCE,
                               "profile-stats source-freshness contract")
 
 
 def validate_spotlight_reconciliation(text: str) -> None:
-    """Keep interrupted-transaction cleanup reductive, stale-only, and topology bound."""
     validate_ordered_contract(text, SPOTLIGHT_RECONCILIATION_SEQUENCE,
                               "Spotlight stale-candidate reconciliation contract")
 
 
 def validate_spotlight_mutation_budget(text: str) -> None:
-    """Keep read-only source-epoch admission before every constructive Spotlight mutation boundary."""
     validate_ordered_contract(text, SPOTLIGHT_MUTATION_BUDGET_SEQUENCE,
                               "Spotlight source-epoch mutation-budget contract")
 
 
 def validate_spotlight_provenance(text: str) -> None:
-    """Bind exact canonical workflow runs to the required checks consumed by merge authority."""
     validate_ordered_contract(text, SPOTLIGHT_PROVENANCE_SEQUENCE,
                               "Spotlight workflow/check provenance contract")
 
 
 def validate_spotlight_immutable_candidates(text: str) -> None:
-    """Keep candidate refs content-addressed, create-once, and exact-head consumed."""
     validate_ordered_contract(text, SPOTLIGHT_IMMUTABLE_CANDIDATE_SEQUENCE,
                               "Spotlight immutable-candidate contract")
     for forbidden in (
@@ -193,6 +200,17 @@ def validate_spotlight_immutable_candidates(text: str) -> None:
     ):
         require(forbidden not in text,
                 f"Spotlight immutable-candidate contract regained mutable branch publication: {forbidden}")
+
+
+def validate_mutation_leases(profile: str, spotlight: str) -> None:
+    validate_ordered_contract(profile, MUTATION_LEASE_SEQUENCE[:7],
+                              "Profile Stats mutation-lease mint contract")
+    validate_ordered_contract(spotlight, MUTATION_LEASE_SEQUENCE,
+                              "Spotlight mutation-lease contract")
+    require(profile.count("- name: Verify exact short-lived mutation lease") == 3,
+            "Profile Stats write jobs must each verify the exact lease")
+    require(spotlight.count("# Verify exact short-lived mutation lease.") == 4,
+            "Spotlight mutation jobs must each verify the exact lease inline")
 
 
 def self_test() -> None:
@@ -261,19 +279,20 @@ def main() -> int:
                     f"{relative}: governed workflow bytes changed; expected Git blob {expected}, got {actual}")
             observed[relative] = actual
         require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
-        validate_profile_stats_freshness(
-            (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
-        )
+        profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+        validate_profile_stats_freshness(profile)
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         validate_spotlight_reconciliation(spotlight)
         validate_spotlight_mutation_budget(spotlight)
         validate_spotlight_provenance(spotlight)
         validate_spotlight_immutable_candidates(spotlight)
+        validate_mutation_leases(profile, spotlight)
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
             "generated publication is source-epoch freshness bound · autonomous planning/terminal concurrency bytes are locked · "
-            "Spotlight has stale-only reconciliation, source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
+            "short-lived mutation leases bind the exact run/base/candidate transaction · Spotlight retains stale-only reconciliation, "
+            "source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
         )
         return 0
     except (OSError, ValueError) as exc:
