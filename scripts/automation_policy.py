@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from typing import Any
 
+import automation_concurrency
+
 ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = ROOT / ".github" / "automation-policy-v1.json"
 POLICY_ID = "automation-policy-v1"
@@ -433,7 +435,10 @@ def load_policy(path: Path = POLICY_PATH) -> dict[str, Any]:
         payload = strict_json_loads(path.read_text(encoding="utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise ValueError(f"automation policy JSON is invalid: {exc}") from exc
-    return validate_policy(payload)
+    policy = validate_policy(payload)
+    if path == POLICY_PATH:
+        automation_concurrency.validate(policy, ROOT)
+    return policy
 
 
 def workflow_by_path(policy: dict[str, Any], path: str) -> tuple[str, dict[str, Any]]:
@@ -454,6 +459,7 @@ def expect_policy_failure(payload: dict[str, Any], expected: str) -> None:
 
 def self_test(policy: dict[str, Any]) -> None:
     validate_policy(copy.deepcopy(policy))
+    automation_concurrency.self_test(policy, ROOT)
     try:
         strict_json_loads('{"schemaVersion":1,"schemaVersion":1}')
     except ValueError as exc:
@@ -637,7 +643,7 @@ def main() -> int:
         f"{sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs · "
         f"{len(policy['transactionMachines'])} finite-state transactions · "
         f"{maintenance_jobs} transaction-adjacent maintenance jobs · "
-        f"{concurrency_groups} autonomous concurrency classes · "
+        f"{concurrency_groups} source-compiled autonomous concurrency classes · "
         f"{len(policy['requiredChecks'])} protected required-check bindings"
     )
     return 0
