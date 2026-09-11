@@ -50,11 +50,19 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA64 = re.compile(r"^[0-9a-f]{64}$")
 POSITIVE_DECIMAL = re.compile(r"^[1-9][0-9]*$")
 PUBLISHED_PATHS = subjects.published_paths()
+TREE_PATHS = tuple(sorted(PUBLISHED_PATHS))
 
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def exact_keys(value: Any, expected: set[str], label: str) -> dict[str, Any]:
+    require(isinstance(value, dict), f"{label} must be an object")
+    require(set(value) == expected,
+            f"{label} keys changed: expected={sorted(expected)} observed={sorted(value)}")
+    return value
 
 
 def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -103,28 +111,32 @@ def git(root: Path, *args: str) -> str:
 
 def schema_identity() -> dict[str, str]:
     subjects.require_regular_file(PREDICATE_SCHEMA, "publication receipt predicate schema")
-    return {"id": PREDICATE_TYPE, "digest": f"sha256:{sha256_bytes(PREDICATE_SCHEMA.read_bytes())}"}
+    schema_bytes = PREDICATE_SCHEMA.read_bytes()
+    schema = strict_json_bytes(schema_bytes, "publication receipt predicate schema")
+    require(schema.get("$id") == PREDICATE_TYPE, "publication receipt schema id changed")
+    return {"id": PREDICATE_TYPE, "digest": f"sha256:{sha256_bytes(schema_bytes)}"}
 
 
-def source_epoch_identity(source_revision: str) -> dict[str, Any]:
-    subjects.require_regular_file(SOURCE_EPOCH, "profile source epoch")
-    payload = strict_json_bytes(SOURCE_EPOCH.read_bytes(), "profile source epoch")
-    require(set(payload) == {"version", "algorithm", "file_count", "closure_sha256"},
-            "profile source epoch keys changed")
-    require(payload.get("version") == SOURCE_EPOCH_VERSION, "profile source epoch version changed")
-    require(payload.get("algorithm") == SOURCE_EPOCH_ALGORITHM, "profile source epoch algorithm changed")
-    file_count = payload.get("file_count")
-    require(type(file_count) is int and file_count > 0, "profile source epoch file_count is invalid")
-    closure = payload.get("closure_sha256")
-    require(isinstance(closure, str) and SHA64.fullmatch(closure) is not None,
+def load_source_epoch(source_revision: str, path: Path = SOURCE_EPOCH) -> dict[str, Any]:
+    subjects.require_regular_file(path, "profile source epoch")
+    payload = exact_keys(
+        strict_json_bytes(path.read_bytes(), "profile source epoch"),
+        {"version", "algorithm", "file_count", "closure_sha256"},
+        "profile source epoch",
+    )
+    require(payload["version"] == SOURCE_EPOCH_VERSION, "profile source epoch version changed")
+    require(payload["algorithm"] == SOURCE_EPOCH_ALGORITHM, "profile source epoch algorithm changed")
+    require(type(payload["file_count"]) is int and payload["file_count"] > 0,
+            "profile source epoch file_count is invalid")
+    require(isinstance(payload["closure_sha256"], str) and SHA64.fullmatch(payload["closure_sha256"]) is not None,
             "profile source epoch closure digest is malformed")
     require(SHA40.fullmatch(source_revision) is not None, "source revision is malformed")
     return {
         "sourceRevision": source_revision,
         "version": SOURCE_EPOCH_VERSION,
         "algorithm": SOURCE_EPOCH_ALGORITHM,
-        "fileCount": file_count,
-        "closureSha256": closure,
+        "fileCount": payload["file_count"],
+        "closureSha256": payload["closure_sha256"],
     }
 
 
@@ -152,13 +164,13 @@ def publication_identity(root: Path, expected_commit: str, expected_parent: str)
 
     observed: list[tuple[str, str]] = []
     for line in git(root, "ls-tree", "-r", "HEAD").splitlines():
-        metadata, path = line.split("\t", 1)
+        metadata, relative = line.split("\t", 1)
         mode, object_type, _object_id = metadata.split()
-        require(object_type == "blob", f"published generated tree contains non-blob subject: {path}")
-        observed.append((mode, path))
-    require([path for _mode, path in observed] == list(PUBLISHED_PATHS),
+        require(object_type == "blob", f"published generated tree contains non-blob subject: {relative}")
+        observed.append((mode, relative))
+    require(tuple(relative for _mode, relative in observed) == TREE_PATHS,
             "published generated tree paths differ from the canonical eleven subjects")
-    require(all(mode == "100644" for mode, _path in observed),
+    require(all(mode == "100644" for mode, _relative in observed),
             "published generated tree contains non-100644 subject mode")
 
     return {
@@ -227,7 +239,7 @@ def build_predicate(env: dict[str, str], published_root: Path) -> tuple[dict[str
         "run": {"id": run_id, "attempt": run_attempt, "url": f"{server}/{REPOSITORY}/actions/runs/{run_id}"},
         "predicateSchema": schema_identity(),
         "transaction": {"candidateId": candidate_id, "leaseId": lease_id},
-        "sourceEpoch": source_epoch_identity(source_revision),
+        "sourceEpoch": load_source_epoch(source_revision),
         "publication": publication,
         "subjectDescriptor": {"name": SUBJECT_NAME, "digest": f"sha256:{sha256_bytes(descriptor_bytes)}"},
         "evidenceSubjects": evidence_digests(published_root),
@@ -239,63 +251,71 @@ def build_predicate(env: dict[str, str], published_root: Path) -> tuple[dict[str
 
 
 def validate_receipt(predicate: dict[str, Any], descriptor_bytes: bytes, published_root: Path) -> None:
-    require(set(predicate) == {
+    exact_keys(predicate, {
         "schemaVersion", "kind", "repository", "workflow", "run", "predicateSchema", "transaction",
         "sourceEpoch", "publication", "subjectDescriptor", "evidenceSubjects", "authority", "claim"
-    }, "publication receipt predicate keys changed")
-    require(type(predicate.get("schemaVersion")) is int and predicate["schemaVersion"] == SCHEMA_VERSION,
+    }, "publication receipt predicate")
+    require(type(predicate["schemaVersion"]) is int and predicate["schemaVersion"] == SCHEMA_VERSION,
             "publication receipt schemaVersion changed")
-    require(predicate.get("kind") == KIND and predicate.get("repository") == REPOSITORY,
+    require(predicate["kind"] == KIND and predicate["repository"] == REPOSITORY,
             "publication receipt predicate identity changed")
-    workflow = predicate.get("workflow")
-    require(workflow == {"path": WORKFLOW_PATH, "ref": WORKFLOW_REF, "sha": workflow.get("sha") if isinstance(workflow, dict) else None},
-            "publication receipt workflow block changed")
-    require(isinstance(workflow, dict) and isinstance(workflow.get("sha"), str) and
-            SHA40.fullmatch(workflow["sha"]) is not None, "publication receipt workflow SHA is malformed")
 
-    run = predicate.get("run")
-    require(isinstance(run, dict) and set(run) == {"id", "attempt", "url"}, "publication receipt run block changed")
-    require(isinstance(run.get("id"), str) and POSITIVE_DECIMAL.fullmatch(run["id"]) is not None,
+    workflow = exact_keys(predicate["workflow"], {"path", "ref", "sha"}, "publication receipt workflow")
+    require(workflow["path"] == WORKFLOW_PATH and workflow["ref"] == WORKFLOW_REF,
+            "publication receipt workflow identity changed")
+    require(isinstance(workflow["sha"], str) and SHA40.fullmatch(workflow["sha"]) is not None,
+            "publication receipt workflow SHA is malformed")
+
+    run = exact_keys(predicate["run"], {"id", "attempt", "url"}, "publication receipt run")
+    require(isinstance(run["id"], str) and POSITIVE_DECIMAL.fullmatch(run["id"]) is not None,
             "publication receipt run id is malformed")
-    require(isinstance(run.get("attempt"), str) and POSITIVE_DECIMAL.fullmatch(run["attempt"]) is not None,
+    require(isinstance(run["attempt"], str) and POSITIVE_DECIMAL.fullmatch(run["attempt"]) is not None,
             "publication receipt run attempt is malformed")
-    require(run.get("url") == f"https://github.com/{REPOSITORY}/actions/runs/{run['id']}",
+    require(run["url"] == f"https://github.com/{REPOSITORY}/actions/runs/{run['id']}",
             "publication receipt run URL changed")
-    require(predicate.get("predicateSchema") == schema_identity(), "publication receipt schema identity changed")
+    require(predicate["predicateSchema"] == schema_identity(), "publication receipt schema identity changed")
 
-    transaction = predicate.get("transaction")
-    require(isinstance(transaction, dict) and set(transaction) == {"candidateId", "leaseId"},
-            "publication receipt transaction block changed")
-    require(all(isinstance(transaction.get(key), str) and SHA64.fullmatch(transaction[key]) is not None
+    transaction = exact_keys(predicate["transaction"], {"candidateId", "leaseId"}, "publication receipt transaction")
+    require(all(isinstance(transaction[key], str) and SHA64.fullmatch(transaction[key]) is not None
                 for key in ("candidateId", "leaseId")), "publication receipt transaction identity is malformed")
 
-    source_epoch = predicate.get("sourceEpoch")
-    require(isinstance(source_epoch, dict), "publication receipt source epoch is missing")
-    require(source_epoch == source_epoch_identity(source_epoch.get("sourceRevision", "")),
+    source_epoch = exact_keys(
+        predicate["sourceEpoch"],
+        {"sourceRevision", "version", "algorithm", "fileCount", "closureSha256"},
+        "publication receipt source epoch",
+    )
+    require(source_epoch == load_source_epoch(source_epoch["sourceRevision"]),
             "publication receipt source epoch changed")
     require(workflow["sha"] == source_epoch["sourceRevision"],
             "publication receipt source/workflow revision binding changed")
 
-    publication = predicate.get("publication")
-    require(isinstance(publication, dict), "publication receipt publication block is missing")
-    observed_publication = publication_identity(published_root, publication.get("commit", ""), publication.get("parent", ""))
-    require(publication == observed_publication, "publication receipt commit topology changed")
+    publication = exact_keys(
+        predicate["publication"],
+        {"ref", "commit", "parent", "tree", "message", "author", "committer"},
+        "publication receipt publication",
+    )
+    require(publication == publication_identity(published_root, publication["commit"], publication["parent"]),
+            "publication receipt commit topology changed")
 
     descriptor = strict_json_bytes(descriptor_bytes, "publication subject descriptor")
+    require(descriptor_bytes == canonical_json_bytes(descriptor), "publication subject descriptor is not canonical JSON")
     require(descriptor == build_subject_descriptor(publication), "publication subject descriptor changed")
-    expected_descriptor = {"name": SUBJECT_NAME, "digest": f"sha256:{sha256_bytes(descriptor_bytes)}"}
-    require(predicate.get("subjectDescriptor") == expected_descriptor,
-            "publication receipt subject descriptor digest changed")
-    require(predicate.get("evidenceSubjects") == evidence_digests(published_root),
+    require(predicate["subjectDescriptor"] == {
+        "name": SUBJECT_NAME,
+        "digest": f"sha256:{sha256_bytes(descriptor_bytes)}",
+    }, "publication receipt subject descriptor digest changed")
+    require(predicate["evidenceSubjects"] == evidence_digests(published_root),
             "publication receipt evidence digests differ from actual generated bytes")
-    require(predicate.get("authority") == AUTHORITY, "publication receipt authority contract changed")
-    require(predicate.get("claim") == CLAIM, "publication receipt claim boundary changed")
+    require(predicate["authority"] == AUTHORITY, "publication receipt authority contract changed")
+    require(predicate["claim"] == CLAIM, "publication receipt claim boundary changed")
 
 
 def write_receipt(env: dict[str, str], published_root: Path, subject_output: Path, predicate_output: Path) -> None:
     predicate, descriptor_bytes = build_predicate(env, published_root)
-    require(subject_output.parent == Path(".") or subject_output.parent.is_dir(), "receipt subject output parent is missing")
-    require(predicate_output.parent == Path(".") or predicate_output.parent.is_dir(), "receipt predicate output parent is missing")
+    for output in (subject_output, predicate_output):
+        require(not output.exists() and not output.is_symlink(), f"publication receipt output already exists: {output}")
+        require(output.parent == Path(".") or (output.parent.is_dir() and not output.parent.is_symlink()),
+                f"publication receipt output parent is invalid: {output.parent}")
     subject_output.write_bytes(descriptor_bytes)
     predicate_output.write_bytes(canonical_json_bytes(predicate))
 
@@ -321,9 +341,19 @@ def git_write(root: Path, *args: str) -> None:
     require(completed.returncode == 0, f"receipt fixture git command failed: {completed.stderr.strip()}")
 
 
+def expect_failure(action: Any, expected: str) -> None:
+    try:
+        action()
+    except ValueError as exc:
+        require(expected in str(exc), f"publication receipt self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"publication receipt self-test accepted forbidden drift: {expected}")
+
+
 def self_test() -> None:
     with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp) / "published"
+        base = Path(tmp)
+        root = base / "published"
         root.mkdir()
         subjects.fixture_published_root(root)
         git_write(root, "init", "-q")
@@ -343,45 +373,45 @@ def self_test() -> None:
 
         wrong_parent = dict(env)
         wrong_parent["EXPECTED_GENERATED_PARENT_SHA"] = "d" * 40
-        try:
-            build_predicate(wrong_parent, root)
-        except ValueError as exc:
-            require("parent differs" in str(exc), f"wrong-parent self-test failed for wrong reason: {exc}")
-        else:
-            raise ValueError("publication receipt self-test accepted wrong generated parent")
+        expect_failure(lambda: build_predicate(wrong_parent, root), "parent differs")
 
-        drifted = json.loads(json.dumps(predicate))
-        drifted["subjectDescriptor"]["digest"] = "sha256:" + "0" * 64
-        try:
-            validate_receipt(drifted, descriptor_bytes, root)
-        except ValueError as exc:
-            require("descriptor digest" in str(exc), f"descriptor-drift self-test failed for wrong reason: {exc}")
-        else:
-            raise ValueError("publication receipt self-test accepted subject descriptor drift")
+        wrong_repo = dict(env)
+        wrong_repo["GITHUB_REPOSITORY"] = "portyu9/not-this-repository"
+        expect_failure(lambda: build_predicate(wrong_repo, root), "unexpected receipt repository")
+
+        descriptor_drift = json.loads(json.dumps(predicate))
+        descriptor_drift["subjectDescriptor"]["digest"] = "sha256:" + "0" * 64
+        expect_failure(lambda: validate_receipt(descriptor_drift, descriptor_bytes, root), "descriptor digest")
 
         evidence_drift = json.loads(json.dumps(predicate))
         evidence_drift["evidenceSubjects"][0]["digest"] = "sha256:" + "0" * 64
-        try:
-            validate_receipt(evidence_drift, descriptor_bytes, root)
-        except ValueError as exc:
-            require("evidence digests" in str(exc), f"evidence-drift self-test failed for wrong reason: {exc}")
-        else:
-            raise ValueError("publication receipt self-test accepted evidence digest drift")
+        expect_failure(lambda: validate_receipt(evidence_drift, descriptor_bytes, root), "evidence digests")
 
         extra = root / "unexpected.txt"
         extra.write_text("unexpected\n", encoding="utf-8")
-        try:
-            build_predicate(env, root)
-        except ValueError as exc:
-            require("inventory mismatch" in str(exc), f"extra-subject self-test failed for wrong reason: {exc}")
-        else:
-            raise ValueError("publication receipt self-test accepted extra generated subject")
+        expect_failure(lambda: build_predicate(env, root), "inventory mismatch")
 
-    epoch = source_epoch_identity("a" * 40)
-    malformed_epoch = dict(epoch)
-    malformed_epoch["closureSha256"] = "bad"
-    require(not SHA64.fullmatch(str(malformed_epoch["closureSha256"])),
-            "publication receipt source-epoch malformed-digest self-test fixture failed")
+        duplicate_epoch = base / "duplicate-epoch.json"
+        duplicate_epoch.write_text(
+            '{"version":"profile-stats-source-epoch-v1","version":"duplicate",'
+            '"algorithm":"sha256-sorted-path-nul-git-blob-oid-lf-v1","file_count":1,'
+            '"closure_sha256":"' + "0" * 64 + '"}\n',
+            encoding="utf-8",
+        )
+        expect_failure(lambda: load_source_epoch("a" * 40, duplicate_epoch), "duplicate object key")
+
+        malformed_epoch = base / "malformed-epoch.json"
+        malformed_epoch.write_text(
+            json.dumps({
+                "version": SOURCE_EPOCH_VERSION,
+                "algorithm": SOURCE_EPOCH_ALGORITHM,
+                "file_count": 1,
+                "closure_sha256": "bad",
+            }) + "\n",
+            encoding="utf-8",
+        )
+        expect_failure(lambda: load_source_epoch("a" * 40, malformed_epoch), "closure digest is malformed")
+
     print(
         f"Profile publication receipt builder self-test passed: {KIND}-v{SCHEMA_VERSION} · "
         f"{len(PUBLISHED_PATHS)} actual published subject digests · generated commit/parent/source epoch bound"
