@@ -218,14 +218,87 @@ def validate_quality(text: str) -> None:
             "Profile Quality integration must publish the read-only contract summary")
 
 
+def _remove_named_step(block: str, name: str) -> str:
+    marker = f"      - name: {name}\n"
+    require(block.count(marker) == 1,
+            f"Stats lease governance projection cannot isolate step: {name}")
+    start = block.index(marker)
+    tail = block[start + len(marker):]
+    next_step = re.search(r"(?m)^      - name: ", tail)
+    end = len(block) if next_step is None else start + len(marker) + next_step.start()
+    return block[:start] + block[end:]
+
+
+def project_legacy_stats_source(text: str) -> str:
+    """Remove exactly the item-8 lease overlay for the established governance assertions."""
+    projected = text
+    lease = job_block(projected, "lease", "attest_publish")
+    require("name: mint-mutation-lease-read-only" in lease and
+            "permissions:\n      actions: read" in lease,
+            "Stats mutation lease mint identity/authority changed")
+    for forbidden in ("contents: write", "actions: write", "id-token: write", "attestations: write"):
+        require(forbidden not in lease, f"Stats mutation lease mint acquired write authority: {forbidden}")
+    projected = projected.replace(lease, "", 1)
+
+    for job_id, next_job_id, steps in (
+        ("attest_publish", "stage", (
+            "Verify exact short-lived mutation lease",
+            "Verify leased attestation predicate identity",
+        )),
+        ("publish", "dispatch", ("Verify exact short-lived mutation lease",)),
+        ("dispatch", None, ("Verify exact short-lived mutation lease",)),
+    ):
+        original = job_block(projected, job_id, next_job_id)
+        replacement = original
+        for step in steps:
+            replacement = _remove_named_step(replacement, step)
+        projected = projected.replace(original, replacement, 1)
+
+    for current, legacy in (
+        ("    needs: [attest, lease]\n", "    needs: attest\n"),
+        ("    needs: [generate, attest, lease, attest_publish]\n",
+         "    needs: [generate, attest, attest_publish]\n"),
+        ("    needs: [stage, lease, attest]\n", "    needs: stage\n"),
+        ("    needs: [publish, lease, attest]\n", "    needs: publish\n"),
+    ):
+        require(projected.count(current) == 1,
+                f"Stats mutation lease dependency projection changed: {current.strip()}")
+        projected = projected.replace(current, legacy, 1)
+    return projected
+
+
 def validate_stats(text: str) -> None:
+    require(text.count("runs-on: ubuntu-24.04") == 7,
+            "All seven lease-aware stats jobs must pin ubuntu-24.04")
+    current_lease = job_block(text, "lease", "attest_publish")
+    require("needs: attest" in current_lease and "name: mint-mutation-lease-read-only" in current_lease,
+            "Stats mutation lease mint dependency/identity changed")
+    require("permissions:\n      actions: read" in current_lease,
+            "Stats mutation lease mint must retain Actions-read-only authority")
+    for job_id, next_job_id in (("attest_publish", "stage"), ("publish", "dispatch"), ("dispatch", None)):
+        block = job_block(text, job_id, next_job_id)
+        require(block.count("      - name: Verify exact short-lived mutation lease\n") == 1,
+                f"Stats write-capable job lost its exact mutation lease proof: {job_id}")
+    attest_current = job_block(text, "attest_publish", "stage")
+    require(attest_current.count("      - name: Verify leased attestation predicate identity\n") == 1,
+            "Terminal attestation lost leased predicate identity proof")
+    for dependency in (
+        "    needs: [attest, lease]\n",
+        "    needs: [generate, attest, lease, attest_publish]\n",
+        "    needs: [stage, lease, attest]\n",
+        "    needs: [publish, lease, attest]\n",
+    ):
+        require(text.count(dependency) == 1,
+                f"Stats lease-aware dependency graph changed: {dependency.strip()}")
+
+    text = project_legacy_stats_source(text)
     require("name: Update profile stats" in text, "Profile stats workflow name changed")
     require('cron: "17 * * * *"' in text, "Hourly best-effort refresh contract changed")
     require('cron: "17,47 * * * *"' not in text and 'cron: "2-57/5 * * * *"' not in text,
             "Stale higher-frequency cron remains in production workflow")
     require("cancel-in-progress: true" in text, "Stats workflow must cancel stale runs")
     require('PYTHON_VERSION: "3.13.15"' in text, "Stats Python version is not explicit")
-    require(text.count("runs-on: ubuntu-24.04") == 6, "All six stats jobs must pin ubuntu-24.04")
+    require(text.count("runs-on: ubuntu-24.04") == 6, "Projected six-job stats contract changed")
 
     generate = job_block(text, "generate", "attest")
     prepare = job_block(text, "attest", "attest_publish")
@@ -416,7 +489,8 @@ def main() -> int:
         validate_cadence_doc(CADENCE.read_text(encoding="utf-8"))
         print(
             "Repository governance validation passed: PR checks remain stable/read-only; dependency/action provenance is mandatory; "
-            "generation and attestation preparation execute authored code with read-only authority; terminal OIDC/attestation authority executes only digest-checked transport plus pinned actions/attest; "
+            "the seventh Profile Stats job mints an Actions-read-only short-lived lease and every writer proves that exact capability; "
+            "generation and attestation preparation execute authored code with read-only authority; terminal OIDC/attestation authority executes only digest-checked transport plus pinned actions/attest after the lease overlay; "
             "publication staging seals the generated candidate and trusted source epoch under read-only authority; terminal contents-write publication re-proves current main source before token derivation and one exact generated push; "
             "and post-publication Spotlight dispatch remains isolated to actions: write."
         )
