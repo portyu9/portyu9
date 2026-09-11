@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-publication-receipt-v1.schema.json",
+  "title": "Ƴunior Ƥortal generated profile publication receipt predicate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "repository",
+    "workflow",
+    "run",
+    "predicateSchema",
+    "transaction",
+    "sourceEpoch",
+    "publication",
+    "subjectDescriptor",
+    "evidenceSubjects",
+    "authority",
+    "claim"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "profile-publication-receipt"},
+    "repository": {"const": "portyu9/portyu9"},
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "ref", "sha"],
+      "properties": {
+        "path": {"const": ".github/workflows/profile-stats.yml"},
+        "ref": {"const": "portyu9/portyu9/.github/workflows/profile-stats.yml@refs/heads/main"},
+        "sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "attempt", "url"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "attempt": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "url": {"type": "string", "pattern": "^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
+      }
+    },
+    "predicateSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "digest"],
+      "properties": {
+        "id": {"const": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-publication-receipt-v1.schema.json"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateId", "leaseId"],
+      "properties": {
+        "candidateId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "leaseId": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "sourceEpoch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceRevision", "version", "algorithm", "fileCount", "closureSha256"],
+      "properties": {
+        "sourceRevision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "version": {"const": "profile-stats-source-epoch-v1"},
+        "algorithm": {"const": "sha256-sorted-path-nul-git-blob-oid-lf-v1"},
+        "fileCount": {"type": "integer", "minimum": 1},
+        "closureSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "commit", "parent", "tree", "message", "author", "committer"],
+      "properties": {
+        "ref": {"const": "refs/heads/generated"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "parent": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "message": {"const": "chore: publish validated profile evidence [skip ci]"},
+        "author": {"const": "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"},
+        "committer": {"const": "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"}
+      }
+    },
+    "subjectDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "digest"],
+      "properties": {
+        "name": {"const": "generated-publication-subject.json"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "evidenceSubjects": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": false,
+      "prefixItems": [
+        {"$ref": "#/$defs/wideLight"},
+        {"$ref": "#/$defs/wideDark"},
+        {"$ref": "#/$defs/compactLight"},
+        {"$ref": "#/$defs/compactDark"},
+        {"$ref": "#/$defs/spotlight1Light"},
+        {"$ref": "#/$defs/spotlight1Dark"},
+        {"$ref": "#/$defs/spotlight2Light"},
+        {"$ref": "#/$defs/spotlight2Dark"},
+        {"$ref": "#/$defs/spotlight3Light"},
+        {"$ref": "#/$defs/spotlight3Dark"},
+        {"$ref": "#/$defs/ledger"}
+      ]
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preparation", "attestation", "publication", "separation"],
+      "properties": {
+        "preparation": {"const": "contents:read"},
+        "attestation": {"const": "id-token:write,attestations:write"},
+        "publication": {"const": "contents:write"},
+        "separation": {"const": "Publication completes before receipt preparation; the receipt signer cannot write repository contents and executes no repository-authored code."}
+      }
+    },
+    "claim": {"const": "The actual generated branch commit and parent were revalidated after publication and are bound to the exact published evidence digests and trusted source epoch; this attests repository-defined publication provenance, not universal correctness."}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "wideLight": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "profile-stats/profile/signal-field-wide-light.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "wideDark": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "profile-stats/profile/signal-field-wide-dark.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "compactLight": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "profile-stats/profile/signal-field-compact-light.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "compactDark": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "profile-stats/profile/signal-field-compact-dark.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "spotlight1Light": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "engineering-spotlight/spotlight-1-light.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "spotlight1Dark": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "engineering-spotlight/spotlight-1-dark.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "spotlight2Light": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "engineering-spotlight/spotlight-2-light.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "spotlight2Dark": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "engineering-spotlight/spotlight-2-dark.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "spotlight3Light": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "engineering-spotlight/spotlight-3-light.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "spotlight3Dark": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "engineering-spotlight/spotlight-3-dark.svg"}, "digest": {"$ref": "#/$defs/digest"}}},
+    "ledger": {"type": "object", "additionalProperties": false, "required": ["path", "digest"], "properties": {"path": {"const": "portfolio-evidence/portfolio-evidence-ledger.json"}, "digest": {"$ref": "#/$defs/digest"}}}
+  }
+}
