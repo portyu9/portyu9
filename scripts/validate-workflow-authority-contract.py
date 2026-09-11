@@ -220,8 +220,8 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
     approve = core.job_block(workflow, "approve", "merge")
     merge = core.job_block(workflow, "merge", None)
 
-    require("name: reconcile-stale-candidates-write" in reconcile and "needs: plan" in reconcile,
-            "Spotlight stale-candidate reconciler identity/dependency changed")
+    require("name: reconcile-stale-candidates-write" in reconcile and "needs: [plan, lease]" in reconcile,
+            "Spotlight stale-candidate reconciler identity/lease dependency changed")
     require("permissions:\n      contents: write\n      pull-requests: write" in reconcile,
             "Spotlight stale-candidate reconciler authority changed")
     require("STALE_AFTER_SECONDS=1800" in reconcile and 'test "$REF_COUNT" -le 20 || {' in reconcile,
@@ -292,12 +292,12 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
     require("exit 1" in quarantine and "GITHUB_STEP_SUMMARY" in quarantine,
             "Spotlight mutation quarantine must fail visibly while retaining read-only diagnostics")
 
-    require("needs: [plan, reconcile, budget]" in propose and "needs.budget.outputs.allowed == 'true'" in propose,
-            "Spotlight proposal mutation must require successful reconciliation and positive budget admission")
-    require("needs: [plan, reconcile, budget, propose]" in approve and "needs.budget.outputs.allowed == 'true'" in approve,
-            "Spotlight approval mutation must remain downstream of reconciliation and positive budget admission")
-    require("needs: [plan, reconcile, budget, propose, approve]" in merge and "needs.budget.outputs.allowed == 'true'" in merge,
-            "Spotlight terminal merge must remain downstream of reconciliation and positive budget admission")
+    require("needs: [plan, lease, reconcile, budget]" in propose and "needs.budget.outputs.allowed == 'true'" in propose,
+            "Spotlight proposal mutation must require the exact lease, successful reconciliation, and positive budget admission")
+    require("needs: [plan, lease, reconcile, budget, propose]" in approve and "needs.budget.outputs.allowed == 'true'" in approve,
+            "Spotlight approval mutation must remain downstream of the exact lease, reconciliation, and positive budget admission")
+    require("needs: [plan, lease, reconcile, budget, propose, approve]" in merge and "needs.budget.outputs.allowed == 'true'" in merge,
+            "Spotlight terminal merge must remain downstream of the exact lease, reconciliation, and positive budget admission")
     require('APPROVAL_REQUESTED_RUN_IDS=""' in approve and 'case " $APPROVAL_REQUESTED_RUN_IDS " in' in approve,
             "Spotlight approval loop must locally de-duplicate approval mutations")
     require('APPROVAL_REQUESTED_RUN_IDS="${APPROVAL_REQUESTED_RUN_IDS} ${RUN_ID}"' in approve,
@@ -441,12 +441,12 @@ def self_test_current_sync(workflow: str, readme: str) -> None:
     )
     expect_sync_failure(
         workflow.replace(
-            'needs: [plan, reconcile, budget]',
-            'needs: [plan, budget]',
+            'needs: [plan, lease, reconcile, budget]',
+            'needs: [plan, lease, budget]',
             1,
         ),
         readme,
-        "must require successful reconciliation",
+        "must require the exact lease, successful reconciliation",
     )
 
 
@@ -469,7 +469,7 @@ def main() -> int:
             f"Workflow authority validation passed: {policy['policyId']} is the executable semantic authority graph for "
             f"{len(policy['workflows'])} workflows and {sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs; "
             "generic workflow/profile-publication guards remain byte-preserved under the exact lease projection; "
-            "Profile Stats mutation leases are compiled independently; Spotlight has stale-only reductive reconciliation, "
+            "Profile Stats mutation leases are compiled independently; Spotlight has lease-bound stale-only reductive reconciliation, "
             "content-addressed create-once candidates, exact-ref approval/merge revalidation, and exact API-surface negative tests."
         )
         return 0
