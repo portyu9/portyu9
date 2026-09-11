@@ -193,6 +193,7 @@ jobs:
           set -euo pipefail
           # Verify exact short-lived mutation lease.
           LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=240
           EXPECTED_BASE_SHA="$BASE_SHA"
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
@@ -205,6 +206,7 @@ jobs:
           NOW_EPOCH="$(date -u +%s)"
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
             "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
@@ -482,6 +484,7 @@ jobs:
           set -euo pipefail
           # Verify exact short-lived mutation lease.
           LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=300
           EXPECTED_BASE_SHA="$SOURCE_SHA"
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
@@ -494,6 +497,7 @@ jobs:
           NOW_EPOCH="$(date -u +%s)"
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
             "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
@@ -657,6 +661,7 @@ jobs:
           set -euo pipefail
           # Verify exact short-lived mutation lease.
           LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=780
           EXPECTED_BASE_SHA="$BASE_SHA"
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
@@ -669,6 +674,7 @@ jobs:
           NOW_EPOCH="$(date -u +%s)"
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
             "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
@@ -831,6 +837,7 @@ jobs:
           set -euo pipefail
           # Verify exact short-lived mutation lease.
           LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=240
           EXPECTED_BASE_SHA="$BASE_SHA"
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
@@ -843,6 +850,7 @@ jobs:
           NOW_EPOCH="$(date -u +%s)"
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
             "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
