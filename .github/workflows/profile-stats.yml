@@ -300,6 +300,7 @@ jobs:
         run: |
           set -euo pipefail
           LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=300
           [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
           [[ "$LEASE_ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
           [[ "$LEASE_EXPIRES_AT" =~ ^[1-9][0-9]*$ ]]
@@ -313,6 +314,7 @@ jobs:
           NOW_EPOCH="$(date -u +%s)"
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/profile-stats.yml" \
             "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
@@ -526,6 +528,7 @@ jobs:
         run: |
           set -euo pipefail
           LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=240
           [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
           [[ "$LEASE_ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
           [[ "$LEASE_EXPIRES_AT" =~ ^[1-9][0-9]*$ ]]
@@ -539,6 +542,7 @@ jobs:
           NOW_EPOCH="$(date -u +%s)"
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/profile-stats.yml" \
             "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
@@ -646,6 +650,7 @@ jobs:
         run: |
           set -euo pipefail
           LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=180
           [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
           [[ "$LEASE_ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
           [[ "$LEASE_EXPIRES_AT" =~ ^[1-9][0-9]*$ ]]
@@ -659,6 +664,7 @@ jobs:
           NOW_EPOCH="$(date -u +%s)"
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/profile-stats.yml" \
             "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
