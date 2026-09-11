@@ -228,12 +228,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ github.sha }}
+          GENERATED_SHA: ${{ needs.attest.outputs.generated_sha }}
+          PREDICATE_SHA256: ${{ needs.attest.outputs.predicate_sha256 }}
           CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}
         run: |
           set -euo pipefail
           LEASE_TTL_SECONDS=1800
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
           [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$PREDICATE_SHA256" | sha256sum | cut -d' ' -f1)"
+          test "$CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
           [[ "$GITHUB_REPOSITORY_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
@@ -249,6 +255,9 @@ jobs:
           test "$(jq -r .path <<<"$RUN")" = ".github/workflows/profile-stats.yml"
           test "$(jq -r .repository.id <<<"$RUN")" = "$GITHUB_REPOSITORY_ID"
           test "$(jq -r .head_repository.id <<<"$RUN")" = "$GITHUB_REPOSITORY_ID"
+          REMOTE_GENERATED="$(git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/generated)"
+          [[ "$REMOTE_GENERATED" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/generated$ ]]
+          test "${BASH_REMATCH[1]}" = "$GENERATED_SHA"
           ISSUED_AT="$(date -u +%s)"
           [[ "$ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
           EXPIRES_AT=$((ISSUED_AT + LEASE_TTL_SECONDS))
@@ -342,6 +351,14 @@ jobs:
           path: attestation-input
           digest-mismatch: error
 
+      - name: Verify leased attestation predicate identity
+        env:
+          EXPECTED_PREDICATE_SHA256: ${{ needs.attest.outputs.predicate_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum attestation-input/attestation-predicate.json | cut -d' ' -f1)" = "$EXPECTED_PREDICATE_SHA256"
+
       - name: Attest validated profile evidence
         if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -426,12 +443,16 @@ jobs:
 
       - name: Stage and seal exact generated publication candidate
         id: seal
+        env:
+          LEASED_GENERATED_SHA: ${{ needs.attest.outputs.generated_sha }}
         run: |
           set -euo pipefail
           source_sha="$(git -C source rev-parse HEAD)"
           base_sha="$(git -C artifacts rev-parse HEAD)"
           [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$LEASED_GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$source_sha" = "$GITHUB_SHA"
+          test "$base_sha" = "$LEASED_GENERATED_SHA"
           test "$(git -C artifacts rev-parse refs/remotes/origin/generated)" = "$base_sha"
           test "$(git -C artifacts rev-parse --abbrev-ref HEAD)" = "generated"
           if git -C artifacts config --local --get-regexp '^(credential\.|http\..*\.extraheader|includeif\.)' >/dev/null; then
