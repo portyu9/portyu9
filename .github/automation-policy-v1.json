@@ -133,6 +133,14 @@
             "contents": "read"
           }
         },
+        "reconcile": {
+          "name": "reconcile-stale-candidates-write",
+          "needs": ["plan"],
+          "permissions": {
+            "contents": "write",
+            "pull-requests": "write"
+          }
+        },
         "budget": {
           "name": "mutation-budget-read-only",
           "needs": ["plan"],
@@ -149,7 +157,7 @@
         },
         "propose": {
           "name": "propose-readme-only-write",
-          "needs": ["plan", "budget"],
+          "needs": ["plan", "reconcile", "budget"],
           "permissions": {
             "contents": "write",
             "pull-requests": "write"
@@ -157,7 +165,7 @@
         },
         "approve": {
           "name": "approve-bot-pr-checks-only",
-          "needs": ["plan", "budget", "propose"],
+          "needs": ["plan", "reconcile", "budget", "propose"],
           "permissions": {
             "contents": "read",
             "actions": "write"
@@ -165,7 +173,7 @@
         },
         "merge": {
           "name": "merge-readme-only-terminal-write",
-          "needs": ["plan", "budget", "propose", "approve"],
+          "needs": ["plan", "reconcile", "budget", "propose", "approve"],
           "permissions": {
             "contents": "write",
             "pull-requests": "read",
@@ -180,6 +188,7 @@
       "initialState": "idle",
       "states": ["idle", "proposed", "approved", "mutated", "verified", "completed", "no-change"],
       "terminalStates": ["completed", "no-change"],
+      "maintenanceJobs": [],
       "transitions": [
         {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["generate"]},
         {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["attest"]},
@@ -194,6 +203,7 @@
       "initialState": "idle",
       "states": ["idle", "proposed", "approved", "mutated", "verified", "completed", "no-change", "quarantined"],
       "terminalStates": ["completed", "no-change", "quarantined"],
+      "maintenanceJobs": ["reconcile"],
       "transitions": [
         {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["plan"]},
         {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["plan"]},

@@ -4,7 +4,8 @@
 The pre-immutable-candidate validator is retained byte-for-byte in
 spotlight_merge_authorization_core.py. This layer reuses its independent mutation-budget,
 dispatch, and check-suite proofs while replacing the retired shared-branch assumptions
-with the content-addressed immutable-candidate transaction contract.
+with the content-addressed immutable-candidate transaction and reductive reconciliation
+contracts.
 """
 from __future__ import annotations
 
@@ -28,11 +29,6 @@ CANDIDATE_FORMULA_DOWNSTREAM = (
     'EXPECTED_CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$BASE_SHA" "$GENERATED_SHA" '
     '"$README_SHA256_AFTER" | sha256sum | cut -d\' \' -f1)"'
 )
-CLEANUP_404_GATE = (
-    "          else\n"
-    "            test \"$(jq -r '.status // empty' <<<\"$CANDIDATE_REF\")\" = \"404\"\n"
-    "          fi"
-)
 
 
 def fail(message: str) -> None:
@@ -44,11 +40,85 @@ def require(condition: bool, message: str) -> None:
         fail(message)
 
 
+def validate_reconciliation(reconcile: str) -> None:
+    require("name: reconcile-stale-candidates-write" in reconcile and "needs: plan" in reconcile,
+            "Spotlight reconciler identity/dependency changed")
+    require("timeout-minutes: 3" in reconcile,
+            "Spotlight reconciler authority window changed")
+    require("permissions:\n      contents: write\n      pull-requests: write" in reconcile,
+            "Spotlight reconciler must retain only contents/PR write authority")
+    for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "actions: write", "checks: read"):
+        require(forbidden not in reconcile,
+                f"Spotlight reconciler acquired an unauthorized execution/permission surface: {forbidden}")
+
+    required = (
+        'test "$BASE_SHA" = "$GITHUB_SHA"',
+        'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+        'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"',
+        'EXPECTED_CANDIDATE_BRANCH=""',
+        'EXPECTED_CANDIDATE_BRANCH="${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"',
+        'STALE_AFTER_SECONDS=1800',
+        'REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}")"',
+        'test "$REF_COUNT" -le 20 || {',
+        '(.ref | test("^refs/heads/automation/spotlight-links/[0-9a-f]{64}$") | not)',
+        'if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && [ "$BRANCH" = "$EXPECTED_CANDIDATE_BRANCH" ]; then',
+        'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        'test "$(jq \' .parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"',
+        'test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"',
+        'test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"',
+        'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ]; then',
+        'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"',
+        'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
+        'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
+        'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"',
+        'test "$PR_COUNT" = "0" || test "$PR_COUNT" = "1"',
+        'test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"',
+        'test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"',
+        'test "$(jq -r .body <<<"$PR")" = "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force."',
+        'test "$(jq -r .base.ref <<<"$PR")" = "main"',
+        'test "$(jq -r .head.ref <<<"$PR")" = "$BRANCH"',
+        'test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"',
+        'test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"',
+        'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
+        'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"',
+        'test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"',
+        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null',
+        'test "$REMAINING_EXACT" = "0"',
+    )
+    for fragment in required:
+        normalized = fragment.replace("' .parents", "'.parents")
+        require(normalized in reconcile,
+                f"Spotlight reconciler lost a stale-only/topology proof: {normalized}")
+
+    require(reconcile.count('gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"') == 1,
+            "Spotlight reconciler must expose exactly one PR-closing PATCH mutation")
+    require(reconcile.count('gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}"') == 1,
+            "Spotlight reconciler must expose exactly one stale-ref DELETE mutation")
+    for forbidden in (
+        "gh api --method POST ",
+        "gh api --method PUT ",
+        "/approve",
+        "/merge",
+        'git/refs/heads/${CANDIDATE_BRANCH}',
+    ):
+        require(forbidden not in reconcile,
+                f"Spotlight reconciler regained constructive mutation authority: {forbidden}")
+
+
 def validate_candidate_publication(sync: str) -> None:
-    plan = core.job_block(sync, "plan", "budget")
+    plan = core.job_block(sync, "plan", "reconcile")
+    reconcile = core.job_block(sync, "reconcile", "budget")
     propose = core.job_block(sync, "propose", "approve")
     approve = core.job_block(sync, "approve", "merge")
     merge = core.job_block(sync, "merge", None)
+
+    validate_reconciliation(reconcile)
+    require("needs: [plan, reconcile, budget]" in propose,
+            "Spotlight proposer must wait for reconciliation and positive budget admission")
+    require("needs: [plan, reconcile, budget, propose]" in approve,
+            "Spotlight approval must remain downstream of reconciliation/proposal")
+    require("needs: [plan, reconcile, budget, propose, approve]" in merge,
+            "Spotlight terminal merge must remain downstream of reconciliation/approval")
 
     require(f'BOT_BRANCH_PREFIX: "{CANDIDATE_PREFIX}"' in sync,
             "Spotlight immutable candidate prefix changed")
@@ -145,10 +215,15 @@ def validate_candidate_publication(sync: str) -> None:
             "Spotlight terminal merge must re-prove candidate head immutability")
     require('test "$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")" = "$BASE_SHA"' in merge,
             "Spotlight terminal merge must re-prove the candidate single-parent source binding")
+    require('CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"' in merge and
+            'test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"' in merge,
+            "Spotlight terminal cleanup must classify exact candidate-ref cardinality without a failing GET")
     require('gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null' in merge,
             "Spotlight cleanup must delete only the exact consumed immutable candidate ref")
-    require(CLEANUP_404_GATE in merge,
-            "Spotlight immutable candidate cleanup must fail closed except on explicit 404")
+    require('test "$AFTER_EXACT" = "0"' in merge,
+            "Spotlight terminal cleanup must prove the exact consumed ref is absent after deletion")
+    require("CANDIDATE_REF=\"$(gh api " not in merge and "2>/dev/null" not in merge,
+            "Spotlight terminal cleanup must not classify missing refs through suppressed single-ref GET failures")
 
 
 def validate_run_provenance(approve: str) -> None:
@@ -185,6 +260,21 @@ def validate_run_provenance(approve: str) -> None:
             "Spotlight approval must not hide duplicate canonical workflow-run identities")
 
 
+def legacy_mutation_budget_view(sync: str) -> str:
+    """Project only the new maintenance dependency out for the frozen legacy budget proof."""
+    replacements = (
+        ("    needs: [plan, reconcile, budget]\n", "    needs: [plan, budget]\n"),
+        ("    needs: [plan, reconcile, budget, propose]\n", "    needs: [plan, budget, propose]\n"),
+        ("    needs: [plan, reconcile, budget, propose, approve]\n", "    needs: [plan, budget, propose, approve]\n"),
+    )
+    legacy = sync
+    for current, old in replacements:
+        require(legacy.count(current) == 1,
+                f"Spotlight reconciliation dependency projection is ambiguous: {current.strip()}")
+        legacy = legacy.replace(current, old, 1)
+    return legacy
+
+
 def validate(sync: str, stats: str, policy: str) -> None:
     require("  workflow_dispatch:\n" in sync,
             "Spotlight synchronization must retain a manual recovery dispatch")
@@ -193,7 +283,10 @@ def validate(sync: str, stats: str, policy: str) -> None:
     require("merge_ui_after_checks" not in sync and "merge_ui_after_checks" not in stats,
             "Spotlight standing authorization must not depend on a manual merge input")
 
-    core.validate_mutation_budget(sync)
+    # Keep the pre-reconciliation mutation-budget validator byte-for-byte independent.
+    # Its only stale assumption is the downstream needs list, so project the separately
+    # validated maintenance dependency out without changing any runtime/predicate/API bytes.
+    core.validate_mutation_budget(legacy_mutation_budget_view(sync))
     approve = core.job_block(sync, "approve", "merge")
     merge = core.job_block(sync, "merge", None)
     require("name: approve-bot-pr-checks-only" in approve,
@@ -232,6 +325,7 @@ def validate(sync: str, stats: str, policy: str) -> None:
         "append-once", "no candidate-ref patch", "actions-only approval job", "terminal merge job",
         "five protected-main checks", "integration id `15368`", "no bypass actor",
         "does not authorize arbitrary readme/ui", "dependabot", "candidate refs are never moved",
+        "reductive reconciliation", "30-minute stale floor",
     ):
         require(phrase.lower() in policy_lower,
                 f"Spotlight standing auto-merge policy is missing: {phrase}")
@@ -254,6 +348,30 @@ def self_test(sync: str, stats: str, policy: str) -> None:
     expect_failure(
         sync.replace("          MAX_ATTEMPTS=2\n", "          MAX_ATTEMPTS=3\n", 1),
         stats, policy, "mutation-budget fail-closed contract is missing",
+    )
+    expect_failure(
+        sync.replace(
+            'STALE_AFTER_SECONDS=1800',
+            'STALE_AFTER_SECONDS=0',
+            1,
+        ),
+        stats, policy, "reconciler lost a stale-only/topology proof",
+    )
+    expect_failure(
+        sync.replace(
+            'test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"',
+            'test -n "$(jq -r .title <<<"$PR")"',
+            1,
+        ),
+        stats, policy, "reconciler lost a stale-only/topology proof",
+    )
+    expect_failure(
+        sync.replace(
+            'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"',
+            'CLOSED_PR="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input close-pr.json)"',
+            1,
+        ),
+        stats, policy, "reconciler lost a stale-only/topology proof",
     )
     expect_failure(
         sync.replace(
@@ -284,8 +402,8 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         stats, policy, "first publication must bind the created ref",
     )
     expect_failure(
-        sync.replace(CLEANUP_404_GATE, "          else\n            :\n          fi", 1),
-        stats, policy, "cleanup must fail closed except on explicit 404",
+        sync.replace('test "$AFTER_EXACT" = "0"', 'test "$AFTER_EXACT" -le 1', 1),
+        stats, policy, "terminal cleanup must prove the exact consumed ref is absent",
     )
     wrong_suite = sync.replace(
         '{name:"analyze-actions",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head}',
@@ -307,9 +425,9 @@ def main() -> int:
         validate(sync, stats, policy)
         self_test(sync, stats, policy)
         print(
-            "Spotlight UI merge authorization validation passed: source epochs cross the read-only two-attempt mutation budget; "
-            "admitted proposals publish one content-addressed candidate ref only after complete candidate-object validation; candidate refs are never moved; "
-            "approval binds exact workflow runs to that candidate; terminal merge consumes exact check-suite provenance and may delete only the merged immutable ref."
+            "Spotlight UI merge authorization validation passed: stale interrupted candidates have topology-bound reductive reconciliation; "
+            "source epochs cross the read-only two-attempt constructive mutation budget; admitted proposals publish one content-addressed candidate ref; "
+            "approval binds exact workflow runs; terminal merge consumes exact check-suite provenance and uses idempotent exact-ref cleanup."
         )
         return 0
     except (OSError, ValueError) as exc:

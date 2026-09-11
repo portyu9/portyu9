@@ -17,11 +17,11 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v14"
+VERSION = "governed-workflow-byte-identity-v15"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
     ".github/workflows/profile-stats.yml": "625f0ba3cc0cd081cf2d55a0799650fd180200b3",
-    ".github/workflows/spotlight-link-sync.yml": "69c83de375adef9aeed70c0d9cedf63d3af46551",
+    ".github/workflows/spotlight-link-sync.yml": "5cfea6413dffa7a347cd74eef3f20753f2f3678d",
 }
 
 PROFILE_STATS_FRESHNESS_SEQUENCE = (
@@ -37,6 +37,30 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
     '[[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
     'test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
     'push origin HEAD:generated',
+)
+
+SPOTLIGHT_RECONCILIATION_SEQUENCE = (
+    "  reconcile:\n"
+    "    name: reconcile-stale-candidates-write\n"
+    "    needs: plan",
+    "    timeout-minutes: 3\n"
+    "    permissions:\n      contents: write\n      pull-requests: write",
+    'EXPECTED_CANDIDATE_BRANCH=""',
+    'STALE_AFTER_SECONDS=1800',
+    'REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}")"',
+    'test "$REF_COUNT" -le 20 || {',
+    '(.ref | test("^refs/heads/automation/spotlight-links/[0-9a-f]{64}$") | not)',
+    'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '            test "$(jq \' .parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+    '            PARENT_SHA="$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")"'.replace("' .parents", "'.parents"),
+    'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ]; then',
+    'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"',
+    'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"',
+    'test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"',
+    'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"',
+    'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null',
+    'test "$REMAINING_EXACT" = "0"',
+    'needs: [plan, reconcile, budget]',
 )
 
 SPOTLIGHT_MUTATION_BUDGET_SEQUENCE = (
@@ -92,7 +116,9 @@ SPOTLIGHT_IMMUTABLE_CANDIDATE_SEQUENCE = (
     'echo "candidate_branch=$CANDIDATE_BRANCH" >> "$GITHUB_OUTPUT"',
     'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"',
     '# Revalidate both mutable roots and the immutable candidate ref immediately before merge.',
+    'CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',
     'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null',
+    'test "$AFTER_EXACT" = "0"',
 )
 
 
@@ -133,8 +159,14 @@ def validate_profile_stats_freshness(text: str) -> None:
                               "profile-stats source-freshness contract")
 
 
+def validate_spotlight_reconciliation(text: str) -> None:
+    """Keep interrupted-transaction cleanup reductive, stale-only, and topology bound."""
+    validate_ordered_contract(text, SPOTLIGHT_RECONCILIATION_SEQUENCE,
+                              "Spotlight stale-candidate reconciliation contract")
+
+
 def validate_spotlight_mutation_budget(text: str) -> None:
-    """Keep read-only source-epoch admission before every Spotlight mutation boundary."""
+    """Keep read-only source-epoch admission before every constructive Spotlight mutation boundary."""
     validate_ordered_contract(text, SPOTLIGHT_MUTATION_BUDGET_SEQUENCE,
                               "Spotlight source-epoch mutation-budget contract")
 
@@ -175,6 +207,15 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("profile-stats source-freshness self-test accepted a missing terminal equality guard")
+
+    synthetic = "\n".join(SPOTLIGHT_RECONCILIATION_SEQUENCE)
+    validate_spotlight_reconciliation(synthetic)
+    try:
+        validate_spotlight_reconciliation(synthetic.replace(SPOTLIGHT_RECONCILIATION_SEQUENCE[12], "", 1))
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight reconciliation self-test accepted missing PR-close authority binding")
 
     synthetic = "\n".join(SPOTLIGHT_MUTATION_BUDGET_SEQUENCE)
     validate_spotlight_mutation_budget(synthetic)
@@ -220,13 +261,15 @@ def main() -> int:
             (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         )
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        validate_spotlight_reconciliation(spotlight)
         validate_spotlight_mutation_budget(spotlight)
         validate_spotlight_provenance(spotlight)
         validate_spotlight_immutable_candidates(spotlight)
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
-            "generated publication is source-epoch freshness bound · Spotlight mutations are source-epoch budget admitted, immutable-candidate bound, and exact-run/suite authorized"
+            "generated publication is source-epoch freshness bound · Spotlight has stale-only reconciliation, "
+            "source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
         )
         return 0
     except (OSError, ValueError) as exc:

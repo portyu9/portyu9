@@ -39,6 +39,9 @@ GOV_REQUIRED = (
     "attest-write-only",
     "publish-write-only",
     "dispatch-spotlight-link-sync",
+    "reconcile-stale-candidates-write",
+    "stale-only monotone reconciliation",
+    "30-minute stale floor",
     "source-epoch mutation budget",
     "diagnostic-only quarantine",
     "id-token: write",
@@ -76,6 +79,9 @@ THREAT_REQUIRED = (
     "exactly five workflows",
     "spotlight-link-sync.yml",
     "dispatch-spotlight-link-sync",
+    "reconcile-stale-candidates-write",
+    "30-minute",
+    "monotone-reductive",
     "source-epoch mutation budget",
     "diagnostic-only quarantine",
     "prepare-attestation-read-only",
@@ -99,6 +105,9 @@ FORBIDDEN = (
     "redacted bypass actors are empty",
     "closed allowlist of exactly four workflows",
     "Reviewed write-capable exceptions are limited to CodeQL",
+    "resets the fixed `automation/spotlight-links` branch",
+    "update the fixed bot branch",
+    "delete the fixed bot branch",
 )
 
 JOB_KEY = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
@@ -262,6 +271,18 @@ def self_test(
         f"permissions drifted from Automation Policy IR for {merge_name}",
     )
 
+    reconcile_name = expected_jobs["reconcile"][0]
+    missing_reconcile = remove_authority_row(governance, reconcile_name)
+    expect_failure(
+        lambda: validate_doc_job_graph(
+            missing_reconcile,
+            expected_jobs,
+            label="governance",
+            table_scope="Spotlight link sync",
+        ),
+        reconcile_name,
+    )
+
     budget_name = expected_jobs["budget"][0]
     missing_budget = remove_authority_row(governance, budget_name)
     expect_failure(
@@ -286,6 +307,16 @@ def self_test(
         quarantine_name,
     )
 
+    stale_fixed_branch = governance.replace(
+        "derives `automation/spotlight-links/<sha256(main SHA, generated SHA, proposed README digest)>`",
+        "resets the fixed `automation/spotlight-links` branch",
+        1,
+    )
+    expect_failure(
+        lambda: validate_required_phrases(stale_fixed_branch, threat),
+        "stale assurance statement remains",
+    )
+
 
 def main() -> int:
     try:
@@ -306,9 +337,10 @@ def main() -> int:
 
         print(
             "Assurance documentation contract passed: governance and threat model are compiled against the Automation Policy IR "
-            "six-job Spotlight authority graph, including Actions-read-only source-epoch mutation admission, diagnostic-only quarantine, "
-            "PR-write proposal, Actions-only approval, and terminal contents-write/PR-read/check-read merge authority; Ledger v2, "
-            "predicate v3, historical schema immutability, cache boundaries, live ruleset drift verification, and admin-scope audit semantics remain intact."
+            "seven-job Spotlight authority graph, including stale-only monotone reconciliation, Actions-read-only source-epoch "
+            "constructive-mutation admission, diagnostic-only quarantine, PR-write proposal, Actions-only approval, and terminal "
+            "contents-write/PR-read/check-read merge authority; Ledger v2, predicate v3, historical schema immutability, cache "
+            "boundaries, live ruleset drift verification, and admin-scope audit semantics remain intact."
         )
         return 0
     except (OSError, ValueError) as exc:

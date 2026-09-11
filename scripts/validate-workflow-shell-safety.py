@@ -59,7 +59,7 @@ SYSTEM_ESCAPE = re.compile(r"\bsystem\s*\(")
 
 PRIVILEGED_JOBS = {
     "profile-stats.yml": ("publish", "dispatch"),
-    "spotlight-link-sync.yml": ("propose", "approve", "merge"),
+    "spotlight-link-sync.yml": ("reconcile", "propose", "approve", "merge"),
 }
 GIT_AUTHORIZED_JOB = ("profile-stats.yml", "publish")
 
