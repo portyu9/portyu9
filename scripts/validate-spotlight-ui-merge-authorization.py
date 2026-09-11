@@ -5,7 +5,7 @@ The pre-immutable-candidate validator is retained byte-for-byte in
 spotlight_merge_authorization_core.py. This layer reuses its independent mutation-budget,
 dispatch, and check-suite proofs while replacing the retired shared-branch assumptions
 with the content-addressed immutable-candidate transaction, reductive reconciliation,
-and source-compiled terminal concurrency contracts.
+source-compiled terminal concurrency, and short-lived mutation-lease contracts.
 """
 from __future__ import annotations
 
@@ -53,8 +53,8 @@ def require(condition: bool, message: str) -> None:
 
 
 def validate_reconciliation(reconcile: str) -> None:
-    require("name: reconcile-stale-candidates-write" in reconcile and "needs: plan" in reconcile,
-            "Spotlight reconciler identity/dependency changed")
+    require("name: reconcile-stale-candidates-write" in reconcile and "needs: [plan, lease]" in reconcile,
+            "Spotlight reconciler identity/lease dependency changed")
     require("timeout-minutes: 3" in reconcile,
             "Spotlight reconciler authority window changed")
     require(TERMINAL_CONCURRENCY in reconcile,
@@ -130,12 +130,12 @@ def validate_candidate_publication(sync: str) -> None:
     for block, label in ((propose, "proposer"), (approve, "approval"), (merge, "terminal merge")):
         require(TERMINAL_CONCURRENCY in block,
                 f"Spotlight {label} must remain in non-cancellable serialized terminal concurrency")
-    require("needs: [plan, reconcile, budget]" in propose,
-            "Spotlight proposer must wait for reconciliation and positive budget admission")
-    require("needs: [plan, reconcile, budget, propose]" in approve,
-            "Spotlight approval must remain downstream of reconciliation/proposal")
-    require("needs: [plan, reconcile, budget, propose, approve]" in merge,
-            "Spotlight terminal merge must remain downstream of reconciliation/approval")
+    require("needs: [plan, lease, reconcile, budget]" in propose,
+            "Spotlight proposer must wait for the exact lease, reconciliation, and positive budget admission")
+    require("needs: [plan, lease, reconcile, budget, propose]" in approve,
+            "Spotlight approval must remain downstream of the exact lease/reconciliation/proposal")
+    require("needs: [plan, lease, reconcile, budget, propose, approve]" in merge,
+            "Spotlight terminal merge must remain downstream of the exact lease/reconciliation/approval")
 
     require(f'BOT_BRANCH_PREFIX: "{CANDIDATE_PREFIX}"' in sync,
             "Spotlight immutable candidate prefix changed")
@@ -278,29 +278,40 @@ def validate_run_provenance(approve: str) -> None:
 
 
 def legacy_mutation_budget_view(sync: str) -> str:
-    """Project only the new maintenance dependency out for the frozen legacy budget proof."""
+    """Project lease and maintenance dependencies out for the frozen legacy budget proof."""
     replacements = (
-        ("    needs: [plan, reconcile, budget]\n", "    needs: [plan, budget]\n"),
-        ("    needs: [plan, reconcile, budget, propose]\n", "    needs: [plan, budget, propose]\n"),
-        ("    needs: [plan, reconcile, budget, propose, approve]\n", "    needs: [plan, budget, propose, approve]\n"),
+        ("    needs: [plan, lease, reconcile, budget]\n", "    needs: [plan, budget]\n"),
+        ("    needs: [plan, lease, reconcile, budget, propose]\n", "    needs: [plan, budget, propose]\n"),
+        ("    needs: [plan, lease, reconcile, budget, propose, approve]\n", "    needs: [plan, budget, propose, approve]\n"),
     )
     legacy = sync
     for current, old in replacements:
         require(legacy.count(current) == 1,
-                f"Spotlight reconciliation dependency projection is ambiguous: {current.strip()}")
+                f"Spotlight lease/reconciliation dependency projection is ambiguous: {current.strip()}")
         legacy = legacy.replace(current, old, 1)
     return legacy
 
 
 def legacy_dispatch_view(stats: str) -> str:
-    """Project terminal scheduling out only for the frozen exact-dispatch proof."""
-    require(stats.count(PROFILE_DISPATCH_CONCURRENCY) == 4,
-            "Profile-stats terminal concurrency must cover attest/publish continuation and dispatch")
+    """Project only item-7 scheduling and item-8 lease overlays out for the frozen dispatch proof."""
+    require(stats.count(PROFILE_DISPATCH_CONCURRENCY) == 5,
+            "Profile-stats terminal concurrency must cover lease/attestation/staging/publication/dispatch")
     dispatch = core.job_block(stats, "dispatch", None)
     require(dispatch.count(PROFILE_DISPATCH_CONCURRENCY) == 1,
             "Profile-stats dispatcher must remain in terminal concurrency")
-    return stats.replace(PROFILE_DISPATCH_CONCURRENCY, "", 1) if stats.index(PROFILE_DISPATCH_CONCURRENCY) > stats.index("  dispatch:\n") else \
-        stats[:stats.index("  dispatch:\n")] + dispatch.replace(PROFILE_DISPATCH_CONCURRENCY, "", 1)
+    current_needs = "    needs: [publish, lease, attest]\n"
+    require(dispatch.count(current_needs) == 1,
+            "Profile-stats dispatcher must retain the exact lease-aware dependency set")
+    legacy = dispatch.replace(current_needs, "    needs: publish\n", 1)
+    lease_step = "      - name: Verify exact short-lived mutation lease\n"
+    dispatch_step = "      - name: Dispatch exact Spotlight reconciliation workflow\n"
+    require(legacy.count(lease_step) == 1 and legacy.count(dispatch_step) == 1,
+            "Profile-stats dispatch lease projection cannot isolate the exact proof step")
+    start = legacy.index(lease_step)
+    end = legacy.index(dispatch_step, start)
+    legacy = legacy[:start] + legacy[end:]
+    legacy = legacy.replace(PROFILE_DISPATCH_CONCURRENCY, "", 1)
+    return stats[:stats.index("  dispatch:\n")] + legacy
 
 
 def validate(sync: str, stats: str, policy: str) -> None:
@@ -311,9 +322,9 @@ def validate(sync: str, stats: str, policy: str) -> None:
     require("merge_ui_after_checks" not in sync and "merge_ui_after_checks" not in stats,
             "Spotlight standing authorization must not depend on a manual merge input")
 
-    # Keep the pre-reconciliation mutation-budget validator byte-for-byte independent.
-    # Its only stale assumption is the downstream needs list, so project the separately
-    # validated maintenance dependency out without changing any runtime/predicate/API bytes.
+    # Keep the pre-reconciliation/pre-lease mutation-budget validator byte-for-byte independent.
+    # Project only the separately validated lease + maintenance dependency edges out without
+    # changing any runtime predicates or API bytes.
     core.validate_mutation_budget(legacy_mutation_budget_view(sync))
     approve = core.job_block(sync, "approve", "merge")
     merge = core.job_block(sync, "merge", None)
@@ -344,6 +355,9 @@ def validate(sync: str, stats: str, policy: str) -> None:
     dispatch = core.job_block(stats, "dispatch", None)
     require(PROFILE_DISPATCH_CONCURRENCY in dispatch,
             "Profile-stats dispatcher must remain in non-cancellable serialized terminal concurrency")
+    require("needs: [publish, lease, attest]" in dispatch and
+            "      - name: Verify exact short-lived mutation lease" in dispatch,
+            "Profile-stats dispatcher must remain gated by the exact mutation lease")
     core.validate_dispatch_job(legacy_dispatch_view(stats))
 
     for forbidden in (
@@ -446,8 +460,10 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         1,
     )
     expect_failure(wrong_suite, stats, policy, "check-provenance contract is missing")
+    # The lease mint is the first terminal-concurrency job; mutate both the lease and
+    # reconcile blocks so this negative test necessarily reaches a mutation writer.
     expect_failure(
-        sync.replace(TERMINAL_CONCURRENCY, TERMINAL_CONCURRENCY.replace("false", "true", 1), 1),
+        sync.replace(TERMINAL_CONCURRENCY, TERMINAL_CONCURRENCY.replace("false", "true", 1), 2),
         stats, policy, "non-cancellable serialized terminal concurrency",
     )
     policy_without_append_once = re.sub(r"append-once", "mutable", policy, flags=re.IGNORECASE)
@@ -464,7 +480,7 @@ def main() -> int:
         validate(sync, stats, policy)
         self_test(sync, stats, policy)
         print(
-            "Spotlight UI merge authorization validation passed: stale interrupted candidates have topology-bound reductive reconciliation; "
+            "Spotlight UI merge authorization validation passed: stale interrupted candidates and every constructive writer are short-lived-lease bound; "
             "source epochs cross the read-only two-attempt constructive mutation budget; terminal side effects are serialized/non-cancellable; "
             "admitted proposals publish one content-addressed candidate ref; approval binds exact workflow runs; terminal merge consumes exact "
             "check-suite provenance and uses idempotent exact-ref cleanup."

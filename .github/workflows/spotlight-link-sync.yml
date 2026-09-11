@@ -100,9 +100,72 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  lease:
+    name: mint-mutation-lease-read-only
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    concurrency:
+      group: spotlight-link-sync-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      actions: read
+    outputs:
+      lease_id: ${{ steps.lease.outputs.lease_id }}
+      issued_at: ${{ steps.lease.outputs.issued_at }}
+      expires_at: ${{ steps.lease.outputs.expires_at }}
+      base_sha: ${{ steps.lease.outputs.base_sha }}
+      candidate_id: ${{ steps.lease.outputs.candidate_id }}
+
+    steps:
+      - name: Mint exact short-lived mutation lease
+        id: lease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
+        run: |
+          set -euo pipefail
+          LEASE_TTL_SECONDS=1800
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$README_SHA256_AFTER" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$GITHUB_REPOSITORY_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$BASE_SHA"
+          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"
+          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"
+          test "$(jq -r .run_attempt <<<"$RUN")" = "$GITHUB_RUN_ATTEMPT"
+          test "$(jq -r .head_sha <<<"$RUN")" = "$BASE_SHA"
+          test "$(jq -r .head_branch <<<"$RUN")" = "main"
+          test "$(jq -r .path <<<"$RUN")" = ".github/workflows/spotlight-link-sync.yml"
+          test "$(jq -r .repository.id <<<"$RUN")" = "$GITHUB_REPOSITORY_ID"
+          test "$(jq -r .head_repository.id <<<"$RUN")" = "$GITHUB_REPOSITORY_ID"
+          ISSUED_AT="$(date -u +%s)"
+          [[ "$ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
+          EXPIRES_AT=$((ISSUED_AT + LEASE_TTL_SECONDS))
+          LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$BASE_SHA" "$CANDIDATE_ID" "$ISSUED_AT" "$EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
+          echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"
+          echo "issued_at=$ISSUED_AT" >> "$GITHUB_OUTPUT"
+          echo "expires_at=$EXPIRES_AT" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "candidate_id=$CANDIDATE_ID" >> "$GITHUB_OUTPUT"
+
   reconcile:
     name: reconcile-stale-candidates-write
-    needs: plan
+    needs: [plan, lease]
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     concurrency:
@@ -121,8 +184,35 @@ jobs:
           BASE_SHA: ${{ needs.plan.outputs.base_sha }}
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
         run: |
           set -euo pipefail
+          # Verify exact short-lived mutation lease.
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=240
+          EXPECTED_BASE_SHA="$BASE_SHA"
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+
           test "$CHANGED" = "true" || test "$CHANGED" = "false"
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -354,7 +444,7 @@ jobs:
   propose:
     if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true'
     name: propose-readme-only-write
-    needs: [plan, reconcile, budget]
+    needs: [plan, lease, reconcile, budget]
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     concurrency:
@@ -385,8 +475,35 @@ jobs:
           SOURCE_SHA: ${{ needs.plan.outputs.base_sha }}
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
         run: |
           set -euo pipefail
+          # Verify exact short-lived mutation lease.
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=300
+          EXPECTED_BASE_SHA="$SOURCE_SHA"
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+
           PLAN="spotlight-link-plan/plan.json"
           PROPOSED="spotlight-link-plan/README.md"
           test -s "$PLAN" && test -s "$PROPOSED"
@@ -507,7 +624,7 @@ jobs:
   approve:
     if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success'
     name: approve-bot-pr-checks-only
-    needs: [plan, reconcile, budget, propose]
+    needs: [plan, lease, reconcile, budget, propose]
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     concurrency:
@@ -535,8 +652,34 @@ jobs:
           CANDIDATE_BRANCH: ${{ needs.propose.outputs.candidate_branch }}
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
         run: |
           set -euo pipefail
+          # Verify exact short-lived mutation lease.
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=780
+          EXPECTED_BASE_SHA="$BASE_SHA"
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
 
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
@@ -558,7 +701,6 @@ jobs:
           test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
           test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
 
-          # Bind workflow display names to their canonical default-branch workflow files.
           CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"
           DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"
           PROFILE_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"
@@ -568,9 +710,6 @@ jobs:
             --argjson profile "$PROFILE_WORKFLOW_ID" \
             '[{"name":"CodeQL","workflow_id":$codeql},{"name":"Dependency review","workflow_id":$dependency},{"name":"Profile quality","workflow_id":$profile}] | sort_by(.name)')"
 
-          # Keep the long-lived wait under Actions-only authority. The terminal merge job
-          # receives repository-content write plus pull-request read authority only after all
-          # three canonical workflows have completed successfully for the exact reviewed head.
           APPROVAL_REQUESTED_RUN_IDS=""
           for attempt in $(seq 1 60); do
             RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
@@ -661,7 +800,7 @@ jobs:
   merge:
     if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'
     name: merge-readme-only-terminal-write
-    needs: [plan, reconcile, budget, propose, approve]
+    needs: [plan, lease, reconcile, budget, propose, approve]
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     concurrency:
@@ -683,6 +822,11 @@ jobs:
           CANDIDATE_BRANCH: ${{ needs.propose.outputs.candidate_branch }}
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
           CODEQL_RUN_ID: ${{ needs.approve.outputs.codeql_run_id }}
           CODEQL_CHECK_SUITE_ID: ${{ needs.approve.outputs.codeql_check_suite_id }}
           DEPENDENCY_RUN_ID: ${{ needs.approve.outputs.dependency_run_id }}
@@ -691,13 +835,32 @@ jobs:
           PROFILE_CHECK_SUITE_ID: ${{ needs.approve.outputs.profile_check_suite_id }}
         run: |
           set -euo pipefail
+          # Verify exact short-lived mutation lease.
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=240
+          EXPECTED_BASE_SHA="$BASE_SHA"
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
 
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
 
-          # Revalidate the exact PR, mutable roots, immutable candidate ref, README-only closure,
-          # and required checks after the Actions-only wait. This job performs no polling.
           PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .state <<<"$PR")" = "open"
           test "$(jq -r .base.ref <<<"$PR")" = "main"
@@ -750,7 +913,6 @@ jobs:
           OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
           test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
 
-          # Revalidate both mutable roots and the immutable candidate ref immediately before merge.
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
@@ -760,8 +922,6 @@ jobs:
           MERGE_SHA="$(jq -r .sha <<<"$RESULT")"
           test "$MERGE_SHA" != "null"
 
-          # Delete only the consumed immutable candidate ref after proving the exact reviewed head
-          # merged and main points at that merge. The candidate ref is never moved in its lifetime.
           MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .merged <<<"$MERGED_PR")" = "true"
           test "$(jq -r .state <<<"$MERGED_PR")" = "closed"

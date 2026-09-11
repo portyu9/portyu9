@@ -36,7 +36,11 @@ GOV_REQUIRED = (
     "validate-profile-cache-contract.py",
     "generate-read-only",
     "prepare-attestation-read-only",
+    "mint-mutation-lease-read-only",
+    "short-lived mutation lease",
+    "minimum remaining lifetime",
     "attest-write-only",
+    "exactly two reviewed read-only proofs",
     "publish-write-only",
     "dispatch-spotlight-link-sync",
     "reconcile-stale-candidates-write",
@@ -46,7 +50,6 @@ GOV_REQUIRED = (
     "diagnostic-only quarantine",
     "id-token: write",
     "attestations: write",
-    "no repository-authored shell",
     "validate-ruleset-contract.py --live",
     "live GitHub control-plane",
     "admin-scope",
@@ -79,6 +82,10 @@ THREAT_REQUIRED = (
     "exactly five workflows",
     "spotlight-link-sync.yml",
     "dispatch-spotlight-link-sync",
+    "mint-mutation-lease-read-only",
+    "short-lived mutation lease",
+    "minimum remaining lifetime",
+    "two reviewed read-only proof shells",
     "reconcile-stale-candidates-write",
     "30-minute",
     "monotone-reductive",
@@ -271,6 +278,18 @@ def self_test(
         f"permissions drifted from Automation Policy IR for {merge_name}",
     )
 
+    lease_name = expected_jobs["lease"][0]
+    missing_lease = remove_authority_row(governance, lease_name)
+    expect_failure(
+        lambda: validate_doc_job_graph(
+            missing_lease,
+            expected_jobs,
+            label="governance",
+            table_scope="Spotlight link sync",
+        ),
+        lease_name,
+    )
+
     reconcile_name = expected_jobs["reconcile"][0]
     missing_reconcile = remove_authority_row(governance, reconcile_name)
     expect_failure(
@@ -307,6 +326,14 @@ def self_test(
         quarantine_name,
     )
 
+    require("minimum remaining lifetime" in governance,
+            "assurance self-test fixture lost minimum remaining lifetime phrase")
+    lease_semantics_removed = governance.replace("minimum remaining lifetime", "remaining lifetime")
+    expect_failure(
+        lambda: validate_required_phrases(lease_semantics_removed, threat),
+        "minimum remaining lifetime",
+    )
+
     stale_fixed_branch = governance.replace(
         "derives `automation/spotlight-links/<sha256(main SHA, generated SHA, proposed README digest)>`",
         "resets the fixed `automation/spotlight-links` branch",
@@ -337,10 +364,11 @@ def main() -> int:
 
         print(
             "Assurance documentation contract passed: governance and threat model are compiled against the Automation Policy IR "
-            "seven-job Spotlight authority graph, including stale-only monotone reconciliation, Actions-read-only source-epoch "
-            "constructive-mutation admission, diagnostic-only quarantine, PR-write proposal, Actions-only approval, and terminal "
-            "contents-write/PR-read/check-read merge authority; Ledger v2, predicate v3, historical schema immutability, cache "
-            "boundaries, live ruleset drift verification, and admin-scope audit semantics remain intact."
+            "eight-job Spotlight authority graph, including Actions-read-only short-lived mutation lease minting, stale-only monotone "
+            "reconciliation, Actions-read-only source-epoch constructive-mutation admission, diagnostic-only quarantine, PR-write proposal, "
+            "Actions-only approval, and terminal contents-write/PR-read/check-read merge authority; minimum remaining lifetime covers each "
+            "writer hard timeout; Ledger v2, predicate v3, historical schema immutability, cache boundaries, live ruleset drift verification, "
+            "and admin-scope audit semantics remain intact."
         )
         return 0
     except (OSError, ValueError) as exc:
