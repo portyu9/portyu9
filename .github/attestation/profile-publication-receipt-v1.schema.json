@@ -123,7 +123,7 @@
         "preparation": {"const": "contents:read"},
         "attestation": {"const": "id-token:write,attestations:write"},
         "publication": {"const": "contents:write"},
-        "separation": {"const": "Publication completes before receipt preparation; the receipt signer cannot write repository contents and executes no repository-authored code."}
+        "separation": {"const": "Publication completes before receipt preparation; the receipt signer cannot write repository contents and executes only one reviewed read-only mutation-lease proof shell plus digest-checked transport and pinned actions/attest."}
       }
     },
     "claim": {"const": "The actual generated branch commit and parent were revalidated after publication and are bound to the exact published evidence digests and trusted source epoch; this attests repository-defined publication provenance, not universal correctness."}
