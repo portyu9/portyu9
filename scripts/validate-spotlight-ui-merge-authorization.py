@@ -460,8 +460,10 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         1,
     )
     expect_failure(wrong_suite, stats, policy, "check-provenance contract is missing")
+    # The lease mint is the first terminal-concurrency job; mutate both the lease and
+    # reconcile blocks so this negative test necessarily reaches a mutation writer.
     expect_failure(
-        sync.replace(TERMINAL_CONCURRENCY, TERMINAL_CONCURRENCY.replace("false", "true", 1), 1),
+        sync.replace(TERMINAL_CONCURRENCY, TERMINAL_CONCURRENCY.replace("false", "true", 1), 2),
         stats, policy, "non-cancellable serialized terminal concurrency",
     )
     policy_without_append_once = re.sub(r"append-once", "mutable", policy, flags=re.IGNORECASE)
