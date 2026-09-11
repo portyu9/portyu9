@@ -553,7 +553,12 @@ jobs:
             "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
 
+      - name: Publication candidate already current
+        if: needs.stage.outputs.changed == 'false'
+        run: echo "Validated generated profile evidence is already current."
+
       - name: Download sealed generated publication candidate
+        if: needs.stage.outputs.changed == 'true'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: generated-publication-candidate
@@ -561,6 +566,7 @@ jobs:
           digest-mismatch: error
 
       - name: Verify sealed generated publication candidate
+        if: needs.stage.outputs.changed == 'true'
         env:
           BASE_SHA: ${{ needs.stage.outputs.base_sha }}
           CANDIDATE_SHA: ${{ needs.stage.outputs.candidate_sha }}
@@ -611,6 +617,7 @@ jobs:
 
       - name: Publish sealed artifact commit and re-prove remote head
         id: publish
+        if: needs.stage.outputs.changed == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}
