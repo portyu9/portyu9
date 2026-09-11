@@ -4,8 +4,8 @@
 The pre-immutable-candidate validator is retained byte-for-byte in
 spotlight_merge_authorization_core.py. This layer reuses its independent mutation-budget,
 dispatch, and check-suite proofs while replacing the retired shared-branch assumptions
-with the content-addressed immutable-candidate transaction and reductive reconciliation
-contracts.
+with the content-addressed immutable-candidate transaction, reductive reconciliation,
+and source-compiled terminal concurrency contracts.
 """
 from __future__ import annotations
 
@@ -21,6 +21,18 @@ STATS = ROOT / ".github/workflows/profile-stats.yml"
 POLICY = ROOT / ".github/SPOTLIGHT_UI_MERGE_AUTHORIZATION.md"
 
 CANDIDATE_PREFIX = "automation/spotlight-links/"
+TERMINAL_CONCURRENCY = (
+    "    concurrency:\n"
+    "      group: spotlight-link-sync-terminal\n"
+    "      cancel-in-progress: false\n"
+    "      queue: max\n"
+)
+PROFILE_DISPATCH_CONCURRENCY = (
+    "    concurrency:\n"
+    "      group: profile-stats-terminal\n"
+    "      cancel-in-progress: false\n"
+    "      queue: max\n"
+)
 CANDIDATE_FORMULA_PROPOSE = (
     'CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$SOURCE_SHA" "$GENERATED_SHA" '
     '"$README_SHA256_AFTER" | sha256sum | cut -d\' \' -f1)"'
@@ -45,6 +57,8 @@ def validate_reconciliation(reconcile: str) -> None:
             "Spotlight reconciler identity/dependency changed")
     require("timeout-minutes: 3" in reconcile,
             "Spotlight reconciler authority window changed")
+    require(TERMINAL_CONCURRENCY in reconcile,
+            "Spotlight reconciler must remain in non-cancellable serialized terminal concurrency")
     require("permissions:\n      contents: write\n      pull-requests: write" in reconcile,
             "Spotlight reconciler must retain only contents/PR write authority")
     for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "actions: write", "checks: read"):
@@ -113,6 +127,9 @@ def validate_candidate_publication(sync: str) -> None:
     merge = core.job_block(sync, "merge", None)
 
     validate_reconciliation(reconcile)
+    for block, label in ((propose, "proposer"), (approve, "approval"), (merge, "terminal merge")):
+        require(TERMINAL_CONCURRENCY in block,
+                f"Spotlight {label} must remain in non-cancellable serialized terminal concurrency")
     require("needs: [plan, reconcile, budget]" in propose,
             "Spotlight proposer must wait for reconciliation and positive budget admission")
     require("needs: [plan, reconcile, budget, propose]" in approve,
@@ -275,6 +292,17 @@ def legacy_mutation_budget_view(sync: str) -> str:
     return legacy
 
 
+def legacy_dispatch_view(stats: str) -> str:
+    """Project terminal scheduling out only for the frozen exact-dispatch proof."""
+    require(stats.count(PROFILE_DISPATCH_CONCURRENCY) == 4,
+            "Profile-stats terminal concurrency must cover attest/publish continuation and dispatch")
+    dispatch = core.job_block(stats, "dispatch", None)
+    require(dispatch.count(PROFILE_DISPATCH_CONCURRENCY) == 1,
+            "Profile-stats dispatcher must remain in terminal concurrency")
+    return stats.replace(PROFILE_DISPATCH_CONCURRENCY, "", 1) if stats.index(PROFILE_DISPATCH_CONCURRENCY) > stats.index("  dispatch:\n") else \
+        stats[:stats.index("  dispatch:\n")] + dispatch.replace(PROFILE_DISPATCH_CONCURRENCY, "", 1)
+
+
 def validate(sync: str, stats: str, policy: str) -> None:
     require("  workflow_dispatch:\n" in sync,
             "Spotlight synchronization must retain a manual recovery dispatch")
@@ -291,6 +319,8 @@ def validate(sync: str, stats: str, policy: str) -> None:
     merge = core.job_block(sync, "merge", None)
     require("name: approve-bot-pr-checks-only" in approve,
             "Spotlight approval job identity changed")
+    require(TERMINAL_CONCURRENCY in approve,
+            "Spotlight approval must remain in non-cancellable serialized terminal concurrency")
     require("permissions:\n      contents: read\n      actions: write" in approve,
             "Spotlight approval must retain only contents-read plus Actions-write authority")
     require("timeout-minutes: 12" in approve and
@@ -302,6 +332,8 @@ def validate(sync: str, stats: str, policy: str) -> None:
             "Spotlight terminal merge job identity changed")
     require("timeout-minutes: 3" in merge,
             "Spotlight terminal merge authority window changed")
+    require(TERMINAL_CONCURRENCY in merge,
+            "Spotlight terminal merge must remain non-cancellable and max-queued")
     require("permissions:\n      contents: write\n      pull-requests: read\n      checks: read" in merge,
             "Spotlight terminal merge authority changed")
     for forbidden in ("for attempt in ", "sleep 10", "actions/checkout@", "actions/setup-python@", "python3 "):
@@ -309,7 +341,10 @@ def validate(sync: str, stats: str, policy: str) -> None:
                 f"Spotlight terminal merge acquired polling/authored execution surface: {forbidden}")
     core.validate_check_provenance(merge)
     validate_candidate_publication(sync)
-    core.validate_dispatch_job(stats)
+    dispatch = core.job_block(stats, "dispatch", None)
+    require(PROFILE_DISPATCH_CONCURRENCY in dispatch,
+            "Profile-stats dispatcher must remain in non-cancellable serialized terminal concurrency")
+    core.validate_dispatch_job(legacy_dispatch_view(stats))
 
     for forbidden in (
         "github.event_name == 'workflow_dispatch'", "inputs.merge_ui_after_checks", "pull_request_target",
@@ -411,6 +446,10 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         1,
     )
     expect_failure(wrong_suite, stats, policy, "check-provenance contract is missing")
+    expect_failure(
+        sync.replace(TERMINAL_CONCURRENCY, TERMINAL_CONCURRENCY.replace("false", "true", 1), 1),
+        stats, policy, "non-cancellable serialized terminal concurrency",
+    )
     policy_without_append_once = re.sub(r"append-once", "mutable", policy, flags=re.IGNORECASE)
     expect_failure(sync, stats, policy_without_append_once, "append-once")
 
@@ -426,8 +465,9 @@ def main() -> int:
         self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: stale interrupted candidates have topology-bound reductive reconciliation; "
-            "source epochs cross the read-only two-attempt constructive mutation budget; admitted proposals publish one content-addressed candidate ref; "
-            "approval binds exact workflow runs; terminal merge consumes exact check-suite provenance and uses idempotent exact-ref cleanup."
+            "source epochs cross the read-only two-attempt constructive mutation budget; terminal side effects are serialized/non-cancellable; "
+            "admitted proposals publish one content-addressed candidate ref; approval binds exact workflow runs; terminal merge consumes exact "
+            "check-suite provenance and uses idempotent exact-ref cleanup."
         )
         return 0
     except (OSError, ValueError) as exc:

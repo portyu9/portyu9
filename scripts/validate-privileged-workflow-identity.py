@@ -17,11 +17,11 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v15"
+VERSION = "governed-workflow-byte-identity-v16"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
-    ".github/workflows/profile-stats.yml": "625f0ba3cc0cd081cf2d55a0799650fd180200b3",
-    ".github/workflows/spotlight-link-sync.yml": "5cfea6413dffa7a347cd74eef3f20753f2f3678d",
+    ".github/workflows/profile-stats.yml": "585dc72e2d01f726461bf6241187cb5d42a87a37",
+    ".github/workflows/spotlight-link-sync.yml": "367f7d583d132853b08905442c097b3d9053f840",
 }
 
 PROFILE_STATS_FRESHNESS_SEQUENCE = (
@@ -44,6 +44,10 @@ SPOTLIGHT_RECONCILIATION_SEQUENCE = (
     "    name: reconcile-stale-candidates-write\n"
     "    needs: plan",
     "    timeout-minutes: 3\n"
+    "    concurrency:\n"
+    "      group: spotlight-link-sync-terminal\n"
+    "      cancel-in-progress: false\n"
+    "      queue: max\n"
     "    permissions:\n      contents: write\n      pull-requests: write",
     'EXPECTED_CANDIDATE_BRANCH=""',
     'STALE_AFTER_SECONDS=1800',
@@ -268,8 +272,8 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
-            "generated publication is source-epoch freshness bound · Spotlight has stale-only reconciliation, "
-            "source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
+            "generated publication is source-epoch freshness bound · autonomous planning/terminal concurrency bytes are locked · "
+            "Spotlight has stale-only reconciliation, source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
         )
         return 0
     except (OSError, ValueError) as exc:

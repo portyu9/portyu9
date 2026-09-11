@@ -15,10 +15,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: update-profile-stats
-  cancel-in-progress: true
-
 env:
   PYTHON_VERSION: "3.13.15"
 
@@ -28,6 +24,9 @@ jobs:
     name: generate-read-only
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    concurrency:
+      group: profile-stats-planning
+      cancel-in-progress: true
     permissions:
       contents: read
 
@@ -95,6 +94,9 @@ jobs:
     needs: generate
     runs-on: ubuntu-24.04
     timeout-minutes: 6
+    concurrency:
+      group: profile-stats-planning
+      cancel-in-progress: true
     permissions:
       contents: read
     outputs:
@@ -187,6 +189,10 @@ jobs:
     needs: attest
     runs-on: ubuntu-24.04
     timeout-minutes: 4
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
       id-token: write
@@ -243,6 +249,10 @@ jobs:
     needs: [generate, attest, attest_publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 6
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
     outputs:
@@ -364,6 +374,10 @@ jobs:
     needs: stage
     runs-on: ubuntu-24.04
     timeout-minutes: 3
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
 
@@ -449,6 +463,10 @@ jobs:
     needs: publish
     runs-on: ubuntu-24.04
     timeout-minutes: 2
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
     permissions:
       actions: write
 
