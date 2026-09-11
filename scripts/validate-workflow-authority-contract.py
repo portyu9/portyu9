@@ -4,7 +4,7 @@
 The generic workflow/parser/profile-publication firewall is preserved byte-for-byte in
 workflow_authority_contract_core.py. This layer owns the current Spotlight candidate
 transaction contract, whose branch identity is content-addressed and immutable, plus the
-stale-only reductive reconciliation boundary.
+stale-only reductive reconciliation boundary and the item-8 mutation-lease overlay.
 """
 from __future__ import annotations
 
@@ -33,6 +33,52 @@ def fail(message: str) -> None:
 def require(condition: bool, message: str) -> None:
     if not condition:
         fail(message)
+
+
+def _remove_named_step(block: str, name: str) -> str:
+    marker = f"      - name: {name}\n"
+    require(block.count(marker) == 1,
+            f"Profile Stats lease projection cannot isolate step: {name}")
+    start = block.index(marker)
+    tail = block[start + len(marker):]
+    next_step = core.re.search(r"(?m)^      - name: ", tail)
+    end = len(block) if next_step is None else start + len(marker) + next_step.start()
+    return block[:start] + block[end:]
+
+
+def project_legacy_profile_stats_source(workflow: str) -> str:
+    """Remove exactly the item-8 lease overlay before invoking the frozen source firewall."""
+    projected = workflow
+    lease = core.job_block(projected, "lease", "attest_publish")
+    require("name: mint-mutation-lease-read-only" in lease,
+            "Profile Stats lease projection lost the reviewed lease job")
+    projected = projected.replace(lease, "", 1)
+
+    for job_id, next_job_id, steps in (
+        ("attest_publish", "stage", (
+            "Verify exact short-lived mutation lease",
+            "Verify leased attestation predicate identity",
+        )),
+        ("publish", "dispatch", ("Verify exact short-lived mutation lease",)),
+        ("dispatch", None, ("Verify exact short-lived mutation lease",)),
+    ):
+        original = core.job_block(projected, job_id, next_job_id)
+        replacement = original
+        for step in steps:
+            replacement = _remove_named_step(replacement, step)
+        projected = projected.replace(original, replacement, 1)
+
+    for current, legacy in (
+        ("    needs: [attest, lease]\n", "    needs: attest\n"),
+        ("    needs: [generate, attest, lease, attest_publish]\n",
+         "    needs: [generate, attest, attest_publish]\n"),
+        ("    needs: [stage, lease, attest]\n", "    needs: stage\n"),
+        ("    needs: [publish, lease, attest]\n", "    needs: publish\n"),
+    ):
+        require(projected.count(current) == 1,
+                f"Profile Stats lease projection lost exact dependency overlay: {current.strip()}")
+        projected = projected.replace(current, legacy, 1)
+    return projected
 
 
 def validate_policy_cross_contracts(policy: dict[str, object], profile_stats: str, sync: str) -> None:
@@ -416,13 +462,14 @@ def main() -> int:
         readme = README.read_text(encoding="utf-8")
         validate_policy_cross_contracts(policy, profile_stats, sync)
         core.validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
-        core.validate_profile_stats_contract(profile_stats)
+        core.validate_profile_stats_contract(project_legacy_profile_stats_source(profile_stats))
         self_test_current_sync(sync, readme)
         core.validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
         print(
             f"Workflow authority validation passed: {policy['policyId']} is the executable semantic authority graph for "
             f"{len(policy['workflows'])} workflows and {sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs; "
-            "generic workflow/profile-publication guards remain byte-preserved; Spotlight has stale-only reductive reconciliation, "
+            "generic workflow/profile-publication guards remain byte-preserved under the exact lease projection; "
+            "Profile Stats mutation leases are compiled independently; Spotlight has stale-only reductive reconciliation, "
             "content-addressed create-once candidates, exact-ref approval/merge revalidation, and exact API-surface negative tests."
         )
         return 0
