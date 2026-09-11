@@ -17,11 +17,11 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v18"
+VERSION = "governed-workflow-byte-identity-v19"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
-    ".github/workflows/profile-stats.yml": "d44f2673618bbd6194fb30220e5a6164c8a74f0e",
-    ".github/workflows/spotlight-link-sync.yml": "56491024b61c6c05b1761b796a1837f08e85c0cc",
+    ".github/workflows/profile-stats.yml": "4e35122b9e094c9145bae4a61909299f503dbd21",
+    ".github/workflows/spotlight-link-sync.yml": "93b5ef74b8bb0fec9853f26eed717011ffea1b13",
 }
 
 PROFILE_STATS_FRESHNESS_SEQUENCE = (
@@ -155,6 +155,7 @@ MUTATION_LEASE_SEQUENCE = (
     'echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"',
     '# Verify exact short-lived mutation lease.',
     'test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"',
+    'test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"',
     'test "$EXPECTED_LEASE_ID" = "$LEASE_ID"',
 )
 
@@ -246,6 +247,15 @@ def validate_mutation_leases(profile: str, spotlight: str) -> None:
             "Profile Stats write jobs must each verify the exact lease")
     require(spotlight.count("# Verify exact short-lived mutation lease.") == 4,
             "Spotlight mutation jobs must each verify the exact lease inline")
+    guard = 'test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"'
+    require(profile.count(guard) == 3,
+            "Profile Stats write jobs must each reserve lease lifetime through hard timeout")
+    require(spotlight.count(guard) == 4,
+            "Spotlight mutation jobs must each reserve lease lifetime through hard timeout")
+    for fragment in ("LEASE_MIN_REMAINING_SECONDS=300", "LEASE_MIN_REMAINING_SECONDS=240", "LEASE_MIN_REMAINING_SECONDS=180"):
+        require(fragment in profile, f"Profile Stats mutation-lease reserve contract is missing: {fragment}")
+    for fragment in ("LEASE_MIN_REMAINING_SECONDS=240", "LEASE_MIN_REMAINING_SECONDS=300", "LEASE_MIN_REMAINING_SECONDS=780"):
+        require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
 
 
 def self_test() -> None:
@@ -268,9 +278,7 @@ def self_test() -> None:
     synthetic = "\n".join(PROFILE_STATS_LEASE_BINDING_SEQUENCE)
     validate_profile_stats_lease_binding(synthetic)
     try:
-        validate_profile_stats_lease_binding(
-            synthetic.replace(PROFILE_STATS_LEASE_BINDING_SEQUENCE[9], "", 1)
-        )
+        validate_profile_stats_lease_binding(synthetic.replace(PROFILE_STATS_LEASE_BINDING_SEQUENCE[9], "", 1))
     except ValueError:
         pass
     else:
@@ -338,9 +346,9 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
             "generated publication is source-epoch freshness bound · autonomous planning/terminal concurrency bytes are locked · "
-            "Profile Stats leases re-prove the generated base and predicate identity · short-lived mutation leases bind the exact "
-            "run/base/candidate transaction · Spotlight retains stale-only reconciliation, source-epoch constructive-mutation admission, "
-            "immutable candidates, and exact-run/suite authorization"
+            "Profile Stats leases re-prove the generated base and predicate identity · lease reserves cover every writer hard timeout · "
+            "short-lived mutation leases bind the exact run/base/candidate transaction · Spotlight retains stale-only reconciliation, "
+            "source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
         )
         return 0
     except (OSError, ValueError) as exc:
