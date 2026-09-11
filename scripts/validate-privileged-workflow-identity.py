@@ -130,9 +130,9 @@ SPOTLIGHT_IMMUTABLE_CANDIDATE_SEQUENCE = (
 MUTATION_LEASE_SEQUENCE = (
     'name: mint-mutation-lease-read-only',
     'LEASE_TTL_SECONDS=1800',
+    'test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"',
     'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"',
     'test "$(jq -r .run_attempt <<<"$RUN")" = "$GITHUB_RUN_ATTEMPT"',
-    'test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"',
     'EXPIRES_AT=$((ISSUED_AT + LEASE_TTL_SECONDS))',
     'echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"',
     '# Verify exact short-lived mutation lease.',
