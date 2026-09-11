@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json",
+  "title": "Ƴunior Ƥortal generated publication receipt predicate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "repository",
+    "workflowRef",
+    "run",
+    "predicateSchema",
+    "source",
+    "transaction",
+    "publication",
+    "evidence",
+    "claim"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "generated-publication-receipt"},
+    "repository": {"const": "portyu9/portyu9"},
+    "workflowRef": {"const": "portyu9/portyu9/.github/workflows/profile-stats.yml@refs/heads/main"},
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "attempt", "url"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "attempt": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "url": {"type": "string", "pattern": "^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
+      }
+    },
+    "predicateSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "digest"],
+      "properties": {
+        "id": {"const": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mainSha", "epoch"],
+      "properties": {
+        "mainSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "epoch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["version", "algorithm", "fileCount", "closureSha256"],
+          "properties": {
+            "version": {"const": "profile-stats-source-epoch-v1"},
+            "algorithm": {"const": "sha256-sorted-path-nul-git-blob-oid-lf-v1"},
+            "fileCount": {"type": "integer", "minimum": 1},
+            "closureSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["leaseId", "candidateId"],
+      "properties": {
+        "leaseId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "candidateId": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["branch", "commitSha", "parentSha", "gitObjectSha256"],
+      "properties": {
+        "branch": {"const": "generated"},
+        "commitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "parentSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "gitObjectSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profileEvidencePredicateSha256", "subjectSet", "subjects"],
+      "properties": {
+        "profileEvidencePredicateSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "subjectSet": {"const": "generated-profile-evidence"},
+        "subjects": {
+          "type": "array",
+          "minItems": 11,
+          "maxItems": 11,
+          "prefixItems": [
+            {"$ref": "#/$defs/signalWideLight"},
+            {"$ref": "#/$defs/signalWideDark"},
+            {"$ref": "#/$defs/signalCompactLight"},
+            {"$ref": "#/$defs/signalCompactDark"},
+            {"$ref": "#/$defs/spotlight1Light"},
+            {"$ref": "#/$defs/spotlight1Dark"},
+            {"$ref": "#/$defs/spotlight2Light"},
+            {"$ref": "#/$defs/spotlight2Dark"},
+            {"$ref": "#/$defs/spotlight3Light"},
+            {"$ref": "#/$defs/spotlight3Dark"},
+            {"$ref": "#/$defs/portfolioLedger"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "claim": {"const": "This receipt binds the actual published generated Git commit and parent to the exact validated evidence bytes, production source epoch, workflow run, and leased transaction that produced the publication."}
+  },
+  "$defs": {
+    "digest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "signalWideLight": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "profile-stats/profile/signal-field-wide-light.svg"}}}]},
+    "signalWideDark": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "profile-stats/profile/signal-field-wide-dark.svg"}}}]},
+    "signalCompactLight": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "profile-stats/profile/signal-field-compact-light.svg"}}}]},
+    "signalCompactDark": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "profile-stats/profile/signal-field-compact-dark.svg"}}}]},
+    "spotlight1Light": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "engineering-spotlight/spotlight-1-light.svg"}}}]},
+    "spotlight1Dark": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "engineering-spotlight/spotlight-1-dark.svg"}}}]},
+    "spotlight2Light": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "engineering-spotlight/spotlight-2-light.svg"}}}]},
+    "spotlight2Dark": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "engineering-spotlight/spotlight-2-dark.svg"}}}]},
+    "spotlight3Light": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "engineering-spotlight/spotlight-3-light.svg"}}}]},
+    "spotlight3Dark": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "engineering-spotlight/spotlight-3-dark.svg"}}}]},
+    "portfolioLedger": {"allOf": [{"$ref": "#/$defs/digest"}, {"properties": {"path": {"const": "portfolio-evidence/portfolio-evidence-ledger.json"}}}]}
+  }
+}
