@@ -120,7 +120,10 @@ def validate_profile_candidate_binding(text: str, label: str) -> None:
         '[[ "$LEASED_GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]',
         'test "$base_sha" = "$LEASED_GENERATED_SHA"',
     ):
-        require(fragment in text, f"{label} lost Profile Stats candidate binding: {fragment}")
+        require(
+            fragment in text,
+            f"{label} lost Profile Stats generated base or predicate candidate binding: {fragment}",
+        )
 
 
 def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: str) -> None:
