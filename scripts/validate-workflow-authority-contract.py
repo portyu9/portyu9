@@ -3,7 +3,8 @@
 
 The generic workflow/parser/profile-publication firewall is preserved byte-for-byte in
 workflow_authority_contract_core.py. This layer owns the current Spotlight candidate
-transaction contract, whose branch identity is now content-addressed and immutable.
+transaction contract, whose branch identity is content-addressed and immutable, plus the
+stale-only reductive reconciliation boundary.
 """
 from __future__ import annotations
 
@@ -129,7 +130,6 @@ def validate_immutable_candidate_contract(workflow: str, propose: str, approve: 
         'test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"',
         'test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"',
     ):
-        # Normalize one legacy quoting-sensitive fragment below rather than weakening the check.
         if " .parents" in fragment:
             fragment = fragment.replace("' .parents", "'.parents")
         require(fragment in propose,
@@ -167,11 +167,45 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
     require("validate-portfolio-evidence-ledger.py published/portfolio-evidence --require-live" in workflow,
             "Spotlight plan must revalidate published Ledger evidence")
 
+    reconcile = core.job_block(workflow, "reconcile", "budget")
     budget = core.job_block(workflow, "budget", "quarantine")
     quarantine = core.job_block(workflow, "quarantine", "propose")
     propose = core.job_block(workflow, "propose", "approve")
     approve = core.job_block(workflow, "approve", "merge")
     merge = core.job_block(workflow, "merge", None)
+
+    require("name: reconcile-stale-candidates-write" in reconcile and "needs: plan" in reconcile,
+            "Spotlight stale-candidate reconciler identity/dependency changed")
+    require("permissions:\n      contents: write\n      pull-requests: write" in reconcile,
+            "Spotlight stale-candidate reconciler authority changed")
+    require("STALE_AFTER_SECONDS=1800" in reconcile and 'test "$REF_COUNT" -le 20 || {' in reconcile,
+            "Spotlight stale-candidate reconciler lost age/namespace bounds")
+    require('if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && [ "$BRANCH" = "$EXPECTED_CANDIDATE_BRANCH" ]; then' in reconcile,
+            "Spotlight reconciler must preserve the current deterministic candidate")
+    require('test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"' in reconcile and
+            'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"' in reconcile,
+            "Spotlight reconciler lost exact bot PR identity binding")
+    require(reconcile.count('gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"') == 1 and
+            reconcile.count('gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}"') == 1,
+            "Spotlight reconciler mutation surface must remain one PR close plus one stale-ref delete")
+    for forbidden in ("gh api --method POST ", "gh api --method PUT ", "/approve", "/merge"):
+        require(forbidden not in reconcile,
+                f"Spotlight reconciler regained constructive mutation authority: {forbidden}")
+    core.require_exact_gh_api_surface(
+        reconcile,
+        label="Spotlight reconcile",
+        expected_lines=(
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+            'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"',
+            'REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}")"',
+            'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+            'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"',
+            'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"',
+            'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"',
+            'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null',
+            'REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"',
+        ),
+    )
 
     require("name: mutation-budget-read-only" in budget and "needs: plan" in budget,
             "Spotlight mutation budget identity/dependency changed")
@@ -212,12 +246,12 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
     require("exit 1" in quarantine and "GITHUB_STEP_SUMMARY" in quarantine,
             "Spotlight mutation quarantine must fail visibly while retaining read-only diagnostics")
 
-    require("needs: [plan, budget]" in propose and "needs.budget.outputs.allowed == 'true'" in propose,
-            "Spotlight proposal mutation must require positive budget admission")
-    require("needs: [plan, budget, propose]" in approve and "needs.budget.outputs.allowed == 'true'" in approve,
-            "Spotlight approval mutation must require positive budget admission")
-    require("needs: [plan, budget, propose, approve]" in merge and "needs.budget.outputs.allowed == 'true'" in merge,
-            "Spotlight terminal merge must require positive budget admission")
+    require("needs: [plan, reconcile, budget]" in propose and "needs.budget.outputs.allowed == 'true'" in propose,
+            "Spotlight proposal mutation must require successful reconciliation and positive budget admission")
+    require("needs: [plan, reconcile, budget, propose]" in approve and "needs.budget.outputs.allowed == 'true'" in approve,
+            "Spotlight approval mutation must remain downstream of reconciliation and positive budget admission")
+    require("needs: [plan, reconcile, budget, propose, approve]" in merge and "needs.budget.outputs.allowed == 'true'" in merge,
+            "Spotlight terminal merge must remain downstream of reconciliation and positive budget admission")
     require('APPROVAL_REQUESTED_RUN_IDS=""' in approve and 'case " $APPROVAL_REQUESTED_RUN_IDS " in' in approve,
             "Spotlight approval loop must locally de-duplicate approval mutations")
     require('APPROVAL_REQUESTED_RUN_IDS="${APPROVAL_REQUESTED_RUN_IDS} ${RUN_ID}"' in approve,
@@ -283,12 +317,14 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
             'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
             'MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"',
             'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"',
-            'if CANDIDATE_REF="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" 2>/dev/null)"; then',
+            'CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',
             'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null',
+            'AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',
         ),
     )
 
-    for block, label in ((budget, "budget"), (quarantine, "quarantine"), (propose, "propose"), (approve, "approve"), (merge, "merge")):
+    for block, label in ((reconcile, "reconcile"), (budget, "budget"), (quarantine, "quarantine"),
+                         (propose, "propose"), (approve, "approve"), (merge, "merge")):
         require("actions/checkout@" not in block and "actions/setup-python@" not in block,
                 f"Spotlight {label} authority job must not checkout or execute authored Python")
     require('compare/${BASE_SHA}...${HEAD_SHA}' in approve,
@@ -298,8 +334,10 @@ def validate_sync_contract(workflow: str, readme: str) -> None:
     for fragment in (
         'test "$(jq -r .merged <<<"$MERGED_PR")" = "true"',
         'test "$(jq -r .head.sha <<<"$MERGED_PR")" = "$HEAD_SHA"',
-        'test "$(jq -r .object.sha <<<"$CANDIDATE_REF")" = "$HEAD_SHA"',
+        'test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"',
+        'test "$(jq -r --arg ref "refs/heads/${CANDIDATE_BRANCH}" \'[.[] | select(.ref == $ref)][0].object.sha\' <<<"$CANDIDATE_REFS")" = "$HEAD_SHA"',
         'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null',
+        'test "$AFTER_EXACT" = "0"',
     ):
         require(fragment in merge,
                 f"Spotlight merge lost exact-head immutable-candidate cleanup closure: {fragment}")
@@ -355,6 +393,15 @@ def self_test_current_sync(workflow: str, readme: str) -> None:
         readme,
         "approval must independently rederive",
     )
+    expect_sync_failure(
+        workflow.replace(
+            'needs: [plan, reconcile, budget]',
+            'needs: [plan, budget]',
+            1,
+        ),
+        readme,
+        "must require successful reconciliation",
+    )
 
 
 def main() -> int:
@@ -375,8 +422,8 @@ def main() -> int:
         print(
             f"Workflow authority validation passed: {policy['policyId']} is the executable semantic authority graph for "
             f"{len(policy['workflows'])} workflows and {sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs; "
-            "generic workflow/profile-publication guards remain byte-preserved; Spotlight candidates are content-addressed, create-once, "
-            "exact-ref revalidated through approval/merge, and protected by exact API-surface plus negative mutation tests."
+            "generic workflow/profile-publication guards remain byte-preserved; Spotlight has stale-only reductive reconciliation, "
+            "content-addressed create-once candidates, exact-ref approval/merge revalidation, and exact API-surface negative tests."
         )
         return 0
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
