@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Lease-aware public loader for the repository Automation Policy IR.
+"""Lease- and receipt-aware public loader for the repository Automation Policy IR.
 
 The pre-lease loader is retained byte-for-byte in automation_policy_core.py. This
-wrapper projects only the item-8 lease extension out for the frozen legacy checks,
-then validates the complete lease-extended graph and compiles it against workflow
+wrapper projects only reviewed additive authority overlays out for frozen legacy
+checks, then validates the complete current graph and compiles it against workflow
 source. Existing consumers continue importing this module as the canonical policy.
 """
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import Any
 
 import automation_concurrency
 import automation_leases
+import automation_receipts
 import automation_policy_core as core
 from automation_policy_core import *  # noqa: F401,F403 - preserve the established public helper surface.
 
@@ -46,8 +47,8 @@ LEGACY_NEEDS = {
 
 
 def project_legacy_policy(payload: dict[str, Any]) -> dict[str, Any]:
-    """Remove exactly the lease extension, preserving every pre-item-8 policy byte-semantic."""
-    projected = copy.deepcopy(payload)
+    """Remove exact reviewed overlays, preserving every pre-item-8 policy byte-semantic."""
+    projected = automation_receipts.project_pre_receipt_policy(payload)
     for workflow_id in sorted(LEASE_WORKFLOWS):
         workflow = projected["workflows"][workflow_id]
         lease_job = workflow["lease"]["job"]
@@ -101,6 +102,7 @@ def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
             f"automation policy lease transaction workflow set changed: {sorted(machines)}")
     for workflow_id in sorted(LEASE_WORKFLOWS):
         validate_transaction_machine(workflow_id, machines[workflow_id], policy["workflows"])
+    automation_receipts.validate_policy(policy)
 
 
 def validate_policy(payload: Any) -> dict[str, Any]:
@@ -115,8 +117,8 @@ def validate_policy(payload: Any) -> dict[str, Any]:
             f"automation policy workflow {workflow_id}",
         )
 
-    # The projection is intentionally narrow: all pre-item-8 authority semantics
-    # still pass through the exact previous validator implementation.
+    # Each projection is narrow and independently validated before the frozen core
+    # sees the pre-item-8 graph. Current source is compiled again without projection.
     core.validate_policy(project_legacy_policy(payload))
     _validate_full_workflow_extensions(payload)
     return payload
@@ -132,6 +134,7 @@ def load_policy(path: Path = POLICY_PATH) -> dict[str, Any]:
     if path == POLICY_PATH:
         automation_concurrency.validate(policy, ROOT)
         automation_leases.validate_source(policy, ROOT)
+        automation_receipts.validate_source(policy, ROOT)
     return policy
 
 
@@ -146,15 +149,15 @@ def expect_policy_failure(payload: dict[str, Any], expected: str) -> None:
     try:
         validate_policy(payload)
     except (KeyError, ValueError) as exc:
-        require(expected in str(exc), f"automation policy lease self-test failed for wrong reason: {exc}")
+        require(expected in str(exc), f"automation policy overlay self-test failed for wrong reason: {exc}")
     else:
-        raise ValueError(f"automation policy lease self-test accepted forbidden drift: {expected}")
+        raise ValueError(f"automation policy overlay self-test accepted forbidden drift: {expected}")
 
 
 def _run_frozen_core_self_tests(projected: dict[str, Any]) -> None:
-    # The frozen core's one source-coupled self-test predates lease jobs. Suppress only
-    # that source compiler invocation while retaining every other legacy negative test;
-    # the full current concurrency source compiler runs immediately afterwards.
+    # The frozen core's one source-coupled self-test predates lease/receipt jobs.
+    # Suppress only that historical source compiler invocation while every current
+    # compiler runs independently immediately afterwards.
     original = core.automation_concurrency.self_test
     core.automation_concurrency.self_test = lambda *_args, **_kwargs: None
     try:
@@ -169,6 +172,7 @@ def self_test(policy: dict[str, Any]) -> None:
     _run_frozen_core_self_tests(projected)
     automation_concurrency.self_test(policy, ROOT)
     automation_leases.self_test(policy, ROOT)
+    automation_receipts.self_test(policy, ROOT)
 
     missing_lease = copy.deepcopy(policy)
     del missing_lease["workflows"]["profile-stats"]["lease"]
@@ -196,6 +200,7 @@ def main() -> int:
             f"{sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs · "
             f"{len(policy['transactionMachines'])} finite-state transactions · "
             f"{lease_jobs} short-lived mutation leases · {bound_jobs} lease-bound mutation jobs · "
+            "one post-publication receipt boundary · "
             f"{len(policy['requiredChecks'])} protected required-check bindings"
         )
         return 0
