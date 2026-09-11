@@ -317,26 +317,36 @@ def main() -> int:
         require("pull_request:" not in workflow,
                 "production refresh workflow must never run from pull_request events")
         generate = job_block(workflow, "generate", "attest")
-        attest = job_block(workflow, "attest", "attest_publish")
+        attest = job_block(workflow, "attest", "lease")
+        lease = job_block(workflow, "lease", "attest_publish")
         attest_publish = job_block(workflow, "attest_publish", "stage")
         stage = job_block(workflow, "stage", "publish")
         publish = job_block(workflow, "publish", "dispatch")
+        dispatch = job_block(workflow, "dispatch", None)
         require(exact_job_if(generate, "production generation") == MAIN_REF_EXPR,
                 "production generation job-level if must be the exact refs/heads/main guard")
         require("needs: generate" in attest,
                 "read-only attestation preparation must remain downstream of main-guarded generation")
-        require("needs: attest" in attest_publish,
-                "terminal attestation authority must consume only reviewed attestation preparation")
+        require("needs: attest" in lease,
+                "read-only mutation lease mint must consume only reviewed attestation preparation")
+        require("permissions:\n      actions: read" in lease,
+                "mutation lease mint must remain Actions-read-only")
+        require(exact_job_if(lease, "mutation lease mint") == ATTEST_DELTA_EXPR,
+                "mutation lease mint job-level if must be the exact scheduled-delta guard")
+        require("needs: [attest, lease]" in attest_publish,
+                "terminal attestation authority must consume reviewed preparation plus the read-only lease gate")
         require(exact_job_if(attest_publish, "terminal attestation") == ATTEST_DELTA_EXPR,
                 "terminal attestation job-level if must be the exact scheduled-delta guard")
-        require("needs: [generate, attest, attest_publish]" in stage,
-                "publication staging must remain downstream of generation, attestation preparation, and terminal attestation")
+        require("needs: [generate, attest, lease, attest_publish]" in stage,
+                "publication staging must remain downstream of generation, attestation preparation, lease, and terminal attestation")
         require(exact_job_if(stage, "publication staging") == ATTEST_DELTA_EXPR,
                 "publication staging job-level if must remain aligned with the exact attestation scheduled-delta guard")
-        require("needs: stage" in publish,
-                "terminal publication must remain downstream of read-only publication staging")
+        require("needs: [stage, lease, attest]" in publish,
+                "terminal publication must remain downstream of staging and the exact attestation/lease transaction")
         require(exact_job_if(publish, "terminal publication") == PUBLICATION_DELTA_EXPR,
                 "terminal publication job-level if must be the exact staged-candidate delta guard")
+        require("needs: [publish, lease, attest]" in dispatch,
+                "terminal dispatch must remain downstream of publication and the exact attestation/lease transaction")
 
         for phrase in (
             "content-addressed source epoch",
@@ -351,7 +361,7 @@ def main() -> int:
         print(
             f"Profile stats trigger contract passed: {len(files)} exact trusted production inputs compile to "
             f"source epoch sha256:{digest}; push invalidation is workflow-or-epoch only, validation-only scripts do not trigger publication; "
-            "main/manual/schedule guards and terminal attestation/publication delta boundaries remain unchanged."
+            "main/manual/schedule guards, read-only lease gating, and terminal attestation/publication delta boundaries remain exact."
         )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError, StopIteration, IndexError, SyntaxError) as exc:
