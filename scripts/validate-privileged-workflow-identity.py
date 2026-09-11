@@ -17,10 +17,10 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v19"
+VERSION = "governed-workflow-byte-identity-v20"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
-    ".github/workflows/profile-stats.yml": "4e35122b9e094c9145bae4a61909299f503dbd21",
+    ".github/workflows/profile-stats.yml": "0b8b5c65a16ee730a7f4ab6948b49d332cac95ca",
     ".github/workflows/spotlight-link-sync.yml": "93b5ef74b8bb0fec9853f26eed717011ffea1b13",
 }
 
@@ -28,15 +28,20 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
     'source_sha: ${{ steps.seal.outputs.source_sha }}',
     'source_sha="$(git -C source rev-parse HEAD)"',
     'test "$source_sha" = "$GITHUB_SHA"',
-    "      - name: Publish sealed artifact commit\n"
-    "        if: needs.stage.outputs.changed == 'true'\n"
+    "      - name: Publish sealed artifact commit and re-prove remote head\n"
+    "        id: publish\n"
     "        env:\n"
     "          GITHUB_TOKEN: ${{ github.token }}\n"
-    "          SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}",
+    "          SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}\n"
+    "          CANDIDATE_SHA: ${{ needs.stage.outputs.candidate_sha }}\n"
+    "          PARENT_SHA: ${{ needs.stage.outputs.base_sha }}",
     'REMOTE_MAIN="$(git -C artifacts ls-remote --exit-code origin refs/heads/main)"',
     '[[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
     'test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
     'push origin HEAD:generated',
+    'REMOTE_GENERATED="$(git -C artifacts ls-remote --exit-code origin refs/heads/generated)"',
+    'test "${BASH_REMATCH[1]}" = "$CANDIDATE_SHA"',
+    'echo "published_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"',
 )
 
 PROFILE_STATS_LEASE_BINDING_SEQUENCE = (
@@ -55,6 +60,41 @@ PROFILE_STATS_LEASE_BINDING_SEQUENCE = (
     'test "$(sha256sum attestation-input/attestation-predicate.json | cut -d\' \' -f1)" = "$EXPECTED_PREDICATE_SHA256"',
     'LEASED_GENERATED_SHA: ${{ needs.attest.outputs.generated_sha }}',
     'test "$base_sha" = "$LEASED_GENERATED_SHA"',
+)
+
+PROFILE_STATS_RECEIPT_SEQUENCE = (
+    'published_sha: ${{ steps.publish.outputs.published_sha }}',
+    'parent_sha: ${{ steps.publish.outputs.parent_sha }}',
+    'source_sha: ${{ steps.publish.outputs.source_sha }}',
+    'echo "published_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"',
+    "  receipt:\n"
+    "    name: prepare-publication-receipt-read-only\n"
+    "    needs: [publish, stage, lease, attest]",
+    "    permissions:\n      contents: read\n    outputs:\n      published_sha: ${{ steps.receipt.outputs.published_sha }}",
+    'ref: ${{ needs.publish.outputs.published_sha }}',
+    'name: profile-evidence-attestation-predicate',
+    'test "$(git -C published rev-parse HEAD)" = "$PUBLISHED_SHA"',
+    'test "$(git -C published rev-parse HEAD^)" = "$PUBLISHED_PARENT_SHA"',
+    'REMOTE_GENERATED="$(git -C published ls-remote --exit-code origin refs/heads/generated)"',
+    'test "${BASH_REMATCH[1]}" = "$PUBLISHED_SHA"',
+    'git -C published cat-file commit "$PUBLISHED_SHA" > published-commit.payload',
+    "{ printf 'commit %s\\0' \"$PAYLOAD_SIZE\"; cat published-commit.payload; } > published-commit.object",
+    'test "$(sha1sum published-commit.object | cut -d\' \' -f1)" = "$PUBLISHED_SHA"',
+    'GIT_OBJECT_SHA256="$(sha256sum published-commit.object | cut -d\' \' -f1)"',
+    'python3 source/scripts/build-generated-publication-receipt.py',
+    'name: generated-publication-receipt-predicate',
+    "  receipt_attest:\n"
+    "    name: attest-publication-receipt-write-only\n"
+    "    needs: [receipt, lease, attest]",
+    "    permissions:\n      contents: read\n      id-token: write\n      attestations: write",
+    'name: generated-publication-receipt-predicate',
+    'EXPECTED_PREDICATE_SHA256: ${{ needs.receipt.outputs.predicate_sha256 }}',
+    '- name: Attest actual generated publication commit receipt',
+    'subject-name: portyu9/portyu9:generated@${{ needs.receipt.outputs.published_sha }}',
+    'subject-digest: sha256:${{ needs.receipt.outputs.git_object_sha256 }}',
+    'predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json',
+    'predicate-path: receipt-attestation-input/generated-publication-receipt.json',
+    'needs: [receipt_attest, lease, attest]',
 )
 
 SPOTLIGHT_RECONCILIATION_SEQUENCE = (
@@ -210,6 +250,17 @@ def validate_profile_stats_lease_binding(text: str) -> None:
                               "Profile Stats generated-base lease-binding contract")
 
 
+def validate_profile_stats_receipt(text: str) -> None:
+    validate_ordered_presence(text, PROFILE_STATS_RECEIPT_SEQUENCE,
+                              "Profile Stats post-publication receipt contract")
+    require(text.count("name: prepare-publication-receipt-read-only") == 1,
+            "Profile Stats must have exactly one read-only receipt preparer")
+    require(text.count("name: attest-publication-receipt-write-only") == 1,
+            "Profile Stats must have exactly one receipt attestation writer")
+    require(text.count("subject-digest: sha256:${{ needs.receipt.outputs.git_object_sha256 }}") == 1,
+            "Profile Stats receipt signer must attest exactly the canonical Git-object SHA-256")
+
+
 def validate_spotlight_reconciliation(text: str) -> None:
     validate_ordered_contract(text, SPOTLIGHT_RECONCILIATION_SEQUENCE,
                               "Spotlight stale-candidate reconciliation contract")
@@ -243,16 +294,18 @@ def validate_mutation_leases(profile: str, spotlight: str) -> None:
                               "Profile Stats mutation-lease mint contract")
     validate_ordered_presence(spotlight, MUTATION_LEASE_SEQUENCE,
                               "Spotlight mutation-lease contract")
-    require(profile.count("- name: Verify exact short-lived mutation lease") == 3,
+    require(profile.count("- name: Verify exact short-lived mutation lease") == 4,
             "Profile Stats write jobs must each verify the exact lease")
     require(spotlight.count("# Verify exact short-lived mutation lease.") == 4,
             "Spotlight mutation jobs must each verify the exact lease inline")
     guard = 'test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"'
-    require(profile.count(guard) == 3,
+    require(profile.count(guard) == 4,
             "Profile Stats write jobs must each reserve lease lifetime through hard timeout")
     require(spotlight.count(guard) == 4,
             "Spotlight mutation jobs must each reserve lease lifetime through hard timeout")
-    for fragment in ("LEASE_MIN_REMAINING_SECONDS=300", "LEASE_MIN_REMAINING_SECONDS=240", "LEASE_MIN_REMAINING_SECONDS=180"):
+    require(profile.count("LEASE_MIN_REMAINING_SECONDS=300") == 2,
+            "Profile Stats signing jobs must each reserve five minutes of lease lifetime")
+    for fragment in ("LEASE_MIN_REMAINING_SECONDS=240", "LEASE_MIN_REMAINING_SECONDS=180"):
         require(fragment in profile, f"Profile Stats mutation-lease reserve contract is missing: {fragment}")
     for fragment in ("LEASE_MIN_REMAINING_SECONDS=240", "LEASE_MIN_REMAINING_SECONDS=300", "LEASE_MIN_REMAINING_SECONDS=780"):
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
@@ -283,6 +336,15 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("Profile Stats lease-binding self-test accepted a missing generated-base equality guard")
+
+    synthetic = "\n".join(PROFILE_STATS_RECEIPT_SEQUENCE)
+    validate_profile_stats_receipt(synthetic)
+    try:
+        validate_profile_stats_receipt(synthetic.replace(PROFILE_STATS_RECEIPT_SEQUENCE[-5], "", 1))
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Profile Stats receipt self-test accepted a missing subject-digest binding")
 
     synthetic = "\n".join(SPOTLIGHT_RECONCILIATION_SEQUENCE)
     validate_spotlight_reconciliation(synthetic)
@@ -336,6 +398,7 @@ def main() -> int:
         profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         validate_profile_stats_freshness(profile)
         validate_profile_stats_lease_binding(profile)
+        validate_profile_stats_receipt(profile)
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         validate_spotlight_reconciliation(spotlight)
         validate_spotlight_mutation_budget(spotlight)
@@ -345,10 +408,10 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
-            "generated publication is source-epoch freshness bound · autonomous planning/terminal concurrency bytes are locked · "
-            "Profile Stats leases re-prove the generated base and predicate identity · lease reserves cover every writer hard timeout · "
-            "short-lived mutation leases bind the exact run/base/candidate transaction · Spotlight retains stale-only reconciliation, "
-            "source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
+            "generated publication is source-epoch freshness bound and remote-head re-proved · "
+            "Profile Stats post-publication receipt binds the actual Git commit object under SHA-256 · "
+            "lease reserves cover every writer hard timeout · short-lived mutation leases bind the exact run/base/candidate transaction · "
+            "Spotlight retains stale-only reconciliation, source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
         )
         return 0
     except (OSError, ValueError) as exc:
