@@ -43,6 +43,7 @@ SPOTLIGHT_RECONCILIATION_SEQUENCE = (
     "  reconcile:\n"
     "    name: reconcile-stale-candidates-write\n"
     "    needs: plan",
+    "    timeout-minutes: 3\n"
     "    permissions:\n      contents: write\n      pull-requests: write",
     'EXPECTED_CANDIDATE_BRANCH=""',
     'STALE_AFTER_SECONDS=1800',
