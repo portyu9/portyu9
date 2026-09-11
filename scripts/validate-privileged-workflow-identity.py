@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v20"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
-    ".github/workflows/profile-stats.yml": "0b8b5c65a16ee730a7f4ab6948b49d332cac95ca",
+    ".github/workflows/profile-stats.yml": "d0d0afcb81e807f77f7bd7663bebe78c26ac4e80",
     ".github/workflows/spotlight-link-sync.yml": "93b5ef74b8bb0fec9853f26eed717011ffea1b13",
 }
 
@@ -30,6 +30,7 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
     'test "$source_sha" = "$GITHUB_SHA"',
     "      - name: Publish sealed artifact commit and re-prove remote head\n"
     "        id: publish\n"
+    "        if: needs.stage.outputs.changed == 'true'\n"
     "        env:\n"
     "          GITHUB_TOKEN: ${{ github.token }}\n"
     "          SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}\n"
