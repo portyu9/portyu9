@@ -73,7 +73,12 @@ def validate_reconciliation(reconcile: str) -> None:
         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"',
         'test "$PR_COUNT" = "0" || test "$PR_COUNT" = "1"',
         'test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"',
+        'test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"',
+        'test "$(jq -r .body <<<"$PR")" = "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force."',
+        'test "$(jq -r .base.ref <<<"$PR")" = "main"',
+        'test "$(jq -r .head.ref <<<"$PR")" = "$BRANCH"',
         'test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"',
+        'test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"',
         'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
         'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"',
         'test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"',
@@ -255,6 +260,21 @@ def validate_run_provenance(approve: str) -> None:
             "Spotlight approval must not hide duplicate canonical workflow-run identities")
 
 
+def legacy_mutation_budget_view(sync: str) -> str:
+    """Project only the new maintenance dependency out for the frozen legacy budget proof."""
+    replacements = (
+        ("    needs: [plan, reconcile, budget]\n", "    needs: [plan, budget]\n"),
+        ("    needs: [plan, reconcile, budget, propose]\n", "    needs: [plan, budget, propose]\n"),
+        ("    needs: [plan, reconcile, budget, propose, approve]\n", "    needs: [plan, budget, propose, approve]\n"),
+    )
+    legacy = sync
+    for current, old in replacements:
+        require(legacy.count(current) == 1,
+                f"Spotlight reconciliation dependency projection is ambiguous: {current.strip()}")
+        legacy = legacy.replace(current, old, 1)
+    return legacy
+
+
 def validate(sync: str, stats: str, policy: str) -> None:
     require("  workflow_dispatch:\n" in sync,
             "Spotlight synchronization must retain a manual recovery dispatch")
@@ -263,7 +283,10 @@ def validate(sync: str, stats: str, policy: str) -> None:
     require("merge_ui_after_checks" not in sync and "merge_ui_after_checks" not in stats,
             "Spotlight standing authorization must not depend on a manual merge input")
 
-    core.validate_mutation_budget(sync)
+    # Keep the pre-reconciliation mutation-budget validator byte-for-byte independent.
+    # Its only stale assumption is the downstream needs list, so project the separately
+    # validated maintenance dependency out without changing any runtime/predicate/API bytes.
+    core.validate_mutation_budget(legacy_mutation_budget_view(sync))
     approve = core.job_block(sync, "approve", "merge")
     merge = core.job_block(sync, "merge", None)
     require("name: approve-bot-pr-checks-only" in approve,
@@ -330,6 +353,14 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         sync.replace(
             'STALE_AFTER_SECONDS=1800',
             'STALE_AFTER_SECONDS=0',
+            1,
+        ),
+        stats, policy, "reconciler lost a stale-only/topology proof",
+    )
+    expect_failure(
+        sync.replace(
+            'test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"',
+            'test -n "$(jq -r .title <<<"$PR")"',
             1,
         ),
         stats, policy, "reconciler lost a stale-only/topology proof",
