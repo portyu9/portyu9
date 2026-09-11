@@ -25,7 +25,8 @@ The architecture is intended to ensure that:
 12. every ruleset field observable to the read-only workflow identity must match source-controlled intent before the required Profile Quality gate passes, while admin-redacted bypass actors remain separately audited;
 13. new workflows, local Actions, trigger families, jobs, and write-capable token grants fail closed unless they enter the reviewed authority model first;
 14. a pathological Spotlight reconciliation cannot constructively mutate indefinitely for one exact source epoch: a read-only source-epoch mutation budget precedes candidate/PR creation, workflow approval, and merge while exhausted epochs enter diagnostic-only quarantine;
-15. interrupted Spotlight transactions converge toward a clean fixed point through a separately modeled reductive reconciliation capability that may only close a stale validated bot PR and delete its exact stale immutable candidate ref after a **30-minute stale floor**.
+15. interrupted Spotlight transactions converge toward a clean fixed point through a separately modeled reductive reconciliation capability that may only close a stale validated bot PR and delete its exact stale immutable candidate ref after a **30-minute stale floor**;
+16. every autonomous write-capable job must prove a **short-lived mutation lease** bound to the exact repository/workflow/run/base/candidate transaction, with a policy-owned minimum remaining lifetime covering the complete job timeout before side effects can begin.
 
 ## Protected assets
 
@@ -46,7 +47,8 @@ The architecture is intended to ensure that:
 | `generated` branch | exact artifact-only public evidence history |
 | README generated-asset cache identities | presentation identity aligned with current generated evidence |
 | Repository ruleset control plane | observable live enforcement must match reviewed desired state |
-| GitHub Actions token capabilities | separated read, Actions-read admission, reductive cleanup, Actions-mutation, PR/content mutation, signing, and publication authority |
+| GitHub Actions token capabilities | separated read, Actions-read lease/admission, reductive cleanup, Actions-mutation, PR/content mutation, signing, and publication authority |
+| Autonomous mutation leases | 30-minute SHA-256 capabilities binding exact repository/workflow/run/base/candidate identity; every writer requires sufficient remaining lifetime for its hard timeout |
 | Spotlight mutation-attempt artifacts | one-day immutable exact `(main SHA, generated SHA)` attempt tokens used only for fail-closed constructive mutation admission |
 | Spotlight candidate refs/PRs | immutable content-addressed transaction state; stale residue may be reduced only after exact topology/identity and age proofs |
 
@@ -82,25 +84,29 @@ The GitHub Actions surface is a closed allowlist of **exactly five workflows**:
 - `profile-stats.yml`
 - `spotlight-link-sync.yml`
 
-Read-only is the default. Spotlight planning, reductive reconciliation, source-epoch admission, quarantine, proposal, approval, and terminal merge are explicit separate jobs so the authority graph itself is inspectable:
+Read-only is the default. Autonomous transaction workflows mint short-lived leases before write-capable jobs. Spotlight planning, lease minting, reductive reconciliation, source-epoch admission, quarantine, proposal, approval, and terminal merge are explicit separate jobs so the authority graph itself is inspectable:
 
 | Workflow / job | Additional authority | Purpose |
 | --- | --- | --- |
 | CodeQL / `analyze` | `security-events: write` | publish code-scanning results |
-| Profile stats / `attest-write-only` | `id-token: write`, `attestations: write` | consume digest-checked reviewed evidence/predicate and mint the attestation |
-| Profile stats / `publish-write-only` | `contents: write` | push only the already sealed generated publication commit |
-| Profile stats / `dispatch-spotlight-link-sync` | `actions: write` | dispatch only the fixed Spotlight reconciliation workflow after publication |
+| Profile stats / `mint-mutation-lease-read-only` | `actions: read` | validate the exact run, re-prove the live generated base, and mint the 30-minute Profile Stats transaction capability |
+| Profile stats / `attest-write-only` | `id-token: write`, `attestations: write` | consume digest-checked reviewed evidence/predicate and mint the attestation after exact lease/predicate proofs |
+| Profile stats / `publish-write-only` | `contents: write` | push only the already sealed generated publication commit after exact lease proof |
+| Profile stats / `dispatch-spotlight-link-sync` | `actions: write` | dispatch only the fixed Spotlight reconciliation workflow after publication and exact lease proof |
 | Spotlight / `plan-direct-links-read-only` | `contents: read` | reconstruct and validate the exact published projection before any mutation |
-| Spotlight / `reconcile-stale-candidates-write` | `contents: write`, `pull-requests: write` | close/delete only stale fully revalidated immutable bot candidates; never create/update candidates, approve runs, or merge |
+| Spotlight / `mint-mutation-lease-read-only` | `actions: read` | validate the exact run and mint the 30-minute deterministic source/candidate capability |
+| Spotlight / `reconcile-stale-candidates-write` | `contents: write`, `pull-requests: write` | close/delete only stale fully revalidated immutable bot candidates under the exact lease; never create/update candidates, approve runs, or merge |
 | Spotlight / `mutation-budget-read-only` | `actions: read` | prove the complete exact-source-epoch changed-plan artifact history and decide whether constructive mutation remains admissible |
 | Spotlight / `mutation-budget-quarantine-read-only` | `contents: read` | emit diagnostic-only quarantine output for an exhausted successful budget decision without GitHub mutation/API authority |
-| Spotlight / `propose-readme-only-write` | `contents: write`, `pull-requests: write` | create or exact-reuse one content-addressed immutable README-only candidate and its PR after reconciliation plus positive budget admission |
-| Spotlight / `approve-bot-pr-checks-only` | `contents: read`, `actions: write` | approve only exact canonical required workflow runs after fail-closed source/head/file checks and de-duplicate approval requests |
-| Spotlight / `merge-readme-only-terminal-write` | `contents: write`, `pull-requests: read`, `checks: read` | revalidate and merge only the exact README-only head after the five required checks succeed and mutable roots remain bound |
+| Spotlight / `propose-readme-only-write` | `contents: write`, `pull-requests: write` | create or exact-reuse one content-addressed immutable README-only candidate and its PR after lease/reconciliation plus positive budget admission |
+| Spotlight / `approve-bot-pr-checks-only` | `contents: read`, `actions: write` | approve only exact canonical required workflow runs after fail-closed lease/source/head/file checks and de-duplicate approval requests |
+| Spotlight / `merge-readme-only-terminal-write` | `contents: write`, `pull-requests: read`, `checks: read` | revalidate and merge only the exact README-only head after the exact lease and five required checks succeed and mutable roots remain bound |
 
-`prepare-attestation-read-only` and `stage-publication-read-only` deliberately remain read-only. No job combines repository-content write with OIDC/attestation authority. More importantly, `attest-write-only` contains no checkout, no setup-python, no `run:` step, and no repository-authored shell/Python at all.
+`prepare-attestation-read-only` and `stage-publication-read-only` deliberately remain read-only. No job combines repository-content write with OIDC/attestation authority. `attest-write-only` has no checkout, setup-Python, repository-authored Python, Git, `gh`, or alternate mutation client. Its only authored shell is exactly two reviewed read-only proof steps: mutation lease identity/lifetime and predicate SHA-256.
 
-The Spotlight graph similarly prevents authority collapse. `reconcile-stale-candidates-write` has no checkout/Python, no Actions/check authority, and a closed monotone-reductive API surface: after exact namespace, bot identity, one-parent/one-README topology, PR identity, and stale-age proofs it may close one stale bot PR and delete its exact stale ref. `mutation-budget-read-only` can observe only Actions history; it cannot mutate repository content, PRs, or workflow runs. `mutation-budget-quarantine-read-only` can only report and fail. The terminal merger can write repository contents through the expected-head merge endpoint but can only read PR/check metadata and has no Actions authority.
+Each `mint-mutation-lease-read-only` job has `actions: read` only. The Automation Policy IR fixes the lease at 30 minutes and binds repository name/id, workflow path/ref/SHA, run id/attempt, base SHA, deterministic candidate identity, issuance, and expiry into one SHA-256 capability. Its complete `boundJobs` set must equal the workflow's write-capable jobs. Each bound job independently recomputes the capability and proves a policy-owned **minimum remaining lifetime** at least as long as its literal hard timeout. The lease is scheduling-independent authorization layered on top of non-cancellable terminal serialization; it does not replace freshness, mutation-budget, topology, or check provenance.
+
+The Spotlight graph similarly prevents authority collapse. `reconcile-stale-candidates-write` has no checkout/Python, no Actions/check authority, and a closed monotone-reductive API surface: after the exact lease plus namespace, bot identity, one-parent/one-README topology, PR identity, and stale-age proofs it may close one stale bot PR and delete its exact stale ref. `mutation-budget-read-only` can observe only Actions history; it cannot mutate repository content, PRs, or workflow runs. `mutation-budget-quarantine-read-only` can only report and fail. The terminal merger can write repository contents through the expected-head merge endpoint but can only read PR/check metadata and has no Actions authority.
 
 ### 5. Shell/data boundary
 
@@ -126,7 +132,9 @@ Spotlight changed-plan artifacts have a separate authority purpose: their immuta
 
 `prepare-attestation-read-only` receives `contents: read` only. It independently downloads the three evidence sets, enforces transport digests, runs the canonical `profile-evidence-validation-boundary-v1`, computes scheduled-delta state, builds the v3 predicate, and uploads one reviewed `profile-evidence-attestation-predicate` artifact. It cannot request an OIDC identity or write an attestation.
 
-`attest-write-only` receives `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission. It contains **exactly four digest-checked downloads**—three evidence sets plus the reviewed predicate—and one pinned `actions/attest`. It executes no repository-authored shell/Python and has no Git/gh/curl/wget mutation path.
+`mint-mutation-lease-read-only` then receives `actions: read` only. It validates the exact current Profile Stats run and re-proves the live `generated` ref before minting the short-lived capability over the exact `main` base, generated base, reviewed predicate digest, run/workflow identity, issuance, and expiry.
+
+`attest-write-only` receives `contents: read`, `id-token: write`, and `attestations: write`, but no repository-content write permission. It contains **exactly four digest-checked downloads**—three evidence sets plus the reviewed predicate—two reviewed read-only proof shells for the mutation lease and predicate digest, and one pinned `actions/attest`. It executes no repository-authored Python and has no checkout/setup-Python/Git/`gh` mutation path.
 
 The public/attested subject set is **exactly 11 files**: four Signal Field SVGs, six Spotlight SVGs, and one Portfolio Evidence Ledger JSON document. `spotlight-manifest.json` is internal validation metadata and is neither published nor attested.
 
@@ -138,19 +146,21 @@ The canonical validation manifest retains the frozen semantic boundary identity 
 
 ### 11. Publication boundary
 
-`stage-publication-read-only` depends on validated generation, read-only attestation preparation, and successful terminal attestation. It downloads independent candidate copies, runs the canonical validation boundary again, stages the exact 11 public subjects, excludes internal metadata, creates the local generated commit, and seals that commit in a digest-transported Git bundle.
+`stage-publication-read-only` depends on validated generation, read-only attestation preparation, the lease mint, and successful terminal attestation. It downloads independent candidate copies, runs the canonical validation boundary again, re-proves its checked-out generated base equals the leased generated SHA, stages the exact 11 public subjects, excludes internal metadata, creates the local generated commit, and seals that commit in a digest-transported Git bundle.
 
-`publish-write-only` receives `contents: write` but no OIDC/attestation authority and does not execute authored Python or a source checkout. It verifies the sealed candidate's Git identity, ancestry, exact tree paths, fixed origin, and expected base/head identities, then performs the one terminal fast-forward push to `generated`.
+`publish-write-only` receives `contents: write` but no OIDC/attestation authority and does not execute authored Python or a source checkout. It first proves the exact short-lived mutation lease, then verifies the sealed candidate's Git identity, ancestry, exact tree paths, fixed origin, and expected base/head identities before the one terminal fast-forward push to `generated`.
 
 ### 12. Spotlight reconciliation boundary
 
-`dispatch-spotlight-link-sync` has only `actions: write` and dispatches the fixed reconciliation workflow after successful publication. The synchronizer's planning job is read-only and uploads a changed plan under an exact source-epoch artifact name.
+`dispatch-spotlight-link-sync` has only `actions: write` and dispatches the fixed reconciliation workflow after successful publication and exact Profile Stats lease proof. The synchronizer's planning job is read-only and uploads a changed plan under an exact source-epoch artifact name.
 
-`reconcile-stale-candidates-write` runs after a successful plan as a transaction-adjacent maintenance capability, not as one of the current transaction's `propose → approve → mutate → verify → terminalize` phases. It first re-proves the planned `main` and `generated` roots, derives the exact current content-addressed candidate when a change is planned, and preserves that candidate for immutable retry reuse. It bounds the candidate namespace, rejects malformed refs, and applies a **30-minute stale floor** before examining any other candidate for cleanup. Every stale cleanup candidate must re-prove one parent, exact GitHub Actions bot author/committer/message identity, exactly one commit over its parent, and exactly one modified `README.md`. If an open PR exists it must additionally be the exact automation-authored, non-maintainer-mutable PR for that branch/head. Only then may the job close that stale PR and delete that exact stale ref. It has no POST/PUT candidate-creation, Actions approval, or merge authority; unknown or malformed residue fails closed rather than being deleted.
+`mint-mutation-lease-read-only` follows planning with `actions: read` only. It binds the exact Spotlight run/attempt/workflow, planned `main` source, and deterministic `(main SHA, generated SHA, proposed README digest)` candidate to a 30-minute capability. Reconciliation, proposal, approval, and merge each independently prove that lease and sufficient minimum remaining lifetime for their full hard timeout.
 
-Independently, `mutation-budget-read-only` uses `actions: read` to enforce the **source-epoch mutation budget** before constructive candidate/PR creation, workflow approval, or merge. For one exact `(main SHA, generated SHA)` epoch, the first changed-plan attempt and at most one retry are admitted while the one-day attempt artifacts remain live. A third changed-plan attempt yields `allowed=false`; `mutation-budget-quarantine-read-only` enters **diagnostic-only quarantine**, writes a job summary, and fails without a GitHub API mutation token surface. Quarantine does not re-enable constructive mutation, but reductive reconciliation remains available so stale authority can still converge away. If history is incomplete or malformed, the budget job itself fails closed and no constructive mutation job is authorized.
+`reconcile-stale-candidates-write` runs after a successful plan and exact lease as a transaction-adjacent maintenance capability, not as one of the current transaction's `propose → approve → mutate → verify → terminalize` phases. It first re-proves the planned `main` and `generated` roots, derives the exact current content-addressed candidate when a change is planned, and preserves that candidate for immutable retry reuse. It bounds the candidate namespace, rejects malformed refs, and applies a **30-minute stale floor** before examining any other candidate for cleanup. Every stale cleanup candidate must re-prove one parent, exact GitHub Actions bot author/committer/message identity, exactly one commit over its parent, and exactly one modified `README.md`. If an open PR exists it must additionally be the exact automation-authored, non-maintainer-mutable PR for that branch/head. Only then may the job close that stale PR and delete that exact stale ref. It has no POST/PUT candidate-creation, Actions approval, or merge authority; unknown or malformed residue fails closed rather than being deleted.
 
-After successful reconciliation and positive admission, `propose-readme-only-write` may create or reuse only the exact content-addressed immutable candidate branch and its README-only PR. `approve-bot-pr-checks-only` revalidates both source roots and the one-commit README-only topology, binds the three canonical default-branch workflow identities, and locally de-duplicates each `/approve` mutation while waiting for success. `merge-readme-only-terminal-write` receives `contents: write`, `pull-requests: read`, and `checks: read` only. It revalidates the exact PR head, `main` base, `generated` snapshot, one-file README diff, and five required checks immediately before the expected-head merge. After a successful merge it uses matching-ref cardinality to accept zero or one exact consumed candidate ref, verifies any remaining exact ref still targets the reviewed head, deletes it, and proves absence. Candidate refs are never moved.
+Independently, `mutation-budget-read-only` uses `actions: read` to enforce the **source-epoch mutation budget** before constructive candidate/PR creation, workflow approval, or merge. For one exact `(main SHA, generated SHA)` epoch, the first changed-plan attempt and at most one retry are admitted while the one-day attempt artifacts remain live. A third changed-plan attempt yields `allowed=false`; `mutation-budget-quarantine-read-only` enters **diagnostic-only quarantine**, writes a job summary, and fails without a GitHub API mutation token surface. Quarantine does not re-enable constructive mutation, but reductive reconciliation remains available only through its exact lease so stale authority can still converge away. If history is incomplete or malformed, the budget job itself fails closed and no constructive mutation job is authorized.
+
+After exact lease proof, successful reconciliation, and positive admission, `propose-readme-only-write` may create or reuse only the exact content-addressed immutable candidate branch and its README-only PR. `approve-bot-pr-checks-only` re-proves the exact lease, revalidates both source roots and the one-commit README-only topology, binds the three canonical default-branch workflow identities, and locally de-duplicates each `/approve` mutation while waiting for success. `merge-readme-only-terminal-write` re-proves the lease and receives `contents: write`, `pull-requests: read`, and `checks: read` only. It revalidates the exact PR head, `main` base, `generated` snapshot, one-file README diff, and five required checks immediately before the expected-head merge. After a successful merge it uses matching-ref cardinality to accept zero or one exact consumed candidate ref, verifies any remaining exact ref still targets the reviewed head, deletes it, and proves absence. Candidate refs are never moved.
 
 ### 13. Generated branch boundary
 
@@ -176,29 +186,30 @@ The **Profile image cache boundary** is presentation/version hygiene, not eviden
 | New workflow receives authority | exact five-workflow allowlist | governed workflow byte identity | validator defects remain possible |
 | Event data becomes shell source | shell-safety firewall | CodeQL Actions analysis | authored scripts still require safe data handling |
 | Third-party generator writes/signs | generation read-only/non-signing | terminal authority isolation | platform compromise out of scope |
-| Authored predicate code abuses OIDC | predicate/validation runs only in `prepare-attestation-read-only` | `attest-write-only` has no `run:`/checkout/Python | malicious pinned platform Action remains in TCB |
+| Authored predicate code abuses OIDC | predicate/validation runs only in `prepare-attestation-read-only` | `attest-write-only` has no checkout/setup-Python/authored Python; only two reviewed proof shells | malicious pinned platform Action remains in TCB |
+| Mutation capability outlives reviewed transaction | exact 30-minute hash-bound mutation lease + minimum remaining lifetime | hard job timeouts + serialized terminal concurrency | runner/platform clock or identity compromise remains out of scope |
 | Artifact corrupted in transport | digest mismatch fails closed | downstream semantic validation | GitHub artifact service remains in TCB |
 | Public files differ from attested files | exact 11-subject closure | staged tree checks | authored path-contract defects remain possible |
 | Historical predicate semantics change | frozen schema bytes + v3 | `predicateSchema.digest` | verifier must select intended schema version |
 | Signer publishes arbitrary content | signer lacks `contents: write` | separate sealed publisher | platform compromise out of scope |
 | Publisher forges attestation | publisher lacks OIDC/attestation authority | publication waits for signer | platform credential compromise out of scope |
 | Repeated Spotlight constructive reconciliation loops mutate one source epoch | two-attempt exact-epoch mutation budget | read-only diagnostic quarantine + approval de-duplication | artifact-history availability can conservatively block mutation |
-| Interrupted Spotlight candidate/PR residue persists | stale-only reductive reconciliation after exact topology/identity proof | 30-minute stale floor + current-candidate preservation | malformed residue intentionally blocks cleanup for manual investigation |
+| Interrupted Spotlight candidate/PR residue persists | lease-bound stale-only reductive reconciliation after exact topology/identity proof | 30-minute stale floor + current-candidate preservation | malformed residue intentionally blocks cleanup for manual investigation |
 | Force-push/delete generated history | `Protect generated` | artifact-only exact tree | authorized fast-forward publisher remains powerful |
 | Evidence claim overstates assurance | bounded predicate claim | governance/threat-model documentation | human interpretation risk remains |
 
 ## Trusted computing base
 
-The design trusts the GitHub platform and hosted runners, reviewed immutable Action commits, repository validators/generators, GitHub evidence semantics returned by the API, GitHub Actions artifact-history semantics used by the mutation budget, GitHub ref/PR metadata used by stale reconciliation, and repository rulesets/token behavior.
+The design trusts the GitHub platform and hosted runners, reviewed immutable Action commits, repository validators/generators, GitHub evidence semantics returned by the API, GitHub Actions run metadata used to mint mutation leases, GitHub Actions artifact-history semantics used by the mutation budget, GitHub ref/PR metadata used by stale reconciliation, and repository rulesets/token behavior.
 
 ## Accepted residual risks
 
 - A zero-day or malicious behavior in a reviewed pinned dependency may evade Dependency Review and CodeQL.
 - An upstream release tag move/deletion can cause fail-closed CI availability loss.
 - A compromised GitHub-hosted runner or GitHub control plane is outside repository-level mitigation.
-- `attest-write-only` intentionally holds OIDC/attestation authority; safety depends on exact Action identity, digest-checked input transport, zero authored shell/code, and GitHub's attestation implementation.
-- `publish-write-only` intentionally holds `contents: write`; safety depends on source protection, authority isolation, sealed-candidate verification, and exact terminal push closure.
-- Spotlight reconciliation/proposal/approval/merge jobs intentionally hold narrow mutation capabilities; safety depends on the reconciler's reductive stale-only closure, positive source-epoch budget admission for constructive mutation, exact branch/file/head/workflow/check predicates, and the server-side no-bypass Main ruleset.
+- `attest-write-only` intentionally holds OIDC/attestation authority; safety depends on exact Action identity, the exact short-lived lease/predicate proof shells, digest-checked input transport, no repository-authored Python/Git/GitHub mutation client, and GitHub's attestation implementation.
+- `publish-write-only` intentionally holds `contents: write`; safety depends on the exact short-lived mutation lease, source protection, authority isolation, sealed-candidate verification, and exact terminal push closure.
+- Spotlight reconciliation/proposal/approval/merge jobs intentionally hold narrow mutation capabilities; safety depends on exact lease identity/lifetime, the reconciler's reductive stale-only closure, positive source-epoch budget admission for constructive mutation, exact branch/file/head/workflow/check predicates, and the server-side no-bypass Main ruleset.
 - Spotlight stale reconciliation intentionally refuses to delete malformed/ambiguous candidates and preserves the current deterministic candidate plus candidates younger than 30 minutes; this can cause conservative availability/cleanup delay rather than destructive guessing.
 - Spotlight mutation admission intentionally depends on GitHub artifact-history availability and completeness. Ambiguous, incomplete, malformed, or unavailable history causes fail-closed availability loss rather than permitting additional mutations.
 - Attestation proves provenance and repository-defined contract conformance, not universal behavioral correctness.
@@ -217,13 +228,14 @@ After a material workflow, evidence, or governance change:
 6. confirm result, binding, and freshness stay independent and live publication requires `CURRENT_SUBJECT`;
 7. confirm the public and attested subject sets remain the same exact 11 files;
 8. confirm historical schema bytes remain frozen and current issuance uses v3 with `predicateSchema.digest`;
-9. confirm generation has no write/signing authority and `prepare-attestation-read-only` has no OIDC/attestation authority;
-10. confirm `attest-write-only` contains exactly four digest-checked downloads plus one pinned `actions/attest`, with no checkout/setup-python/`run:`/authored Python;
-11. confirm `stage-publication-read-only` remains read-only, publication has no signing authority, and the exact seven-job Spotlight graph keeps planning → reductive reconciliation plus source-epoch mutation budget → diagnostic-only quarantine/proposal → approval → terminal merge authority separated;
-12. confirm the reconciler preserves the current deterministic candidate, applies the 30-minute stale floor, and can only close/delete stale fully revalidated immutable candidates while constructive mutations remain budget-gated;
-13. confirm a real production `Update profile stats` run succeeds after production-path changes;
-14. confirm `generated` contains only the four Signal Field SVGs, six Spotlight SVGs, and Portfolio Ledger JSON;
-15. confirm generated README images pass the cache-identity contract.
+9. confirm both autonomous workflows contain `mint-mutation-lease-read-only` with `actions: read` only, every write-capable job proves its exact short-lived mutation lease, and each minimum remaining lifetime covers that writer's literal hard timeout;
+10. confirm generation has no write/signing authority and `prepare-attestation-read-only` has no OIDC/attestation authority;
+11. confirm `attest-write-only` contains exactly four digest-checked downloads plus two reviewed read-only proof shells and one pinned `actions/attest`, with no checkout/setup-Python/authored Python/Git/`gh` mutation client;
+12. confirm `stage-publication-read-only` remains read-only, publication has no signing authority, and the exact eight-job Spotlight graph keeps planning → lease mint → reductive reconciliation plus source-epoch mutation budget → diagnostic-only quarantine/proposal → approval → terminal merge authority separated;
+13. confirm the reconciler preserves the current deterministic candidate, applies the 30-minute stale floor, can only close/delete stale fully revalidated immutable candidates, and remains lease-bound while constructive mutations are separately budget-gated;
+14. confirm a real production `Update profile stats` run succeeds after production-path changes, including lease mint and all writer lease proofs;
+15. confirm `generated` contains only the four Signal Field SVGs, six Spotlight SVGs, and Portfolio Ledger JSON;
+16. confirm generated README images pass the cache-identity contract.
 
 ## Change policy
 
