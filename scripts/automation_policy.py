@@ -90,7 +90,11 @@ def validate_job_graph(workflow_id: str, jobs: dict[str, Any]) -> None:
 def validate_transaction_machine(workflow_id: str, value: Any, workflows: dict[str, Any]) -> None:
     label = f"automation policy transaction machine {workflow_id}"
     require(workflow_id in workflows, f"{label} references unknown workflow")
-    machine = exact_keys(value, {"initialState", "states", "terminalStates", "transitions"}, label)
+    machine = exact_keys(
+        value,
+        {"initialState", "states", "terminalStates", "maintenanceJobs", "transitions"},
+        label,
+    )
 
     states = string_list(machine["states"], f"{label} states")
     require(all(STATE_ID.fullmatch(state) is not None for state in states),
@@ -101,6 +105,14 @@ def validate_transaction_machine(workflow_id: str, value: Any, workflows: dict[s
     require(set(terminals) <= set(states), f"{label} terminalStates must reference declared states")
     require(initial not in terminals, f"{label} initialState cannot be terminal")
 
+    workflow_jobs = workflows[workflow_id]["jobs"]
+    maintenance_jobs = string_list(
+        machine["maintenanceJobs"], f"{label} maintenanceJobs", allow_empty=True
+    )
+    maintenance_set = set(maintenance_jobs)
+    for job_id in maintenance_jobs:
+        require(job_id in workflow_jobs, f"{label} maintenanceJobs references unknown workflow job: {job_id}")
+
     transitions = machine["transitions"]
     require(isinstance(transitions, list) and transitions, f"{label} transitions must be a non-empty array")
     outgoing: dict[str, list[tuple[str, int]]] = {state: [] for state in states}
@@ -109,7 +121,6 @@ def validate_transaction_machine(workflow_id: str, value: Any, workflows: dict[s
     observed_phases: set[str] = set()
     identities: set[tuple[str, str, str, tuple[str, ...]]] = set()
     phase_rank = {phase: rank for rank, phase in enumerate(TRANSACTION_PHASES)}
-    workflow_jobs = workflows[workflow_id]["jobs"]
     job_phase_ranks: dict[str, set[int]] = {job_id: set() for job_id in workflow_jobs}
 
     for index, transition_value in enumerate(transitions):
@@ -149,15 +160,34 @@ def validate_transaction_machine(workflow_id: str, value: Any, workflows: dict[s
 
     require(observed_phases == set(TRANSACTION_PHASES),
             f"{label} lifecycle phases changed: expected={list(TRANSACTION_PHASES)} observed={sorted(observed_phases)}")
-    require(covered_jobs == set(workflow_jobs),
-            f"{label} job closure changed: expected={sorted(workflow_jobs)} observed={sorted(covered_jobs)}")
+    require(maintenance_set.isdisjoint(covered_jobs),
+            f"{label} maintenance jobs must remain outside transaction transitions")
+    require(covered_jobs | maintenance_set == set(workflow_jobs),
+            f"{label} job closure changed: expected={sorted(workflow_jobs)} "
+            f"observed={sorted(covered_jobs | maintenance_set)}")
     require(outgoing[initial] and all(rank == phase_rank["propose"] for _, rank in outgoing[initial]),
             f"{label} initial transitions must be propose phase")
 
-    # The earliest phase assigned to a dependent job may never precede the
-    # earliest phase assigned to one of its declared workflow dependencies.
-    for job_id, job in workflow_jobs.items():
+    for job_id in maintenance_jobs:
+        job = workflow_jobs[job_id]
+        require(any(permission == "write" for permission in job["permissions"].values()),
+                f"{label} maintenance job must be write-capable: {job_id}")
+        require(job["needs"], f"{label} maintenance job must depend on a transaction job: {job_id}")
         for dependency in job["needs"]:
+            require(dependency in covered_jobs,
+                    f"{label} maintenance job must depend only on transaction jobs: {job_id} -> {dependency}")
+            require(min(job_phase_ranks[dependency]) == phase_rank["propose"],
+                    f"{label} maintenance job must depend only on propose-phase jobs: {job_id} -> {dependency}")
+
+    # The earliest phase assigned to a dependent transaction job may never precede
+    # the earliest phase assigned to one of its transaction dependencies. Maintenance
+    # jobs are deliberately outside the five-phase transaction lifecycle.
+    for job_id, job in workflow_jobs.items():
+        if job_id in maintenance_set:
+            continue
+        for dependency in job["needs"]:
+            if dependency in maintenance_set:
+                continue
             require(min(job_phase_ranks[job_id]) >= min(job_phase_ranks[dependency]),
                     f"{label} job dependency phase regresses: {dependency} -> {job_id}")
 
@@ -431,6 +461,22 @@ def self_test(policy: dict[str, Any]) -> None:
     ]
     expect_policy_failure(unmodeled_job, "job closure changed")
 
+    missing_maintenance = copy.deepcopy(policy)
+    missing_maintenance["transactionMachines"]["spotlight-link-sync"]["maintenanceJobs"] = []
+    expect_policy_failure(missing_maintenance, "job closure changed")
+
+    maintenance_in_transaction = copy.deepcopy(policy)
+    maintenance_in_transaction["transactionMachines"]["spotlight-link-sync"]["transitions"][0]["jobs"].append("reconcile")
+    expect_policy_failure(maintenance_in_transaction, "maintenance jobs must remain outside transaction transitions")
+
+    read_only_maintenance = copy.deepcopy(policy)
+    read_only_maintenance["workflows"]["spotlight-link-sync"]["jobs"]["reconcile"]["permissions"] = {"contents": "read"}
+    expect_policy_failure(read_only_maintenance, "maintenance job must be write-capable")
+
+    late_maintenance = copy.deepcopy(policy)
+    late_maintenance["workflows"]["spotlight-link-sync"]["jobs"]["reconcile"]["needs"] = ["budget"]
+    expect_policy_failure(late_maintenance, "maintenance job must depend only on propose-phase jobs")
+
     read_only_mutation = copy.deepcopy(policy)
     for transition in read_only_mutation["transactionMachines"]["profile-stats"]["transitions"]:
         if transition["phase"] == "mutate":
@@ -486,10 +532,14 @@ def self_test(policy: dict[str, Any]) -> None:
 def main() -> int:
     policy = load_policy()
     self_test(policy)
+    maintenance_jobs = sum(
+        len(machine["maintenanceJobs"]) for machine in policy["transactionMachines"].values()
+    )
     print(
         f"Automation Policy IR passed: {policy['policyId']} · {len(policy['workflows'])} workflows · "
         f"{sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs · "
         f"{len(policy['transactionMachines'])} finite-state transactions · "
+        f"{maintenance_jobs} transaction-adjacent maintenance jobs · "
         f"{len(policy['requiredChecks'])} protected required-check bindings"
     )
     return 0
