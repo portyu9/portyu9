@@ -176,6 +176,7 @@ def self_test(policy: dict[str, Any]) -> None:
 
     unbound_writer = copy.deepcopy(policy)
     unbound_writer["workflows"]["spotlight-link-sync"]["lease"]["boundJobs"].remove("merge")
+    del unbound_writer["workflows"]["spotlight-link-sync"]["lease"]["minimumRemainingSeconds"]["merge"]
     expect_policy_failure(unbound_writer, "complete write-capable job set")
 
     lease_write = copy.deepcopy(policy)
