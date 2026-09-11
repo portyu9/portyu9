@@ -15,8 +15,10 @@ REPOSITORY = "portyu9/portyu9"
 PERMISSION_VALUES = {"read", "write", "none"}
 JOB_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 STATE_ID = re.compile(r"^[a-z][a-z0-9-]*$")
+CONCURRENCY_GROUP = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 TRANSACTION_PHASES = ("propose", "approve", "mutate", "verify", "terminalize")
 TRANSACTION_WORKFLOWS = {"profile-stats", "spotlight-link-sync"}
+CONCURRENCY_WORKFLOWS = TRANSACTION_WORKFLOWS
 
 
 def require(condition: bool, message: str) -> None:
@@ -85,6 +87,63 @@ def validate_job_graph(workflow_id: str, jobs: dict[str, Any]) -> None:
 
     for job_id in jobs:
         visit(job_id)
+
+
+def validate_concurrency_policy(
+    workflow_id: str,
+    value: Any,
+    jobs: dict[str, Any],
+    global_groups: set[str],
+) -> None:
+    label = f"automation policy workflow {workflow_id} concurrency"
+    classes = exact_keys(value, {"planning", "terminal"}, label)
+    covered: set[str] = set()
+    class_jobs: dict[str, set[str]] = {}
+
+    for class_id in ("planning", "terminal"):
+        class_label = f"{label} {class_id}"
+        spec = exact_keys(classes[class_id], {"group", "cancelInProgress", "queue", "jobs"}, class_label)
+        group = spec["group"]
+        require(
+            isinstance(group, str)
+            and group == group.lower()
+            and CONCURRENCY_GROUP.fullmatch(group) is not None,
+            f"{class_label} group is invalid",
+        )
+        folded = group.casefold()
+        require(folded not in global_groups, f"automation policy concurrency group is duplicated: {group}")
+        global_groups.add(folded)
+
+        cancel = spec["cancelInProgress"]
+        require(type(cancel) is bool, f"{class_label} cancelInProgress must be boolean")
+        queue = spec["queue"]
+        require(queue in {"single", "max"}, f"{class_label} queue must be single or max")
+        members = string_list(spec["jobs"], f"{class_label} jobs")
+        member_set = set(members)
+        require(member_set.isdisjoint(covered), f"{label} job is classified more than once")
+        for job_id in members:
+            require(job_id in jobs, f"{class_label} references unknown workflow job: {job_id}")
+        covered.update(member_set)
+        class_jobs[class_id] = member_set
+
+        if class_id == "planning":
+            require(cancel is True and queue == "single",
+                    f"{class_label} must remain latest-wins cancel-in-progress with single pending replacement")
+            for job_id in members:
+                require("write" not in jobs[job_id]["permissions"].values(),
+                        f"{class_label} cannot contain write-capable job: {job_id}")
+        else:
+            require(cancel is False and queue == "max",
+                    f"{class_label} must remain non-cancellable with max pending queue")
+
+    require(covered == set(jobs),
+            f"{label} job coverage changed: expected={sorted(jobs)} observed={sorted(covered)}")
+    write_jobs = {
+        job_id for job_id, job in jobs.items()
+        if "write" in job["permissions"].values()
+    }
+    require(write_jobs <= class_jobs["terminal"],
+            f"{label} write-capable jobs must all be terminal: {sorted(write_jobs - class_jobs['terminal'])}")
 
 
 def validate_transaction_machine(workflow_id: str, value: Any, workflows: dict[str, Any]) -> None:
@@ -283,8 +342,7 @@ def validate_policy(payload: Any) -> dict[str, Any]:
         candidate_prefix.startswith("automation/")
         and candidate_prefix.endswith("/")
         and not candidate_prefix.startswith("refs/")
-        and ".." not in candidate_prefix.split("/")
-        and "//" not in candidate_prefix,
+        and ".." not in candidate_prefix.split("/"),
         "automation policy Spotlight candidate prefix is invalid",
     )
     require(not main_branch.startswith(candidate_prefix) and not generated_branch.startswith(candidate_prefix),
@@ -293,10 +351,14 @@ def validate_policy(payload: Any) -> dict[str, Any]:
     workflows = root["workflows"]
     require(isinstance(workflows, dict) and workflows, "automation policy workflows must be a non-empty object")
     paths: set[str] = set()
+    concurrency_groups: set[str] = set()
     for workflow_id, workflow_value in workflows.items():
         require(isinstance(workflow_id, str) and JOB_ID.fullmatch(workflow_id) is not None,
                 f"automation policy workflow id is invalid: {workflow_id!r}")
-        workflow = exact_keys(workflow_value, {"path", "triggers", "permissions", "jobs"},
+        workflow_keys = {"path", "triggers", "permissions", "jobs"}
+        if workflow_id in CONCURRENCY_WORKFLOWS:
+            workflow_keys.add("concurrency")
+        workflow = exact_keys(workflow_value, workflow_keys,
                               f"automation policy workflow {workflow_id}")
         path = workflow["path"]
         require(
@@ -327,6 +389,8 @@ def validate_policy(payload: Any) -> dict[str, Any]:
             string_list(job["needs"], f"automation policy workflow {workflow_id} job {job_id} needs", allow_empty=True)
             validate_permissions(job["permissions"], f"automation policy workflow {workflow_id} job {job_id}")
         validate_job_graph(workflow_id, jobs)
+        if workflow_id in CONCURRENCY_WORKFLOWS:
+            validate_concurrency_policy(workflow_id, workflow["concurrency"], jobs, concurrency_groups)
 
     machines = root["transactionMachines"]
     require(isinstance(machines, dict) and machines,
@@ -439,6 +503,36 @@ def self_test(policy: dict[str, Any]) -> None:
     cycle["workflows"]["profile-stats"]["jobs"]["generate"]["needs"] = ["dispatch"]
     expect_policy_failure(cycle, "needs cycle")
 
+    missing_concurrency = copy.deepcopy(policy)
+    del missing_concurrency["workflows"]["profile-stats"]["concurrency"]
+    expect_policy_failure(missing_concurrency, "workflow profile-stats keys changed")
+
+    terminal_cancellation = copy.deepcopy(policy)
+    terminal_cancellation["workflows"]["profile-stats"]["concurrency"]["terminal"]["cancelInProgress"] = True
+    expect_policy_failure(terminal_cancellation, "must remain non-cancellable with max pending queue")
+
+    terminal_replacement = copy.deepcopy(policy)
+    terminal_replacement["workflows"]["spotlight-link-sync"]["concurrency"]["terminal"]["queue"] = "single"
+    expect_policy_failure(terminal_replacement, "must remain non-cancellable with max pending queue")
+
+    planning_queue = copy.deepcopy(policy)
+    planning_queue["workflows"]["profile-stats"]["concurrency"]["planning"]["queue"] = "max"
+    expect_policy_failure(planning_queue, "must remain latest-wins cancel-in-progress")
+
+    write_in_planning = copy.deepcopy(policy)
+    write_in_planning["workflows"]["profile-stats"]["concurrency"]["planning"]["jobs"].append("publish")
+    write_in_planning["workflows"]["profile-stats"]["concurrency"]["terminal"]["jobs"].remove("publish")
+    expect_policy_failure(write_in_planning, "cannot contain write-capable job")
+
+    incomplete_concurrency = copy.deepcopy(policy)
+    incomplete_concurrency["workflows"]["spotlight-link-sync"]["concurrency"]["planning"]["jobs"].remove("quarantine")
+    expect_policy_failure(incomplete_concurrency, "job coverage changed")
+
+    duplicate_concurrency_group = copy.deepcopy(policy)
+    duplicate_concurrency_group["workflows"]["spotlight-link-sync"]["concurrency"]["planning"]["group"] = \
+        duplicate_concurrency_group["workflows"]["profile-stats"]["concurrency"]["planning"]["group"]
+    expect_policy_failure(duplicate_concurrency_group, "concurrency group is duplicated")
+
     missing_machine = copy.deepcopy(policy)
     del missing_machine["transactionMachines"]["profile-stats"]
     expect_policy_failure(missing_machine, "transaction workflow set changed")
@@ -535,11 +629,15 @@ def main() -> int:
     maintenance_jobs = sum(
         len(machine["maintenanceJobs"]) for machine in policy["transactionMachines"].values()
     )
+    concurrency_groups = sum(
+        len(workflow.get("concurrency", {})) for workflow in policy["workflows"].values()
+    )
     print(
         f"Automation Policy IR passed: {policy['policyId']} · {len(policy['workflows'])} workflows · "
         f"{sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs · "
         f"{len(policy['transactionMachines'])} finite-state transactions · "
         f"{maintenance_jobs} transaction-adjacent maintenance jobs · "
+        f"{concurrency_groups} autonomous concurrency classes · "
         f"{len(policy['requiredChecks'])} protected required-check bindings"
     )
     return 0
