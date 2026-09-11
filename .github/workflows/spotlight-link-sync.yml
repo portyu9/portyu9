@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: sync-spotlight-profile-links
-  cancel-in-progress: true
-
 env:
   PYTHON_VERSION: "3.13.15"
   BOT_BRANCH_PREFIX: "automation/spotlight-links/"
@@ -25,6 +21,9 @@ jobs:
     name: plan-direct-links-read-only
     runs-on: ubuntu-24.04
     timeout-minutes: 6
+    concurrency:
+      group: spotlight-link-sync-planning
+      cancel-in-progress: true
     permissions:
       contents: read
     outputs:
@@ -106,6 +105,10 @@ jobs:
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 3
+    concurrency:
+      group: spotlight-link-sync-terminal
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
       pull-requests: write
@@ -245,6 +248,9 @@ jobs:
     needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 2
+    concurrency:
+      group: spotlight-link-sync-planning
+      cancel-in-progress: true
     permissions:
       actions: read
     outputs:
@@ -321,6 +327,9 @@ jobs:
     needs: [plan, budget]
     runs-on: ubuntu-24.04
     timeout-minutes: 1
+    concurrency:
+      group: spotlight-link-sync-planning
+      cancel-in-progress: true
     permissions:
       contents: read
 
@@ -348,6 +357,10 @@ jobs:
     needs: [plan, reconcile, budget]
     runs-on: ubuntu-24.04
     timeout-minutes: 4
+    concurrency:
+      group: spotlight-link-sync-terminal
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
       pull-requests: write
@@ -497,6 +510,10 @@ jobs:
     needs: [plan, reconcile, budget, propose]
     runs-on: ubuntu-24.04
     timeout-minutes: 12
+    concurrency:
+      group: spotlight-link-sync-terminal
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
       actions: write
@@ -647,6 +664,10 @@ jobs:
     needs: [plan, reconcile, budget, propose, approve]
     runs-on: ubuntu-24.04
     timeout-minutes: 3
+    concurrency:
+      group: spotlight-link-sync-terminal
+      cancel-in-progress: false
+      queue: max
     permissions:
       contents: write
       pull-requests: read
