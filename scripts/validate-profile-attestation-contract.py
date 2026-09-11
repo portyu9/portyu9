@@ -181,7 +181,8 @@ def validate_builder() -> None:
 def validate_workflow() -> None:
     text = STATS.read_text(encoding="utf-8")
     generate = job_block(text, "generate", "attest")
-    prepare = job_block(text, "attest", "attest_publish")
+    prepare = job_block(text, "attest", "lease")
+    lease = job_block(text, "lease", "attest_publish")
     attest_write = job_block(text, "attest_publish", "stage")
     stage = job_block(text, "stage", "publish")
     publish = job_block(text, "publish", "dispatch")
@@ -198,23 +199,43 @@ def validate_workflow() -> None:
         require(forbidden not in prepare,
                 f"attestation preparation acquired terminal signing/write surface: {forbidden}")
 
-    require("name: attest-write-only" in attest_write and "needs: attest" in attest_write,
+    require("name: mint-mutation-lease-read-only" in lease and "needs: attest" in lease,
+            "mutation lease mint identity/dependency changed")
+    require("permissions:\n      actions: read" in lease,
+            "mutation lease mint must remain Actions-read-only")
+    for forbidden in ("contents: write", "id-token: write", "attestations: write", f"actions/attest@{ATTEST_SHA}"):
+        require(forbidden not in lease,
+                f"mutation lease mint acquired attestation/content-write authority: {forbidden}")
+
+    require("name: attest-write-only" in attest_write and "needs: [attest, lease]" in attest_write,
             "terminal attestation identity/dependency changed")
     require("contents: read" in attest_write and "id-token: write" in attest_write and "attestations: write" in attest_write,
             "terminal attestation authority changed")
     require("contents: write" not in attest_write,
             "terminal attestation must not receive repository-content write authority")
-    for forbidden in ("actions/checkout@", "actions/setup-python@", "        run:", "python3 ", "git ", "gh ", "GITHUB_TOKEN:", "GH_TOKEN:"):
+    for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "git ", "gh ", "GITHUB_TOKEN:", "GH_TOKEN:"):
         require(forbidden not in attest_write,
-                f"terminal attestation must not execute repository-authored shell/code or alternate mutation clients: {forbidden}")
+                f"terminal attestation must not execute repository-authored code or alternate mutation clients: {forbidden}")
+    require(attest_write.count("        run: |") == 2,
+            "terminal attestation may execute only the two reviewed first-party proof shells")
+    for fragment in (
+        "- name: Verify exact short-lived mutation lease",
+        "LEASE_MIN_REMAINING_SECONDS=300",
+        'test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"',
+        "- name: Verify leased attestation predicate identity",
+        'EXPECTED_PREDICATE_SHA256: ${{ needs.attest.outputs.predicate_sha256 }}',
+        'test "$(sha256sum attestation-input/attestation-predicate.json | cut -d\' \' -f1)" = "$EXPECTED_PREDICATE_SHA256"',
+    ):
+        require(fragment in attest_write,
+                f"terminal attestation lost reviewed lease/predicate proof: {fragment}")
 
     require("name: stage-publication-read-only" in stage and
-            "needs: [generate, attest, attest_publish]" in stage,
+            "needs: [generate, attest, lease, attest_publish]" in stage,
             "publication staging dependency changed")
     require("permissions:\n      contents: read" in stage, "publication staging authority changed")
     require("contents: write" not in stage and "id-token: write" not in stage and "attestations: write" not in stage,
             "publication staging authority expanded")
-    require("name: publish-write-only" in publish and "needs: stage" in publish,
+    require("name: publish-write-only" in publish and "needs: [stage, lease, attest]" in publish,
             "publication dependency changed")
     require("permissions:\n      contents: write" in publish and "id-token: write" not in publish and "attestations: write" not in publish,
             "publication authority changed")
@@ -245,8 +266,8 @@ def validate_workflow() -> None:
             "terminal attestation downloads must fail closed on digest mismatch")
     require(attest_write.count(f"actions/attest@{ATTEST_SHA}") == 1,
             "terminal attestation must execute the reviewed actions/attest SHA exactly once")
-    require(attest_write.count("      - name: ") == 5,
-            "terminal attestation must contain exactly four downloads plus one attest step")
+    require(attest_write.count("      - name: ") == 7,
+            "terminal attestation must contain two reviewed proof shells, four downloads, and one attest step")
 
     require(stage.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 3,
             "publication staging must download three immutable evidence sets")
@@ -314,7 +335,7 @@ def validate_workflow() -> None:
     require(attest_write.startswith(f"  attest_publish:\n    {guard}\n"),
             "terminal attestation job must use the exact scheduled-delta guard at the job boundary")
     require(attest_write.count(guard) == 6,
-            "terminal attestation job and all five terminal steps must share the exact scheduled-delta guard")
+            "terminal attestation job, four downloads, and attest step must share the exact scheduled-delta guard")
     require("python3 source/scripts/stage-profile-evidence.py candidate-profile-evidence" in prepare,
             "scheduled delta comparison must stage canonical subject set")
     require("python3 source/scripts/validate-profile-evidence-subjects.py --published-root published" in prepare,
@@ -374,7 +395,7 @@ def main() -> int:
         validate_doc()
         print(
             "Engineering attestation validation passed: predicate v1/v2/v3 bytes are frozen; read-only preparation owns validation/predicate construction; "
-            "terminal OIDC/attestation authority executes only digest-checked artifact transport plus pinned actions/attest; "
+            "terminal OIDC/attestation authority executes only two reviewed first-party lease/predicate proof shells, digest-checked artifact transport, and pinned actions/attest; "
             "terminal contents-write publication is eligible only for a sealed changed candidate; the eleven-subject contract remains closed and the claim remains provenance/contract conformance rather than certification."
         )
         return 0
