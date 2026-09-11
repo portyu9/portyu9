@@ -72,7 +72,10 @@ SPOTLIGHT_MUTATION_BUDGET_SEQUENCE = (
     "  budget:\n"
     "    if: needs.plan.outputs.changed == 'true'\n"
     "    name: mutation-budget-read-only",
-    "    permissions:\n      actions: read",
+    "    permissions:\n"
+    "      actions: read\n"
+    "    outputs:\n"
+    "      allowed: ${{ steps.admit.outputs.allowed }}",
     'ARTIFACT_NAME="spotlight-link-plan-${BASE_SHA}-${GENERATED_SHA}"',
     "MAX_ATTEMPTS=2",
     'ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"',
