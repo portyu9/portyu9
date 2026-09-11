@@ -162,9 +162,18 @@ def git_blob_sha(path: Path) -> str:
 def validate_ordered_contract(text: str, fragments: tuple[str, ...], label: str) -> None:
     cursor = -1
     for fragment in fragments:
-        require(text.count(fragment) >= 1,
-                f"{label} must contain reviewed fragment: {fragment}")
-        position = text.index(fragment, cursor + 1)
+        require(text.count(fragment) == 1,
+                f"{label} must contain exactly one reviewed fragment: {fragment}")
+        position = text.index(fragment)
+        require(position > cursor, f"{label} is out of reviewed order: {fragment}")
+        cursor = position
+
+
+def validate_ordered_presence(text: str, fragments: tuple[str, ...], label: str) -> None:
+    cursor = -1
+    for fragment in fragments:
+        position = text.find(fragment, cursor + 1)
+        require(position >= 0, f"{label} is missing reviewed fragment: {fragment}")
         require(position > cursor, f"{label} is out of reviewed order: {fragment}")
         cursor = position
 
@@ -203,9 +212,9 @@ def validate_spotlight_immutable_candidates(text: str) -> None:
 
 
 def validate_mutation_leases(profile: str, spotlight: str) -> None:
-    validate_ordered_contract(profile, MUTATION_LEASE_SEQUENCE[:7],
+    validate_ordered_presence(profile, MUTATION_LEASE_SEQUENCE[:7],
                               "Profile Stats mutation-lease mint contract")
-    validate_ordered_contract(spotlight, MUTATION_LEASE_SEQUENCE,
+    validate_ordered_presence(spotlight, MUTATION_LEASE_SEQUENCE,
                               "Spotlight mutation-lease contract")
     require(profile.count("- name: Verify exact short-lived mutation lease") == 3,
             "Profile Stats write jobs must each verify the exact lease")
