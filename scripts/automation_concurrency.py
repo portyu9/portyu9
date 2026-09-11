@@ -7,6 +7,16 @@ import re
 from typing import Any
 
 WORKFLOW_LEVEL_CONCURRENCY = re.compile(r"(?m)^concurrency:\s*$")
+SPOTLIGHT_AUTHORIZATION = ".github/SPOTLIGHT_UI_MERGE_AUTHORIZATION.md"
+REQUIRED_AUTHORIZATION_PHRASES = (
+    "scheduling isolation is explicit",
+    "not authorization",
+    "spotlight-link-sync-planning",
+    "non-cancellable serialized terminal",
+    "spotlight-link-sync-terminal",
+    "queue: max",
+    "concurrency only controls scheduling",
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -74,6 +84,13 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
                     f"{label} job {job_id} planning queue must retain GitHub single-pending latest-wins default")
 
 
+def validate_authorization_policy(text: str) -> None:
+    lower = text.lower()
+    for phrase in REQUIRED_AUTHORIZATION_PHRASES:
+        require(phrase in lower,
+                f"autonomous concurrency standing authorization is missing: {phrase}")
+
+
 def validate(policy: dict[str, Any], root: Path) -> None:
     observed_groups: set[str] = set()
     validated = 0
@@ -95,6 +112,11 @@ def validate(policy: dict[str, Any], root: Path) -> None:
     require(validated == 2, f"concurrency compiler workflow inventory changed: {validated}")
     require(len(observed_groups) == 4, f"concurrency compiler group inventory changed: {len(observed_groups)}")
 
+    policy_path = root / SPOTLIGHT_AUTHORIZATION
+    require(policy_path.is_file() and not policy_path.is_symlink(),
+            f"concurrency standing authorization is missing or aliased: {SPOTLIGHT_AUTHORIZATION}")
+    validate_authorization_policy(policy_path.read_text(encoding="utf-8"))
+
 
 def expect_source_failure(
     workflow_id: str,
@@ -108,6 +130,15 @@ def expect_source_failure(
         require(expected in str(exc), f"concurrency source self-test failed for wrong reason: {exc}")
     else:
         raise ValueError(f"concurrency source self-test accepted forbidden drift: {expected}")
+
+
+def expect_policy_failure(text: str, expected: str) -> None:
+    try:
+        validate_authorization_policy(text)
+    except ValueError as exc:
+        require(expected in str(exc), f"concurrency authorization self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"concurrency authorization self-test accepted forbidden drift: {expected}")
 
 
 def self_test(policy: dict[str, Any], root: Path) -> None:
@@ -153,4 +184,10 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
             1,
         ),
         "differs from terminal IR group/cancellation policy",
+    )
+
+    authorization = (root / SPOTLIGHT_AUTHORIZATION).read_text(encoding="utf-8")
+    expect_policy_failure(
+        re.sub(r"non-cancellable serialized terminal", "terminal", authorization, flags=re.IGNORECASE),
+        "non-cancellable serialized terminal",
     )
