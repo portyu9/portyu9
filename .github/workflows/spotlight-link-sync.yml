@@ -101,6 +101,144 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  reconcile:
+    name: reconcile-stale-candidates-write
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Remove only stale validated automation candidates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGED: ${{ needs.plan.outputs.changed }}
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
+        run: |
+          set -euo pipefail
+          test "$CHANGED" = "true" || test "$CHANGED" = "false"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$README_SHA256_AFTER" =~ ^[0-9a-f]{64}$ ]]
+          test "$BASE_SHA" = "$GITHUB_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
+
+          EXPECTED_CANDIDATE_BRANCH=""
+          if [ "$CHANGED" = "true" ]; then
+            EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+            [[ "$EXPECTED_CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
+            EXPECTED_CANDIDATE_BRANCH="${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
+            [[ "$EXPECTED_CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
+          fi
+
+          STALE_AFTER_SECONDS=1800
+          NOW_EPOCH="$(date -u +%s)"
+          [[ "$NOW_EPOCH" =~ ^[1-9][0-9]*$ ]]
+          REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}")"
+          REF_COUNT="$(jq 'length' <<<"$REFS")"
+          [[ "$REF_COUNT" =~ ^[0-9]+$ ]]
+          test "$REF_COUNT" -le 20 || {
+            echo "Spotlight candidate namespace exceeds the reviewed reconciliation bound." >&2
+            exit 1
+          }
+          INVALID_REFS="$(jq '[.[] | select(
+            (.ref | test("^refs/heads/automation/spotlight-links/[0-9a-f]{64}$") | not) or
+            .object.type != "commit" or
+            (.object.sha | test("^[0-9a-f]{40}$") | not)
+          )] | length' <<<"$REFS")"
+          test "$INVALID_REFS" = "0" || {
+            echo "Spotlight candidate namespace contains an unreviewed ref shape." >&2
+            exit 1
+          }
+
+          CLEANED=0
+          PRESERVED_CURRENT=0
+          PRESERVED_YOUNG=0
+          while IFS=$'\t' read -r REF HEAD_SHA; do
+            test -n "$REF" || continue
+            BRANCH="${REF#refs/heads/}"
+            [[ "$BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
+            [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+            if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && [ "$BRANCH" = "$EXPECTED_CANDIDATE_BRANCH" ]; then
+              PRESERVED_CURRENT=$((PRESERVED_CURRENT + 1))
+              continue
+            fi
+
+            CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"
+            test "$(jq '.parents | length' <<<"$CANDIDATE_COMMIT")" = "1"
+            PARENT_SHA="$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")"
+            [[ "$PARENT_SHA" =~ ^[0-9a-f]{40}$ ]]
+            test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+            test "$(jq -r .author.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+            test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+            test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+            test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
+
+            COMMITTER_DATE="$(jq -r .committer.date <<<"$CANDIDATE_COMMIT")"
+            COMMIT_EPOCH="$(date -u -d "$COMMITTER_DATE" +%s)"
+            [[ "$COMMIT_EPOCH" =~ ^[1-9][0-9]*$ ]]
+            AGE_SECONDS=$((NOW_EPOCH - COMMIT_EPOCH))
+            test "$AGE_SECONDS" -ge 0
+            if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ]; then
+              PRESERVED_YOUNG=$((PRESERVED_YOUNG + 1))
+              continue
+            fi
+
+            COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"
+            test "$(jq -r .status <<<"$COMPARE")" = "ahead"
+            test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$PARENT_SHA"
+            test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$PARENT_SHA"
+            test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"
+            test "$(jq -r .behind_by <<<"$COMPARE")" = "0"
+            test "$(jq -r .total_commits <<<"$COMPARE")" = "1"
+            test "$(jq '.files | length' <<<"$COMPARE")" = "1"
+            test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
+            test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
+
+            PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"
+            PR_COUNT="$(jq 'length' <<<"$PRS")"
+            test "$PR_COUNT" = "0" || test "$PR_COUNT" = "1"
+            if [ "$PR_COUNT" = "1" ]; then
+              PR="$(jq -c '.[0]' <<<"$PRS")"
+              PR_NUMBER="$(jq -r .number <<<"$PR")"
+              [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+              test "$(jq -r .state <<<"$PR")" = "open"
+              test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"
+              test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"
+              test "$(jq -r .body <<<"$PR")" = "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force."
+              test "$(jq -r .base.ref <<<"$PR")" = "main"
+              test "$(jq -r .head.ref <<<"$PR")" = "$BRANCH"
+              test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+              test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
+              test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
+              jq -n '{state:"closed"}' > close-pr.json
+              CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"
+              test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"
+              test "$(jq -r .head.ref <<<"$CLOSED_PR")" = "$BRANCH"
+              test "$(jq -r .head.sha <<<"$CLOSED_PR")" = "$HEAD_SHA"
+            fi
+
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null
+            REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"
+            REMAINING_EXACT="$(jq --arg ref "refs/heads/${BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$REMAINING_REFS")"
+            test "$REMAINING_EXACT" = "0"
+            CLEANED=$((CLEANED + 1))
+          done < <(jq -r '.[] | [.ref, .object.sha] | @tsv' <<<"$REFS")
+
+          {
+            echo "### Spotlight interrupted-transaction reconciliation"
+            echo "- candidate refs observed: **$REF_COUNT**"
+            echo "- stale candidates cleaned: **$CLEANED**"
+            echo "- current deterministic candidate preserved: **$PRESERVED_CURRENT**"
+            echo "- candidates below 30-minute stale floor preserved: **$PRESERVED_YOUNG**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   budget:
     if: needs.plan.outputs.changed == 'true'
     name: mutation-budget-read-only
@@ -196,17 +334,18 @@ jobs:
           set -euo pipefail
           {
             echo "### Spotlight mutation quarantine"
-            echo "Mutation authority is disabled for source epoch \`$BASE_SHA / $GENERATED_SHA\`."
+            echo "Constructive mutation authority is disabled for source epoch \`$BASE_SHA / $GENERATED_SHA\`."
             echo "Observed changed-plan attempts: **$ATTEMPT_COUNT**."
-            echo "No candidate branch, pull request, workflow approval, merge, or cleanup mutation was authorized by this run."
+            echo "No candidate creation, pull request creation, workflow approval, or merge mutation was authorized by this budget decision."
+            echo "Reductive stale-candidate reconciliation remains a separately modeled maintenance capability."
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "Spotlight source-epoch mutation budget exhausted; remaining diagnostic-only." >&2
+          echo "Spotlight source-epoch mutation budget exhausted; constructive mutation remains disabled." >&2
           exit 1
 
   propose:
     if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true'
     name: propose-readme-only-write
-    needs: [plan, budget]
+    needs: [plan, reconcile, budget]
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     permissions:
@@ -355,7 +494,7 @@ jobs:
   approve:
     if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success'
     name: approve-bot-pr-checks-only
-    needs: [plan, budget, propose]
+    needs: [plan, reconcile, budget, propose]
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     permissions:
@@ -505,7 +644,7 @@ jobs:
   merge:
     if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'
     name: merge-readme-only-terminal-write
-    needs: [plan, budget, propose, approve]
+    needs: [plan, reconcile, budget, propose, approve]
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions:
@@ -609,9 +748,13 @@ jobs:
           test "$(jq -r .head.ref <<<"$MERGED_PR")" = "$CANDIDATE_BRANCH"
           test "$(jq -r .head.sha <<<"$MERGED_PR")" = "$HEAD_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"
-          if CANDIDATE_REF="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" 2>/dev/null)"; then
-            test "$(jq -r .object.sha <<<"$CANDIDATE_REF")" = "$HEAD_SHA"
+          CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
+          EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$CANDIDATE_REFS")"
+          test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"
+          if [ "$EXACT_REF_COUNT" = "1" ]; then
+            test "$(jq -r --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)][0].object.sha' <<<"$CANDIDATE_REFS")" = "$HEAD_SHA"
             gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null
-          else
-            test "$(jq -r '.status // empty' <<<"$CANDIDATE_REF")" = "404"
+            AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
+            AFTER_EXACT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$AFTER_REFS")"
+            test "$AFTER_EXACT" = "0"
           fi
