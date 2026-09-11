@@ -93,6 +93,26 @@ def job_block(text: str, job_id: str, next_job_id: str | None) -> str:
     return text[start:end]
 
 
+def validate_profile_candidate_binding(text: str, label: str) -> None:
+    """Keep the leased semantic candidate bound to the live generated base and exact predicate."""
+    for fragment in (
+        'GENERATED_SHA: ${{ needs.attest.outputs.generated_sha }}',
+        'PREDICATE_SHA256: ${{ needs.attest.outputs.predicate_sha256 }}',
+        'EXPECTED_CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$BASE_SHA" "$GENERATED_SHA" "$PREDICATE_SHA256" | sha256sum | cut -d\' \' -f1)"',
+        'test "$CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"',
+        'REMOTE_GENERATED="$(git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/generated)"',
+        '[[ "$REMOTE_GENERATED" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/generated$ ]]',
+        'test "${BASH_REMATCH[1]}" = "$GENERATED_SHA"',
+        '- name: Verify leased attestation predicate identity',
+        'EXPECTED_PREDICATE_SHA256: ${{ needs.attest.outputs.predicate_sha256 }}',
+        'test "$(sha256sum attestation-input/attestation-predicate.json | cut -d\' \' -f1)" = "$EXPECTED_PREDICATE_SHA256"',
+        'LEASED_GENERATED_SHA: ${{ needs.attest.outputs.generated_sha }}',
+        '[[ "$LEASED_GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        'test "$base_sha" = "$LEASED_GENERATED_SHA"',
+    ):
+        require(fragment in text, f"{label} lost Profile Stats candidate binding: {fragment}")
+
+
 def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: str) -> None:
     spec = workflow["lease"]
     label = f"automation policy workflow {workflow_id} mutation lease source"
@@ -130,6 +150,9 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
         require(fragment in lease, f"{label} mint job is missing: {fragment}")
     for forbidden in ("contents: write", "pull-requests: write", "actions: write", "checks: write"):
         require(forbidden not in lease, f"{label} mint job acquired write authority: {forbidden}")
+
+    if workflow_id == "profile-stats":
+        validate_profile_candidate_binding(text, label)
 
     for job_id in spec["boundJobs"]:
         index = job_ids.index(job_id)
@@ -202,6 +225,26 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
         policy["workflows"]["profile-stats"],
         profile_source.replace(f"LEASE_TTL_SECONDS={LEASE_TTL_SECONDS}", "LEASE_TTL_SECONDS=3600", 1),
         f"LEASE_TTL_SECONDS={LEASE_TTL_SECONDS}",
+    )
+    expect_source_failure(
+        "profile-stats",
+        policy["workflows"]["profile-stats"],
+        profile_source.replace(
+            'test "${BASH_REMATCH[1]}" = "$GENERATED_SHA"',
+            'test "${BASH_REMATCH[1]}" = "$BASE_SHA"',
+            1,
+        ),
+        "generated base",
+    )
+    expect_source_failure(
+        "profile-stats",
+        policy["workflows"]["profile-stats"],
+        profile_source.replace(
+            'test "$base_sha" = "$LEASED_GENERATED_SHA"',
+            'test "$base_sha" = "$base_sha"',
+            1,
+        ),
+        "generated base",
     )
 
     spotlight_source = (root / policy["workflows"]["spotlight-link-sync"]["path"]).read_text(encoding="utf-8")
