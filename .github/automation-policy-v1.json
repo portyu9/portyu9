@@ -83,7 +83,7 @@
           "group": "profile-stats-terminal",
           "cancelInProgress": false,
           "queue": "max",
-          "jobs": ["lease", "attest_publish", "stage", "publish", "dispatch"]
+          "jobs": ["lease", "attest_publish", "stage", "publish", "receipt", "receipt_attest", "dispatch"]
         }
       },
       "lease": {
@@ -102,10 +102,11 @@
           "issuedAt",
           "expiresAt"
         ],
-        "boundJobs": ["attest_publish", "publish", "dispatch"],
+        "boundJobs": ["attest_publish", "publish", "receipt_attest", "dispatch"],
         "minimumRemainingSeconds": {
           "attest_publish": 300,
           "publish": 240,
+          "receipt_attest": 240,
           "dispatch": 180
         }
       },
@@ -154,9 +155,25 @@
             "contents": "write"
           }
         },
+        "receipt": {
+          "name": "prepare-publication-receipt-read-only",
+          "needs": ["publish", "stage", "lease", "attest"],
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "receipt_attest": {
+          "name": "attest-publication-receipt-write-only",
+          "needs": ["receipt", "lease", "attest"],
+          "permissions": {
+            "contents": "read",
+            "id-token": "write",
+            "attestations": "write"
+          }
+        },
         "dispatch": {
           "name": "dispatch-spotlight-link-sync",
-          "needs": ["publish", "lease", "attest"],
+          "needs": ["receipt_attest", "publish", "lease", "attest"],
           "permissions": {
             "actions": "write"
           }
@@ -284,7 +301,7 @@
         {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["attest", "lease", "attest_publish", "stage"]},
         {"from": "approved", "to": "no-change", "phase": "terminalize", "jobs": ["stage"]},
         {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["publish"]},
-        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["publish"]},
+        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["publish", "receipt", "receipt_attest"]},
         {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["dispatch"]}
       ]
     },
