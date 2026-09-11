@@ -2,6 +2,7 @@
 """Compile Automation Policy IR concurrency classes against canonical workflow source."""
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 import re
 from typing import Any
@@ -92,6 +93,10 @@ def validate_authorization_policy(text: str) -> None:
 
 
 def validate(policy: dict[str, Any], root: Path) -> None:
+    candidate_prefix = policy["branches"]["spotlightCandidatePrefix"]
+    require("//" not in candidate_prefix,
+            "automation policy Spotlight candidate prefix cannot contain an empty path segment")
+
     observed_groups: set[str] = set()
     validated = 0
     for workflow_id, workflow in policy["workflows"].items():
@@ -143,6 +148,16 @@ def expect_policy_failure(text: str, expected: str) -> None:
 
 def self_test(policy: dict[str, Any], root: Path) -> None:
     validate(policy, root)
+
+    malformed_prefix = copy.deepcopy(policy)
+    malformed_prefix["branches"]["spotlightCandidatePrefix"] = "automation//spotlight-links/"
+    try:
+        validate(malformed_prefix, root)
+    except ValueError as exc:
+        require("empty path segment" in str(exc),
+                f"candidate-prefix normalization self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("candidate-prefix normalization self-test accepted an empty path segment")
 
     profile = policy["workflows"]["profile-stats"]
     profile_text = (root / profile["path"]).read_text(encoding="utf-8")
