@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
+import re
 from typing import Any
 
 LEASE_TTL_SECONDS = 1800
@@ -23,6 +24,7 @@ LEASE_IDENTITY_FIELDS = [
 LEASE_WORKFLOWS = {"profile-stats", "spotlight-link-sync"}
 LEASE_STEP_NAME = "Verify exact short-lived mutation lease"
 LEASE_PROOF_MARKER = "# Verify exact short-lived mutation lease."
+TIMEOUT_RE = re.compile(r"(?m)^    timeout-minutes: ([1-9][0-9]*)$")
 
 
 def require(condition: bool, message: str) -> None:
@@ -43,7 +45,7 @@ def validate_policy(workflow_id: str, workflow: dict[str, Any]) -> None:
     require(workflow_id in LEASE_WORKFLOWS, f"{label} is not an authorized lease workflow")
     spec = exact_keys(
         workflow["lease"],
-        {"job", "ttlSeconds", "identityFields", "boundJobs"},
+        {"job", "ttlSeconds", "identityFields", "boundJobs", "minimumRemainingSeconds"},
         label,
     )
     jobs = workflow["jobs"]
@@ -62,6 +64,14 @@ def validate_policy(workflow_id: str, workflow: dict[str, Any]) -> None:
     for job_id in bound_jobs:
         require(job_id in jobs, f"{label} references unknown bound job: {job_id}")
     require(lease_job not in bound_jobs, f"{label} lease job cannot consume its own lease")
+
+    remaining = spec["minimumRemainingSeconds"]
+    require(isinstance(remaining, dict), f"{label} minimumRemainingSeconds must be an object")
+    require(set(remaining) == set(bound_jobs),
+            f"{label} minimumRemainingSeconds must cover exactly boundJobs")
+    for job_id, seconds in remaining.items():
+        require(type(seconds) is int and 0 < seconds < LEASE_TTL_SECONDS,
+                f"{label} minimumRemainingSeconds must be a positive integer below TTL: {job_id}")
 
     lease_permissions = jobs[lease_job]["permissions"]
     require(lease_permissions == {"actions": "read"},
@@ -161,8 +171,15 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
         proof_count = block.count(f"- name: {LEASE_STEP_NAME}") + block.count(LEASE_PROOF_MARKER)
         require(proof_count == 1,
                 f"{label} bound job {job_id} must verify exactly one mutation lease")
+        timeouts = TIMEOUT_RE.findall(block)
+        require(len(timeouts) == 1, f"{label} bound job {job_id} must declare one literal timeout-minutes")
+        timeout_seconds = int(timeouts[0]) * 60
+        minimum_remaining = spec["minimumRemainingSeconds"][job_id]
+        require(minimum_remaining >= timeout_seconds,
+                f"{label} bound job {job_id} lease reserve is below its hard timeout")
         for fragment in (
             f"LEASE_TTL_SECONDS={LEASE_TTL_SECONDS}",
+            f"LEASE_MIN_REMAINING_SECONDS={minimum_remaining}",
             'test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"',
             'test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"',
             expected_ref,
@@ -171,6 +188,7 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
             'test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))',
             'test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"',
             'test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"',
+            'test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"',
             'test "$EXPECTED_LEASE_ID" = "$LEASE_ID"',
         ):
             require(fragment in block,
@@ -217,7 +235,11 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
 
     spotlight = copy.deepcopy(policy["workflows"]["spotlight-link-sync"])
     spotlight["lease"]["boundJobs"].remove("merge")
-    expect_policy_failure("spotlight-link-sync", spotlight, "complete write-capable job set")
+    expect_policy_failure("spotlight-link-sync", spotlight, "minimumRemainingSeconds must cover exactly boundJobs")
+
+    missing_reserve = copy.deepcopy(policy["workflows"]["profile-stats"])
+    del missing_reserve["lease"]["minimumRemainingSeconds"]["dispatch"]
+    expect_policy_failure("profile-stats", missing_reserve, "minimumRemainingSeconds must cover exactly boundJobs")
 
     profile_source = (root / policy["workflows"]["profile-stats"]["path"]).read_text(encoding="utf-8")
     expect_source_failure(
@@ -246,8 +268,22 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
         ),
         "generated base",
     )
+    expect_source_failure(
+        "profile-stats",
+        policy["workflows"]["profile-stats"],
+        profile_source.replace("LEASE_MIN_REMAINING_SECONDS=300", "LEASE_MIN_REMAINING_SECONDS=239", 1),
+        "LEASE_MIN_REMAINING_SECONDS=300",
+    )
 
+    under_timeout = copy.deepcopy(policy["workflows"]["spotlight-link-sync"])
+    under_timeout["lease"]["minimumRemainingSeconds"]["approve"] = 719
     spotlight_source = (root / policy["workflows"]["spotlight-link-sync"]["path"]).read_text(encoding="utf-8")
+    expect_source_failure(
+        "spotlight-link-sync",
+        under_timeout,
+        spotlight_source.replace("LEASE_MIN_REMAINING_SECONDS=780", "LEASE_MIN_REMAINING_SECONDS=719", 1),
+        "lease reserve is below its hard timeout",
+    )
     expect_source_failure(
         "spotlight-link-sync",
         policy["workflows"]["spotlight-link-sync"],
