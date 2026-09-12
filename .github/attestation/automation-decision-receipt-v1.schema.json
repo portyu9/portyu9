@@ -71,188 +71,166 @@
     "sha64": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "positiveInteger": {"type": "integer", "minimum": 1},
     "candidateBranch": {"type": "string", "pattern": "^automation/spotlight-links/[0-9a-f]{64}$"},
-    "effectBase": {
+    "effect": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["ordinal", "effectId", "job", "kind", "outcome", "target", "observation"],
       "properties": {
         "ordinal": {"type": "integer", "minimum": 1, "maximum": 32},
         "effectId": {"$ref": "#/$defs/sha64"},
-        "job": {"type": "string", "minLength": 1},
-        "kind": {"type": "string", "minLength": 1},
+        "job": {"enum": ["dispatch", "reconcile", "propose", "approve", "merge"]},
+        "kind": {
+          "enum": [
+            "spotlight-workflow-dispatch",
+            "stale-candidate-reconciliation",
+            "spotlight-candidate-publication",
+            "workflow-run-approval-request",
+            "spotlight-terminal-merge"
+          ]
+        },
         "outcome": {"enum": ["applied", "reused"]},
         "target": {"type": "object"},
         "observation": {"type": "object"}
-      }
-    },
-    "effect": {
-      "oneOf": [
-        {"$ref": "#/$defs/dispatchEffect"},
-        {"$ref": "#/$defs/staleCleanupEffect"},
-        {"$ref": "#/$defs/candidatePublicationEffect"},
-        {"$ref": "#/$defs/approvalEffect"},
-        {"$ref": "#/$defs/mergeEffect"}
-      ]
-    },
-    "dispatchEffect": {
+      },
       "allOf": [
-        {"$ref": "#/$defs/effectBase"},
         {
-          "additionalProperties": false,
-          "properties": {
-            "job": {"const": "dispatch"},
-            "kind": {"const": "spotlight-workflow-dispatch"},
-            "outcome": {"const": "applied"},
-            "target": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["workflowPath", "ref"],
-              "properties": {
-                "workflowPath": {"const": ".github/workflows/spotlight-link-sync.yml"},
-                "ref": {"const": "main"}
-              }
-            },
-            "observation": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["acceptedStatus"],
-              "properties": {
-                "acceptedStatus": {"const": 204}
+          "if": {"properties": {"kind": {"const": "spotlight-workflow-dispatch"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "dispatch"},
+              "outcome": {"const": "applied"},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["workflowPath", "ref"],
+                "properties": {
+                  "workflowPath": {"const": ".github/workflows/spotlight-link-sync.yml"},
+                  "ref": {"const": "main"}
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["acceptedStatus"],
+                "properties": {"acceptedStatus": {"const": 204}}
               }
             }
           }
-        }
-      ]
-    },
-    "staleCleanupEffect": {
-      "allOf": [
-        {"$ref": "#/$defs/effectBase"},
+        },
         {
-          "additionalProperties": false,
-          "properties": {
-            "job": {"const": "reconcile"},
-            "kind": {"const": "stale-candidate-reconciliation"},
-            "outcome": {"const": "applied"},
-            "target": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["candidateBranch", "headSha", "prNumber"],
-              "properties": {
-                "candidateBranch": {"$ref": "#/$defs/candidateBranch"},
-                "headSha": {"$ref": "#/$defs/sha40"},
-                "prNumber": {
-                  "oneOf": [
-                    {"$ref": "#/$defs/positiveInteger"},
-                    {"type": "null"}
-                  ]
+          "if": {"properties": {"kind": {"const": "stale-candidate-reconciliation"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "reconcile"},
+              "outcome": {"const": "applied"},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["candidateBranch", "headSha", "prNumber"],
+                "properties": {
+                  "candidateBranch": {"$ref": "#/$defs/candidateBranch"},
+                  "headSha": {"$ref": "#/$defs/sha40"},
+                  "prNumber": {
+                    "oneOf": [
+                      {"$ref": "#/$defs/positiveInteger"},
+                      {"type": "null"}
+                    ]
+                  }
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["prClosed", "candidateRefAbsent"],
+                "properties": {
+                  "prClosed": {"type": "boolean"},
+                  "candidateRefAbsent": {"const": true}
                 }
               }
-            },
-            "observation": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["prClosed", "candidateRefAbsent"],
-              "properties": {
-                "prClosed": {"type": "boolean"},
-                "candidateRefAbsent": {"const": true}
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "spotlight-candidate-publication"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "propose"},
+              "outcome": {"enum": ["applied", "reused"]},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["candidateBranch", "headSha", "prNumber"],
+                "properties": {
+                  "candidateBranch": {"$ref": "#/$defs/candidateBranch"},
+                  "headSha": {"$ref": "#/$defs/sha40"},
+                  "prNumber": {"$ref": "#/$defs/positiveInteger"}
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["refCreated", "prCreated"],
+                "properties": {
+                  "refCreated": {"type": "boolean"},
+                  "prCreated": {"type": "boolean"}
+                }
               }
             }
           }
-        }
-      ]
-    },
-    "candidatePublicationEffect": {
-      "allOf": [
-        {"$ref": "#/$defs/effectBase"},
+        },
         {
-          "additionalProperties": false,
-          "properties": {
-            "job": {"const": "propose"},
-            "kind": {"const": "spotlight-candidate-publication"},
-            "outcome": {"enum": ["applied", "reused"]},
-            "target": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["candidateBranch", "headSha", "prNumber"],
-              "properties": {
-                "candidateBranch": {"$ref": "#/$defs/candidateBranch"},
-                "headSha": {"$ref": "#/$defs/sha40"},
-                "prNumber": {"$ref": "#/$defs/positiveInteger"}
-              }
-            },
-            "observation": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["refCreated", "prCreated"],
-              "properties": {
-                "refCreated": {"type": "boolean"},
-                "prCreated": {"type": "boolean"}
+          "if": {"properties": {"kind": {"const": "workflow-run-approval-request"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "approve"},
+              "outcome": {"const": "applied"},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["workflowName", "workflowId", "runId", "runAttempt", "checkSuiteId"],
+                "properties": {
+                  "workflowName": {"enum": ["CodeQL", "Dependency review", "Profile quality"]},
+                  "workflowId": {"$ref": "#/$defs/positiveInteger"},
+                  "runId": {"$ref": "#/$defs/positiveInteger"},
+                  "runAttempt": {"$ref": "#/$defs/positiveInteger"},
+                  "checkSuiteId": {"$ref": "#/$defs/positiveInteger"}
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["approvalRequested"],
+                "properties": {"approvalRequested": {"const": true}}
               }
             }
           }
-        }
-      ]
-    },
-    "approvalEffect": {
-      "allOf": [
-        {"$ref": "#/$defs/effectBase"},
+        },
         {
-          "additionalProperties": false,
-          "properties": {
-            "job": {"const": "approve"},
-            "kind": {"const": "workflow-run-approval-request"},
-            "outcome": {"const": "applied"},
-            "target": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["workflowName", "workflowId", "runId", "runAttempt", "checkSuiteId"],
-              "properties": {
-                "workflowName": {"enum": ["CodeQL", "Dependency review", "Profile quality"]},
-                "workflowId": {"$ref": "#/$defs/positiveInteger"},
-                "runId": {"$ref": "#/$defs/positiveInteger"},
-                "runAttempt": {"$ref": "#/$defs/positiveInteger"},
-                "checkSuiteId": {"$ref": "#/$defs/positiveInteger"}
-              }
-            },
-            "observation": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["approvalRequested"],
-              "properties": {
-                "approvalRequested": {"const": true}
-              }
-            }
-          }
-        }
-      ]
-    },
-    "mergeEffect": {
-      "allOf": [
-        {"$ref": "#/$defs/effectBase"},
-        {
-          "additionalProperties": false,
-          "properties": {
-            "job": {"const": "merge"},
-            "kind": {"const": "spotlight-terminal-merge"},
-            "outcome": {"const": "applied"},
-            "target": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["prNumber", "candidateBranch", "headSha", "baseSha"],
-              "properties": {
-                "prNumber": {"$ref": "#/$defs/positiveInteger"},
-                "candidateBranch": {"$ref": "#/$defs/candidateBranch"},
-                "headSha": {"$ref": "#/$defs/sha40"},
-                "baseSha": {"$ref": "#/$defs/sha40"}
-              }
-            },
-            "observation": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["mergeSha", "mainSha", "candidateRefAbsent"],
-              "properties": {
-                "mergeSha": {"$ref": "#/$defs/sha40"},
-                "mainSha": {"$ref": "#/$defs/sha40"},
-                "candidateRefAbsent": {"const": true}
+          "if": {"properties": {"kind": {"const": "spotlight-terminal-merge"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "merge"},
+              "outcome": {"const": "applied"},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["prNumber", "candidateBranch", "headSha", "baseSha"],
+                "properties": {
+                  "prNumber": {"$ref": "#/$defs/positiveInteger"},
+                  "candidateBranch": {"$ref": "#/$defs/candidateBranch"},
+                  "headSha": {"$ref": "#/$defs/sha40"},
+                  "baseSha": {"$ref": "#/$defs/sha40"}
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["mergeSha", "mainSha", "candidateRefAbsent"],
+                "properties": {
+                  "mergeSha": {"$ref": "#/$defs/sha40"},
+                  "mainSha": {"$ref": "#/$defs/sha40"},
+                  "candidateRefAbsent": {"const": true}
+                }
               }
             }
           }
