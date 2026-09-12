@@ -293,15 +293,15 @@ def legacy_mutation_budget_view(sync: str) -> str:
 
 
 def legacy_dispatch_view(stats: str) -> str:
-    """Project only item-7 scheduling and item-8 lease overlays out for the frozen dispatch proof."""
-    require(stats.count(PROFILE_DISPATCH_CONCURRENCY) == 5,
-            "Profile-stats terminal concurrency must cover lease/attestation/staging/publication/dispatch")
+    """Project item-7 scheduling, item-8 lease, and item-9 receipt overlays for the frozen dispatch proof."""
+    require(stats.count(PROFILE_DISPATCH_CONCURRENCY) == 7,
+            "Profile-stats terminal concurrency must cover lease/attestation/staging/publication/receipt/signing/dispatch")
     dispatch = core.job_block(stats, "dispatch", None)
     require(dispatch.count(PROFILE_DISPATCH_CONCURRENCY) == 1,
             "Profile-stats dispatcher must remain in terminal concurrency")
-    current_needs = "    needs: [publish, lease, attest]\n"
+    current_needs = "    needs: [receipt_attest, lease, attest]\n"
     require(dispatch.count(current_needs) == 1,
-            "Profile-stats dispatcher must retain the exact lease-aware dependency set")
+            "Profile-stats dispatcher must retain the exact receipt/lease-aware dependency set")
     legacy = dispatch.replace(current_needs, "    needs: publish\n", 1)
     lease_step = "      - name: Verify exact short-lived mutation lease\n"
     dispatch_step = "      - name: Dispatch exact Spotlight reconciliation workflow\n"
@@ -355,9 +355,9 @@ def validate(sync: str, stats: str, policy: str) -> None:
     dispatch = core.job_block(stats, "dispatch", None)
     require(PROFILE_DISPATCH_CONCURRENCY in dispatch,
             "Profile-stats dispatcher must remain in non-cancellable serialized terminal concurrency")
-    require("needs: [publish, lease, attest]" in dispatch and
+    require("needs: [receipt_attest, lease, attest]" in dispatch and
             "      - name: Verify exact short-lived mutation lease" in dispatch,
-            "Profile-stats dispatcher must remain gated by the exact mutation lease")
+            "Profile-stats dispatcher must remain gated by the signed publication receipt and exact mutation lease")
     core.validate_dispatch_job(legacy_dispatch_view(stats))
 
     for forbidden in (
