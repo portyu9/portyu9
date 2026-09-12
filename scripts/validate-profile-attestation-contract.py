@@ -412,8 +412,10 @@ def validate_workflow() -> None:
             "publication receipt preparation must download exactly one digest-checked reviewed predicate")
     require(receipt.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 1,
             "publication receipt preparation must upload exactly one receipt predicate")
+    require('ref: ${{ needs.publish.outputs.published_sha }}' not in receipt,
+            "publication receipt preparation must not checkout a dynamic published SHA")
     for fragment in (
-        'ref: ${{ needs.publish.outputs.published_sha }}',
+        "ref: generated",
         "fetch-depth: 2",
         'PUBLISHED_SHA: ${{ needs.publish.outputs.published_sha }}',
         'PUBLISHED_PARENT_SHA: ${{ needs.publish.outputs.parent_sha }}',
