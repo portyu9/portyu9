@@ -12,7 +12,7 @@ VERSION = "governed-workflow-byte-identity-v22"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
     ".github/workflows/profile-stats.yml": "8f586791bd7984d11c817aab93612bdebeabc9e6",
-    ".github/workflows/spotlight-link-sync.yml": "7bf7990d4d4f4a50b885514e72403e1ee3159258",
+    ".github/workflows/spotlight-link-sync.yml": "ac081afc77f657587fc11038173030574552685c",
 }
 
 OLD_MERGE_IF = (
@@ -83,7 +83,7 @@ def validate_item10_mac(spotlight: str) -> None:
         "- name: Download exact merge authorization artifact",
         "- name: Verify exact merge authorization artifact identity",
         "- name: Attest exact Spotlight merge authorization certificate",
-        "uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.1.0",
+        "uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2",
         "subject-path: merge-authorization-input/spotlight-merge-authorization.subject.json",
         "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json",
         "predicate-path: merge-authorization-input/spotlight-merge-authorization.json",
@@ -174,7 +174,7 @@ def self_test() -> None:
         "      - name: Download exact merge authorization artifact\n"
         "      - name: Verify exact merge authorization artifact identity\n"
         "      - name: Attest exact Spotlight merge authorization certificate\n"
-        "        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.1.0\n"
+        "        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2\n"
         "        with:\n          subject-path: merge-authorization-input/spotlight-merge-authorization.subject.json\n"
         "          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json\n"
         "          predicate-path: merge-authorization-input/spotlight-merge-authorization.json",
