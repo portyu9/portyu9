@@ -56,30 +56,15 @@
       "triggers": ["push", "schedule", "workflow_dispatch"],
       "permissions": {"contents": "read"},
       "concurrency": {
-        "planning": {
-          "group": "profile-stats-planning",
-          "cancelInProgress": true,
-          "queue": "single",
-          "jobs": ["generate", "attest"]
-        },
-        "terminal": {
-          "group": "profile-stats-terminal",
-          "cancelInProgress": false,
-          "queue": "max",
-          "jobs": ["lease", "attest_publish", "stage", "publish", "receipt", "receipt_attest", "dispatch"]
-        }
+        "planning": {"group": "profile-stats-planning", "cancelInProgress": true, "queue": "single", "jobs": ["generate", "attest"]},
+        "terminal": {"group": "profile-stats-terminal", "cancelInProgress": false, "queue": "max", "jobs": ["lease", "attest_publish", "stage", "publish", "receipt", "receipt_attest", "dispatch"]}
       },
       "lease": {
         "job": "lease",
         "ttlSeconds": 1800,
         "identityFields": ["repository", "repositoryId", "workflowPath", "workflowRef", "workflowSha", "runId", "runAttempt", "baseSha", "candidateId", "issuedAt", "expiresAt"],
         "boundJobs": ["attest_publish", "publish", "receipt_attest", "dispatch"],
-        "minimumRemainingSeconds": {
-          "attest_publish": 300,
-          "publish": 240,
-          "receipt_attest": 300,
-          "dispatch": 180
-        }
+        "minimumRemainingSeconds": {"attest_publish": 300, "publish": 240, "receipt_attest": 300, "dispatch": 180}
       },
       "jobs": {
         "generate": {"name": "generate-read-only", "needs": [], "permissions": {"contents": "read"}},
@@ -98,31 +83,15 @@
       "triggers": ["schedule", "workflow_dispatch"],
       "permissions": {"contents": "read"},
       "concurrency": {
-        "planning": {
-          "group": "spotlight-link-sync-planning",
-          "cancelInProgress": true,
-          "queue": "single",
-          "jobs": ["plan", "budget", "quarantine"]
-        },
-        "terminal": {
-          "group": "spotlight-link-sync-terminal",
-          "cancelInProgress": false,
-          "queue": "max",
-          "jobs": ["lease", "reconcile", "propose", "approve", "authorize", "authorize_attest", "merge"]
-        }
+        "planning": {"group": "spotlight-link-sync-planning", "cancelInProgress": true, "queue": "single", "jobs": ["plan", "budget", "quarantine"]},
+        "terminal": {"group": "spotlight-link-sync-terminal", "cancelInProgress": false, "queue": "max", "jobs": ["lease", "reconcile", "propose", "approve", "authorize", "authorize_attest", "merge"]}
       },
       "lease": {
         "job": "lease",
         "ttlSeconds": 1800,
         "identityFields": ["repository", "repositoryId", "workflowPath", "workflowRef", "workflowSha", "runId", "runAttempt", "baseSha", "candidateId", "issuedAt", "expiresAt"],
         "boundJobs": ["reconcile", "propose", "approve", "authorize_attest", "merge"],
-        "minimumRemainingSeconds": {
-          "reconcile": 240,
-          "propose": 300,
-          "approve": 780,
-          "authorize_attest": 180,
-          "merge": 240
-        }
+        "minimumRemainingSeconds": {"reconcile": 240, "propose": 300, "approve": 780, "authorize_attest": 180, "merge": 240}
       },
       "jobs": {
         "plan": {"name": "plan-direct-links-read-only", "needs": [], "permissions": {"contents": "read"}},
@@ -134,7 +103,7 @@
         "approve": {"name": "approve-bot-pr-checks-only", "needs": ["plan", "lease", "reconcile", "budget", "propose"], "permissions": {"contents": "read", "actions": "write"}},
         "authorize": {"name": "prepare-merge-authorization-read-only", "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve"], "permissions": {"contents": "read", "pull-requests": "read", "checks": "read", "actions": "read"}},
         "authorize_attest": {"name": "attest-merge-authorization-write-only", "needs": ["authorize", "lease", "plan", "propose", "approve"], "permissions": {"contents": "read", "id-token": "write", "attestations": "write"}},
-        "merge": {"name": "merge-readme-only-terminal-write", "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve", "authorize", "authorize_attest"], "permissions": {"contents": "write", "pull-requests": "read", "checks": "read"}}
+        "merge": {"name": "merge-readme-only-terminal-write", "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve", "authorize", "authorize_attest"], "permissions": {"contents": "write", "pull-requests": "read", "checks": "read", "attestations": "read"}}
       }
     }
   },
