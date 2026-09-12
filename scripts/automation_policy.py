@@ -119,6 +119,21 @@ def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
                              f"automation policy workflow {workflow_id} job {lease_job_id}")
         validate_job_graph(workflow_id, jobs)
         validate_concurrency_policy(workflow_id, workflow["concurrency"], jobs, global_groups)
+
+        if workflow_id == "profile-stats":
+            require(jobs["receipt"] == {
+                "name": "prepare-publication-receipt-read-only",
+                "needs": ["publish", "stage", "lease", "attest"],
+                "permissions": {"contents": "read"},
+            }, "automation policy Profile Stats receipt preparer authority changed")
+            require(jobs["receipt_attest"] == {
+                "name": "attest-publication-receipt-write-only",
+                "needs": ["receipt", "lease", "attest"],
+                "permissions": {"contents": "read", "id-token": "write", "attestations": "write"},
+            }, "automation policy Profile Stats receipt signer authority changed")
+            require(jobs["dispatch"]["needs"] == ["receipt_attest", "lease", "attest"],
+                    "automation policy dispatch must remain downstream of publication receipt attestation")
+
         automation_leases.validate_policy(workflow_id, workflow)
 
     machines = policy["transactionMachines"]
@@ -126,20 +141,6 @@ def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
             f"automation policy lease transaction workflow set changed: {sorted(machines)}")
     for workflow_id in sorted(LEASE_WORKFLOWS):
         validate_transaction_machine(workflow_id, machines[workflow_id], policy["workflows"])
-
-    profile = policy["workflows"]["profile-stats"]["jobs"]
-    require(profile["receipt"] == {
-        "name": "prepare-publication-receipt-read-only",
-        "needs": ["publish", "stage", "lease", "attest"],
-        "permissions": {"contents": "read"},
-    }, "automation policy Profile Stats receipt preparer authority changed")
-    require(profile["receipt_attest"] == {
-        "name": "attest-publication-receipt-write-only",
-        "needs": ["receipt", "lease", "attest"],
-        "permissions": {"contents": "read", "id-token": "write", "attestations": "write"},
-    }, "automation policy Profile Stats receipt signer authority changed")
-    require(profile["dispatch"]["needs"] == ["receipt_attest", "lease", "attest"],
-            "automation policy dispatch must remain downstream of publication receipt attestation")
 
 
 def validate_policy(payload: Any) -> dict[str, Any]:
