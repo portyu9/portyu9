@@ -341,7 +341,7 @@ def self_test() -> None:
     synthetic = "\n".join(PROFILE_STATS_RECEIPT_SEQUENCE)
     validate_profile_stats_receipt(synthetic)
     try:
-        validate_profile_stats_receipt(synthetic.replace(PROFILE_STATS_RECEIPT_SEQUENCE[-5], "", 1))
+        validate_profile_stats_receipt(synthetic.replace(PROFILE_STATS_RECEIPT_SEQUENCE[-4], "", 1))
     except ValueError:
         pass
     else:
