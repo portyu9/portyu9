@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import automation_concurrency
+import automation_decision_receipts
 import automation_leases
 import automation_policy_core as core
 from automation_policy_core import *  # noqa: F401,F403 - preserve the established public helper surface.
@@ -202,6 +203,11 @@ def load_policy(path: Path = POLICY_PATH) -> dict[str, Any]:
     if path == POLICY_PATH:
         automation_concurrency.validate(policy, ROOT)
         automation_leases.validate_source(policy, ROOT)
+        decision_contract = automation_decision_receipts.strict_json(
+            ROOT / policy["decisionReceiptContract"]
+        )
+        automation_decision_receipts.validate(policy, decision_contract)
+        automation_decision_receipts.self_test(policy, decision_contract)
     return policy
 
 
