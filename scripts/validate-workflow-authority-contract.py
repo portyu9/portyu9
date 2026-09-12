@@ -37,6 +37,12 @@ DOWNLOAD_STEP = (
     "          path: merge-authorization-input\n"
     "          digest-mismatch: error\n\n"
 )
+ITEM10_CANDIDATE_REPROOF = (
+    '          test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"\n'
+    '          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content \\\n'
+    "            | tr -d '\\n' | base64 --decode > candidate-readme.md\n"
+    '          test "$(sha256sum candidate-readme.md | cut -d\' \' -f1)" = "$README_SHA256_AFTER"\n'
+)
 
 
 def fail(message: str) -> None:
@@ -75,6 +81,10 @@ def project_item9_sync(sync: str) -> str:
     require(projected.count(certificate_env) == 1,
             "item-10 authority projection lost terminal certificate identity inputs")
     projected = projected.replace(certificate_env, "", 1)
+
+    require(projected.count(ITEM10_CANDIDATE_REPROOF) == 1,
+            "item-10 authority projection lost terminal candidate content reproof")
+    projected = projected.replace(ITEM10_CANDIDATE_REPROOF, "", 1)
 
     mac_start = '          CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"\n'
     require(projected.count(mac_start) == 1,
