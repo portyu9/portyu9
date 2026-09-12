@@ -306,7 +306,7 @@ def validate_receipt_builder() -> None:
         'SOURCE_EPOCH_VERSION = "profile-stats-source-epoch-v1"',
         'SOURCE_EPOCH_ALGORITHM = "sha256-sorted-path-nul-git-blob-oid-lf-v1"',
         "import profile_evidence_subjects as subjects",
-        'subjectSet.get("publishedPaths") == list(subjects.published_paths())',
+        'subject_set.get("publishedPaths") == list(subjects.published_paths())',
         'expected_candidate = hashlib.sha256(',
         'f"{source_sha}\\n{parent_sha}\\n{profile_digest}\\n".encode("ascii")',
         '"leaseId": lease_id, "candidateId": candidate_id',
