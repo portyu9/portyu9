@@ -321,7 +321,9 @@ def main() -> int:
         lease = job_block(workflow, "lease", "attest_publish")
         attest_publish = job_block(workflow, "attest_publish", "stage")
         stage = job_block(workflow, "stage", "publish")
-        publish = job_block(workflow, "publish", "dispatch")
+        publish = job_block(workflow, "publish", "receipt")
+        receipt = job_block(workflow, "receipt", "receipt_attest")
+        receipt_attest = job_block(workflow, "receipt_attest", "dispatch")
         dispatch = job_block(workflow, "dispatch", None)
         require(exact_job_if(generate, "production generation") == MAIN_REF_EXPR,
                 "production generation job-level if must be the exact refs/heads/main guard")
@@ -345,8 +347,22 @@ def main() -> int:
                 "terminal publication must remain downstream of staging and the exact attestation/lease transaction")
         require(exact_job_if(publish, "terminal publication") == PUBLICATION_DELTA_EXPR,
                 "terminal publication job-level if must be the exact staged-candidate delta guard")
-        require("needs: [publish, lease, attest]" in dispatch,
-                "terminal dispatch must remain downstream of publication and the exact attestation/lease transaction")
+        require("name: prepare-publication-receipt-read-only" in receipt
+                and "needs: [publish, stage, lease, attest]" in receipt,
+                "post-publication receipt preparation dependency changed")
+        require("permissions:\n      contents: read" in receipt,
+                "post-publication receipt preparation must remain read-only")
+        require("contents: write" not in receipt and "id-token: write" not in receipt
+                and "attestations: write" not in receipt,
+                "post-publication receipt preparation acquired write/signing authority")
+        require("name: attest-publication-receipt-write-only" in receipt_attest
+                and "needs: [receipt, lease, attest]" in receipt_attest,
+                "publication receipt signer dependency changed")
+        require("contents: read" in receipt_attest and "id-token: write" in receipt_attest
+                and "attestations: write" in receipt_attest and "contents: write" not in receipt_attest,
+                "publication receipt signer authority changed")
+        require("needs: [receipt_attest, lease, attest]" in dispatch,
+                "terminal dispatch must remain downstream of the signed publication receipt and exact lease transaction")
 
         for phrase in (
             "content-addressed source epoch",
@@ -361,7 +377,7 @@ def main() -> int:
         print(
             f"Profile stats trigger contract passed: {len(files)} exact trusted production inputs compile to "
             f"source epoch sha256:{digest}; push invalidation is workflow-or-epoch only, validation-only scripts do not trigger publication; "
-            "main/manual/schedule guards, read-only lease gating, and terminal attestation/publication delta boundaries remain exact."
+            "main/manual/schedule guards, read-only lease gating, publication receipt preparation/signing, and terminal dispatch ordering remain exact."
         )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError, StopIteration, IndexError, SyntaxError) as exc:
