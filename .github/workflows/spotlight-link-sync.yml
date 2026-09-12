@@ -797,10 +797,179 @@ jobs:
           echo "profile_run_id=$PROFILE_RUN_ID" >> "$GITHUB_OUTPUT"
           echo "profile_check_suite_id=$PROFILE_CHECK_SUITE_ID" >> "$GITHUB_OUTPUT"
 
-  merge:
+  authorize:
     if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'
-    name: merge-readme-only-terminal-write
+    name: prepare-merge-authorization-read-only
     needs: [plan, lease, reconcile, budget, propose, approve]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    concurrency:
+      group: spotlight-link-sync-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+      actions: read
+    outputs:
+      certificate_sha256: ${{ steps.build.outputs.certificate_sha256 }}
+      subject_sha256: ${{ steps.build.outputs.subject_sha256 }}
+
+    steps:
+      - name: Checkout trusted source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Independently re-prove live merge authorization state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.propose.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.propose.outputs.head_sha }}
+          BASE_SHA: ${{ needs.propose.outputs.base_sha }}
+          CANDIDATE_BRANCH: ${{ needs.propose.outputs.candidate_branch }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
+          CODEQL_RUN_ID: ${{ needs.approve.outputs.codeql_run_id }}
+          CODEQL_CHECK_SUITE_ID: ${{ needs.approve.outputs.codeql_check_suite_id }}
+          DEPENDENCY_RUN_ID: ${{ needs.approve.outputs.dependency_run_id }}
+          DEPENDENCY_CHECK_SUITE_ID: ${{ needs.approve.outputs.dependency_check_suite_id }}
+          PROFILE_RUN_ID: ${{ needs.approve.outputs.profile_run_id }}
+          PROFILE_CHECK_SUITE_ID: ${{ needs.approve.outputs.profile_check_suite_id }}
+        run: python3 source/scripts/prepare-spotlight-merge-authorization.py merge-authorization-state.json
+
+      - name: Build deterministic merge authorization certificate and subject
+        id: build
+        env:
+          BASE_SHA: ${{ needs.propose.outputs.base_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
+          PR_NUMBER: ${{ needs.propose.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.propose.outputs.head_sha }}
+          CANDIDATE_BRANCH: ${{ needs.propose.outputs.candidate_branch }}
+          CODEQL_RUN_ID: ${{ needs.approve.outputs.codeql_run_id }}
+          CODEQL_CHECK_SUITE_ID: ${{ needs.approve.outputs.codeql_check_suite_id }}
+          DEPENDENCY_RUN_ID: ${{ needs.approve.outputs.dependency_run_id }}
+          DEPENDENCY_CHECK_SUITE_ID: ${{ needs.approve.outputs.dependency_check_suite_id }}
+          PROFILE_RUN_ID: ${{ needs.approve.outputs.profile_run_id }}
+          PROFILE_CHECK_SUITE_ID: ${{ needs.approve.outputs.profile_check_suite_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p merge-authorization
+          RESULT="$(python3 source/scripts/build-spotlight-merge-authorization.py \
+            --state merge-authorization-state.json \
+            --certificate merge-authorization/spotlight-merge-authorization.json \
+            --subject merge-authorization/spotlight-merge-authorization.subject.json)"
+          CERTIFICATE_SHA256="$(jq -r .certificateSha256 <<<"$RESULT")"
+          SUBJECT_SHA256="$(jq -r .subjectSha256 <<<"$RESULT")"
+          [[ "$CERTIFICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum merge-authorization/spotlight-merge-authorization.json | cut -d' ' -f1)" = "$CERTIFICATE_SHA256"
+          test "$(sha256sum merge-authorization/spotlight-merge-authorization.subject.json | cut -d' ' -f1)" = "$SUBJECT_SHA256"
+          echo "certificate_sha256=$CERTIFICATE_SHA256" >> "$GITHUB_OUTPUT"
+          echo "subject_sha256=$SUBJECT_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact merge authorization artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}
+          path: merge-authorization/*
+          if-no-files-found: error
+          retention-days: 1
+
+  authorize_attest:
+    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success' && needs.authorize.result == 'success'
+    name: attest-merge-authorization-write-only
+    needs: [authorize, lease, plan, propose, approve]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    concurrency:
+      group: spotlight-link-sync-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Verify exact short-lived mutation lease
+        env:
+          BASE_SHA: ${{ needs.propose.outputs.base_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
+        run: |
+          set -euo pipefail
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=180
+          EXPECTED_BASE_SHA="$BASE_SHA"
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+
+      - name: Download exact merge authorization artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}
+          path: merge-authorization-input
+          digest-mismatch: error
+
+      - name: Verify exact merge authorization artifact identity
+        env:
+          EXPECTED_CERTIFICATE_SHA256: ${{ needs.authorize.outputs.certificate_sha256 }}
+          EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_CERTIFICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum merge-authorization-input/spotlight-merge-authorization.json | cut -d' ' -f1)" = "$EXPECTED_CERTIFICATE_SHA256"
+          test "$(sha256sum merge-authorization-input/spotlight-merge-authorization.subject.json | cut -d' ' -f1)" = "$EXPECTED_SUBJECT_SHA256"
+
+      - name: Attest exact Spotlight merge authorization certificate
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.1.0
+        with:
+          subject-path: merge-authorization-input/spotlight-merge-authorization.subject.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json
+          predicate-path: merge-authorization-input/spotlight-merge-authorization.json
+          show-summary: true
+
+  merge:
+    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success' && needs.authorize.result == 'success' && needs.authorize_attest.result == 'success'
+    name: merge-readme-only-terminal-write
+    needs: [plan, lease, reconcile, budget, propose, approve, authorize, authorize_attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     concurrency:
@@ -811,8 +980,16 @@ jobs:
       contents: write
       pull-requests: read
       checks: read
+      attestations: read
 
     steps:
+      - name: Download attested merge authorization artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}
+          path: merge-authorization-input
+          digest-mismatch: error
+
       - name: Merge exact approved head and clean up immutable candidate branch
         env:
           GH_TOKEN: ${{ github.token }}
@@ -833,6 +1010,8 @@ jobs:
           DEPENDENCY_CHECK_SUITE_ID: ${{ needs.approve.outputs.dependency_check_suite_id }}
           PROFILE_RUN_ID: ${{ needs.approve.outputs.profile_run_id }}
           PROFILE_CHECK_SUITE_ID: ${{ needs.approve.outputs.profile_check_suite_id }}
+          EXPECTED_CERTIFICATE_SHA256: ${{ needs.authorize.outputs.certificate_sha256 }}
+          EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}
         run: |
           set -euo pipefail
           # Verify exact short-lived mutation lease.
@@ -882,6 +1061,10 @@ jobs:
           test "$(jq -r .author.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
           test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
           test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+          test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content \
+            | tr -d '\n' | base64 --decode > candidate-readme.md
+          test "$(sha256sum candidate-readme.md | cut -d' ' -f1)" = "$README_SHA256_AFTER"
 
           for ID in "$CODEQL_RUN_ID" "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_RUN_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_RUN_ID" "$PROFILE_CHECK_SUITE_ID"; do
             [[ "$ID" =~ ^[1-9][0-9]*$ ]]
@@ -912,6 +1095,84 @@ jobs:
             ] | sort_by(.name)')"
           OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
           test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
+
+          CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"
+          SUBJECT="merge-authorization-input/spotlight-merge-authorization.subject.json"
+          [[ "$EXPECTED_CERTIFICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum "$CERTIFICATE" | cut -d' ' -f1)" = "$EXPECTED_CERTIFICATE_SHA256"
+          test "$(sha256sum "$SUBJECT" | cut -d' ' -f1)" = "$EXPECTED_SUBJECT_SHA256"
+
+          EXPECTED_SUBJECT="$(jq -cn \
+            --arg candidate "$EXPECTED_CANDIDATE_ID" \
+            --arg base "$BASE_SHA" \
+            --arg generated "$GENERATED_SHA" \
+            --arg head "$HEAD_SHA" \
+            --arg certificate "$EXPECTED_CERTIFICATE_SHA256" \
+            '{schemaVersion:1,kind:"spotlight-merge-authorization-subject",repository:"portyu9/portyu9",transaction:{candidateId:$candidate,baseSha:$base,generatedSha:$generated,headSha:$head},certificateSha256:$certificate}')"
+          test "$(jq -cS . "$SUBJECT")" = "$(jq -cS . <<<"$EXPECTED_SUBJECT")"
+
+          jq -e \
+            --arg base "$BASE_SHA" \
+            --arg generated "$GENERATED_SHA" \
+            --arg readme "$README_SHA256_AFTER" \
+            --arg lease "$LEASE_ID" \
+            --arg candidate "$EXPECTED_CANDIDATE_ID" \
+            --arg issued "$LEASE_ISSUED_AT" \
+            --arg expires "$LEASE_EXPIRES_AT" \
+            --arg branch "$CANDIDATE_BRANCH" \
+            --arg head "$HEAD_SHA" \
+            --argjson pr "$PR_NUMBER" \
+            '.schemaVersion == 1 and
+             .kind == "spotlight-merge-authorization" and
+             .repository == "portyu9/portyu9" and
+             .workflowRef == "portyu9/portyu9/.github/workflows/spotlight-link-sync.yml@refs/heads/main" and
+             .source == {mainSha:$base,generatedSha:$generated,readmeSha256After:$readme} and
+             .transaction == {leaseId:$lease,candidateId:$candidate,issuedAt:$issued,expiresAt:$expires} and
+             .pullRequest.number == $pr and .pullRequest.baseRef == "main" and .pullRequest.headRef == $branch and
+             .pullRequest.headSha == $head and .pullRequest.headRepository == "portyu9/portyu9" and
+             .pullRequest.maintainerCanModify == false and
+             .candidate.parentSha == $base and .candidate.readmeSha256 == $readme' "$CERTIFICATE" >/dev/null
+
+          CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"
+          DEPENDENCY_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"
+          PROFILE_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"
+          EXPECTED_CERTIFICATE_RUNS="$(jq -cn \
+            --argjson codeql "$CODEQL_RUN" \
+            --argjson dependency "$DEPENDENCY_RUN" \
+            --argjson profile "$PROFILE_RUN" \
+            '[
+              {name:"CodeQL",workflowId:$codeql.workflow_id,runId:$codeql.id,runAttempt:$codeql.run_attempt,checkSuiteId:$codeql.check_suite_id,event:$codeql.event,headBranch:$codeql.head_branch,headSha:$codeql.head_sha,repository:$codeql.repository.full_name,headRepository:$codeql.head_repository.full_name,status:$codeql.status,conclusion:$codeql.conclusion},
+              {name:"Dependency review",workflowId:$dependency.workflow_id,runId:$dependency.id,runAttempt:$dependency.run_attempt,checkSuiteId:$dependency.check_suite_id,event:$dependency.event,headBranch:$dependency.head_branch,headSha:$dependency.head_sha,repository:$dependency.repository.full_name,headRepository:$dependency.head_repository.full_name,status:$dependency.status,conclusion:$dependency.conclusion},
+              {name:"Profile quality",workflowId:$profile.workflow_id,runId:$profile.id,runAttempt:$profile.run_attempt,checkSuiteId:$profile.check_suite_id,event:$profile.event,headBranch:$profile.head_branch,headSha:$profile.head_sha,repository:$profile.repository.full_name,headRepository:$profile.head_repository.full_name,status:$profile.status,conclusion:$profile.conclusion}
+            ] | sort_by(.name)')"
+          test "$(jq -c '.workflowRuns | sort_by(.name)' "$CERTIFICATE")" = "$EXPECTED_CERTIFICATE_RUNS"
+
+          EXPECTED_CERTIFICATE_CHECKS="$(jq -cn \
+            --arg head "$HEAD_SHA" \
+            --argjson codeql "$CODEQL_CHECK_SUITE_ID" \
+            --argjson dependency "$DEPENDENCY_CHECK_SUITE_ID" \
+            --argjson profile "$PROFILE_CHECK_SUITE_ID" \
+            '[
+              {name:"analyze-actions",checkSuiteId:$codeql,appId:15368,status:"completed",conclusion:"success",headSha:$head},
+              {name:"analyze-python",checkSuiteId:$codeql,appId:15368,status:"completed",conclusion:"success",headSha:$head},
+              {name:"dependency-review",checkSuiteId:$dependency,appId:15368,status:"completed",conclusion:"success",headSha:$head},
+              {name:"integration-pinned-upstream",checkSuiteId:$profile,appId:15368,status:"completed",conclusion:"success",headSha:$head},
+              {name:"validate-contracts",checkSuiteId:$profile,appId:15368,status:"completed",conclusion:"success",headSha:$head}
+            ] | sort_by(.name)')"
+          test "$(jq -c '.checkRuns | sort_by(.name)' "$CERTIFICATE")" = "$EXPECTED_CERTIFICATE_CHECKS"
+
+          gh attestation verify "$SUBJECT" \
+            --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml" \
+            --signer-digest "$BASE_SHA" \
+            --source-digest "$BASE_SHA" \
+            --source-ref refs/heads/main \
+            --deny-self-hosted-runners \
+            --format json > verified-merge-authorization.json
+          MATCHING_PREDICATES="$(jq --slurpfile expected "$CERTIFICATE" '[.. | objects | select(has("predicate")) | .predicate | select(. == $expected[0])] | length' verified-merge-authorization.json)"
+          test "$MATCHING_PREDICATES" -ge 1
 
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
