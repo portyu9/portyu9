@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "contractId": "automation-decision-receipts-v1",
+  "repository": "portyu9/portyu9",
+  "genericPredicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json",
+  "workflows": {
+    "profile-stats": {
+      "jobs": {
+        "attest_publish": {
+          "mode": "self-attested",
+          "effectKinds": ["profile-evidence-attestation"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v3.schema.json"
+        },
+        "publish": {
+          "mode": "specialized-attested-receipt",
+          "effectKinds": ["generated-publication"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json"
+        },
+        "receipt_attest": {
+          "mode": "self-attested",
+          "effectKinds": ["generated-publication-receipt-attestation"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json"
+        },
+        "dispatch": {
+          "mode": "generic-decision-receipt",
+          "effectKinds": ["spotlight-workflow-dispatch"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"
+        }
+      }
+    },
+    "spotlight-link-sync": {
+      "jobs": {
+        "reconcile": {
+          "mode": "generic-decision-receipt",
+          "effectKinds": ["stale-candidate-reconciliation"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"
+        },
+        "propose": {
+          "mode": "generic-decision-receipt",
+          "effectKinds": ["spotlight-candidate-publication"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"
+        },
+        "approve": {
+          "mode": "generic-decision-receipt",
+          "effectKinds": ["workflow-run-approval-request"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"
+        },
+        "authorize_attest": {
+          "mode": "self-attested",
+          "effectKinds": ["spotlight-merge-authorization-attestation"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json"
+        },
+        "merge": {
+          "mode": "generic-decision-receipt",
+          "effectKinds": ["spotlight-terminal-merge"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"
+        }
+      }
+    }
+  }
+}
