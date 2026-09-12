@@ -55,23 +55,23 @@ def require(condition: bool, message: str) -> None:
 
 
 def project_item9_sync(sync: str) -> str:
-    """Remove only item-10 authority so the frozen item-9 firewall can re-prove itself."""
+    """Remove only item-10 overlays so the exact item-9 firewall can rerun."""
     authorize_start = sync.index("  authorize:\n")
     merge_start = sync.index("  merge:\n", authorize_start)
     projected = sync[:authorize_start] + sync[merge_start:]
 
-    require(projected.count(NEW_MERGE_IF) == 1,
-            "item-10 authority projection lost exact merge condition")
-    projected = projected.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
-    require(projected.count(NEW_MERGE_NEEDS) == 1,
-            "item-10 authority projection lost exact merge dependency overlay")
-    projected = projected.replace(NEW_MERGE_NEEDS, OLD_MERGE_NEEDS, 1)
+    for current, legacy, label in (
+        (NEW_MERGE_IF, OLD_MERGE_IF, "merge condition"),
+        (NEW_MERGE_NEEDS, OLD_MERGE_NEEDS, "merge dependency overlay"),
+    ):
+        require(projected.count(current) == 1, f"item-10 projection lost exact {label}")
+        projected = projected.replace(current, legacy, 1)
 
     require(projected.count("      attestations: read\n") == 1,
-            "item-10 authority projection lost terminal attestation-read permission")
+            "item-10 projection lost terminal attestation-read permission")
     projected = projected.replace("      attestations: read\n", "", 1)
     require(projected.count(DOWNLOAD_STEP) == 1,
-            "item-10 authority projection lost terminal certificate download")
+            "item-10 projection lost terminal certificate download")
     projected = projected.replace(DOWNLOAD_STEP, "", 1)
 
     certificate_env = (
@@ -79,16 +79,16 @@ def project_item9_sync(sync: str) -> str:
         "          EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}\n"
     )
     require(projected.count(certificate_env) == 1,
-            "item-10 authority projection lost terminal certificate identity inputs")
+            "item-10 projection lost certificate identity inputs")
     projected = projected.replace(certificate_env, "", 1)
 
     require(projected.count(ITEM10_CANDIDATE_REPROOF) == 1,
-            "item-10 authority projection lost terminal candidate content reproof")
+            "item-10 projection lost candidate content reproof")
     projected = projected.replace(ITEM10_CANDIDATE_REPROOF, "", 1)
 
     mac_start = '          CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"\n'
     require(projected.count(mac_start) == 1,
-            "item-10 authority projection lost terminal MAC proof boundary")
+            "item-10 projection lost terminal MAC proof boundary")
     start = projected.index(mac_start)
     final_reproof = (
         '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" '
@@ -166,20 +166,32 @@ def validate_item10_authority(sync: str) -> None:
     for forbidden in ("id-token: write", "attestations: write"):
         require(forbidden not in merge,
                 f"Spotlight terminal merge acquired signer authority: {forbidden}")
+
     verify = 'gh attestation verify "$SUBJECT"'
     mutation = 'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
     require(verify in merge and mutation in merge and merge.index(verify) < merge.index(mutation),
             "Spotlight terminal merge mutation is not downstream of cryptographic MAC verification")
+    for fragment in (
+        f"--predicate-type {PREDICATE_TYPE}",
+        '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml"',
+        '--signer-digest "$BASE_SHA"',
+        '--source-digest "$BASE_SHA"',
+        "--source-ref refs/heads/main",
+        "--deny-self-hosted-runners",
+        'test "$MATCHING_PREDICATES" -ge 1',
+    ):
+        require(fragment in merge, f"Spotlight terminal attestation verification drifted: {fragment}")
 
-    mac_start = merge.index('          CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"\n')
-    final_reproof = merge.index(
-        '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n',
-        mac_start,
-    )
-    mac_block = merge[mac_start:final_reproof]
+    api_start_marker = '          CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"\n'
+    api_end_marker = '          EXPECTED_CERTIFICATE_CHECKS="$(jq -cn \\\n'
+    require(merge.count(api_start_marker) == 1 and merge.count(api_end_marker) == 1,
+            "Spotlight item-10 terminal certificate API proof boundary changed")
+    api_start = merge.index(api_start_marker)
+    api_end = merge.index(api_end_marker, api_start)
+    api_block = merge[api_start:api_end]
     item9.core.require_exact_gh_api_surface(
-        mac_block,
-        label="Spotlight item-10 terminal certificate proof",
+        api_block,
+        label="Spotlight item-10 terminal certificate API proof",
         expected_lines=(
             'CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"',
             'DEPENDENCY_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"',
