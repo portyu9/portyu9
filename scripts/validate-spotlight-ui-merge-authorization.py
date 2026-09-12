@@ -155,7 +155,7 @@ def validate_mac(sync: str) -> None:
         "permissions:\n      contents: read\n      id-token: write\n      attestations: write" in signer,
         "Spotlight MAC signer authority changed",
     )
-    require(signer.count("uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.1.0") == 1,
+    require(signer.count("uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2") == 1,
             "Spotlight MAC signer must contain exactly one reviewed attestation action")
     for fragment in (
         "subject-path: merge-authorization-input/spotlight-merge-authorization.subject.json",
