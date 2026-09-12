@@ -138,34 +138,50 @@ def validate_publish_write_surface(publish: str) -> None:
     expressions = re.findall(r"\$\{\{\s*([^}]+?)\s*\}\}", publish)
     require(
         expressions == [
+            "steps.publish.outputs.published_sha",
+            "steps.publish.outputs.parent_sha",
+            "steps.publish.outputs.source_sha",
             "needs.stage.outputs.base_sha",
             "needs.stage.outputs.candidate_sha",
             "needs.stage.outputs.source_sha",
             "github.token",
             "needs.stage.outputs.source_sha",
+            "needs.stage.outputs.candidate_sha",
+            "needs.stage.outputs.base_sha",
         ],
         f"Write-only publication expression surface changed: {expressions!r}",
     )
-    marker = "      - name: Publish sealed artifact commit\n"
-    require(publish.count(marker) == 1, "Publication must contain one exact terminal push step")
+    marker = "      - name: Publish sealed artifact commit and re-prove remote head\n"
+    require(publish.count(marker) == 1, "Publication must contain one exact terminal push/re-proof step")
     terminal = publish[publish.index(marker):]
     require(terminal.count("      - name: ") == 1,
             "No authored step may follow explicit publication token introduction")
     for fragment in (
         "          SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}",
+        "          CANDIDATE_SHA: ${{ needs.stage.outputs.candidate_sha }}",
+        "          PARENT_SHA: ${{ needs.stage.outputs.base_sha }}",
         '          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        '          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        '          [[ "$PARENT_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        '          test "$(git -C artifacts rev-parse HEAD)" = "$CANDIDATE_SHA"',
+        '          test "$(git -C artifacts rev-parse HEAD^)" = "$PARENT_SHA"',
         '          REMOTE_MAIN="$(git -C artifacts ls-remote --exit-code origin refs/heads/main)"',
         '          [[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
         '          test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
+        '          REMOTE_GENERATED="$(git -C artifacts ls-remote --exit-code origin refs/heads/generated)"',
+        '          test "${BASH_REMATCH[1]}" = "$CANDIDATE_SHA"',
+        '          echo "published_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"',
+        '          echo "parent_sha=$PARENT_SHA" >> "$GITHUB_OUTPUT"',
+        '          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"',
     ):
         require(terminal.count(fragment) == 1,
-                f"Publication terminal source-freshness contract changed: {fragment}")
+                f"Publication terminal source/receipt handoff contract changed: {fragment}")
     freshness_guard = '          test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"'
     auth_intro = '          AUTH_HEADER="$(printf \'x-access-token:%s\' "$GITHUB_TOKEN" | base64 -w0)"'
     push = 'git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated'
-    require(terminal.index(freshness_guard) < terminal.index(auth_intro) < terminal.index(push),
-            "Publication must prove current main source before token derivation and exact generated push")
-    require(push in terminal, "Publication exact terminal generated push changed")
+    generated_reproof = '          REMOTE_GENERATED="$(git -C artifacts ls-remote --exit-code origin refs/heads/generated)"'
+    require(terminal.index(freshness_guard) < terminal.index(auth_intro) < terminal.index(push) < terminal.index(generated_reproof),
+            "Publication must prove current main before token derivation/push and re-prove generated after the exact push")
 
 
 def validate_quality(text: str) -> None:
@@ -230,7 +246,7 @@ def _remove_named_step(block: str, name: str) -> str:
 
 
 def project_legacy_stats_source(text: str) -> str:
-    """Remove exactly the item-8 lease overlay for the established governance assertions."""
+    """Remove exactly the item-8 lease and item-9 receipt overlays for established assertions."""
     projected = text
     lease = job_block(projected, "lease", "attest_publish")
     require("name: mint-mutation-lease-read-only" in lease and
@@ -239,6 +255,20 @@ def project_legacy_stats_source(text: str) -> str:
     for forbidden in ("contents: write", "actions: write", "id-token: write", "attestations: write"):
         require(forbidden not in lease, f"Stats mutation lease mint acquired write authority: {forbidden}")
     projected = projected.replace(lease, "", 1)
+
+    for job_id, next_job_id, expected_name in (
+        ("receipt", "receipt_attest", "prepare-publication-receipt-read-only"),
+        ("receipt_attest", "dispatch", "attest-publication-receipt-write-only"),
+    ):
+        receipt_job = job_block(projected, job_id, next_job_id)
+        require(f"name: {expected_name}" in receipt_job,
+                f"Stats receipt governance projection lost reviewed job: {job_id}")
+        projected = projected.replace(receipt_job, "", 1)
+
+    receipt_dispatch_needs = "    needs: [receipt_attest, lease, attest]\n"
+    require(projected.count(receipt_dispatch_needs) == 1,
+            "Stats receipt governance projection lost exact dispatch dependency")
+    projected = projected.replace(receipt_dispatch_needs, "    needs: [publish, lease, attest]\n", 1)
 
     for job_id, next_job_id, steps in (
         ("attest_publish", "stage", (
@@ -268,14 +298,19 @@ def project_legacy_stats_source(text: str) -> str:
 
 
 def validate_stats(text: str) -> None:
-    require(text.count("runs-on: ubuntu-24.04") == 7,
-            "All seven lease-aware stats jobs must pin ubuntu-24.04")
+    require(text.count("runs-on: ubuntu-24.04") == 9,
+            "All nine Profile Stats jobs must pin ubuntu-24.04")
     current_lease = job_block(text, "lease", "attest_publish")
     require("needs: attest" in current_lease and "name: mint-mutation-lease-read-only" in current_lease,
             "Stats mutation lease mint dependency/identity changed")
     require("permissions:\n      actions: read" in current_lease,
             "Stats mutation lease mint must retain Actions-read-only authority")
-    for job_id, next_job_id in (("attest_publish", "stage"), ("publish", "dispatch"), ("dispatch", None)):
+    for job_id, next_job_id in (
+        ("attest_publish", "stage"),
+        ("publish", "receipt"),
+        ("receipt_attest", "dispatch"),
+        ("dispatch", None),
+    ):
         block = job_block(text, job_id, next_job_id)
         require(block.count("      - name: Verify exact short-lived mutation lease\n") == 1,
                 f"Stats write-capable job lost its exact mutation lease proof: {job_id}")
@@ -286,10 +321,38 @@ def validate_stats(text: str) -> None:
         "    needs: [attest, lease]\n",
         "    needs: [generate, attest, lease, attest_publish]\n",
         "    needs: [stage, lease, attest]\n",
-        "    needs: [publish, lease, attest]\n",
+        "    needs: [publish, stage, lease, attest]\n",
+        "    needs: [receipt, lease, attest]\n",
+        "    needs: [receipt_attest, lease, attest]\n",
     ):
         require(text.count(dependency) == 1,
-                f"Stats lease-aware dependency graph changed: {dependency.strip()}")
+                f"Stats lease/receipt-aware dependency graph changed: {dependency.strip()}")
+
+    receipt = job_block(text, "receipt", "receipt_attest")
+    receipt_attest = job_block(text, "receipt_attest", "dispatch")
+    require("name: prepare-publication-receipt-read-only" in receipt and
+            "permissions:\n      contents: read" in receipt,
+            "Post-publication receipt preparation identity/authority changed")
+    for forbidden in ("contents: write", "id-token: write", "attestations: write", "actions: write"):
+        require(forbidden not in receipt,
+                f"Post-publication receipt preparation acquired write authority: {forbidden}")
+    require(receipt.count(f"actions/checkout@{CHECKOUT_SHA}") == 2 and
+            receipt.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 1,
+            "Post-publication receipt preparation trusted runtime inventory changed")
+    require(receipt.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1 and
+            receipt.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 1,
+            "Post-publication receipt preparation artifact surface changed")
+    require("name: attest-publication-receipt-write-only" in receipt_attest and
+            "permissions:\n      contents: read\n      id-token: write\n      attestations: write" in receipt_attest,
+            "Post-publication receipt signer identity/authority changed")
+    require("contents: write" not in receipt_attest and "actions: write" not in receipt_attest,
+            "Post-publication receipt signer must not receive repository/action mutation authority")
+    for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "git ", "gh "):
+        require(forbidden not in receipt_attest,
+                f"Post-publication receipt signer acquired forbidden authored execution surface: {forbidden}")
+    require(receipt_attest.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1 and
+            receipt_attest.count(f"actions/attest@{ATTEST_SHA}") == 1,
+            "Post-publication receipt signer transport/signing surface changed")
 
     text = project_legacy_stats_source(text)
     require("name: Update profile stats" in text, "Profile stats workflow name changed")
@@ -489,10 +552,10 @@ def main() -> int:
         validate_cadence_doc(CADENCE.read_text(encoding="utf-8"))
         print(
             "Repository governance validation passed: PR checks remain stable/read-only; dependency/action provenance is mandatory; "
-            "the seventh Profile Stats job mints an Actions-read-only short-lived lease and every writer proves that exact capability; "
-            "generation and attestation preparation execute authored code with read-only authority; terminal OIDC/attestation authority executes only digest-checked transport plus pinned actions/attest after the lease overlay; "
-            "publication staging seals the generated candidate and trusted source epoch under read-only authority; terminal contents-write publication re-proves current main source before token derivation and one exact generated push; "
-            "and post-publication Spotlight dispatch remains isolated to actions: write."
+            "Profile Stats mints an Actions-read-only short-lived lease and every writer proves that exact capability; "
+            "generation and attestation preparation execute authored code with read-only authority; terminal evidence signing and post-publication receipt signing retain isolated OIDC/attestation authority; "
+            "publication staging seals the generated candidate and trusted source epoch under read-only authority; terminal contents-write publication re-proves current main and generated heads around one exact push; "
+            "the actual generated Git commit is independently receipted before the actions-write-only Spotlight dispatch."
         )
         return 0
     except (OSError, ValueError) as exc:
