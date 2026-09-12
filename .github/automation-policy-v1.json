@@ -13,65 +13,48 @@
     "codeql": {
       "path": ".github/workflows/codeql.yml",
       "triggers": ["pull_request", "push", "schedule", "workflow_dispatch"],
-      "permissions": {
-        "contents": "read"
-      },
+      "permissions": {"contents": "read"},
       "jobs": {
         "analyze": {
           "name": "analyze-${{ matrix.language }}",
           "needs": [],
-          "permissions": {
-            "contents": "read",
-            "security-events": "write"
-          }
+          "permissions": {"contents": "read", "security-events": "write"}
         }
       }
     },
     "dependency-review": {
       "path": ".github/workflows/dependency-review.yml",
       "triggers": ["pull_request"],
-      "permissions": {
-        "contents": "read"
-      },
+      "permissions": {"contents": "read"},
       "jobs": {
         "dependency-review": {
           "name": "dependency-review",
           "needs": [],
-          "permissions": {
-            "contents": "read"
-          }
+          "permissions": {"contents": "read"}
         }
       }
     },
     "profile-quality": {
       "path": ".github/workflows/profile-quality.yml",
       "triggers": ["pull_request", "push"],
-      "permissions": {
-        "contents": "read"
-      },
+      "permissions": {"contents": "read"},
       "jobs": {
         "validate": {
           "name": "validate-contracts",
           "needs": [],
-          "permissions": {
-            "contents": "read"
-          }
+          "permissions": {"contents": "read"}
         },
         "integration": {
           "name": "integration-pinned-upstream",
           "needs": [],
-          "permissions": {
-            "contents": "read"
-          }
+          "permissions": {"contents": "read"}
         }
       }
     },
     "profile-stats": {
       "path": ".github/workflows/profile-stats.yml",
       "triggers": ["push", "schedule", "workflow_dispatch"],
-      "permissions": {
-        "contents": "read"
-      },
+      "permissions": {"contents": "read"},
       "concurrency": {
         "planning": {
           "group": "profile-stats-planning",
@@ -89,19 +72,7 @@
       "lease": {
         "job": "lease",
         "ttlSeconds": 1800,
-        "identityFields": [
-          "repository",
-          "repositoryId",
-          "workflowPath",
-          "workflowRef",
-          "workflowSha",
-          "runId",
-          "runAttempt",
-          "baseSha",
-          "candidateId",
-          "issuedAt",
-          "expiresAt"
-        ],
+        "identityFields": ["repository", "repositoryId", "workflowPath", "workflowRef", "workflowSha", "runId", "runAttempt", "baseSha", "candidateId", "issuedAt", "expiresAt"],
         "boundJobs": ["attest_publish", "publish", "receipt_attest", "dispatch"],
         "minimumRemainingSeconds": {
           "attest_publish": 300,
@@ -111,81 +82,21 @@
         }
       },
       "jobs": {
-        "generate": {
-          "name": "generate-read-only",
-          "needs": [],
-          "permissions": {
-            "contents": "read"
-          }
-        },
-        "attest": {
-          "name": "prepare-attestation-read-only",
-          "needs": ["generate"],
-          "permissions": {
-            "contents": "read"
-          }
-        },
-        "lease": {
-          "name": "mint-mutation-lease-read-only",
-          "needs": ["attest"],
-          "permissions": {
-            "actions": "read"
-          }
-        },
-        "attest_publish": {
-          "name": "attest-write-only",
-          "needs": ["attest", "lease"],
-          "permissions": {
-            "contents": "read",
-            "id-token": "write",
-            "attestations": "write"
-          }
-        },
-        "stage": {
-          "name": "stage-publication-read-only",
-          "needs": ["generate", "attest", "lease", "attest_publish"],
-          "permissions": {
-            "contents": "read"
-          }
-        },
-        "publish": {
-          "name": "publish-write-only",
-          "needs": ["stage", "lease", "attest"],
-          "permissions": {
-            "contents": "write"
-          }
-        },
-        "receipt": {
-          "name": "prepare-publication-receipt-read-only",
-          "needs": ["publish", "stage", "lease", "attest"],
-          "permissions": {
-            "contents": "read"
-          }
-        },
-        "receipt_attest": {
-          "name": "attest-publication-receipt-write-only",
-          "needs": ["receipt", "lease", "attest"],
-          "permissions": {
-            "contents": "read",
-            "id-token": "write",
-            "attestations": "write"
-          }
-        },
-        "dispatch": {
-          "name": "dispatch-spotlight-link-sync",
-          "needs": ["receipt_attest", "lease", "attest"],
-          "permissions": {
-            "actions": "write"
-          }
-        }
+        "generate": {"name": "generate-read-only", "needs": [], "permissions": {"contents": "read"}},
+        "attest": {"name": "prepare-attestation-read-only", "needs": ["generate"], "permissions": {"contents": "read"}},
+        "lease": {"name": "mint-mutation-lease-read-only", "needs": ["attest"], "permissions": {"actions": "read"}},
+        "attest_publish": {"name": "attest-write-only", "needs": ["attest", "lease"], "permissions": {"contents": "read", "id-token": "write", "attestations": "write"}},
+        "stage": {"name": "stage-publication-read-only", "needs": ["generate", "attest", "lease", "attest_publish"], "permissions": {"contents": "read"}},
+        "publish": {"name": "publish-write-only", "needs": ["stage", "lease", "attest"], "permissions": {"contents": "write"}},
+        "receipt": {"name": "prepare-publication-receipt-read-only", "needs": ["publish", "stage", "lease", "attest"], "permissions": {"contents": "read"}},
+        "receipt_attest": {"name": "attest-publication-receipt-write-only", "needs": ["receipt", "lease", "attest"], "permissions": {"contents": "read", "id-token": "write", "attestations": "write"}},
+        "dispatch": {"name": "dispatch-spotlight-link-sync", "needs": ["receipt_attest", "lease", "attest"], "permissions": {"actions": "write"}}
       }
     },
     "spotlight-link-sync": {
       "path": ".github/workflows/spotlight-link-sync.yml",
       "triggers": ["schedule", "workflow_dispatch"],
-      "permissions": {
-        "contents": "read"
-      },
+      "permissions": {"contents": "read"},
       "concurrency": {
         "planning": {
           "group": "spotlight-link-sync-planning",
@@ -197,95 +108,33 @@
           "group": "spotlight-link-sync-terminal",
           "cancelInProgress": false,
           "queue": "max",
-          "jobs": ["lease", "reconcile", "propose", "approve", "merge"]
+          "jobs": ["lease", "reconcile", "propose", "approve", "authorize", "authorize_attest", "merge"]
         }
       },
       "lease": {
         "job": "lease",
         "ttlSeconds": 1800,
-        "identityFields": [
-          "repository",
-          "repositoryId",
-          "workflowPath",
-          "workflowRef",
-          "workflowSha",
-          "runId",
-          "runAttempt",
-          "baseSha",
-          "candidateId",
-          "issuedAt",
-          "expiresAt"
-        ],
-        "boundJobs": ["reconcile", "propose", "approve", "merge"],
+        "identityFields": ["repository", "repositoryId", "workflowPath", "workflowRef", "workflowSha", "runId", "runAttempt", "baseSha", "candidateId", "issuedAt", "expiresAt"],
+        "boundJobs": ["reconcile", "propose", "approve", "authorize_attest", "merge"],
         "minimumRemainingSeconds": {
           "reconcile": 240,
           "propose": 300,
           "approve": 780,
+          "authorize_attest": 180,
           "merge": 240
         }
       },
       "jobs": {
-        "plan": {
-          "name": "plan-direct-links-read-only",
-          "needs": [],
-          "permissions": {
-            "contents": "read"
-          }
-        },
-        "lease": {
-          "name": "mint-mutation-lease-read-only",
-          "needs": ["plan"],
-          "permissions": {
-            "actions": "read"
-          }
-        },
-        "reconcile": {
-          "name": "reconcile-stale-candidates-write",
-          "needs": ["plan", "lease"],
-          "permissions": {
-            "contents": "write",
-            "pull-requests": "write"
-          }
-        },
-        "budget": {
-          "name": "mutation-budget-read-only",
-          "needs": ["plan"],
-          "permissions": {
-            "actions": "read"
-          }
-        },
-        "quarantine": {
-          "name": "mutation-budget-quarantine-read-only",
-          "needs": ["plan", "budget"],
-          "permissions": {
-            "contents": "read"
-          }
-        },
-        "propose": {
-          "name": "propose-readme-only-write",
-          "needs": ["plan", "lease", "reconcile", "budget"],
-          "permissions": {
-            "contents": "write",
-            "pull-requests": "write"
-          }
-        },
-        "approve": {
-          "name": "approve-bot-pr-checks-only",
-          "needs": ["plan", "lease", "reconcile", "budget", "propose"],
-          "permissions": {
-            "contents": "read",
-            "actions": "write"
-          }
-        },
-        "merge": {
-          "name": "merge-readme-only-terminal-write",
-          "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve"],
-          "permissions": {
-            "contents": "write",
-            "pull-requests": "read",
-            "checks": "read"
-          }
-        }
+        "plan": {"name": "plan-direct-links-read-only", "needs": [], "permissions": {"contents": "read"}},
+        "lease": {"name": "mint-mutation-lease-read-only", "needs": ["plan"], "permissions": {"actions": "read"}},
+        "reconcile": {"name": "reconcile-stale-candidates-write", "needs": ["plan", "lease"], "permissions": {"contents": "write", "pull-requests": "write"}},
+        "budget": {"name": "mutation-budget-read-only", "needs": ["plan"], "permissions": {"actions": "read"}},
+        "quarantine": {"name": "mutation-budget-quarantine-read-only", "needs": ["plan", "budget"], "permissions": {"contents": "read"}},
+        "propose": {"name": "propose-readme-only-write", "needs": ["plan", "lease", "reconcile", "budget"], "permissions": {"contents": "write", "pull-requests": "write"}},
+        "approve": {"name": "approve-bot-pr-checks-only", "needs": ["plan", "lease", "reconcile", "budget", "propose"], "permissions": {"contents": "read", "actions": "write"}},
+        "authorize": {"name": "prepare-merge-authorization-read-only", "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve"], "permissions": {"contents": "read", "pull-requests": "read", "checks": "read", "actions": "read"}},
+        "authorize_attest": {"name": "attest-merge-authorization-write-only", "needs": ["authorize", "lease", "plan", "propose", "approve"], "permissions": {"contents": "read", "id-token": "write", "attestations": "write"}},
+        "merge": {"name": "merge-readme-only-terminal-write", "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve", "authorize", "authorize_attest"], "permissions": {"contents": "write", "pull-requests": "read", "checks": "read"}}
       }
     }
   },
@@ -316,36 +165,16 @@
         {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["budget"]},
         {"from": "proposed", "to": "quarantined", "phase": "terminalize", "jobs": ["budget", "quarantine"]},
         {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["propose"]},
-        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["approve"]},
+        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["approve", "authorize", "authorize_attest"]},
         {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["merge"]}
       ]
     }
   },
   "requiredChecks": [
-    {
-      "context": "validate-contracts",
-      "workflow": "profile-quality",
-      "job": "validate"
-    },
-    {
-      "context": "integration-pinned-upstream",
-      "workflow": "profile-quality",
-      "job": "integration"
-    },
-    {
-      "context": "dependency-review",
-      "workflow": "dependency-review",
-      "job": "dependency-review"
-    },
-    {
-      "context": "analyze-actions",
-      "workflow": "codeql",
-      "job": "analyze"
-    },
-    {
-      "context": "analyze-python",
-      "workflow": "codeql",
-      "job": "analyze"
-    }
+    {"context": "validate-contracts", "workflow": "profile-quality", "job": "validate"},
+    {"context": "integration-pinned-upstream", "workflow": "profile-quality", "job": "integration"},
+    {"context": "dependency-review", "workflow": "dependency-review", "job": "dependency-review"},
+    {"context": "analyze-actions", "workflow": "codeql", "job": "analyze"},
+    {"context": "analyze-python", "workflow": "codeql", "job": "analyze"}
   ]
 }
