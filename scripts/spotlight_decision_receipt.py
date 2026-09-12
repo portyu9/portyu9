@@ -60,6 +60,7 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
     env_value(env, "GITHUB_RUN_ID", POSITIVE)
     env_value(env, "GITHUB_RUN_ATTEMPT", POSITIVE)
     expected_head = env_value(env, "EXPECTED_HEAD_SHA", SHA40)
+    current_candidate_branch = BOT_BRANCH_PREFIX + lease["candidateId"]
 
     validated: list[dict[str, Any]] = []
     terminal_merges = 0
@@ -68,8 +69,18 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
         kind = effect["kind"]
         require(kind != "spotlight-workflow-dispatch",
                 "Profile Stats dispatch effect cannot appear in a Spotlight decision journal")
-        if kind == "spotlight-terminal-merge":
+        if kind == "stale-candidate-reconciliation":
+            require(effect["target"]["candidateBranch"] != current_candidate_branch,
+                    "Spotlight stale reconciliation must never consume the leased current candidate")
+        elif kind == "spotlight-candidate-publication":
+            require(effect["target"]["candidateBranch"] == current_candidate_branch,
+                    "Spotlight candidate publication differs from leased candidate identity")
+            require(effect["target"]["headSha"] == expected_head,
+                    "Spotlight candidate publication head differs from expected candidate head")
+        elif kind == "spotlight-terminal-merge":
             terminal_merges += 1
+            require(effect["target"]["candidateBranch"] == current_candidate_branch,
+                    "Spotlight terminal merge differs from leased candidate identity")
             require(effect["target"]["headSha"] == expected_head,
                     "Spotlight terminal merge head differs from expected candidate head")
         validated.append(effect)
@@ -144,6 +155,24 @@ def self_test() -> None:
     wrong_head = copy.deepcopy(journal)
     wrong_head["effects"][2]["target"]["headSha"] = "f" * 40
     expect_failure(wrong_head, dict(env), "expected candidate head")
+
+    wrong_candidate = copy.deepcopy(journal)
+    wrong_candidate["effects"][0]["target"]["candidateBranch"] = BOT_BRANCH_PREFIX + "f" * 64
+    expect_failure(wrong_candidate, dict(env), "leased candidate identity")
+
+    stale_current = copy.deepcopy(journal)
+    stale_current["effects"].insert(0, {
+        "ordinal": 1,
+        "job": "reconcile",
+        "kind": "stale-candidate-reconciliation",
+        "outcome": "applied",
+        "target": {"candidateBranch": BOT_BRANCH_PREFIX + env["LEASE_CANDIDATE_ID"], "headSha": "1" * 40,
+                   "prNumber": None},
+        "observation": {"prClosed": False, "candidateRefAbsent": True},
+    })
+    for ordinal, effect in enumerate(stale_current["effects"], start=1):
+        effect["ordinal"] = ordinal
+    expect_failure(stale_current, dict(env), "must never consume")
 
     duplicate_merge = copy.deepcopy(journal)
     duplicate = copy.deepcopy(duplicate_merge["effects"][2])
