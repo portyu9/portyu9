@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-import subprocess
 import sys
 
+import spotlight_merge_authorization as mac_builder
 import spotlight_merge_authorization_item9_core as item9
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,11 +13,20 @@ SYNC = ROOT / ".github/workflows/spotlight-link-sync.yml"
 STATS = ROOT / ".github/workflows/profile-stats.yml"
 POLICY = ROOT / ".github/SPOTLIGHT_UI_MERGE_AUTHORIZATION.md"
 BUILDER = ROOT / "scripts/build-spotlight-merge-authorization.py"
+BUILDER_CORE = ROOT / "scripts/spotlight_merge_authorization.py"
 PREPARER = ROOT / "scripts/prepare-spotlight-merge-authorization.py"
 SCHEMA = ROOT / ".github/attestation/spotlight-merge-authorization-v1.schema.json"
 PREDICATE_TYPE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
     "spotlight-merge-authorization-v1.schema.json"
+)
+BUILDER_WRAPPER = (
+    "#!/usr/bin/env python3\n"
+    '"""CLI wrapper for deterministic Spotlight merge authorization certificate construction."""\n'
+    "from __future__ import annotations\n\n"
+    "from spotlight_merge_authorization import main\n\n\n"
+    'if __name__ == "__main__":\n'
+    "    raise SystemExit(main())\n"
 )
 NEW_MERGE_IF = (
     "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && "
@@ -102,7 +111,11 @@ def validate_preparer_script(text: str) -> None:
         require(fragment in text, f"Spotlight MAC preparer lost independent live-state proof: {fragment}")
 
 
-def validate_builder_script(text: str) -> None:
+def validate_builder_script(wrapper: str, core: str) -> None:
+    require(wrapper == BUILDER_WRAPPER,
+            "Spotlight MAC builder wrapper acquired logic outside the reviewed importable core")
+    require(Path(mac_builder.__file__).resolve(strict=True) == BUILDER_CORE.resolve(strict=True),
+            "Spotlight MAC validator imported an unexpected builder core")
     for fragment in (
         'KIND = "spotlight-merge-authorization"',
         'SUBJECT_KIND = "spotlight-merge-authorization-subject"',
@@ -113,17 +126,8 @@ def validate_builder_script(text: str) -> None:
         'certificateSha256',
         'def self_test() -> None:',
     ):
-        require(fragment in text, f"Spotlight MAC builder contract is missing: {fragment}")
-    completed = subprocess.run(
-        [sys.executable, str(BUILDER), "--self-test"],
-        cwd=ROOT,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    require(completed.returncode == 0,
-            "Spotlight MAC builder self-test failed:\n" + completed.stdout)
+        require(fragment in core, f"Spotlight MAC builder core contract is missing: {fragment}")
+    mac_builder.self_test()
 
 
 def validate_mac(sync: str) -> None:
@@ -207,7 +211,7 @@ def self_test(sync: str, stats: str, policy: str) -> None:
 
 def main() -> int:
     try:
-        for path in (SYNC, STATS, POLICY, BUILDER, PREPARER, SCHEMA):
+        for path in (SYNC, STATS, POLICY, BUILDER, BUILDER_CORE, PREPARER, SCHEMA):
             require(path.is_file() and not path.is_symlink(),
                     f"Spotlight merge authorization input is missing or aliased: {path.relative_to(ROOT)}")
         sync = SYNC.read_text(encoding="utf-8")
@@ -215,12 +219,13 @@ def main() -> int:
         policy = POLICY.read_text(encoding="utf-8")
         preparer = PREPARER.read_text(encoding="utf-8")
         builder = BUILDER.read_text(encoding="utf-8")
+        builder_core = BUILDER_CORE.read_text(encoding="utf-8")
 
         legacy = project_item9(sync)
         item9.validate(legacy, stats, policy)
         item9.self_test(legacy, stats, policy)
         validate_preparer_script(preparer)
-        validate_builder_script(builder)
+        validate_builder_script(builder, builder_core)
         validate_mac(sync)
         self_test(sync, stats, policy)
         print(
