@@ -197,7 +197,7 @@
           "group": "spotlight-link-sync-terminal",
           "cancelInProgress": false,
           "queue": "max",
-          "jobs": ["lease", "reconcile", "propose", "approve", "merge"]
+          "jobs": ["lease", "reconcile", "propose", "approve", "authorize", "authorize_attest", "merge"]
         }
       },
       "lease": {
@@ -216,11 +216,12 @@
           "issuedAt",
           "expiresAt"
         ],
-        "boundJobs": ["reconcile", "propose", "approve", "merge"],
+        "boundJobs": ["reconcile", "propose", "approve", "authorize_attest", "merge"],
         "minimumRemainingSeconds": {
           "reconcile": 240,
           "propose": 300,
           "approve": 780,
+          "authorize_attest": 180,
           "merge": 240
         }
       },
@@ -277,13 +278,33 @@
             "actions": "write"
           }
         },
+        "authorize": {
+          "name": "prepare-merge-authorization-read-only",
+          "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve"],
+          "permissions": {
+            "contents": "read",
+            "pull-requests": "read",
+            "checks": "read",
+            "actions": "read"
+          }
+        },
+        "authorize_attest": {
+          "name": "attest-merge-authorization-write-only",
+          "needs": ["authorize", "lease", "plan", "propose", "approve"],
+          "permissions": {
+            "contents": "read",
+            "id-token": "write",
+            "attestations": "write"
+          }
+        },
         "merge": {
           "name": "merge-readme-only-terminal-write",
-          "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve"],
+          "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve", "authorize", "authorize_attest"],
           "permissions": {
             "contents": "write",
             "pull-requests": "read",
-            "checks": "read"
+            "checks": "read",
+            "attestations": "read"
           }
         }
       }
@@ -316,7 +337,7 @@
         {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["budget"]},
         {"from": "proposed", "to": "quarantined", "phase": "terminalize", "jobs": ["budget", "quarantine"]},
         {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["propose"]},
-        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["approve"]},
+        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["approve", "authorize", "authorize_attest"]},
         {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["merge"]}
       ]
     }

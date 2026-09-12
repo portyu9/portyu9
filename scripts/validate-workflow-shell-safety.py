@@ -11,8 +11,10 @@ literal/folded block scalars. YAML aliases, anchors, tags, or quoted whole-comma
 scalars are rejected for `run:` because they can obscure the bytes that will become
 shell source and make a dependency-free source validator ambiguous.
 
-Jobs holding repository-write, PR-write, Actions-write, or check-observation authority
-also use a narrower execution model: reviewed `gh api` calls must remain literal, shell
+Jobs holding repository-write, PR-write, Actions-write, attestation-write, or
+check-observation authority also use a narrower execution model: reviewed `gh api`
+calls must remain literal, with exactly one separately reviewed literal
+`gh attestation verify` boundary allowed only in the Spotlight terminal merger. Shell
 variables cannot become command names, and runner-resident interpreters/network clients
 cannot create an alternate mutation path outside the closed workflow authority surface.
 Git execution is permitted only in the one reviewed generated-branch publisher; every
@@ -37,6 +39,7 @@ BLOCK_HEADER = re.compile(r"^[|>](?:[+-]?[1-9]?|[1-9][+-]?)?\s*(?:#.*)?$")
 FORBIDDEN_NODE_PREFIXES = ("&", "*", "!", "'", '"', "[", "{")
 JOB_KEY = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 GH_WORD = re.compile(r"(?<![A-Za-z0-9_])gh(?![A-Za-z0-9_])")
+GH_ATTESTATION_VERIFY_HEAD = 'gh attestation verify "$SUBJECT" \\'
 COMMAND_TOKEN_SPLICE = re.compile(r"(?<=[A-Za-z0-9_])\\\n[ \t]*(?=[A-Za-z0-9_])")
 SHELL_CONTINUATION = re.compile(r"\\\n[ \t]*")
 DYNAMIC_COMMAND = re.compile(
@@ -59,9 +62,10 @@ SYSTEM_ESCAPE = re.compile(r"\bsystem\s*\(")
 
 PRIVILEGED_JOBS = {
     "profile-stats.yml": ("publish", "dispatch"),
-    "spotlight-link-sync.yml": ("reconcile", "propose", "approve", "merge"),
+    "spotlight-link-sync.yml": ("reconcile", "propose", "approve", "authorize_attest", "merge"),
 }
 GIT_AUTHORIZED_JOB = ("profile-stats.yml", "publish")
+ATTESTATION_VERIFY_AUTHORIZED_JOB = ("spotlight-link-sync.yml", "merge")
 
 
 @dataclass(frozen=True)
@@ -154,14 +158,31 @@ def job_block(text: str, job: str, label: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def validate_privileged_shell_source(source: str, label: str, *, allow_git: bool = False) -> None:
+def validate_privileged_shell_source(
+    source: str,
+    label: str,
+    *,
+    allow_git: bool = False,
+    allow_attestation_verify: bool = False,
+) -> None:
     """Reject alternate/dynamic command paths in token-authorized workflow shell."""
+    attestation_verify_count = 0
     for line_number, line in enumerate(source.splitlines(), start=1):
         gh_words = len(GH_WORD.findall(line))
         literal_gh_api = line.count("gh api ")
+        literal_attestation_verify = int(
+            allow_attestation_verify and line.strip() == GH_ATTESTATION_VERIFY_HEAD
+        )
+        attestation_verify_count += literal_attestation_verify
         require(
-            gh_words == literal_gh_api,
-            f"{label}:{line_number}: GitHub CLI token must appear only as a literal reviewed `gh api` command",
+            gh_words == literal_gh_api + literal_attestation_verify,
+            f"{label}:{line_number}: GitHub CLI token must appear only as a literal reviewed `gh api` command"
+            " or the exact authorized `gh attestation verify` command",
+        )
+    if allow_attestation_verify:
+        require(
+            attestation_verify_count == 1,
+            f"{label}: authorized Spotlight terminal shell must contain exactly one exact `gh attestation verify` command",
         )
 
     logical = logical_shell_source(source, label)
@@ -208,11 +229,13 @@ def validate_privileged_inventory() -> int:
             runs = extract_run_blocks(block, f"{workflow_name}:{job}")
             require(runs, f"{workflow_name}:{job}: privileged job contains no reviewed shell source")
             allow_git = (workflow_name, job) == GIT_AUTHORIZED_JOB
+            allow_attestation_verify = (workflow_name, job) == ATTESTATION_VERIFY_AUTHORIZED_JOB
             for run in runs:
                 validate_privileged_shell_source(
                     run.source,
                     f"{workflow_name}:{job}:run@{run.line}",
                     allow_git=allow_git,
+                    allow_attestation_verify=allow_attestation_verify,
                 )
             run_count += len(runs)
     return run_count
@@ -254,9 +277,20 @@ def expect_failure(text: str, fragment: str) -> None:
         fail(f"self-test accepted forbidden run syntax: {fragment}")
 
 
-def expect_privileged_failure(source: str, fragment: str, *, allow_git: bool = False) -> None:
+def expect_privileged_failure(
+    source: str,
+    fragment: str,
+    *,
+    allow_git: bool = False,
+    allow_attestation_verify: bool = False,
+) -> None:
     try:
-        validate_privileged_shell_source(source, "privileged-self-test", allow_git=allow_git)
+        validate_privileged_shell_source(
+            source,
+            "privileged-self-test",
+            allow_git=allow_git,
+            allow_attestation_verify=allow_attestation_verify,
+        )
     except ValueError as exc:
         require(fragment in str(exc), f"privileged shell self-test failed for wrong reason: {exc}")
     else:
@@ -299,6 +333,34 @@ gh api --method POST \\
         allow_git=True,
     )
 
+    attestation_safe = """set -euo pipefail
+gh attestation verify "$SUBJECT" \\
+  --repo "$GITHUB_REPOSITORY" \\
+  --predicate-type "$PREDICATE_TYPE" \\
+  --signer-workflow "$SIGNER_WORKFLOW" \\
+  --signer-digest "$BASE_SHA" \\
+  --source-digest "$BASE_SHA" \\
+  --source-ref refs/heads/main \\
+  --deny-self-hosted-runners \\
+  --format json > verified.json
+"""
+    validate_privileged_shell_source(
+        attestation_safe,
+        "privileged-self-test-attestation",
+        allow_attestation_verify=True,
+    )
+    expect_privileged_failure(attestation_safe, "GitHub CLI token")
+    expect_privileged_failure(
+        attestation_safe.replace('gh attestation verify "$SUBJECT"', 'gh attestation verify "$OTHER"', 1),
+        "GitHub CLI token",
+        allow_attestation_verify=True,
+    )
+    expect_privileged_failure(
+        attestation_safe.replace('gh attestation verify "$SUBJECT"', 'echo gh attestation verify "$SUBJECT"', 1),
+        "GitHub CLI token",
+        allow_attestation_verify=True,
+    )
+
     for source, fragment in (
         (privileged_safe + 'GH=gh\n"$GH" api --method DELETE "repos/x/y"\n', "GitHub CLI token"),
         (privileged_safe + 'G=g\nH=h\n"$G$H" api --method DELETE "repos/x/y"\n', "must not become command names"),
@@ -324,7 +386,7 @@ def main() -> int:
         print(
             f"Workflow shell-safety validation passed: scanned {run_count} run blocks across {workflow_count} workflows; "
             f"{privileged_run_count} token-authorized run blocks retain literal command closure; "
-            "GitHub expressions remain outside shell source, dynamic data crosses explicit non-shell boundaries, and privileged jobs reject command aliases/alternate interpreters with Git isolated to the reviewed publisher."
+            "GitHub expressions remain outside shell source, dynamic data crosses explicit non-shell boundaries, and privileged jobs reject command aliases/alternate interpreters with Git isolated to the reviewed publisher and attestation verification isolated to the exact Spotlight terminal command."
         )
         return 0
     except (OSError, ValueError) as exc:
