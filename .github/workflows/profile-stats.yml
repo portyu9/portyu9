@@ -669,7 +669,7 @@ jobs:
       - name: Checkout exact published generated commit without credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.publish.outputs.published_sha }}
+          ref: generated
           path: published
           fetch-depth: 2
           persist-credentials: false
