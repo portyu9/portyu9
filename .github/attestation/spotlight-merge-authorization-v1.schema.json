@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json",
+  "title": "Ƴunior Ƥortal Spotlight merge authorization certificate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "repository",
+    "workflowRef",
+    "run",
+    "predicateSchema",
+    "transaction",
+    "source",
+    "pullRequest",
+    "candidate",
+    "workflowRuns",
+    "checkRuns",
+    "claim"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "spotlight-merge-authorization"},
+    "repository": {"const": "portyu9/portyu9"},
+    "workflowRef": {"const": "portyu9/portyu9/.github/workflows/spotlight-link-sync.yml@refs/heads/main"},
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "attempt", "url"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "attempt": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "url": {"type": "string", "pattern": "^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
+      }
+    },
+    "predicateSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "digest"],
+      "properties": {
+        "id": {"const": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["leaseId", "candidateId", "issuedAt", "expiresAt"],
+      "properties": {
+        "leaseId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "candidateId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "issuedAt": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "expiresAt": {"type": "string", "pattern": "^[1-9][0-9]*$"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mainSha", "generatedSha", "readmeSha256After"],
+      "properties": {
+        "mainSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "generatedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "readmeSha256After": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "pullRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "title", "body", "baseRef", "headRef", "headSha", "headRepository", "maintainerCanModify"],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1},
+        "title": {"const": "chore: sync rotating Spotlight links"},
+        "body": {"const": "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force."},
+        "baseRef": {"const": "main"},
+        "headRef": {"type": "string", "pattern": "^automation/spotlight-links/[0-9a-f]{64}$"},
+        "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "headRepository": {"const": "portyu9/portyu9"},
+        "maintainerCanModify": {"const": false}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parentSha", "authorName", "authorEmail", "committerName", "committerEmail", "message", "readmeSha256"],
+      "properties": {
+        "parentSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "authorName": {"const": "github-actions[bot]"},
+        "authorEmail": {"const": "41898282+github-actions[bot]@users.noreply.github.com"},
+        "committerName": {"const": "github-actions[bot]"},
+        "committerEmail": {"const": "41898282+github-actions[bot]@users.noreply.github.com"},
+        "message": {"const": "chore: sync rotating Spotlight links"},
+        "readmeSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "workflowRuns": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/workflowRun"}
+    },
+    "checkRuns": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/checkRun"}
+    },
+    "claim": {"const": "This certificate authorizes only the exact Spotlight README candidate, PR, workflow-run provenance, and successful required checks recorded here. It is not a freshness proof and cannot authorize merge without independent terminal live revalidation and an unexpired matching mutation lease."}
+  },
+  "$defs": {
+    "workflowRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "workflowId", "runId", "runAttempt", "checkSuiteId", "event", "headBranch", "headSha", "repository", "headRepository", "status", "conclusion"],
+      "properties": {
+        "name": {"enum": ["CodeQL", "Dependency review", "Profile quality"]},
+        "workflowId": {"type": "integer", "minimum": 1},
+        "runId": {"type": "integer", "minimum": 1},
+        "runAttempt": {"type": "integer", "minimum": 1},
+        "checkSuiteId": {"type": "integer", "minimum": 1},
+        "event": {"const": "pull_request"},
+        "headBranch": {"type": "string", "pattern": "^automation/spotlight-links/[0-9a-f]{64}$"},
+        "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "repository": {"const": "portyu9/portyu9"},
+        "headRepository": {"const": "portyu9/portyu9"},
+        "status": {"const": "completed"},
+        "conclusion": {"const": "success"}
+      }
+    },
+    "checkRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "checkSuiteId", "appId", "status", "conclusion", "headSha"],
+      "properties": {
+        "name": {"enum": ["analyze-actions", "analyze-python", "dependency-review", "integration-pinned-upstream", "validate-contracts"]},
+        "checkSuiteId": {"type": "integer", "minimum": 1},
+        "appId": {"const": 15368},
+        "status": {"const": "completed"},
+        "conclusion": {"const": "success"},
+        "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    }
+  }
+}
