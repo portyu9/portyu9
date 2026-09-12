@@ -9,6 +9,7 @@ import sys
 from typing import Any
 
 import automation_decision_receipt
+import automation_decision_receipt_schema
 import profile_stats_decision_receipt
 import spotlight_decision_receipt
 
@@ -198,7 +199,8 @@ def self_test(policy: dict[str, Any], contract: dict[str, Any]) -> None:
 
     wrong_mode = copy.deepcopy(contract)
     wrong_mode["workflows"]["profile-stats"]["jobs"]["dispatch"]["mode"] = "self-attested"
-    expect_failure(policy, wrong_mode, "unreviewed self-attested")
+    expect_policy_failure = expect_failure
+    expect_policy_failure(policy, wrong_mode, "unreviewed self-attested")
 
     duplicate_effect = copy.deepcopy(contract)
     duplicate_effect["workflows"]["spotlight-link-sync"]["jobs"]["merge"]["effectKinds"] = [
@@ -221,6 +223,7 @@ def self_test(policy: dict[str, Any], contract: dict[str, Any]) -> None:
     wrong_pointer["decisionReceiptContract"] = ".github/wrong.json"
     expect_failure(wrong_pointer, contract, "pointer differs")
 
+    automation_decision_receipt_schema.self_test()
     automation_decision_receipt.self_test()
     profile_stats_decision_receipt.self_test()
     spotlight_decision_receipt.self_test()
