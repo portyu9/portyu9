@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Validate immutable profile-evidence attestation schema/version and authority contracts."""
+"""Validate immutable profile-evidence and post-publication attestation contracts."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -16,8 +17,10 @@ STATS = ROOT / ".github/workflows/profile-stats.yml"
 V1_SCHEMA = ROOT / ".github/attestation/profile-evidence-v1.schema.json"
 V2_SCHEMA = ROOT / ".github/attestation/profile-evidence-v2.schema.json"
 CURRENT_SCHEMA = ROOT / ".github/attestation/profile-evidence-v3.schema.json"
+RECEIPT_SCHEMA = ROOT / ".github/attestation/generated-publication-receipt-v1.schema.json"
 DOC = ROOT / ".github/ATTESTATION.md"
 BUILDER = ROOT / "scripts/build-profile-evidence-attestation.py"
+RECEIPT_BUILDER = ROOT / "scripts/build-generated-publication-receipt.py"
 SUBJECT_VALIDATOR = ROOT / "scripts/validate-profile-evidence-subjects.py"
 STAGER = ROOT / "scripts/stage-profile-evidence.py"
 VALIDATION_MANIFEST = ROOT / "scripts/profile-evidence-validation-boundary-v1.json"
@@ -34,6 +37,7 @@ UPLOAD_SHA = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
 V1_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json"
 V2_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json"
 PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v3.schema.json"
+RECEIPT_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json"
 EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 VALIDATOR_CONTRACT = validation_contract.predicate_validators()
 SIGNAL_VALIDATORS = list(VALIDATOR_CONTRACT["signalField"])
@@ -146,6 +150,121 @@ def validate_current_schema() -> None:
             "predicate must preserve non-certification claim boundary")
 
 
+def validate_receipt_schema_payload(schema: dict[str, object]) -> None:
+    require(schema.get("$id") == RECEIPT_PREDICATE_TYPE,
+            "publication receipt predicate schema id changed")
+    require(schema.get("additionalProperties") is False,
+            "publication receipt predicate schema must fail closed")
+    required = schema.get("required")
+    require(isinstance(required, list), "publication receipt required set is malformed")
+    for key in ("predicateSchema", "source", "transaction", "publication", "evidence", "claim"):
+        require(key in required, f"publication receipt predicate must require {key}")
+    properties = schema.get("properties")
+    require(isinstance(properties, dict), "publication receipt predicate properties are missing")
+    require(properties.get("schemaVersion", {}).get("const") == 1,
+            "publication receipt schemaVersion changed")
+    require(properties.get("kind", {}).get("const") == "generated-publication-receipt",
+            "publication receipt kind changed")
+    require(properties.get("repository", {}).get("const") == "portyu9/portyu9",
+            "publication receipt repository identity changed")
+    require(properties.get("workflowRef", {}).get("const") ==
+            "portyu9/portyu9/.github/workflows/profile-stats.yml@refs/heads/main",
+            "publication receipt workflow identity changed")
+
+    schema_identity = properties.get("predicateSchema", {})
+    schema_props = schema_identity.get("properties", {}) if isinstance(schema_identity, dict) else {}
+    require(schema_identity.get("additionalProperties") is False,
+            "publication receipt predicateSchema block must fail closed")
+    require(schema_props.get("id", {}).get("const") == RECEIPT_PREDICATE_TYPE,
+            "publication receipt predicateSchema id changed")
+    require(schema_props.get("digest", {}).get("pattern") == "^sha256:[0-9a-f]{64}$",
+            "publication receipt predicateSchema digest format changed")
+
+    source = properties.get("source", {})
+    source_props = source.get("properties", {}) if isinstance(source, dict) else {}
+    epoch = source_props.get("epoch", {}) if isinstance(source_props, dict) else {}
+    epoch_props = epoch.get("properties", {}) if isinstance(epoch, dict) else {}
+    require(source.get("additionalProperties") is False and epoch.get("additionalProperties") is False,
+            "publication receipt source/epoch blocks must fail closed")
+    require(epoch_props.get("version", {}).get("const") == "profile-stats-source-epoch-v1",
+            "publication receipt source epoch version changed")
+    require(epoch_props.get("algorithm", {}).get("const") == "sha256-sorted-path-nul-git-blob-oid-lf-v1",
+            "publication receipt source epoch algorithm changed")
+    require(epoch_props.get("closureSha256", {}).get("pattern") == "^[0-9a-f]{64}$",
+            "publication receipt source epoch digest format changed")
+
+    transaction = properties.get("transaction", {})
+    transaction_props = transaction.get("properties", {}) if isinstance(transaction, dict) else {}
+    require(transaction.get("additionalProperties") is False,
+            "publication receipt transaction block must fail closed")
+    for key in ("leaseId", "candidateId"):
+        require(transaction_props.get(key, {}).get("pattern") == "^[0-9a-f]{64}$",
+                f"publication receipt {key} format changed")
+
+    publication = properties.get("publication", {})
+    publication_props = publication.get("properties", {}) if isinstance(publication, dict) else {}
+    require(publication.get("additionalProperties") is False,
+            "publication receipt publication block must fail closed")
+    require(publication_props.get("branch", {}).get("const") == "generated",
+            "publication receipt branch changed")
+    for key in ("commitSha", "parentSha"):
+        require(publication_props.get(key, {}).get("pattern") == "^[0-9a-f]{40}$",
+                f"publication receipt {key} format changed")
+    require(publication_props.get("gitObjectSha256", {}).get("pattern") == "^[0-9a-f]{64}$",
+            "publication receipt canonical Git-object digest format changed")
+
+    evidence = properties.get("evidence", {})
+    evidence_props = evidence.get("properties", {}) if isinstance(evidence, dict) else {}
+    require(evidence.get("additionalProperties") is False,
+            "publication receipt evidence block must fail closed")
+    require(evidence_props.get("subjectSet", {}).get("const") == subjects.NAME,
+            "publication receipt subject-set identity changed")
+    subject_schema = evidence_props.get("subjects", {})
+    require(subject_schema.get("minItems") == 11 and subject_schema.get("maxItems") == 11,
+            "publication receipt must bind exactly eleven evidence subjects")
+    prefix_items = subject_schema.get("prefixItems")
+    require(isinstance(prefix_items, list) and len(prefix_items) == 11 and subject_schema.get("items") is False,
+            "publication receipt subject schema closure changed")
+    definitions = schema.get("$defs")
+    require(isinstance(definitions, dict), "publication receipt schema definitions are missing")
+    observed_paths: list[str] = []
+    for item in prefix_items:
+        require(isinstance(item, dict) and isinstance(item.get("$ref"), str),
+                "publication receipt subject schema reference is malformed")
+        ref = item["$ref"]
+        name = ref.removeprefix("#/$defs/")
+        definition = definitions.get(name)
+        require(isinstance(definition, dict), f"publication receipt subject definition is missing: {name}")
+        all_of = definition.get("allOf")
+        require(isinstance(all_of, list) and len(all_of) == 2,
+                f"publication receipt subject definition changed: {name}")
+        path_const = all_of[1].get("properties", {}).get("path", {}).get("const")
+        require(isinstance(path_const, str), f"publication receipt subject path is missing: {name}")
+        observed_paths.append(path_const)
+    require(observed_paths == list(subjects.published_paths()),
+            "publication receipt subjects must equal canonical published subject order")
+
+    claim = properties.get("claim", {}).get("const")
+    require(isinstance(claim, str) and "actual published generated Git commit and parent" in claim
+            and "leased transaction" in claim,
+            "publication receipt claim boundary changed")
+
+
+def validate_receipt_schema() -> None:
+    schema = json.loads(RECEIPT_SCHEMA.read_text(encoding="utf-8"))
+    require(isinstance(schema, dict), "publication receipt schema root must be an object")
+    validate_receipt_schema_payload(schema)
+    mutated = copy.deepcopy(schema)
+    mutated["properties"]["publication"]["properties"]["branch"]["const"] = "main"
+    try:
+        validate_receipt_schema_payload(mutated)
+    except ValueError as exc:
+        require("branch changed" in str(exc),
+                f"publication receipt schema negative test failed for wrong reason: {exc}")
+    else:
+        fail("publication receipt schema negative test accepted branch drift")
+
+
 def validate_builder() -> None:
     text = BUILDER.read_text(encoding="utf-8")
     for phrase in (
@@ -178,6 +297,32 @@ def validate_builder() -> None:
                 f"attestation builder must not hardcode canonical subject path: {published_path}")
 
 
+def validate_receipt_builder() -> None:
+    text = RECEIPT_BUILDER.read_text(encoding="utf-8")
+    for phrase in (
+        "SCHEMA_VERSION = 1",
+        'KIND = "generated-publication-receipt"',
+        "generated-publication-receipt-v1.schema.json",
+        'SOURCE_EPOCH_VERSION = "profile-stats-source-epoch-v1"',
+        'SOURCE_EPOCH_ALGORITHM = "sha256-sorted-path-nul-git-blob-oid-lf-v1"',
+        "import profile_evidence_subjects as subjects",
+        'subject_set.get("publishedPaths") == list(subjects.published_paths())',
+        'expected_candidate = hashlib.sha256(',
+        'f"{source_sha}\\n{parent_sha}\\n{profile_digest}\\n".encode("ascii")',
+        '"leaseId": lease_id, "candidateId": candidate_id',
+        '"commitSha": published_sha',
+        '"parentSha": parent_sha',
+        '"gitObjectSha256": git_object_sha256',
+        '"profileEvidencePredicateSha256": profile_digest',
+        '"subjects": evidence_subjects(published_root)',
+        "publication receipt candidate identity is not the exact leased Profile Stats candidate",
+        "publication receipt subject set must contain exactly eleven files",
+    ):
+        require(phrase in text, f"publication receipt builder contract is missing: {phrase}")
+    require("subprocess" not in text and "os.system" not in text,
+            "publication receipt builder must not acquire process execution authority")
+
+
 def validate_workflow() -> None:
     text = STATS.read_text(encoding="utf-8")
     generate = job_block(text, "generate", "attest")
@@ -185,7 +330,10 @@ def validate_workflow() -> None:
     lease = job_block(text, "lease", "attest_publish")
     attest_write = job_block(text, "attest_publish", "stage")
     stage = job_block(text, "stage", "publish")
-    publish = job_block(text, "publish", "dispatch")
+    publish = job_block(text, "publish", "receipt")
+    receipt = job_block(text, "receipt", "receipt_attest")
+    receipt_attest = job_block(text, "receipt_attest", "dispatch")
+    dispatch = job_block(text, "dispatch", None)
 
     require("name: generate-read-only" in generate, "generation job name changed")
     require("contents: write" not in generate and "id-token: write" not in generate and "attestations: write" not in generate,
@@ -246,6 +394,94 @@ def validate_workflow() -> None:
             "terminal publication job and all three changed-candidate steps must share the exact staged-candidate guard")
     require("actions/checkout@" not in publish and "actions/setup-python@" not in publish and "python3 " not in publish,
             "terminal publication must not execute checkout/setup/authored Python")
+
+    require("name: prepare-publication-receipt-read-only" in receipt and
+            "needs: [publish, stage, lease, attest]" in receipt,
+            "publication receipt preparation identity/dependency changed")
+    require("permissions:\n      contents: read" in receipt,
+            "publication receipt preparation must retain contents: read only")
+    for forbidden in ("contents: write", "id-token: write", "attestations: write", "actions: write", f"actions/attest@{ATTEST_SHA}", "GH_TOKEN:", "GITHUB_TOKEN:"):
+        require(forbidden not in receipt,
+                f"publication receipt preparation acquired terminal mutation/signing authority: {forbidden}")
+    require(receipt.count(f"actions/checkout@{CHECKOUT_SHA}") == 2,
+            "publication receipt preparation must perform exactly two credential-free checkouts")
+    require(receipt.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 1,
+            "publication receipt preparation setup-python SHA changed")
+    require(receipt.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1 and
+            receipt.count("digest-mismatch: error") == 1,
+            "publication receipt preparation must download exactly one digest-checked reviewed predicate")
+    require(receipt.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 1,
+            "publication receipt preparation must upload exactly one receipt predicate")
+    require('ref: ${{ needs.publish.outputs.published_sha }}' not in receipt,
+            "publication receipt preparation must not checkout a dynamic published SHA")
+    for fragment in (
+        "ref: generated",
+        "fetch-depth: 2",
+        'PUBLISHED_SHA: ${{ needs.publish.outputs.published_sha }}',
+        'PUBLISHED_PARENT_SHA: ${{ needs.publish.outputs.parent_sha }}',
+        'SOURCE_SHA: ${{ needs.publish.outputs.source_sha }}',
+        'LEASE_ID: ${{ needs.lease.outputs.lease_id }}',
+        'CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}',
+        'test "$(git -C published rev-parse HEAD)" = "$PUBLISHED_SHA"',
+        'test "$(git -C published rev-parse HEAD^)" = "$PUBLISHED_PARENT_SHA"',
+        'test "$(git -C published rev-list --parents -n 1 HEAD | awk \'{print NF}\')" -eq 2',
+        'test "$(git -C published log -1 --format=%s)" = "chore: publish validated profile evidence [skip ci]"',
+        'test "$(git -C published log -1 --format=\'%an <%ae>\')" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"',
+        'test "$(git -C published log -1 --format=\'%cn <%ce>\')" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"',
+        'REMOTE_GENERATED="$(git -C published ls-remote --exit-code origin refs/heads/generated)"',
+        'test "${BASH_REMATCH[1]}" = "$PUBLISHED_SHA"',
+        'git -C published cat-file commit "$PUBLISHED_SHA" > published-commit.payload',
+        "{ printf 'commit %s\\0' \"$PAYLOAD_SIZE\"; cat published-commit.payload; } > published-commit.object",
+        'test "$(sha1sum published-commit.object | cut -d\' \' -f1)" = "$PUBLISHED_SHA"',
+        'GIT_OBJECT_SHA256="$(sha256sum published-commit.object | cut -d\' \' -f1)"',
+        "python3 source/scripts/build-generated-publication-receipt.py",
+        "name: generated-publication-receipt-predicate",
+        "path: generated-publication-receipt.json",
+    ):
+        require(fragment in receipt, f"publication receipt preparation lost proof: {fragment}")
+
+    require("name: attest-publication-receipt-write-only" in receipt_attest and
+            "needs: [receipt, lease, attest]" in receipt_attest,
+            "publication receipt signer identity/dependency changed")
+    require("contents: read" in receipt_attest and "id-token: write" in receipt_attest
+            and "attestations: write" in receipt_attest and "contents: write" not in receipt_attest
+            and "actions: write" not in receipt_attest,
+            "publication receipt signer authority changed")
+    for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "git ", "gh ", "GITHUB_TOKEN:", "GH_TOKEN:"):
+        require(forbidden not in receipt_attest,
+                f"publication receipt signer must not execute repository-authored code or alternate mutation clients: {forbidden}")
+    require(receipt_attest.count("        run: |") == 2,
+            "publication receipt signer may execute only lease and predicate-digest proof shells")
+    require(receipt_attest.count(f"actions/download-artifact@{DOWNLOAD_SHA}") == 1 and
+            receipt_attest.count("digest-mismatch: error") == 1,
+            "publication receipt signer must download exactly one digest-checked predicate")
+    require(receipt_attest.count(f"actions/attest@{ATTEST_SHA}") == 1,
+            "publication receipt signer must execute the reviewed actions/attest SHA exactly once")
+    require(receipt_attest.count("      - name: ") == 4,
+            "publication receipt signer must contain lease proof, predicate download/proof, and one attest step")
+    for fragment in (
+        "- name: Verify exact short-lived mutation lease",
+        "LEASE_MIN_REMAINING_SECONDS=300",
+        'test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"',
+        "- name: Verify exact receipt predicate identity",
+        'EXPECTED_PREDICATE_SHA256: ${{ needs.receipt.outputs.predicate_sha256 }}',
+        'test "$(sha256sum receipt-attestation-input/generated-publication-receipt.json | cut -d\' \' -f1)" = "$EXPECTED_PREDICATE_SHA256"',
+        f"uses: actions/attest@{ATTEST_SHA} # v4.2.2",
+        'subject-name: portyu9/portyu9:generated@${{ needs.receipt.outputs.published_sha }}',
+        'subject-digest: sha256:${{ needs.receipt.outputs.git_object_sha256 }}',
+        f"predicate-type: {RECEIPT_PREDICATE_TYPE}",
+        "predicate-path: receipt-attestation-input/generated-publication-receipt.json",
+    ):
+        require(fragment in receipt_attest, f"publication receipt signer lost proof: {fragment}")
+
+    require("name: dispatch-spotlight-link-sync" in dispatch and
+            "needs: [receipt_attest, lease, attest]" in dispatch,
+            "post-publication dispatcher must remain downstream of signed receipt")
+    require("permissions:\n      actions: write" in dispatch,
+            "post-publication dispatcher authority changed")
+    for forbidden in ("contents: write", "id-token: write", "attestations: write", "pull-requests: write", "actions/checkout@", "actions/setup-python@", "python3 "):
+        require(forbidden not in dispatch,
+                f"post-publication dispatcher acquired unrelated authority/execution surface: {forbidden}")
 
     require(generate.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 3,
             "generation must upload exactly three immutable evidence sets")
@@ -382,21 +618,24 @@ def main() -> int:
         subjects.load_manifest()
         validation_contract.load_manifest()
         for path in (
-            STATS, V1_SCHEMA, V2_SCHEMA, CURRENT_SCHEMA, DOC, BUILDER, SUBJECT_VALIDATOR,
-            STAGER, VALIDATION_MANIFEST, VALIDATION_RUNNER,
+            STATS, V1_SCHEMA, V2_SCHEMA, CURRENT_SCHEMA, RECEIPT_SCHEMA, DOC, BUILDER,
+            RECEIPT_BUILDER, SUBJECT_VALIDATOR, STAGER, VALIDATION_MANIFEST, VALIDATION_RUNNER,
         ):
             require(path.is_file(), f"attestation contract input is missing: {path.relative_to(ROOT)}")
         validate_frozen_schema(V1_SCHEMA, V1_GIT_BLOB_SHA, V1_PREDICATE_TYPE, 1)
         validate_frozen_schema(V2_SCHEMA, V2_GIT_BLOB_SHA, V2_PREDICATE_TYPE, 2)
         validate_frozen_schema(CURRENT_SCHEMA, V3_GIT_BLOB_SHA, PREDICATE_TYPE, 3)
         validate_current_schema()
+        validate_receipt_schema()
         validate_builder()
+        validate_receipt_builder()
         validate_workflow()
         validate_doc()
         print(
             "Engineering attestation validation passed: predicate v1/v2/v3 bytes are frozen; read-only preparation owns validation/predicate construction; "
-            "terminal OIDC/attestation authority executes only two reviewed first-party lease/predicate proof shells, digest-checked artifact transport, and pinned actions/attest; "
-            "terminal contents-write publication is eligible only for a sealed changed candidate; the eleven-subject contract remains closed and the claim remains provenance/contract conformance rather than certification."
+            "terminal evidence attestation and post-publication receipt signing each retain isolated OIDC/attestation authority with reviewed proof shells and pinned actions/attest; "
+            "terminal contents-write publication remains separate; the actual published generated Git commit object is SHA-256 receipted before Spotlight dispatch; "
+            "the eleven-subject contract remains closed and the evidence claim remains provenance/contract conformance rather than certification."
         )
         return 0
     except (OSError, ValueError, json.JSONDecodeError, TypeError) as exc:

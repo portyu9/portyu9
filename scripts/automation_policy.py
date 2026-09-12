@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Lease-aware public loader for the repository Automation Policy IR.
+"""Lease/receipt-aware public loader for the repository Automation Policy IR.
 
 The pre-lease loader is retained byte-for-byte in automation_policy_core.py. This
-wrapper projects only the item-8 lease extension out for the frozen legacy checks,
-then validates the complete lease-extended graph and compiles it against workflow
-source. Existing consumers continue importing this module as the canonical policy.
+wrapper projects only the item-8 lease and item-9 publication-receipt extensions out
+for the frozen legacy checks, then validates the complete current graph and compiles it
+against workflow source. Existing consumers continue importing this module as the
+canonical policy.
 """
 from __future__ import annotations
 
@@ -21,9 +22,10 @@ from automation_policy_core import *  # noqa: F401,F403 - preserve the establish
 ROOT = core.ROOT
 POLICY_PATH = core.POLICY_PATH
 LEASE_WORKFLOWS = automation_leases.LEASE_WORKFLOWS
+RECEIPT_JOBS = ("receipt", "receipt_attest")
 
-# Dependencies introduced only so bound mutation jobs can independently compare the
-# lease candidate identity are projected away for the byte-frozen legacy validator.
+# Dependencies introduced only by item-8 leases and item-9 receipts are projected
+# away for the byte-frozen legacy validator.
 LEGACY_NEEDS = {
     "profile-stats": {
         "generate": [],
@@ -44,9 +46,19 @@ LEGACY_NEEDS = {
     },
 }
 
+PROFILE_LEGACY_TRANSITIONS = [
+    {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["generate"]},
+    {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["attest"]},
+    {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["attest", "attest_publish", "stage"]},
+    {"from": "approved", "to": "no-change", "phase": "terminalize", "jobs": ["stage"]},
+    {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["publish"]},
+    {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["publish"]},
+    {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["dispatch"]},
+]
+
 
 def project_legacy_policy(payload: dict[str, Any]) -> dict[str, Any]:
-    """Remove exactly the lease extension, preserving every pre-item-8 policy byte-semantic."""
+    """Remove exactly the lease/receipt extensions, preserving pre-item-8 semantics."""
     projected = copy.deepcopy(payload)
     for workflow_id in sorted(LEASE_WORKFLOWS):
         workflow = projected["workflows"][workflow_id]
@@ -57,14 +69,27 @@ def project_legacy_policy(payload: dict[str, Any]) -> dict[str, Any]:
         del workflow["jobs"][lease_job]
         for class_spec in workflow["concurrency"].values():
             class_spec["jobs"] = [job_id for job_id in class_spec["jobs"] if job_id != lease_job]
+
+        if workflow_id == "profile-stats":
+            for job_id in RECEIPT_JOBS:
+                require(job_id in workflow["jobs"],
+                        f"automation policy receipt projection cannot find job: {job_id}")
+                del workflow["jobs"][job_id]
+                for class_spec in workflow["concurrency"].values():
+                    class_spec["jobs"] = [member for member in class_spec["jobs"] if member != job_id]
+
         require(set(workflow["jobs"]) == set(LEGACY_NEEDS[workflow_id]),
-                f"automation policy lease projection legacy job inventory changed: {workflow_id}")
+                f"automation policy extension projection legacy job inventory changed: {workflow_id}")
         for job_id, needs in LEGACY_NEEDS[workflow_id].items():
             workflow["jobs"][job_id]["needs"] = list(needs)
-        for transition in projected["transactionMachines"][workflow_id]["transitions"]:
-            transition["jobs"] = [job_id for job_id in transition["jobs"] if job_id != lease_job]
-            require(transition["jobs"],
-                    f"automation policy lease projection emptied transaction transition: {workflow_id}")
+
+        if workflow_id == "profile-stats":
+            projected["transactionMachines"][workflow_id]["transitions"] = copy.deepcopy(PROFILE_LEGACY_TRANSITIONS)
+        else:
+            for transition in projected["transactionMachines"][workflow_id]["transitions"]:
+                transition["jobs"] = [job_id for job_id in transition["jobs"] if job_id != lease_job]
+                require(transition["jobs"],
+                        f"automation policy lease projection emptied transaction transition: {workflow_id}")
     return projected
 
 
@@ -94,6 +119,21 @@ def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
                              f"automation policy workflow {workflow_id} job {lease_job_id}")
         validate_job_graph(workflow_id, jobs)
         validate_concurrency_policy(workflow_id, workflow["concurrency"], jobs, global_groups)
+
+        if workflow_id == "profile-stats":
+            require(jobs["receipt"] == {
+                "name": "prepare-publication-receipt-read-only",
+                "needs": ["publish", "stage", "lease", "attest"],
+                "permissions": {"contents": "read"},
+            }, "automation policy Profile Stats receipt preparer authority changed")
+            require(jobs["receipt_attest"] == {
+                "name": "attest-publication-receipt-write-only",
+                "needs": ["receipt", "lease", "attest"],
+                "permissions": {"contents": "read", "id-token": "write", "attestations": "write"},
+            }, "automation policy Profile Stats receipt signer authority changed")
+            require(jobs["dispatch"]["needs"] == ["receipt_attest", "lease", "attest"],
+                    "automation policy dispatch must remain downstream of publication receipt attestation")
+
         automation_leases.validate_policy(workflow_id, workflow)
 
     machines = policy["transactionMachines"]
@@ -146,15 +186,15 @@ def expect_policy_failure(payload: dict[str, Any], expected: str) -> None:
     try:
         validate_policy(payload)
     except (KeyError, ValueError) as exc:
-        require(expected in str(exc), f"automation policy lease self-test failed for wrong reason: {exc}")
+        require(expected in str(exc), f"automation policy extension self-test failed for wrong reason: {exc}")
     else:
-        raise ValueError(f"automation policy lease self-test accepted forbidden drift: {expected}")
+        raise ValueError(f"automation policy extension self-test accepted forbidden drift: {expected}")
 
 
 def _run_frozen_core_self_tests(projected: dict[str, Any]) -> None:
-    # The frozen core's one source-coupled self-test predates lease jobs. Suppress only
-    # that source compiler invocation while retaining every other legacy negative test;
-    # the full current concurrency source compiler runs immediately afterwards.
+    # The frozen core's one source-coupled self-test predates lease/receipt jobs. Suppress
+    # only that source compiler invocation while retaining every other legacy negative
+    # test; the full current concurrency source compiler runs immediately afterwards.
     original = core.automation_concurrency.self_test
     core.automation_concurrency.self_test = lambda *_args, **_kwargs: None
     try:
@@ -183,6 +223,14 @@ def self_test(policy: dict[str, Any]) -> None:
     lease_write["workflows"]["profile-stats"]["jobs"]["lease"]["permissions"] = {"actions": "write"}
     expect_policy_failure(lease_write, "only Actions-read authority")
 
+    receipt_write = copy.deepcopy(policy)
+    receipt_write["workflows"]["profile-stats"]["jobs"]["receipt"]["permissions"] = {"contents": "write"}
+    expect_policy_failure(receipt_write, "receipt preparer authority changed")
+
+    dispatch_bypass = copy.deepcopy(policy)
+    dispatch_bypass["workflows"]["profile-stats"]["jobs"]["dispatch"]["needs"] = ["publish", "lease", "attest"]
+    expect_policy_failure(dispatch_bypass, "downstream of publication receipt attestation")
+
 
 def main() -> int:
     try:
@@ -196,6 +244,7 @@ def main() -> int:
             f"{sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs · "
             f"{len(policy['transactionMachines'])} finite-state transactions · "
             f"{lease_jobs} short-lived mutation leases · {bound_jobs} lease-bound mutation jobs · "
+            "one post-publication generated-commit receipt verification/signing boundary · "
             f"{len(policy['requiredChecks'])} protected required-check bindings"
         )
         return 0

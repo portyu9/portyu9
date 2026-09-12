@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed when governance/threat-model docs drift from the active trust graph."""
+"""Fail closed when governance/threat-model/attestation docs drift from the active trust graph."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -11,6 +11,7 @@ import automation_policy
 ROOT = Path(__file__).resolve().parents[1]
 GOV = ROOT / ".github" / "GOVERNANCE.md"
 THREAT = ROOT / ".github" / "THREAT_MODEL.md"
+ATTESTATION = ROOT / ".github" / "ATTESTATION.md"
 SYNC = ROOT / ".github" / "workflows" / "spotlight-link-sync.yml"
 
 SEMANTICS = "execution-result-subject-binding-freshness-v1"
@@ -96,6 +97,22 @@ THREAT_REQUIRED = (
     "stage-publication-read-only",
     "exactly four digest-checked downloads",
     "Local/composite `uses: ./...` execution is currently forbidden",
+)
+
+ATTESTATION_REQUIRED = (
+    "seven relevant authorities",
+    "prepare-publication-receipt-read-only",
+    "attest-publication-receipt-write-only",
+    "generated-publication-receipt-v1.schema.json",
+    "actual published `generated` commit",
+    "canonical Git commit object",
+    "profile-stats-source-epoch-v1",
+    "canonical Git-object SHA-256",
+    "short-lived mutation lease ID",
+    "profile-evidence-subjects-v1",
+    "no repository-content or Actions-write permission",
+    "Spotlight dispatch is downstream of successful receipt signing",
+    "not a second validation result or merge authorization",
 )
 
 FORBIDDEN = (
@@ -223,12 +240,14 @@ def validate_doc_job_graph(
                 f"{label} authority-table permissions drifted from Automation Policy IR for {name}: {rows[0]}")
 
 
-def validate_required_phrases(governance: str, threat: str) -> None:
+def validate_required_phrases(governance: str, threat: str, attestation: str) -> None:
     for phrase in GOV_REQUIRED:
         require(phrase in governance, f"governance contract is missing current architecture phrase: {phrase}")
     for phrase in THREAT_REQUIRED:
         require(phrase in threat, f"threat model is missing current architecture phrase: {phrase}")
-    joined = governance + "\n" + threat
+    for phrase in ATTESTATION_REQUIRED:
+        require(phrase in attestation, f"attestation contract is missing post-publication receipt phrase: {phrase}")
+    joined = governance + "\n" + threat + "\n" + attestation
     for phrase in FORBIDDEN:
         require(phrase not in joined, f"stale assurance statement remains: {phrase}")
 
@@ -250,6 +269,7 @@ def self_test(
     workflow: str,
     governance: str,
     threat: str,
+    attestation: str,
     expected_jobs: dict[str, tuple[str, tuple[tuple[str, str], ...]]],
 ) -> None:
     merge_name, merge_permissions = expected_jobs["merge"]
@@ -330,8 +350,14 @@ def self_test(
             "assurance self-test fixture lost minimum remaining lifetime phrase")
     lease_semantics_removed = governance.replace("minimum remaining lifetime", "remaining lifetime")
     expect_failure(
-        lambda: validate_required_phrases(lease_semantics_removed, threat),
+        lambda: validate_required_phrases(lease_semantics_removed, threat, attestation),
         "minimum remaining lifetime",
+    )
+
+    receipt_removed = attestation.replace("canonical Git commit object", "published commit object", 1)
+    expect_failure(
+        lambda: validate_required_phrases(governance, threat, receipt_removed),
+        "canonical Git commit object",
     )
 
     stale_fixed_branch = governance.replace(
@@ -340,18 +366,19 @@ def self_test(
         1,
     )
     expect_failure(
-        lambda: validate_required_phrases(stale_fixed_branch, threat),
+        lambda: validate_required_phrases(stale_fixed_branch, threat, attestation),
         "stale assurance statement remains",
     )
 
 
 def main() -> int:
     try:
-        for path in (GOV, THREAT, SYNC, automation_policy.POLICY_PATH):
+        for path in (GOV, THREAT, ATTESTATION, SYNC, automation_policy.POLICY_PATH):
             require(path.is_file() and not path.is_symlink(),
                     f"assurance input is missing or aliased: {path.relative_to(ROOT)}")
         governance = GOV.read_text(encoding="utf-8")
         threat = THREAT.read_text(encoding="utf-8")
+        attestation = ATTESTATION.read_text(encoding="utf-8")
         workflow = SYNC.read_text(encoding="utf-8")
         policy = automation_policy.load_policy()
         expected_jobs = spotlight_jobs(policy)
@@ -359,16 +386,17 @@ def main() -> int:
         validate_spotlight_workflow(workflow, expected_jobs)
         validate_doc_job_graph(governance, expected_jobs, label="governance", table_scope="Spotlight link sync")
         validate_doc_job_graph(threat, expected_jobs, label="threat model", table_scope="Spotlight")
-        validate_required_phrases(governance, threat)
-        self_test(workflow, governance, threat, expected_jobs)
+        validate_required_phrases(governance, threat, attestation)
+        self_test(workflow, governance, threat, attestation, expected_jobs)
 
         print(
             "Assurance documentation contract passed: governance and threat model are compiled against the Automation Policy IR "
             "eight-job Spotlight authority graph, including Actions-read-only short-lived mutation lease minting, stale-only monotone "
             "reconciliation, Actions-read-only source-epoch constructive-mutation admission, diagnostic-only quarantine, PR-write proposal, "
-            "Actions-only approval, and terminal contents-write/PR-read/check-read merge authority; minimum remaining lifetime covers each "
-            "writer hard timeout; Ledger v2, predicate v3, historical schema immutability, cache boundaries, live ruleset drift verification, "
-            "and admin-scope audit semantics remain intact."
+            "Actions-only approval, and terminal contents-write/PR-read/check-read merge authority; the attestation guide is additionally "
+            "bound to the post-publication generated-commit receipt cut, canonical Git-object SHA-256 subject identity, isolated receipt signer, "
+            "and receipt-before-Spotlight-dispatch ordering; minimum remaining lifetime covers each writer hard timeout; Ledger v2, predicate v3, "
+            "historical schema immutability, cache boundaries, live ruleset drift verification, and admin-scope audit semantics remain intact."
         )
         return 0
     except (OSError, ValueError) as exc:

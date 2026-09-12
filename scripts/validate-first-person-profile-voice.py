@@ -27,7 +27,7 @@ FLAGSHIP_SVGS = tuple(sorted((ROOT / "assets" / "profile-systems").glob("qualifi
 FIRST_PERSON_REQUIRED = {
     ROOT / ".github" / "ATTESTATION.md": (
         "My profile treats generated evidence as a supply-chain artifact rather than decorative output.",
-        "My production profile workflow separates five relevant authorities:",
+        "My production profile workflow separates seven relevant authorities:",
         "represented by my profile",
     ),
     ROOT / ".github" / "GOVERNANCE.md": (

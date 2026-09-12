@@ -47,12 +47,30 @@ def _remove_named_step(block: str, name: str) -> str:
 
 
 def project_legacy_profile_stats_source(workflow: str) -> str:
-    """Remove exactly the item-8 lease overlay before invoking the frozen source firewall."""
+    """Remove exactly the item-8 lease and item-9 receipt overlays for the frozen core."""
     projected = workflow
     lease = core.job_block(projected, "lease", "attest_publish")
     require("name: mint-mutation-lease-read-only" in lease,
             "Profile Stats lease projection lost the reviewed lease job")
     projected = projected.replace(lease, "", 1)
+
+    for job_id, next_job_id, expected_name in (
+        ("receipt", "receipt_attest", "prepare-publication-receipt-read-only"),
+        ("receipt_attest", "dispatch", "attest-publication-receipt-write-only"),
+    ):
+        receipt_job = core.job_block(projected, job_id, next_job_id)
+        require(f"name: {expected_name}" in receipt_job,
+                f"Profile Stats receipt projection lost reviewed job: {job_id}")
+        projected = projected.replace(receipt_job, "", 1)
+
+    receipt_dispatch_needs = "    needs: [receipt_attest, lease, attest]\n"
+    require(projected.count(receipt_dispatch_needs) == 1,
+            "Profile Stats receipt projection lost exact dispatch dependency overlay")
+    projected = projected.replace(
+        receipt_dispatch_needs,
+        "    needs: [publish, lease, attest]\n",
+        1,
+    )
 
     for job_id, next_job_id, steps in (
         ("attest_publish", "stage", (
