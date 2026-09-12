@@ -8,12 +8,12 @@ from pathlib import Path
 import sys
 from typing import Any
 
-import automation_policy
-
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / ".github/automation-decision-receipts-v1.json"
+CONTRACT_RELATIVE_PATH = ".github/automation-decision-receipts-v1.json"
 CONTRACT_ID = "automation-decision-receipts-v1"
 REPOSITORY = "portyu9/portyu9"
+LEASE_WORKFLOWS = {"profile-stats", "spotlight-link-sync"}
 GENERIC_PREDICATE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
     "automation-decision-receipt-v1.schema.json"
@@ -90,6 +90,8 @@ def write_capabilities(permissions: dict[str, str]) -> set[str]:
 
 
 def validate(policy: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]:
+    require(policy.get("decisionReceiptContract") == CONTRACT_RELATIVE_PATH,
+            "Automation Policy IR decision receipt contract pointer differs from coverage contract")
     root = exact_keys(
         contract,
         {"schemaVersion", "contractId", "repository", "genericPredicateType", "workflows"},
@@ -101,14 +103,14 @@ def validate(policy: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]
     require(root["genericPredicateType"] == GENERIC_PREDICATE,
             "decision-receipt generic predicate identity changed")
 
-    workflows = exact_keys(root["workflows"], set(automation_policy.LEASE_WORKFLOWS),
+    workflows = exact_keys(root["workflows"], LEASE_WORKFLOWS,
                            "decision-receipt workflow coverage")
     observed_effect_kinds: set[str] = set()
     generic_jobs: set[tuple[str, str]] = set()
     self_attested_jobs: set[tuple[str, str]] = set()
     specialized_jobs: set[tuple[str, str]] = set()
 
-    for workflow_id in sorted(automation_policy.LEASE_WORKFLOWS):
+    for workflow_id in sorted(LEASE_WORKFLOWS):
         policy_workflow = policy["workflows"][workflow_id]
         workflow_contract = exact_keys(workflows[workflow_id], {"jobs"},
                                        f"decision-receipt workflow {workflow_id}")
@@ -211,9 +213,15 @@ def self_test(policy: dict[str, Any], contract: dict[str, Any]) -> None:
     writer_signs["workflows"]["spotlight-link-sync"]["jobs"]["propose"]["permissions"]["attestations"] = "write"
     expect_failure(writer_signs, contract, "must not gain receipt-signing authority")
 
+    wrong_pointer = copy.deepcopy(policy)
+    wrong_pointer["decisionReceiptContract"] = ".github/wrong.json"
+    expect_failure(wrong_pointer, contract, "pointer differs")
+
 
 def main() -> int:
     try:
+        import automation_policy
+
         policy = automation_policy.load_policy()
         contract = strict_json(CONTRACT_PATH)
         validate(policy, contract)
