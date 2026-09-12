@@ -43,17 +43,17 @@ The pre-publication v3 evidence attestation proves the reviewed evidence inputs 
 
 `generated-publication-receipt-v1.schema.json` is fail-closed around repository/workflow identity, source epoch, transaction identity, publication topology, the exact eleven-subject evidence set, and the bounded receipt claim. `scripts/build-generated-publication-receipt.py` derives the subject inventory from `profile-evidence-subjects-v1` and rejects a profile predicate whose published paths do not equal that canonical contract.
 
-The receipt is intentionally about the **actual published Git commit**, not a staged candidate or GitHub API JSON serialization. `prepare-publication-receipt-read-only` checks that the checked-out commit equals the publisher's emitted commit SHA, has exactly one parent equal to the sealed publication base, retains the reviewed bot author/committer/message identity, and is still the live remote `generated` head. It then reconstructs the canonical Git commit object as `commit <payload-size>\0<payload>`, proves the repository-native SHA-1 Git OID over those exact bytes, and computes the independent SHA-256 subject digest over the same canonical Git object.
+The receipt is intentionally about the **actual published Git commit**, not a staged candidate or GitHub API JSON serialization. `prepare-publication-receipt-read-only` checks that the checked-out commit equals the publisher's emitted commit SHA, has exactly one parent equal to the sealed publication base, retains the reviewed bot author/committer/message identity, and is still the live remote `generated` head. It then reconstructs the canonical Git object as `commit <payload-size>\0<payload>`, proves the repository-native SHA-1 Git OID over those exact bytes, and computes the independent SHA-256 subject digest over the same canonical Git object.
 
 The deterministic receipt predicate binds:
 
 - the native published commit SHA and exact parent SHA;
-- the canonical Git commit object SHA-256 used as the custom attestation subject digest;
+- the canonical Git-object SHA-256 used as the custom attestation subject digest;
 - exact source `main` SHA plus `profile-stats-source-epoch-v1` algorithm, file count, and closure SHA-256;
 - exact workflow run ID and run attempt;
 - exact short-lived mutation lease ID and deterministic Profile Stats candidate ID;
 - the reviewed profile-evidence predicate SHA-256;
-- `profile-evidence-subjects-v1` plus SHA-256 and size for each of the exact eleven published subjects; and
+- `profile-evidence-subjects-v1` plus SHA-256 for each of the exact eleven published subjects; and
 - its own receipt-schema identity and SHA-256.
 
 Publication and receipt signing remain deliberately separated. `publish-write-only` has `contents: write` but no OIDC/attestation authority. `prepare-publication-receipt-read-only` has only `contents: read`. `attest-publication-receipt-write-only` has OIDC/attestation authority but no `contents: write`, Actions-write, checkout, setup-Python, repository-authored Python, Git, or `gh` surface. It consumes one digest-checked receipt artifact and invokes the already-reviewed pinned `actions/attest` custom-attestation mode with subject name `portyu9/portyu9:generated@<commit-sha>` and subject digest `sha256:<canonical-git-object-sha256>`.
@@ -150,6 +150,6 @@ gh attestation verify portfolio-evidence-ledger.json \
 
 A successful evidence verification binds the artifact digest to the GitHub Actions workflow identity that created the attestation. For v3, inspect `sourceRevision`, `predicateSchema.id`, `predicateSchema.digest`, `signalFieldEvidence.id`, `signalFieldEvidence.digest`, `portfolioEvidenceLedger.version`, `portfolioEvidenceLedger.semantics`, `portfolioEvidenceLedger.id`, `portfolioEvidenceLedger.digest`, validation scope, subject set, and authority boundary before making any broader inference. The recorded `predicateSchema.digest` should equal the SHA-256 digest of the immutable v3 schema bytes used for that run.
 
-The post-publication receipt is a custom attestation whose subject name identifies `generated@<commit-sha>` and whose subject digest is the SHA-256 of the canonical Git commit object, not the SHA-1 Git OID. When inspecting that receipt, verify the `generated-publication-receipt-v1.schema.json` predicate type and correlate `publication.commitSha`, `publication.parentSha`, `publication.gitObjectSha256`, `source.revision`, `source.epoch.closureSha256`, `transaction.leaseId`, `transaction.candidateId`, `run.id`, `run.attempt`, `evidence.profileEvidencePredicateSha256`, and every per-subject digest before treating it as the publication receipt for that generated commit.
+The post-publication receipt is a custom attestation whose subject name identifies `generated@<commit-sha>` and whose subject digest is the SHA-256 of the canonical Git object, not the SHA-1 Git OID. When inspecting that receipt, verify the `generated-publication-receipt-v1.schema.json` predicate type and correlate `publication.commitSha`, `publication.parentSha`, `publication.gitObjectSha256`, `source.revision`, `source.epoch.closureSha256`, `transaction.leaseId`, `transaction.candidateId`, `run.id`, `run.attempt`, `evidence.profileEvidencePredicateSha256`, and every per-subject digest before treating it as the publication receipt for that generated commit.
 
 Historical v1 and v2 evidence attestations remain verifiable with their frozen predicate types. The existence of those legacy verification paths does not authorize new v1/v2 evidence attestations or edits to either historical schema.
