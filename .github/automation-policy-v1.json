@@ -9,6 +9,7 @@
   },
   "githubActionsAppId": 15368,
   "rulesetContract": ".github/rulesets/repository-rulesets-v1.json",
+  "decisionReceiptContract": ".github/automation-decision-receipts-v1.json",
   "workflows": {
     "codeql": {
       "path": ".github/workflows/codeql.yml",

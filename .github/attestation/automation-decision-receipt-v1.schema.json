@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json",
+  "title": "Ƴunior Ƥortal automation decision receipt predicate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "repository",
+    "workflowRef",
+    "run",
+    "predicateSchema",
+    "transaction",
+    "effects",
+    "claim"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "automation-decision-receipt"},
+    "repository": {"const": "portyu9/portyu9"},
+    "workflowRef": {
+      "enum": [
+        "portyu9/portyu9/.github/workflows/profile-stats.yml@refs/heads/main",
+        "portyu9/portyu9/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
+      ]
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "attempt", "event", "sourceSha", "url"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "attempt": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "event": {"enum": ["push", "schedule", "workflow_dispatch"]},
+        "sourceSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "url": {"type": "string", "pattern": "^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
+      }
+    },
+    "predicateSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "digest"],
+      "properties": {
+        "id": {"const": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"},
+        "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["leaseId", "candidateId", "baseSha", "issuedAt", "expiresAt"],
+      "properties": {
+        "leaseId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "candidateId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "baseSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "issuedAt": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+        "expiresAt": {"type": "string", "pattern": "^[1-9][0-9]*$"}
+      }
+    },
+    "effects": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {"$ref": "#/$defs/effect"}
+    },
+    "claim": {"const": "This append-only receipt records the exact reviewed automation decision and observed outcome for the privileged semantic side effects listed here. It does not replace freshness, mutation-lease validation, required checks, branch protection, or any stronger domain-specific authorization or publication attestation."}
+  },
+  "$defs": {
+    "sha40": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sha64": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "positiveInteger": {"type": "integer", "minimum": 1},
+    "candidateBranch": {"type": "string", "pattern": "^automation/spotlight-links/[0-9a-f]{64}$"},
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordinal", "effectId", "job", "kind", "outcome", "target", "observation"],
+      "properties": {
+        "ordinal": {"type": "integer", "minimum": 1, "maximum": 32},
+        "effectId": {"$ref": "#/$defs/sha64"},
+        "job": {"enum": ["dispatch", "reconcile", "propose", "approve", "merge"]},
+        "kind": {
+          "enum": [
+            "spotlight-workflow-dispatch",
+            "stale-candidate-reconciliation",
+            "spotlight-candidate-publication",
+            "workflow-run-approval-request",
+            "spotlight-terminal-merge"
+          ]
+        },
+        "outcome": {"enum": ["applied", "reused"]},
+        "target": {"type": "object"},
+        "observation": {"type": "object"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "spotlight-workflow-dispatch"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "dispatch"},
+              "outcome": {"const": "applied"},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["workflowPath", "ref"],
+                "properties": {
+                  "workflowPath": {"const": ".github/workflows/spotlight-link-sync.yml"},
+                  "ref": {"const": "main"}
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["acceptedStatus"],
+                "properties": {"acceptedStatus": {"const": 204}}
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "stale-candidate-reconciliation"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "reconcile"},
+              "outcome": {"const": "applied"},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["candidateBranch", "headSha", "prNumber"],
+                "properties": {
+                  "candidateBranch": {"$ref": "#/$defs/candidateBranch"},
+                  "headSha": {"$ref": "#/$defs/sha40"},
+                  "prNumber": {
+                    "oneOf": [
+                      {"$ref": "#/$defs/positiveInteger"},
+                      {"type": "null"}
+                    ]
+                  }
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["prClosed", "candidateRefAbsent"],
+                "properties": {
+                  "prClosed": {"type": "boolean"},
+                  "candidateRefAbsent": {"const": true}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "spotlight-candidate-publication"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "propose"},
+              "outcome": {"enum": ["applied", "reused"]},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["candidateBranch", "headSha", "prNumber"],
+                "properties": {
+                  "candidateBranch": {"$ref": "#/$defs/candidateBranch"},
+                  "headSha": {"$ref": "#/$defs/sha40"},
+                  "prNumber": {"$ref": "#/$defs/positiveInteger"}
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["refCreated", "prCreated"],
+                "properties": {
+                  "refCreated": {"type": "boolean"},
+                  "prCreated": {"type": "boolean"}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "workflow-run-approval-request"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "approve"},
+              "outcome": {"const": "applied"},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["workflowName", "workflowId", "runId", "runAttempt", "checkSuiteId"],
+                "properties": {
+                  "workflowName": {"enum": ["CodeQL", "Dependency review", "Profile quality"]},
+                  "workflowId": {"$ref": "#/$defs/positiveInteger"},
+                  "runId": {"$ref": "#/$defs/positiveInteger"},
+                  "runAttempt": {"$ref": "#/$defs/positiveInteger"},
+                  "checkSuiteId": {"$ref": "#/$defs/positiveInteger"}
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["approvalRequested"],
+                "properties": {"approvalRequested": {"const": true}}
+              }
+            }
+          }
+        },
+        {
+          "if": {"properties": {"kind": {"const": "spotlight-terminal-merge"}}, "required": ["kind"]},
+          "then": {
+            "properties": {
+              "job": {"const": "merge"},
+              "outcome": {"const": "applied"},
+              "target": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["prNumber", "candidateBranch", "headSha", "baseSha"],
+                "properties": {
+                  "prNumber": {"$ref": "#/$defs/positiveInteger"},
+                  "candidateBranch": {"$ref": "#/$defs/candidateBranch"},
+                  "headSha": {"$ref": "#/$defs/sha40"},
+                  "baseSha": {"$ref": "#/$defs/sha40"}
+                }
+              },
+              "observation": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["mergeSha", "mainSha", "candidateRefAbsent"],
+                "properties": {
+                  "mergeSha": {"$ref": "#/$defs/sha40"},
+                  "mainSha": {"$ref": "#/$defs/sha40"},
+                  "candidateRefAbsent": {"const": true}
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
