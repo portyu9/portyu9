@@ -8,6 +8,10 @@ from pathlib import Path
 import sys
 from typing import Any
 
+import automation_decision_receipt
+import profile_stats_decision_receipt
+import spotlight_decision_receipt
+
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / ".github/automation-decision-receipts-v1.json"
 CONTRACT_RELATIVE_PATH = ".github/automation-decision-receipts-v1.json"
@@ -216,6 +220,10 @@ def self_test(policy: dict[str, Any], contract: dict[str, Any]) -> None:
     wrong_pointer = copy.deepcopy(policy)
     wrong_pointer["decisionReceiptContract"] = ".github/wrong.json"
     expect_failure(wrong_pointer, contract, "pointer differs")
+
+    automation_decision_receipt.self_test()
+    profile_stats_decision_receipt.self_test()
+    spotlight_decision_receipt.self_test()
 
 
 def main() -> int:
