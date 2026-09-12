@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Lease/receipt/MAC-aware public loader for the repository Automation Policy IR.
+"""Lease/receipt/MAC/decision-receipt-aware loader for the Automation Policy IR.
 
 The pre-lease loader is retained byte-for-byte in automation_policy_core.py. This
-wrapper projects only the item-8 lease, item-9 publication-receipt, and item-10
-Spotlight merge-authorization extensions out for the frozen legacy checks, then
-validates the complete current graph and compiles it against workflow source.
-Existing consumers continue importing this module as the canonical policy.
+wrapper projects only the item-8 lease, item-9 publication-receipt, item-10 Spotlight
+merge-authorization, and item-11 decision-receipt pointer extensions out for the frozen
+legacy checks, then validates the complete current graph and compiles it against workflow
+source. Existing consumers continue importing this module as the canonical policy.
 """
 from __future__ import annotations
 
@@ -24,8 +24,9 @@ POLICY_PATH = core.POLICY_PATH
 LEASE_WORKFLOWS = automation_leases.LEASE_WORKFLOWS
 RECEIPT_JOBS = ("receipt", "receipt_attest")
 MAC_JOBS = ("authorize", "authorize_attest")
+DECISION_RECEIPT_CONTRACT = ".github/automation-decision-receipts-v1.json"
 
-# Dependencies introduced only by items 8-10 are projected away for the byte-frozen
+# Dependencies introduced only by items 8-11 are projected away for the byte-frozen
 # legacy validator.
 LEGACY_NEEDS = {
     "profile-stats": {
@@ -59,8 +60,11 @@ PROFILE_LEGACY_TRANSITIONS = [
 
 
 def project_legacy_policy(payload: dict[str, Any]) -> dict[str, Any]:
-    """Remove exactly the lease/receipt/MAC extensions, preserving legacy semantics."""
+    """Remove exactly the lease/receipt/MAC/decision-receipt extensions."""
     projected = copy.deepcopy(payload)
+    require(projected.get("decisionReceiptContract") == DECISION_RECEIPT_CONTRACT,
+            "automation policy decision receipt contract pointer changed")
+    del projected["decisionReceiptContract"]
     for workflow_id in sorted(LEASE_WORKFLOWS):
         workflow = projected["workflows"][workflow_id]
         lease_job = workflow["lease"]["job"]
@@ -102,6 +106,8 @@ def project_legacy_policy(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
+    require(policy.get("decisionReceiptContract") == DECISION_RECEIPT_CONTRACT,
+            "automation policy decision receipt contract pointer changed")
     global_groups: set[str] = set()
     for workflow_id, workflow in policy["workflows"].items():
         if workflow_id not in LEASE_WORKFLOWS:
@@ -169,6 +175,8 @@ def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
 
 def validate_policy(payload: Any) -> dict[str, Any]:
     require(isinstance(payload, dict), "automation policy root must be an object")
+    require(payload.get("decisionReceiptContract") == DECISION_RECEIPT_CONTRACT,
+            "automation policy decision receipt contract pointer changed")
     require(set(payload.get("workflows", {})) >= LEASE_WORKFLOWS,
             "automation policy lease workflows are missing")
     for workflow_id in sorted(LEASE_WORKFLOWS):
@@ -229,6 +237,14 @@ def self_test(policy: dict[str, Any]) -> None:
     automation_concurrency.self_test(policy, ROOT)
     automation_leases.self_test(policy, ROOT)
 
+    missing_receipt_contract = copy.deepcopy(policy)
+    del missing_receipt_contract["decisionReceiptContract"]
+    expect_policy_failure(missing_receipt_contract, "decision receipt contract pointer changed")
+
+    wrong_receipt_contract = copy.deepcopy(policy)
+    wrong_receipt_contract["decisionReceiptContract"] = ".github/unreviewed.json"
+    expect_policy_failure(wrong_receipt_contract, "decision receipt contract pointer changed")
+
     missing_lease = copy.deepcopy(policy)
     del missing_lease["workflows"]["profile-stats"]["lease"]
     expect_policy_failure(missing_lease, "workflow profile-stats keys changed")
@@ -281,6 +297,7 @@ def main() -> int:
             f"{lease_jobs} short-lived mutation leases · {bound_jobs} lease-bound mutation jobs · "
             "one post-publication generated-commit receipt boundary · "
             "one attested Spotlight merge-authorization boundary · "
+            "one source-bound append-only decision-receipt coverage contract · "
             f"{len(policy['requiredChecks'])} protected required-check bindings"
         )
         return 0
