@@ -17,10 +17,10 @@ import stat
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v20"
+VERSION = "governed-workflow-byte-identity-v21"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
-    ".github/workflows/profile-stats.yml": "d0d0afcb81e807f77f7bd7663bebe78c26ac4e80",
+    ".github/workflows/profile-stats.yml": "8f586791bd7984d11c817aab93612bdebeabc9e6",
     ".github/workflows/spotlight-link-sync.yml": "93b5ef74b8bb0fec9853f26eed717011ffea1b13",
 }
 
@@ -72,7 +72,7 @@ PROFILE_STATS_RECEIPT_SEQUENCE = (
     "    name: prepare-publication-receipt-read-only\n"
     "    needs: [publish, stage, lease, attest]",
     "    permissions:\n      contents: read\n    outputs:\n      published_sha: ${{ steps.receipt.outputs.published_sha }}",
-    'ref: ${{ needs.publish.outputs.published_sha }}',
+    'ref: generated',
     'name: profile-evidence-attestation-predicate',
     'test "$(git -C published rev-parse HEAD)" = "$PUBLISHED_SHA"',
     'test "$(git -C published rev-parse HEAD^)" = "$PUBLISHED_PARENT_SHA"',
@@ -258,6 +258,8 @@ def validate_profile_stats_receipt(text: str) -> None:
             "Profile Stats must have exactly one read-only receipt preparer")
     require(text.count("name: attest-publication-receipt-write-only") == 1,
             "Profile Stats must have exactly one receipt attestation writer")
+    require("ref: ${{ needs.publish.outputs.published_sha }}" not in text,
+            "Profile Stats receipt must not checkout a dynamic published SHA")
     require(text.count("subject-digest: sha256:${{ needs.receipt.outputs.git_object_sha256 }}") == 1,
             "Profile Stats receipt signer must attest exactly the canonical Git-object SHA-256")
 
@@ -346,6 +348,14 @@ def self_test() -> None:
         pass
     else:
         raise ValueError("Profile Stats receipt self-test accepted a missing subject-digest binding")
+    try:
+        validate_profile_stats_receipt(
+            synthetic + '\nref: ${{ needs.publish.outputs.published_sha }}'
+        )
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Profile Stats receipt self-test accepted a dynamic published-SHA checkout")
 
     synthetic = "\n".join(SPOTLIGHT_RECONCILIATION_SEQUENCE)
     validate_spotlight_reconciliation(synthetic)
