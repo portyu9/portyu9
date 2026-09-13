@@ -43,6 +43,16 @@ ITEM10_CANDIDATE_REPROOF = (
     "            | tr -d '\\n' | base64 --decode > candidate-readme.md\n"
     '          test "$(sha256sum candidate-readme.md | cut -d\' \' -f1)" = "$README_SHA256_AFTER"\n'
 )
+NEW_RECONCILE_PR_READ = (
+    "              PR_NUMBER=\"$(jq -r '.[0].number' <<<\"$PRS\")\"\n"
+    "              [[ \"$PR_NUMBER\" =~ ^[1-9][0-9]*$ ]]\n"
+    "              PR=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}\")\"\n"
+)
+OLD_RECONCILE_PR_READ = (
+    "              PR=\"$(jq -c '.[0]' <<<\"$PRS\")\"\n"
+    "              PR_NUMBER=\"$(jq -r .number <<<\"$PR\")\"\n"
+    "              [[ \"$PR_NUMBER\" =~ ^[1-9][0-9]*$ ]]\n"
+)
 
 
 def fail(message: str) -> None:
@@ -55,10 +65,14 @@ def require(condition: bool, message: str) -> None:
 
 
 def project_item9_sync(sync: str) -> str:
-    """Remove only item-10 overlays so the exact item-9 firewall can rerun."""
+    """Remove only post-item-9 overlays so the exact item-9 firewall can rerun."""
     authorize_start = sync.index("  authorize:\n")
     merge_start = sync.index("  merge:\n", authorize_start)
     projected = sync[:authorize_start] + sync[merge_start:]
+
+    require(projected.count(NEW_RECONCILE_PR_READ) == 1,
+            "item-10 production-fix projection lost exact reconciler PR-read overlay")
+    projected = projected.replace(NEW_RECONCILE_PR_READ, OLD_RECONCILE_PR_READ, 1)
 
     for current, legacy, label in (
         (NEW_MERGE_IF, OLD_MERGE_IF, "merge condition"),
@@ -115,9 +129,23 @@ def validate_item10_authority(sync: str) -> None:
     authorize = item9.core.job_block(sync, "authorize", "authorize_attest")
     signer = item9.core.job_block(sync, "authorize_attest", "merge")
     merge = item9.core.job_block(sync, "merge", None)
+    reconcile = item9.core.job_block(sync, "reconcile", "budget")
 
     require("id-token:" not in approve and "attestations:" not in approve,
             "Spotlight Actions approval job acquired attestation authority")
+
+    require(
+        'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"' in reconcile and
+        'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"' in reconcile and
+        'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"' in reconcile,
+        "Spotlight stale reconciler must use bounded PR discovery followed by an exact full-object GET",
+    )
+    require(
+        reconcile.index('PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"') <
+        reconcile.index('PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"') <
+        reconcile.index('CLOSED_PR="$(gh api --method PATCH'),
+        "Spotlight stale reconciler must validate the exact full PR object before close mutation",
+    )
 
     require("name: prepare-merge-authorization-read-only" in authorize and
             "needs: [plan, lease, reconcile, budget, propose, approve]" in authorize,
@@ -168,9 +196,11 @@ def validate_item10_authority(sync: str) -> None:
                 f"Spotlight terminal merge acquired signer authority: {forbidden}")
 
     verify = 'gh attestation verify "$SUBJECT"'
+    statement = '.verificationResult.statement'
     mutation = 'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
-    require(verify in merge and mutation in merge and merge.index(verify) < merge.index(mutation),
-            "Spotlight terminal merge mutation is not downstream of cryptographic MAC verification")
+    require(verify in merge and statement in merge and mutation in merge and
+            merge.index(verify) < merge.index(statement) < merge.index(mutation),
+            "Spotlight terminal merge mutation is not downstream of direct cryptographic MAC statement verification")
     for fragment in (
         f"--predicate-type {PREDICATE_TYPE}",
         '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml"',
@@ -178,9 +208,14 @@ def validate_item10_authority(sync: str) -> None:
         '--source-digest "$BASE_SHA"',
         "--source-ref refs/heads/main",
         "--deny-self-hosted-runners",
-        'test "$MATCHING_PREDICATES" -ge 1',
+        '.predicateType == $predicate_type',
+        '.predicate == $expected[0]',
+        '.subject[0].digest.sha256 == $subject_digest',
+        'test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"',
     ):
         require(fragment in merge, f"Spotlight terminal attestation verification drifted: {fragment}")
+    require("[.. | objects" not in merge,
+            "Spotlight terminal attestation verification must not recursively search arbitrary JSON")
 
     api_start_marker = '          CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"\n'
     api_end_marker = '          EXPECTED_CERTIFICATE_CHECKS="$(jq -cn \\\n'
@@ -205,7 +240,8 @@ def self_test_item10(sync: str) -> None:
     failures = (
         (sync.replace("      id-token: write\n", "      actions: write\n", 1), "OIDC authority"),
         (sync.replace("      attestations: read\n", "      attestations: write\n", 1), "attestation-write authority"),
-        (sync.replace('gh attestation verify "$SUBJECT"', 'echo "$SUBJECT"', 1), "not downstream of cryptographic"),
+        (sync.replace('gh attestation verify "$SUBJECT"', 'echo "$SUBJECT"', 1), "not downstream of direct cryptographic"),
+        (sync.replace('.verificationResult.statement', '.attestation', 1), "not downstream of direct cryptographic"),
     )
     for malformed, expected in failures:
         try:
@@ -240,9 +276,8 @@ def main() -> int:
         print(
             f"Workflow authority validation passed: {policy['policyId']} remains the executable semantic authority graph for "
             f"{len(policy['workflows'])} workflows and {sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs; "
-            "the frozen item-9 Spotlight firewall re-proves the exact projected legacy transaction, while item 10 confines "
-            "OIDC/attestation-write to one lease-bound signer and attestation-read to the terminal merger after an independently "
-            "read-only MAC preparation boundary."
+            "the frozen item-9 Spotlight firewall re-proves the exact projected legacy transaction, while the production recovery overlay separately requires "
+            "a complete stale-PR GET before close mutation and direct verified-statement MAC binding before the unchanged terminal merge PUT."
         )
         return 0
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
