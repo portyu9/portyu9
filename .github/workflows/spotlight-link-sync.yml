@@ -298,9 +298,9 @@ jobs:
             PR_COUNT="$(jq 'length' <<<"$PRS")"
             test "$PR_COUNT" = "0" || test "$PR_COUNT" = "1"
             if [ "$PR_COUNT" = "1" ]; then
-              PR="$(jq -c '.[0]' <<<"$PRS")"
-              PR_NUMBER="$(jq -r .number <<<"$PR")"
+              PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
               [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+              PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
               test "$(jq -r .state <<<"$PR")" = "open"
               test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"
               test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"
@@ -1035,6 +1035,7 @@ jobs:
             "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
             "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+          echo "Spotlight terminal stage: lease-verified" >&2
 
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
@@ -1065,6 +1066,7 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content \
             | tr -d '\n' | base64 --decode > candidate-readme.md
           test "$(sha256sum candidate-readme.md | cut -d' ' -f1)" = "$README_SHA256_AFTER"
+          echo "Spotlight terminal stage: candidate-verified" >&2
 
           for ID in "$CODEQL_RUN_ID" "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_RUN_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_RUN_ID" "$PROFILE_CHECK_SUITE_ID"; do
             [[ "$ID" =~ ^[1-9][0-9]*$ ]]
@@ -1095,6 +1097,7 @@ jobs:
             ] | sort_by(.name)')"
           OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
           test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
+          echo "Spotlight terminal stage: required-checks-verified" >&2
 
           CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"
           SUBJECT="merge-authorization-input/spotlight-merge-authorization.subject.json"
@@ -1133,6 +1136,7 @@ jobs:
              .pullRequest.headSha == $head and .pullRequest.headRepository == "portyu9/portyu9" and
              .pullRequest.maintainerCanModify == false and
              .candidate.parentSha == $base and .candidate.readmeSha256 == $readme' "$CERTIFICATE" >/dev/null
+          echo "Spotlight terminal stage: local-certificate-verified" >&2
 
           CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"
           DEPENDENCY_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"
@@ -1161,7 +1165,9 @@ jobs:
               {name:"validate-contracts",checkSuiteId:$profile,appId:15368,status:"completed",conclusion:"success",headSha:$head}
             ] | sort_by(.name)')"
           test "$(jq -c '.checkRuns | sort_by(.name)' "$CERTIFICATE")" = "$EXPECTED_CERTIFICATE_CHECKS"
+          echo "Spotlight terminal stage: certificate-provenance-verified" >&2
 
+          echo "Spotlight terminal stage: attestation-verification-start" >&2
           gh attestation verify "$SUBJECT" \
             --repo "$GITHUB_REPOSITORY" \
             --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json \
@@ -1171,17 +1177,32 @@ jobs:
             --source-ref refs/heads/main \
             --deny-self-hosted-runners \
             --format json > verified-merge-authorization.json
-          MATCHING_PREDICATES="$(jq --slurpfile expected "$CERTIFICATE" '[.. | objects | select(has("predicate")) | .predicate | select(. == $expected[0])] | length' verified-merge-authorization.json)"
-          test "$MATCHING_PREDICATES" -ge 1
+          echo "Spotlight terminal stage: attestation-cryptographic-verified" >&2
+          VERIFIED_COUNT="$(jq 'if type == "array" then length else 0 end' verified-merge-authorization.json)"
+          [[ "$VERIFIED_COUNT" =~ ^[1-9][0-9]*$ ]]
+          MATCHING_STATEMENTS="$(jq \
+            --slurpfile expected "$CERTIFICATE" \
+            --arg predicate_type "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json" \
+            --arg subject_digest "$EXPECTED_SUBJECT_SHA256" \
+            '[.[] | .verificationResult.statement | select(
+              .predicateType == $predicate_type and
+              .predicate == $expected[0] and
+              (.subject | type == "array" and length == 1) and
+              .subject[0].digest.sha256 == $subject_digest
+            )] | length' verified-merge-authorization.json)"
+          test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"
+          echo "Spotlight terminal stage: attestation-statement-verified" >&2
 
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          echo "Spotlight terminal stage: pre-merge-roots-verified" >&2
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
           RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"
           test "$(jq -r .merged <<<"$RESULT")" = "true"
           MERGE_SHA="$(jq -r .sha <<<"$RESULT")"
           test "$MERGE_SHA" != "null"
+          echo "Spotlight terminal stage: expected-head-merge-succeeded" >&2
 
           MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .merged <<<"$MERGED_PR")" = "true"
@@ -1200,3 +1221,4 @@ jobs:
             AFTER_EXACT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$AFTER_REFS")"
             test "$AFTER_EXACT" = "0"
           fi
+          echo "Spotlight terminal stage: cleanup-verified" >&2
