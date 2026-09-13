@@ -1150,7 +1150,7 @@ jobs:
               {name:"Dependency review",workflowId:$dependency.workflow_id,runId:$dependency.id,runAttempt:$dependency.run_attempt,checkSuiteId:$dependency.check_suite_id,event:$dependency.event,headBranch:$dependency.head_branch,headSha:$dependency.head_sha,repository:$dependency.repository.full_name,headRepository:$dependency.head_repository.full_name,status:$dependency.status,conclusion:$dependency.conclusion},
               {name:"Profile quality",workflowId:$profile.workflow_id,runId:$profile.id,runAttempt:$profile.run_attempt,checkSuiteId:$profile.check_suite_id,event:$profile.event,headBranch:$profile.head_branch,headSha:$profile.head_sha,repository:$profile.repository.full_name,headRepository:$profile.head_repository.full_name,status:$profile.status,conclusion:$profile.conclusion}
             ] | sort_by(.name)')"
-          test "$(jq -c '.workflowRuns | sort_by(.name)' "$CERTIFICATE")" = "$EXPECTED_CERTIFICATE_RUNS"
+          test "$(jq -cS '.workflowRuns | sort_by(.name)' "$CERTIFICATE")" = "$(jq -cS . <<<"$EXPECTED_CERTIFICATE_RUNS")"
 
           EXPECTED_CERTIFICATE_CHECKS="$(jq -cn \
             --arg head "$HEAD_SHA" \
@@ -1164,7 +1164,7 @@ jobs:
               {name:"integration-pinned-upstream",checkSuiteId:$profile,appId:15368,status:"completed",conclusion:"success",headSha:$head},
               {name:"validate-contracts",checkSuiteId:$profile,appId:15368,status:"completed",conclusion:"success",headSha:$head}
             ] | sort_by(.name)')"
-          test "$(jq -c '.checkRuns | sort_by(.name)' "$CERTIFICATE")" = "$EXPECTED_CERTIFICATE_CHECKS"
+          test "$(jq -cS '.checkRuns | sort_by(.name)' "$CERTIFICATE")" = "$(jq -cS . <<<"$EXPECTED_CERTIFICATE_CHECKS")"
           echo "Spotlight terminal stage: certificate-provenance-verified" >&2
 
           echo "Spotlight terminal stage: attestation-verification-start" >&2
