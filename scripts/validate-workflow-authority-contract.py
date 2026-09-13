@@ -43,6 +43,16 @@ ITEM10_CANDIDATE_REPROOF = (
     "            | tr -d '\\n' | base64 --decode > candidate-readme.md\n"
     '          test "$(sha256sum candidate-readme.md | cut -d\' \' -f1)" = "$README_SHA256_AFTER"\n'
 )
+NEW_RECONCILE_PR_READ = (
+    "              PR_NUMBER=\"$(jq -r '.[0].number' <<<\"$PRS\")\"\n"
+    "              [[ \"$PR_NUMBER\" =~ ^[1-9][0-9]*$ ]]\n"
+    "              PR=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}\")\"\n"
+)
+OLD_RECONCILE_PR_READ = (
+    "              PR=\"$(jq -c '.[0]' <<<\"$PRS\")\"\n"
+    "              PR_NUMBER=\"$(jq -r .number <<<\"$PR\")\"\n"
+    "              [[ \"$PR_NUMBER\" =~ ^[1-9][0-9]*$ ]]\n"
+)
 
 
 def fail(message: str) -> None:
@@ -55,10 +65,14 @@ def require(condition: bool, message: str) -> None:
 
 
 def project_item9_sync(sync: str) -> str:
-    """Remove only item-10 overlays so the exact item-9 firewall can rerun."""
+    """Remove only post-item-9 overlays so the exact item-9 firewall can rerun."""
     authorize_start = sync.index("  authorize:\n")
     merge_start = sync.index("  merge:\n", authorize_start)
     projected = sync[:authorize_start] + sync[merge_start:]
+
+    require(projected.count(NEW_RECONCILE_PR_READ) == 1,
+            "item-10 production-fix projection lost exact reconciler PR-read overlay")
+    projected = projected.replace(NEW_RECONCILE_PR_READ, OLD_RECONCILE_PR_READ, 1)
 
     for current, legacy, label in (
         (NEW_MERGE_IF, OLD_MERGE_IF, "merge condition"),
@@ -262,8 +276,8 @@ def main() -> int:
         print(
             f"Workflow authority validation passed: {policy['policyId']} remains the executable semantic authority graph for "
             f"{len(policy['workflows'])} workflows and {sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs; "
-            "the frozen item-9 Spotlight firewall re-proves the projected legacy transaction, stale reconciliation re-fetches the exact PR object before mutation, "
-            "and item 10 confines OIDC/attestation-write to one lease-bound signer while terminal attestation-read binds only the direct verified statement before merge."
+            "the frozen item-9 Spotlight firewall re-proves the exact projected legacy transaction, while the production recovery overlay separately requires "
+            "a complete stale-PR GET before close mutation and direct verified-statement MAC binding before the unchanged terminal merge PUT."
         )
         return 0
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
