@@ -115,9 +115,23 @@ def validate_item10_authority(sync: str) -> None:
     authorize = item9.core.job_block(sync, "authorize", "authorize_attest")
     signer = item9.core.job_block(sync, "authorize_attest", "merge")
     merge = item9.core.job_block(sync, "merge", None)
+    reconcile = item9.core.job_block(sync, "reconcile", "budget")
 
     require("id-token:" not in approve and "attestations:" not in approve,
             "Spotlight Actions approval job acquired attestation authority")
+
+    require(
+        'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"' in reconcile and
+        'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"' in reconcile and
+        'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"' in reconcile,
+        "Spotlight stale reconciler must use bounded PR discovery followed by an exact full-object GET",
+    )
+    require(
+        reconcile.index('PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"') <
+        reconcile.index('PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"') <
+        reconcile.index('CLOSED_PR="$(gh api --method PATCH'),
+        "Spotlight stale reconciler must validate the exact full PR object before close mutation",
+    )
 
     require("name: prepare-merge-authorization-read-only" in authorize and
             "needs: [plan, lease, reconcile, budget, propose, approve]" in authorize,
@@ -168,9 +182,11 @@ def validate_item10_authority(sync: str) -> None:
                 f"Spotlight terminal merge acquired signer authority: {forbidden}")
 
     verify = 'gh attestation verify "$SUBJECT"'
+    statement = '.verificationResult.statement'
     mutation = 'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
-    require(verify in merge and mutation in merge and merge.index(verify) < merge.index(mutation),
-            "Spotlight terminal merge mutation is not downstream of cryptographic MAC verification")
+    require(verify in merge and statement in merge and mutation in merge and
+            merge.index(verify) < merge.index(statement) < merge.index(mutation),
+            "Spotlight terminal merge mutation is not downstream of direct cryptographic MAC statement verification")
     for fragment in (
         f"--predicate-type {PREDICATE_TYPE}",
         '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml"',
@@ -178,9 +194,14 @@ def validate_item10_authority(sync: str) -> None:
         '--source-digest "$BASE_SHA"',
         "--source-ref refs/heads/main",
         "--deny-self-hosted-runners",
-        'test "$MATCHING_PREDICATES" -ge 1',
+        '.predicateType == $predicate_type',
+        '.predicate == $expected[0]',
+        '.subject[0].digest.sha256 == $subject_digest',
+        'test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"',
     ):
         require(fragment in merge, f"Spotlight terminal attestation verification drifted: {fragment}")
+    require("[.. | objects" not in merge,
+            "Spotlight terminal attestation verification must not recursively search arbitrary JSON")
 
     api_start_marker = '          CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"\n'
     api_end_marker = '          EXPECTED_CERTIFICATE_CHECKS="$(jq -cn \\\n'
@@ -205,7 +226,8 @@ def self_test_item10(sync: str) -> None:
     failures = (
         (sync.replace("      id-token: write\n", "      actions: write\n", 1), "OIDC authority"),
         (sync.replace("      attestations: read\n", "      attestations: write\n", 1), "attestation-write authority"),
-        (sync.replace('gh attestation verify "$SUBJECT"', 'echo "$SUBJECT"', 1), "not downstream of cryptographic"),
+        (sync.replace('gh attestation verify "$SUBJECT"', 'echo "$SUBJECT"', 1), "not downstream of direct cryptographic"),
+        (sync.replace('.verificationResult.statement', '.attestation', 1), "not downstream of direct cryptographic"),
     )
     for malformed, expected in failures:
         try:
@@ -240,9 +262,8 @@ def main() -> int:
         print(
             f"Workflow authority validation passed: {policy['policyId']} remains the executable semantic authority graph for "
             f"{len(policy['workflows'])} workflows and {sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs; "
-            "the frozen item-9 Spotlight firewall re-proves the exact projected legacy transaction, while item 10 confines "
-            "OIDC/attestation-write to one lease-bound signer and attestation-read to the terminal merger after an independently "
-            "read-only MAC preparation boundary."
+            "the frozen item-9 Spotlight firewall re-proves the projected legacy transaction, stale reconciliation re-fetches the exact PR object before mutation, "
+            "and item 10 confines OIDC/attestation-write to one lease-bound signer while terminal attestation-read binds only the direct verified statement before merge."
         )
         return 0
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
