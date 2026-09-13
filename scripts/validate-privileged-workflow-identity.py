@@ -8,11 +8,11 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v23"
+VERSION = "governed-workflow-byte-identity-v24"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
     ".github/workflows/profile-stats.yml": "8f586791bd7984d11c817aab93612bdebeabc9e6",
-    ".github/workflows/spotlight-link-sync.yml": "a3af40f88c7d0a80782f21586e102f85587efe97",
+    ".github/workflows/spotlight-link-sync.yml": "15df3ccc450bd9c8f98f24cf1716784456f1f8b7",
 }
 
 OLD_MERGE_IF = (
@@ -112,6 +112,11 @@ def validate_item10_mac(spotlight: str) -> None:
         '--source-digest "$BASE_SHA"',
         "--source-ref refs/heads/main",
         "--deny-self-hosted-runners",
+        "jq -cS '.workflowRuns | sort_by(.name)'",
+        'jq -cS . <<<"$EXPECTED_CERTIFICATE_RUNS"',
+        "jq -cS '.checkRuns | sort_by(.name)'",
+        'jq -cS . <<<"$EXPECTED_CERTIFICATE_CHECKS"',
+        'echo "Spotlight terminal stage: certificate-provenance-verified" >&2',
         '.verificationResult.statement',
         '.subject[0].digest.sha256 == $subject_digest',
         'test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"',
@@ -120,13 +125,17 @@ def validate_item10_mac(spotlight: str) -> None:
         'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
     ):
         require(fragment in merge, f"Spotlight terminal MAC verification contract is missing: {fragment}")
+    require("jq -c '.workflowRuns | sort_by(.name)'" not in merge and
+            "jq -c '.checkRuns | sort_by(.name)'" not in merge,
+            "Spotlight terminal provenance equality must canonicalize object-key order before byte comparison")
     require("[.. | objects" not in merge,
             "Spotlight terminal MAC verification must not recursively search untrusted verifier JSON")
+    provenance_pos = merge.index('echo "Spotlight terminal stage: certificate-provenance-verified" >&2')
     verify_pos = merge.index('gh attestation verify "$SUBJECT"')
     statement_pos = merge.index('.verificationResult.statement')
     merge_pos = merge.index('RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"')
-    require(verify_pos < statement_pos < merge_pos,
-            "Spotlight terminal merge mutation moved before direct verified-statement MAC binding")
+    require(provenance_pos < verify_pos < statement_pos < merge_pos,
+            "Spotlight terminal merge mutation moved before canonical provenance and verified-statement MAC binding")
     for forbidden in ("for attempt in ", "sleep 10", "actions/checkout@", "actions/setup-python@", "python3 "):
         require(forbidden not in merge, f"Spotlight terminal merge acquired polling/authored execution surface: {forbidden}")
 
@@ -198,6 +207,11 @@ def self_test() -> None:
         "    steps:\n      - name: Download attested merge authorization artifact\n      - run: |\n"
         "          EXPECTED_CERTIFICATE_SHA256: ${{ needs.authorize.outputs.certificate_sha256 }}\n"
         "          EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}\n"
+        "          jq -cS '.workflowRuns | sort_by(.name)'\n"
+        "          jq -cS . <<<\"$EXPECTED_CERTIFICATE_RUNS\"\n"
+        "          jq -cS '.checkRuns | sort_by(.name)'\n"
+        "          jq -cS . <<<\"$EXPECTED_CERTIFICATE_CHECKS\"\n"
+        "          echo \"Spotlight terminal stage: certificate-provenance-verified\" >&2\n"
         "          gh attestation verify \"$SUBJECT\" --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json \\\n"
         "            --signer-workflow \"${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml\" --signer-digest \"$BASE_SHA\" \\\n"
         "            --source-digest \"$BASE_SHA\" --source-ref refs/heads/main --deny-self-hosted-runners\n"
@@ -240,8 +254,8 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "Spotlight v23 re-fetches complete stale PR objects and binds terminal MAC verification directly to the CLI's "
-            "verified statement before the unchanged exact-head merge mutation."
+            "Spotlight v24 retains complete stale-PR re-fetch and direct verified-statement MAC binding while canonicalizing "
+            "live certificate provenance before equality so JSON object-key order cannot create a false authorization failure."
         )
         return 0
     except (OSError, ValueError) as exc:
