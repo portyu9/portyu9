@@ -30,6 +30,8 @@ ADR_PREDICATE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
     "automation-decision-receipt-v1.schema.json"
 )
+IMMUTABLE_COMMENT = "# Validate the complete candidate object before first publication or retry reuse."
+IMMUTABLE_ANCHOR = '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
 
 
 def require(condition: bool, message: str) -> None:
@@ -246,9 +248,28 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"' in legacy,
         "Spotlight stale reconciliation must use list results only for bounded PR discovery and re-fetch the exact full PR object",
     )
-    v21.validate_spotlight_immutable_candidates(legacy)
-    projected = legacy.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
-    require(projected != legacy, "Spotlight v21 mutation-budget projection could not isolate item-10 merge gating")
+    for fragment in (
+        'CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$SOURCE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d\' \' -f1)"',
+        'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',
+        'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        'test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"',
+        'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"',
+        'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
+        'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
+        'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
+    ):
+        require(fragment in legacy, f"Spotlight current immutable-candidate proof is missing: {fragment}")
+    require(legacy.count(IMMUTABLE_ANCHOR) == 1,
+            "Spotlight v21 immutable-candidate projection anchor changed")
+    projected_immutable = legacy.replace(
+        IMMUTABLE_ANCHOR,
+        f"          {IMMUTABLE_COMMENT}\n{IMMUTABLE_ANCHOR}",
+        1,
+    )
+    v21.validate_spotlight_immutable_candidates(projected_immutable)
+    projected = projected_immutable.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
+    require(projected != projected_immutable,
+            "Spotlight v21 mutation-budget projection could not isolate item-10 merge gating")
     v21.validate_spotlight_mutation_budget(projected)
 
 
