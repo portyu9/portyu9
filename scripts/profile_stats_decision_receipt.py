@@ -83,7 +83,10 @@ def build_state(env: dict[str, str], downstream_run: dict[str, Any]) -> dict[str
             "Profile Stats decision receipt repository identity changed")
     require(env_value(env, "GITHUB_WORKFLOW_REF") == WORKFLOW_REF,
             "Profile Stats decision receipt workflow identity changed")
-    require(env_value(env, "GITHUB_WORKFLOW_SHA", SHA40) == env_value(env, "LEASE_BASE_SHA", SHA40),
+    base = env_value(env, "LEASE_BASE_SHA", SHA40)
+    require(env_value(env, "GITHUB_SHA", SHA40) == base,
+            "Profile Stats decision receipt event source SHA differs from leased base")
+    require(env_value(env, "GITHUB_WORKFLOW_SHA", SHA40) == base,
             "Profile Stats decision receipt workflow SHA differs from leased base")
     env_value(env, "GITHUB_RUN_ID", POSITIVE)
     env_value(env, "GITHUB_RUN_ATTEMPT", POSITIVE)
@@ -119,6 +122,7 @@ def fixture() -> tuple[dict[str, str], dict[str, Any]]:
         "GITHUB_REPOSITORY_ID": str(repository_id),
         "GITHUB_WORKFLOW_REF": WORKFLOW_REF,
         "GITHUB_WORKFLOW_SHA": base,
+        "GITHUB_SHA": base,
         "GITHUB_RUN_ID": "123",
         "GITHUB_RUN_ATTEMPT": "2",
         "LEASE_BASE_SHA": base,
@@ -201,3 +205,12 @@ def self_test() -> None:
         require("leased source main" in str(exc), f"Profile Stats decision receipt failed for wrong reason: {exc}")
     else:
         raise ValueError("Profile Stats decision receipt accepted wrong downstream head")
+
+    wrong_source = dict(env)
+    wrong_source["GITHUB_SHA"] = "b" * 40
+    try:
+        build_state(wrong_source, dict(downstream))
+    except ValueError as exc:
+        require("event source SHA differs" in str(exc), f"Profile Stats decision receipt failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Profile Stats decision receipt accepted an event/lease source split")
