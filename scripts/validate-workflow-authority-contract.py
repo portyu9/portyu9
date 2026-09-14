@@ -39,7 +39,7 @@ DOWNLOAD_STEP = (
     "        with:\n"
     "          name: spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}\n"
     "          path: merge-authorization-input\n"
-    "          digest-mismatch: error\n\n"
+    "          digest-mismatch: error\n"
 )
 ITEM10_CANDIDATE_REPROOF = (
     '          test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"\n'
