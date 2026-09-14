@@ -6,6 +6,7 @@ import sys
 
 import automation_decision_receipts
 import automation_policy
+import spotlight_decision_journal
 
 
 def main() -> int:
@@ -14,6 +15,7 @@ def main() -> int:
         contract = automation_decision_receipts.strict_json(automation_decision_receipts.CONTRACT_PATH)
         automation_decision_receipts.validate(policy, contract)
         automation_decision_receipts.self_test(policy, contract)
+        spotlight_decision_journal.self_test()
         total = sum(len(workflow["jobs"]) for workflow in contract["workflows"].values())
         generic = sum(
             1
@@ -24,7 +26,8 @@ def main() -> int:
         print(
             "Automation Decision Receipt contract passed: "
             f"{automation_decision_receipts.CONTRACT_ID} · {total} exact lease-bound privileged jobs · "
-            f"{generic} generic receipt effect classes · complete self-attested/specialized receipt disposition"
+            f"{generic} generic receipt effect classes · complete self-attested/specialized receipt disposition · "
+            "observed Spotlight side-effect journal compiler self-test passed"
         )
         return 0
     except (OSError, KeyError, ValueError) as exc:
