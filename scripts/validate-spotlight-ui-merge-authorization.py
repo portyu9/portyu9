@@ -5,6 +5,16 @@ from __future__ import annotations
 import spotlight_ui_merge_authorization_item10_core as core
 
 
+COMPRESSED_DOWNLOAD_STEP = (
+    "      - name: Download attested merge authorization artifact\n"
+    "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1\n"
+    "        with:\n"
+    "          name: spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}\n"
+    "          path: merge-authorization-input\n"
+    "          digest-mismatch: error\n"
+)
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
@@ -28,6 +38,7 @@ def main() -> int:
             require(path.is_file() and not path.is_symlink(),
                     f"Spotlight merge authorization input is missing or aliased: {path.relative_to(core.ROOT)}")
 
+        core.DOWNLOAD_STEP = COMPRESSED_DOWNLOAD_STEP
         sync = strip_adr_tail(core.SYNC.read_text(encoding="utf-8"), "Spotlight")
         stats = strip_adr_tail(core.STATS.read_text(encoding="utf-8"), "Profile Stats")
         policy = core.POLICY.read_text(encoding="utf-8")
