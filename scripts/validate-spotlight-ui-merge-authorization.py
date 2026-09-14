@@ -88,6 +88,7 @@ LEGACY_PROFILE_DISPATCH = '''  dispatch:
             "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \\
             -f ref=main
 '''
+ORIGINAL_PROJECT_ITEM9 = core.project_item9
 
 
 def require(condition: bool, message: str) -> None:
@@ -114,7 +115,7 @@ def project_profile_item9(stats: str) -> str:
 
 
 def project_item9(sync: str) -> str:
-    legacy = core.project_item9(sync)
+    legacy = ORIGINAL_PROJECT_ITEM9(sync)
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
             "Spotlight item-9 immutable-candidate projection anchor changed")
     legacy = legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
@@ -136,6 +137,7 @@ def main() -> int:
                     f"Spotlight merge authorization input is missing or aliased: {path.relative_to(core.ROOT)}")
 
         core.DOWNLOAD_STEP = COMPRESSED_DOWNLOAD_STEP
+        core.project_item9 = project_item9
         sync = strip_adr_tail(core.SYNC.read_text(encoding="utf-8"), "Spotlight")
         stats = project_profile_item9(strip_adr_tail(core.STATS.read_text(encoding="utf-8"), "Profile Stats"))
         policy = core.POLICY.read_text(encoding="utf-8")
