@@ -31,7 +31,17 @@ ADR_PREDICATE = (
     "automation-decision-receipt-v1.schema.json"
 )
 IMMUTABLE_COMMENT = "# Validate the complete candidate object before first publication or retry reuse."
-IMMUTABLE_ANCHOR = '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+IMMUTABLE_ANCHOR = (
+    '          fi\n\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
+IMMUTABLE_PROJECTED = (
+    '          fi\n\n'
+    f'          {IMMUTABLE_COMMENT}\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -261,11 +271,7 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         require(fragment in legacy, f"Spotlight current immutable-candidate proof is missing: {fragment}")
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
             "Spotlight v21 immutable-candidate projection anchor changed")
-    projected_immutable = legacy.replace(
-        IMMUTABLE_ANCHOR,
-        f"          {IMMUTABLE_COMMENT}\n{IMMUTABLE_ANCHOR}",
-        1,
-    )
+    projected_immutable = legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
     v21.validate_spotlight_immutable_candidates(projected_immutable)
     projected = projected_immutable.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
     require(projected != projected_immutable,
