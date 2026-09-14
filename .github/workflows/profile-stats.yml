@@ -826,6 +826,9 @@ jobs:
       queue: max
     permissions:
       actions: write
+    outputs:
+      previous_run_high_water: ${{ steps.dispatch.outputs.previous_run_high_water }}
+      accepted_status: ${{ steps.dispatch.outputs.accepted_status }}
 
     steps:
       - name: Verify exact short-lived mutation lease
@@ -862,10 +865,184 @@ jobs:
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
 
       - name: Dispatch exact Spotlight reconciliation workflow
+        id: dispatch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api --method POST \
+          WORKFLOW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml")"
+          WORKFLOW_ID="$(jq -r .id <<<"$WORKFLOW")"
+          [[ "$WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
+          test "$(jq -r .path <<<"$WORKFLOW")" = ".github/workflows/spotlight-link-sync.yml"
+          RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1")"
+          TOTAL="$(jq -r .total_count <<<"$RUNS")"
+          COUNT="$(jq -r '.workflow_runs | length' <<<"$RUNS")"
+          [[ "$TOTAL" =~ ^[0-9]+$ ]]
+          [[ "$COUNT" =~ ^[0-9]+$ ]]
+          if [ "$TOTAL" = "0" ]; then
+            test "$COUNT" = "0"
+            PREVIOUS_RUN_HIGH_WATER=0
+          else
+            test "$COUNT" = "1"
+            PREVIOUS_RUN_HIGH_WATER="$(jq -r '.workflow_runs[0].id' <<<"$RUNS")"
+            [[ "$PREVIOUS_RUN_HIGH_WATER" =~ ^[1-9][0-9]*$ ]]
+            test "$(jq -r '.workflow_runs[0].workflow_id' <<<"$RUNS")" = "$WORKFLOW_ID"
+            test "$(jq -r '.workflow_runs[0].path' <<<"$RUNS")" = ".github/workflows/spotlight-link-sync.yml"
+            test "$(jq -r '.workflow_runs[0].event' <<<"$RUNS")" = "workflow_dispatch"
+            test "$(jq -r '.workflow_runs[0].head_branch' <<<"$RUNS")" = "main"
+            test "$(jq -r '.workflow_runs[0].repository.id' <<<"$RUNS")" = "$GITHUB_REPOSITORY_ID"
+            test "$(jq -r '.workflow_runs[0].head_repository.id' <<<"$RUNS")" = "$GITHUB_REPOSITORY_ID"
+          fi
+          RESPONSE="$(gh api --include --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \
-            -f ref=main
+            -f ref=main)"
+          STATUS_LINE="$(head -n 1 <<<"$RESPONSE" | tr -d '\r')"
+          [[ "$STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]]
+          echo "previous_run_high_water=$PREVIOUS_RUN_HIGH_WATER" >> "$GITHUB_OUTPUT"
+          echo "accepted_status=204" >> "$GITHUB_OUTPUT"
+
+  decision_receipt:
+    name: prepare-automation-decision-receipt-read-only
+    needs: [dispatch, lease]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      receipt_sha256: ${{ steps.receipt.outputs.receipt_sha256 }}
+      subject_sha256: ${{ steps.receipt.outputs.subject_sha256 }}
+
+    steps:
+      - name: Checkout trusted source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Independently re-prove dispatch and build Automation Decision Receipt
+        id: receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
+          DISPATCH_ACCEPTED_STATUS: ${{ needs.dispatch.outputs.accepted_status }}
+          DISPATCH_PREVIOUS_RUN_HIGH_WATER: ${{ needs.dispatch.outputs.previous_run_high_water }}
+          DISPATCH_WORKFLOW_PATH: .github/workflows/spotlight-link-sync.yml
+          DISPATCH_REF: main
+        run: |
+          set -euo pipefail
+          mkdir -p automation-decision-receipt
+          python3 source/scripts/prepare-profile-stats-decision-receipt.py automation-decision-receipt/state.json
+          RESULT="$(python3 source/scripts/automation_decision_receipt.py \
+            --state automation-decision-receipt/state.json \
+            --receipt automation-decision-receipt/automation-decision-receipt.json \
+            --subject automation-decision-receipt/automation-decision-receipt.subject.json)"
+          RECEIPT_SHA256="$(jq -r .receiptSha256 <<<"$RESULT")"
+          SUBJECT_SHA256="$(jq -r .subjectSha256 <<<"$RESULT")"
+          [[ "$RECEIPT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum automation-decision-receipt/automation-decision-receipt.json | cut -d' ' -f1)" = "$RECEIPT_SHA256"
+          test "$(sha256sum automation-decision-receipt/automation-decision-receipt.subject.json | cut -d' ' -f1)" = "$SUBJECT_SHA256"
+          echo "receipt_sha256=$RECEIPT_SHA256" >> "$GITHUB_OUTPUT"
+          echo "subject_sha256=$SUBJECT_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact Automation Decision Receipt artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: automation-decision-receipt-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            automation-decision-receipt/automation-decision-receipt.json
+            automation-decision-receipt/automation-decision-receipt.subject.json
+          if-no-files-found: error
+          retention-days: 1
+
+  decision_receipt_attest:
+    name: attest-automation-decision-receipt-write-only
+    needs: [decision_receipt, lease, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Verify exact short-lived mutation lease
+        env:
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
+          EXPECTED_BASE_SHA: ${{ github.sha }}
+          EXPECTED_CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}
+        run: |
+          set -euo pipefail
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=180
+          [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$LEASE_ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$LEASE_EXPIRES_AT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/profile-stats.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/profile-stats.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+
+      - name: Download exact Automation Decision Receipt artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: automation-decision-receipt-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: automation-decision-receipt-input
+          digest-mismatch: error
+
+      - name: Verify exact Automation Decision Receipt artifact identity
+        env:
+          EXPECTED_RECEIPT_SHA256: ${{ needs.decision_receipt.outputs.receipt_sha256 }}
+          EXPECTED_SUBJECT_SHA256: ${{ needs.decision_receipt.outputs.subject_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_RECEIPT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(find automation-decision-receipt-input -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)" = $'automation-decision-receipt.json\nautomation-decision-receipt.subject.json'
+          test "$(sha256sum automation-decision-receipt-input/automation-decision-receipt.json | cut -d' ' -f1)" = "$EXPECTED_RECEIPT_SHA256"
+          test "$(sha256sum automation-decision-receipt-input/automation-decision-receipt.subject.json | cut -d' ' -f1)" = "$EXPECTED_SUBJECT_SHA256"
+
+      - name: Attest exact Automation Decision Receipt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: automation-decision-receipt-input/automation-decision-receipt.subject.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json
+          predicate-path: automation-decision-receipt-input/automation-decision-receipt.json
+          show-summary: true
