@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extend the frozen item-9 workflow authority firewall with item-10 MAC authority."""
+"""Extend frozen item-9/item-10 workflow authority proofs with item-11 ADR authority."""
 from __future__ import annotations
 
 import json
@@ -14,9 +14,13 @@ PROFILE_STATS = item9.PROFILE_STATS
 SYNC = item9.SYNC
 GOVERNANCE = item9.GOVERNANCE
 README = item9.README
-PREDICATE_TYPE = (
+MAC_PREDICATE_TYPE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
     "spotlight-merge-authorization-v1.schema.json"
+)
+ADR_PREDICATE_TYPE = (
+    "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
+    "automation-decision-receipt-v1.schema.json"
 )
 NEW_MERGE_IF = (
     "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && "
@@ -53,6 +57,7 @@ OLD_RECONCILE_PR_READ = (
     "              PR_NUMBER=\"$(jq -r .number <<<\"$PR\")\"\n"
     "              [[ \"$PR_NUMBER\" =~ ^[1-9][0-9]*$ ]]\n"
 )
+ADR_SIGNER_PERMISSIONS = "permissions:\n      contents: read\n      id-token: write\n      attestations: write"
 
 
 def fail(message: str) -> None:
@@ -64,8 +69,18 @@ def require(condition: bool, message: str) -> None:
         fail(message)
 
 
+def strip_adr_tail(workflow: str, label: str) -> str:
+    marker = "  decision_receipt:\n"
+    require(workflow.count(marker) == 1, f"{label} item-11 projection cannot isolate ADR preparer")
+    preparer_start = workflow.index(marker)
+    tail = workflow[preparer_start:]
+    require(tail.count("  decision_receipt_attest:\n") == 1,
+            f"{label} item-11 projection cannot isolate ADR signer")
+    return workflow[:preparer_start]
+
+
 def project_item9_sync(sync: str) -> str:
-    """Remove only post-item-9 overlays so the exact item-9 firewall can rerun."""
+    """Remove item-10 overlays after item-11 jobs have already been projected away."""
     authorize_start = sync.index("  authorize:\n")
     merge_start = sync.index("  merge:\n", authorize_start)
     projected = sync[:authorize_start] + sync[merge_start:]
@@ -109,15 +124,14 @@ def project_item9_sync(sync: str) -> str:
         '--jq .object.sha)" = "$BASE_SHA"\n'
     )
     end = projected.index(final_reproof, start)
-    projected = projected[:start] + projected[end:]
-    return projected
+    return projected[:start] + projected[end:]
 
 
 def validate_item10_authority(sync: str) -> None:
+    """Validate the exact item-10 authority surface after only item-11 projection."""
     for forbidden in ("pull_request_target", "  workflow_run:", "repository_dispatch", "issues: write"):
         require(forbidden not in sync,
                 f"Spotlight item-10 workflow contains forbidden authority/trigger: {forbidden.strip()}")
-
     require(sync.count("      id-token: write\n") == 1,
             "Spotlight item-10 OIDC authority must exist in exactly one job")
     require(sync.count("      attestations: write\n") == 1,
@@ -133,7 +147,6 @@ def validate_item10_authority(sync: str) -> None:
 
     require("id-token:" not in approve and "attestations:" not in approve,
             "Spotlight Actions approval job acquired attestation authority")
-
     require(
         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"' in reconcile and
         'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"' in reconcile and
@@ -150,10 +163,8 @@ def validate_item10_authority(sync: str) -> None:
     require("name: prepare-merge-authorization-read-only" in authorize and
             "needs: [plan, lease, reconcile, budget, propose, approve]" in authorize,
             "Spotlight MAC preparer identity/dependency closure changed")
-    require(
-        "permissions:\n      contents: read\n      pull-requests: read\n      checks: read\n      actions: read" in authorize,
-        "Spotlight MAC preparer must remain read-only",
-    )
+    require("permissions:\n      contents: read\n      pull-requests: read\n      checks: read\n      actions: read" in authorize,
+            "Spotlight MAC preparer must remain read-only")
     for fragment in (
         "python3 source/scripts/prepare-spotlight-merge-authorization.py merge-authorization-state.json",
         "python3 source/scripts/build-spotlight-merge-authorization.py",
@@ -168,15 +179,11 @@ def validate_item10_authority(sync: str) -> None:
     require("name: attest-merge-authorization-write-only" in signer and
             "needs: [authorize, lease, plan, propose, approve]" in signer,
             "Spotlight MAC signer identity/dependency closure changed")
-    require(
-        "permissions:\n      contents: read\n      id-token: write\n      attestations: write" in signer,
-        "Spotlight MAC signer authority changed",
-    )
+    require(ADR_SIGNER_PERMISSIONS in signer, "Spotlight MAC signer authority changed")
     for fragment in (
         "LEASE_MIN_REMAINING_SECONDS=180",
         "uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2",
-        "subject-path: merge-authorization-input/spotlight-merge-authorization.subject.json",
-        f"predicate-type: {PREDICATE_TYPE}",
+        f"predicate-type: {MAC_PREDICATE_TYPE}",
         "predicate-path: merge-authorization-input/spotlight-merge-authorization.json",
     ):
         require(fragment in signer, f"Spotlight MAC signer lost reviewed authority surface: {fragment}")
@@ -187,13 +194,10 @@ def validate_item10_authority(sync: str) -> None:
 
     require(NEW_MERGE_IF in merge and NEW_MERGE_NEEDS in merge,
             "Spotlight terminal merge can bypass MAC preparation/signing")
-    require(
-        "permissions:\n      contents: write\n      pull-requests: read\n      checks: read\n      attestations: read" in merge,
-        "Spotlight terminal merge authority changed beyond read-only attestation verification",
-    )
+    require("permissions:\n      contents: write\n      pull-requests: read\n      checks: read\n      attestations: read" in merge,
+            "Spotlight terminal merge authority changed beyond read-only attestation verification")
     for forbidden in ("id-token: write", "attestations: write"):
-        require(forbidden not in merge,
-                f"Spotlight terminal merge acquired signer authority: {forbidden}")
+        require(forbidden not in merge, f"Spotlight terminal merge acquired signer authority: {forbidden}")
 
     verify = 'gh attestation verify "$SUBJECT"'
     statement = '.verificationResult.statement'
@@ -202,7 +206,7 @@ def validate_item10_authority(sync: str) -> None:
             merge.index(verify) < merge.index(statement) < merge.index(mutation),
             "Spotlight terminal merge mutation is not downstream of direct cryptographic MAC statement verification")
     for fragment in (
-        f"--predicate-type {PREDICATE_TYPE}",
+        f"--predicate-type {MAC_PREDICATE_TYPE}",
         '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml"',
         '--signer-digest "$BASE_SHA"',
         '--source-digest "$BASE_SHA"',
@@ -218,14 +222,13 @@ def validate_item10_authority(sync: str) -> None:
             "Spotlight terminal attestation verification must not recursively search arbitrary JSON")
 
     api_start_marker = '          CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"\n'
-    api_end_marker = '          EXPECTED_CERTIFICATE_CHECKS="$(jq -cn \\\n'
+    api_end_marker = '          EXPECTED_CERTIFICATE_CHECKS="$(jq -cn '
     require(merge.count(api_start_marker) == 1 and merge.count(api_end_marker) == 1,
             "Spotlight item-10 terminal certificate API proof boundary changed")
     api_start = merge.index(api_start_marker)
     api_end = merge.index(api_end_marker, api_start)
-    api_block = merge[api_start:api_end]
     item9.core.require_exact_gh_api_surface(
-        api_block,
+        merge[api_start:api_end],
         label="Spotlight item-10 terminal certificate API proof",
         expected_lines=(
             'CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"',
@@ -233,6 +236,70 @@ def validate_item10_authority(sync: str) -> None:
             'PROFILE_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"',
         ),
     )
+
+
+def _validate_adr_pair(workflow: str, workflow_id: str) -> None:
+    preparer = item9.core.job_block(workflow, "decision_receipt", "decision_receipt_attest")
+    signer = item9.core.job_block(workflow, "decision_receipt_attest", None)
+    require("name: prepare-automation-decision-receipt-read-only" in preparer,
+            f"{workflow_id} ADR preparer identity changed")
+    require("name: attest-automation-decision-receipt-write-only" in signer,
+            f"{workflow_id} ADR signer identity changed")
+    require(ADR_SIGNER_PERMISSIONS in signer, f"{workflow_id} ADR signer authority changed")
+    require(f"predicate-type: {ADR_PREDICATE_TYPE}" in signer,
+            f"{workflow_id} ADR signer predicate changed")
+    for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "gh api ",
+                      "git ", "curl ", "wget ", "contents: write", "actions: write",
+                      "pull-requests: write", "checks: write"):
+        require(forbidden not in signer,
+                f"{workflow_id} ADR signer acquired unrelated execution/authority surface: {forbidden}")
+
+    if workflow_id == "Profile Stats":
+        require("needs: [dispatch, lease]" in preparer,
+                "Profile Stats ADR preparer dependency closure changed")
+        require("permissions:\n      contents: read\n      actions: read" in preparer,
+                "Profile Stats ADR preparer authority changed")
+        require("needs: [decision_receipt, lease, attest]" in signer,
+                "Profile Stats ADR signer dependency closure changed")
+        require("python3 source/scripts/prepare-profile-stats-decision-receipt.py" in preparer and
+                "python3 source/scripts/automation_decision_receipt.py" in preparer,
+                "Profile Stats ADR preparer lost reviewed independent reproof/build roots")
+    else:
+        require("if: always() && needs.lease.result == 'success'" in preparer,
+                "Spotlight ADR preparer lost safe recovery gate")
+        require("needs: [plan, lease, reconcile, propose, approve, merge]" in preparer,
+                "Spotlight ADR preparer dependency closure changed")
+        require("permissions:\n      contents: read\n      pull-requests: read\n      actions: read" in preparer,
+                "Spotlight ADR preparer authority changed")
+        require("if: always() && needs.lease.result == 'success' && needs.decision_receipt.result == 'success'" in signer,
+                "Spotlight ADR signer lost safe recovery/success gate")
+        require("needs: [decision_receipt, lease, plan]" in signer,
+                "Spotlight ADR signer dependency closure changed")
+        for fragment in (
+            "python3 source/scripts/spotlight_decision_journal.py",
+            "python3 source/scripts/prepare-spotlight-decision-receipt.py",
+            "python3 source/scripts/automation_decision_receipt.py",
+        ):
+            require(fragment in preparer, f"Spotlight ADR preparer lost reviewed root: {fragment}")
+
+    for forbidden in ("id-token: write", "attestations: write", "contents: write",
+                      "actions: write", "pull-requests: write", "checks: write",
+                      "--method POST", "--method PUT", "--method PATCH", "--method DELETE"):
+        require(forbidden not in preparer,
+                f"{workflow_id} ADR preparer acquired mutation/signing authority: {forbidden}")
+
+
+def validate_item11_authority(profile_stats: str, sync: str) -> None:
+    _validate_adr_pair(profile_stats, "Profile Stats")
+    _validate_adr_pair(sync, "Spotlight")
+    require(profile_stats.count("      id-token: write\n") == 3,
+            "Profile Stats current OIDC writer inventory changed")
+    require(profile_stats.count("      attestations: write\n") == 3,
+            "Profile Stats current attestation-writer inventory changed")
+    require(sync.count("      id-token: write\n") == 2,
+            "Spotlight current OIDC writer inventory changed")
+    require(sync.count("      attestations: write\n") == 2,
+            "Spotlight current attestation-writer inventory changed")
 
 
 def self_test_item10(sync: str) -> None:
@@ -252,6 +319,22 @@ def self_test_item10(sync: str) -> None:
             fail(f"item-10 workflow authority self-test accepted forbidden drift: {expected}")
 
 
+def self_test_item11(profile_stats: str, sync: str) -> None:
+    validate_item11_authority(profile_stats, sync)
+    malformed = sync.replace(
+        "permissions:\n      contents: read\n      id-token: write\n      attestations: write",
+        "permissions:\n      contents: write\n      id-token: write\n      attestations: write",
+        2,
+    )
+    try:
+        validate_item11_authority(profile_stats, malformed)
+    except ValueError as exc:
+        require("ADR signer authority changed" in str(exc) or "writer inventory changed" in str(exc),
+                f"item-11 signer authority self-test failed for wrong reason: {exc}")
+    else:
+        fail("item-11 workflow authority self-test accepted ADR signer authority expansion")
+
+
 def main() -> int:
     try:
         for path in (automation_policy.POLICY_PATH, QUALITY, PROFILE_STATS, GOVERNANCE, README, SYNC):
@@ -264,20 +347,22 @@ def main() -> int:
         profile_stats = PROFILE_STATS.read_text(encoding="utf-8")
         sync = SYNC.read_text(encoding="utf-8")
         readme = README.read_text(encoding="utf-8")
-        projected_sync = project_item9_sync(sync)
+        profile_item10 = strip_adr_tail(profile_stats, "Profile Stats")
+        sync_item10 = strip_adr_tail(sync, "Spotlight")
+        projected_sync = project_item9_sync(sync_item10)
 
-        item9.validate_policy_cross_contracts(policy, profile_stats, sync)
+        item9.validate_policy_cross_contracts(policy, profile_item10, sync_item10)
         item9.core.validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
-        item9.core.validate_profile_stats_contract(item9.project_legacy_profile_stats_source(profile_stats))
+        item9.core.validate_profile_stats_contract(item9.project_legacy_profile_stats_source(profile_item10))
         item9.self_test_current_sync(projected_sync, readme)
         item9.core.validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
-        self_test_item10(sync)
+        self_test_item10(sync_item10)
+        self_test_item11(profile_stats, sync)
 
         print(
-            f"Workflow authority validation passed: {policy['policyId']} remains the executable semantic authority graph for "
-            f"{len(policy['workflows'])} workflows and {sum(len(workflow['jobs']) for workflow in policy['workflows'].values())} jobs; "
-            "the frozen item-9 Spotlight firewall re-proves the exact projected legacy transaction, while the production recovery overlay separately requires "
-            "a complete stale-PR GET before close mutation and direct verified-statement MAC binding before the unchanged terminal merge PUT."
+            f"Workflow authority validation passed: {policy['policyId']} retains frozen item-9/item-10 projections and "
+            "exact MAC signer counts, while item-11 adds only independently validated read-only ADR preparers and "
+            "lease-bound attestations-only signers with no authored mutation client surface."
         )
         return 0
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
