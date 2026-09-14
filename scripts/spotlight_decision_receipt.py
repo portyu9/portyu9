@@ -44,8 +44,8 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
     require(isinstance(journal, dict) and set(journal) == {"effects"},
             "Spotlight decision journal root shape changed")
     raw_effects = journal["effects"]
-    require(isinstance(raw_effects, list) and 2 <= len(raw_effects) <= 32,
-            "Spotlight decision journal must contain between two and 32 effects")
+    require(isinstance(raw_effects, list) and 1 <= len(raw_effects) <= 32,
+            "Spotlight decision journal must contain between one and 32 effects")
     lease = transaction(env)
     expected_head = env_value(env, "EXPECTED_HEAD_SHA", SHA40)
     current_candidate_branch = BOT_BRANCH_PREFIX + lease["candidateId"]
@@ -78,12 +78,16 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
             stale_branches.add(branch)
         elif kind == "spotlight-candidate-publication":
             candidate_publications += 1
+            require(candidate_publications == 1,
+                    "Spotlight decision journal contains multiple candidate-publication effects")
             require(effect["target"]["candidateBranch"] == current_candidate_branch,
                     "Spotlight candidate publication differs from leased candidate identity")
             require(effect["target"]["headSha"] == expected_head,
                     "Spotlight candidate publication head differs from expected candidate head")
             candidate_pr_number = effect["target"]["prNumber"]
         elif kind == "workflow-run-approval-request":
+            require(candidate_publications == 1,
+                    "Spotlight approval effects require a preceding candidate-publication disposition")
             run_id = effect["target"]["runId"]
             workflow_name = effect["target"]["workflowName"]
             require(run_id not in approval_runs,
@@ -96,21 +100,21 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
                     "Spotlight decision journal exceeds the canonical three protected workflow approvals")
         elif kind == "spotlight-terminal-merge":
             terminal_merges += 1
+            require(terminal_merges == 1,
+                    "Spotlight decision journal contains multiple terminal merge effects")
+            require(candidate_publications == 1,
+                    "Spotlight terminal merge effect requires a preceding candidate-publication disposition")
             require(effect["target"]["candidateBranch"] == current_candidate_branch,
                     "Spotlight terminal merge differs from leased candidate identity")
             require(effect["target"]["headSha"] == expected_head,
                     "Spotlight terminal merge head differs from expected candidate head")
+            require(candidate_pr_number == effect["target"]["prNumber"],
+                    "Spotlight decision journal candidate publication and merge PR identities differ")
         validated.append(effect)
 
-    require(candidate_publications == 1,
-            "Spotlight decision journal must contain exactly one candidate-publication effect")
-    require(terminal_merges == 1,
-            "Spotlight decision journal must contain exactly one terminal merge effect")
-    require(validated[-1]["kind"] == "spotlight-terminal-merge",
-            "Spotlight decision journal terminal merge effect must be final")
-    merge_pr_number = validated[-1]["target"]["prNumber"]
-    require(candidate_pr_number == merge_pr_number,
-            "Spotlight decision journal candidate publication and merge PR identities differ")
+    if terminal_merges:
+        require(validated[-1]["kind"] == "spotlight-terminal-merge",
+                "Spotlight decision journal terminal merge effect must be final")
     return {"effects": validated}
 
 
@@ -173,6 +177,32 @@ def self_test() -> None:
     state = validate_journal(copy.deepcopy(journal), dict(env))
     require(len(state["effects"]) == 3, "Spotlight decision receipt self-test lost effects")
 
+    # Recovery/maintenance subsets are valid when every listed effect is independently re-provable.
+    stale_only = {
+        "effects": [{
+            "ordinal": 1,
+            "job": "reconcile",
+            "kind": "stale-candidate-reconciliation",
+            "outcome": "applied",
+            "target": {"candidateBranch": BOT_BRANCH_PREFIX + "d" * 64, "headSha": "1" * 40,
+                       "prNumber": 122},
+            "observation": {"prClosed": True, "candidateRefAbsent": True},
+        }]
+    }
+    require(len(validate_journal(stale_only, dict(env))["effects"]) == 1,
+            "Spotlight decision receipt rejected maintenance-only reconciliation")
+
+    publication_only = {"effects": [copy.deepcopy(journal["effects"][0])]}
+    require(len(validate_journal(publication_only, dict(env))["effects"]) == 1,
+            "Spotlight decision receipt rejected publication-only recovery")
+
+    publication_approval = {"effects": copy.deepcopy(journal["effects"][:2])}
+    require(len(validate_journal(publication_approval, dict(env))["effects"]) == 2,
+            "Spotlight decision receipt rejected approval recovery subset")
+
+    empty = {"effects": []}
+    expect_failure(empty, dict(env), "between one and 32")
+
     wrong_head = copy.deepcopy(journal)
     wrong_head["effects"][2]["target"]["headSha"] = "f" * 40
     expect_failure(wrong_head, dict(env), "expected candidate head")
@@ -197,22 +227,20 @@ def self_test() -> None:
     duplicate_merge = copy.deepcopy(journal)
     duplicate_merge["effects"].append(copy.deepcopy(duplicate_merge["effects"][2]))
     renumber(duplicate_merge)
-    expect_failure(duplicate_merge, dict(env), "exactly one terminal merge")
+    expect_failure(duplicate_merge, dict(env), "multiple terminal merge")
 
     duplicate_publication = copy.deepcopy(journal)
     duplicate_publication["effects"].insert(1, copy.deepcopy(duplicate_publication["effects"][0]))
     renumber(duplicate_publication)
-    expect_failure(duplicate_publication, dict(env), "exactly one candidate-publication")
+    expect_failure(duplicate_publication, dict(env), "multiple candidate-publication")
 
-    missing_merge = copy.deepcopy(journal)
-    missing_merge["effects"].pop()
-    renumber(missing_merge)
-    expect_failure(missing_merge, dict(env), "exactly one terminal merge")
+    merge_without_publication = {"effects": [copy.deepcopy(journal["effects"][2])]}
+    merge_without_publication["effects"][0]["ordinal"] = 1
+    expect_failure(merge_without_publication, dict(env), "requires a preceding candidate-publication")
 
-    missing_publication = copy.deepcopy(journal)
-    missing_publication["effects"].pop(0)
-    renumber(missing_publication)
-    expect_failure(missing_publication, dict(env), "exactly one candidate-publication")
+    approval_without_publication = {"effects": [copy.deepcopy(journal["effects"][1])]}
+    approval_without_publication["effects"][0]["ordinal"] = 1
+    expect_failure(approval_without_publication, dict(env), "require a preceding candidate-publication")
 
     reordered = copy.deepcopy(journal)
     reordered["effects"][0], reordered["effects"][1] = reordered["effects"][1], reordered["effects"][0]
