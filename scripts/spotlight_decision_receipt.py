@@ -6,6 +6,7 @@ import copy
 import re
 from typing import Any
 
+import automation_decision_lease as lease_contract
 import automation_decision_receipt
 
 REPOSITORY = "portyu9/portyu9"
@@ -36,18 +37,7 @@ def env_value(env: dict[str, str], name: str, pattern: re.Pattern[str] | None = 
 
 
 def transaction(env: dict[str, str]) -> dict[str, str]:
-    issued = env_value(env, "LEASE_ISSUED_AT", POSITIVE)
-    expires = env_value(env, "LEASE_EXPIRES_AT", POSITIVE)
-    require(int(expires) == int(issued) + 1800,
-            "Spotlight decision receipt lease lifetime changed")
-    base = env_value(env, "LEASE_BASE_SHA", SHA40)
-    return {
-        "leaseId": env_value(env, "LEASE_ID", automation_decision_receipt.SHA64),
-        "candidateId": env_value(env, "LEASE_CANDIDATE_ID", automation_decision_receipt.SHA64),
-        "baseSha": base,
-        "issuedAt": issued,
-        "expiresAt": expires,
-    }
+    return lease_contract.validate(env, WORKFLOW_PATH)
 
 
 def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, Any]:
@@ -56,17 +46,7 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
     raw_effects = journal["effects"]
     require(isinstance(raw_effects, list) and 2 <= len(raw_effects) <= 32,
             "Spotlight decision journal must contain between two and 32 effects")
-    require(env_value(env, "GITHUB_REPOSITORY") == REPOSITORY,
-            "Spotlight decision receipt repository identity changed")
-    require(env_value(env, "GITHUB_WORKFLOW_REF") == WORKFLOW_REF,
-            "Spotlight decision receipt workflow identity changed")
     lease = transaction(env)
-    require(env_value(env, "GITHUB_SHA", SHA40) == lease["baseSha"],
-            "Spotlight decision receipt event source SHA differs from leased base")
-    require(env_value(env, "GITHUB_WORKFLOW_SHA", SHA40) == lease["baseSha"],
-            "Spotlight decision receipt workflow SHA differs from leased base")
-    env_value(env, "GITHUB_RUN_ID", POSITIVE)
-    env_value(env, "GITHUB_RUN_ATTEMPT", POSITIVE)
     expected_head = env_value(env, "EXPECTED_HEAD_SHA", SHA40)
     current_candidate_branch = BOT_BRANCH_PREFIX + lease["candidateId"]
 
@@ -135,24 +115,12 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
 
 
 def fixture() -> tuple[dict[str, Any], dict[str, str]]:
-    base = "a" * 40
-    candidate_id = "b" * 64
+    env = lease_contract.fixture(WORKFLOW_PATH)
+    base = env["LEASE_BASE_SHA"]
+    candidate_id = env["LEASE_CANDIDATE_ID"]
     branch = f"{BOT_BRANCH_PREFIX}{candidate_id}"
     head = "c" * 40
-    env = {
-        "GITHUB_REPOSITORY": REPOSITORY,
-        "GITHUB_WORKFLOW_REF": WORKFLOW_REF,
-        "GITHUB_WORKFLOW_SHA": base,
-        "GITHUB_SHA": base,
-        "GITHUB_RUN_ID": "100",
-        "GITHUB_RUN_ATTEMPT": "2",
-        "LEASE_ID": "d" * 64,
-        "LEASE_CANDIDATE_ID": candidate_id,
-        "LEASE_BASE_SHA": base,
-        "LEASE_ISSUED_AT": "1000000",
-        "LEASE_EXPIRES_AT": "1001800",
-        "EXPECTED_HEAD_SHA": head,
-    }
+    env["EXPECTED_HEAD_SHA"] = head
     journal = {
         "effects": [
             {
@@ -200,6 +168,7 @@ def renumber(journal: dict[str, Any]) -> None:
 
 
 def self_test() -> None:
+    lease_contract.self_test()
     journal, env = fixture()
     state = validate_journal(copy.deepcopy(journal), dict(env))
     require(len(state["effects"]) == 3, "Spotlight decision receipt self-test lost effects")
@@ -265,6 +234,10 @@ def self_test() -> None:
     wrong_source = dict(env)
     wrong_source["GITHUB_SHA"] = "f" * 40
     expect_failure(copy.deepcopy(journal), wrong_source, "event source SHA differs")
+
+    wrong_lease = dict(env)
+    wrong_lease["LEASE_ID"] = "f" * 64
+    expect_failure(copy.deepcopy(journal), wrong_lease, "lease ID differs")
 
     bad_ordinal = copy.deepcopy(journal)
     bad_ordinal["effects"][1]["ordinal"] = 3
