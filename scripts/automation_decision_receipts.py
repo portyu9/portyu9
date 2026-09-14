@@ -41,9 +41,17 @@ EXPECTED_SELF_ATTESTED = {
         "generated-publication-receipt-attestation",
         "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json",
     ),
+    ("profile-stats", "decision_receipt_attest"): (
+        "profile-automation-decision-receipt-attestation",
+        GENERIC_PREDICATE,
+    ),
     ("spotlight-link-sync", "authorize_attest"): (
         "spotlight-merge-authorization-attestation",
         "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json",
+    ),
+    ("spotlight-link-sync", "decision_receipt_attest"): (
+        "spotlight-automation-decision-receipt-attestation",
+        GENERIC_PREDICATE,
     ),
 }
 EXPECTED_SPECIALIZED = {
@@ -52,6 +60,11 @@ EXPECTED_SPECIALIZED = {
         "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json",
     ),
 }
+ADR_SIGNERS = {
+    ("profile-stats", "decision_receipt_attest"),
+    ("spotlight-link-sync", "decision_receipt_attest"),
+}
+ADR_SIGNER_PERMISSIONS = {"contents": "read", "id-token": "write", "attestations": "write"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -164,6 +177,9 @@ def validate(policy: dict[str, Any], contract: dict[str, Any]) -> dict[str, Any]
                 require(job["permissions"].get("id-token") == "write"
                         and job["permissions"].get("attestations") == "write",
                         f"self-attested job lacks exact OIDC/attestations authority: {workflow_id}/{job_id}")
+                if key in ADR_SIGNERS:
+                    require(job["permissions"] == ADR_SIGNER_PERMISSIONS,
+                            f"Automation Decision Receipt signer authority expanded: {workflow_id}/{job_id}")
             else:
                 specialized_jobs.add(key)
                 require(key in EXPECTED_SPECIALIZED,
@@ -199,8 +215,7 @@ def self_test(policy: dict[str, Any], contract: dict[str, Any]) -> None:
 
     wrong_mode = copy.deepcopy(contract)
     wrong_mode["workflows"]["profile-stats"]["jobs"]["dispatch"]["mode"] = "self-attested"
-    expect_policy_failure = expect_failure
-    expect_policy_failure(policy, wrong_mode, "unreviewed self-attested")
+    expect_failure(policy, wrong_mode, "unreviewed self-attested")
 
     duplicate_effect = copy.deepcopy(contract)
     duplicate_effect["workflows"]["spotlight-link-sync"]["jobs"]["merge"]["effectKinds"] = [
@@ -218,6 +233,10 @@ def self_test(policy: dict[str, Any], contract: dict[str, Any]) -> None:
     writer_signs["workflows"]["spotlight-link-sync"]["jobs"]["propose"]["permissions"]["id-token"] = "write"
     writer_signs["workflows"]["spotlight-link-sync"]["jobs"]["propose"]["permissions"]["attestations"] = "write"
     expect_failure(writer_signs, contract, "must not gain receipt-signing authority")
+
+    signer_expands = copy.deepcopy(policy)
+    signer_expands["workflows"]["profile-stats"]["jobs"]["decision_receipt_attest"]["permissions"]["actions"] = "write"
+    expect_failure(signer_expands, contract, "signer authority expanded")
 
     wrong_pointer = copy.deepcopy(policy)
     wrong_pointer["decisionReceiptContract"] = ".github/wrong.json"
