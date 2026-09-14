@@ -47,13 +47,13 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
     require(isinstance(raw_effects, list) and 1 <= len(raw_effects) <= 32,
             "Spotlight decision journal must contain between one and 32 effects")
     lease = transaction(env)
-    expected_head = env_value(env, "EXPECTED_HEAD_SHA", SHA40)
     current_candidate_branch = BOT_BRANCH_PREFIX + lease["candidateId"]
 
     validated: list[dict[str, Any]] = []
     candidate_publications = 0
     terminal_merges = 0
     candidate_pr_number: int | None = None
+    expected_head: str | None = None
     last_phase = 0
     stale_branches: set[str] = set()
     approval_runs: set[int] = set()
@@ -80,13 +80,14 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
             candidate_publications += 1
             require(candidate_publications == 1,
                     "Spotlight decision journal contains multiple candidate-publication effects")
+            expected_head = env_value(env, "EXPECTED_HEAD_SHA", SHA40)
             require(effect["target"]["candidateBranch"] == current_candidate_branch,
                     "Spotlight candidate publication differs from leased candidate identity")
             require(effect["target"]["headSha"] == expected_head,
                     "Spotlight candidate publication head differs from expected candidate head")
             candidate_pr_number = effect["target"]["prNumber"]
         elif kind == "workflow-run-approval-request":
-            require(candidate_publications == 1,
+            require(candidate_publications == 1 and expected_head is not None,
                     "Spotlight approval effects require a preceding candidate-publication disposition")
             run_id = effect["target"]["runId"]
             workflow_name = effect["target"]["workflowName"]
@@ -102,7 +103,7 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
             terminal_merges += 1
             require(terminal_merges == 1,
                     "Spotlight decision journal contains multiple terminal merge effects")
-            require(candidate_publications == 1,
+            require(candidate_publications == 1 and expected_head is not None,
                     "Spotlight terminal merge effect requires a preceding candidate-publication disposition")
             require(effect["target"]["candidateBranch"] == current_candidate_branch,
                     "Spotlight terminal merge differs from leased candidate identity")
@@ -189,8 +190,10 @@ def self_test() -> None:
             "observation": {"prClosed": True, "candidateRefAbsent": True},
         }]
     }
-    require(len(validate_journal(stale_only, dict(env))["effects"]) == 1,
-            "Spotlight decision receipt rejected maintenance-only reconciliation")
+    maintenance_env = dict(env)
+    maintenance_env.pop("EXPECTED_HEAD_SHA", None)
+    require(len(validate_journal(stale_only, maintenance_env)["effects"]) == 1,
+            "Spotlight decision receipt rejected headless maintenance-only reconciliation")
 
     publication_only = {"effects": [copy.deepcopy(journal["effects"][0])]}
     require(len(validate_journal(publication_only, dict(env))["effects"]) == 1,
