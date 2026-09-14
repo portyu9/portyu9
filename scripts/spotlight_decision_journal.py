@@ -2,9 +2,13 @@
 """Compile observed Spotlight side-effect outputs into one strict ADR journal."""
 from __future__ import annotations
 
+import argparse
 import copy
 import json
+import os
+from pathlib import Path
 import re
+import sys
 from typing import Any
 
 import automation_decision_receipt
@@ -164,6 +168,10 @@ def build(env: dict[str, str], approval_runs: list[dict[str, Any]]) -> dict[str,
     return spotlight_decision_receipt.validate_journal({"effects": effects}, env)
 
 
+def write_journal(path: Path, state: dict[str, Any]) -> None:
+    path.write_text(json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+
+
 def expect_failure(env: dict[str, str], approvals: list[dict[str, Any]], expected: str) -> None:
     try:
         build(env, approvals)
@@ -203,6 +211,9 @@ def self_test() -> None:
         "workflow-run-approval-request",
         "spotlight-terminal-merge",
     ], "Spotlight decision journal self-test lost canonical effect order")
+    encoded = json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n"
+    require(json.loads(encoded) == state,
+            "Spotlight decision journal canonical writer self-test changed semantic bytes")
 
     reused = dict(env)
     reused["STALE_CLEANUPS_JSON"] = "[]"
@@ -228,11 +239,38 @@ def self_test() -> None:
     wrong_main["CURRENT_MAIN_SHA"] = "0" * 40
     expect_failure(wrong_main, approvals, "does not match current main")
 
+    malformed_approvals = dict(env)
+    malformed_approvals["APPROVAL_RUNS_JSON"] = "{}"
+    try:
+        json_env(malformed_approvals, "APPROVAL_RUNS_JSON", list)
+    except ValueError as exc:
+        require("invalid JSON type" in str(exc),
+                f"Spotlight approval JSON self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Spotlight decision journal accepted non-list approval JSON")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("output", nargs="?", type=Path)
+    parser.add_argument("--self-test", action="store_true")
+    args = parser.parse_args()
+    try:
+        if args.self_test:
+            self_test()
+            print("Spotlight decision journal compiler self-test passed")
+            return 0
+        require(args.output is not None, "output path is required outside --self-test")
+        env = dict(os.environ)
+        approvals = json_env(env, "APPROVAL_RUNS_JSON", list)
+        state = build(env, approvals)
+        write_journal(args.output, state)
+        print(f"Spotlight decision journal compiled: {args.output}")
+        return 0
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
 
 if __name__ == "__main__":
-    try:
-        self_test()
-        print("Spotlight decision journal compiler self-test passed")
-    except ValueError as exc:
-        print(f"ERROR: {exc}")
-        raise SystemExit(1)
+    raise SystemExit(main())
