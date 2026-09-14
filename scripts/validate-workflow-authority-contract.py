@@ -80,6 +80,15 @@ IMMUTABLE_PROJECTED = (
     '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
     '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
 )
+CURRENT_MAIN_CAPTURE = (
+    '          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"\n'
+    '          test "$CURRENT_MAIN_SHA" = "$MERGE_SHA"\n'
+)
+LEGACY_MAIN_PROOF = (
+    '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"\n'
+)
+CURRENT_MAIN_OUTPUT = '      current_main_sha: ${{ steps.merge.outputs.current_main_sha }}\n'
+CURRENT_MAIN_ECHO = '          echo "current_main_sha=$CURRENT_MAIN_SHA" >> "$GITHUB_OUTPUT"\n'
 
 
 def strip_item11_tail(workflow: str, label: str) -> str:
@@ -96,7 +105,15 @@ def project_item9_sync_with_marker(sync: str) -> str:
     projected = ORIGINAL_PROJECT_ITEM9_SYNC(sync)
     if projected.count(IMMUTABLE_ANCHOR) != 1:
         raise ValueError("Spotlight item-9 immutable-candidate projection anchor changed")
-    return projected.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
+    projected = projected.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
+    if projected.count(CURRENT_MAIN_CAPTURE) != 1:
+        raise ValueError("Spotlight item-9 current-main observation projection changed")
+    projected = projected.replace(CURRENT_MAIN_CAPTURE, LEGACY_MAIN_PROOF, 1)
+    if projected.count(CURRENT_MAIN_OUTPUT) != 1 or projected.count(CURRENT_MAIN_ECHO) != 1:
+        raise ValueError("Spotlight item-9 current-main output projection changed")
+    projected = projected.replace(CURRENT_MAIN_OUTPUT, "", 1)
+    projected = projected.replace(CURRENT_MAIN_ECHO, "", 1)
+    return projected
 
 
 core.strip_adr_tail = strip_item11_tail
