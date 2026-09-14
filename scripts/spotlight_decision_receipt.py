@@ -61,6 +61,8 @@ def validate_journal(journal: dict[str, Any], env: dict[str, str]) -> dict[str, 
     require(env_value(env, "GITHUB_WORKFLOW_REF") == WORKFLOW_REF,
             "Spotlight decision receipt workflow identity changed")
     lease = transaction(env)
+    require(env_value(env, "GITHUB_SHA", SHA40) == lease["baseSha"],
+            "Spotlight decision receipt event source SHA differs from leased base")
     require(env_value(env, "GITHUB_WORKFLOW_SHA", SHA40) == lease["baseSha"],
             "Spotlight decision receipt workflow SHA differs from leased base")
     env_value(env, "GITHUB_RUN_ID", POSITIVE)
@@ -141,6 +143,7 @@ def fixture() -> tuple[dict[str, Any], dict[str, str]]:
         "GITHUB_REPOSITORY": REPOSITORY,
         "GITHUB_WORKFLOW_REF": WORKFLOW_REF,
         "GITHUB_WORKFLOW_SHA": base,
+        "GITHUB_SHA": base,
         "GITHUB_RUN_ID": "100",
         "GITHUB_RUN_ATTEMPT": "2",
         "LEASE_ID": "d" * 64,
@@ -258,6 +261,10 @@ def self_test() -> None:
     duplicate_approval["effects"].insert(2, extra_approval)
     renumber(duplicate_approval)
     expect_failure(duplicate_approval, dict(env), "duplicate workflow approval")
+
+    wrong_source = dict(env)
+    wrong_source["GITHUB_SHA"] = "f" * 40
+    expect_failure(copy.deepcopy(journal), wrong_source, "event source SHA differs")
 
     bad_ordinal = copy.deepcopy(journal)
     bad_ordinal["effects"][1]["ordinal"] = 3
