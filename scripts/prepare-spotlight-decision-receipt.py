@@ -136,6 +136,14 @@ def reprove_approval(effect: dict[str, Any], expected_head: str) -> None:
             "Spotlight approval receipt must represent an actual approval POST")
 
 
+def validate_main_ref(main_ref: Any, expected_merge_sha: str) -> None:
+    require(isinstance(main_ref, dict) and main_ref.get("ref") == "refs/heads/main",
+            "Spotlight terminal receipt main-ref response is malformed")
+    require(main_ref.get("object", {}).get("type") == "commit"
+            and main_ref.get("object", {}).get("sha") == expected_merge_sha,
+            "Spotlight terminal receipt merge SHA is not the durable current main")
+
+
 def reprove_merge(effect: dict[str, Any]) -> None:
     target = effect["target"]
     observation = effect["observation"]
@@ -144,6 +152,9 @@ def reprove_merge(effect: dict[str, Any]) -> None:
             "Spotlight terminal receipt PR is not merged")
     require(pr.get("merge_commit_sha") == observation["mergeSha"],
             "Spotlight terminal receipt merge SHA differs from durable PR state")
+    validate_main_ref(gh_json(f"repos/{REPOSITORY}/git/ref/heads/main"), observation["mergeSha"])
+    require(observation["mainSha"] == observation["mergeSha"],
+            "Spotlight terminal receipt journal lost merge/current-main equality")
     exact_candidate_absent(target["candidateBranch"])
 
 
@@ -162,6 +173,18 @@ def reprove_state(state: dict[str, Any], expected_head: str) -> None:
             raise ValueError(f"unreviewed Spotlight decision effect reached reproof: {kind}")
 
 
+def self_test() -> None:
+    core.self_test()
+    merge_sha = "a" * 40
+    validate_main_ref({"ref": "refs/heads/main", "object": {"type": "commit", "sha": merge_sha}}, merge_sha)
+    try:
+        validate_main_ref({"ref": "refs/heads/main", "object": {"type": "commit", "sha": "b" * 40}}, merge_sha)
+    except ValueError as exc:
+        require("durable current main" in str(exc), f"Spotlight main-ref self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Spotlight main-ref self-test accepted a divergent main SHA")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("journal", nargs="?", type=Path)
@@ -170,7 +193,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.self_test:
-            core.self_test()
+            self_test()
             print("Spotlight Automation Decision Receipt preparer self-test passed")
             return 0
         require(args.journal is not None and args.output is not None,
