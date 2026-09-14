@@ -1011,6 +1011,7 @@ jobs:
           EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}
         run: |
           set -euo pipefail
+          # Verify exact short-lived mutation lease.
           LEASE_TTL_SECONDS=1800
           LEASE_MIN_REMAINING_SECONDS=240
           EXPECTED_BASE_SHA="$BASE_SHA"
@@ -1032,8 +1033,10 @@ jobs:
             "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
           echo "Spotlight terminal stage: lease-verified" >&2
+
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
+          [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
           PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .state <<<"$PR")" = "open"
           test "$(jq -r .base.ref <<<"$PR")" = "main"
@@ -1058,17 +1061,30 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content | tr -d '\n' | base64 --decode > candidate-readme.md
           test "$(sha256sum candidate-readme.md | cut -d' ' -f1)" = "$README_SHA256_AFTER"
           echo "Spotlight terminal stage: candidate-verified" >&2
-          for ID in "$CODEQL_RUN_ID" "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_RUN_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_RUN_ID" "$PROFILE_CHECK_SUITE_ID"; do [[ "$ID" =~ ^[1-9][0-9]*$ ]]; done
+
+          for ID in "$CODEQL_RUN_ID" "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_RUN_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_RUN_ID" "$PROFILE_CHECK_SUITE_ID"; do
+            [[ "$ID" =~ ^[1-9][0-9]*$ ]]
+          done
+          test "$(printf '%s\n' "$CODEQL_RUN_ID" "$DEPENDENCY_RUN_ID" "$PROFILE_RUN_ID" | LC_ALL=C sort -u | wc -l)" = "3"
+          test "$(printf '%s\n' "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_CHECK_SUITE_ID" | LC_ALL=C sort -u | wc -l)" = "3"
           CHECKS="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
           CHECKS_TOTAL="$(jq -r '.total_count // empty' <<<"$CHECKS")"
           CHECKS_COUNT="$(jq '.check_runs | length' <<<"$CHECKS")"
-          test "$CHECKS_TOTAL" = "$CHECKS_COUNT"
+          [[ "$CHECKS_TOTAL" =~ ^[0-9]+$ ]]
+          [[ "$CHECKS_COUNT" =~ ^[0-9]+$ ]]
+          test "$CHECKS_TOTAL" = "$CHECKS_COUNT" || {
+            echo "Spotlight terminal check-run response is incomplete." >&2
+            exit 1
+          }
           EXPECTED_CHECKS="$(jq -cn --arg head "$HEAD_SHA" --argjson codeql "$CODEQL_CHECK_SUITE_ID" --argjson dependency "$DEPENDENCY_CHECK_SUITE_ID" --argjson profile "$PROFILE_CHECK_SUITE_ID" '[{name:"analyze-actions",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"analyze-python",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"dependency-review",check_suite_id:$dependency,status:"completed",conclusion:"success",head_sha:$head},{name:"integration-pinned-upstream",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head},{name:"validate-contracts",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}] | sort_by(.name)')"
           OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
           test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
           echo "Spotlight terminal stage: required-checks-verified" >&2
+
           CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"
           SUBJECT="merge-authorization-input/spotlight-merge-authorization.subject.json"
+          [[ "$EXPECTED_CERTIFICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
           test "$(sha256sum "$CERTIFICATE" | cut -d' ' -f1)" = "$EXPECTED_CERTIFICATE_SHA256"
           test "$(sha256sum "$SUBJECT" | cut -d' ' -f1)" = "$EXPECTED_SUBJECT_SHA256"
           EXPECTED_SUBJECT="$(jq -cn --arg candidate "$EXPECTED_CANDIDATE_ID" --arg base "$BASE_SHA" --arg generated "$GENERATED_SHA" --arg head "$HEAD_SHA" --arg certificate "$EXPECTED_CERTIFICATE_SHA256" '{schemaVersion:1,kind:"spotlight-merge-authorization-subject",repository:"portyu9/portyu9",transaction:{candidateId:$candidate,baseSha:$base,generatedSha:$generated,headSha:$head},certificateSha256:$certificate}')"
@@ -1221,14 +1237,20 @@ jobs:
           LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
           LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
           LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
+          EXPECTED_BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+          GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
+          README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
         run: |
           set -euo pipefail
           LEASE_TTL_SECONDS=1800
           LEASE_MIN_REMAINING_SECONDS=180
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
           EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
           test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
-          test "$GITHUB_SHA" = "$LEASE_BASE_SHA"
-          test "$GITHUB_WORKFLOW_SHA" = "$LEASE_BASE_SHA"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
           test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
           NOW_EPOCH="$(date -u +%s)"
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
