@@ -188,6 +188,15 @@ def self_test() -> None:
     else:
         raise ValueError("Profile Stats decision receipt accepted a pre-dispatch downstream run")
 
+    wrong_attempt = dict(downstream)
+    wrong_attempt["runAttempt"] = 2
+    try:
+        build_state(dict(env), wrong_attempt)
+    except ValueError as exc:
+        require("first run attempt" in str(exc), f"Profile Stats decision receipt failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Profile Stats decision receipt accepted a rerun as the dispatched downstream run")
+
     wrong_actor = dict(downstream)
     wrong_actor["actorLogin"] = "portyu9"
     try:
