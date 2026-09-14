@@ -178,7 +178,6 @@ def self_test() -> None:
     state = validate_journal(copy.deepcopy(journal), dict(env))
     require(len(state["effects"]) == 3, "Spotlight decision receipt self-test lost effects")
 
-    # Recovery/maintenance subsets are valid when every listed effect is independently re-provable.
     stale_only = {
         "effects": [{
             "ordinal": 1,
@@ -248,7 +247,7 @@ def self_test() -> None:
     reordered = copy.deepcopy(journal)
     reordered["effects"][0], reordered["effects"][1] = reordered["effects"][1], reordered["effects"][0]
     renumber(reordered)
-    expect_failure(reordered, dict(env), "canonical transaction phase order")
+    expect_failure(reordered, dict(env), "require a preceding candidate-publication")
 
     wrong_pr = copy.deepcopy(journal)
     wrong_pr["effects"][2]["target"]["prNumber"] = 124
