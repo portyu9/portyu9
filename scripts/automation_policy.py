@@ -313,7 +313,9 @@ def self_test(policy: dict[str, Any]) -> None:
     expect_policy_failure(adr_signer_mutation, "ADR signer authority/dependencies changed")
 
     adr_bypass = copy.deepcopy(policy)
-    adr_bypass["transactionMachines"]["spotlight-link-sync"]["transitions"][-1]["jobs"] = ["merge"]
+    adr_bypass["transactionMachines"]["spotlight-link-sync"]["transitions"][-1]["jobs"] = [
+        "merge", "decision_receipt_attest", "decision_receipt"
+    ]
     expect_policy_failure(adr_bypass, "can bypass ADR preparation/signing")
 
     mac_preparer_write = copy.deepcopy(policy)
