@@ -60,18 +60,32 @@ def downstream_identity(run: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def matching_runs(payload: Any, env: dict[str, str], workflow_id: int, high_water: int) -> list[dict[str, Any]]:
+def complete_newer_window(payload: Any, high_water: int) -> list[dict[str, Any]]:
     require(isinstance(payload, dict), "Profile Stats downstream workflow-run response is malformed")
     runs = payload.get("workflow_runs")
     total = payload.get("total_count")
-    require(isinstance(runs, list) and type(total) is int and total >= len(runs),
+    require(isinstance(runs, list) and type(total) is int and total >= 0,
             "Profile Stats downstream workflow-run response shape changed")
+    require(all(isinstance(run, dict) for run in runs),
+            "Profile Stats downstream workflow-run response contains a malformed run")
+    require(total >= len(runs),
+            "Profile Stats downstream workflow-run response total is below returned run count")
+    if high_water == 0:
+        require(total == len(runs),
+                "Profile Stats dispatch attribution cannot prove a complete first-run history")
+    else:
+        boundary = [run for run in runs if run.get("id") == high_water]
+        require(len(boundary) == 1,
+                "Profile Stats dispatch attribution high-water boundary is absent or ambiguous in the newest run page")
+    return runs
+
+
+def matching_runs(payload: Any, env: dict[str, str], workflow_id: int, high_water: int) -> list[dict[str, Any]]:
+    runs = complete_newer_window(payload, high_water)
     repository_id = int(core.env_value(env, "GITHUB_REPOSITORY_ID", core.POSITIVE))
     base = core.env_value(env, "LEASE_BASE_SHA", core.SHA40)
     matches: list[dict[str, Any]] = []
     for run in runs:
-        if not isinstance(run, dict):
-            continue
         if run.get("id") is None or type(run.get("id")) is not int or run["id"] <= high_water:
             continue
         if not (
@@ -150,11 +164,13 @@ def self_test() -> None:
             "full_name": downstream["headRepository"], "id": downstream["headRepositoryId"]
         },
     }
-    payload = {"total_count": 1, "workflow_runs": [run]}
+    boundary = {**run, "id": high_water, "check_suite_id": downstream["checkSuiteId"] - 1}
+    payload = {"total_count": 2, "workflow_runs": [run, boundary]}
     require(select_downstream_run(payload, dict(env), workflow_id, high_water) == downstream,
             "Profile Stats downstream-run selector rejected the exact causal fixture")
 
-    ambiguous = {"total_count": 2, "workflow_runs": [run, {**run, "id": run["id"] + 1}]}
+    ambiguous_run = {**run, "id": run["id"] + 1, "check_suite_id": run["check_suite_id"] + 1}
+    ambiguous = {"total_count": 3, "workflow_runs": [ambiguous_run, run, boundary]}
     try:
         select_downstream_run(ambiguous, dict(env), workflow_id, high_water)
     except ValueError as exc:
@@ -162,9 +178,31 @@ def self_test() -> None:
     else:
         raise ValueError("Profile Stats downstream-run selector accepted ambiguous causal attribution")
 
-    stale = {"total_count": 1, "workflow_runs": [{**run, "id": high_water}]}
+    stale = {"total_count": 1, "workflow_runs": [boundary]}
     require(select_downstream_run(stale, dict(env), workflow_id, high_water) is None,
             "Profile Stats downstream-run selector accepted a pre-dispatch run")
+
+    missing_boundary = {"total_count": 150, "workflow_runs": [run]}
+    try:
+        select_downstream_run(missing_boundary, dict(env), workflow_id, high_water)
+    except ValueError as exc:
+        require("high-water boundary" in str(exc), f"Profile Stats incomplete-history test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Profile Stats downstream-run selector accepted an incomplete newest-run page")
+
+    first_history = dict(env)
+    first_history["DISPATCH_PREVIOUS_RUN_HIGH_WATER"] = "0"
+    first_payload = {"total_count": 1, "workflow_runs": [run]}
+    first_identity = dict(downstream)
+    require(select_downstream_run(first_payload, first_history, workflow_id, 0) == first_identity,
+            "Profile Stats first downstream-run history was not accepted when complete")
+    incomplete_first = {"total_count": 2, "workflow_runs": [run]}
+    try:
+        select_downstream_run(incomplete_first, first_history, workflow_id, 0)
+    except ValueError as exc:
+        require("complete first-run history" in str(exc), f"Profile Stats first-history test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Profile Stats downstream-run selector accepted incomplete history with zero high-water")
 
 
 def main() -> int:
