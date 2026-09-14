@@ -19,18 +19,32 @@ EXACT_COMPRESSED_ATTESTATION_VERIFY = (
     '--signer-digest "$BASE_SHA" --source-digest "$BASE_SHA" --source-ref refs/heads/main '
     '--deny-self-hosted-runners --format json > verified-merge-authorization.json'
 )
+FROZEN_SELF_TEST_VERIFY_HEAD = 'gh attestation verify "$SUBJECT" \\'
+ORIGINAL_SELF_TEST = core.self_test
+
+
+def self_test_with_frozen_fixture() -> None:
+    production_verify = core.GH_ATTESTATION_VERIFY_HEAD
+    core.GH_ATTESTATION_VERIFY_HEAD = FROZEN_SELF_TEST_VERIFY_HEAD
+    try:
+        ORIGINAL_SELF_TEST()
+    finally:
+        core.GH_ATTESTATION_VERIFY_HEAD = production_verify
 
 
 def main() -> int:
     original_jobs = core.PRIVILEGED_JOBS
     original_verify = core.GH_ATTESTATION_VERIFY_HEAD
+    original_self_test = core.self_test
     core.PRIVILEGED_JOBS = ITEM11_PRIVILEGED_JOBS
     core.GH_ATTESTATION_VERIFY_HEAD = EXACT_COMPRESSED_ATTESTATION_VERIFY
+    core.self_test = self_test_with_frozen_fixture
     try:
         return core.main()
     finally:
         core.PRIVILEGED_JOBS = original_jobs
         core.GH_ATTESTATION_VERIFY_HEAD = original_verify
+        core.self_test = original_self_test
 
 
 if __name__ == "__main__":
