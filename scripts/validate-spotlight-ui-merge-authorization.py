@@ -135,6 +135,12 @@ def validate_mac(sync: str) -> None:
     signer = job_block(sync, "authorize_attest", "merge")
     merge = job_block(sync, "merge", None)
 
+    require(
+        'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"' in sync and
+        'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"' in sync,
+        "Spotlight stale reconciliation must re-fetch the exact full PR object after bounded list discovery",
+    )
+
     require("name: prepare-merge-authorization-read-only" in authorize,
             "Spotlight MAC preparer job identity changed")
     require("needs: [plan, lease, reconcile, budget, propose, approve]" in authorize,
@@ -175,6 +181,11 @@ def validate_mac(sync: str) -> None:
         "- name: Download attested merge authorization artifact",
         "EXPECTED_CERTIFICATE_SHA256: ${{ needs.authorize.outputs.certificate_sha256 }}",
         "EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}",
+        "jq -cS '.workflowRuns | sort_by(.name)'",
+        'jq -cS . <<<"$EXPECTED_CERTIFICATE_RUNS"',
+        "jq -cS '.checkRuns | sort_by(.name)'",
+        'jq -cS . <<<"$EXPECTED_CERTIFICATE_CHECKS"',
+        'echo "Spotlight terminal stage: certificate-provenance-verified" >&2',
         'gh attestation verify "$SUBJECT"',
         f"--predicate-type {PREDICATE_TYPE}",
         '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml"',
@@ -182,12 +193,27 @@ def validate_mac(sync: str) -> None:
         '--source-digest "$BASE_SHA"',
         "--source-ref refs/heads/main",
         "--deny-self-hosted-runners",
-        'test "$MATCHING_PREDICATES" -ge 1',
+        '.verificationResult.statement',
+        '.predicateType == $predicate_type',
+        '.predicate == $expected[0]',
+        '.subject[0].digest.sha256 == $subject_digest',
+        'test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"',
+        'echo "Spotlight terminal stage: attestation-verification-start" >&2',
+        'echo "Spotlight terminal stage: attestation-cryptographic-verified" >&2',
+        'echo "Spotlight terminal stage: attestation-statement-verified" >&2',
     ):
         require(fragment in merge, f"Spotlight terminal MAC consumption contract is missing: {fragment}")
+    require("jq -c '.workflowRuns | sort_by(.name)'" not in merge and
+            "jq -c '.checkRuns | sort_by(.name)'" not in merge,
+            "Spotlight terminal provenance comparison must canonicalize JSON object-key order")
+    require("[.. | objects" not in merge,
+            "Spotlight terminal MAC consumer must not recursively search arbitrary verifier JSON")
+    provenance = merge.index('echo "Spotlight terminal stage: certificate-provenance-verified" >&2')
     verify = merge.index('gh attestation verify "$SUBJECT"')
+    statement = merge.index('.verificationResult.statement')
     mutation = merge.index('gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"')
-    require(verify < mutation, "Spotlight terminal merge mutation moved before cryptographic MAC verification")
+    require(provenance < verify < statement < mutation,
+            "Spotlight terminal merge mutation moved before canonical provenance and direct cryptographic MAC statement binding")
 
 
 def expect_failure(sync: str, stats: str, policy: str, expected: str) -> None:
@@ -204,6 +230,12 @@ def self_test(sync: str, stats: str, policy: str) -> None:
     item9.self_test(project_item9(sync), stats, policy)
     expect_failure(sync.replace("      attestations: read\n", "", 1), stats, policy, "lacks explicit read-only")
     expect_failure(sync.replace('gh attestation verify "$SUBJECT"', 'echo "$SUBJECT"', 1),
+                   stats, policy, "terminal MAC consumption contract is missing")
+    expect_failure(sync.replace('.verificationResult.statement', '.attestation', 1),
+                   stats, policy, "terminal MAC consumption contract is missing")
+    expect_failure(sync.replace("jq -cS '.workflowRuns | sort_by(.name)'", "jq -c '.workflowRuns | sort_by(.name)'", 1),
+                   stats, policy, "terminal MAC consumption contract is missing")
+    expect_failure(sync.replace("jq -cS '.checkRuns | sort_by(.name)'", "jq -c '.checkRuns | sort_by(.name)'", 1),
                    stats, policy, "terminal MAC consumption contract is missing")
     expect_failure(sync.replace("      attestations: write\n", "      actions: write\n", 1),
                    stats, policy, "signer authority changed")
@@ -230,8 +262,9 @@ def main() -> int:
         self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: the complete frozen item-9 authorization proof still holds after exact item-10 projection; "
-            "the new read-only MAC preparer independently re-proves live state, the isolated OIDC signer attests only the deterministic certificate subject, "
-            "and terminal merge cryptographically verifies that certificate after fresh PR/ref/check revalidation and before expected-head mutation."
+            "stale reconciliation discovers PRs through the bounded list surface but validates the exact full PR object; the read-only MAC preparer independently "
+            "re-proves live state, the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge canonicalizes exact live provenance "
+            "before binding the CLI's direct verified statement to the exact subject digest and certificate ahead of expected-head mutation."
         )
         return 0
     except (OSError, ValueError) as exc:
