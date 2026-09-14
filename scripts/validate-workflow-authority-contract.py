@@ -13,6 +13,7 @@ core.ITEM10_CANDIDATE_REPROOF = (
 )
 
 ORIGINAL_STRIP_ADR_TAIL = core.strip_adr_tail
+ORIGINAL_PROJECT_ITEM9_SYNC = core.project_item9_sync
 LEGACY_PROFILE_DISPATCH = '''  dispatch:
     name: dispatch-spotlight-link-sync
     needs: [receipt_attest, lease, attest]
@@ -68,6 +69,17 @@ LEGACY_PROFILE_DISPATCH = '''  dispatch:
             "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \\
             -f ref=main
 '''
+IMMUTABLE_ANCHOR = (
+    '          fi\n\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
+IMMUTABLE_PROJECTED = (
+    '          fi\n\n'
+    '          # Validate the complete candidate object before first publication or retry reuse.\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
 
 
 def strip_item11_tail(workflow: str, label: str) -> str:
@@ -80,7 +92,15 @@ def strip_item11_tail(workflow: str, label: str) -> str:
     return projected[:projected.index(marker)] + LEGACY_PROFILE_DISPATCH
 
 
+def project_item9_sync_with_marker(sync: str) -> str:
+    projected = ORIGINAL_PROJECT_ITEM9_SYNC(sync)
+    if projected.count(IMMUTABLE_ANCHOR) != 1:
+        raise ValueError("Spotlight item-9 immutable-candidate projection anchor changed")
+    return projected.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
+
+
 core.strip_adr_tail = strip_item11_tail
+core.project_item9_sync = project_item9_sync_with_marker
 
 
 def main() -> int:
