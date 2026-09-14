@@ -2,6 +2,7 @@
 """Bind the frozen Automation Decision Receipt v1 schema to builder constants."""
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -14,6 +15,24 @@ EXPECTED_EFFECT_JOBS = {
     "workflow-run-approval-request": "approve",
     "spotlight-terminal-merge": "merge",
 }
+DISPATCH_DOWNSTREAM_REQUIRED = [
+    "workflowId",
+    "runId",
+    "runAttempt",
+    "checkSuiteId",
+    "path",
+    "event",
+    "headBranch",
+    "headSha",
+    "actorLogin",
+    "actorId",
+    "triggeringActorLogin",
+    "triggeringActorId",
+    "repository",
+    "repositoryId",
+    "headRepository",
+    "headRepositoryId",
+]
 
 
 def require(condition: bool, message: str) -> None:
@@ -38,6 +57,61 @@ def load_schema() -> dict[str, Any]:
         raise ValueError(f"Automation Decision Receipt schema is invalid JSON: {exc}") from exc
     require(isinstance(value, dict), "Automation Decision Receipt schema root must be an object")
     return value
+
+
+def dispatch_condition(conditions: list[Any]) -> dict[str, Any]:
+    matches = [
+        condition for condition in conditions
+        if condition.get("if", {}).get("properties", {}).get("kind", {}).get("const")
+        == "spotlight-workflow-dispatch"
+    ]
+    require(len(matches) == 1, "Automation Decision Receipt dispatch schema condition changed")
+    return matches[0]
+
+
+def validate_dispatch_schema(conditions: list[Any]) -> None:
+    condition = dispatch_condition(conditions)
+    properties = condition.get("then", {}).get("properties", {})
+    require(properties.get("job") == {"const": "dispatch"}
+            and properties.get("outcome") == {"const": "applied"},
+            "Automation Decision Receipt dispatch job/outcome schema changed")
+    observation = properties.get("observation")
+    require(isinstance(observation, dict) and observation.get("type") == "object"
+            and observation.get("additionalProperties") is False,
+            "Automation Decision Receipt dispatch observation must remain closed")
+    require(observation.get("required") == ["acceptedStatus", "previousRunHighWater", "downstreamRun"],
+            "Automation Decision Receipt dispatch observation required set changed")
+    observed = observation.get("properties", {})
+    require(observed.get("acceptedStatus") == {"const": 204},
+            "Automation Decision Receipt dispatch acceptance schema changed")
+    require(observed.get("previousRunHighWater") == {"$ref": "#/$defs/nonNegativeInteger"},
+            "Automation Decision Receipt dispatch high-water schema changed")
+    downstream = observed.get("downstreamRun")
+    require(isinstance(downstream, dict) and downstream.get("type") == "object"
+            and downstream.get("additionalProperties") is False,
+            "Automation Decision Receipt downstream run schema must remain closed")
+    require(downstream.get("required") == DISPATCH_DOWNSTREAM_REQUIRED,
+            "Automation Decision Receipt downstream run required set changed")
+    fields = downstream.get("properties", {})
+    require(fields.get("runAttempt") == {"const": 1},
+            "Automation Decision Receipt downstream run attempt schema changed")
+    require(fields.get("path") == {"const": builder.SPOTLIGHT_WORKFLOW}
+            and fields.get("event") == {"const": "workflow_dispatch"}
+            and fields.get("headBranch") == {"const": "main"},
+            "Automation Decision Receipt downstream workflow/event/branch schema changed")
+    require(fields.get("actorLogin") == {"const": builder.BOT_LOGIN}
+            and fields.get("actorId") == {"const": builder.BOT_ID}
+            and fields.get("triggeringActorLogin") == {"const": builder.BOT_LOGIN}
+            and fields.get("triggeringActorId") == {"const": builder.BOT_ID},
+            "Automation Decision Receipt downstream bot actor schema changed")
+    require(fields.get("repository") == {"const": builder.REPOSITORY}
+            and fields.get("headRepository") == {"const": builder.REPOSITORY},
+            "Automation Decision Receipt downstream repository schema changed")
+    for field in ("workflowId", "runId", "checkSuiteId", "repositoryId", "headRepositoryId"):
+        require(fields.get(field) == {"$ref": "#/$defs/positiveInteger"},
+                f"Automation Decision Receipt downstream {field} schema changed")
+    require(fields.get("headSha") == {"$ref": "#/$defs/sha40"},
+            "Automation Decision Receipt downstream head SHA schema changed")
 
 
 def validate(schema: dict[str, Any]) -> None:
@@ -67,7 +141,10 @@ def validate(schema: dict[str, Any]) -> None:
     require(predicate_schema.get("id") == {"const": builder.PREDICATE_TYPE},
             "Automation Decision Receipt predicateSchema.id differs from builder")
 
-    effect = schema.get("$defs", {}).get("effect")
+    definitions = schema.get("$defs", {})
+    require(definitions.get("nonNegativeInteger") == {"type": "integer", "minimum": 0},
+            "Automation Decision Receipt non-negative integer schema changed")
+    effect = definitions.get("effect")
     require(isinstance(effect, dict) and effect.get("type") == "object"
             and effect.get("additionalProperties") is False,
             "Automation Decision Receipt effect schema is not closed")
@@ -91,6 +168,7 @@ def validate(schema: dict[str, Any]) -> None:
         observed[kind] = job
     require(observed == EXPECTED_EFFECT_JOBS,
             "Automation Decision Receipt effect kind→job schema binding differs from builder")
+    validate_dispatch_schema(conditions)
 
 
 def self_test() -> None:
@@ -104,3 +182,16 @@ def self_test() -> None:
         require("kind differs" in str(exc), f"schema-binding self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("schema-binding self-test accepted changed receipt kind")
+
+    changed_dispatch = copy.deepcopy(schema)
+    dispatch = dispatch_condition(changed_dispatch["$defs"]["effect"]["allOf"])
+    dispatch["then"]["properties"]["observation"]["properties"]["downstreamRun"]["properties"]["event"] = {
+        "const": "schedule"
+    }
+    try:
+        validate(changed_dispatch)
+    except ValueError as exc:
+        require("workflow/event/branch" in str(exc),
+                f"schema-binding dispatch self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("schema-binding self-test accepted changed downstream dispatch event")

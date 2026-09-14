@@ -70,6 +70,7 @@
     "sha40": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "sha64": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "positiveInteger": {"type": "integer", "minimum": 1},
+    "nonNegativeInteger": {"type": "integer", "minimum": 0},
     "candidateBranch": {"type": "string", "pattern": "^automation/spotlight-links/[0-9a-f]{64}$"},
     "effect": {
       "type": "object",
@@ -111,8 +112,51 @@
               "observation": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["acceptedStatus"],
-                "properties": {"acceptedStatus": {"const": 204}}
+                "required": ["acceptedStatus", "previousRunHighWater", "downstreamRun"],
+                "properties": {
+                  "acceptedStatus": {"const": 204},
+                  "previousRunHighWater": {"$ref": "#/$defs/nonNegativeInteger"},
+                  "downstreamRun": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "workflowId",
+                      "runId",
+                      "runAttempt",
+                      "checkSuiteId",
+                      "path",
+                      "event",
+                      "headBranch",
+                      "headSha",
+                      "actorLogin",
+                      "actorId",
+                      "triggeringActorLogin",
+                      "triggeringActorId",
+                      "repository",
+                      "repositoryId",
+                      "headRepository",
+                      "headRepositoryId"
+                    ],
+                    "properties": {
+                      "workflowId": {"$ref": "#/$defs/positiveInteger"},
+                      "runId": {"$ref": "#/$defs/positiveInteger"},
+                      "runAttempt": {"const": 1},
+                      "checkSuiteId": {"$ref": "#/$defs/positiveInteger"},
+                      "path": {"const": ".github/workflows/spotlight-link-sync.yml"},
+                      "event": {"const": "workflow_dispatch"},
+                      "headBranch": {"const": "main"},
+                      "headSha": {"$ref": "#/$defs/sha40"},
+                      "actorLogin": {"const": "github-actions[bot]"},
+                      "actorId": {"const": 41898282},
+                      "triggeringActorLogin": {"const": "github-actions[bot]"},
+                      "triggeringActorId": {"const": 41898282},
+                      "repository": {"const": "portyu9/portyu9"},
+                      "repositoryId": {"$ref": "#/$defs/positiveInteger"},
+                      "headRepository": {"const": "portyu9/portyu9"},
+                      "headRepositoryId": {"$ref": "#/$defs/positiveInteger"}
+                    }
+                  }
+                }
               }
             }
           }

@@ -46,6 +46,26 @@ EFFECT_KINDS = {
     "workflow-run-approval-request",
     "spotlight-terminal-merge",
 }
+BOT_LOGIN = "github-actions[bot]"
+BOT_ID = 41898282
+DISPATCH_RUN_KEYS = {
+    "workflowId",
+    "runId",
+    "runAttempt",
+    "checkSuiteId",
+    "path",
+    "event",
+    "headBranch",
+    "headSha",
+    "actorLogin",
+    "actorId",
+    "triggeringActorLogin",
+    "triggeringActorId",
+    "repository",
+    "repositoryId",
+    "headRepository",
+    "headRepositoryId",
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -152,16 +172,43 @@ def boolean(value: Any, label: str) -> bool:
     return value
 
 
-def validate_dispatch(effect: dict[str, Any], path: str) -> None:
+def validate_dispatch(effect: dict[str, Any], path: str, lease: dict[str, str]) -> None:
     require(path == PROFILE_WORKFLOW, "Spotlight dispatch receipts must originate from Profile Stats")
     require(effect["job"] == "dispatch" and effect["outcome"] == "applied",
             "Spotlight dispatch receipt job/outcome changed")
     target = exact_object(effect["target"], {"workflowPath", "ref"}, "Spotlight dispatch target")
     require(target == {"workflowPath": SPOTLIGHT_WORKFLOW, "ref": "main"},
             "Spotlight dispatch target changed")
-    observation = exact_object(effect["observation"], {"acceptedStatus"}, "Spotlight dispatch observation")
+    observation = exact_object(
+        effect["observation"],
+        {"acceptedStatus", "previousRunHighWater", "downstreamRun"},
+        "Spotlight dispatch observation",
+    )
     require(observation["acceptedStatus"] == 204,
             "Spotlight dispatch must record exact HTTP 204 acceptance")
+    high_water = observation["previousRunHighWater"]
+    require(type(high_water) is int and high_water >= 0,
+            "Spotlight dispatch previous run high-water must be one non-negative integer")
+    downstream = exact_object(observation["downstreamRun"], DISPATCH_RUN_KEYS,
+                              "Spotlight dispatch downstream run")
+    for key in ("workflowId", "runId", "runAttempt", "checkSuiteId", "actorId", "triggeringActorId",
+                "repositoryId", "headRepositoryId"):
+        positive_int(downstream[key], f"Spotlight dispatch downstream {key}")
+    require(downstream["runId"] > high_water,
+            "Spotlight dispatch downstream run must cross the pre-dispatch high-water mark")
+    require(downstream["runAttempt"] == 1,
+            "Spotlight dispatch downstream run must bind the newly created first attempt")
+    require(downstream["path"] == SPOTLIGHT_WORKFLOW and downstream["event"] == "workflow_dispatch"
+            and downstream["headBranch"] == "main",
+            "Spotlight dispatch downstream workflow/event/branch identity changed")
+    require(sha40(downstream["headSha"], "Spotlight dispatch downstream head") == lease["baseSha"],
+            "Spotlight dispatch downstream head differs from leased source main")
+    require(downstream["actorLogin"] == BOT_LOGIN and downstream["actorId"] == BOT_ID
+            and downstream["triggeringActorLogin"] == BOT_LOGIN and downstream["triggeringActorId"] == BOT_ID,
+            "Spotlight dispatch downstream actor identity changed")
+    require(downstream["repository"] == REPOSITORY and downstream["headRepository"] == REPOSITORY
+            and downstream["repositoryId"] == downstream["headRepositoryId"],
+            "Spotlight dispatch downstream repository identity changed")
 
 
 def validate_stale_cleanup(effect: dict[str, Any], path: str) -> None:
@@ -251,7 +298,7 @@ def validate_effect(effect: Any, path: str, lease: dict[str, str], ordinal: int)
             "Automation Decision Receipt effect outcome is unreviewed")
 
     if kind == "spotlight-workflow-dispatch":
-        validate_dispatch(item, path)
+        validate_dispatch(item, path, lease)
     elif kind == "stale-candidate-reconciliation":
         validate_stale_cleanup(item, path)
     elif kind == "spotlight-candidate-publication":
@@ -366,7 +413,28 @@ def fixture(path: str) -> tuple[dict[str, Any], dict[str, str]]:
                 "kind": "spotlight-workflow-dispatch",
                 "outcome": "applied",
                 "target": {"workflowPath": SPOTLIGHT_WORKFLOW, "ref": "main"},
-                "observation": {"acceptedStatus": 204},
+                "observation": {
+                    "acceptedStatus": 204,
+                    "previousRunHighWater": 9000,
+                    "downstreamRun": {
+                        "workflowId": 351927175,
+                        "runId": 9002,
+                        "runAttempt": 1,
+                        "checkSuiteId": 94229114333,
+                        "path": SPOTLIGHT_WORKFLOW,
+                        "event": "workflow_dispatch",
+                        "headBranch": "main",
+                        "headSha": base,
+                        "actorLogin": BOT_LOGIN,
+                        "actorId": BOT_ID,
+                        "triggeringActorLogin": BOT_LOGIN,
+                        "triggeringActorId": BOT_ID,
+                        "repository": REPOSITORY,
+                        "repositoryId": 1355082509,
+                        "headRepository": REPOSITORY,
+                        "headRepositoryId": 1355082509,
+                    },
+                },
             }]
         }, env
 
@@ -444,6 +512,18 @@ def self_test() -> None:
     wrong_status = copy.deepcopy(dispatch)
     wrong_status["effects"][0]["observation"]["acceptedStatus"] = 200
     expect_failure(wrong_status, dict(profile_env), "HTTP 204")
+
+    stale_downstream = copy.deepcopy(dispatch)
+    stale_downstream["effects"][0]["observation"]["downstreamRun"]["runId"] = 9000
+    expect_failure(stale_downstream, dict(profile_env), "high-water")
+
+    wrong_dispatch_head = copy.deepcopy(dispatch)
+    wrong_dispatch_head["effects"][0]["observation"]["downstreamRun"]["headSha"] = "4" * 40
+    expect_failure(wrong_dispatch_head, dict(profile_env), "leased source main")
+
+    wrong_dispatch_actor = copy.deepcopy(dispatch)
+    wrong_dispatch_actor["effects"][0]["observation"]["downstreamRun"]["actorLogin"] = "portyu9"
+    expect_failure(wrong_dispatch_actor, dict(profile_env), "actor identity")
 
     wrong_ttl = dict(profile_env)
     wrong_ttl["LEASE_EXPIRES_AT"] = "1001799"
