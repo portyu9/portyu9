@@ -5,12 +5,32 @@ from __future__ import annotations
 import governance_contract_item10_core as core
 
 
+CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+SETUP_PYTHON_SHA = "5fda3b95a4ea91299a34e894583c3862153e4b97"
+UPLOAD_SHA = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+DOWNLOAD_SHA = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
+UPSTREAM_SHA = "49b5f7091182a45f3ef93923505b660c6da5f835"
+ATTEST_SHA = "1e69f48acb82d1966a394da916b4c1698aa569d6"
+
 ORIGINAL_VALIDATE_STATS = core.validate_stats
 
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def validate_action_identity_projection() -> None:
+    for name, value in (
+        ("CHECKOUT_SHA", CHECKOUT_SHA),
+        ("SETUP_PYTHON_SHA", SETUP_PYTHON_SHA),
+        ("UPLOAD_SHA", UPLOAD_SHA),
+        ("DOWNLOAD_SHA", DOWNLOAD_SHA),
+        ("UPSTREAM_SHA", UPSTREAM_SHA),
+        ("ATTEST_SHA", ATTEST_SHA),
+    ):
+        require(value == getattr(core, name),
+                f"Governance adapter {name} differs from frozen contract")
 
 
 def validate_stats_item11(text: str) -> None:
@@ -47,6 +67,7 @@ def main() -> int:
     original = core.validate_stats
     core.validate_stats = validate_stats_item11
     try:
+        validate_action_identity_projection()
         return core.main()
     finally:
         core.validate_stats = original
