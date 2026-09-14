@@ -13,6 +13,17 @@ COMPRESSED_DOWNLOAD_STEP = (
     "          path: merge-authorization-input\n"
     "          digest-mismatch: error\n"
 )
+IMMUTABLE_ANCHOR = (
+    '          fi\n\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
+IMMUTABLE_PROJECTED = (
+    '          fi\n\n'
+    '          # Validate the complete candidate object before first publication or retry reuse.\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -31,6 +42,13 @@ def strip_adr_tail(workflow: str, label: str) -> str:
     return workflow[:start]
 
 
+def project_item9(sync: str) -> str:
+    legacy = core.project_item9(sync)
+    require(legacy.count(IMMUTABLE_ANCHOR) == 1,
+            "Spotlight item-9 immutable-candidate projection anchor changed")
+    return legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
+
+
 def main() -> int:
     try:
         for path in (core.SYNC, core.STATS, core.POLICY, core.BUILDER, core.BUILDER_CORE,
@@ -46,7 +64,7 @@ def main() -> int:
         builder = core.BUILDER.read_text(encoding="utf-8")
         builder_core = core.BUILDER_CORE.read_text(encoding="utf-8")
 
-        legacy = core.project_item9(sync)
+        legacy = project_item9(sync)
         core.item9.validate(legacy, stats, policy)
         core.item9.self_test(legacy, stats, policy)
         core.validate_preparer_script(preparer)
