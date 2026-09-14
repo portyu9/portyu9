@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 import re
 
+import automation_decision_lease as lease_contract
+
 REPOSITORY = "portyu9/portyu9"
 WORKFLOW_PATH = ".github/workflows/profile-stats.yml"
 SPOTLIGHT_PATH = ".github/workflows/spotlight-link-sync.yml"
@@ -79,17 +81,7 @@ def exact_downstream_run(value: Any, env: dict[str, str], high_water: int) -> di
 
 
 def build_state(env: dict[str, str], downstream_run: dict[str, Any]) -> dict[str, Any]:
-    require(env_value(env, "GITHUB_REPOSITORY") == REPOSITORY,
-            "Profile Stats decision receipt repository identity changed")
-    require(env_value(env, "GITHUB_WORKFLOW_REF") == WORKFLOW_REF,
-            "Profile Stats decision receipt workflow identity changed")
-    base = env_value(env, "LEASE_BASE_SHA", SHA40)
-    require(env_value(env, "GITHUB_SHA", SHA40) == base,
-            "Profile Stats decision receipt event source SHA differs from leased base")
-    require(env_value(env, "GITHUB_WORKFLOW_SHA", SHA40) == base,
-            "Profile Stats decision receipt workflow SHA differs from leased base")
-    env_value(env, "GITHUB_RUN_ID", POSITIVE)
-    env_value(env, "GITHUB_RUN_ATTEMPT", POSITIVE)
+    lease = lease_contract.validate(env, WORKFLOW_PATH)
     status = env_value(env, "DISPATCH_ACCEPTED_STATUS", POSITIVE)
     require(status == "204", "Profile Stats Spotlight dispatch must record exact HTTP 204 acceptance")
     target = env_value(env, "DISPATCH_WORKFLOW_PATH")
@@ -98,6 +90,8 @@ def build_state(env: dict[str, str], downstream_run: dict[str, Any]) -> dict[str
             "Profile Stats Spotlight dispatch target changed")
     high_water = int(env_value(env, "DISPATCH_PREVIOUS_RUN_HIGH_WATER", NONNEGATIVE))
     observed = exact_downstream_run(downstream_run, env, high_water)
+    require(observed["headSha"] == lease["baseSha"],
+            "Profile Stats downstream Spotlight head escaped exact lease identity")
     return {
         "effects": [{
             "ordinal": 1,
@@ -115,22 +109,15 @@ def build_state(env: dict[str, str], downstream_run: dict[str, Any]) -> dict[str
 
 
 def fixture() -> tuple[dict[str, str], dict[str, Any]]:
-    base = "a" * 40
-    repository_id = 1355082509
-    env = {
-        "GITHUB_REPOSITORY": REPOSITORY,
-        "GITHUB_REPOSITORY_ID": str(repository_id),
-        "GITHUB_WORKFLOW_REF": WORKFLOW_REF,
-        "GITHUB_WORKFLOW_SHA": base,
-        "GITHUB_SHA": base,
-        "GITHUB_RUN_ID": "123",
-        "GITHUB_RUN_ATTEMPT": "2",
-        "LEASE_BASE_SHA": base,
+    env = lease_contract.fixture(WORKFLOW_PATH)
+    base = env["LEASE_BASE_SHA"]
+    repository_id = int(env["GITHUB_REPOSITORY_ID"])
+    env.update({
         "DISPATCH_ACCEPTED_STATUS": "204",
         "DISPATCH_WORKFLOW_PATH": SPOTLIGHT_PATH,
         "DISPATCH_REF": "main",
         "DISPATCH_PREVIOUS_RUN_HIGH_WATER": "900",
-    }
+    })
     downstream = {
         "workflowId": 351927175,
         "runId": 901,
@@ -153,6 +140,7 @@ def fixture() -> tuple[dict[str, str], dict[str, Any]]:
 
 
 def self_test() -> None:
+    lease_contract.self_test()
     env, downstream = fixture()
     state = build_state(dict(env), dict(downstream))
     observation = state["effects"][0]["observation"]
@@ -223,3 +211,12 @@ def self_test() -> None:
         require("event source SHA differs" in str(exc), f"Profile Stats decision receipt failed for wrong reason: {exc}")
     else:
         raise ValueError("Profile Stats decision receipt accepted an event/lease source split")
+
+    wrong_lease = dict(env)
+    wrong_lease["LEASE_ID"] = "f" * 64
+    try:
+        build_state(wrong_lease, dict(downstream))
+    except ValueError as exc:
+        require("lease ID differs" in str(exc), f"Profile Stats decision receipt failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Profile Stats decision receipt accepted an arbitrary lease id")
