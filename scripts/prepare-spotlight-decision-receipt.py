@@ -20,6 +20,7 @@ PR_BODY = (
     "protection and all required checks remain in force."
 )
 WORKFLOW_NAMES = {"CodeQL", "Dependency review", "Profile quality"}
+APPROVAL_REQUIRED_STATES = {"waiting", "action_required"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -114,6 +115,15 @@ def reprove_candidate_publication(effect: dict[str, Any]) -> None:
     require(pr.get("state") in {"open", "closed"}, "Spotlight candidate PR state is invalid")
 
 
+def approval_left_gate(run: dict[str, Any]) -> None:
+    status = run.get("status")
+    conclusion = run.get("conclusion")
+    require(isinstance(status, str) and status,
+            "Spotlight approval run status is missing")
+    require(status not in APPROVAL_REQUIRED_STATES and conclusion != "action_required",
+            "Spotlight approval run is still blocked on approval")
+
+
 def reprove_approval(effect: dict[str, Any], expected_head: str) -> None:
     target = effect["target"]
     require(target["workflowName"] in WORKFLOW_NAMES,
@@ -130,8 +140,7 @@ def reprove_approval(effect: dict[str, Any], expected_head: str) -> None:
             and run.get("repository", {}).get("full_name") == REPOSITORY
             and run.get("head_repository", {}).get("full_name") == REPOSITORY,
             "Spotlight approval run provenance changed")
-    require(run.get("status") == "completed" and run.get("conclusion") == "success",
-            "Spotlight approval receipt requires the selected run to finish successfully")
+    approval_left_gate(run)
     require(effect["observation"]["approvalRequested"] is True,
             "Spotlight approval receipt must represent an actual approval POST")
 
@@ -187,6 +196,26 @@ def self_test() -> None:
         require("durable current main" in str(exc), f"Spotlight main-ref self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("Spotlight main-ref self-test accepted a divergent main SHA")
+
+    for allowed in (
+        {"status": "queued", "conclusion": None},
+        {"status": "in_progress", "conclusion": None},
+        {"status": "completed", "conclusion": "failure"},
+        {"status": "completed", "conclusion": "success"},
+    ):
+        approval_left_gate(allowed)
+    for blocked in (
+        {"status": "waiting", "conclusion": None},
+        {"status": "action_required", "conclusion": None},
+        {"status": "completed", "conclusion": "action_required"},
+    ):
+        try:
+            approval_left_gate(blocked)
+        except ValueError as exc:
+            require("still blocked on approval" in str(exc),
+                    f"Spotlight approval gate self-test failed for wrong reason: {exc}")
+        else:
+            raise ValueError("Spotlight approval gate accepted an approval-required run")
 
 
 def main() -> int:
