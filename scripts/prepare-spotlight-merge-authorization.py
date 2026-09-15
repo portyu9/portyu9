@@ -23,15 +23,23 @@ PR_BODY = (
     "protection and all required checks remain in force."
 )
 WORKFLOWS = {
+    "Capability admission": "capability-admission.yml",
     "CodeQL": "codeql.yml",
     "Dependency review": "dependency-review.yml",
     "Profile quality": "profile-quality.yml",
+}
+WORKFLOW_EVENT = {
+    "Capability admission": "pull_request_target",
+    "CodeQL": "pull_request",
+    "Dependency review": "pull_request",
+    "Profile quality": "pull_request",
 }
 CHECK_NAMES = (
     "analyze-actions",
     "analyze-python",
     "dependency-review",
     "integration-pinned-upstream",
+    "trusted-capability-admission",
     "validate-contracts",
 )
 CHECK_WORKFLOW = {
@@ -39,6 +47,7 @@ CHECK_WORKFLOW = {
     "analyze-python": "CodeQL",
     "dependency-review": "Dependency review",
     "integration-pinned-upstream": "Profile quality",
+    "trusted-capability-admission": "Capability admission",
     "validate-contracts": "Profile quality",
 }
 RUN_ENV = {
@@ -192,25 +201,35 @@ def prepare_state() -> dict[str, Any]:
         workflow = gh_json(f"repos/{REPOSITORY}/actions/workflows/{filename}")
         workflow_ids[name] = positive(workflow.get("id"), f"{name} workflow ID")
 
-    runs_payload = gh_json(f"repos/{REPOSITORY}/actions/runs?head_sha={head}&event=pull_request&per_page=100")
-    total = runs_payload.get("total_count")
-    runs = runs_payload.get("workflow_runs")
-    require(type(total) is int and isinstance(runs, list) and total == len(runs) == 3,
-            "Spotlight authorization workflow-run response is incomplete or ambiguous")
+    pr_runs_payload = gh_json(f"repos/{REPOSITORY}/actions/runs?head_sha={head}&event=pull_request&per_page=100")
+    pr_total = pr_runs_payload.get("total_count")
+    pr_runs = pr_runs_payload.get("workflow_runs")
+    require(type(pr_total) is int and isinstance(pr_runs, list) and pr_total == len(pr_runs) == 3,
+            "Spotlight authorization pull-request workflow-run response is incomplete or ambiguous")
+    target_runs_payload = gh_json(
+        f"repos/{REPOSITORY}/actions/runs?head_sha={head}&event=pull_request_target&per_page=100"
+    )
+    target_total = target_runs_payload.get("total_count")
+    target_runs = target_runs_payload.get("workflow_runs")
+    require(type(target_total) is int and isinstance(target_runs, list) and target_total == len(target_runs) == 1,
+            "Spotlight authorization pull-request-target workflow-run response is incomplete or ambiguous")
+
     expected_outputs = {
         name: (int(env_value(run_env, POSITIVE)), int(env_value(suite_env, POSITIVE)))
         for name, (run_env, suite_env) in RUN_ENV.items()
     }
     workflow_runs: list[dict[str, Any]] = []
     for name in sorted(WORKFLOWS):
-        matches = [run for run in runs if run.get("name") == name and run.get("workflow_id") == workflow_ids[name]]
+        source_runs = target_runs if name == "Capability admission" else pr_runs
+        matches = [run for run in source_runs if run.get("name") == name and run.get("workflow_id") == workflow_ids[name]]
         require(len(matches) == 1, f"Spotlight authorization canonical workflow run changed: {name}")
         run = matches[0]
         run_id = positive(run.get("id"), f"{name} run ID")
         suite_id = positive(run.get("check_suite_id"), f"{name} check suite ID")
         attempt = positive(run.get("run_attempt"), f"{name} run attempt")
-        require((run_id, suite_id) == expected_outputs[name],
-                f"Spotlight authorization {name} run/check-suite differs from approval output")
+        if name in expected_outputs:
+            require((run_id, suite_id) == expected_outputs[name],
+                    f"Spotlight authorization {name} run/check-suite differs from approval output")
         item = {
             "name": name,
             "workflowId": workflow_ids[name],
@@ -225,11 +244,15 @@ def prepare_state() -> dict[str, Any]:
             "status": run.get("status"),
             "conclusion": run.get("conclusion"),
         }
-        require(item["event"] == "pull_request" and item["headBranch"] == branch and item["headSha"] == head
+        require(item["event"] == WORKFLOW_EVENT[name] and item["headBranch"] == branch and item["headSha"] == head
                 and item["repository"] == REPOSITORY and item["headRepository"] == REPOSITORY
                 and item["status"] == "completed" and item["conclusion"] == "success",
                 f"Spotlight authorization {name} run provenance changed")
         workflow_runs.append(item)
+    require(len({item["runId"] for item in workflow_runs}) == 4,
+            "Spotlight authorization workflow run IDs are not unique")
+    require(len({item["checkSuiteId"] for item in workflow_runs}) == 4,
+            "Spotlight authorization workflow check-suite IDs are not unique")
 
     checks_payload = gh_json(f"repos/{REPOSITORY}/commits/{head}/check-runs?filter=latest&per_page=100")
     checks_total = checks_payload.get("total_count")
@@ -237,7 +260,7 @@ def prepare_state() -> dict[str, Any]:
     require(type(checks_total) is int and isinstance(checks, list) and checks_total == len(checks),
             "Spotlight authorization check-run response is incomplete")
     actions_checks = [check for check in checks if check.get("app", {}).get("id") == 15368]
-    require(len(actions_checks) == 5 and sorted(check.get("name") for check in actions_checks) == list(CHECK_NAMES),
+    require(len(actions_checks) == 6 and sorted(check.get("name") for check in actions_checks) == list(CHECK_NAMES),
             "Spotlight authorization GitHub-Actions check set changed")
     suite_by_workflow = {item["name"]: item["checkSuiteId"] for item in workflow_runs}
     check_runs: list[dict[str, Any]] = []
