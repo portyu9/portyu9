@@ -32,8 +32,6 @@ PROTECTED_PREFIXES = (
     "scripts/automation_",
     "scripts/workflow_capability_",
 )
-# Python resolves these names before/while loading the admission TCB. Candidate files or
-# packages with the same names could shadow stdlib modules when they become the next base.
 RESERVED_MODULES = {
     "argparse", "copy", "hashlib", "json", "os", "pathlib", "re", "shlex",
     "stat", "subprocess", "sys", "typing",
@@ -89,8 +87,7 @@ def sha256_file(path: Path) -> str:
 
 def protected_files(root: Path) -> dict[str, str]:
     result: dict[str, str] = {}
-    candidates = [root / ".github", root / "scripts"]
-    for directory in candidates:
+    for directory in (root / ".github", root / "scripts"):
         if not directory.is_dir():
             continue
         for path in directory.rglob("*"):
@@ -102,14 +99,33 @@ def protected_files(root: Path) -> dict[str, str]:
     return dict(sorted(result.items()))
 
 
+def protected_digest(files: dict[str, str]) -> str:
+    require(all(isinstance(path, str) and path for path in files),
+            "trusted control-source digest contains an invalid path")
+    require(all(re.fullmatch(r"[0-9a-f]{64}", digest) is not None for digest in files.values()),
+            "trusted control-source digest contains an invalid file SHA-256")
+    payload = b"".join(
+        path.encode("utf-8") + b"\0" + files[path].encode("ascii") + b"\n"
+        for path in sorted(files)
+    )
+    return hashlib.sha256(payload).hexdigest()
+
+
 def source_expansions(base_root: Path, candidate_root: Path, candidate_tree_sha: str | None) -> list[dict[str, object]]:
     base = protected_files(base_root)
     candidate = protected_files(candidate_root)
     changed = sorted(path for path in set(base) | set(candidate) if base.get(path) != candidate.get(path))
     if not changed:
         return []
+
+    # The exact tree SHA remains a transport/freshness proof for the fetched candidate bytes,
+    # but it is intentionally not part of the authorization digest. The trusted authorization
+    # ledger lives in the repository tree, so binding that tree into a record stored in the
+    # ledger would create a cryptographic self-reference. Instead bind the complete protected
+    # TCB map; ledger-only prior-review PRs cannot change this digest.
     require(candidate_tree_sha is not None and SHA40.fullmatch(candidate_tree_sha) is not None,
             "candidate tree SHA is required for trusted control-source changes")
+    candidate_tcb_sha256 = protected_digest(candidate)
     return [
         {
             "direction": "expansion",
@@ -119,7 +135,7 @@ def source_expansions(base_root: Path, candidate_root: Path, candidate_tree_sha:
             "before": None if path not in base else {"sha256": base[path]},
             "after": {
                 "sha256": candidate.get(path),
-                "candidateTreeSha": candidate_tree_sha,
+                "candidateTcbSha256": candidate_tcb_sha256,
             },
         }
         for path in changed
@@ -140,18 +156,24 @@ def self_test() -> None:
 
     base = {"scripts/workflow_capability_admission.py": "a" * 64}
     candidate = {"scripts/workflow_capability_admission.py": "b" * 64}
-    # Exercise the canonical expansion shape without filesystem mutation.
-    changed = sorted(path for path in set(base) | set(candidate) if base.get(path) != candidate.get(path))
+    base_digest = protected_digest(base)
+    candidate_digest = protected_digest(candidate)
+    require(base_digest != candidate_digest,
+            "TCB self-test source digest failed to distinguish protected source changes")
     expansion = {
         "direction": "expansion",
         "category": "trusted-control-source",
         "workflow": CONTROL_WORKFLOW_ID,
-        "key": changed[0],
-        "before": {"sha256": base[changed[0]]},
-        "after": {"sha256": candidate[changed[0]], "candidateTreeSha": "c" * 40},
+        "key": "scripts/workflow_capability_admission.py",
+        "before": {"sha256": base["scripts/workflow_capability_admission.py"]},
+        "after": {
+            "sha256": candidate["scripts/workflow_capability_admission.py"],
+            "candidateTcbSha256": candidate_digest,
+        },
     }
-    require(expansion["key"] == "scripts/workflow_capability_admission.py",
-            "TCB self-test source-change identity drifted")
+    require("candidateTreeSha" not in expansion["after"] and
+            expansion["after"]["candidateTcbSha256"] == candidate_digest,
+            "TCB self-test reintroduced self-referential candidate-tree authorization")
 
 
 def main() -> int:
