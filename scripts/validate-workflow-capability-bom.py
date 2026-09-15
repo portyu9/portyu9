@@ -8,6 +8,7 @@ import sys
 from typing import Any
 
 import automation_policy
+import trusted_workflow_capability
 import workflow_capability_bom as compiler
 import workflow_capability_diff as capability_diff
 
@@ -67,6 +68,7 @@ def validate_snapshot() -> tuple[int, int]:
 
     compiler.self_test()
     capability_diff.self_test()
+    trusted_workflow_capability.self_test()
     compiled = compiler.compile_bom()
     canonical = compiler.canonical_json(compiled)
     difference = first_difference(compiled, snapshot)
@@ -92,7 +94,10 @@ def validate_snapshot() -> tuple[int, int]:
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
-        print(f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; semantic diff self-tests passed.")
+        print(
+            f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
+            "semantic diff and trusted alternate-tree compiler self-tests passed."
+        )
         return 0
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
