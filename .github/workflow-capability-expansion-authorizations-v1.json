@@ -2,5 +2,13 @@
   "schemaVersion": 1,
   "ledgerId": "workflow-capability-expansion-authorizations-v1",
   "repository": "portyu9/portyu9",
-  "authorizations": []
+  "authorizations": [
+    {
+      "id": "2026-09-15-codeql-alert-4-admission-logging-fix",
+      "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
+      "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
+      "expansionSha256": "e3297194c6592e785860dce2094f86c339e54c59e9a3990282700d6fde3639f5",
+      "rationale": "Authorize the exact trusted-control-source change in PR #412 that fixes CodeQL alert #4 (py/clear-text-logging-sensitive-data) by removing caught exception contents from stderr; semantic workflow capabilities remain byte-for-byte unchanged."
+    }
+  ]
 }
