@@ -43,6 +43,27 @@ GH_API_FLAG_OPTIONS = {"-i", "--include", "--paginate", "--slurp", "--silent", "
 SHELL_CONTROL = {"|", "||", "&&", ";"}
 GIT_GLOBAL_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
 GIT_NETWORK_OPERATIONS = {"push", "fetch", "clone", "ls-remote"}
+GIT_OPERATION_FLAG_OPTIONS = {
+    "push": {
+        "-f", "--force", "--force-with-lease", "--atomic", "--dry-run", "--porcelain",
+        "-q", "--quiet", "-v", "--verbose", "--follow-tags", "--no-verify",
+    },
+    "fetch": {
+        "-f", "--force", "-k", "--keep", "-p", "--prune", "--prune-tags", "--tags",
+        "--no-tags", "--dry-run", "-q", "--quiet", "-v", "--verbose",
+    },
+    "clone": {
+        "--bare", "--mirror", "--single-branch", "--no-single-branch", "--no-tags",
+        "--recurse-submodules", "-q", "--quiet", "-v", "--verbose",
+    },
+    "ls-remote": {"--exit-code", "--heads", "--tags", "--refs", "-q", "--quiet"},
+}
+GIT_OPERATION_VALUE_OPTIONS = {
+    "push": {"--repo"},
+    "fetch": {"--depth", "--deepen", "--shallow-since", "--shallow-exclude", "--refmap", "--upload-pack"},
+    "clone": {"-b", "--branch", "-o", "--origin", "--depth", "--reference", "--separate-git-dir"},
+    "ls-remote": {"--sort", "--upload-pack"},
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -308,15 +329,38 @@ def git_surface(command: str, *, workflow: str, job: str, step: str) -> dict[str
         return None
     if operation not in GIT_NETWORK_OPERATIONS:
         return None
-    args = [unquote(token).rstrip(")\"") for token in tokens[index + 1:]]
-    positional = [token for token in args if token and not token.startswith("-") and not token.startswith(">")]
+
+    flag_options = GIT_OPERATION_FLAG_OPTIONS[operation]
+    value_options = GIT_OPERATION_VALUE_OPTIONS[operation]
+    positional: list[str] = []
+    index += 1
+    while index < len(tokens):
+        token = unquote(tokens[index]).rstrip(")\"")
+        if token in SHELL_CONTROL or re.match(r"^\d*[<>]", token) is not None:
+            break
+        if token in flag_options:
+            index += 1
+            continue
+        if token in value_options:
+            require(index + 1 < len(tokens),
+                    f"{workflow}/{job}/{step}: git {operation} option value is missing: {token}")
+            index += 2
+            continue
+        if any(token.startswith(option + "=") for option in value_options if option.startswith("--")):
+            index += 1
+            continue
+        require(not token.startswith("-"),
+                f"{workflow}/{job}/{step}: unclassified git {operation} option: {token}")
+        positional.append(token)
+        index += 1
+
+    require(positional, f"{workflow}/{job}/{step}: git {operation} remote is not statically visible")
     surface: dict[str, Any] = {
         "client": "git",
         "operation": operation,
         "mutating": operation == "push",
+        "remote": positional[0],
     }
-    if positional:
-        surface["remote"] = positional[0]
     if len(positional) > 1:
         surface["targets"] = positional[1:]
     return surface
@@ -351,6 +395,19 @@ def expression_references(text: str) -> dict[str, list[str]]:
     if GITHUB_TOKEN.search(text):
         result["githubToken"].add("github.token")
     return {key: sorted(values) for key, values in result.items()}
+
+
+def validate_job_authority(filename: str, entry: dict[str, Any]) -> None:
+    for action in entry["actions"]:
+        if action.get("repository") in {"actions/attest", "actions/attest-build-provenance"}:
+            require(entry["oidc"] and entry["permissions"].get("attestations") == "write",
+                    f"{filename}/{entry['id']}: attestation action lacks exact OIDC/attestations write authority")
+    write_permissions = sorted(
+        permission for permission, level in entry["permissions"].items() if level == "write"
+    )
+    if write_permissions:
+        require(entry["mutations"],
+                f"{filename}/{entry['id']}: write permissions lack a classified mutation: {write_permissions}")
 
 
 def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[str, Any]]:
@@ -435,6 +492,8 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
                         artifact[key] = with_values[key]
                 require(artifact["name"],
                         f"{workflow}/{current_job}/{current_step}: artifact action must name its artifact")
+                require(artifact.get("path"),
+                        f"{workflow}/{current_job}/{current_step}: artifact action must expose its path")
                 compiled[current_job]["artifacts"].append(artifact)
             if repository in {"actions/attest", "actions/attest-build-provenance"}:
                 target = with_values.get("subject-path") or with_values.get("subject-digest")
@@ -444,6 +503,12 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
                     "class": "attestation",
                     "step": current_step,
                     "target": target,
+                })
+            if repository == "github/codeql-action" and action.get("path") == "analyze":
+                compiled[current_job]["mutations"].append({
+                    "class": "code-scanning-results-upload",
+                    "step": current_step,
+                    "target": "repository-code-scanning",
                 })
             index += 1
             continue
@@ -531,10 +596,7 @@ def compile_bom(root: Path = ROOT) -> dict[str, Any]:
                 "references": expression_references(blocks[job]),
                 **compiled_steps[job],
             }
-            for action in entry["actions"]:
-                if action.get("repository") in {"actions/attest", "actions/attest-build-provenance"}:
-                    require(entry["oidc"] and effective[job].get("attestations") == "write",
-                            f"{filename}/{job}: attestation action lacks exact OIDC/attestations write authority")
+            validate_job_authority(filename, entry)
             job_entries.append(entry)
         workflows.append({
             "id": workflow_id,
@@ -621,6 +683,24 @@ def self_test() -> None:
     require(git is not None and git["operation"] == "push" and git.get("remote") == "origin"
             and git.get("targets") == ["HEAD:generated"] and git["mutating"],
             f"git push parser self-test drifted: {git!r}")
+    fetch = git_surface(
+        "git -C published fetch -q ../candidate.bundle refs/heads/generated:refs/heads/generated",
+        workflow="fixture.yml", job="job", step="fetch",
+    )
+    require(fetch is not None and fetch.get("remote") == "../candidate.bundle"
+            and fetch.get("targets") == ["refs/heads/generated:refs/heads/generated"],
+            f"git fetch parser self-test drifted: {fetch!r}")
+    ls_remote = git_surface(
+        "git -C published ls-remote --exit-code origin refs/heads/generated",
+        workflow="fixture.yml", job="job", step="ls-remote",
+    )
+    require(ls_remote is not None and ls_remote.get("remote") == "origin"
+            and ls_remote.get("targets") == ["refs/heads/generated"],
+            f"git ls-remote parser self-test drifted: {ls_remote!r}")
+    expect_failure(
+        lambda: git_surface("git fetch --mystery origin main", workflow="fixture.yml", job="job", step="fetch"),
+        "unclassified git fetch option",
+    )
 
     refs = expression_references("${{ secrets.ONE }} ${{ vars.TWO }} ${{ env.THREE }} ${{ github.token }}")
     require(refs == {
@@ -637,6 +717,36 @@ def self_test() -> None:
         "          curl https://example.invalid\n"
     )
     expect_failure(lambda: compile_steps(network_fixture, "fixture.yml", ["job"]), "unclassified network client")
+
+    artifact_fixture = (
+        "jobs:\n"
+        "  job:\n"
+        "    name: job\n"
+        "    steps:\n"
+        "      - name: Missing artifact path\n"
+        "        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n"
+        "        with:\n"
+        "          name: fixture\n"
+    )
+    expect_failure(lambda: compile_steps(artifact_fixture, "fixture.yml", ["job"]),
+                   "artifact action must expose its path")
+
+    expect_failure(
+        lambda: validate_job_authority("fixture.yml", {
+            "id": "write-job", "actions": [], "permissions": {"contents": "write"},
+            "oidc": False, "mutations": [],
+        }),
+        "write permissions lack a classified mutation",
+    )
+    expect_failure(
+        lambda: validate_job_authority("fixture.yml", {
+            "id": "attest-job",
+            "actions": [{"repository": "actions/attest"}],
+            "permissions": {"attestations": "write"}, "oidc": False,
+            "mutations": [{"class": "attestation"}],
+        }),
+        "attestation action lacks exact OIDC/attestations write authority",
+    )
 
 
 if __name__ == "__main__":
