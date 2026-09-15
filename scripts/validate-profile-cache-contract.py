@@ -44,7 +44,13 @@ REVIEW_NAVIGATION = (
     f'<a href="{ATTESTATION_REVIEW_URL}">Attestation Contract</a></sub></p>'
 )
 SELECTED_HEADING = '<h2 align="center">◇ Selected Engineering Systems</h2>'
-FIRST_FLAGSHIP = '<a href="https://github.com/portyu9/ai-qa-automation"><picture>'
+SPOTLIGHT_END = "<!-- spotlight-direct-links:end -->"
+SPOTLIGHT_FOOTER = (
+    '<p align="center"><sub>From my QE systems portfolio · permanent flagship systems excluded · '
+    'signals scoped to named <code>main</code>-branch workflows.</sub></p>'
+)
+ACTIVITY_HEADING = '<h2 align="center">◉ Activity Metrics</h2>'
+SECTION_BREAK = "\n\n---\n\n"
 
 SPOTLIGHT_IMMUTABLE = re.compile(
     r"https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/engineering-spotlight/"
@@ -210,12 +216,23 @@ def validate_reviewer_navigation(text: str) -> None:
     require(text.count(ATTESTATION_REVIEW_URL) == 1,
             "README attestation review link changed or duplicated")
     selected = text.find(SELECTED_HEADING)
-    navigation = text.find(REVIEW_NAVIGATION)
-    first_flagship = text.find(FIRST_FLAGSHIP, selected)
-    require(selected >= 0 and navigation >= 0 and first_flagship >= 0,
-            "Selected Engineering Systems review-navigation anchors are missing")
-    require(selected < navigation < first_flagship,
-            "evidence review links must remain adjacent to Selected Engineering Systems before flagship cards")
+    spotlight_end = text.find(SPOTLIGHT_END, selected)
+    spotlight_footer = text.find(SPOTLIGHT_FOOTER, spotlight_end)
+    navigation = text.find(REVIEW_NAVIGATION, spotlight_footer)
+    section_break = text.find(SECTION_BREAK, navigation + len(REVIEW_NAVIGATION))
+    activity = text.find(ACTIVITY_HEADING, section_break)
+    require(
+        min(selected, spotlight_end, spotlight_footer, navigation, section_break, activity) >= 0,
+        "Selected Engineering Systems footer review-navigation anchors are missing",
+    )
+    require(selected < spotlight_end < spotlight_footer < navigation < section_break < activity,
+            "evidence review links must remain at the bottom of Selected Engineering Systems before Activity Metrics")
+    require(text[spotlight_footer + len(SPOTLIGHT_FOOTER):navigation].strip() == "",
+            "evidence review links must remain directly below the Spotlight portfolio footer")
+    require(text[navigation + len(REVIEW_NAVIGATION):section_break].strip() == "",
+            "unexpected content appears between evidence review links and the Selected Engineering Systems section break")
+    require(text[section_break + len(SECTION_BREAK):activity].strip() == "",
+            "Activity Metrics must immediately follow the Selected Engineering Systems section break")
 
 
 def validate_readme(expected_signal: str = SIGNAL_FIELD_TOKEN) -> None:
