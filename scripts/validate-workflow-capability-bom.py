@@ -90,7 +90,7 @@ def validate_snapshot() -> tuple[int, int]:
 
     workflows = compiled["workflows"]
     jobs = sum(len(workflow["jobs"]) for workflow in workflows)
-    require(len(workflows) == 5, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
+    require(len(workflows) == 6, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
     require(jobs > 0, "Workflow Capability BOM contains no jobs")
     return len(workflows), jobs
 
