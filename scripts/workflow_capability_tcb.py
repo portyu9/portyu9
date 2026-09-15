@@ -30,6 +30,7 @@ PROTECTED_EXACT = {
 }
 PROTECTED_PREFIXES = (
     "scripts/automation_",
+    "scripts/codeql_autofix_",
     "scripts/workflow_capability_",
 )
 RESERVED_MODULES = {
@@ -147,6 +148,14 @@ def self_test() -> None:
             "TCB self-test lost admission module")
     require(is_protected_path("scripts/automation_policy.py"),
             "TCB self-test lost Automation Policy loader")
+    for path in (
+        "scripts/codeql_autofix_admission.py",
+        "scripts/codeql_autofix_controller_contract.py",
+        "scripts/codeql_autofix_discovery.py",
+        "scripts/codeql_autofix_future_module.py",
+    ):
+        require(is_protected_path(path),
+                f"TCB self-test lost CodeQL Autofix controller source: {path}")
     require(is_protected_path("scripts/json.py") and is_protected_path("scripts/json/__init__.py"),
             "TCB self-test lost stdlib-shadow protection")
     require(not is_protected_path("scripts/generate-profile-evidence.py"),
