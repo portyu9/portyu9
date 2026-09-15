@@ -144,7 +144,7 @@ def self_test() -> None:
         "workflow": CONTROL_WORKFLOW_ID,
         "key": "scripts/json.py",
         "before": None,
-        "after": {"sha256": "a" * 64, "candidateTreeSha": "b" * 40},
+        "after": {"sha256": "a" * 64, "candidateTcbSha256": "b" * 64},
     }])
     require(source_probe["hasExpansion"] and source_probe["expansionSha256"] != diff["expansionSha256"],
             "trusted source expansion did not alter the exact authorization digest")
@@ -170,7 +170,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument(
         "--candidate-tree-sha",
         default=None,
-        help="Exact candidate Git tree SHA; required when trusted control-source bytes differ",
+        help="Exact fetched candidate Git tree SHA transport proof; required when trusted control-source bytes differ",
     )
     value.add_argument("--self-test", action="store_true", help="Run trusted admission self-tests first")
     return value
