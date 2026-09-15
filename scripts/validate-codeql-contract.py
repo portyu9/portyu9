@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import sys
 
+from codeql_autofix_admission import self_test as autofix_admission_self_test
+
 ROOT = Path(__file__).resolve().parents[1]
 CODEQL = ROOT / ".github/workflows/codeql.yml"
 QUALITY = ROOT / ".github/workflows/profile-quality.yml"
@@ -101,8 +103,6 @@ def codeql_step_blocks(analyze: str) -> dict[str, str]:
 def validate_codeql(text: str) -> None:
     require(text.startswith("name: CodeQL\n"), "CodeQL workflow name changed")
 
-    # Event coverage is intentionally broad. Workflow/config changes are themselves
-    # security-sensitive here, so path-gated scans would create a bypass surface.
     require(text.count("  pull_request:\n") == 1, "CodeQL must run on every pull request")
     require(text.count("  push:\n") == 1, "CodeQL must run on push")
     require("    branches:\n      - main\n" in text, "CodeQL push analysis must target main")
@@ -111,9 +111,6 @@ def validate_codeql(text: str) -> None:
     require("paths:" not in text and "paths-ignore:" not in text,
             "CodeQL must not use path filters that can create scan gaps")
 
-    # Default token is read-only. Only each isolated language-analysis job gets SARIF
-    # upload authority. No job may publish repository content, mint identities, or
-    # mutate pull requests/Actions state.
     jobs_index = text.find("\njobs:\n")
     require(jobs_index > 0, "CodeQL jobs block is missing")
     pre_jobs = text[:jobs_index]
@@ -142,8 +139,6 @@ def validate_codeql(text: str) -> None:
             "CodeQL analysis jobs must have only contents: read plus security-events: write")
     require("continue-on-error:" not in analyze, "CodeQL findings/errors must not be made non-blocking")
 
-    # GitHub recommends one CodeQL language per analysis. This repository has two
-    # security-relevant CodeQL languages: authored Python and GitHub Actions workflows.
     require("strategy:\n      fail-fast: false\n      matrix:\n" in analyze,
             "CodeQL must isolate languages in a non-fail-fast matrix")
     expected_matrix = "      matrix:\n        language:\n          - python\n          - actions\n"
@@ -155,9 +150,6 @@ def validate_codeql(text: str) -> None:
     require(matrix_block.count("          - ") == 2,
             "CodeQL language matrix must not silently add or remove analysis languages")
 
-    # Step execution is authority too. Exact source blocks ensure reviewed action/query
-    # text cannot be moved into comments/inert data while an extra run step mutates the
-    # checkout or otherwise weakens what the required CodeQL statuses actually analyze.
     steps = codeql_step_blocks(analyze)
     for name in EXPECTED_STEP_NAMES:
         require(steps[name] == EXPECTED_STEPS[name], f"CodeQL {name} step changed")
@@ -212,6 +204,7 @@ def validate_governance(text: str) -> None:
 
 
 def self_test(good: str) -> None:
+    autofix_admission_self_test()
     validate_codeql(good)
     mutations = (
         (good.replace(CODEQL_SHA, "v4"), "Initialize CodeQL step changed"),
@@ -266,7 +259,7 @@ def main() -> int:
         print(
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
-            "reviewed steps, and use only reviewed SHA-pinned actions."
+            "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix auto-merge eligibility fixtures."
         )
         return 0
     except (OSError, ValueError) as exc:
