@@ -8,7 +8,6 @@ Live PR/bot identity and public release provenance are separate admission layers
 """
 from __future__ import annotations
 
-from pathlib import Path
 import re
 from typing import Mapping
 
@@ -24,11 +23,67 @@ USES = re.compile(
     r"(?P<tag>v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)(?P<suffix>\s*)$"
 )
 WORKFLOW_PATH = re.compile(r"^\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml$")
+SEMVER_IDENTIFIER = re.compile(r"^[0-9A-Za-z-]+$")
 
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def parse_semver(tag: str) -> tuple[tuple[int, int, int], tuple[str, ...] | None]:
+    """Parse SemVer 2.0 precedence fields; build metadata is intentionally ignored."""
+    require(SEMVER_TAG.fullmatch(tag) is not None, f"release annotation is not exact semver: {tag}")
+    body = tag[1:]
+    precedence, _, _build = body.partition("+")
+    core, separator, prerelease = precedence.partition("-")
+    parts = core.split(".")
+    require(len(parts) == 3, f"release annotation is not exact semver: {tag}")
+    for part in parts:
+        require(part.isdigit() and (part == "0" or not part.startswith("0")),
+                f"release annotation has invalid semver numeric identifier: {tag}")
+    pre: tuple[str, ...] | None = None
+    if separator:
+        identifiers = prerelease.split(".")
+        require(all(identifier and SEMVER_IDENTIFIER.fullmatch(identifier) for identifier in identifiers),
+                f"release annotation has invalid semver prerelease: {tag}")
+        for identifier in identifiers:
+            if identifier.isdigit():
+                require(identifier == "0" or not identifier.startswith("0"),
+                        f"release annotation has invalid semver prerelease numeric identifier: {tag}")
+        pre = tuple(identifiers)
+    return (int(parts[0]), int(parts[1]), int(parts[2])), pre
+
+
+def compare_prerelease(left: tuple[str, ...] | None, right: tuple[str, ...] | None) -> int:
+    if left is None and right is None:
+        return 0
+    if left is None:
+        return 1
+    if right is None:
+        return -1
+    for left_id, right_id in zip(left, right):
+        if left_id == right_id:
+            continue
+        left_numeric = left_id.isdigit()
+        right_numeric = right_id.isdigit()
+        if left_numeric and right_numeric:
+            return 1 if int(left_id) > int(right_id) else -1
+        if left_numeric != right_numeric:
+            return -1 if left_numeric else 1
+        return 1 if left_id > right_id else -1
+    if len(left) == len(right):
+        return 0
+    return 1 if len(left) > len(right) else -1
+
+
+def compare_semver(left: str, right: str) -> int:
+    """Return -1/0/1 by SemVer precedence, ignoring build metadata as required by SemVer."""
+    left_core, left_pre = parse_semver(left)
+    right_core, right_pre = parse_semver(right)
+    if left_core != right_core:
+        return 1 if left_core > right_core else -1
+    return compare_prerelease(left_pre, right_pre)
 
 
 def parse_uses(line: str, label: str) -> dict[str, str]:
@@ -37,7 +92,7 @@ def parse_uses(line: str, label: str) -> dict[str, str]:
     result = match.groupdict()
     require(ACTION.fullmatch(result["action"]) is not None, f"{label}: invalid Action path")
     require(SHA40.fullmatch(result["sha"]) is not None, f"{label}: Action ref must be exact lowercase SHA-40")
-    require(SEMVER_TAG.fullmatch(result["tag"]) is not None, f"{label}: release annotation must be exact semver")
+    parse_semver(result["tag"])
     return result
 
 
@@ -50,6 +105,7 @@ def workflow_occurrences(files: Mapping[str, str]) -> list[dict[str, object]]:
             if match is None:
                 continue
             value = match.groupdict()
+            parse_semver(value["tag"])
             result.append({
                 "path": path,
                 "line": line_number,
@@ -88,7 +144,8 @@ def classify_pin_only_update(
                     f"{path}:{index}: pin-only update changed uses-line syntax/whitespace")
             require(before["action"] == after["action"], f"{path}:{index}: Dependabot may not substitute the Action path")
             require(before["sha"] != after["sha"], f"{path}:{index}: candidate Action SHA did not change")
-            require(before["tag"] != after["tag"], f"{path}:{index}: changed SHA under the same release tag is not an admissible update")
+            require(compare_semver(after["tag"], before["tag"]) > 0,
+                    f"{path}:{index}: candidate release tag must strictly advance semver")
 
             action = before["action"]
             locked = trusted_lock.get(action)
@@ -166,6 +223,13 @@ def self_test() -> None:
         "github/codeql-action/analyze": {"sha": a, "tag": "v4.37.9"},
     }
 
+    require(compare_semver("v1.0.0", "v1.0.0-rc.1") > 0,
+            "semver self-test must rank stable release above prerelease")
+    require(compare_semver("v1.0.0-rc.10", "v1.0.0-rc.2") > 0,
+            "semver self-test must compare numeric prerelease identifiers numerically")
+    require(compare_semver("v1.0.0+build.2", "v1.0.0+build.1") == 0,
+            "semver self-test must ignore build metadata for precedence")
+
     base = {".github/workflows/a.yml": "name: A\nsteps:\n" + checkout_old + "\n"}
     candidate = {".github/workflows/a.yml": "name: A\nsteps:\n" + checkout_new + "\n"}
     result = classify_pin_only_update(base, candidate, lock)
@@ -196,7 +260,11 @@ def self_test() -> None:
     expect_failure(base, {".github/workflows/a.yml": "name: A\nsteps:\n" + setup_new + "\n"}, lock,
                    "may not substitute the Action path")
     expect_failure(base, {".github/workflows/a.yml": f"name: A\nsteps:\n      - uses: actions/checkout@{b} # v7.0.1\n"}, lock,
-                   "same release tag")
+                   "strictly advance semver")
+    expect_failure(base, {".github/workflows/a.yml": f"name: A\nsteps:\n      - uses: actions/checkout@{b} # v6.9.9\n"}, lock,
+                   "strictly advance semver")
+    expect_failure(base, {".github/workflows/a.yml": f"name: A\nsteps:\n      - uses: actions/checkout@{b} # v07.1.0\n"}, lock,
+                   "invalid semver numeric identifier")
     bad_lock = dict(lock)
     bad_lock["actions/checkout"] = {"sha": c, "tag": "v7.0.1"}
     expect_failure(base, candidate, bad_lock, "differs from trusted action lock")
@@ -222,7 +290,10 @@ def self_test() -> None:
 
 def main() -> int:
     self_test()
-    print("Dependabot pin-diff self-test passed: exact single-repository immutable Action updates only.")
+    print(
+        "Dependabot pin-diff self-test passed: exact single-repository immutable Action updates only; "
+        "candidate release tags must strictly advance SemVer precedence."
+    )
     return 0
 
 
