@@ -40,6 +40,9 @@ GH_API_VALUE_OPTIONS = {
     "--input", "--jq", "-q", "--cache", "--hostname", "--preview",
 }
 GH_API_FLAG_OPTIONS = {"-i", "--include", "--paginate", "--slurp", "--silent", "--verbose"}
+GRAPHQL_QUERY_FIELD = re.compile(
+    r"(?:^|\s)(?:-f|--raw-field|-F|--field)\s+query=(?:'|\")?(?P<operation>query|mutation)\b"
+)
 SHELL_CONTROL = {"|", "||", "&&", ";"}
 GIT_GLOBAL_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
 GIT_NETWORK_OPERATIONS = {"push", "fetch", "clone", "ls-remote"}
@@ -279,6 +282,22 @@ def api_surface(command: str, *, workflow: str, job: str, step: str) -> dict[str
         index += 1
     require(endpoint is not None and endpoint,
             f"{workflow}/{job}/{step}: gh api endpoint is not statically visible")
+
+    if endpoint == "graphql":
+        require(method in {"GET", "POST"},
+                f"{workflow}/{job}/{step}: GraphQL transport method must be POST/default")
+        operations = [match.group("operation") for match in GRAPHQL_QUERY_FIELD.finditer(fragment)]
+        require(len(operations) == 1,
+                f"{workflow}/{job}/{step}: GraphQL query operation must be statically visible exactly once")
+        operation = operations[0]
+        return {
+            "client": "gh-api",
+            "endpoint": endpoint,
+            "graphqlOperation": operation,
+            "method": "POST",
+            "mutating": operation == "mutation",
+        }
+
     return {
         "client": "gh-api",
         "endpoint": endpoint,
@@ -290,6 +309,9 @@ def api_surface(command: str, *, workflow: str, job: str, step: str) -> dict[str
 def mutation_class(surface: dict[str, Any]) -> str:
     endpoint = surface["endpoint"]
     method = surface["method"]
+    if endpoint == "graphql":
+        require(surface.get("graphqlOperation") == "mutation", "non-mutating GraphQL surface reached mutation classifier")
+        return "graphql-mutation"
     if "/actions/workflows/" in endpoint and "/dispatches" in endpoint:
         return "workflow-dispatch"
     if "/actions/runs/" in endpoint and endpoint.rstrip("/").endswith("/approve"):
@@ -671,6 +693,30 @@ def self_test() -> None:
         workflow="fixture.yml", job="job", step="api",
     )
     require(post["method"] == "POST" and post["mutating"], f"gh api method self-test drifted: {post!r}")
+    graphql_query = api_surface(
+        "gh api graphql -f query='query($owner:String!){viewer{login}}' -f owner=x",
+        workflow="fixture.yml", job="job", step="graphql-read",
+    )
+    require(graphql_query == {
+        "client": "gh-api", "endpoint": "graphql", "graphqlOperation": "query",
+        "method": "POST", "mutating": False,
+    }, f"GraphQL read classification self-test drifted: {graphql_query!r}")
+    graphql_mutation = api_surface(
+        "gh api graphql -f query='mutation($id:ID!){enablePullRequestAutoMerge(input:{pullRequestId:$id}){clientMutationId}}' -f id=x",
+        workflow="fixture.yml", job="job", step="graphql-write",
+    )
+    require(graphql_mutation["method"] == "POST" and graphql_mutation["mutating"]
+            and graphql_mutation["graphqlOperation"] == "mutation"
+            and mutation_class(graphql_mutation) == "graphql-mutation",
+            f"GraphQL mutation classification self-test drifted: {graphql_mutation!r}")
+    expect_failure(
+        lambda: api_surface("gh api graphql -f query=$DYNAMIC", workflow="fixture.yml", job="job", step="api"),
+        "GraphQL query operation must be statically visible exactly once",
+    )
+    expect_failure(
+        lambda: api_surface("gh api graphql -f query='mutation{x}' -f query='query{x}'", workflow="fixture.yml", job="job", step="api"),
+        "GraphQL query operation must be statically visible exactly once",
+    )
     expect_failure(
         lambda: api_surface("gh api --unknown value repos/x", workflow="fixture.yml", job="job", step="api"),
         "unclassified gh api option",
