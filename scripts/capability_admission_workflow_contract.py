@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "8bd4d488a934983d6cdbe3d2968002cdb94b7d78"
+EXPECTED_GIT_BLOB = "27acdf09a4273080b9dc1b3a00d135e24b03d7a2"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -62,18 +62,31 @@ def validate_text(text: str) -> None:
             "trusted admission lost complete candidate-tree proof")
     require('test "$(jq -r \'.[0].mode\' <<<"$ENTRY")" = "100644"' in text,
             "trusted admission lost candidate regular-file mode proof")
-    require("candidate-capability-source/.github/workflows" in text and
-            "candidate-capability-source/scripts" in text,
-            "trusted admission candidate data roots changed")
 
-    require("python3 scripts/workflow_capability_tcb.py select" in text,
-            "trusted admission no longer selects candidate TCB bytes with trusted code")
+    require("mkdir -p candidate-capability-source/.github/workflows" in text,
+            "trusted admission candidate workflow data root changed")
+    require("candidate-capability-source/scripts" not in text,
+            "trusted admission must never materialize candidate Python TCB paths")
+    require(": > candidate-capability-source/.candidate-tcb-sha256" in text,
+            "trusted admission lost the digest-only candidate TCB manifest")
+    require("python3 scripts/workflow_capability_tcb.py select-json" in text,
+            "trusted admission no longer parses candidate Git paths as one JSON value")
+    require("jq -e 'length > 0 and length == (unique | length)'" in text,
+            "trusted admission lost complete unique tree-path validation")
+    require('[[ "$PATH_VALUE" =~ ^\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml$ ]]' in text,
+            "trusted admission lost flat canonical workflow filename enforcement")
+    require("sha256sum" in text and
+            "printf '%s\\t%s\\n' \"$PATH_VALUE\" \"$DIGEST\" >> candidate-capability-source/.candidate-tcb-sha256" in text,
+            "trusted admission no longer binds selected candidate Git blobs by SHA-256")
+    require('test "$(wc -l < candidate-capability-source/.candidate-tcb-sha256)" = "${#SELECTED_PATHS[@]}"' in text,
+            "trusted admission lost selected-path/manifest cardinality closure")
+
     require("printf '%s\\n' \"$TREE_SHA\" > candidate-capability-source/.candidate-tree-sha" in text,
             "trusted admission no longer persists the exact candidate tree SHA")
     require('TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"' in text,
             "trusted admission lost cross-step candidate tree SHA binding")
-    require("python3 scripts/workflow_capability_admission.py \\\n            candidate-capability-source \\\n            --candidate-tree-sha \"$TREE_SHA\"" in text,
-            "trusted admission evaluator lost exact candidate tree binding")
+    require("python3 scripts/workflow_capability_admission.py \\\n            candidate-capability-source \\\n            --candidate-tree-sha \"$TREE_SHA\" \\\n            --candidate-tcb-manifest candidate-capability-source/.candidate-tcb-sha256" in text,
+            "trusted admission evaluator lost exact candidate tree/manifest binding")
 
     require(text.count("actions/checkout@") == 1,
             "trusted admission gained an additional checkout execution surface")
@@ -121,10 +134,10 @@ def self_test() -> None:
     else:
         raise ValueError("trusted admission contract accepted candidate checkout")
     try:
-        validate_text(text.replace("--candidate-tree-sha \"$TREE_SHA\"", "", 1))
+        validate_text(text.replace("--candidate-tcb-manifest candidate-capability-source/.candidate-tcb-sha256", "", 1))
     except ValueError as exc:
-        require("candidate tree binding" in str(exc),
-                f"trusted admission tree-binding self-test failed for wrong reason: {exc}")
+        require("tree/manifest binding" in str(exc),
+                f"trusted admission manifest-binding self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("trusted admission contract accepted an unbound candidate TCB")
 
@@ -132,4 +145,4 @@ def self_test() -> None:
 if __name__ == "__main__":
     self_test()
     validate()
-    print("Trusted capability admission workflow contract passed: exact bytes, read-only authority, base-only execution, candidate TCB bound to exact tree.")
+    print("Trusted capability admission workflow contract passed: exact bytes, read-only authority, base-only execution, candidate Python TCB digest-only binding.")
