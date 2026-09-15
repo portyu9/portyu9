@@ -2,6 +2,7 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import base64
 import hashlib
 from pathlib import Path
 import sys
@@ -66,10 +67,13 @@ def validate_snapshot() -> tuple[int, int]:
 
     compiler.self_test()
     compiled = compiler.compile_bom()
-    difference = first_difference(compiled, snapshot)
-    require(difference is None, f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
-
     canonical = compiler.canonical_json(compiled)
+    difference = first_difference(compiled, snapshot)
+    if difference is not None:
+        encoded = base64.b64encode(canonical.encode("utf-8")).decode("ascii")
+        print(f"BOM_CANONICAL_BASE64={encoded}", file=sys.stderr)
+        raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
+
     require(raw == canonical,
             "Workflow Capability BOM bytes are not canonical: "
             f"expected_sha256={hashlib.sha256(canonical.encode()).hexdigest()} "
