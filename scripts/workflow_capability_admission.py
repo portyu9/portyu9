@@ -20,6 +20,7 @@ import workflow_capability_authorization
 import workflow_capability_bom
 import workflow_capability_diff
 import workflow_capability_snapshot
+import workflow_capability_tcb
 
 ROOT = Path(__file__).resolve().parents[1]
 TRUSTED_LEDGER = ROOT / ".github/workflow-capability-expansion-authorizations-v1.json"
@@ -45,37 +46,49 @@ def workflow_by_id(bom: dict[str, Any], workflow_id: str) -> dict[str, Any] | No
     return matches[0] if matches else None
 
 
-def protect_trusted_control(
-    base: dict[str, Any], candidate: dict[str, Any], diff: dict[str, Any]
-) -> dict[str, Any]:
-    """Treat every change to the admission gate itself as authority expansion.
-
-    A syntactic restriction such as deleting the read-only gate is a capability reduction in
-    isolation but weakens the repository control plane. Binding the complete before/after
-    workflow object makes any self-change require an exact prior trusted authorization.
-    """
-    before = workflow_by_id(base, CONTROL_WORKFLOW_ID)
-    require(before is not None, "trusted base BOM is missing the capability admission control workflow")
-    after = workflow_by_id(candidate, CONTROL_WORKFLOW_ID)
-    if after is not None and workflow_capability_diff.stable_key(before) == workflow_capability_diff.stable_key(after):
+def with_expansions(diff: dict[str, Any], additions: list[dict[str, object]]) -> dict[str, Any]:
+    if not additions:
         return diff
-
     result = copy.deepcopy(diff)
-    boundary = {
-        "direction": "expansion",
-        "category": "trusted-control-boundary",
-        "workflow": CONTROL_WORKFLOW_ID,
-        "before": before,
-        "after": after,
-    }
-    result["expansions"].append(boundary)
+    result["expansions"].extend(copy.deepcopy(additions))
     result["expansions"].sort(key=workflow_capability_diff.stable_key)
     result["hasExpansion"] = True
     result["expansionSha256"] = workflow_capability_diff.digest(result["expansions"])
     return result
 
 
-def evaluate(candidate_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+def protect_trusted_control(
+    base: dict[str, Any], candidate: dict[str, Any], diff: dict[str, Any]
+) -> dict[str, Any]:
+    """Treat every semantic change to the admission gate itself as authority expansion."""
+    before = workflow_by_id(base, CONTROL_WORKFLOW_ID)
+    require(before is not None, "trusted base BOM is missing the capability admission control workflow")
+    after = workflow_by_id(candidate, CONTROL_WORKFLOW_ID)
+    if after is not None and workflow_capability_diff.stable_key(before) == workflow_capability_diff.stable_key(after):
+        return diff
+    return with_expansions(diff, [{
+        "direction": "expansion",
+        "category": "trusted-control-boundary",
+        "workflow": CONTROL_WORKFLOW_ID,
+        "before": before,
+        "after": after,
+    }])
+
+
+def protect_trusted_sources(
+    candidate_root: Path,
+    candidate_tree_sha: str | None,
+    diff: dict[str, Any],
+) -> dict[str, Any]:
+    additions = workflow_capability_tcb.source_expansions(ROOT, candidate_root, candidate_tree_sha)
+    return with_expansions(diff, additions)
+
+
+def evaluate(
+    candidate_root: Path,
+    *,
+    candidate_tree_sha: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     base = workflow_capability_snapshot.load_combined()
     ledger = strict_json(TRUSTED_LEDGER, "trusted capability authorization ledger")
     workflow_capability_authorization.validate_ledger(ledger)
@@ -83,6 +96,7 @@ def evaluate(candidate_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     candidate = trusted_workflow_capability.compile_repository(candidate_root)
     diff = workflow_capability_diff.semantic_diff(base, candidate)
     diff = protect_trusted_control(base, candidate, diff)
+    diff = protect_trusted_sources(candidate_root, candidate_tree_sha, diff)
     decision = workflow_capability_authorization.authorize(diff, ledger)
     require(decision["allowed"] is True, "capability admission returned a non-allow decision")
     return decision, diff
@@ -90,6 +104,7 @@ def evaluate(candidate_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 def self_test() -> None:
     workflow_capability_snapshot.self_test()
+    workflow_capability_tcb.self_test()
     base = workflow_capability_snapshot.load_combined()
     decision, diff = evaluate(ROOT)
     require(not diff["hasExpansion"] and not diff["expansions"] and not diff["reductions"],
@@ -123,6 +138,17 @@ def self_test() -> None:
         for item in removed_diff["expansions"]
     ), "trusted admission control removal did not require prior authorization")
 
+    source_probe = with_expansions(copy.deepcopy(diff), [{
+        "direction": "expansion",
+        "category": "trusted-control-source",
+        "workflow": CONTROL_WORKFLOW_ID,
+        "key": "scripts/json.py",
+        "before": None,
+        "after": {"sha256": "a" * 64, "candidateTreeSha": "b" * 40},
+    }])
+    require(source_probe["hasExpansion"] and source_probe["expansionSha256"] != diff["expansionSha256"],
+            "trusted source expansion did not alter the exact authorization digest")
+
     trusted_github = ROOT / ".github"
     require(workflow_capability_snapshot.BASE_SNAPSHOT.parent == trusted_github,
             "trusted base BOM escaped the trusted checkout")
@@ -139,7 +165,12 @@ def parser() -> argparse.ArgumentParser:
         nargs="?",
         type=Path,
         default=ROOT,
-        help="Repository tree containing untrusted candidate Automation Policy/workflow bytes",
+        help="Repository tree containing untrusted candidate Automation Policy/workflow/control-source bytes",
+    )
+    value.add_argument(
+        "--candidate-tree-sha",
+        default=None,
+        help="Exact candidate Git tree SHA; required when trusted control-source bytes differ",
     )
     value.add_argument("--self-test", action="store_true", help="Run trusted admission self-tests first")
     return value
@@ -150,7 +181,7 @@ def main() -> int:
     try:
         if args.self_test:
             self_test()
-        decision, diff = evaluate(args.candidate_root)
+        decision, diff = evaluate(args.candidate_root, candidate_tree_sha=args.candidate_tree_sha)
         print(workflow_capability_bom.canonical_json({
             "decision": decision,
             "diff": diff,

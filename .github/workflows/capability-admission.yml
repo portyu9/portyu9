@@ -55,12 +55,13 @@ jobs:
           [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
 
           rm -rf candidate-capability-source
-          mkdir -p candidate-capability-source/.github/workflows
+          mkdir -p candidate-capability-source/.github/workflows candidate-capability-source/scripts
 
           COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"
           test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
           TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          printf '%s\n' "$TREE_SHA" > candidate-capability-source/.candidate-tree-sha
 
           TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
           test "$(jq -r .truncated <<<"$TREE")" = "false"
@@ -72,18 +73,21 @@ jobs:
           test "${#PATHS[@]}" -gt 0
           test "$(printf '%s\n' "${PATHS[@]}" | LC_ALL=C sort -u | wc -l)" = "${#PATHS[@]}"
 
-          SELECTED=0
+          mapfile -t SELECTED_PATHS < <(
+            printf '%s\n' "${PATHS[@]}" |
+              python3 scripts/workflow_capability_tcb.py select
+          )
+          test "${#SELECTED_PATHS[@]}" -gt 0
+
           POLICY_SEEN=0
-          for PATH_VALUE in "${PATHS[@]}"; do
+          WORKFLOW_SEEN=0
+          for PATH_VALUE in "${SELECTED_PATHS[@]}"; do
+            if [ "$PATH_VALUE" = ".github/automation-policy-v1.json" ]; then
+              POLICY_SEEN=$((POLICY_SEEN + 1))
+            fi
             case "$PATH_VALUE" in
-              .github/automation-policy-v1.json)
-                POLICY_SEEN=$((POLICY_SEEN + 1))
-                ;;
               .github/workflows/*.yml|.github/workflows/*.yaml)
-                [[ "$PATH_VALUE" =~ ^\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml$ ]]
-                ;;
-              *)
-                continue
+                WORKFLOW_SEEN=$((WORKFLOW_SEEN + 1))
                 ;;
             esac
 
@@ -100,15 +104,19 @@ jobs:
             mkdir -p "candidate-capability-source/$(dirname "$PATH_VALUE")"
             jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "candidate-capability-source/$PATH_VALUE"
             test -s "candidate-capability-source/$PATH_VALUE"
-            SELECTED=$((SELECTED + 1))
           done
 
           test "$POLICY_SEEN" = "1"
-          test "$SELECTED" -ge 2
+          test "$WORKFLOW_SEEN" -ge 1
 
       - name: Evaluate trusted semantic capability admission
         run: |
           set -euo pipefail
-          python3 scripts/workflow_capability_admission.py candidate-capability-source > capability-admission.json
+          TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          python3 scripts/workflow_capability_admission.py \
+            candidate-capability-source \
+            --candidate-tree-sha "$TREE_SHA" \
+            > capability-admission.json
           jq -e '.decision.allowed == true' capability-admission.json >/dev/null
           jq -cS '{decision: .decision, expansionCount: (.diff.expansions | length), reductionCount: (.diff.reductions | length)}' capability-admission.json
