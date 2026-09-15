@@ -403,6 +403,11 @@
       "job": "validate"
     },
     {
+      "context": "trusted-capability-admission",
+      "workflow": "capability-admission",
+      "job": "admission"
+    },
+    {
       "context": "integration-pinned-upstream",
       "workflow": "profile-quality",
       "job": "integration"
