@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Evaluate an untrusted candidate repository against trusted capability policy.
 
-This module must execute from the trusted default-branch checkout. `candidate_root` is data
-only: trusted_workflow_capability parses candidate Automation Policy/workflows without
-importing or executing candidate code. The base BOM and authorization ledger are always read
-from this module's trusted repository root, never from the candidate tree.
+This module must execute from the trusted default-branch checkout. Candidate workflow/policy
+bytes are data only: trusted_workflow_capability parses them without importing or executing
+candidate code. Candidate protected Python bytes are represented only by a digest manifest;
+they are never materialized into executable-looking source paths. The base BOM and
+authorization ledger are always read from this module's trusted repository root.
 """
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ import argparse
 import copy
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, Mapping
 
 import automation_policy
 import trusted_workflow_capability
@@ -24,6 +25,8 @@ import workflow_capability_tcb
 
 ROOT = Path(__file__).resolve().parents[1]
 TRUSTED_LEDGER = ROOT / ".github/workflow-capability-expansion-authorizations-v1.json"
+CANDIDATE_DATA_ROOT = ROOT / "candidate-capability-source"
+CANDIDATE_TCB_MANIFEST = CANDIDATE_DATA_ROOT / ".candidate-tcb-sha256"
 CONTROL_WORKFLOW_ID = "capability-admission"
 
 
@@ -38,6 +41,27 @@ def strict_json(path: Path, label: str) -> Any:
         return automation_policy.strict_json_loads(path.read_text(encoding="utf-8"))
     except (UnicodeDecodeError, ValueError) as exc:
         raise ValueError(f"{label} JSON is invalid: {exc}") from exc
+
+
+def canonical_candidate_root(path: Path) -> Path:
+    resolved = path.resolve(strict=True)
+    require(resolved.is_dir() and not resolved.is_symlink(), f"candidate repository root is invalid: {resolved}")
+    if resolved == ROOT:
+        return resolved
+    require(resolved == CANDIDATE_DATA_ROOT.resolve(strict=True),
+            "candidate repository root must be the fixed admission data directory")
+    return resolved
+
+
+def candidate_manifest(path: Path | None, candidate_root: Path) -> Mapping[str, str] | None:
+    if candidate_root == ROOT:
+        require(path is None, "trusted self-comparison must not accept an external candidate TCB manifest")
+        return None
+    require(path is not None, "candidate TCB digest manifest is required for PR admission")
+    resolved = path.resolve(strict=True)
+    require(resolved == CANDIDATE_TCB_MANIFEST.resolve(strict=True),
+            "candidate TCB manifest must be the fixed admission manifest path")
+    return workflow_capability_tcb.load_manifest(resolved)
 
 
 def workflow_by_id(bom: dict[str, Any], workflow_id: str) -> dict[str, Any] | None:
@@ -79,8 +103,14 @@ def protect_trusted_sources(
     candidate_root: Path,
     candidate_tree_sha: str | None,
     diff: dict[str, Any],
+    manifest: Mapping[str, str] | None,
 ) -> dict[str, Any]:
-    additions = workflow_capability_tcb.source_expansions(ROOT, candidate_root, candidate_tree_sha)
+    additions = workflow_capability_tcb.source_expansions(
+        ROOT,
+        candidate_root,
+        candidate_tree_sha,
+        candidate_manifest=manifest,
+    )
     return with_expansions(diff, additions)
 
 
@@ -88,7 +118,11 @@ def evaluate(
     candidate_root: Path,
     *,
     candidate_tree_sha: str | None = None,
+    candidate_tcb_manifest: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    candidate_root = canonical_candidate_root(candidate_root)
+    manifest = candidate_manifest(candidate_tcb_manifest, candidate_root)
+
     base = workflow_capability_snapshot.load_combined()
     ledger = strict_json(TRUSTED_LEDGER, "trusted capability authorization ledger")
     workflow_capability_authorization.validate_ledger(ledger)
@@ -96,7 +130,7 @@ def evaluate(
     candidate = trusted_workflow_capability.compile_repository(candidate_root)
     diff = workflow_capability_diff.semantic_diff(base, candidate)
     diff = protect_trusted_control(base, candidate, diff)
-    diff = protect_trusted_sources(candidate_root, candidate_tree_sha, diff)
+    diff = protect_trusted_sources(candidate_root, candidate_tree_sha, diff, manifest)
     decision = workflow_capability_authorization.authorize(diff, ledger)
     require(decision["allowed"] is True, "capability admission returned a non-allow decision")
     return decision, diff
@@ -165,12 +199,18 @@ def parser() -> argparse.ArgumentParser:
         nargs="?",
         type=Path,
         default=ROOT,
-        help="Repository tree containing untrusted candidate Automation Policy/workflow/control-source bytes",
+        help="Fixed repository data tree containing untrusted candidate Automation Policy/workflow bytes",
     )
     value.add_argument(
         "--candidate-tree-sha",
         default=None,
         help="Exact fetched candidate Git tree SHA transport proof; required when trusted control-source bytes differ",
+    )
+    value.add_argument(
+        "--candidate-tcb-manifest",
+        type=Path,
+        default=None,
+        help="Fixed digest-only manifest for candidate trusted-control-source Git blobs",
     )
     value.add_argument("--self-test", action="store_true", help="Run trusted admission self-tests first")
     return value
@@ -181,7 +221,11 @@ def main() -> int:
     try:
         if args.self_test:
             self_test()
-        decision, diff = evaluate(args.candidate_root, candidate_tree_sha=args.candidate_tree_sha)
+        decision, diff = evaluate(
+            args.candidate_root,
+            candidate_tree_sha=args.candidate_tree_sha,
+            candidate_tcb_manifest=args.candidate_tcb_manifest,
+        )
         print(workflow_capability_bom.canonical_json({
             "decision": decision,
             "diff": diff,
