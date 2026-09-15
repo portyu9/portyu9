@@ -30,7 +30,7 @@
     },
     "codeql-autofix": {
       "path": ".github/workflows/codeql-autofix.yml",
-      "triggers": ["workflow_run", "schedule", "repository_dispatch"],
+      "triggers": ["repository_dispatch", "schedule", "workflow_run"],
       "permissions": {
         "actions": "read",
         "checks": "read",
