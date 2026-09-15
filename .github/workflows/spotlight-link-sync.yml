@@ -1067,6 +1067,38 @@ jobs:
           done
           test "$(printf '%s\n' "$CODEQL_RUN_ID" "$DEPENDENCY_RUN_ID" "$PROFILE_RUN_ID" | LC_ALL=C sort -u | wc -l)" = "3"
           test "$(printf '%s\n' "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_CHECK_SUITE_ID" | LC_ALL=C sort -u | wc -l)" = "3"
+
+          CAPABILITY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"
+          [[ "$CAPABILITY_WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
+          CAPABILITY_RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request_target&per_page=100")"
+          CAPABILITY_RUNS_TOTAL="$(jq -r '.total_count // empty' <<<"$CAPABILITY_RUNS")"
+          CAPABILITY_RUNS_COUNT="$(jq '.workflow_runs | length' <<<"$CAPABILITY_RUNS")"
+          [[ "$CAPABILITY_RUNS_TOTAL" =~ ^[0-9]+$ ]]
+          [[ "$CAPABILITY_RUNS_COUNT" =~ ^[0-9]+$ ]]
+          test "$CAPABILITY_RUNS_TOTAL" = "$CAPABILITY_RUNS_COUNT" || {
+            echo "Canonical Capability admission workflow-run response is incomplete." >&2
+            exit 1
+          }
+          test "$CAPABILITY_RUNS_TOTAL" = "1"
+          CAPABILITY_MATCH_COUNT="$(jq --argjson workflow_id "$CAPABILITY_WORKFLOW_ID" '[.workflow_runs[] | select(.name == "Capability admission" and .workflow_id == $workflow_id)] | length' <<<"$CAPABILITY_RUNS")"
+          test "$CAPABILITY_MATCH_COUNT" = "1"
+          CAPABILITY_RUN="$(jq -c --argjson workflow_id "$CAPABILITY_WORKFLOW_ID" '[.workflow_runs[] | select(.name == "Capability admission" and .workflow_id == $workflow_id)][0]' <<<"$CAPABILITY_RUNS")"
+          CAPABILITY_RUN_ID="$(jq -r .id <<<"$CAPABILITY_RUN")"
+          CAPABILITY_CHECK_SUITE_ID="$(jq -r .check_suite_id <<<"$CAPABILITY_RUN")"
+          CAPABILITY_RUN_ATTEMPT="$(jq -r .run_attempt <<<"$CAPABILITY_RUN")"
+          [[ "$CAPABILITY_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$CAPABILITY_CHECK_SUITE_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$CAPABILITY_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          test "$(jq -r .event <<<"$CAPABILITY_RUN")" = "pull_request_target"
+          test "$(jq -r .head_branch <<<"$CAPABILITY_RUN")" = "$CANDIDATE_BRANCH"
+          test "$(jq -r .head_sha <<<"$CAPABILITY_RUN")" = "$HEAD_SHA"
+          test "$(jq -r .repository.full_name <<<"$CAPABILITY_RUN")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .head_repository.full_name <<<"$CAPABILITY_RUN")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .status <<<"$CAPABILITY_RUN")" = "completed"
+          test "$(jq -r .conclusion <<<"$CAPABILITY_RUN")" = "success"
+          test "$(printf '%s\n' "$CODEQL_RUN_ID" "$DEPENDENCY_RUN_ID" "$PROFILE_RUN_ID" "$CAPABILITY_RUN_ID" | LC_ALL=C sort -u | wc -l)" = "4"
+          test "$(printf '%s\n' "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_CHECK_SUITE_ID" "$CAPABILITY_CHECK_SUITE_ID" | LC_ALL=C sort -u | wc -l)" = "4"
+
           CHECKS="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
           CHECKS_TOTAL="$(jq -r '.total_count // empty' <<<"$CHECKS")"
           CHECKS_COUNT="$(jq '.check_runs | length' <<<"$CHECKS")"
@@ -1076,7 +1108,7 @@ jobs:
             echo "Spotlight terminal check-run response is incomplete." >&2
             exit 1
           }
-          EXPECTED_CHECKS="$(jq -cn --arg head "$HEAD_SHA" --argjson codeql "$CODEQL_CHECK_SUITE_ID" --argjson dependency "$DEPENDENCY_CHECK_SUITE_ID" --argjson profile "$PROFILE_CHECK_SUITE_ID" '[{name:"analyze-actions",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"analyze-python",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"dependency-review",check_suite_id:$dependency,status:"completed",conclusion:"success",head_sha:$head},{name:"integration-pinned-upstream",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head},{name:"validate-contracts",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}] | sort_by(.name)')"
+          EXPECTED_CHECKS="$(jq -cn --arg head "$HEAD_SHA" --argjson codeql "$CODEQL_CHECK_SUITE_ID" --argjson dependency "$DEPENDENCY_CHECK_SUITE_ID" --argjson profile "$PROFILE_CHECK_SUITE_ID" --argjson capability "$CAPABILITY_CHECK_SUITE_ID" '[{name:"analyze-actions",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"analyze-python",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"dependency-review",check_suite_id:$dependency,status:"completed",conclusion:"success",head_sha:$head},{name:"integration-pinned-upstream",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head},{name:"trusted-capability-admission",check_suite_id:$capability,status:"completed",conclusion:"success",head_sha:$head},{name:"validate-contracts",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}] | sort_by(.name)')"
           OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
           test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
           echo "Spotlight terminal stage: required-checks-verified" >&2

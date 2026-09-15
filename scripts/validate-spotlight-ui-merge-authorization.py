@@ -90,6 +90,22 @@ LEGACY_PROFILE_DISPATCH = '''  dispatch:
 '''
 ORIGINAL_PROJECT_ITEM9 = core.project_item9
 
+ITEM13_CAPABILITY_FRAGMENTS = (
+    'CAPABILITY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"',
+    'CAPABILITY_RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request_target&per_page=100")"',
+    'test "$CAPABILITY_RUNS_TOTAL" = "$CAPABILITY_RUNS_COUNT" || {',
+    'test "$CAPABILITY_RUNS_TOTAL" = "1"',
+    'select(.name == "Capability admission" and .workflow_id == $workflow_id)',
+    'test "$(jq -r .event <<<"$CAPABILITY_RUN")" = "pull_request_target"',
+    'test "$(jq -r .head_branch <<<"$CAPABILITY_RUN")" = "$CANDIDATE_BRANCH"',
+    'test "$(jq -r .head_sha <<<"$CAPABILITY_RUN")" = "$HEAD_SHA"',
+    'test "$(jq -r .repository.full_name <<<"$CAPABILITY_RUN")" = "$GITHUB_REPOSITORY"',
+    'test "$(jq -r .head_repository.full_name <<<"$CAPABILITY_RUN")" = "$GITHUB_REPOSITORY"',
+    'test "$(jq -r .status <<<"$CAPABILITY_RUN")" = "completed"',
+    'test "$(jq -r .conclusion <<<"$CAPABILITY_RUN")" = "success"',
+    '{name:"trusted-capability-admission",check_suite_id:$capability,status:"completed",conclusion:"success",head_sha:$head}',
+)
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -129,6 +145,42 @@ def project_item9(sync: str) -> str:
     return legacy
 
 
+def validate_item13_trusted_admission_overlay(sync: str) -> None:
+    merge = core.job_block(sync, "merge", None)
+    for fragment in ITEM13_CAPABILITY_FRAGMENTS:
+        require(fragment in merge,
+                f"Spotlight terminal trusted-capability admission proof is missing: {fragment}")
+    require(
+        'test "$(printf \'%s\\n\' "$CODEQL_RUN_ID" "$DEPENDENCY_RUN_ID" "$PROFILE_RUN_ID" "$CAPABILITY_RUN_ID" | LC_ALL=C sort -u | wc -l)" = "4"' in merge,
+        "Spotlight terminal run provenance must keep all four canonical run identities distinct",
+    )
+    require(
+        'test "$(printf \'%s\\n\' "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_CHECK_SUITE_ID" "$CAPABILITY_CHECK_SUITE_ID" | LC_ALL=C sort -u | wc -l)" = "4"' in merge,
+        "Spotlight terminal check-suite provenance must keep all four canonical suite identities distinct",
+    )
+    capability_run = merge.index('CAPABILITY_RUNS="$(gh api ')
+    checks = merge.index('CHECKS="$(gh api -H ')
+    mutation = merge.index('gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"')
+    require(capability_run < checks < mutation,
+            "Spotlight terminal trusted-capability proof must precede exact check binding and merge mutation")
+
+
+def self_test_item13(sync: str) -> None:
+    validate_item13_trusted_admission_overlay(sync)
+    mutated = sync.replace(
+        '{name:"trusted-capability-admission",check_suite_id:$capability,status:"completed",conclusion:"success",head_sha:$head}',
+        '{name:"trusted-capability-admission",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}',
+        1,
+    )
+    try:
+        validate_item13_trusted_admission_overlay(mutated)
+    except ValueError as exc:
+        require("trusted-capability admission proof" in str(exc),
+                f"item-13 trusted admission self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("item-13 trusted admission self-test accepted an unbound trusted check suite")
+
+
 def main() -> int:
     try:
         for path in (core.SYNC, core.STATS, core.POLICY, core.BUILDER, core.BUILDER_CORE,
@@ -152,8 +204,11 @@ def main() -> int:
         core.validate_builder_script(builder, builder_core)
         core.validate_mac(sync)
         core.self_test(sync, stats, policy)
+        validate_item13_trusted_admission_overlay(sync)
+        self_test_item13(sync)
         print(
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
+            "item-13 additionally binds the exact successful default-branch-trusted capability-admission run/check-suite before terminal mutation; "
             "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state, "
             "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance "
             "and the CLI's direct verified statement before expected-head mutation."
