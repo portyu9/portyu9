@@ -2,5 +2,13 @@
   "schemaVersion": 1,
   "ledgerId": "workflow-capability-expansion-authorizations-v1",
   "repository": "portyu9/portyu9",
-  "authorizations": []
+  "authorizations": [
+    {
+      "id": "cap-trigger-edited-proof",
+      "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
+      "candidateBomSha256": "4f96e14e54db3b917364c54e5baa1760104b7e29c7ccf5fa9ef191497c771942",
+      "expansionSha256": "9b17d2ba5d0a8592fb160de325ffea058c2404eb50fbd6715baad89070591afd",
+      "rationale": "Production proof of exact prior review for the temporary read-only edited-trigger expansion."
+    }
+  ]
 }
