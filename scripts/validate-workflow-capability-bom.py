@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+import capability_admission_workflow_contract
 import trusted_workflow_capability
 import workflow_capability_admission
 import workflow_capability_authorization
@@ -52,6 +53,8 @@ def validate_snapshot() -> tuple[int, int]:
     trusted_workflow_capability.self_test()
     workflow_capability_authorization.self_test()
     workflow_capability_snapshot.self_test()
+    capability_admission_workflow_contract.self_test()
+    capability_admission_workflow_contract.validate()
     workflow_capability_admission.self_test()
 
     compiled = compiler.compile_bom()
@@ -78,7 +81,7 @@ def main() -> int:
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
-            "composite snapshot, and trusted admission self-tests passed."
+            "composite snapshot, exact trusted-workflow bytes, and admission self-tests passed."
         )
         return 0
     except (OSError, ValueError) as exc:
