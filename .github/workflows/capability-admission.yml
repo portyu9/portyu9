@@ -1,0 +1,114 @@
+name: Capability admission
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13.15"
+
+jobs:
+  admission:
+    name: trusted-capability-admission
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout exact trusted base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
+      - name: Fetch exact candidate capability source as data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$BASE_REF" = "main"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+
+          rm -rf candidate-capability-source
+          mkdir -p candidate-capability-source/.github/workflows
+
+          COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
+          TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
+          test "$(jq -r .truncated <<<"$TREE")" = "false"
+
+          mapfile -t PATHS < <(
+            jq -r '.tree[] | select(.type == "blob") | .path' <<<"$TREE" |
+              LC_ALL=C sort
+          )
+          test "${#PATHS[@]}" -gt 0
+          test "$(printf '%s\n' "${PATHS[@]}" | LC_ALL=C sort -u | wc -l)" = "${#PATHS[@]}"
+
+          SELECTED=0
+          POLICY_SEEN=0
+          for PATH_VALUE in "${PATHS[@]}"; do
+            case "$PATH_VALUE" in
+              .github/automation-policy-v1.json)
+                POLICY_SEEN=$((POLICY_SEEN + 1))
+                ;;
+              .github/workflows/*.yml|.github/workflows/*.yaml)
+                [[ "$PATH_VALUE" =~ ^\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml$ ]]
+                ;;
+              *)
+                continue
+                ;;
+            esac
+
+            ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path)]' <<<"$TREE")"
+            test "$(jq 'length' <<<"$ENTRY")" = "1"
+            test "$(jq -r '.[0].type' <<<"$ENTRY")" = "blob"
+            test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
+            BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
+            [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+            BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
+            test "$(jq -r .encoding <<<"$BLOB")" = "base64"
+            mkdir -p "candidate-capability-source/$(dirname "$PATH_VALUE")"
+            jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "candidate-capability-source/$PATH_VALUE"
+            test -s "candidate-capability-source/$PATH_VALUE"
+            SELECTED=$((SELECTED + 1))
+          done
+
+          test "$POLICY_SEEN" = "1"
+          test "$SELECTED" -ge 2
+
+      - name: Evaluate trusted semantic capability admission
+        run: |
+          set -euo pipefail
+          python3 scripts/workflow_capability_admission.py candidate-capability-source > capability-admission.json
+          jq -e '.decision.allowed == true' capability-admission.json >/dev/null
+          jq -cS '{decision: .decision, expansionCount: (.diff.expansions | length), reductionCount: (.diff.reductions | length)}' capability-admission.json
