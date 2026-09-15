@@ -7,6 +7,7 @@ import re
 import sys
 
 from codeql_autofix_admission import self_test as autofix_admission_self_test
+from codeql_autofix_controller_contract import self_test as autofix_controller_self_test
 from codeql_autofix_discovery import self_test as autofix_discovery_self_test
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -206,6 +207,7 @@ def validate_governance(text: str) -> None:
 
 def self_test(good: str) -> None:
     autofix_admission_self_test()
+    autofix_controller_self_test()
     autofix_discovery_self_test()
     validate_codeql(good)
     mutations = (
@@ -261,8 +263,8 @@ def main() -> int:
         print(
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
-            "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission plus read-only "
-            "discovery fixtures."
+            "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
+            "and controller trust/provenance fixtures."
         )
         return 0
     except (OSError, ValueError) as exc:
