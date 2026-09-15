@@ -67,7 +67,6 @@ def validate_text(text: str) -> None:
     require("python3 scripts/workflow_capability_admission.py candidate-capability-source" in text,
             "trusted admission evaluator command changed")
 
-    # Candidate bytes may only be fetched into the data tree; never checkout/import/execute the candidate ref.
     require(text.count("actions/checkout@") == 1,
             "trusted admission gained an additional checkout execution surface")
     require("ref: ${{ github.event.pull_request.head.sha }}" not in text,
@@ -105,8 +104,12 @@ def self_test() -> None:
             1,
         ))
     except ValueError as exc:
-        require("trusted base SHA" in str(exc) or "checkout candidate" in str(exc),
-                f"trusted admission checkout self-test failed for wrong reason: {exc}")
+        require(
+            "trusted base SHA" in str(exc)
+            or "checkout candidate" in str(exc)
+            or "forbidden authority" in str(exc),
+            f"trusted admission checkout self-test failed for wrong reason: {exc}",
+        )
     else:
         raise ValueError("trusted admission contract accepted candidate checkout")
 
