@@ -29,17 +29,28 @@ USES_KEY = re.compile(r"^        uses:\s*(?P<uses>\S+)\s*(?:#.*)?$")
 RUN_BLOCK = re.compile(r"^        run:\s*[|>]\s*$")
 WITH_BLOCK = re.compile(r"^        with:\s*$")
 WITH_ENTRY = re.compile(r"^          (?P<key>[A-Za-z0-9_.-]+):\s*(?P<value>.*?)\s*$")
+BLOCK_SCALAR = re.compile(r"^[|>](?:[+-]?[1-9]?|[1-9][+-]?)?$")
 TOP_NAME = re.compile(r"^name:\s*(?P<name>.+?)\s*$", re.M)
 EXPR_REF = re.compile(r"\b(?P<scope>secrets|vars|env)\.(?P<name>[A-Za-z_][A-Za-z0-9_]*)\b")
 GITHUB_TOKEN = re.compile(r"\bgithub\.token\b")
 MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 FORBIDDEN_NETWORK = re.compile(r"(^|[;&|()\s])(curl|wget)(?:\s|$)")
-GIT_NETWORK = re.compile(r"(^|[;&|()\s])git\s+(push|fetch|clone)(?:\s|$)")
+GH_API_VALUE_OPTIONS = {
+    "-X", "--method", "-H", "--header", "-f", "--raw-field", "-F", "--field",
+    "--input", "--jq", "-q", "--cache", "--hostname", "--preview",
+}
+GH_API_FLAG_OPTIONS = {"-i", "--include", "--paginate", "--slurp", "--silent", "--verbose"}
+GIT_GLOBAL_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
+GIT_NETWORK_OPERATIONS = {"push", "fetch", "clone", "ls-remote"}
 
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def indentation(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
 
 
 def unquote(value: str) -> str:
@@ -51,6 +62,17 @@ def unquote(value: str) -> str:
 
 def canonical_json(value: Any) -> str:
     return json.dumps(value, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+
+
+def shell_tokens(value: str) -> list[str]:
+    """Tokenize the reviewed shell fragments without evaluating shell syntax.
+
+    The surrounding shell assignment/command-substitution syntax can leave a trailing
+    quote or parenthesis after the gh/git invocation. The lexical tokenizer therefore
+    consumes balanced quoted tokens when present and treats the remaining shell text as
+    opaque tokens; capability extraction only inspects the reviewed command prefix.
+    """
+    return re.findall(r"(?:'[^']*'|\"[^\"]*\"|\S+)", value)
 
 
 def workflow_sources(policy: dict[str, Any]) -> list[tuple[str, str, Path]]:
@@ -82,7 +104,7 @@ def parse_trigger_details(text: str, label: str) -> dict[str, Any]:
     for line_number, line in enumerate(lines[starts[0] + 1:], start=starts[0] + 2):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        indent = len(line) - len(line.lstrip(" "))
+        indent = indentation(line)
         if indent == 0:
             break
         if indent == 2:
@@ -137,6 +159,49 @@ def effective_permissions(
     return result
 
 
+def parse_with_values(
+    lines: list[str], start: int, *, workflow: str, job: str, step: str
+) -> dict[str, str]:
+    values: dict[str, str] = {}
+    cursor = start
+    while cursor < len(lines):
+        line = lines[cursor]
+        if line.strip() and indentation(line) <= 8:
+            break
+        if not line.strip():
+            cursor += 1
+            continue
+        entry = WITH_ENTRY.fullmatch(line)
+        require(entry is not None,
+                f"{workflow}/{job}/{step}: unsupported with syntax: {line.strip()}")
+        key = entry.group("key")
+        require(key not in values, f"{workflow}/{job}/{step}: duplicate with key: {key}")
+        raw = entry.group("value")
+        if BLOCK_SCALAR.fullmatch(raw):
+            style = raw[0]
+            cursor += 1
+            payload: list[str] = []
+            while cursor < len(lines):
+                candidate = lines[cursor]
+                if candidate.strip() and indentation(candidate) <= 10:
+                    break
+                if not candidate.strip():
+                    payload.append("")
+                    cursor += 1
+                    continue
+                require(indentation(candidate) >= 12,
+                        f"{workflow}/{job}/{step}: malformed with block scalar for {key}")
+                payload.append(candidate[12:])
+                cursor += 1
+            while payload and payload[-1] == "":
+                payload.pop()
+            values[key] = ("\n" if style == "|" else " ").join(payload)
+            continue
+        values[key] = unquote(raw)
+        cursor += 1
+    return values
+
+
 def normalize_shell_command(lines: list[str], start: int) -> tuple[str, int]:
     parts: list[str] = []
     index = start
@@ -157,23 +222,49 @@ def normalize_shell_command(lines: list[str], start: int) -> tuple[str, int]:
 def api_surface(command: str, *, workflow: str, job: str, step: str) -> dict[str, Any]:
     position = command.find("gh api ")
     require(position >= 0, "internal gh api parser misuse")
-    fragment = command[position:]
-    method_match = re.search(r"(?:^|\s)(?:-X|--method)\s+([A-Za-z]+)(?:\s|$)", fragment)
-    method = method_match.group(1).upper() if method_match else "GET"
-    tokens = re.findall(r"(?:'[^']*'|\"[^\"]*\"|\S+)", fragment[len("gh api "):])
-    endpoint = next(
-        (unquote(token) for token in tokens
-         if not token.startswith("-") and token.upper() not in {"GET", "POST", "PUT", "PATCH", "DELETE"}),
-        None,
-    )
-    require(endpoint is not None, f"{workflow}/{job}/{step}: gh api endpoint is not statically visible")
-    mutation = method in MUTATING_METHODS
+    fragment = command[position + len("gh api "):]
+    tokens = shell_tokens(fragment)
+    method = "GET"
+    endpoint: str | None = None
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token in {"-X", "--method"}:
+            require(index + 1 < len(tokens), f"{workflow}/{job}/{step}: gh api method value is missing")
+            method = unquote(tokens[index + 1]).upper().rstrip(")\"")
+            require(method in {"GET", "POST", "PUT", "PATCH", "DELETE"},
+                    f"{workflow}/{job}/{step}: unsupported gh api method: {method}")
+            index += 2
+            continue
+        if token.startswith("--method="):
+            method = unquote(token.split("=", 1)[1]).upper().rstrip(")\"")
+            require(method in {"GET", "POST", "PUT", "PATCH", "DELETE"},
+                    f"{workflow}/{job}/{step}: unsupported gh api method: {method}")
+            index += 1
+            continue
+        if token in GH_API_VALUE_OPTIONS:
+            require(index + 1 < len(tokens),
+                    f"{workflow}/{job}/{step}: gh api option value is missing: {token}")
+            index += 2
+            continue
+        if any(token.startswith(option + "=") for option in GH_API_VALUE_OPTIONS if option.startswith("--")):
+            index += 1
+            continue
+        if token in GH_API_FLAG_OPTIONS:
+            index += 1
+            continue
+        require(not token.startswith("-"),
+                f"{workflow}/{job}/{step}: unclassified gh api option: {token}")
+        if endpoint is None:
+            endpoint = unquote(token).rstrip(")\"")
+        index += 1
+    require(endpoint is not None and endpoint,
+            f"{workflow}/{job}/{step}: gh api endpoint is not statically visible")
     return {
         "client": "gh-api",
-        "command": fragment,
         "endpoint": endpoint,
         "method": method,
-        "mutating": mutation,
+        "mutating": method in MUTATING_METHODS,
     }
 
 
@@ -193,6 +284,70 @@ def mutation_class(surface: dict[str, Any]) -> str:
     if "/issues" in endpoint:
         return "issue-or-pr-metadata"
     return f"github-api-{method.lower()}"
+
+
+def git_surface(command: str, *, workflow: str, job: str, step: str) -> dict[str, Any] | None:
+    position = command.find("git ")
+    if position < 0:
+        return None
+    tokens = shell_tokens(command[position + len("git "):])
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token in GIT_GLOBAL_VALUE_OPTIONS:
+            require(index + 1 < len(tokens),
+                    f"{workflow}/{job}/{step}: git global option value is missing: {token}")
+            index += 2
+            continue
+        if any(token.startswith(option + "=") for option in GIT_GLOBAL_VALUE_OPTIONS if option.startswith("--")):
+            index += 1
+            continue
+        if token.startswith("-"):
+            return None
+        operation = token.rstrip(")\"")
+        break
+    else:
+        return None
+    if operation not in GIT_NETWORK_OPERATIONS:
+        return None
+    args = [unquote(token).rstrip(")\"") for token in tokens[index + 1:]]
+    positional = [token for token in args if token and not token.startswith("-") and not token.startswith(">")]
+    surface: dict[str, Any] = {
+        "client": "git",
+        "operation": operation,
+        "mutating": operation == "push",
+    }
+    if positional:
+        surface["remote"] = positional[0]
+    if len(positional) > 1:
+        surface["targets"] = positional[1:]
+    return surface
+
+
+def job_blocks(text: str, jobs: list[str], label: str) -> dict[str, str]:
+    lines = text.splitlines(keepends=True)
+    starts: list[tuple[int, str]] = []
+    for index, line in enumerate(lines):
+        match = JOB_KEY.fullmatch(line.rstrip("\n"))
+        if match:
+            starts.append((index, match.group("job")))
+    observed = [job for _, job in starts]
+    require(set(observed) == set(jobs) and len(observed) == len(jobs),
+            f"{label}: job block inventory changed: expected={sorted(jobs)} observed={observed}")
+    blocks: dict[str, str] = {}
+    for offset, (start, job) in enumerate(starts):
+        end = starts[offset + 1][0] if offset + 1 < len(starts) else len(lines)
+        blocks[job] = "".join(lines[start:end])
+    return blocks
+
+
+def expression_references(text: str) -> dict[str, list[str]]:
+    result: dict[str, set[str]] = {"secrets": set(), "vars": set(), "env": set(), "githubToken": set()}
+    for match in EXPR_REF.finditer(text):
+        result[match.group("scope")].add(match.group("name"))
+    if GITHUB_TOKEN.search(text):
+        result["githubToken"].add("github.token")
+    return {key: sorted(values) for key, values in result.items()}
 
 
 def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[str, Any]]:
@@ -227,33 +382,26 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
             cursor = index + 1
             while cursor < len(lines):
                 if WITH_BLOCK.fullmatch(lines[cursor]):
-                    cursor += 1
-                    while cursor < len(lines):
-                        entry = WITH_ENTRY.fullmatch(lines[cursor])
-                        if entry is None:
-                            break
-                        key = entry.group("key")
-                        require(key not in with_values,
-                                f"{workflow}/{current_job}/{current_step}: duplicate with key: {key}")
-                        with_values[key] = unquote(entry.group("value"))
-                        cursor += 1
+                    with_values = parse_with_values(
+                        lines, cursor + 1, workflow=workflow, job=current_job, step=current_step
+                    )
                     break
-                if lines[cursor].strip() and len(lines[cursor]) - len(lines[cursor].lstrip(" ")) <= 8:
+                if lines[cursor].strip() and indentation(lines[cursor]) <= 8:
                     break
                 cursor += 1
 
-            action: dict[str, Any] = {"step": current_step, "uses": uses}
             remote = REMOTE_ACTION.fullmatch(uses)
             if remote:
-                action.update({
+                action: dict[str, Any] = {
                     "kind": "remote",
                     "repository": remote.group("repository"),
                     "path": (remote.group("subpath") or "").lstrip("/"),
                     "ref": remote.group("ref"),
-                })
+                    "step": current_step,
+                }
             elif uses.startswith("./"):
                 require("@" not in uses, f"{workflow}/{current_job}/{current_step}: malformed local action")
-                action.update({"kind": "local", "path": uses})
+                action = {"kind": "local", "path": uses, "step": current_step}
             else:
                 raise ValueError(
                     f"{workflow}/{current_job}/{current_step}: external action is not immutable: {uses}"
@@ -274,11 +422,14 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
                 require(artifact["name"],
                         f"{workflow}/{current_job}/{current_step}: artifact action must name its artifact")
                 compiled[current_job]["artifacts"].append(artifact)
-            if repository == "actions/attest-build-provenance":
+            if repository in {"actions/attest", "actions/attest-build-provenance"}:
+                target = with_values.get("subject-path") or with_values.get("subject-digest")
+                require(target,
+                        f"{workflow}/{current_job}/{current_step}: attestation subject is not statically visible")
                 compiled[current_job]["mutations"].append({
                     "class": "attestation",
                     "step": current_step,
-                    "target": with_values.get("subject-path") or with_values.get("subject-digest") or "attestation-subject",
+                    "target": target,
                 })
             index += 1
             continue
@@ -289,7 +440,7 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
             cursor = index + 1
             while cursor < len(lines):
                 candidate = lines[cursor]
-                if candidate.strip() and len(candidate) - len(candidate.lstrip(" ")) <= 8:
+                if candidate.strip() and indentation(candidate) <= 8:
                     break
                 block.append(candidate[10:] if candidate.startswith("          ") else candidate.lstrip())
                 cursor += 1
@@ -312,25 +463,20 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
                         })
                     shell_index = next_index
                     continue
-                network = GIT_NETWORK.search(shell_line)
-                if network:
-                    command, next_index = normalize_shell_command(block, shell_index)
-                    operation = network.group(2)
-                    compiled[current_job]["apiSurfaces"].append({
-                        "client": "git",
-                        "command": command,
-                        "operation": operation,
-                        "mutating": operation == "push",
-                        "step": current_step,
-                    })
-                    if operation == "push":
+                git = git_surface(shell_line, workflow=workflow, job=current_job, step=current_step)
+                if git is not None:
+                    git["step"] = current_step
+                    compiled[current_job]["apiSurfaces"].append(git)
+                    if git["mutating"]:
+                        remote = git.get("remote", "")
+                        targets = git.get("targets", [])
+                        require(remote and targets,
+                                f"{workflow}/{current_job}/{current_step}: git push target is not statically visible")
                         compiled[current_job]["mutations"].append({
                             "class": "git-ref-push",
                             "step": current_step,
-                            "target": command,
+                            "target": f"{remote} {' '.join(targets)}",
                         })
-                    shell_index = next_index
-                    continue
                 shell_index += 1
             index = cursor
             continue
@@ -340,15 +486,6 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
         for key in ("actions", "apiSurfaces", "artifacts", "mutations"):
             compiled[job][key].sort(key=lambda value: canonical_json(value))
     return compiled
-
-
-def expression_references(text: str) -> dict[str, list[str]]:
-    result = {"secrets": set(), "vars": set(), "env": set(), "githubToken": set()}
-    for match in EXPR_REF.finditer(text):
-        result[match.group("scope")].add(match.group("name"))
-    if GITHUB_TOKEN.search(text):
-        result["githubToken"].add("github.token")
-    return {key: sorted(values) for key, values in result.items()}
 
 
 def compile_bom(root: Path = ROOT) -> dict[str, Any]:
@@ -366,7 +503,7 @@ def compile_bom(root: Path = ROOT) -> dict[str, Any]:
         jobs = sorted(names)
         effective = effective_permissions(permissions, jobs, filename)
         compiled_steps = compile_steps(text, relative, jobs)
-        refs = expression_references(text)
+        blocks = job_blocks(text, jobs, filename)
         top_name = TOP_NAME.search(text)
         require(top_name is not None, f"{filename}: workflow name is missing")
         job_entries: list[dict[str, Any]] = []
@@ -377,8 +514,13 @@ def compile_bom(root: Path = ROOT) -> dict[str, Any]:
                 "needs": needs[job],
                 "permissions": effective[job],
                 "oidc": effective[job].get("id-token") == "write",
+                "references": expression_references(blocks[job]),
                 **compiled_steps[job],
             }
+            for action in entry["actions"]:
+                if action.get("repository") in {"actions/attest", "actions/attest-build-provenance"}:
+                    require(entry["oidc"] and effective[job].get("attestations") == "write",
+                            f"{filename}/{job}: attestation action lacks exact OIDC/attestations write authority")
             job_entries.append(entry)
         workflows.append({
             "id": workflow_id,
@@ -390,7 +532,7 @@ def compile_bom(root: Path = ROOT) -> dict[str, Any]:
                 for key in sorted(permissions[authority.WORKFLOW_SCOPE])
             },
             "jobs": job_entries,
-            "references": refs,
+            "references": expression_references(text),
         })
     return {
         "schemaVersion": SCHEMA_VERSION,
@@ -399,6 +541,15 @@ def compile_bom(root: Path = ROOT) -> dict[str, Any]:
         "automationPolicyId": policy["policyId"],
         "workflows": workflows,
     }
+
+
+def expect_failure(callback, fragment: str) -> None:
+    try:
+        callback()
+    except ValueError as exc:
+        require(fragment in str(exc), f"capability BOM self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"capability BOM self-test accepted forbidden input: {fragment}")
 
 
 def self_test() -> None:
@@ -419,12 +570,58 @@ def self_test() -> None:
     )
     require(action is not None and action.group("repository") == "actions/checkout",
             "immutable action parser self-test failed")
-    bad = REMOTE_ACTION.fullmatch("actions/checkout@main")
-    require(bad is None, "mutable action ref self-test was accepted")
+    require(REMOTE_ACTION.fullmatch("actions/checkout@main") is None,
+            "mutable action ref self-test was accepted")
+
+    with_lines = [
+        "          name: receipt",
+        "          path: |",
+        "            receipt.json",
+        "            receipt.sha256",
+        "          retention-days: 1",
+    ]
+    values = parse_with_values(with_lines, 0, workflow="fixture.yml", job="job", step="artifact")
+    require(values["path"] == "receipt.json\nreceipt.sha256" and values["retention-days"] == "1",
+            f"with block scalar self-test drifted: {values!r}")
+
+    gh = api_surface(
+        'gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs" --jq .total_count)',
+        workflow="fixture.yml", job="job", step="api",
+    )
+    require(gh["endpoint"] == "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs" and gh["method"] == "GET",
+            f"gh api option parser self-test drifted: {gh!r}")
+    post = api_surface(
+        'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/x.yml/dispatches" -f ref=main)',
+        workflow="fixture.yml", job="job", step="api",
+    )
+    require(post["method"] == "POST" and post["mutating"], f"gh api method self-test drifted: {post!r}")
+    expect_failure(
+        lambda: api_surface("gh api --unknown value repos/x", workflow="fixture.yml", job="job", step="api"),
+        "unclassified gh api option",
+    )
+
+    git = git_surface(
+        'git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic x" push origin HEAD:generated',
+        workflow="fixture.yml", job="job", step="publish",
+    )
+    require(git is not None and git["operation"] == "push" and git.get("remote") == "origin"
+            and git.get("targets") == ["HEAD:generated"] and git["mutating"],
+            f"git push parser self-test drifted: {git!r}")
+
     refs = expression_references("${{ secrets.ONE }} ${{ vars.TWO }} ${{ env.THREE }} ${{ github.token }}")
     require(refs == {
         "secrets": ["ONE"], "vars": ["TWO"], "env": ["THREE"], "githubToken": ["github.token"]
     }, f"expression reference self-test drifted: {refs!r}")
+
+    network_fixture = (
+        "  job:\n"
+        "    name: job\n"
+        "    steps:\n"
+        "      - name: Bad network\n"
+        "        run: |\n"
+        "          curl https://example.invalid\n"
+    )
+    expect_failure(lambda: compile_steps(network_fixture, "fixture.yml", ["job"]), "unclassified network client")
 
 
 if __name__ == "__main__":
