@@ -13,7 +13,6 @@ from typing import Any, Mapping
 
 REPOSITORY = "portyu9/portyu9"
 DEFAULT_BRANCH = "main"
-DEFAULT_REF = "refs/heads/main"
 CONTROLLER_ID = "portyu9-codeql-autofix-v1"
 FLOW_ID = "github-codeql-autofix-v1"
 WORKFLOW_NAME = "CodeQL Autofix controller"
@@ -47,8 +46,7 @@ FORBIDDEN_MUTATION_FRAGMENTS = {
     "DELETE ",
 }
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
-BRANCH = re.compile(r"^codeql-autofix/alert-(?P<alert>[1-9][0-9]*)/run-(?P<run>[1-9][0-9]*)$")
-ARTIFACT = re.compile(r"^codeql-autofix-receipt-run-(?P<run>[1-9][0-9]*)-alert-(?P<alert>[1-9][0-9]*)$")
+DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 RULE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}$")
 
 
@@ -132,8 +130,7 @@ def validate_receipt(receipt: Any, *, workflow_run: Any, artifact: Any) -> dict[
         "controllerId", "flowId", "repository", "workflowPath", "runId", "runAttempt", "event",
         "baseSha", "alertNumber", "ruleId", "targetBranch", "autofixCommitSha", "prNumber",
     }
-    require(set(receipt) == expected_keys,
-            "Autofix provenance receipt keys changed")
+    require(set(receipt) == expected_keys, "Autofix provenance receipt keys changed")
     require(receipt.get("controllerId") == CONTROLLER_ID, "Autofix receipt controller identity mismatch")
     require(receipt.get("flowId") == FLOW_ID, "Autofix receipt flow identity mismatch")
     require(receipt.get("repository") == REPOSITORY, "Autofix receipt repository identity mismatch")
@@ -175,14 +172,24 @@ def validate_receipt(receipt: Any, *, workflow_run: Any, artifact: Any) -> dict[
     require(artifact_value.get("name") == receipt_name(run_id, alert),
             "Autofix provenance artifact name mismatch")
     require(artifact_value.get("expired") is False, "Autofix provenance artifact is expired")
-    require(artifact_value.get("workflow_run_id") == run_id,
+    artifact_digest = artifact_value.get("digest")
+    require(isinstance(artifact_digest, str) and DIGEST.fullmatch(artifact_digest) is not None,
+            "Autofix provenance artifact digest is missing or invalid")
+    artifact_run = artifact_value.get("workflow_run")
+    require(isinstance(artifact_run, Mapping), "Autofix provenance artifact lacks workflow_run identity")
+    require(artifact_run.get("id") == run_id,
             "Autofix provenance artifact belongs to another workflow run")
+    require(artifact_run.get("head_branch") == DEFAULT_BRANCH,
+            "Autofix provenance artifact was not produced from main")
+    require(artifact_run.get("head_sha") == base_sha,
+            "Autofix provenance artifact is bound to another base SHA")
 
     return {
         "controllerId": CONTROLLER_ID,
         "flowId": FLOW_ID,
         "autofixGenerated": True,
         "artifactVerified": True,
+        "artifactDigest": artifact_digest,
         "runId": run_id,
         "runAttempt": attempt,
         "alertNumber": alert,
@@ -228,7 +235,14 @@ def fixture() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     artifact = {
         "name": receipt_name(run_id, alert),
         "expired": False,
-        "workflow_run_id": run_id,
+        "digest": "sha256:" + "c" * 64,
+        "workflow_run": {
+            "id": run_id,
+            "repository_id": 1355082509,
+            "head_repository_id": 1355082509,
+            "head_branch": DEFAULT_BRANCH,
+            "head_sha": base,
+        },
     }
     return receipt, workflow_run, artifact
 
@@ -277,13 +291,21 @@ def self_test() -> None:
     failed_run["conclusion"] = "failure"
     expect_failure(lambda: validate_receipt(receipt, workflow_run=failed_run, artifact=artifact), "completed success")
 
-    expired = dict(artifact)
+    expired = copy.deepcopy(artifact)
     expired["expired"] = True
     expect_failure(lambda: validate_receipt(receipt, workflow_run=workflow_run, artifact=expired), "expired")
 
-    wrong_artifact_run = dict(artifact)
-    wrong_artifact_run["workflow_run_id"] = 99999
+    wrong_artifact_run = copy.deepcopy(artifact)
+    wrong_artifact_run["workflow_run"]["id"] = 99999
     expect_failure(lambda: validate_receipt(receipt, workflow_run=workflow_run, artifact=wrong_artifact_run), "another workflow run")
+
+    wrong_artifact_sha = copy.deepcopy(artifact)
+    wrong_artifact_sha["workflow_run"]["head_sha"] = "c" * 40
+    expect_failure(lambda: validate_receipt(receipt, workflow_run=workflow_run, artifact=wrong_artifact_sha), "another base SHA")
+
+    no_digest = copy.deepcopy(artifact)
+    no_digest["digest"] = None
+    expect_failure(lambda: validate_receipt(receipt, workflow_run=workflow_run, artifact=no_digest), "digest")
 
 
 def main() -> int:
@@ -291,7 +313,7 @@ def main() -> int:
     print(
         "CodeQL Autofix controller trust contract passed: only default-branch workflow_run/schedule/repository_dispatch "
         "execution, least reviewed token permissions/mutations, deterministic remediation branches, and successful "
-        "workflow-run artifact receipts may establish controller provenance."
+        "workflow-run artifacts with exact run/base identity may establish controller provenance."
     )
     return 0
 
