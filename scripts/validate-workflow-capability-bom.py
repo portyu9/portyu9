@@ -9,6 +9,7 @@ from typing import Any
 
 import automation_policy
 import workflow_capability_bom as compiler
+import workflow_capability_diff as capability_diff
 
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT = ROOT / ".github" / "workflow-capability-bom-v1.json"
@@ -65,6 +66,7 @@ def validate_snapshot() -> tuple[int, int]:
             "Workflow Capability BOM Automation Policy binding changed")
 
     compiler.self_test()
+    capability_diff.self_test()
     compiled = compiler.compile_bom()
     canonical = compiler.canonical_json(compiled)
     difference = first_difference(compiled, snapshot)
@@ -76,6 +78,10 @@ def validate_snapshot() -> tuple[int, int]:
             f"expected_sha256={hashlib.sha256(canonical.encode()).hexdigest()} "
             f"observed_sha256={hashlib.sha256(raw.encode()).hexdigest()}")
 
+    identity_diff = capability_diff.semantic_diff(snapshot, compiled)
+    require(not identity_diff["hasExpansion"] and not identity_diff["reductions"],
+            "identical canonical BOMs produced a semantic capability diff")
+
     workflows = compiled["workflows"]
     jobs = sum(len(workflow["jobs"]) for workflow in workflows)
     require(len(workflows) == 5, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
@@ -86,7 +92,7 @@ def validate_snapshot() -> tuple[int, int]:
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
-        print(f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs.")
+        print(f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; semantic diff self-tests passed.")
         return 0
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
