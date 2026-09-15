@@ -1,0 +1,98 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "capability-admission",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted base"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Fetch exact candidate capability source as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Fetch exact candidate capability source as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1",
+              "method": "GET",
+              "mutating": false,
+              "step": "Fetch exact candidate capability source as data"
+            }
+          ],
+          "artifacts": [],
+          "id": "admission",
+          "mutations": [],
+          "name": "trusted-capability-admission",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Capability admission",
+      "path": ".github/workflows/capability-admission.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "pull_request_target": {
+          "types": [
+            "opened",
+            "reopened",
+            "synchronize",
+            "ready_for_review"
+          ]
+        }
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}
