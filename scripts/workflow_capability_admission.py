@@ -18,9 +18,9 @@ import trusted_workflow_capability
 import workflow_capability_authorization
 import workflow_capability_bom
 import workflow_capability_diff
+import workflow_capability_snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
-BASE_BOM = ROOT / ".github/workflow-capability-bom-v1.json"
 TRUSTED_LEDGER = ROOT / ".github/workflow-capability-expansion-authorizations-v1.json"
 
 
@@ -38,7 +38,7 @@ def strict_json(path: Path, label: str) -> Any:
 
 
 def evaluate(candidate_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    base = strict_json(BASE_BOM, "trusted base Workflow Capability BOM")
+    base = workflow_capability_snapshot.load_combined()
     ledger = strict_json(TRUSTED_LEDGER, "trusted capability authorization ledger")
     workflow_capability_authorization.validate_ledger(ledger)
 
@@ -50,6 +50,7 @@ def evaluate(candidate_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def self_test() -> None:
+    workflow_capability_snapshot.self_test()
     decision, diff = evaluate(ROOT)
     require(not diff["hasExpansion"] and not diff["expansions"] and not diff["reductions"],
             "trusted repository self-comparison produced capability drift")
@@ -62,11 +63,13 @@ def self_test() -> None:
         "expansionSha256": diff["expansionSha256"],
     }, "trusted repository self-comparison produced unexpected admission decision")
 
-    # Candidate-authored BOM/authorization files are deliberately outside the compile input.
-    # The trusted compiler consumes only candidate policy/workflow source while BASE_BOM and
-    # TRUSTED_LEDGER are module constants rooted at the trusted checkout.
-    require(BASE_BOM.parent == ROOT / ".github" and TRUSTED_LEDGER.parent == ROOT / ".github",
-            "trusted admission evidence escaped the trusted checkout")
+    trusted_github = ROOT / ".github"
+    require(workflow_capability_snapshot.BASE_SNAPSHOT.parent == trusted_github,
+            "trusted base BOM escaped the trusted checkout")
+    require(workflow_capability_snapshot.ADMISSION_EXTENSION.parent == trusted_github,
+            "trusted admission BOM extension escaped the trusted checkout")
+    require(TRUSTED_LEDGER.parent == trusted_github,
+            "trusted authorization ledger escaped the trusted checkout")
 
 
 def parser() -> argparse.ArgumentParser:
