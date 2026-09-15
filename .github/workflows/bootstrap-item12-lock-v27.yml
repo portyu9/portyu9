@@ -1,0 +1,52 @@
+name: Bootstrap item 12 byte lock v27
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    if: >-
+      github.repository == 'portyu9/portyu9' &&
+      github.head_ref == 'item-12-workflow-capability-bom' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    name: bootstrap-item12-byte-lock-v27
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Advance exact Profile Quality byte lock
+        env:
+          TARGET_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/validate-privileged-workflow-identity.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'VERSION = "governed-workflow-byte-identity-v26"': 'VERSION = "governed-workflow-byte-identity-v27"',
+              '".github/workflows/profile-quality.yml": "7fd919ed2f0afc41eb318f38ac072ff5e444aea9"': '".github/workflows/profile-quality.yml": "751c94434676a598b3a941f39ee85230d504178f"',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'exact lock anchor changed: {old}')
+              text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/validate-privileged-workflow-identity.py
+          git commit -m "Advance governed Profile Quality byte lock to v27"
+          git push origin "HEAD:${TARGET_BRANCH}"
