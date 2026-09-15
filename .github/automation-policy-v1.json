@@ -28,6 +28,22 @@
         }
       }
     },
+    "capability-admission": {
+      "path": ".github/workflows/capability-admission.yml",
+      "triggers": ["pull_request_target"],
+      "permissions": {
+        "contents": "read"
+      },
+      "jobs": {
+        "admission": {
+          "name": "trusted-capability-admission",
+          "needs": [],
+          "permissions": {
+            "contents": "read"
+          }
+        }
+      }
+    },
     "dependency-review": {
       "path": ".github/workflows/dependency-review.yml",
       "triggers": ["pull_request"],
