@@ -147,6 +147,7 @@ def protected_files(root: Path) -> dict[str, str]:
 
 
 def validate_manifest(files: Mapping[str, str]) -> dict[str, str]:
+    """Validate a protected-only TCB digest map."""
     result: dict[str, str] = {}
     for raw_path, digest in files.items():
         require(isinstance(raw_path, str) and isinstance(digest, str),
@@ -161,9 +162,10 @@ def validate_manifest(files: Mapping[str, str]) -> dict[str, str]:
 
 
 def load_manifest(path: Path) -> dict[str, str]:
-    """Load a trusted-workflow-produced path<TAB>sha256 manifest as untrusted data."""
+    """Load selected path<TAB>sha256 records and return only protected TCB identities."""
     require(path.is_file() and not path.is_symlink(), f"candidate TCB manifest is missing or aliased: {path}")
-    entries: dict[str, str] = {}
+    protected: dict[str, str] = {}
+    seen: set[str] = set()
     previous: str | None = None
     for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         fields = raw.split("\t")
@@ -173,9 +175,15 @@ def load_manifest(path: Path) -> dict[str, str]:
         require(previous is None or previous < candidate_path,
                 "candidate TCB manifest paths must be strictly sorted and unique")
         previous = candidate_path
-        require(candidate_path not in entries, f"candidate TCB manifest duplicates path: {candidate_path}")
-        entries[candidate_path] = digest
-    return validate_manifest(entries)
+        require(candidate_path not in seen, f"candidate TCB manifest duplicates path: {candidate_path}")
+        seen.add(candidate_path)
+        require(is_candidate_input(candidate_path),
+                f"candidate TCB manifest contains an unselected repository path: {candidate_path}")
+        require(SHA256.fullmatch(digest) is not None,
+                f"candidate TCB manifest contains an invalid SHA-256 for {candidate_path}")
+        if is_protected_path(candidate_path):
+            protected[candidate_path] = digest
+    return validate_manifest(protected)
 
 
 def protected_digest(files: Mapping[str, str]) -> str:
@@ -200,11 +208,6 @@ def source_expansions(
     if not changed:
         return []
 
-    # The exact tree SHA remains a transport/freshness proof for the fetched candidate bytes,
-    # but it is intentionally not part of the authorization digest. The trusted authorization
-    # ledger lives in the repository tree, so binding that tree into a record stored in the
-    # ledger would create a cryptographic self-reference. Instead bind the complete protected
-    # TCB map; ledger-only prior-review PRs cannot change this digest.
     require(candidate_tree_sha is not None and SHA40.fullmatch(candidate_tree_sha) is not None,
             "candidate tree SHA is required for trusted control-source changes")
     candidate_tcb_sha256 = protected_digest(candidate)
