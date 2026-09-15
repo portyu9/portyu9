@@ -1,0 +1,2174 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "codeql",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout"
+            },
+            {
+              "kind": "remote",
+              "path": "analyze",
+              "ref": "cdf488f595d80d6e07e03d4674febd5ab45fa938",
+              "repository": "github/codeql-action",
+              "step": "Analyze"
+            },
+            {
+              "kind": "remote",
+              "path": "init",
+              "ref": "cdf488f595d80d6e07e03d4674febd5ab45fa938",
+              "repository": "github/codeql-action",
+              "step": "Initialize CodeQL"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [],
+          "id": "analyze",
+          "mutations": [
+            {
+              "class": "code-scanning-results-upload",
+              "step": "Analyze",
+              "target": "repository-code-scanning"
+            }
+          ],
+          "name": "analyze-${{ matrix.language }}",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read",
+            "security-events": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "CodeQL",
+      "path": ".github/workflows/codeql.yml",
+      "references": {
+        "env": [],
+        "githubToken": [],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "pull_request": {},
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
+        "schedule": {
+          "cron": [
+            "17 5 * * 3"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    },
+    {
+      "id": "dependency-review",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+              "repository": "actions/dependency-review-action",
+              "step": "Review dependency changes"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [],
+          "id": "dependency-review",
+          "mutations": [],
+          "name": "dependency-review",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Dependency review",
+      "path": ".github/workflows/dependency-review.yml",
+      "references": {
+        "env": [],
+        "githubToken": [],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "pull_request": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    },
+    {
+      "id": "profile-quality",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload Signal Field review artifacts"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download Signal Field review artifacts"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
+              "repository": "shinpr/github-profile-stats",
+              "step": "Generate actual pinned upstream Signal Field"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
+              "repository": "shinpr/github-profile-stats",
+              "step": "Retry exact pinned upstream Signal Field once"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "signal-field-publishable-review",
+              "operation": "download",
+              "path": "roundtrip-signal-field",
+              "step": "Download Signal Field review artifacts"
+            },
+            {
+              "if-no-files-found": "error",
+              "name": "signal-field-publishable-review",
+              "operation": "upload",
+              "path": "${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg",
+              "retention-days": "1",
+              "step": "Upload Signal Field review artifacts"
+            }
+          ],
+          "id": "integration",
+          "mutations": [],
+          "name": "integration-pinned-upstream",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [],
+          "id": "validate",
+          "mutations": [],
+          "name": "validate-contracts",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Profile quality",
+      "path": ".github/workflows/profile-quality.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "pull_request": {},
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            "README.md",
+            "assets/**",
+            "scripts/**",
+            ".github/GOVERNANCE.md",
+            ".github/SPOTLIGHT_UI_MERGE_AUTHORIZATION.md",
+            ".github/REFRESH_CADENCE.md",
+            ".github/THREAT_MODEL.md",
+            ".github/RULESETS.md",
+            ".github/rulesets/**",
+            ".github/ATTESTATION.md",
+            ".github/attestation/**",
+            ".github/dependabot.yml",
+            ".github/action-lock.json",
+            ".github/automation-policy-v1.json",
+            ".github/workflow-capability-bom-v1.json",
+            ".github/workflows/**"
+          ]
+        }
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    },
+    {
+      "id": "profile-stats",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload reviewed attestation predicate"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout current generated evidence without credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout trusted source without credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download validated Engineering Spotlight for attestation preparation"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download validated Portfolio Evidence Ledger for attestation preparation"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download validated Signal Field for attestation preparation"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "engineering-spotlight-svg",
+              "operation": "download",
+              "path": "engineering-spotlight",
+              "step": "Download validated Engineering Spotlight for attestation preparation"
+            },
+            {
+              "digest-mismatch": "error",
+              "name": "portfolio-evidence-ledger",
+              "operation": "download",
+              "path": "portfolio-evidence",
+              "step": "Download validated Portfolio Evidence Ledger for attestation preparation"
+            },
+            {
+              "digest-mismatch": "error",
+              "name": "signal-field-svg",
+              "operation": "download",
+              "path": "profile-stats/profile",
+              "step": "Download validated Signal Field for attestation preparation"
+            },
+            {
+              "if-no-files-found": "error",
+              "name": "profile-evidence-attestation-predicate",
+              "operation": "upload",
+              "path": "attestation-predicate.json",
+              "retention-days": "1",
+              "step": "Upload reviewed attestation predicate"
+            }
+          ],
+          "id": "attest",
+          "mutations": [],
+          "name": "prepare-attestation-read-only",
+          "needs": [
+            "generate"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest validated profile evidence"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download reviewed attestation predicate"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download validated Engineering Spotlight for terminal attestation"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download validated Portfolio Evidence Ledger for terminal attestation"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download validated Signal Field for terminal attestation"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "engineering-spotlight-svg",
+              "operation": "download",
+              "path": "engineering-spotlight",
+              "step": "Download validated Engineering Spotlight for terminal attestation"
+            },
+            {
+              "digest-mismatch": "error",
+              "name": "portfolio-evidence-ledger",
+              "operation": "download",
+              "path": "portfolio-evidence",
+              "step": "Download validated Portfolio Evidence Ledger for terminal attestation"
+            },
+            {
+              "digest-mismatch": "error",
+              "name": "profile-evidence-attestation-predicate",
+              "operation": "download",
+              "path": "attestation-input",
+              "step": "Download reviewed attestation predicate"
+            },
+            {
+              "digest-mismatch": "error",
+              "name": "signal-field-svg",
+              "operation": "download",
+              "path": "profile-stats/profile",
+              "step": "Download validated Signal Field for terminal attestation"
+            }
+          ],
+          "id": "attest_publish",
+          "mutations": [
+            {
+              "class": "attestation",
+              "step": "Attest validated profile evidence",
+              "target": "profile-stats/profile/signal-field-*.svg\nengineering-spotlight/spotlight-*.svg\nportfolio-evidence/portfolio-evidence-ledger.json"
+            }
+          ],
+          "name": "attest-write-only",
+          "needs": [
+            "attest",
+            "lease"
+          ],
+          "oidc": true,
+          "permissions": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact Automation Decision Receipt artifact"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout trusted source without credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "automation-decision-receipt-profile-${{ github.run_id }}-${{ github.run_attempt }}",
+              "operation": "upload",
+              "path": "automation-decision-receipt/automation-decision-receipt.json\nautomation-decision-receipt/automation-decision-receipt.subject.json",
+              "retention-days": "1",
+              "step": "Upload exact Automation Decision Receipt artifact"
+            }
+          ],
+          "id": "decision_receipt",
+          "mutations": [],
+          "name": "prepare-automation-decision-receipt-read-only",
+          "needs": [
+            "dispatch",
+            "lease"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest exact Automation Decision Receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact Automation Decision Receipt artifact"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "automation-decision-receipt-profile-${{ github.run_id }}-${{ github.run_attempt }}",
+              "operation": "download",
+              "path": "automation-decision-receipt-input",
+              "step": "Download exact Automation Decision Receipt artifact"
+            }
+          ],
+          "id": "decision_receipt_attest",
+          "mutations": [
+            {
+              "class": "attestation",
+              "step": "Attest exact Automation Decision Receipt",
+              "target": "automation-decision-receipt-input/automation-decision-receipt.subject.json"
+            }
+          ],
+          "name": "attest-automation-decision-receipt-write-only",
+          "needs": [
+            "decision_receipt",
+            "lease",
+            "attest"
+          ],
+          "oidc": true,
+          "permissions": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Dispatch exact Spotlight reconciliation workflow"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Dispatch exact Spotlight reconciliation workflow"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1",
+              "method": "GET",
+              "mutating": false,
+              "step": "Dispatch exact Spotlight reconciliation workflow"
+            }
+          ],
+          "artifacts": [],
+          "id": "dispatch",
+          "mutations": [
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Dispatch exact Spotlight reconciliation workflow",
+              "target": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches"
+            }
+          ],
+          "name": "dispatch-spotlight-link-sync",
+          "needs": [
+            "receipt_attest",
+            "lease",
+            "attest"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload immutable validated Engineering Spotlight"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload immutable validated Portfolio Evidence Ledger"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload immutable validated Signal Field"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout trusted source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
+              "repository": "shinpr/github-profile-stats",
+              "step": "Generate upstream Signal Field"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "engineering-spotlight-svg",
+              "operation": "upload",
+              "path": "spotlight-ready/*",
+              "retention-days": "1",
+              "step": "Upload immutable validated Engineering Spotlight"
+            },
+            {
+              "if-no-files-found": "error",
+              "name": "portfolio-evidence-ledger",
+              "operation": "upload",
+              "path": "portfolio-ledger-ready/portfolio-evidence-ledger.json",
+              "retention-days": "1",
+              "step": "Upload immutable validated Portfolio Evidence Ledger"
+            },
+            {
+              "if-no-files-found": "error",
+              "name": "signal-field-svg",
+              "operation": "upload",
+              "path": "${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg",
+              "retention-days": "1",
+              "step": "Upload immutable validated Signal Field"
+            }
+          ],
+          "id": "generate",
+          "mutations": [],
+          "name": "generate-read-only",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Mint exact short-lived mutation lease"
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "https://github.com/${GITHUB_REPOSITORY}.git",
+              "step": "Mint exact short-lived mutation lease",
+              "targets": [
+                "refs/heads/generated"
+              ]
+            }
+          ],
+          "artifacts": [],
+          "id": "lease",
+          "mutations": [],
+          "name": "mint-mutation-lease-read-only",
+          "needs": [
+            "attest"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download sealed generated publication candidate"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "fetch",
+              "remote": "../publication-candidate/generated-publication.bundle",
+              "step": "Verify sealed generated publication candidate",
+              "targets": [
+                "refs/heads/generated:refs/heads/generated"
+              ]
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "origin",
+              "step": "Publish sealed artifact commit and re-prove remote head",
+              "targets": [
+                "refs/heads/generated"
+              ]
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "origin",
+              "step": "Publish sealed artifact commit and re-prove remote head",
+              "targets": [
+                "refs/heads/main"
+              ]
+            },
+            {
+              "client": "git",
+              "mutating": true,
+              "operation": "push",
+              "remote": "origin",
+              "step": "Publish sealed artifact commit and re-prove remote head",
+              "targets": [
+                "HEAD:generated"
+              ]
+            }
+          ],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "generated-publication-candidate",
+              "operation": "download",
+              "path": "publication-candidate",
+              "step": "Download sealed generated publication candidate"
+            }
+          ],
+          "id": "publish",
+          "mutations": [
+            {
+              "class": "git-ref-push",
+              "step": "Publish sealed artifact commit and re-prove remote head",
+              "target": "origin HEAD:generated"
+            }
+          ],
+          "name": "publish-write-only",
+          "needs": [
+            "stage",
+            "lease",
+            "attest"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact post-publication receipt predicate"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact published generated commit without credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout trusted source without credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download reviewed profile evidence predicate for receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "origin",
+              "step": "Re-prove actual publication and build deterministic receipt",
+              "targets": [
+                "refs/heads/generated"
+              ]
+            }
+          ],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "profile-evidence-attestation-predicate",
+              "operation": "download",
+              "path": "receipt-input",
+              "step": "Download reviewed profile evidence predicate for receipt"
+            },
+            {
+              "if-no-files-found": "error",
+              "name": "generated-publication-receipt-predicate",
+              "operation": "upload",
+              "path": "generated-publication-receipt.json",
+              "retention-days": "1",
+              "step": "Upload exact post-publication receipt predicate"
+            }
+          ],
+          "id": "receipt",
+          "mutations": [],
+          "name": "prepare-publication-receipt-read-only",
+          "needs": [
+            "publish",
+            "stage",
+            "lease",
+            "attest"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest actual generated publication commit receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact post-publication receipt predicate"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "generated-publication-receipt-predicate",
+              "operation": "download",
+              "path": "receipt-attestation-input",
+              "step": "Download exact post-publication receipt predicate"
+            }
+          ],
+          "id": "receipt_attest",
+          "mutations": [
+            {
+              "class": "attestation",
+              "step": "Attest actual generated publication commit receipt",
+              "target": "sha256:${{ needs.receipt.outputs.git_object_sha256 }}"
+            }
+          ],
+          "name": "attest-publication-receipt-write-only",
+          "needs": [
+            "receipt",
+            "lease",
+            "attest"
+          ],
+          "oidc": true,
+          "permissions": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload sealed generated publication candidate"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout generated artifact branch without credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout trusted source without credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download validated Engineering Spotlight for publication staging"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download validated Portfolio Evidence Ledger for publication staging"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download validated Signal Field for publication staging"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "engineering-spotlight-svg",
+              "operation": "download",
+              "path": "spotlight-publish-input",
+              "step": "Download validated Engineering Spotlight for publication staging"
+            },
+            {
+              "digest-mismatch": "error",
+              "name": "portfolio-evidence-ledger",
+              "operation": "download",
+              "path": "portfolio-ledger-publish-input",
+              "step": "Download validated Portfolio Evidence Ledger for publication staging"
+            },
+            {
+              "digest-mismatch": "error",
+              "name": "signal-field-svg",
+              "operation": "download",
+              "path": "publish-input",
+              "step": "Download validated Signal Field for publication staging"
+            },
+            {
+              "if-no-files-found": "error",
+              "name": "generated-publication-candidate",
+              "operation": "upload",
+              "path": "generated-publication.bundle",
+              "retention-days": "1",
+              "step": "Upload sealed generated publication candidate"
+            }
+          ],
+          "id": "stage",
+          "mutations": [],
+          "name": "stage-publication-read-only",
+          "needs": [
+            "generate",
+            "attest",
+            "lease",
+            "attest_publish"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Update profile stats",
+      "path": ".github/workflows/profile-stats.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/workflows/profile-stats.yml",
+            "scripts/profile-stats-source-epoch-v1.json"
+          ]
+        },
+        "schedule": {
+          "cron": [
+            "17 * * * *"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    },
+    {
+      "id": "spotlight-link-sync",
+      "jobs": [
+        {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            }
+          ],
+          "artifacts": [],
+          "id": "approve",
+          "mutations": [
+            {
+              "class": "workflow-run-approval",
+              "method": "POST",
+              "step": "Approve and wait for only the exact README-only automation checks",
+              "target": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve"
+            }
+          ],
+          "name": "approve-bot-pr-checks-only",
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "budget",
+            "propose"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "write",
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact merge authorization artifact"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout trusted source without credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}",
+              "operation": "upload",
+              "path": "merge-authorization/*",
+              "retention-days": "1",
+              "step": "Upload exact merge authorization artifact"
+            }
+          ],
+          "id": "authorize",
+          "mutations": [],
+          "name": "prepare-merge-authorization-read-only",
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "budget",
+            "propose",
+            "approve"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest exact Spotlight merge authorization certificate"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact merge authorization artifact"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}",
+              "operation": "download",
+              "path": "merge-authorization-input",
+              "step": "Download exact merge authorization artifact"
+            }
+          ],
+          "id": "authorize_attest",
+          "mutations": [
+            {
+              "class": "attestation",
+              "step": "Attest exact Spotlight merge authorization certificate",
+              "target": "merge-authorization-input/spotlight-merge-authorization.subject.json"
+            }
+          ],
+          "name": "attest-merge-authorization-write-only",
+          "needs": [
+            "authorize",
+            "lease",
+            "plan",
+            "propose",
+            "approve"
+          ],
+          "oidc": true,
+          "permissions": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Admit exact source epoch within bounded mutation budget"
+            }
+          ],
+          "artifacts": [],
+          "id": "budget",
+          "mutations": [],
+          "name": "mutation-budget-read-only",
+          "needs": [
+            "plan"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact Automation Decision Receipt artifact"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout trusted source without credentials"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "automation-decision-receipt-spotlight-${{ github.run_id }}-${{ github.run_attempt }}",
+              "operation": "upload",
+              "path": "automation-decision-receipt/automation-decision-receipt.json\nautomation-decision-receipt/automation-decision-receipt.subject.json",
+              "retention-days": "1",
+              "step": "Upload exact Automation Decision Receipt artifact"
+            }
+          ],
+          "id": "decision_receipt",
+          "mutations": [],
+          "name": "prepare-automation-decision-receipt-read-only",
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "propose",
+            "approve",
+            "merge"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest exact Automation Decision Receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact Automation Decision Receipt artifact"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "automation-decision-receipt-spotlight-${{ github.run_id }}-${{ github.run_attempt }}",
+              "operation": "download",
+              "path": "automation-decision-receipt-input",
+              "step": "Download exact Automation Decision Receipt artifact"
+            }
+          ],
+          "id": "decision_receipt_attest",
+          "mutations": [
+            {
+              "class": "attestation",
+              "step": "Attest exact Automation Decision Receipt",
+              "target": "automation-decision-receipt-input/automation-decision-receipt.subject.json"
+            }
+          ],
+          "name": "attest-automation-decision-receipt-write-only",
+          "needs": [
+            "decision_receipt",
+            "lease",
+            "plan"
+          ],
+          "oidc": true,
+          "permissions": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Mint exact short-lived mutation lease"
+            }
+          ],
+          "artifacts": [],
+          "id": "lease",
+          "mutations": [],
+          "name": "mint-mutation-lease-read-only",
+          "needs": [
+            "plan"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download attested merge authorization artifact"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}",
+              "method": "DELETE",
+              "mutating": true,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            }
+          ],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}",
+              "operation": "download",
+              "path": "merge-authorization-input",
+              "step": "Download attested merge authorization artifact"
+            }
+          ],
+          "id": "merge",
+          "mutations": [
+            {
+              "class": "git-ref",
+              "method": "DELETE",
+              "step": "Merge exact approved head and clean up immutable candidate branch",
+              "target": "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}"
+            },
+            {
+              "class": "pull-request-merge",
+              "method": "PUT",
+              "step": "Merge exact approved head and clean up immutable candidate branch",
+              "target": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"
+            }
+          ],
+          "name": "merge-readme-only-terminal-write",
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "budget",
+            "propose",
+            "approve",
+            "authorize",
+            "authorize_attest"
+          ],
+          "oidc": false,
+          "permissions": {
+            "attestations": "read",
+            "checks": "read",
+            "contents": "write",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload reviewed direct-link proposal"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout published evidence snapshot"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout trusted source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "spotlight-link-plan-${{ steps.render.outputs.base_sha }}-${{ steps.render.outputs.generated_sha }}",
+              "operation": "upload",
+              "path": "spotlight-link-plan/*",
+              "retention-days": "1",
+              "step": "Upload reviewed direct-link proposal"
+            }
+          ],
+          "id": "plan",
+          "mutations": [],
+          "name": "plan-direct-links-read-only",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download reviewed direct-link proposal"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/blobs",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/commits",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/refs",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/trees",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            }
+          ],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "spotlight-link-plan-${{ needs.plan.outputs.base_sha }}-${{ needs.plan.outputs.generated_sha }}",
+              "operation": "download",
+              "path": "spotlight-link-plan",
+              "step": "Download reviewed direct-link proposal"
+            }
+          ],
+          "id": "propose",
+          "mutations": [
+            {
+              "class": "git-ref",
+              "method": "POST",
+              "step": "Create or reuse immutable README-only candidate",
+              "target": "repos/${GITHUB_REPOSITORY}/git/refs"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Create or reuse immutable README-only candidate",
+              "target": "repos/${GITHUB_REPOSITORY}/git/blobs"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Create or reuse immutable README-only candidate",
+              "target": "repos/${GITHUB_REPOSITORY}/git/commits"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Create or reuse immutable README-only candidate",
+              "target": "repos/${GITHUB_REPOSITORY}/git/trees"
+            },
+            {
+              "class": "pull-request",
+              "method": "POST",
+              "step": "Create or reuse immutable README-only candidate",
+              "target": "repos/${GITHUB_REPOSITORY}/pulls"
+            }
+          ],
+          "name": "propose-readme-only-write",
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "budget"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [],
+          "apiSurfaces": [],
+          "artifacts": [],
+          "id": "quarantine",
+          "mutations": [],
+          "name": "mutation-budget-quarantine-read-only",
+          "needs": [
+            "plan",
+            "budget"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}",
+              "method": "DELETE",
+              "mutating": true,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "PATCH",
+              "mutating": true,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            }
+          ],
+          "artifacts": [],
+          "id": "reconcile",
+          "mutations": [
+            {
+              "class": "git-ref",
+              "method": "DELETE",
+              "step": "Remove only stale validated automation candidates",
+              "target": "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}"
+            },
+            {
+              "class": "pull-request",
+              "method": "PATCH",
+              "step": "Remove only stale validated automation candidates",
+              "target": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"
+            }
+          ],
+          "name": "reconcile-stale-candidates-write",
+          "needs": [
+            "plan",
+            "lease"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Sync Spotlight profile links",
+      "path": ".github/workflows/spotlight-link-sync.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "schedule": {
+          "cron": [
+            "41 * * * *"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}
