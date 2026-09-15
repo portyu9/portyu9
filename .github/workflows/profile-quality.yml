@@ -20,6 +20,7 @@ on:
       - ".github/dependabot.yml"
       - ".github/action-lock.json"
       - ".github/automation-policy-v1.json"
+      - ".github/workflow-capability-bom-v1.json"
       - ".github/workflows/**"
 
 permissions:
@@ -51,8 +52,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Bootstrap compressed Workflow Capability BOM
-        run: python3 scripts/workflow_capability_bom.py | gzip -9 | base64 -w0
+      - name: Validate Workflow Capability BOM
+        run: python3 scripts/validate-workflow-capability-bom.py
 
       - name: Validate privileged workflow byte identity
         run: python3 scripts/validate-privileged-workflow-identity.py
