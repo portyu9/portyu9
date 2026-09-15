@@ -11,6 +11,7 @@ the prior-review mechanism for a later exact expansion.
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 import re
 import sys
@@ -114,6 +115,17 @@ def selected(paths: Iterable[str]) -> list[str]:
     require(any(path.startswith(".github/workflows/") for path in ordered),
             "candidate source selection contains no workflows")
     return ordered
+
+
+def select_json(stream: object) -> list[str]:
+    try:
+        value = json.load(stream)  # type: ignore[arg-type]
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError(f"candidate Git tree path array is invalid JSON: {exc}") from exc
+    require(isinstance(value, list) and all(isinstance(item, str) for item in value),
+            "candidate Git tree path input must be an array of strings")
+    require(len(value) == len(set(value)), "candidate Git tree path array contains duplicates")
+    return selected(value)
 
 
 def sha256_file(path: Path) -> str:
@@ -265,6 +277,14 @@ def main() -> int:
         for path in selected(line.rstrip("\n") for line in sys.stdin):
             print(path)
         return 0
+    if len(sys.argv) == 2 and sys.argv[1] == "select-json":
+        try:
+            for path in select_json(sys.stdin):
+                print(path)
+            return 0
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
     self_test()
     print("Workflow Capability trusted-source TCB self-test passed.")
     return 0
