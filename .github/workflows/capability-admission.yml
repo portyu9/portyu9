@@ -55,7 +55,8 @@ jobs:
           [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
 
           rm -rf candidate-capability-source
-          mkdir -p candidate-capability-source/.github/workflows candidate-capability-source/scripts
+          mkdir -p candidate-capability-source/.github/workflows
+          : > candidate-capability-source/.candidate-tcb-sha256
 
           COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"
           test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
@@ -66,16 +67,10 @@ jobs:
           TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
           test "$(jq -r .truncated <<<"$TREE")" = "false"
 
-          mapfile -t PATHS < <(
-            jq -r '.tree[] | select(.type == "blob") | .path' <<<"$TREE" |
-              LC_ALL=C sort
-          )
-          test "${#PATHS[@]}" -gt 0
-          test "$(printf '%s\n' "${PATHS[@]}" | LC_ALL=C sort -u | wc -l)" = "${#PATHS[@]}"
-
+          PATHS_JSON="$(jq -c '[.tree[] | select(.type == "blob") | .path] | sort' <<<"$TREE")"
+          jq -e 'length > 0 and length == (unique | length)' <<<"$PATHS_JSON" >/dev/null
           mapfile -t SELECTED_PATHS < <(
-            printf '%s\n' "${PATHS[@]}" |
-              python3 scripts/workflow_capability_tcb.py select
+            python3 scripts/workflow_capability_tcb.py select-json <<<"$PATHS_JSON"
           )
           test "${#SELECTED_PATHS[@]}" -gt 0
 
@@ -84,12 +79,9 @@ jobs:
           for PATH_VALUE in "${SELECTED_PATHS[@]}"; do
             if [ "$PATH_VALUE" = ".github/automation-policy-v1.json" ]; then
               POLICY_SEEN=$((POLICY_SEEN + 1))
+            elif [[ "$PATH_VALUE" =~ ^\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml$ ]]; then
+              WORKFLOW_SEEN=$((WORKFLOW_SEEN + 1))
             fi
-            case "$PATH_VALUE" in
-              .github/workflows/*.yml|.github/workflows/*.yaml)
-                WORKFLOW_SEEN=$((WORKFLOW_SEEN + 1))
-                ;;
-            esac
 
             ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path)]' <<<"$TREE")"
             test "$(jq 'length' <<<"$ENTRY")" = "1"
@@ -101,13 +93,21 @@ jobs:
             BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"
             test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
             test "$(jq -r .encoding <<<"$BLOB")" = "base64"
-            mkdir -p "candidate-capability-source/$(dirname "$PATH_VALUE")"
-            jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "candidate-capability-source/$PATH_VALUE"
-            test -s "candidate-capability-source/$PATH_VALUE"
+            CONTENT_B64="$(jq -r .content <<<"$BLOB" | tr -d '\n')"
+            DIGEST="$(printf '%s' "$CONTENT_B64" | base64 --decode | sha256sum | cut -d' ' -f1)"
+            [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]]
+            printf '%s\t%s\n' "$PATH_VALUE" "$DIGEST" >> candidate-capability-source/.candidate-tcb-sha256
+
+            if [ "$PATH_VALUE" = ".github/automation-policy-v1.json" ] ||
+               [[ "$PATH_VALUE" =~ ^\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml$ ]]; then
+              printf '%s' "$CONTENT_B64" | base64 --decode > "candidate-capability-source/$PATH_VALUE"
+              test -s "candidate-capability-source/$PATH_VALUE"
+            fi
           done
 
           test "$POLICY_SEEN" = "1"
           test "$WORKFLOW_SEEN" -ge 1
+          test "$(wc -l < candidate-capability-source/.candidate-tcb-sha256)" = "${#SELECTED_PATHS[@]}"
 
       - name: Evaluate trusted semantic capability admission
         run: |
@@ -117,6 +117,7 @@ jobs:
           python3 scripts/workflow_capability_admission.py \
             candidate-capability-source \
             --candidate-tree-sha "$TREE_SHA" \
+            --candidate-tcb-manifest candidate-capability-source/.candidate-tcb-sha256 \
             > capability-admission.json
           jq -e '.decision.allowed == true' capability-admission.json >/dev/null
           jq -cS '{decision: .decision, expansionCount: (.diff.expansions | length), reductionCount: (.diff.reductions | length)}' capability-admission.json
