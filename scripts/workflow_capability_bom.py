@@ -65,13 +65,6 @@ def canonical_json(value: Any) -> str:
 
 
 def shell_tokens(value: str) -> list[str]:
-    """Tokenize the reviewed shell fragments without evaluating shell syntax.
-
-    The surrounding shell assignment/command-substitution syntax can leave a trailing
-    quote or parenthesis after the gh/git invocation. The lexical tokenizer therefore
-    consumes balanced quoted tokens when present and treats the remaining shell text as
-    opaque tokens; capability extraction only inspects the reviewed command prefix.
-    """
     return re.findall(r"(?:'[^']*'|\"[^\"]*\"|\S+)", value)
 
 
@@ -326,8 +319,13 @@ def git_surface(command: str, *, workflow: str, job: str, step: str) -> dict[str
 
 def job_blocks(text: str, jobs: list[str], label: str) -> dict[str, str]:
     lines = text.splitlines(keepends=True)
+    jobs_roots = [index for index, line in enumerate(lines) if line.rstrip("\n") == "jobs:"]
+    require(len(jobs_roots) == 1, f"{label}: workflow must contain exactly one jobs block")
     starts: list[tuple[int, str]] = []
-    for index, line in enumerate(lines):
+    for index in range(jobs_roots[0] + 1, len(lines)):
+        line = lines[index]
+        if line.strip() and indentation(line) == 0:
+            break
         match = JOB_KEY.fullmatch(line.rstrip("\n"))
         if match:
             starts.append((index, match.group("job")))
@@ -357,9 +355,20 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
     }
     current_job: str | None = None
     current_step = ""
+    in_jobs = False
     index = 0
     while index < len(lines):
         line = lines[index]
+        if line == "jobs:":
+            in_jobs = True
+            current_job = None
+            index += 1
+            continue
+        if in_jobs and line.strip() and indentation(line) == 0:
+            break
+        if not in_jobs:
+            index += 1
+            continue
         job_match = JOB_KEY.fullmatch(line)
         if job_match:
             current_job = job_match.group("job")
@@ -614,6 +623,7 @@ def self_test() -> None:
     }, f"expression reference self-test drifted: {refs!r}")
 
     network_fixture = (
+        "jobs:\n"
         "  job:\n"
         "    name: job\n"
         "    steps:\n"
