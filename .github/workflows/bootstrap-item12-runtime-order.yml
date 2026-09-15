@@ -1,0 +1,89 @@
+name: Bootstrap item 12 runtime ordering fix
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  patch:
+    if: >-
+      github.repository == 'portyu9/portyu9' &&
+      github.head_ref == 'item-12-workflow-capability-bom' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    name: bootstrap-item12-runtime-order
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Restore runtime proof ordering and advance byte lock
+        env:
+          TARGET_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/profile-quality.yml')
+          text = workflow.read_text(encoding='utf-8')
+          old = '''      - name: Validate Workflow Capability BOM
+                  run: python3 scripts/validate-workflow-capability-bom.py
+
+                - name: Validate privileged workflow byte identity
+                  run: python3 scripts/validate-privileged-workflow-identity.py
+
+                - name: Verify resolved Python runtime
+                  run: python3 scripts/verify-python-runtime.py
+'''
+          new = '''      - name: Validate privileged workflow byte identity
+                  run: python3 scripts/validate-privileged-workflow-identity.py
+
+                - name: Verify resolved Python runtime
+                  run: python3 scripts/verify-python-runtime.py
+
+                - name: Validate Workflow Capability BOM
+                  run: python3 scripts/validate-workflow-capability-bom.py
+'''
+          # Dedent only the embedded YAML payload while keeping this workflow readable.
+          old = '\n'.join(line[10:] if line.startswith('          ') else line for line in old.splitlines()) + '\n'
+          new = '\n'.join(line[10:] if line.startswith('          ') else line for line in new.splitlines()) + '\n'
+          if text.count(old) != 1:
+              raise SystemExit('exact Profile Quality runtime/BOM ordering anchor changed')
+          workflow.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+          NEW_BLOB="$(git hash-object .github/workflows/profile-quality.yml)"
+          test "${#NEW_BLOB}" = 40
+          python3 - "$NEW_BLOB" <<'PY'
+          from pathlib import Path
+          import sys
+
+          new_blob = sys.argv[1]
+          path = Path('scripts/validate-privileged-workflow-identity.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'VERSION = "governed-workflow-byte-identity-v26"': 'VERSION = "governed-workflow-byte-identity-v27"',
+              '".github/workflows/profile-quality.yml": "7fd919ed2f0afc41eb318f38ac072ff5e444aea9"': f'".github/workflows/profile-quality.yml": "{new_blob}"',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'exact lock anchor changed: {old}')
+              text = text.replace(old, new)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/profile-quality.yml scripts/validate-privileged-workflow-identity.py
+          git commit -m "Restore Profile Quality runtime proof ordering"
+          git push origin "HEAD:${TARGET_BRANCH}"
