@@ -111,7 +111,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <h2 align="center">◇ Selected Engineering Systems</h2>
 
 <p align="center"><sub>Four flagship systems · scoped live <code>main</code>-branch evidence</sub></p>
-<p align="center"><sub><strong>Evidence review</strong> · <a href="https://github.com/portyu9/portyu9/blob/generated/portfolio-evidence/portfolio-evidence-ledger.json">Portfolio Evidence Ledger</a> · <a href="https://github.com/portyu9/portyu9/blob/main/.github/ATTESTATION.md">Attestation Contract</a></sub></p>
 
 <p align="center">
 <a href="https://github.com/portyu9/ai-qa-automation"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-ai-qa-control-plane-dark.svg"><img alt="AI QA Control Plane engineering system card" src="assets/profile-systems/qualification-ai-qa-control-plane-light.svg"></picture></a><br>
@@ -156,6 +155,7 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <!-- spotlight-direct-links:end -->
 
 <p align="center"><sub>From my QE systems portfolio · permanent flagship systems excluded · signals scoped to named <code>main</code>-branch workflows.</sub></p>
+<p align="center"><sub><strong>Evidence review</strong> · <a href="https://github.com/portyu9/portyu9/blob/generated/portfolio-evidence/portfolio-evidence-ledger.json">Portfolio Evidence Ledger</a> · <a href="https://github.com/portyu9/portyu9/blob/main/.github/ATTESTATION.md">Attestation Contract</a></sub></p>
 
 ---
 
