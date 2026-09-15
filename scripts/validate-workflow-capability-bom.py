@@ -9,6 +9,7 @@ from typing import Any
 
 import automation_policy
 import trusted_workflow_capability
+import workflow_capability_authorization
 import workflow_capability_bom as compiler
 import workflow_capability_diff as capability_diff
 
@@ -69,6 +70,7 @@ def validate_snapshot() -> tuple[int, int]:
     compiler.self_test()
     capability_diff.self_test()
     trusted_workflow_capability.self_test()
+    workflow_capability_authorization.self_test()
     compiled = compiler.compile_bom()
     canonical = compiler.canonical_json(compiled)
     difference = first_difference(compiled, snapshot)
@@ -96,7 +98,7 @@ def main() -> int:
         workflows, jobs = validate_snapshot()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
-            "semantic diff and trusted alternate-tree compiler self-tests passed."
+            "semantic diff, trusted alternate-tree compiler, and exact expansion authorization self-tests passed."
         )
         return 0
     except (OSError, ValueError) as exc:
