@@ -89,6 +89,7 @@ LEGACY_PROFILE_DISPATCH = '''  dispatch:
             -f ref=main
 '''
 ORIGINAL_PROJECT_ITEM9 = core.project_item9
+ORIGINAL_VALIDATE_BUILDER_SCRIPT = core.validate_builder_script
 
 
 def require(condition: bool, message: str) -> None:
@@ -129,6 +130,62 @@ def project_item9(sync: str) -> str:
     return legacy
 
 
+def validate_preparer_script_with_trusted_admission(text: str) -> None:
+    require("def gh_json(endpoint: str)" in text and '["gh", "api", endpoint]' in text,
+            "Spotlight MAC preparer must retain one GET-only GitHub API helper")
+    for forbidden in ("--method", "requests.", "urllib", "curl ", "wget "):
+        require(forbidden not in text,
+                f"Spotlight MAC preparer acquired alternate/mutating network surface: {forbidden}")
+    for fragment in (
+        'git/ref/heads/main',
+        'git/ref/heads/generated',
+        'pulls/{pr_number}/files?per_page=100',
+        'compare/{base}...{head}',
+        'actions/runs?head_sha={head}&event=pull_request&per_page=100',
+        'total == len(runs) == 3',
+        'actions/runs?head_sha={head}&event=pull_request_target&per_page=100',
+        'trusted_total == len(trusted_runs) == 1',
+        'TRUSTED_WORKFLOW_NAME = "Capability admission"',
+        'TRUSTED_CHECK_NAME = "trusted-capability-admission"',
+        'check-runs?filter=latest&per_page=100',
+        'checks_total == len(checks)',
+        'len(actions_checks) == 6',
+        '"trustedAdmission"',
+    ):
+        require(fragment in text,
+                f"Spotlight MAC preparer lost independent trusted/live-state proof: {fragment}")
+
+
+def validate_builder_script_with_trusted_admission(wrapper: str, builder_core: str) -> None:
+    ORIGINAL_VALIDATE_BUILDER_SCRIPT(wrapper, builder_core)
+    for fragment in (
+        '"trustedAdmission"',
+        '"Capability admission"',
+        '"trusted-capability-admission"',
+        '"pull_request_target"',
+        'server-side required-check enforcement',
+        'def validate_trusted_admission(',
+    ):
+        require(fragment in builder_core,
+                f"Spotlight MAC builder core lost trusted admission binding: {fragment}")
+    schema = core.SCHEMA.read_text(encoding="utf-8")
+    for fragment in (
+        '"trustedAdmission"',
+        '"Capability admission"',
+        '"trusted-capability-admission"',
+        '"event": {"const": "pull_request_target"}',
+        '"appId": {"const": 15368}',
+    ):
+        require(fragment in schema,
+                f"Spotlight MAC schema lost trusted admission binding: {fragment}")
+
+
+core.DOWNLOAD_STEP = COMPRESSED_DOWNLOAD_STEP
+core.project_item9 = project_item9
+core.validate_preparer_script = validate_preparer_script_with_trusted_admission
+core.validate_builder_script = validate_builder_script_with_trusted_admission
+
+
 def main() -> int:
     try:
         for path in (core.SYNC, core.STATS, core.POLICY, core.BUILDER, core.BUILDER_CORE,
@@ -136,8 +193,6 @@ def main() -> int:
             require(path.is_file() and not path.is_symlink(),
                     f"Spotlight merge authorization input is missing or aliased: {path.relative_to(core.ROOT)}")
 
-        core.DOWNLOAD_STEP = COMPRESSED_DOWNLOAD_STEP
-        core.project_item9 = project_item9
         sync = strip_adr_tail(core.SYNC.read_text(encoding="utf-8"), "Spotlight")
         stats = project_profile_item9(strip_adr_tail(core.STATS.read_text(encoding="utf-8"), "Profile Stats"))
         policy = core.POLICY.read_text(encoding="utf-8")
@@ -154,7 +209,7 @@ def main() -> int:
         core.self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
-            "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state, "
+            "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state plus the separate trusted capability-admission proof, "
             "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance "
             "and the CLI's direct verified statement before expected-head mutation."
         )
