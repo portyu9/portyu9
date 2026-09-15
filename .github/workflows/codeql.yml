@@ -44,6 +44,41 @@ jobs:
           queries: security-extended
 
       - name: Analyze
+        id: analyze
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           category: "/language:${{ matrix.language }}"
+
+      - name: Print minimal SARIF result metadata
+        if: always() && steps.analyze.outputs.sarif-output != ''
+        env:
+          SARIF_OUTPUT: ${{ steps.analyze.outputs.sarif-output }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["SARIF_OUTPUT"])
+          for path in sorted(root.glob("*.sarif")):
+              value = json.loads(path.read_text(encoding="utf-8"))
+              for run in value.get("runs", []):
+                  for result in run.get("results", []):
+                      locations = []
+                      for location in result.get("locations", []):
+                          physical = location.get("physicalLocation", {})
+                          artifact = physical.get("artifactLocation", {})
+                          region = physical.get("region", {})
+                          locations.append({
+                              "uri": artifact.get("uri"),
+                              "startLine": region.get("startLine"),
+                              "startColumn": region.get("startColumn"),
+                          })
+                      print(json.dumps({
+                          "ruleId": result.get("ruleId"),
+                          "level": result.get("level"),
+                          "message": result.get("message", {}).get("text"),
+                          "locations": locations,
+                      }, sort_keys=True))
+          PY
