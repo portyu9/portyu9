@@ -10,12 +10,13 @@ GitHub branch rulesets are repository control-plane state, not ordinary source f
 `Protect Main` targets the default branch, is active, has no bypass actors, blocks deletion and non-fast-forward updates, requires pull requests, permits only merge commits, and requires these exact status contexts on the current head:
 
 - `validate-contracts`
+- `trusted-capability-admission`
 - `integration-pinned-upstream`
 - `dependency-review`
 - `analyze-actions`
 - `analyze-python`
 
-All five required status checks are additionally bound to the GitHub Actions app identity `integration_id: 15368`. Matching a context name is not sufficient: the live ruleset gate requires every required-check entry to carry that exact integration ID so a same-named status emitted by another integration cannot satisfy the reviewed merge contract.
+All six required status checks are additionally bound to the GitHub Actions app identity `integration_id: 15368`. Matching a context name is not sufficient: the live ruleset gate requires every required-check entry to carry that exact integration ID so a same-named status emitted by another integration cannot satisfy the reviewed merge contract.
 
 The pull-request rule intentionally keeps `required_approving_review_count: 0` for my solo-maintainer repository. It must require `required_review_thread_resolution: true` so an unresolved review conversation cannot be bypassed merely because no second approving reviewer is configured.
 
@@ -31,7 +32,9 @@ The pull-request rule intentionally keeps `required_approving_review_count: 0` f
 
 `python3 scripts/validate-ruleset-contract.py --live` additionally reads GitHub's repository rulesets and compares every field observable to the read-only workflow identity with the version-controlled target. `Profile quality / validate-contracts` executes this live form on every pull request and on relevant `main` pushes. A mismatch in the observable control-plane surface is therefore a **merge-blocking** governance defect rather than a separate manual observation.
 
-The required live comparison covers the exact ruleset inventory, targets, enforcement, `Protect Main` pull-request parameters, the strict five-check set including each check's GitHub Actions integration identity, and the `Protect generated` rule inventory. If GitHub exposes `bypass_actors` to the workflow identity, a non-empty value also fails the gate.
+The required live comparison covers the exact ruleset inventory, targets, enforcement, `Protect Main` pull-request parameters, the required-check set including each check's GitHub Actions integration identity, and the `Protect generated` rule inventory. If GitHub exposes `bypass_actors` to the workflow identity, a non-empty value also fails the gate.
+
+For the item-13 migration, the checked-in target is the final six-context set above while the live comparison temporarily accepts only two exact states: the legacy five contexts without `trusted-capability-admission`, or the final six contexts with it. No other required-check set is accepted. After the live ruleset reaches the final six-context state, this temporary two-state allowance is removed.
 
 GitHub currently redacts `bypass_actors` from both the short-lived read-only Actions token and the unauthenticated public API view. The validator does not interpret that omission as an empty list. Empty bypass actors remain locked as desired state in the source contract and as a separate **admin-scope** control-plane audit invariant. An administration-capable read must periodically confirm that invariant; the latest connected control-plane audit observed `bypass_actors: []` on both repository rulesets.
 
