@@ -187,8 +187,8 @@ def main() -> int:
             "diff": diff,
         }), end="")
         return 0
-    except (OSError, ValueError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+    except (OSError, ValueError):
+        print("ERROR: trusted capability admission rejected candidate input", file=sys.stderr)
         return 1
 
 
