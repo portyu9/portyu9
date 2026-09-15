@@ -95,14 +95,14 @@
     },
     "workflowRuns": {
       "type": "array",
-      "minItems": 3,
-      "maxItems": 3,
+      "minItems": 4,
+      "maxItems": 4,
       "items": {"$ref": "#/$defs/workflowRun"}
     },
     "checkRuns": {
       "type": "array",
-      "minItems": 5,
-      "maxItems": 5,
+      "minItems": 6,
+      "maxItems": 6,
       "items": {"$ref": "#/$defs/checkRun"}
     },
     "claim": {"const": "This certificate authorizes only the exact Spotlight README candidate, PR, workflow-run provenance, and successful required checks recorded here. It is not a freshness proof and cannot authorize merge without independent terminal live revalidation and an unexpired matching mutation lease."}
@@ -113,12 +113,12 @@
       "additionalProperties": false,
       "required": ["name", "workflowId", "runId", "runAttempt", "checkSuiteId", "event", "headBranch", "headSha", "repository", "headRepository", "status", "conclusion"],
       "properties": {
-        "name": {"enum": ["CodeQL", "Dependency review", "Profile quality"]},
+        "name": {"enum": ["Capability admission", "CodeQL", "Dependency review", "Profile quality"]},
         "workflowId": {"type": "integer", "minimum": 1},
         "runId": {"type": "integer", "minimum": 1},
         "runAttempt": {"type": "integer", "minimum": 1},
         "checkSuiteId": {"type": "integer", "minimum": 1},
-        "event": {"const": "pull_request"},
+        "event": {"enum": ["pull_request", "pull_request_target"]},
         "headBranch": {"type": "string", "pattern": "^automation/spotlight-links/[0-9a-f]{64}$"},
         "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "repository": {"const": "portyu9/portyu9"},
@@ -132,7 +132,7 @@
       "additionalProperties": false,
       "required": ["name", "checkSuiteId", "appId", "status", "conclusion", "headSha"],
       "properties": {
-        "name": {"enum": ["analyze-actions", "analyze-python", "dependency-review", "integration-pinned-upstream", "validate-contracts"]},
+        "name": {"enum": ["analyze-actions", "analyze-python", "dependency-review", "integration-pinned-upstream", "trusted-capability-admission", "validate-contracts"]},
         "checkSuiteId": {"type": "integer", "minimum": 1},
         "appId": {"const": 15368},
         "status": {"const": "completed"},
