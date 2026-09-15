@@ -25,6 +25,7 @@
           "integration_id": 15368,
           "contexts": [
             "validate-contracts",
+            "trusted-capability-admission",
             "integration-pinned-upstream",
             "dependency-review",
             "analyze-actions",

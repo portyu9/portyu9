@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 import re
 import sys
-import tempfile
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,9 +35,9 @@ PR_BODY = (
 )
 CLAIM = (
     "This certificate authorizes only the exact Spotlight README candidate, PR, workflow-run "
-    "provenance, and successful required checks recorded here. It is not a freshness proof and "
-    "cannot authorize merge without independent terminal live revalidation and an unexpired "
-    "matching mutation lease."
+    "provenance, successful pull-request checks, and trusted capability-admission proof recorded "
+    "here. It is not a freshness proof and cannot authorize merge without independent terminal "
+    "live revalidation, server-side required-check enforcement, and an unexpired matching mutation lease."
 )
 WORKFLOW_NAMES = ("CodeQL", "Dependency review", "Profile quality")
 CHECK_NAMES = (
@@ -250,6 +249,43 @@ def validate_check_runs(value: Any, env: dict[str, str], runs: list[dict[str, An
     return checks
 
 
+def validate_trusted_admission(value: Any, env: dict[str, str]) -> dict[str, Any]:
+    require(isinstance(value, dict) and set(value) == {"workflowRun", "checkRun"},
+            "merge authorization trustedAdmission shape changed")
+    workflow = value["workflowRun"]
+    check = value["checkRun"]
+    require(isinstance(workflow, dict) and set(workflow) == {
+        "name", "workflowId", "runId", "runAttempt", "checkSuiteId", "event", "headBranch",
+        "headSha", "repository", "headRepository", "status", "conclusion",
+    }, "merge authorization trusted admission workflow-run shape changed")
+    branch = env_value(env, "CANDIDATE_BRANCH", BRANCH)
+    head = env_value(env, "HEAD_SHA", SHA40)
+    require(workflow.get("name") == "Capability admission",
+            "merge authorization trusted admission workflow identity changed")
+    for field in ("workflowId", "runId", "runAttempt", "checkSuiteId"):
+        positive_int(workflow.get(field), f"trusted admission {field}")
+    require(workflow.get("event") == "pull_request_target"
+            and workflow.get("headBranch") == branch and workflow.get("headSha") == head,
+            "merge authorization trusted admission source identity changed")
+    require(workflow.get("repository") == REPOSITORY and workflow.get("headRepository") == REPOSITORY,
+            "merge authorization trusted admission repository identity changed")
+    require(workflow.get("status") == "completed" and workflow.get("conclusion") == "success",
+            "merge authorization trusted admission workflow is not successful")
+
+    require(isinstance(check, dict) and set(check) == {
+        "name", "checkSuiteId", "appId", "status", "conclusion", "headSha",
+    }, "merge authorization trusted admission check-run shape changed")
+    require(check.get("name") == "trusted-capability-admission",
+            "merge authorization trusted admission check identity changed")
+    positive_int(check.get("checkSuiteId"), "trusted admission checkSuiteId")
+    require(check.get("checkSuiteId") == workflow["checkSuiteId"],
+            "merge authorization trusted admission check suite is not bound to its workflow run")
+    require(check.get("appId") == 15368 and check.get("status") == "completed"
+            and check.get("conclusion") == "success" and check.get("headSha") == head,
+            "merge authorization trusted admission check success identity changed")
+    return {"workflowRun": workflow, "checkRun": check}
+
+
 def build(state: dict[str, Any], env: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
     repository = env_value(env, "GITHUB_REPOSITORY")
     workflow_ref = env_value(env, "GITHUB_WORKFLOW_REF")
@@ -262,13 +298,14 @@ def build(state: dict[str, Any], env: dict[str, str]) -> tuple[dict[str, Any], d
     require(source_sha == env_value(env, "BASE_SHA", SHA40),
             "merge authorization workflow source SHA differs from transaction base")
     require(server == "https://github.com", "merge authorization GitHub server identity changed")
-    require(set(state) == {"pullRequest", "candidate", "workflowRuns", "checkRuns"},
+    require(set(state) == {"pullRequest", "candidate", "workflowRuns", "checkRuns", "trustedAdmission"},
             "merge authorization live-state keys changed")
 
     pull_request = validate_pull_request(state["pullRequest"], env)
     candidate = validate_candidate(state["candidate"], env)
     runs = validate_workflow_runs(state["workflowRuns"], env)
     checks = validate_check_runs(state["checkRuns"], env, runs)
+    trusted_admission = validate_trusted_admission(state["trustedAdmission"], env)
     transaction = expected_transaction(env)
     branch = env_value(env, "CANDIDATE_BRANCH", BRANCH)
     require(branch == BOT_BRANCH_PREFIX + transaction["candidateId"],
@@ -291,6 +328,7 @@ def build(state: dict[str, Any], env: dict[str, str]) -> tuple[dict[str, Any], d
         "candidate": candidate,
         "workflowRuns": runs,
         "checkRuns": checks,
+        "trustedAdmission": trusted_admission,
         "claim": CLAIM,
     }
     certificate_sha = hashlib.sha256(canonical_bytes(certificate)).hexdigest()
@@ -354,6 +392,14 @@ def fixture() -> tuple[dict[str, Any], dict[str, str]]:
     suites = {run["name"]: run["checkSuiteId"] for run in runs}
     checks = [{"name": name, "checkSuiteId": suites[CHECK_WORKFLOW[name]], "appId": 15368,
                "status": "completed", "conclusion": "success", "headSha": head} for name in CHECK_NAMES]
+    trusted = {
+        "workflowRun": {"name": "Capability admission", "workflowId": 104, "runId": 2004,
+                        "runAttempt": 1, "checkSuiteId": 3004, "event": "pull_request_target",
+                        "headBranch": branch, "headSha": head, "repository": REPOSITORY,
+                        "headRepository": REPOSITORY, "status": "completed", "conclusion": "success"},
+        "checkRun": {"name": "trusted-capability-admission", "checkSuiteId": 3004, "appId": 15368,
+                     "status": "completed", "conclusion": "success", "headSha": head},
+    }
     state = {
         "pullRequest": {"number": 123, "title": PR_TITLE, "body": PR_BODY, "baseRef": "main",
                         "headRef": branch, "headSha": head, "headRepository": REPOSITORY,
@@ -363,6 +409,7 @@ def fixture() -> tuple[dict[str, Any], dict[str, str]]:
                       "readmeSha256": readme},
         "workflowRuns": runs,
         "checkRuns": checks,
+        "trustedAdmission": trusted,
     }
     return state, env
 
@@ -397,6 +444,14 @@ def self_test() -> None:
     extra_check = copy.deepcopy(state)
     extra_check["checkRuns"].append(copy.deepcopy(extra_check["checkRuns"][0]))
     expect_failure(extra_check, dict(env), "exactly five check runs")
+
+    wrong_trusted_suite = copy.deepcopy(state)
+    wrong_trusted_suite["trustedAdmission"]["checkRun"]["checkSuiteId"] = 3001
+    expect_failure(wrong_trusted_suite, dict(env), "trusted admission check suite is not bound")
+
+    wrong_trusted_event = copy.deepcopy(state)
+    wrong_trusted_event["trustedAdmission"]["workflowRun"]["event"] = "pull_request"
+    expect_failure(wrong_trusted_event, dict(env), "trusted admission source identity changed")
 
     failed_run = copy.deepcopy(state)
     failed_run["workflowRuns"][0]["conclusion"] = "failure"

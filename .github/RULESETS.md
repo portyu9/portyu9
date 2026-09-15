@@ -10,12 +10,15 @@ GitHub branch rulesets are repository control-plane state, not ordinary source f
 `Protect Main` targets the default branch, is active, has no bypass actors, blocks deletion and non-fast-forward updates, requires pull requests, permits only merge commits, and requires these exact status contexts on the current head:
 
 - `validate-contracts`
+- `trusted-capability-admission`
 - `integration-pinned-upstream`
 - `dependency-review`
 - `analyze-actions`
 - `analyze-python`
 
-All five required status checks are additionally bound to the GitHub Actions app identity `integration_id: 15368`. Matching a context name is not sufficient: the live ruleset gate requires every required-check entry to carry that exact integration ID so a same-named status emitted by another integration cannot satisfy the reviewed merge contract.
+All six required status checks are additionally bound to the GitHub Actions app identity `integration_id: 15368`. Matching a context name is not sufficient: the live ruleset gate requires every required-check entry to carry that exact integration ID so a same-named status emitted by another integration cannot satisfy the reviewed merge contract.
+
+`trusted-capability-admission` is the default-branch-trusted authority-expansion gate. It evaluates pull-request capability source as inert data using trusted base code and requires an exact prior default-branch authorization for any semantic capability expansion or protected admission-TCB expansion. It does not replace `validate-contracts`; the latter remains required for the broader repository validation surface.
 
 The pull-request rule intentionally keeps `required_approving_review_count: 0` for my solo-maintainer repository. It must require `required_review_thread_resolution: true` so an unresolved review conversation cannot be bypassed merely because no second approving reviewer is configured.
 
@@ -31,7 +34,7 @@ The pull-request rule intentionally keeps `required_approving_review_count: 0` f
 
 `python3 scripts/validate-ruleset-contract.py --live` additionally reads GitHub's repository rulesets and compares every field observable to the read-only workflow identity with the version-controlled target. `Profile quality / validate-contracts` executes this live form on every pull request and on relevant `main` pushes. A mismatch in the observable control-plane surface is therefore a **merge-blocking** governance defect rather than a separate manual observation.
 
-The required live comparison covers the exact ruleset inventory, targets, enforcement, `Protect Main` pull-request parameters, the strict five-check set including each check's GitHub Actions integration identity, and the `Protect generated` rule inventory. If GitHub exposes `bypass_actors` to the workflow identity, a non-empty value also fails the gate.
+The required live comparison covers the exact ruleset inventory, targets, enforcement, `Protect Main` pull-request parameters, the strict six-check set including each check's GitHub Actions integration identity, and the `Protect generated` rule inventory. If GitHub exposes `bypass_actors` to the workflow identity, a non-empty value also fails the gate.
 
 GitHub currently redacts `bypass_actors` from both the short-lived read-only Actions token and the unauthenticated public API view. The validator does not interpret that omission as an empty list. Empty bypass actors remain locked as desired state in the source contract and as a separate **admin-scope** control-plane audit invariant. An administration-capable read must periodically confirm that invariant; the latest connected control-plane audit observed `bypass_actors: []` on both repository rulesets.
 

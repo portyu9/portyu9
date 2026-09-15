@@ -27,6 +27,9 @@ WORKFLOWS = {
     "Dependency review": "dependency-review.yml",
     "Profile quality": "profile-quality.yml",
 }
+TRUSTED_WORKFLOW_NAME = "Capability admission"
+TRUSTED_WORKFLOW_FILE = "capability-admission.yml"
+TRUSTED_CHECK_NAME = "trusted-capability-admission"
 CHECK_NAMES = (
     "analyze-actions",
     "analyze-python",
@@ -82,12 +85,6 @@ def gh_json(endpoint: str) -> Any:
 
 def positive(value: Any, label: str) -> int:
     require(type(value) is int and value > 0, f"{label} must be one positive integer")
-    return value
-
-
-def require_sha(value: Any, label: str) -> str:
-    require(isinstance(value, str) and SHA40.fullmatch(value) is not None,
-            f"{label} must be one lowercase 40-character Git SHA")
     return value
 
 
@@ -191,6 +188,8 @@ def prepare_state() -> dict[str, Any]:
     for name, filename in WORKFLOWS.items():
         workflow = gh_json(f"repos/{REPOSITORY}/actions/workflows/{filename}")
         workflow_ids[name] = positive(workflow.get("id"), f"{name} workflow ID")
+    trusted_workflow = gh_json(f"repos/{REPOSITORY}/actions/workflows/{TRUSTED_WORKFLOW_FILE}")
+    trusted_workflow_id = positive(trusted_workflow.get("id"), "Capability admission workflow ID")
 
     runs_payload = gh_json(f"repos/{REPOSITORY}/actions/runs?head_sha={head}&event=pull_request&per_page=100")
     total = runs_payload.get("total_count")
@@ -231,14 +230,51 @@ def prepare_state() -> dict[str, Any]:
                 f"Spotlight authorization {name} run provenance changed")
         workflow_runs.append(item)
 
+    trusted_runs_payload = gh_json(
+        f"repos/{REPOSITORY}/actions/runs?head_sha={head}&event=pull_request_target&per_page=100"
+    )
+    trusted_total = trusted_runs_payload.get("total_count")
+    trusted_runs = trusted_runs_payload.get("workflow_runs")
+    require(type(trusted_total) is int and isinstance(trusted_runs, list)
+            and trusted_total == len(trusted_runs) == 1,
+            "Spotlight trusted admission workflow-run response is incomplete or ambiguous")
+    trusted_matches = [run for run in trusted_runs
+                       if run.get("name") == TRUSTED_WORKFLOW_NAME
+                       and run.get("workflow_id") == trusted_workflow_id]
+    require(len(trusted_matches) == 1,
+            "Spotlight trusted admission canonical workflow run changed")
+    trusted_run = trusted_matches[0]
+    trusted_run_item = {
+        "name": TRUSTED_WORKFLOW_NAME,
+        "workflowId": trusted_workflow_id,
+        "runId": positive(trusted_run.get("id"), "Capability admission run ID"),
+        "runAttempt": positive(trusted_run.get("run_attempt"), "Capability admission run attempt"),
+        "checkSuiteId": positive(trusted_run.get("check_suite_id"), "Capability admission check suite ID"),
+        "event": trusted_run.get("event"),
+        "headBranch": trusted_run.get("head_branch"),
+        "headSha": trusted_run.get("head_sha"),
+        "repository": trusted_run.get("repository", {}).get("full_name"),
+        "headRepository": trusted_run.get("head_repository", {}).get("full_name"),
+        "status": trusted_run.get("status"),
+        "conclusion": trusted_run.get("conclusion"),
+    }
+    require(trusted_run_item["event"] == "pull_request_target"
+            and trusted_run_item["headBranch"] == branch and trusted_run_item["headSha"] == head
+            and trusted_run_item["repository"] == REPOSITORY
+            and trusted_run_item["headRepository"] == REPOSITORY
+            and trusted_run_item["status"] == "completed" and trusted_run_item["conclusion"] == "success",
+            "Spotlight trusted admission run provenance changed")
+
     checks_payload = gh_json(f"repos/{REPOSITORY}/commits/{head}/check-runs?filter=latest&per_page=100")
     checks_total = checks_payload.get("total_count")
     checks = checks_payload.get("check_runs")
     require(type(checks_total) is int and isinstance(checks, list) and checks_total == len(checks),
             "Spotlight authorization check-run response is incomplete")
     actions_checks = [check for check in checks if check.get("app", {}).get("id") == 15368]
-    require(len(actions_checks) == 5 and sorted(check.get("name") for check in actions_checks) == list(CHECK_NAMES),
+    expected_names = sorted(CHECK_NAMES + (TRUSTED_CHECK_NAME,))
+    require(len(actions_checks) == 6 and sorted(check.get("name") for check in actions_checks) == expected_names,
             "Spotlight authorization GitHub-Actions check set changed")
+
     suite_by_workflow = {item["name"]: item["checkSuiteId"] for item in workflow_runs}
     check_runs: list[dict[str, Any]] = []
     for name in CHECK_NAMES:
@@ -260,11 +296,37 @@ def prepare_state() -> dict[str, Any]:
                 f"Spotlight authorization required check is not successful on exact head: {name}")
         check_runs.append(item)
 
+    trusted_checks = [check for check in actions_checks if check.get("name") == TRUSTED_CHECK_NAME]
+    require(len(trusted_checks) == 1,
+            "Spotlight trusted admission check run is ambiguous")
+    trusted_check = trusted_checks[0]
+    trusted_suite = positive(trusted_check.get("check_suite", {}).get("id"),
+                             "trusted capability admission check suite ID")
+    require(trusted_suite == trusted_run_item["checkSuiteId"],
+            "Spotlight trusted admission check suite differs from canonical workflow run")
+    trusted_check_item = {
+        "name": TRUSTED_CHECK_NAME,
+        "checkSuiteId": trusted_suite,
+        "appId": trusted_check.get("app", {}).get("id"),
+        "status": trusted_check.get("status"),
+        "conclusion": trusted_check.get("conclusion"),
+        "headSha": trusted_check.get("head_sha"),
+    }
+    require(trusted_check_item["appId"] == 15368
+            and trusted_check_item["status"] == "completed"
+            and trusted_check_item["conclusion"] == "success"
+            and trusted_check_item["headSha"] == head,
+            "Spotlight trusted admission check is not successful on exact head")
+
     return {
         "pullRequest": expected_pr,
         "candidate": candidate,
         "workflowRuns": workflow_runs,
         "checkRuns": check_runs,
+        "trustedAdmission": {
+            "workflowRun": trusted_run_item,
+            "checkRun": trusted_check_item,
+        },
     }
 
 

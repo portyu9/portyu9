@@ -31,6 +31,7 @@ EXPECTED_RULESET_NAMES = ("Protect Main", "Protect generated")
 
 EXPECTED_CONTEXTS = {
     "validate-contracts",
+    "trusted-capability-admission",
     "integration-pinned-upstream",
     "dependency-review",
     "analyze-actions",
@@ -169,7 +170,7 @@ def validate_source(payload: dict[str, Any]) -> None:
     contexts = checks.get("contexts")
     require(
         isinstance(contexts, list)
-        and len(contexts) == 5
+        and len(contexts) == 6
         and all(isinstance(context, str) and context for context in contexts)
         and set(contexts) == EXPECTED_CONTEXTS,
         "Protect Main required status contexts changed",
@@ -644,7 +645,7 @@ def main() -> int:
         suffix = " + live observable GitHub control-plane state" if args.live else ""
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
-            f"five required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity and observable drift fail closed."
+            f"six required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity and observable drift fail closed."
         )
         if unobservable:
             print(
