@@ -17,6 +17,7 @@
     "candidate",
     "workflowRuns",
     "checkRuns",
+    "trustedAdmission",
     "claim"
   ],
   "properties": {
@@ -95,17 +96,18 @@
     },
     "workflowRuns": {
       "type": "array",
-      "minItems": 4,
-      "maxItems": 4,
+      "minItems": 3,
+      "maxItems": 3,
       "items": {"$ref": "#/$defs/workflowRun"}
     },
     "checkRuns": {
       "type": "array",
-      "minItems": 6,
-      "maxItems": 6,
+      "minItems": 5,
+      "maxItems": 5,
       "items": {"$ref": "#/$defs/checkRun"}
     },
-    "claim": {"const": "This certificate authorizes only the exact Spotlight README candidate, PR, workflow-run provenance, and successful required checks recorded here. It is not a freshness proof and cannot authorize merge without independent terminal live revalidation and an unexpired matching mutation lease."}
+    "trustedAdmission": {"$ref": "#/$defs/trustedAdmission"},
+    "claim": {"const": "This certificate authorizes only the exact Spotlight README candidate, PR, workflow-run provenance, successful pull-request checks, and trusted capability-admission proof recorded here. It is not a freshness proof and cannot authorize merge without independent terminal live revalidation, server-side required-check enforcement, and an unexpired matching mutation lease."}
   },
   "$defs": {
     "workflowRun": {
@@ -113,12 +115,12 @@
       "additionalProperties": false,
       "required": ["name", "workflowId", "runId", "runAttempt", "checkSuiteId", "event", "headBranch", "headSha", "repository", "headRepository", "status", "conclusion"],
       "properties": {
-        "name": {"enum": ["Capability admission", "CodeQL", "Dependency review", "Profile quality"]},
+        "name": {"enum": ["CodeQL", "Dependency review", "Profile quality"]},
         "workflowId": {"type": "integer", "minimum": 1},
         "runId": {"type": "integer", "minimum": 1},
         "runAttempt": {"type": "integer", "minimum": 1},
         "checkSuiteId": {"type": "integer", "minimum": 1},
-        "event": {"enum": ["pull_request", "pull_request_target"]},
+        "event": {"const": "pull_request"},
         "headBranch": {"type": "string", "pattern": "^automation/spotlight-links/[0-9a-f]{64}$"},
         "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
         "repository": {"const": "portyu9/portyu9"},
@@ -132,12 +134,51 @@
       "additionalProperties": false,
       "required": ["name", "checkSuiteId", "appId", "status", "conclusion", "headSha"],
       "properties": {
-        "name": {"enum": ["analyze-actions", "analyze-python", "dependency-review", "integration-pinned-upstream", "trusted-capability-admission", "validate-contracts"]},
+        "name": {"enum": ["analyze-actions", "analyze-python", "dependency-review", "integration-pinned-upstream", "validate-contracts"]},
         "checkSuiteId": {"type": "integer", "minimum": 1},
         "appId": {"const": 15368},
         "status": {"const": "completed"},
         "conclusion": {"const": "success"},
         "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "trustedAdmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workflowRun", "checkRun"],
+      "properties": {
+        "workflowRun": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "workflowId", "runId", "runAttempt", "checkSuiteId", "event", "headBranch", "headSha", "repository", "headRepository", "status", "conclusion"],
+          "properties": {
+            "name": {"const": "Capability admission"},
+            "workflowId": {"type": "integer", "minimum": 1},
+            "runId": {"type": "integer", "minimum": 1},
+            "runAttempt": {"type": "integer", "minimum": 1},
+            "checkSuiteId": {"type": "integer", "minimum": 1},
+            "event": {"const": "pull_request_target"},
+            "headBranch": {"type": "string", "pattern": "^automation/spotlight-links/[0-9a-f]{64}$"},
+            "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "repository": {"const": "portyu9/portyu9"},
+            "headRepository": {"const": "portyu9/portyu9"},
+            "status": {"const": "completed"},
+            "conclusion": {"const": "success"}
+          }
+        },
+        "checkRun": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "checkSuiteId", "appId", "status", "conclusion", "headSha"],
+          "properties": {
+            "name": {"const": "trusted-capability-admission"},
+            "checkSuiteId": {"type": "integer", "minimum": 1},
+            "appId": {"const": 15368},
+            "status": {"const": "completed"},
+            "conclusion": {"const": "success"},
+            "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+          }
+        }
       }
     }
   }
