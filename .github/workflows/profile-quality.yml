@@ -51,6 +51,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Bootstrap Workflow Capability BOM
+        run: python3 scripts/workflow_capability_bom.py
+
       - name: Validate privileged workflow byte identity
         run: python3 scripts/validate-privileged-workflow-identity.py
 
