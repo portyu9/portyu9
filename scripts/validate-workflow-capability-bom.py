@@ -46,9 +46,17 @@ def first_difference(expected: Any, observed: Any, path: str = "$") -> str | Non
 
 
 def validate_snapshot() -> tuple[int, int]:
-    snapshot = workflow_capability_snapshot.load_combined()
-
     compiler.self_test()
+    compiled = compiler.compile_bom()
+    autofix = [workflow for workflow in compiled["workflows"] if workflow.get("id") == "codeql-autofix"]
+    require(len(autofix) == 1, "diagnostic expected exactly one codeql-autofix workflow")
+    extension = {key: compiled[key] for key in compiled if key != "workflows"}
+    extension["workflows"] = autofix
+    print("CODEQL_AUTOFIX_BOM_EXTENSION_BEGIN")
+    print(compiler.canonical_json(extension), end="")
+    print("CODEQL_AUTOFIX_BOM_EXTENSION_END")
+
+    snapshot = workflow_capability_snapshot.load_combined()
     capability_diff.self_test()
     trusted_workflow_capability.self_test()
     workflow_capability_authorization.self_test()
@@ -57,7 +65,6 @@ def validate_snapshot() -> tuple[int, int]:
     capability_admission_workflow_contract.validate()
     workflow_capability_admission.self_test()
 
-    compiled = compiler.compile_bom()
     difference = first_difference(compiled, snapshot)
     if difference is not None:
         raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
