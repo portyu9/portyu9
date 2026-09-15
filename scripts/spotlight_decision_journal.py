@@ -77,14 +77,14 @@ def normalized_approval(value: Any, expected_head: str) -> dict[str, Any]:
 
 
 def build(env: dict[str, str], approval_runs: list[dict[str, Any]]) -> dict[str, Any]:
-    """Build one ordered raw journal from already observed writer outputs.
+    """Build an ordered journal from successful writer outputs only.
 
-    The later read-only preparer must independently re-prove every emitted effect against
-    durable GitHub state before this journal is converted into an attested ADR predicate.
+    Presence booleans are supplied by workflow job-result logic. Writer outputs are expected
+    identities only; the later read-only preparer independently re-proves every emitted effect
+    against durable GitHub state before the journal becomes an attested ADR predicate.
     """
     lease_candidate = env_value(env, "LEASE_CANDIDATE_ID", automation_decision_receipt.SHA64)
     current_branch = f"{spotlight_decision_receipt.BOT_BRANCH_PREFIX}{lease_candidate}"
-    expected_head = env_value(env, "EXPECTED_HEAD_SHA", SHA40)
     base_sha = env_value(env, "LEASE_BASE_SHA", SHA40)
 
     effects: list[dict[str, Any]] = []
@@ -119,21 +119,31 @@ def build(env: dict[str, str], approval_runs: list[dict[str, Any]]) -> dict[str,
             "observation": {"prClosed": pr_closed, "candidateRefAbsent": True},
         })
 
-    ref_created = json_bool(env, "PROPOSE_REF_CREATED")
-    pr_created = json_bool(env, "PROPOSE_PR_CREATED")
-    pr_number = positive_int_env(env, "PR_NUMBER")
-    effects.append({
-        "job": "propose",
-        "kind": "spotlight-candidate-publication",
-        "outcome": "applied" if ref_created or pr_created else "reused",
-        "target": {"candidateBranch": current_branch, "headSha": expected_head, "prNumber": pr_number},
-        "observation": {"refCreated": ref_created, "prCreated": pr_created},
-    })
+    propose_present = json_bool(env, "PROPOSE_EFFECT_PRESENT")
+    merge_present = json_bool(env, "MERGE_EFFECT_PRESENT")
+    expected_head: str | None = None
+    pr_number: int | None = None
+    if propose_present:
+        expected_head = env_value(env, "EXPECTED_HEAD_SHA", SHA40)
+        ref_created = json_bool(env, "PROPOSE_REF_CREATED")
+        pr_created = json_bool(env, "PROPOSE_PR_CREATED")
+        pr_number = positive_int_env(env, "PR_NUMBER")
+        effects.append({
+            "job": "propose",
+            "kind": "spotlight-candidate-publication",
+            "outcome": "applied" if ref_created or pr_created else "reused",
+            "target": {"candidateBranch": current_branch, "headSha": expected_head, "prNumber": pr_number},
+            "observation": {"refCreated": ref_created, "prCreated": pr_created},
+        })
+    else:
+        require(not approval_runs, "Spotlight approval effects cannot exist without a successful propose disposition")
+        require(not merge_present, "Spotlight merge effect cannot exist without a successful propose disposition")
 
     require(isinstance(approval_runs, list) and len(approval_runs) <= 3,
             "Spotlight approval observation exceeds canonical workflow bound")
     approval_ids: set[int] = set()
     for raw in approval_runs:
+        require(expected_head is not None, "Spotlight approval effects require a candidate head")
         item = normalized_approval(raw, expected_head)
         require(item["runId"] not in approval_ids, "Spotlight approval observation duplicates one run")
         approval_ids.add(item["runId"])
@@ -147,25 +157,32 @@ def build(env: dict[str, str], approval_runs: list[dict[str, Any]]) -> dict[str,
             "observation": {"approvalRequested": True},
         })
 
-    merge_sha = env_value(env, "MERGE_SHA", SHA40)
-    current_main = env_value(env, "CURRENT_MAIN_SHA", SHA40)
-    require(current_main == merge_sha, "Spotlight merge observation does not match current main")
-    effects.append({
-        "job": "merge",
-        "kind": "spotlight-terminal-merge",
-        "outcome": "applied",
-        "target": {
-            "prNumber": pr_number,
-            "candidateBranch": current_branch,
-            "headSha": expected_head,
-            "baseSha": base_sha,
-        },
-        "observation": {"mergeSha": merge_sha, "mainSha": current_main, "candidateRefAbsent": True},
-    })
+    if merge_present:
+        require(expected_head is not None and pr_number is not None,
+                "Spotlight merge effect requires successful propose identity")
+        merge_sha = env_value(env, "MERGE_SHA", SHA40)
+        current_main = env_value(env, "CURRENT_MAIN_SHA", SHA40)
+        require(current_main == merge_sha, "Spotlight merge observation does not match current main")
+        effects.append({
+            "job": "merge",
+            "kind": "spotlight-terminal-merge",
+            "outcome": "applied",
+            "target": {
+                "prNumber": pr_number,
+                "candidateBranch": current_branch,
+                "headSha": expected_head,
+                "baseSha": base_sha,
+            },
+            "observation": {"mergeSha": merge_sha, "mainSha": current_main, "candidateRefAbsent": True},
+        })
 
+    require(effects, "Spotlight decision journal contains no successful generic effect disposition")
     for ordinal, effect in enumerate(effects, start=1):
         effect["ordinal"] = ordinal
-    return spotlight_decision_receipt.validate_journal({"effects": effects}, env)
+    validation_env = dict(env)
+    if expected_head is not None:
+        validation_env["EXPECTED_HEAD_SHA"] = expected_head
+    return spotlight_decision_receipt.validate_journal({"effects": effects}, validation_env)
 
 
 def write_journal(path: Path, state: dict[str, Any]) -> None:
@@ -190,9 +207,11 @@ def self_test() -> None:
             "prNumber": 122,
             "prClosed": True,
         }], separators=(",", ":")),
+        "PROPOSE_EFFECT_PRESENT": "true",
         "PROPOSE_REF_CREATED": "true",
         "PROPOSE_PR_CREATED": "true",
         "PR_NUMBER": "123",
+        "MERGE_EFFECT_PRESENT": "true",
         "MERGE_SHA": "f" * 40,
         "CURRENT_MAIN_SHA": "f" * 40,
     })
@@ -219,9 +238,32 @@ def self_test() -> None:
     reused["STALE_CLEANUPS_JSON"] = "[]"
     reused["PROPOSE_REF_CREATED"] = "false"
     reused["PROPOSE_PR_CREATED"] = "false"
+    reused["MERGE_EFFECT_PRESENT"] = "false"
     reused_state = build(reused, [])
     require(reused_state["effects"][0]["outcome"] == "reused",
             "Spotlight decision journal self-test lost candidate reuse semantics")
+
+    maintenance = dict(env)
+    maintenance.update({
+        "PROPOSE_EFFECT_PRESENT": "false",
+        "MERGE_EFFECT_PRESENT": "false",
+    })
+    maintenance.pop("EXPECTED_HEAD_SHA", None)
+    maintenance_state = build(maintenance, [])
+    require([item["kind"] for item in maintenance_state["effects"]] == ["stale-candidate-reconciliation"],
+            "Spotlight decision journal self-test rejected maintenance-only recovery")
+
+    publication_recovery = dict(env)
+    publication_recovery["STALE_CLEANUPS_JSON"] = "[]"
+    publication_recovery["MERGE_EFFECT_PRESENT"] = "false"
+    publication_state = build(publication_recovery, approvals)
+    require([item["kind"] for item in publication_state["effects"]] == [
+        "spotlight-candidate-publication", "workflow-run-approval-request"
+    ], "Spotlight decision journal self-test rejected partial changed-transaction recovery")
+
+    empty = dict(maintenance)
+    empty["STALE_CLEANUPS_JSON"] = "[]"
+    expect_failure(empty, [], "no successful generic effect disposition")
 
     stale_current = dict(env)
     stale_current["STALE_CLEANUPS_JSON"] = json.dumps([{
@@ -238,6 +280,15 @@ def self_test() -> None:
     wrong_main = dict(env)
     wrong_main["CURRENT_MAIN_SHA"] = "0" * 40
     expect_failure(wrong_main, approvals, "does not match current main")
+
+    orphan_approval = dict(maintenance)
+    orphan_approval["STALE_CLEANUPS_JSON"] = "[]"
+    expect_failure(orphan_approval, approvals, "cannot exist without a successful propose")
+
+    orphan_merge = dict(maintenance)
+    orphan_merge["STALE_CLEANUPS_JSON"] = "[]"
+    orphan_merge["MERGE_EFFECT_PRESENT"] = "true"
+    expect_failure(orphan_merge, [], "cannot exist without a successful propose")
 
     malformed_approvals = dict(env)
     malformed_approvals["APPROVAL_RUNS_JSON"] = "{}"

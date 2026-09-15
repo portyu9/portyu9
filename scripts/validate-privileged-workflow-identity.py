@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lock privileged workflow bytes and item-10 merge-authorization semantics."""
+"""Lock privileged workflow bytes and item-10/11 terminal authorization semantics."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,11 +8,11 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v24"
+VERSION = "governed-workflow-byte-identity-v25"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "492608168b403137621a5e66fd1190c35193af00",
-    ".github/workflows/profile-stats.yml": "8f586791bd7984d11c817aab93612bdebeabc9e6",
-    ".github/workflows/spotlight-link-sync.yml": "15df3ccc450bd9c8f98f24cf1716784456f1f8b7",
+    ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
+    ".github/workflows/spotlight-link-sync.yml": "8d185d8e15f81c237f5a5b72e19c9554c3652f0d",
 }
 
 OLD_MERGE_IF = (
@@ -26,6 +26,22 @@ NEW_MERGE_IF = (
     "needs.authorize.result == 'success' && needs.authorize_attest.result == 'success'\n"
     "    name: merge-readme-only-terminal-write"
 )
+ADR_PREDICATE = (
+    "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
+    "automation-decision-receipt-v1.schema.json"
+)
+IMMUTABLE_COMMENT = "# Validate the complete candidate object before first publication or retry reuse."
+IMMUTABLE_ANCHOR = (
+    '          fi\n\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
+IMMUTABLE_PROJECTED = (
+    '          fi\n\n'
+    f'          {IMMUTABLE_COMMENT}\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -35,12 +51,12 @@ def require(condition: bool, message: str) -> None:
 
 def job_block(text: str, job: str, next_job: str | None) -> str:
     start_marker = f"  {job}:\n"
-    require(text.count(start_marker) == 1, f"Spotlight workflow must contain exactly one {job} job")
+    require(text.count(start_marker) == 1, f"governed workflow must contain exactly one {job} job")
     start = text.index(start_marker)
     if next_job is None:
         return text[start:]
     end_marker = f"  {next_job}:\n"
-    require(text.count(end_marker) == 1, f"Spotlight workflow must contain exactly one {next_job} job")
+    require(text.count(end_marker) == 1, f"governed workflow must contain exactly one {next_job} job")
     end = text.index(end_marker, start)
     return text[start:end]
 
@@ -48,7 +64,7 @@ def job_block(text: str, job: str, next_job: str | None) -> str:
 def validate_item10_mac(spotlight: str) -> None:
     authorize = job_block(spotlight, "authorize", "authorize_attest")
     signer = job_block(spotlight, "authorize_attest", "merge")
-    merge = job_block(spotlight, "merge", None)
+    merge = job_block(spotlight, "merge", "decision_receipt")
 
     require("name: prepare-merge-authorization-read-only" in authorize,
             "Spotlight MAC preparer identity changed")
@@ -105,6 +121,12 @@ def validate_item10_mac(spotlight: str) -> None:
         "- name: Download attested merge authorization artifact",
         "EXPECTED_CERTIFICATE_SHA256: ${{ needs.authorize.outputs.certificate_sha256 }}",
         "EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}",
+        'test "$(printf \'%s\\n\' "$CODEQL_RUN_ID" "$DEPENDENCY_RUN_ID" "$PROFILE_RUN_ID" | LC_ALL=C sort -u | wc -l)" = "3"',
+        'test "$(printf \'%s\\n\' "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_CHECK_SUITE_ID" | LC_ALL=C sort -u | wc -l)" = "3"',
+        '[[ "$CHECKS_TOTAL" =~ ^[0-9]+$ ]]',
+        '[[ "$CHECKS_COUNT" =~ ^[0-9]+$ ]]',
+        '[[ "$EXPECTED_CERTIFICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]',
+        '[[ "$EXPECTED_SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]',
         "gh attestation verify \"$SUBJECT\"",
         "--predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json",
         '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml"',
@@ -140,23 +162,84 @@ def validate_item10_mac(spotlight: str) -> None:
         require(forbidden not in merge, f"Spotlight terminal merge acquired polling/authored execution surface: {forbidden}")
 
 
+def validate_item11_receipts(profile: str, spotlight: str) -> None:
+    profile_prepare = job_block(profile, "decision_receipt", "decision_receipt_attest")
+    profile_signer = job_block(profile, "decision_receipt_attest", None)
+    require("name: prepare-automation-decision-receipt-read-only" in profile_prepare,
+            "Profile ADR preparer identity changed")
+    require("needs: [dispatch, lease]" in profile_prepare,
+            "Profile ADR preparer dependency closure changed")
+    require("permissions:\n      contents: read\n      actions: read" in profile_prepare,
+            "Profile ADR preparer must remain read-only")
+    require("python3 source/scripts/prepare-profile-stats-decision-receipt.py" in profile_prepare and
+            "python3 source/scripts/automation_decision_receipt.py" in profile_prepare,
+            "Profile ADR preparer lost independent reproof/build boundary")
+
+    require("name: attest-automation-decision-receipt-write-only" in profile_signer,
+            "Profile ADR signer identity changed")
+    require("needs: [decision_receipt, lease, attest]" in profile_signer,
+            "Profile ADR signer dependency closure changed")
+    require("permissions:\n      contents: read\n      id-token: write\n      attestations: write" in profile_signer,
+            "Profile ADR signer authority changed")
+    require(f"predicate-type: {ADR_PREDICATE}" in profile_signer,
+            "Profile ADR signer predicate changed")
+    for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "gh api ", "--method "):
+        require(forbidden not in profile_signer,
+                f"Profile ADR signer acquired unreviewed execution surface: {forbidden}")
+
+    spotlight_prepare = job_block(spotlight, "decision_receipt", "decision_receipt_attest")
+    spotlight_signer = job_block(spotlight, "decision_receipt_attest", None)
+    require("if: always() && needs.lease.result == 'success'" in spotlight_prepare,
+            "Spotlight ADR preparer lost safe always() recovery entry")
+    require("name: prepare-automation-decision-receipt-read-only" in spotlight_prepare,
+            "Spotlight ADR preparer identity changed")
+    require("needs: [plan, lease, reconcile, propose, approve, merge]" in spotlight_prepare,
+            "Spotlight ADR preparer dependency closure changed")
+    require("permissions:\n      contents: read\n      pull-requests: read\n      actions: read" in spotlight_prepare,
+            "Spotlight ADR preparer must remain read-only")
+    for fragment in (
+        "python3 source/scripts/spotlight_decision_journal.py",
+        "python3 source/scripts/prepare-spotlight-decision-receipt.py",
+        "python3 source/scripts/automation_decision_receipt.py",
+        "STALE_CLEANUPS_JSON:",
+        "APPROVAL_RUNS_JSON:",
+        "MERGE_EFFECT_PRESENT:",
+    ):
+        require(fragment in spotlight_prepare, f"Spotlight ADR recovery contract is missing: {fragment}")
+
+    require("if: always() && needs.lease.result == 'success' && needs.decision_receipt.result == 'success'" in spotlight_signer,
+            "Spotlight ADR signer lost recovery/success gate")
+    require("name: attest-automation-decision-receipt-write-only" in spotlight_signer,
+            "Spotlight ADR signer identity changed")
+    require("needs: [decision_receipt, lease, plan]" in spotlight_signer,
+            "Spotlight ADR signer dependency closure changed")
+    require("permissions:\n      contents: read\n      id-token: write\n      attestations: write" in spotlight_signer,
+            "Spotlight ADR signer authority changed")
+    require(f"predicate-type: {ADR_PREDICATE}" in spotlight_signer,
+            "Spotlight ADR signer predicate changed")
+    require("EXPECTED_CANDIDATE_ID=\"$(printf '%s\\n%s\\n%s\\n'" in spotlight_signer,
+            "Spotlight ADR signer must independently reconstruct the leased candidate")
+    for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "gh api ", "--method "):
+        require(forbidden not in spotlight_signer,
+                f"Spotlight ADR signer acquired unreviewed execution surface: {forbidden}")
+
+
 def validate_leases(profile: str, spotlight: str) -> None:
-    # Reuse the complete v21 Profile Stats proof; item 10 changes Spotlight only.
     v21.validate_ordered_presence(profile, v21.MUTATION_LEASE_SEQUENCE[:7],
                                   "Profile Stats mutation-lease mint contract")
-    require(profile.count("- name: Verify exact short-lived mutation lease") == 4,
+    require(profile.count("- name: Verify exact short-lived mutation lease") == 5,
             "Profile Stats write jobs must each verify the exact lease")
     guard = 'test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"'
-    require(profile.count(guard) == 4,
+    require(profile.count(guard) == 5,
             "Profile Stats write jobs must each reserve lease lifetime through hard timeout")
 
     v21.validate_ordered_presence(spotlight, v21.MUTATION_LEASE_SEQUENCE,
                                   "Spotlight mutation-lease contract")
     require(spotlight.count("# Verify exact short-lived mutation lease.") == 4,
             "Spotlight legacy mutation jobs must retain their inline exact-lease proof")
-    require(spotlight.count("- name: Verify exact short-lived mutation lease") == 1,
-            "Spotlight MAC signer must have exactly one separate exact-lease proof step")
-    require(spotlight.count(guard) == 5,
+    require(spotlight.count("- name: Verify exact short-lived mutation lease") == 2,
+            "Spotlight attestation signers must each retain one exact-lease proof step")
+    require(spotlight.count(guard) == 6,
             "Every Spotlight writer must reserve lease lifetime through its hard timeout")
     for fragment in (
         "LEASE_MIN_REMAINING_SECONDS=240",
@@ -168,66 +251,36 @@ def validate_leases(profile: str, spotlight: str) -> None:
 
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
-    v21.validate_spotlight_reconciliation(spotlight)
+    legacy = spotlight[:spotlight.index("  decision_receipt:\n")]
+    v21.validate_spotlight_reconciliation(legacy)
     require(
-        'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"' in spotlight and
-        'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"' in spotlight,
+        'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"' in legacy and
+        'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"' in legacy,
         "Spotlight stale reconciliation must use list results only for bounded PR discovery and re-fetch the exact full PR object",
     )
-    v21.validate_spotlight_immutable_candidates(spotlight)
-    projected = spotlight.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
-    require(projected != spotlight, "Spotlight v21 mutation-budget projection could not isolate item-10 merge gating")
+    for fragment in (
+        'CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$SOURCE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d\' \' -f1)"',
+        'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',
+        'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        'test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"',
+        'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"',
+        'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
+        'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
+        'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
+    ):
+        require(fragment in legacy, f"Spotlight current immutable-candidate proof is missing: {fragment}")
+    require(legacy.count(IMMUTABLE_ANCHOR) == 1,
+            "Spotlight v21 immutable-candidate projection anchor changed")
+    projected_immutable = legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
+    v21.validate_spotlight_immutable_candidates(projected_immutable)
+    projected = projected_immutable.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
+    require(projected != projected_immutable,
+            "Spotlight v21 mutation-budget projection could not isolate item-10 merge gating")
     v21.validate_spotlight_mutation_budget(projected)
 
 
 def self_test() -> None:
     v21.self_test()
-    synthetic = "\n".join((
-        "  authorize:\n    name: prepare-merge-authorization-read-only\n    needs: [plan, lease, reconcile, budget, propose, approve]\n"
-        "    timeout-minutes: 4\n    concurrency:\n      group: spotlight-link-sync-terminal\n      cancel-in-progress: false\n      queue: max\n"
-        "    permissions:\n      contents: read\n      pull-requests: read\n      checks: read\n      actions: read\n"
-        "    steps:\n      - run: python3 source/scripts/prepare-spotlight-merge-authorization.py merge-authorization-state.json\n"
-        "      - run: python3 source/scripts/build-spotlight-merge-authorization.py\n"
-        "      - with:\n          name: spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}\n          retention-days: 1",
-        "  authorize_attest:\n    name: attest-merge-authorization-write-only\n    needs: [authorize, lease, plan, propose, approve]\n"
-        "    timeout-minutes: 2\n    concurrency:\n      group: spotlight-link-sync-terminal\n      cancel-in-progress: false\n      queue: max\n"
-        "    permissions:\n      contents: read\n      id-token: write\n      attestations: write\n    steps:\n"
-        "      - name: Verify exact short-lived mutation lease\n        run: LEASE_MIN_REMAINING_SECONDS=180\n"
-        "      - name: Download exact merge authorization artifact\n"
-        "      - name: Verify exact merge authorization artifact identity\n"
-        "      - name: Attest exact Spotlight merge authorization certificate\n"
-        "        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2\n"
-        "        with:\n          subject-path: merge-authorization-input/spotlight-merge-authorization.subject.json\n"
-        "          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json\n"
-        "          predicate-path: merge-authorization-input/spotlight-merge-authorization.json",
-        "  merge:\n" + NEW_MERGE_IF + "\n"
-        "    needs: [plan, lease, reconcile, budget, propose, approve, authorize, authorize_attest]\n"
-        "    timeout-minutes: 3\n    concurrency:\n      group: spotlight-link-sync-terminal\n      cancel-in-progress: false\n      queue: max\n"
-        "    permissions:\n      contents: write\n      pull-requests: read\n      checks: read\n      attestations: read\n"
-        "    steps:\n      - name: Download attested merge authorization artifact\n      - run: |\n"
-        "          EXPECTED_CERTIFICATE_SHA256: ${{ needs.authorize.outputs.certificate_sha256 }}\n"
-        "          EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}\n"
-        "          jq -cS '.workflowRuns | sort_by(.name)'\n"
-        "          jq -cS . <<<\"$EXPECTED_CERTIFICATE_RUNS\"\n"
-        "          jq -cS '.checkRuns | sort_by(.name)'\n"
-        "          jq -cS . <<<\"$EXPECTED_CERTIFICATE_CHECKS\"\n"
-        "          echo \"Spotlight terminal stage: certificate-provenance-verified\" >&2\n"
-        "          gh attestation verify \"$SUBJECT\" --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json \\\n"
-        "            --signer-workflow \"${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml\" --signer-digest \"$BASE_SHA\" \\\n"
-        "            --source-digest \"$BASE_SHA\" --source-ref refs/heads/main --deny-self-hosted-runners\n"
-        "          .verificationResult.statement\n"
-        "          .subject[0].digest.sha256 == $subject_digest\n"
-        "          test \"$MATCHING_STATEMENTS\" = \"$VERIFIED_COUNT\"\n"
-        "          echo \"Spotlight terminal stage: attestation-cryptographic-verified\" >&2\n"
-        "          echo \"Spotlight terminal stage: attestation-statement-verified\" >&2\n"
-        "          RESULT=\"$(gh api --method PUT \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge\" --input merge.json)\"",
-    ))
-    try:
-        validate_item10_mac(synthetic)
-    except ValueError:
-        # Synthetic snippets intentionally do not reproduce every production layout byte;
-        # production is locked below by exact blob plus direct validation.
-        pass
 
 
 def main() -> int:
@@ -249,13 +302,14 @@ def main() -> int:
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         validate_v21_spotlight_invariants(spotlight)
         validate_item10_mac(spotlight)
+        validate_item11_receipts(profile, spotlight)
         validate_leases(profile, spotlight)
 
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "Spotlight v24 retains complete stale-PR re-fetch and direct verified-statement MAC binding while canonicalizing "
-            "live certificate provenance before equality so JSON object-key order cannot create a false authorization failure."
+            "item-10 MAC ordering and terminal proof guards retained · item-11 ADR recovery/preparation/signing boundaries "
+            "byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0
     except (OSError, ValueError) as exc:

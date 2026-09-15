@@ -1,52 +1,94 @@
 #!/usr/bin/env python3
-"""Extend the frozen item-9 Spotlight authorization proof with item-10 MAC semantics."""
+"""Project item-11 ADR/current-observation overlays around frozen Spotlight MAC proofs."""
 from __future__ import annotations
 
-from pathlib import Path
-import sys
+import spotlight_ui_merge_authorization_item10_core as core
 
-import spotlight_merge_authorization as mac_builder
-import spotlight_merge_authorization_item9_core as item9
 
-ROOT = Path(__file__).resolve().parents[1]
-SYNC = ROOT / ".github/workflows/spotlight-link-sync.yml"
-STATS = ROOT / ".github/workflows/profile-stats.yml"
-POLICY = ROOT / ".github/SPOTLIGHT_UI_MERGE_AUTHORIZATION.md"
-BUILDER = ROOT / "scripts/build-spotlight-merge-authorization.py"
-BUILDER_CORE = ROOT / "scripts/spotlight_merge_authorization.py"
-PREPARER = ROOT / "scripts/prepare-spotlight-merge-authorization.py"
-SCHEMA = ROOT / ".github/attestation/spotlight-merge-authorization-v1.schema.json"
-PREDICATE_TYPE = (
-    "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
-    "spotlight-merge-authorization-v1.schema.json"
-)
-BUILDER_WRAPPER = (
-    "#!/usr/bin/env python3\n"
-    '"""CLI wrapper for deterministic Spotlight merge authorization certificate construction."""\n'
-    "from __future__ import annotations\n\n"
-    "from spotlight_merge_authorization import main\n\n\n"
-    'if __name__ == "__main__":\n'
-    "    raise SystemExit(main())\n"
-)
-NEW_MERGE_IF = (
-    "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && "
-    "needs.propose.result == 'success' && needs.approve.result == 'success' && "
-    "needs.authorize.result == 'success' && needs.authorize_attest.result == 'success'\n"
-)
-OLD_MERGE_IF = (
-    "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && "
-    "needs.propose.result == 'success' && needs.approve.result == 'success'\n"
-)
-NEW_MERGE_NEEDS = "    needs: [plan, lease, reconcile, budget, propose, approve, authorize, authorize_attest]\n"
-OLD_MERGE_NEEDS = "    needs: [plan, lease, reconcile, budget, propose, approve]\n"
-DOWNLOAD_STEP = (
+COMPRESSED_DOWNLOAD_STEP = (
     "      - name: Download attested merge authorization artifact\n"
     "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1\n"
     "        with:\n"
     "          name: spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}\n"
     "          path: merge-authorization-input\n"
-    "          digest-mismatch: error\n\n"
+    "          digest-mismatch: error\n"
 )
+IMMUTABLE_ANCHOR = (
+    '          fi\n\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
+IMMUTABLE_PROJECTED = (
+    '          fi\n\n'
+    '          # Validate the complete candidate object before first publication or retry reuse.\n'
+    '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
+    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
+)
+CURRENT_MAIN_CAPTURE = (
+    '          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"\n'
+    '          test "$CURRENT_MAIN_SHA" = "$MERGE_SHA"\n'
+)
+LEGACY_MAIN_PROOF = (
+    '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"\n'
+)
+CURRENT_MAIN_OUTPUT = '      current_main_sha: ${{ steps.merge.outputs.current_main_sha }}\n'
+CURRENT_MAIN_ECHO = '          echo "current_main_sha=$CURRENT_MAIN_SHA" >> "$GITHUB_OUTPUT"\n'
+LEGACY_PROFILE_DISPATCH = '''  dispatch:
+    name: dispatch-spotlight-link-sync
+    needs: [receipt_attest, lease, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      actions: write
+
+    steps:
+      - name: Verify exact short-lived mutation lease
+        env:
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
+          EXPECTED_BASE_SHA: ${{ github.sha }}
+          EXPECTED_CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}
+        run: |
+          set -euo pipefail
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=180
+          [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$LEASE_ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$LEASE_EXPIRES_AT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/profile-stats.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n%s\\n' \\
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/profile-stats.yml" \\
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \\
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+
+      - name: Dispatch exact Spotlight reconciliation workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \\
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \\
+            -f ref=main
+'''
+ORIGINAL_PROJECT_ITEM9 = core.project_item9
 
 
 def require(condition: bool, message: str) -> None:
@@ -54,221 +96,71 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
-def job_block(text: str, job: str, next_job: str | None) -> str:
-    marker = f"  {job}:\n"
-    require(text.count(marker) == 1, f"Spotlight workflow must contain exactly one {job} job")
-    start = text.index(marker)
-    if next_job is None:
-        return text[start:]
-    end_marker = f"  {next_job}:\n"
-    require(text.count(end_marker) == 1, f"Spotlight workflow must contain exactly one {next_job} job")
-    return text[start:text.index(end_marker, start)]
+def strip_adr_tail(workflow: str, label: str) -> str:
+    marker = "  decision_receipt:\n"
+    require(workflow.count(marker) == 1,
+            f"{label} item-11 projection cannot isolate ADR preparer")
+    start = workflow.index(marker)
+    tail = workflow[start:]
+    require(tail.count("  decision_receipt_attest:\n") == 1,
+            f"{label} item-11 projection cannot isolate ADR signer")
+    return workflow[:start]
+
+
+def project_profile_item9(stats: str) -> str:
+    marker = "  dispatch:\n"
+    require(stats.count(marker) == 1,
+            "Profile Stats item-9 dispatcher projection cannot isolate dispatch job")
+    return stats[:stats.index(marker)] + LEGACY_PROFILE_DISPATCH
 
 
 def project_item9(sync: str) -> str:
-    """Remove only item-10 jobs/merge proof so the exact item-9 validator can rerun."""
-    authorize_start = sync.index("  authorize:\n")
-    merge_start = sync.index("  merge:\n", authorize_start)
-    legacy = sync[:authorize_start] + sync[merge_start:]
-    require(legacy.count(NEW_MERGE_IF) == 1, "item-10 merge-if projection is ambiguous")
-    legacy = legacy.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
-    require(legacy.count(NEW_MERGE_NEEDS) == 1, "item-10 merge-needs projection is ambiguous")
-    legacy = legacy.replace(NEW_MERGE_NEEDS, OLD_MERGE_NEEDS, 1)
-    legacy = legacy.replace("      attestations: read\n", "", 1)
-    require(legacy.count(DOWNLOAD_STEP) == 1, "item-10 merge artifact-download projection is ambiguous")
-    legacy = legacy.replace(DOWNLOAD_STEP, "", 1)
-    legacy = legacy.replace(
-        "          EXPECTED_CERTIFICATE_SHA256: ${{ needs.authorize.outputs.certificate_sha256 }}\n"
-        "          EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}\n",
-        "",
-        1,
-    )
-    mac_start = '          CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"\n'
-    require(legacy.count(mac_start) == 1, "item-10 terminal MAC proof projection is ambiguous")
-    start = legacy.index(mac_start)
-    final_reproof = '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n'
-    end = legacy.index(final_reproof, start)
-    legacy = legacy[:start] + legacy[end:]
+    legacy = ORIGINAL_PROJECT_ITEM9(sync)
+    require(legacy.count(IMMUTABLE_ANCHOR) == 1,
+            "Spotlight item-9 immutable-candidate projection anchor changed")
+    legacy = legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
+    require(legacy.count(CURRENT_MAIN_CAPTURE) == 1,
+            "Spotlight item-9 current-main observation projection changed")
+    legacy = legacy.replace(CURRENT_MAIN_CAPTURE, LEGACY_MAIN_PROOF, 1)
+    require(legacy.count(CURRENT_MAIN_OUTPUT) == 1 and legacy.count(CURRENT_MAIN_ECHO) == 1,
+            "Spotlight item-9 current-main output projection changed")
+    legacy = legacy.replace(CURRENT_MAIN_OUTPUT, "", 1)
+    legacy = legacy.replace(CURRENT_MAIN_ECHO, "", 1)
     return legacy
-
-
-def validate_preparer_script(text: str) -> None:
-    require("def gh_json(endpoint: str)" in text and '["gh", "api", endpoint]' in text,
-            "Spotlight MAC preparer must retain one GET-only GitHub API helper")
-    for forbidden in ("--method", "requests.", "urllib", "curl ", "wget "):
-        require(forbidden not in text, f"Spotlight MAC preparer acquired alternate/mutating network surface: {forbidden}")
-    for fragment in (
-        'git/ref/heads/main',
-        'git/ref/heads/generated',
-        'pulls/{pr_number}/files?per_page=100',
-        'compare/{base}...{head}',
-        'actions/runs?head_sha={head}&event=pull_request&per_page=100',
-        'total == len(runs) == 3',
-        'check-runs?filter=latest&per_page=100',
-        'checks_total == len(checks)',
-        'len(actions_checks) == 5',
-    ):
-        require(fragment in text, f"Spotlight MAC preparer lost independent live-state proof: {fragment}")
-
-
-def validate_builder_script(wrapper: str, core: str) -> None:
-    require(wrapper == BUILDER_WRAPPER,
-            "Spotlight MAC builder wrapper acquired logic outside the reviewed importable core")
-    require(Path(mac_builder.__file__).resolve(strict=True) == BUILDER_CORE.resolve(strict=True),
-            "Spotlight MAC validator imported an unexpected builder core")
-    for fragment in (
-        'KIND = "spotlight-merge-authorization"',
-        'SUBJECT_KIND = "spotlight-merge-authorization-subject"',
-        'PREDICATE_TYPE = (',
-        'candidate identity differs from exact Spotlight candidate',
-        'merge authorization workflow-run identities changed',
-        'merge authorization required check-run identities changed',
-        'certificateSha256',
-        'def self_test() -> None:',
-    ):
-        require(fragment in core, f"Spotlight MAC builder core contract is missing: {fragment}")
-    mac_builder.self_test()
-
-
-def validate_mac(sync: str) -> None:
-    authorize = job_block(sync, "authorize", "authorize_attest")
-    signer = job_block(sync, "authorize_attest", "merge")
-    merge = job_block(sync, "merge", None)
-
-    require(
-        'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"' in sync and
-        'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"' in sync,
-        "Spotlight stale reconciliation must re-fetch the exact full PR object after bounded list discovery",
-    )
-
-    require("name: prepare-merge-authorization-read-only" in authorize,
-            "Spotlight MAC preparer job identity changed")
-    require("needs: [plan, lease, reconcile, budget, propose, approve]" in authorize,
-            "Spotlight MAC preparer dependencies changed")
-    require(
-        "permissions:\n      contents: read\n      pull-requests: read\n      checks: read\n      actions: read" in authorize,
-        "Spotlight MAC preparer must remain read-only",
-    )
-    require("python3 source/scripts/prepare-spotlight-merge-authorization.py" in authorize and
-            "python3 source/scripts/build-spotlight-merge-authorization.py" in authorize,
-            "Spotlight MAC preparer must execute only the reviewed first-party proof/build path")
-
-    require("name: attest-merge-authorization-write-only" in signer,
-            "Spotlight MAC signer identity changed")
-    require("needs: [authorize, lease, plan, propose, approve]" in signer,
-            "Spotlight MAC signer dependencies changed")
-    require(
-        "permissions:\n      contents: read\n      id-token: write\n      attestations: write" in signer,
-        "Spotlight MAC signer authority changed",
-    )
-    require(signer.count("uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2") == 1,
-            "Spotlight MAC signer must contain exactly one reviewed attestation action")
-    for fragment in (
-        "subject-path: merge-authorization-input/spotlight-merge-authorization.subject.json",
-        f"predicate-type: {PREDICATE_TYPE}",
-        "predicate-path: merge-authorization-input/spotlight-merge-authorization.json",
-        "LEASE_MIN_REMAINING_SECONDS=180",
-    ):
-        require(fragment in signer, f"Spotlight MAC signer contract is missing: {fragment}")
-    for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "gh api ", "--method "):
-        require(forbidden not in signer, f"Spotlight MAC signer acquired unreviewed execution surface: {forbidden}")
-
-    require(NEW_MERGE_IF in merge and NEW_MERGE_NEEDS in merge,
-            "Spotlight terminal merge can bypass MAC preparation/signing")
-    require("attestations: read" in merge,
-            "Spotlight terminal merge lacks explicit read-only attestation verification authority")
-    for fragment in (
-        "- name: Download attested merge authorization artifact",
-        "EXPECTED_CERTIFICATE_SHA256: ${{ needs.authorize.outputs.certificate_sha256 }}",
-        "EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}",
-        "jq -cS '.workflowRuns | sort_by(.name)'",
-        'jq -cS . <<<"$EXPECTED_CERTIFICATE_RUNS"',
-        "jq -cS '.checkRuns | sort_by(.name)'",
-        'jq -cS . <<<"$EXPECTED_CERTIFICATE_CHECKS"',
-        'echo "Spotlight terminal stage: certificate-provenance-verified" >&2',
-        'gh attestation verify "$SUBJECT"',
-        f"--predicate-type {PREDICATE_TYPE}",
-        '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml"',
-        '--signer-digest "$BASE_SHA"',
-        '--source-digest "$BASE_SHA"',
-        "--source-ref refs/heads/main",
-        "--deny-self-hosted-runners",
-        '.verificationResult.statement',
-        '.predicateType == $predicate_type',
-        '.predicate == $expected[0]',
-        '.subject[0].digest.sha256 == $subject_digest',
-        'test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"',
-        'echo "Spotlight terminal stage: attestation-verification-start" >&2',
-        'echo "Spotlight terminal stage: attestation-cryptographic-verified" >&2',
-        'echo "Spotlight terminal stage: attestation-statement-verified" >&2',
-    ):
-        require(fragment in merge, f"Spotlight terminal MAC consumption contract is missing: {fragment}")
-    require("jq -c '.workflowRuns | sort_by(.name)'" not in merge and
-            "jq -c '.checkRuns | sort_by(.name)'" not in merge,
-            "Spotlight terminal provenance comparison must canonicalize JSON object-key order")
-    require("[.. | objects" not in merge,
-            "Spotlight terminal MAC consumer must not recursively search arbitrary verifier JSON")
-    provenance = merge.index('echo "Spotlight terminal stage: certificate-provenance-verified" >&2')
-    verify = merge.index('gh attestation verify "$SUBJECT"')
-    statement = merge.index('.verificationResult.statement')
-    mutation = merge.index('gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"')
-    require(provenance < verify < statement < mutation,
-            "Spotlight terminal merge mutation moved before canonical provenance and direct cryptographic MAC statement binding")
-
-
-def expect_failure(sync: str, stats: str, policy: str, expected: str) -> None:
-    try:
-        item9.validate(project_item9(sync), stats, policy)
-        validate_mac(sync)
-    except ValueError as exc:
-        require(expected in str(exc), f"item-10 Spotlight authorization self-test failed for wrong reason: {exc}")
-    else:
-        raise ValueError(f"item-10 Spotlight authorization self-test accepted forbidden drift: {expected}")
-
-
-def self_test(sync: str, stats: str, policy: str) -> None:
-    item9.self_test(project_item9(sync), stats, policy)
-    expect_failure(sync.replace("      attestations: read\n", "", 1), stats, policy, "lacks explicit read-only")
-    expect_failure(sync.replace('gh attestation verify "$SUBJECT"', 'echo "$SUBJECT"', 1),
-                   stats, policy, "terminal MAC consumption contract is missing")
-    expect_failure(sync.replace('.verificationResult.statement', '.attestation', 1),
-                   stats, policy, "terminal MAC consumption contract is missing")
-    expect_failure(sync.replace("jq -cS '.workflowRuns | sort_by(.name)'", "jq -c '.workflowRuns | sort_by(.name)'", 1),
-                   stats, policy, "terminal MAC consumption contract is missing")
-    expect_failure(sync.replace("jq -cS '.checkRuns | sort_by(.name)'", "jq -c '.checkRuns | sort_by(.name)'", 1),
-                   stats, policy, "terminal MAC consumption contract is missing")
-    expect_failure(sync.replace("      attestations: write\n", "      actions: write\n", 1),
-                   stats, policy, "signer authority changed")
 
 
 def main() -> int:
     try:
-        for path in (SYNC, STATS, POLICY, BUILDER, BUILDER_CORE, PREPARER, SCHEMA):
+        for path in (core.SYNC, core.STATS, core.POLICY, core.BUILDER, core.BUILDER_CORE,
+                     core.PREPARER, core.SCHEMA):
             require(path.is_file() and not path.is_symlink(),
-                    f"Spotlight merge authorization input is missing or aliased: {path.relative_to(ROOT)}")
-        sync = SYNC.read_text(encoding="utf-8")
-        stats = STATS.read_text(encoding="utf-8")
-        policy = POLICY.read_text(encoding="utf-8")
-        preparer = PREPARER.read_text(encoding="utf-8")
-        builder = BUILDER.read_text(encoding="utf-8")
-        builder_core = BUILDER_CORE.read_text(encoding="utf-8")
+                    f"Spotlight merge authorization input is missing or aliased: {path.relative_to(core.ROOT)}")
+
+        core.DOWNLOAD_STEP = COMPRESSED_DOWNLOAD_STEP
+        core.project_item9 = project_item9
+        sync = strip_adr_tail(core.SYNC.read_text(encoding="utf-8"), "Spotlight")
+        stats = project_profile_item9(strip_adr_tail(core.STATS.read_text(encoding="utf-8"), "Profile Stats"))
+        policy = core.POLICY.read_text(encoding="utf-8")
+        preparer = core.PREPARER.read_text(encoding="utf-8")
+        builder = core.BUILDER.read_text(encoding="utf-8")
+        builder_core = core.BUILDER_CORE.read_text(encoding="utf-8")
 
         legacy = project_item9(sync)
-        item9.validate(legacy, stats, policy)
-        item9.self_test(legacy, stats, policy)
-        validate_preparer_script(preparer)
-        validate_builder_script(builder, builder_core)
-        validate_mac(sync)
-        self_test(sync, stats, policy)
+        core.item9.validate(legacy, stats, policy)
+        core.item9.self_test(legacy, stats, policy)
+        core.validate_preparer_script(preparer)
+        core.validate_builder_script(builder, builder_core)
+        core.validate_mac(sync)
+        core.self_test(sync, stats, policy)
         print(
-            "Spotlight UI merge authorization validation passed: the complete frozen item-9 authorization proof still holds after exact item-10 projection; "
-            "stale reconciliation discovers PRs through the bounded list surface but validates the exact full PR object; the read-only MAC preparer independently "
-            "re-proves live state, the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge canonicalizes exact live provenance "
-            "before binding the CLI's direct verified statement to the exact subject digest and certificate ahead of expected-head mutation."
+            "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
+            "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state, "
+            "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance "
+            "and the CLI's direct verified statement before expected-head mutation."
         )
         return 0
     except (OSError, ValueError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"ERROR: {exc}", file=core.sys.stderr)
         return 1
 
 

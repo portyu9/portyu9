@@ -25,6 +25,11 @@
           "mode": "generic-decision-receipt",
           "effectKinds": ["spotlight-workflow-dispatch"],
           "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"
+        },
+        "decision_receipt_attest": {
+          "mode": "self-attested",
+          "effectKinds": ["profile-automation-decision-receipt-attestation"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"
         }
       }
     },
@@ -53,6 +58,11 @@
         "merge": {
           "mode": "generic-decision-receipt",
           "effectKinds": ["spotlight-terminal-merge"],
+          "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"
+        },
+        "decision_receipt_attest": {
+          "mode": "self-attested",
+          "effectKinds": ["spotlight-automation-decision-receipt-attestation"],
           "predicateType": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/automation-decision-receipt-v1.schema.json"
         }
       }

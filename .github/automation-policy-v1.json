@@ -84,7 +84,7 @@
           "group": "profile-stats-terminal",
           "cancelInProgress": false,
           "queue": "max",
-          "jobs": ["lease", "attest_publish", "stage", "publish", "receipt", "receipt_attest", "dispatch"]
+          "jobs": ["lease", "attest_publish", "stage", "publish", "receipt", "receipt_attest", "dispatch", "decision_receipt", "decision_receipt_attest"]
         }
       },
       "lease": {
@@ -103,12 +103,13 @@
           "issuedAt",
           "expiresAt"
         ],
-        "boundJobs": ["attest_publish", "publish", "receipt_attest", "dispatch"],
+        "boundJobs": ["attest_publish", "publish", "receipt_attest", "dispatch", "decision_receipt_attest"],
         "minimumRemainingSeconds": {
           "attest_publish": 300,
           "publish": 240,
           "receipt_attest": 300,
-          "dispatch": 180
+          "dispatch": 180,
+          "decision_receipt_attest": 180
         }
       },
       "jobs": {
@@ -178,6 +179,23 @@
           "permissions": {
             "actions": "write"
           }
+        },
+        "decision_receipt": {
+          "name": "prepare-automation-decision-receipt-read-only",
+          "needs": ["dispatch", "lease"],
+          "permissions": {
+            "contents": "read",
+            "actions": "read"
+          }
+        },
+        "decision_receipt_attest": {
+          "name": "attest-automation-decision-receipt-write-only",
+          "needs": ["decision_receipt", "lease", "attest"],
+          "permissions": {
+            "contents": "read",
+            "id-token": "write",
+            "attestations": "write"
+          }
         }
       }
     },
@@ -198,7 +216,7 @@
           "group": "spotlight-link-sync-terminal",
           "cancelInProgress": false,
           "queue": "max",
-          "jobs": ["lease", "reconcile", "propose", "approve", "authorize", "authorize_attest", "merge"]
+          "jobs": ["lease", "reconcile", "propose", "approve", "authorize", "authorize_attest", "merge", "decision_receipt", "decision_receipt_attest"]
         }
       },
       "lease": {
@@ -217,13 +235,14 @@
           "issuedAt",
           "expiresAt"
         ],
-        "boundJobs": ["reconcile", "propose", "approve", "authorize_attest", "merge"],
+        "boundJobs": ["reconcile", "propose", "approve", "authorize_attest", "merge", "decision_receipt_attest"],
         "minimumRemainingSeconds": {
           "reconcile": 240,
           "propose": 300,
           "approve": 780,
           "authorize_attest": 180,
-          "merge": 240
+          "merge": 240,
+          "decision_receipt_attest": 180
         }
       },
       "jobs": {
@@ -307,6 +326,24 @@
             "checks": "read",
             "attestations": "read"
           }
+        },
+        "decision_receipt": {
+          "name": "prepare-automation-decision-receipt-read-only",
+          "needs": ["plan", "lease", "reconcile", "propose", "approve", "merge"],
+          "permissions": {
+            "contents": "read",
+            "pull-requests": "read",
+            "actions": "read"
+          }
+        },
+        "decision_receipt_attest": {
+          "name": "attest-automation-decision-receipt-write-only",
+          "needs": ["decision_receipt", "lease", "plan"],
+          "permissions": {
+            "contents": "read",
+            "id-token": "write",
+            "attestations": "write"
+          }
         }
       }
     }
@@ -324,7 +361,7 @@
         {"from": "approved", "to": "no-change", "phase": "terminalize", "jobs": ["stage"]},
         {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["publish"]},
         {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["receipt", "receipt_attest"]},
-        {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["dispatch"]}
+        {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["dispatch", "decision_receipt", "decision_receipt_attest"]}
       ]
     },
     "spotlight-link-sync": {
@@ -339,7 +376,7 @@
         {"from": "proposed", "to": "quarantined", "phase": "terminalize", "jobs": ["budget", "quarantine"]},
         {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["propose"]},
         {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["approve", "authorize", "authorize_attest"]},
-        {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["merge"]}
+        {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["merge", "decision_receipt", "decision_receipt_attest"]}
       ]
     }
   },
