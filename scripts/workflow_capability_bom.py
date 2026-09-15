@@ -40,6 +40,7 @@ GH_API_VALUE_OPTIONS = {
     "--input", "--jq", "-q", "--cache", "--hostname", "--preview",
 }
 GH_API_FLAG_OPTIONS = {"-i", "--include", "--paginate", "--slurp", "--silent", "--verbose"}
+SHELL_CONTROL = {"|", "||", "&&", ";"}
 GIT_GLOBAL_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
 GIT_NETWORK_OPERATIONS = {"push", "fetch", "clone", "ls-remote"}
 
@@ -222,6 +223,10 @@ def api_surface(command: str, *, workflow: str, job: str, step: str) -> dict[str
     index = 0
     while index < len(tokens):
         token = tokens[index]
+        if endpoint is not None and (
+            token in SHELL_CONTROL or re.match(r"^\d*[<>]", token) is not None
+        ):
+            break
         if token in {"-X", "--method"}:
             require(index + 1 < len(tokens), f"{workflow}/{job}/{step}: gh api method value is missing")
             method = unquote(tokens[index + 1]).upper().rstrip(")\"")
@@ -594,7 +599,7 @@ def self_test() -> None:
             f"with block scalar self-test drifted: {values!r}")
 
     gh = api_surface(
-        'gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs" --jq .total_count)',
+        'gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs" --jq .total_count | tr -d \'\\n\'',
         workflow="fixture.yml", job="job", step="api",
     )
     require(gh["endpoint"] == "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs" and gh["method"] == "GET",
