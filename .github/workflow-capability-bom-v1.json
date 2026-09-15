@@ -34,7 +34,13 @@
           "apiSurfaces": [],
           "artifacts": [],
           "id": "analyze",
-          "mutations": [],
+          "mutations": [
+            {
+              "class": "code-scanning-results-upload",
+              "step": "Analyze",
+              "target": "repository-code-scanning"
+            }
+          ],
           "name": "analyze-${{ matrix.language }}",
           "needs": [],
           "oidc": false,
@@ -523,9 +529,11 @@
           "apiSurfaces": [],
           "artifacts": [
             {
+              "if-no-files-found": "error",
               "name": "automation-decision-receipt-profile-${{ github.run_id }}-${{ github.run_attempt }}",
               "operation": "upload",
               "path": "automation-decision-receipt/automation-decision-receipt.json\nautomation-decision-receipt/automation-decision-receipt.subject.json",
+              "retention-days": "1",
               "step": "Upload exact Automation Decision Receipt artifact"
             }
           ],
@@ -545,7 +553,9 @@
             "env": [
               "PYTHON_VERSION"
             ],
-            "githubToken": [],
+            "githubToken": [
+              "github.token"
+            ],
             "secrets": [],
             "vars": []
           }
@@ -609,6 +619,13 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Dispatch exact Spotlight reconciliation workflow"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches",
               "method": "POST",
               "mutating": true,
@@ -617,13 +634,6 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1",
-              "method": "GET",
-              "mutating": false,
-              "step": "Dispatch exact Spotlight reconciliation workflow"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml",
               "method": "GET",
               "mutating": false,
               "step": "Dispatch exact Spotlight reconciliation workflow"
@@ -758,6 +768,16 @@
               "method": "GET",
               "mutating": false,
               "step": "Mint exact short-lived mutation lease"
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "https://github.com/${GITHUB_REPOSITORY}.git",
+              "step": "Mint exact short-lived mutation lease",
+              "targets": [
+                "refs/heads/generated"
+              ]
             }
           ],
           "artifacts": [],
@@ -795,10 +815,9 @@
               "client": "git",
               "mutating": false,
               "operation": "fetch",
-              "remote": "-q",
+              "remote": "../publication-candidate/generated-publication.bundle",
               "step": "Verify sealed generated publication candidate",
               "targets": [
-                "../publication-candidate/generated-publication.bundle",
                 "refs/heads/generated:refs/heads/generated"
               ]
             },
@@ -806,22 +825,20 @@
               "client": "git",
               "mutating": false,
               "operation": "ls-remote",
-              "remote": "--exit-code",
+              "remote": "origin",
               "step": "Publish sealed artifact commit and re-prove remote head",
               "targets": [
-                "origin",
-                "refs/heads/generated)"
+                "refs/heads/generated"
               ]
             },
             {
               "client": "git",
               "mutating": false,
               "operation": "ls-remote",
-              "remote": "--exit-code",
+              "remote": "origin",
               "step": "Publish sealed artifact commit and re-prove remote head",
               "targets": [
-                "origin",
-                "refs/heads/main)"
+                "refs/heads/main"
               ]
             },
             {
@@ -909,7 +926,18 @@
               "step": "Set up Python"
             }
           ],
-          "apiSurfaces": [],
+          "apiSurfaces": [
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "origin",
+              "step": "Re-prove actual publication and build deterministic receipt",
+              "targets": [
+                "refs/heads/generated"
+              ]
+            }
+          ],
           "artifacts": [
             {
               "digest-mismatch": "error",
@@ -1423,9 +1451,11 @@
           "apiSurfaces": [],
           "artifacts": [
             {
+              "if-no-files-found": "error",
               "name": "automation-decision-receipt-spotlight-${{ github.run_id }}-${{ github.run_attempt }}",
               "operation": "upload",
               "path": "automation-decision-receipt/automation-decision-receipt.json\nautomation-decision-receipt/automation-decision-receipt.subject.json",
+              "retention-days": "1",
               "step": "Upload exact Automation Decision Receipt artifact"
             }
           ],
@@ -1555,27 +1585,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}",
-              "method": "DELETE",
-              "mutating": true,
-              "step": "Merge exact approved head and clean up immutable candidate branch"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge",
-              "method": "PUT",
-              "mutating": true,
-              "step": "Merge exact approved head and clean up immutable candidate branch"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Merge exact approved head and clean up immutable candidate branch"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}",
               "method": "GET",
               "mutating": false,
@@ -1591,6 +1600,13 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100",
               "method": "GET",
               "mutating": false,
               "step": "Merge exact approved head and clean up immutable candidate branch"
@@ -1674,6 +1690,27 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}",
+              "method": "DELETE",
+              "mutating": true,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
               "method": "GET",
               "mutating": false,
@@ -1681,16 +1718,9 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Merge exact approved head and clean up immutable candidate branch"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge",
+              "method": "PUT",
+              "mutating": true,
               "step": "Merge exact approved head and clean up immutable candidate branch"
             }
           ],
@@ -1817,41 +1847,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/git/blobs",
-              "method": "POST",
-              "mutating": true,
-              "step": "Create or reuse immutable README-only candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/git/commits",
-              "method": "POST",
-              "mutating": true,
-              "step": "Create or reuse immutable README-only candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/git/refs",
-              "method": "POST",
-              "mutating": true,
-              "step": "Create or reuse immutable README-only candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/git/trees",
-              "method": "POST",
-              "mutating": true,
-              "step": "Create or reuse immutable README-only candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls",
-              "method": "POST",
-              "mutating": true,
-              "step": "Create or reuse immutable README-only candidate"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}",
               "method": "GET",
               "mutating": false,
@@ -1869,6 +1864,20 @@
               "endpoint": "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main",
               "method": "GET",
               "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/blobs",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/commits",
+              "method": "POST",
+              "mutating": true,
               "step": "Create or reuse immutable README-only candidate"
             },
             {
@@ -1904,6 +1913,27 @@
               "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/refs",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/trees",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls",
+              "method": "POST",
+              "mutating": true,
               "step": "Create or reuse immutable README-only candidate"
             },
             {
@@ -2011,20 +2041,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}",
-              "method": "DELETE",
-              "mutating": true,
-              "step": "Remove only stale validated automation candidates"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "PATCH",
-              "mutating": true,
-              "step": "Remove only stale validated automation candidates"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}",
               "method": "GET",
               "mutating": false,
@@ -2067,9 +2083,23 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}",
+              "method": "DELETE",
+              "mutating": true,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "PATCH",
+              "mutating": true,
               "step": "Remove only stale validated automation candidates"
             },
             {
