@@ -24,6 +24,7 @@ VALIDATION_MANIFEST = SCRIPTS / "profile-evidence-validation-boundary-v1.json"
 DELEGATED_LOCK = SCRIPTS / "profile-delegated-implementation-lock-v1.json"
 SUBJECT_MANIFEST = SCRIPTS / "profile-evidence-subjects-v1.json"
 ATTESTATION_SCHEMA = ROOT / ".github/attestation/profile-evidence-v3.schema.json"
+ADR_SCHEMA_RELATIVE = ".github/attestation/automation-decision-receipt-v1.schema.json"
 
 VERSION = "profile-stats-source-epoch-v1"
 ALGORITHM = "sha256-sorted-path-nul-git-blob-oid-lf-v1"
@@ -39,6 +40,7 @@ TRIGGER_PATHS = (
 STATIC_SOURCE_ROOTS = {
     ".github/workflows/profile-stats.yml",
     ".github/attestation/profile-evidence-v3.schema.json",
+    ADR_SCHEMA_RELATIVE,
     "scripts/profile-evidence-generation-v1.json",
     "scripts/signal-field-pipeline-v1.json",
     "scripts/signal-field-pipeline-v2.json",
@@ -60,7 +62,10 @@ CLOSURE_SENTINELS = {
     "scripts/validate-profile-evidence-boundary.py",
     "scripts/stage-profile-evidence.py",
     "scripts/build-profile-evidence-attestation.py",
+    "scripts/prepare-profile-stats-decision-receipt.py",
+    "scripts/automation_decision_receipt.py",
     ".github/attestation/profile-evidence-v3.schema.json",
+    ADR_SCHEMA_RELATIVE,
 }
 
 
@@ -283,6 +288,8 @@ def self_test(workflow: str) -> None:
             "self-test delegated production fixture disappeared")
     require("scripts/finalize-signal-field-wide-alignment.py" in components["transitive-local"],
             "self-test transitive production helper disappeared")
+    require(ADR_SCHEMA_RELATIVE in components["static"],
+            "self-test ADR schema static source root disappeared")
     incomplete = closure - {delegated_example}
     expect_failure(
         lambda: require(CLOSURE_SENTINELS <= incomplete and components["delegated"] <= incomplete,
@@ -324,7 +331,9 @@ def main() -> int:
         publish = job_block(workflow, "publish", "receipt")
         receipt = job_block(workflow, "receipt", "receipt_attest")
         receipt_attest = job_block(workflow, "receipt_attest", "dispatch")
-        dispatch = job_block(workflow, "dispatch", None)
+        dispatch = job_block(workflow, "dispatch", "decision_receipt")
+        decision_receipt = job_block(workflow, "decision_receipt", "decision_receipt_attest")
+        decision_receipt_attest = job_block(workflow, "decision_receipt_attest", None)
         require(exact_job_if(generate, "production generation") == MAIN_REF_EXPR,
                 "production generation job-level if must be the exact refs/heads/main guard")
         require("needs: generate" in attest,
@@ -363,6 +372,23 @@ def main() -> int:
                 "publication receipt signer authority changed")
         require("needs: [receipt_attest, lease, attest]" in dispatch,
                 "terminal dispatch must remain downstream of the signed publication receipt and exact lease transaction")
+        require("name: prepare-automation-decision-receipt-read-only" in decision_receipt
+                and "needs: [dispatch, lease]" in decision_receipt,
+                "Automation Decision Receipt preparation dependency changed")
+        require("permissions:\n      contents: read\n      actions: read" in decision_receipt,
+                "Automation Decision Receipt preparation must retain exact read-only authority")
+        require("contents: write" not in decision_receipt and "id-token: write" not in decision_receipt
+                and "attestations: write" not in decision_receipt,
+                "Automation Decision Receipt preparation acquired write/signing authority")
+        require("python3 source/scripts/prepare-profile-stats-decision-receipt.py" in decision_receipt
+                and "python3 source/scripts/automation_decision_receipt.py" in decision_receipt,
+                "Automation Decision Receipt preparation lost reviewed source roots")
+        require("name: attest-automation-decision-receipt-write-only" in decision_receipt_attest
+                and "needs: [decision_receipt, lease, attest]" in decision_receipt_attest,
+                "Automation Decision Receipt signer dependency changed")
+        require("contents: read" in decision_receipt_attest and "id-token: write" in decision_receipt_attest
+                and "attestations: write" in decision_receipt_attest and "contents: write" not in decision_receipt_attest,
+                "Automation Decision Receipt signer authority changed")
 
         for phrase in (
             "content-addressed source epoch",
@@ -377,7 +403,8 @@ def main() -> int:
         print(
             f"Profile stats trigger contract passed: {len(files)} exact trusted production inputs compile to "
             f"source epoch sha256:{digest}; push invalidation is workflow-or-epoch only, validation-only scripts do not trigger publication; "
-            "main/manual/schedule guards, read-only lease gating, publication receipt preparation/signing, and terminal dispatch ordering remain exact."
+            "main/manual/schedule guards, read-only lease gating, publication receipt preparation/signing, terminal dispatch, "
+            "and Automation Decision Receipt preparation/signing ordering remain exact."
         )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError, StopIteration, IndexError, SyntaxError) as exc:

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Lease/receipt/MAC-aware public loader for the repository Automation Policy IR.
+"""Lease/receipt/MAC/decision-receipt-aware loader for the Automation Policy IR.
 
 The pre-lease loader is retained byte-for-byte in automation_policy_core.py. This
-wrapper projects only the item-8 lease, item-9 publication-receipt, and item-10
-Spotlight merge-authorization extensions out for the frozen legacy checks, then
-validates the complete current graph and compiles it against workflow source.
+wrapper projects only the item-8 lease, item-9 publication-receipt, item-10 Spotlight
+merge-authorization, and item-11 decision-receipt extensions out for the frozen legacy
+checks, then validates the complete current graph and compiles it against workflow source.
 Existing consumers continue importing this module as the canonical policy.
 """
 from __future__ import annotations
@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import automation_concurrency
+import automation_decision_receipts
 import automation_leases
 import automation_policy_core as core
 from automation_policy_core import *  # noqa: F401,F403 - preserve the established public helper surface.
@@ -24,8 +25,11 @@ POLICY_PATH = core.POLICY_PATH
 LEASE_WORKFLOWS = automation_leases.LEASE_WORKFLOWS
 RECEIPT_JOBS = ("receipt", "receipt_attest")
 MAC_JOBS = ("authorize", "authorize_attest")
+DECISION_RECEIPT_JOBS = ("decision_receipt", "decision_receipt_attest")
+DECISION_RECEIPT_CONTRACT = ".github/automation-decision-receipts-v1.json"
+ADR_SIGNER_PERMISSIONS = {"contents": "read", "id-token": "write", "attestations": "write"}
 
-# Dependencies introduced only by items 8-10 are projected away for the byte-frozen
+# Dependencies introduced only by items 8-11 are projected away for the byte-frozen
 # legacy validator.
 LEGACY_NEEDS = {
     "profile-stats": {
@@ -59,8 +63,11 @@ PROFILE_LEGACY_TRANSITIONS = [
 
 
 def project_legacy_policy(payload: dict[str, Any]) -> dict[str, Any]:
-    """Remove exactly the lease/receipt/MAC extensions, preserving legacy semantics."""
+    """Remove exactly the lease/receipt/MAC/decision-receipt extensions."""
     projected = copy.deepcopy(payload)
+    require(projected.get("decisionReceiptContract") == DECISION_RECEIPT_CONTRACT,
+            "automation policy decision receipt contract pointer changed")
+    del projected["decisionReceiptContract"]
     for workflow_id in sorted(LEASE_WORKFLOWS):
         workflow = projected["workflows"][workflow_id]
         lease_job = workflow["lease"]["job"]
@@ -71,11 +78,11 @@ def project_legacy_policy(payload: dict[str, Any]) -> dict[str, Any]:
         for class_spec in workflow["concurrency"].values():
             class_spec["jobs"] = [job_id for job_id in class_spec["jobs"] if job_id != lease_job]
 
-        extension_jobs: tuple[str, ...] = ()
+        extension_jobs: tuple[str, ...]
         if workflow_id == "profile-stats":
-            extension_jobs = RECEIPT_JOBS
-        elif workflow_id == "spotlight-link-sync":
-            extension_jobs = MAC_JOBS
+            extension_jobs = RECEIPT_JOBS + DECISION_RECEIPT_JOBS
+        else:
+            extension_jobs = MAC_JOBS + DECISION_RECEIPT_JOBS
         for job_id in extension_jobs:
             require(job_id in workflow["jobs"],
                     f"automation policy extension projection cannot find job: {workflow_id}/{job_id}")
@@ -94,14 +101,40 @@ def project_legacy_policy(payload: dict[str, Any]) -> dict[str, Any]:
             for transition in projected["transactionMachines"][workflow_id]["transitions"]:
                 transition["jobs"] = [
                     job_id for job_id in transition["jobs"]
-                    if job_id != lease_job and job_id not in MAC_JOBS
+                    if job_id != lease_job and job_id not in MAC_JOBS and job_id not in DECISION_RECEIPT_JOBS
                 ]
                 require(transition["jobs"],
                         f"automation policy extension projection emptied transaction transition: {workflow_id}")
     return projected
 
 
+def _validate_adr_jobs(workflow_id: str, jobs: dict[str, Any]) -> None:
+    if workflow_id == "profile-stats":
+        expected_preparer = {
+            "name": "prepare-automation-decision-receipt-read-only",
+            "needs": ["dispatch", "lease"],
+            "permissions": {"contents": "read", "actions": "read"},
+        }
+        expected_signer_needs = ["decision_receipt", "lease", "attest"]
+    else:
+        expected_preparer = {
+            "name": "prepare-automation-decision-receipt-read-only",
+            "needs": ["plan", "lease", "reconcile", "propose", "approve", "merge"],
+            "permissions": {"contents": "read", "pull-requests": "read", "actions": "read"},
+        }
+        expected_signer_needs = ["decision_receipt", "lease", "plan"]
+    require(jobs["decision_receipt"] == expected_preparer,
+            f"automation policy {workflow_id} ADR preparer authority/dependencies changed")
+    require(jobs["decision_receipt_attest"] == {
+        "name": "attest-automation-decision-receipt-write-only",
+        "needs": expected_signer_needs,
+        "permissions": ADR_SIGNER_PERMISSIONS,
+    }, f"automation policy {workflow_id} ADR signer authority/dependencies changed")
+
+
 def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
+    require(policy.get("decisionReceiptContract") == DECISION_RECEIPT_CONTRACT,
+            "automation policy decision receipt contract pointer changed")
     global_groups: set[str] = set()
     for workflow_id, workflow in policy["workflows"].items():
         if workflow_id not in LEASE_WORKFLOWS:
@@ -158,6 +191,7 @@ def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
                 "plan", "lease", "reconcile", "budget", "propose", "approve", "authorize", "authorize_attest"
             ], "automation policy Spotlight merge must remain downstream of attested merge authorization")
 
+        _validate_adr_jobs(workflow_id, jobs)
         automation_leases.validate_policy(workflow_id, workflow)
 
     machines = policy["transactionMachines"]
@@ -165,10 +199,17 @@ def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
             f"automation policy lease transaction workflow set changed: {sorted(machines)}")
     for workflow_id in sorted(LEASE_WORKFLOWS):
         validate_transaction_machine(workflow_id, machines[workflow_id], policy["workflows"])
+        terminal = machines[workflow_id]["transitions"][-1]
+        require(terminal["from"] == "verified" and terminal["to"] == "completed"
+                and terminal["phase"] == "terminalize"
+                and terminal["jobs"][-2:] == list(DECISION_RECEIPT_JOBS),
+                f"automation policy {workflow_id} successful transaction can bypass ADR preparation/signing")
 
 
 def validate_policy(payload: Any) -> dict[str, Any]:
     require(isinstance(payload, dict), "automation policy root must be an object")
+    require(payload.get("decisionReceiptContract") == DECISION_RECEIPT_CONTRACT,
+            "automation policy decision receipt contract pointer changed")
     require(set(payload.get("workflows", {})) >= LEASE_WORKFLOWS,
             "automation policy lease workflows are missing")
     for workflow_id in sorted(LEASE_WORKFLOWS):
@@ -194,6 +235,11 @@ def load_policy(path: Path = POLICY_PATH) -> dict[str, Any]:
     if path == POLICY_PATH:
         automation_concurrency.validate(policy, ROOT)
         automation_leases.validate_source(policy, ROOT)
+        decision_contract = automation_decision_receipts.strict_json(
+            ROOT / policy["decisionReceiptContract"]
+        )
+        automation_decision_receipts.validate(policy, decision_contract)
+        automation_decision_receipts.self_test(policy, decision_contract)
     return policy
 
 
@@ -229,6 +275,14 @@ def self_test(policy: dict[str, Any]) -> None:
     automation_concurrency.self_test(policy, ROOT)
     automation_leases.self_test(policy, ROOT)
 
+    missing_receipt_contract = copy.deepcopy(policy)
+    del missing_receipt_contract["decisionReceiptContract"]
+    expect_policy_failure(missing_receipt_contract, "decision receipt contract pointer changed")
+
+    wrong_receipt_contract = copy.deepcopy(policy)
+    wrong_receipt_contract["decisionReceiptContract"] = ".github/unreviewed.json"
+    expect_policy_failure(wrong_receipt_contract, "decision receipt contract pointer changed")
+
     missing_lease = copy.deepcopy(policy)
     del missing_lease["workflows"]["profile-stats"]["lease"]
     expect_policy_failure(missing_lease, "workflow profile-stats keys changed")
@@ -249,6 +303,20 @@ def self_test(policy: dict[str, Any]) -> None:
     dispatch_bypass = copy.deepcopy(policy)
     dispatch_bypass["workflows"]["profile-stats"]["jobs"]["dispatch"]["needs"] = ["publish", "lease", "attest"]
     expect_policy_failure(dispatch_bypass, "downstream of publication receipt attestation")
+
+    adr_preparer_write = copy.deepcopy(policy)
+    adr_preparer_write["workflows"]["profile-stats"]["jobs"]["decision_receipt"]["permissions"]["contents"] = "write"
+    expect_policy_failure(adr_preparer_write, "ADR preparer authority/dependencies changed")
+
+    adr_signer_mutation = copy.deepcopy(policy)
+    adr_signer_mutation["workflows"]["spotlight-link-sync"]["jobs"]["decision_receipt_attest"]["permissions"]["actions"] = "write"
+    expect_policy_failure(adr_signer_mutation, "ADR signer authority/dependencies changed")
+
+    adr_bypass = copy.deepcopy(policy)
+    adr_bypass["transactionMachines"]["spotlight-link-sync"]["transitions"][-1]["jobs"] = [
+        "merge", "decision_receipt_attest", "decision_receipt"
+    ]
+    expect_policy_failure(adr_bypass, "can bypass ADR preparation/signing")
 
     mac_preparer_write = copy.deepcopy(policy)
     mac_preparer_write["workflows"]["spotlight-link-sync"]["jobs"]["authorize"]["permissions"] = {
@@ -281,6 +349,7 @@ def main() -> int:
             f"{lease_jobs} short-lived mutation leases · {bound_jobs} lease-bound mutation jobs · "
             "one post-publication generated-commit receipt boundary · "
             "one attested Spotlight merge-authorization boundary · "
+            "two terminal generic Automation Decision Receipt signer boundaries · "
             f"{len(policy['requiredChecks'])} protected required-check bindings"
         )
         return 0
