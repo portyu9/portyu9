@@ -124,14 +124,9 @@ def approval_left_gate(run: dict[str, Any]) -> None:
             "Spotlight approval run is still blocked on approval")
 
 
-def reprove_approval(effect: dict[str, Any], expected_head: str) -> None:
-    target = effect["target"]
-    require(target["workflowName"] in WORKFLOW_NAMES,
-            "Spotlight approval journal workflow identity changed")
-    run = gh_json(f"repos/{REPOSITORY}/actions/runs/{target['runId']}")
+def validate_approval_provenance(run: dict[str, Any], target: dict[str, Any], expected_head: str) -> None:
     require(run.get("id") == target["runId"]
             and run.get("workflow_id") == target["workflowId"]
-            and run.get("run_attempt") == target["runAttempt"]
             and run.get("check_suite_id") == target["checkSuiteId"],
             "Spotlight approval run identity differs from journal")
     require(run.get("name") == target["workflowName"]
@@ -140,7 +135,36 @@ def reprove_approval(effect: dict[str, Any], expected_head: str) -> None:
             and run.get("repository", {}).get("full_name") == REPOSITORY
             and run.get("head_repository", {}).get("full_name") == REPOSITORY,
             "Spotlight approval run provenance changed")
+
+
+def validate_approved_attempt(run: dict[str, Any], target: dict[str, Any], expected_head: str) -> None:
+    validate_approval_provenance(run, target, expected_head)
+    require(run.get("run_attempt") == target["runAttempt"],
+            "Spotlight approval historical attempt differs from journal")
+    require(run.get("status") == "completed" and run.get("conclusion") == "action_required",
+            "Spotlight approval historical attempt was not approval-required")
+
+
+def validate_latest_after_approval(run: dict[str, Any], target: dict[str, Any], expected_head: str) -> None:
+    validate_approval_provenance(run, target, expected_head)
+    current_attempt = run.get("run_attempt")
+    require(isinstance(current_attempt, int) and not isinstance(current_attempt, bool),
+            "Spotlight approval current run attempt is malformed")
+    require(current_attempt > target["runAttempt"],
+            "Spotlight approval current run did not advance beyond the approved attempt")
     approval_left_gate(run)
+
+
+def reprove_approval(effect: dict[str, Any], expected_head: str) -> None:
+    target = effect["target"]
+    require(target["workflowName"] in WORKFLOW_NAMES,
+            "Spotlight approval journal workflow identity changed")
+    approved_attempt = gh_json(
+        f"repos/{REPOSITORY}/actions/runs/{target['runId']}/attempts/{target['runAttempt']}"
+    )
+    validate_approved_attempt(approved_attempt, target, expected_head)
+    current_run = gh_json(f"repos/{REPOSITORY}/actions/runs/{target['runId']}")
+    validate_latest_after_approval(current_run, target, expected_head)
     require(effect["observation"]["approvalRequested"] is True,
             "Spotlight approval receipt must represent an actual approval POST")
 
@@ -216,6 +240,57 @@ def self_test() -> None:
                     f"Spotlight approval gate self-test failed for wrong reason: {exc}")
         else:
             raise ValueError("Spotlight approval gate accepted an approval-required run")
+
+    head = "c" * 40
+    target = {
+        "workflowName": "CodeQL",
+        "workflowId": 101,
+        "runId": 202,
+        "runAttempt": 1,
+        "checkSuiteId": 303,
+    }
+    provenance = {
+        "id": 202,
+        "name": "CodeQL",
+        "workflow_id": 101,
+        "check_suite_id": 303,
+        "event": "pull_request",
+        "head_sha": head,
+        "repository": {"full_name": REPOSITORY},
+        "head_repository": {"full_name": REPOSITORY},
+    }
+    validate_approved_attempt(
+        {**provenance, "run_attempt": 1, "status": "completed", "conclusion": "action_required"},
+        target,
+        head,
+    )
+    validate_latest_after_approval(
+        {**provenance, "run_attempt": 2, "status": "completed", "conclusion": "success"},
+        target,
+        head,
+    )
+    try:
+        validate_approved_attempt(
+            {**provenance, "run_attempt": 2, "status": "completed", "conclusion": "action_required"},
+            target,
+            head,
+        )
+    except ValueError as exc:
+        require("historical attempt differs" in str(exc),
+                f"Spotlight approved-attempt self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Spotlight approved-attempt self-test accepted the wrong run attempt")
+    try:
+        validate_latest_after_approval(
+            {**provenance, "run_attempt": 1, "status": "completed", "conclusion": "success"},
+            target,
+            head,
+        )
+    except ValueError as exc:
+        require("did not advance" in str(exc),
+                f"Spotlight approval-advance self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Spotlight approval-advance self-test accepted an unadvanced run attempt")
 
 
 def main() -> int:
