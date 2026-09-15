@@ -52,14 +52,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Validate Workflow Capability BOM
-        run: python3 scripts/validate-workflow-capability-bom.py
-
       - name: Validate privileged workflow byte identity
         run: python3 scripts/validate-privileged-workflow-identity.py
 
       - name: Verify resolved Python runtime
         run: python3 scripts/verify-python-runtime.py
+
+      - name: Validate Workflow Capability BOM
+        run: python3 scripts/validate-workflow-capability-bom.py
 
       - name: Validate Signal Field pipeline contract
         run: python3 scripts/signal_field_pipeline.py --self-test
