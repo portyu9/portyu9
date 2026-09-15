@@ -1,3 +1,5 @@
+<br>
+
 <p align="center">
 <picture>
   <source media="(max-width: 640px)" srcset="assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg">
@@ -8,6 +10,8 @@
 <p align="center">
 <picture><img alt="Ƴunior Ƥortal" height="68" src="assets/profile-badges/nameplate-yunior-portal-v2.svg?text=black-v2"></picture>
 </p>
+
+<br>
 
 <p align="center"><strong>I engineer quality systems that turn software change into attributable evidence —<br>and evidence into bounded, decision-grade confidence.</strong></p>
 
