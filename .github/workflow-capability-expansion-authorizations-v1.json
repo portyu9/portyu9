@@ -32,6 +32,13 @@
       "rationale": "Authorize the exact trusted-source boundary registration in PR #430 that protects the future compiler-generated .github/workflow-capability-bom-v1-codeql-autofix.json snapshot before any production CodeQL Autofix workflow or seventh-workflow snapshot is introduced."
     },
     {
+      "id": "cap-codeql-autofix-compare-head-binding",
+      "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
+      "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
+      "expansionSha256": "83f42fe691347d8165d821dbdb1e7a45501df363d28f5707698a7544325f2337",
+      "rationale": "Authorize the exact one-file trusted-control-source compatibility change in PR #452 that binds the expected GitHub CodeQL Autofix compare head to the sole commit in the real Compare API commits array while retaining exact base/merge-base ancestry, one-commit, changed-file, provenance, required-check, GHAS/review-thread, and protected auto-merge gates; fail-closed fixtures reject missing, duplicate, or wrong commit identities and semantic workflow capabilities remain unchanged."
+    },
+    {
       "id": "cap-codeql-autofix-empty-description-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
