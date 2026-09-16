@@ -32,6 +32,13 @@
       "rationale": "Authorize the exact trusted-source boundary registration in PR #430 that protects the future compiler-generated .github/workflow-capability-bom-v1-codeql-autofix.json snapshot before any production CodeQL Autofix workflow or seventh-workflow snapshot is introduced."
     },
     {
+      "id": "cap-codeql-autofix-candidate-check-publisher",
+      "baseBomSha256": "aa6254a566f466994baa2d7ab3f49c7084707e3d236c482de8e2638ca5f5e479",
+      "candidateBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
+      "expansionSha256": "fa5a3e4c270cb7abf8af391b74e2a8156f33006e3c7e127d6f71d2c414e2779f",
+      "rationale": "Authorize #490's exact repository-dispatch admission for GitHub-token-created CodeQL Autofix PRs. Trusted default-branch code binds the open same-repo PR, exact main/base/head/branch and immutable controller receipt, treats candidate TCB bytes strictly as data, and may publish only trusted-capability-admission success to that candidate SHA. Other required checks, GHAS/review-thread proof, race checks, Protect Main, and exact-SHA merge remain fail-closed."
+    },
+    {
       "id": "cap-codeql-autofix-compare-head-binding",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
