@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Load the canonical Workflow Capability BOM as a strict composite snapshot.
 
-The item-12 five-workflow snapshot remains byte-frozen. Item 13 adds the trusted admission
-workflow as a small canonical extension. This module is the only assembly boundary: callers
-receive one ordinary six-workflow BOM object whose semantic/canonical representation is
+The item-12 five-workflow snapshot remains byte-frozen. Item 13 adds trusted workflow
+extensions as small canonical snapshots. This module is the only assembly boundary: callers
+receive one ordinary seven-workflow BOM object whose semantic/canonical representation is
 compared with live trusted compilation.
 """
 from __future__ import annotations
@@ -17,6 +17,7 @@ import workflow_capability_bom as compiler
 ROOT = Path(__file__).resolve().parents[1]
 BASE_SNAPSHOT = ROOT / ".github/workflow-capability-bom-v1.json"
 ADMISSION_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-capability-admission.json"
+AUTOFIX_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-codeql-autofix.json"
 EXPECTED_ROOT_KEYS = {"schemaVersion", "bomId", "repository", "automationPolicyId", "workflows"}
 
 
@@ -46,16 +47,31 @@ def load_part(path: Path, label: str) -> dict[str, Any]:
 
 def load_combined() -> dict[str, Any]:
     base = load_part(BASE_SNAPSHOT, "base Workflow Capability BOM snapshot")
-    extension = load_part(ADMISSION_EXTENSION, "Capability admission BOM extension")
+    admission_extension = load_part(ADMISSION_EXTENSION, "Capability admission BOM extension")
+    autofix_extension = load_part(AUTOFIX_EXTENSION, "CodeQL Autofix BOM extension")
     require(len(base["workflows"]) == 5, "base Workflow Capability BOM historical workflow count changed")
-    require(len(extension["workflows"]) == 1, "Capability admission BOM extension must contain exactly one workflow")
-    admission = extension["workflows"][0]
+    require(len(admission_extension["workflows"]) == 1,
+            "Capability admission BOM extension must contain exactly one workflow")
+    require(len(autofix_extension["workflows"]) == 1,
+            "CodeQL Autofix BOM extension must contain exactly one workflow")
+
+    admission = admission_extension["workflows"][0]
     require(admission.get("id") == "capability-admission",
             "Capability admission BOM extension workflow identity changed")
     require(admission.get("path") == ".github/workflows/capability-admission.yml",
             "Capability admission BOM extension workflow path changed")
 
-    workflows = list(base["workflows"]) + list(extension["workflows"])
+    autofix = autofix_extension["workflows"][0]
+    require(autofix.get("id") == "codeql-autofix",
+            "CodeQL Autofix BOM extension workflow identity changed")
+    require(autofix.get("path") == ".github/workflows/codeql-autofix.yml",
+            "CodeQL Autofix BOM extension workflow path changed")
+
+    workflows = (
+        list(base["workflows"])
+        + list(admission_extension["workflows"])
+        + list(autofix_extension["workflows"])
+    )
     ids = [workflow.get("id") for workflow in workflows]
     paths = [workflow.get("path") for workflow in workflows]
     require(len(ids) == len(set(ids)), "composite Workflow Capability BOM contains duplicate workflow IDs")
@@ -69,11 +85,13 @@ def load_combined() -> dict[str, Any]:
 
 def self_test() -> None:
     combined = load_combined()
-    require(len(combined["workflows"]) == 6, "composite Workflow Capability BOM must contain six workflows")
+    require(len(combined["workflows"]) == 7, "composite Workflow Capability BOM must contain seven workflows")
     require(combined["workflows"][0]["id"] == "capability-admission",
             "composite Workflow Capability BOM ordering changed")
+    require(any(workflow["id"] == "codeql-autofix" for workflow in combined["workflows"]),
+            "composite Workflow Capability BOM lost CodeQL Autofix workflow")
 
 
 if __name__ == "__main__":
     self_test()
-    print("Composite Workflow Capability BOM snapshot validation passed: 6 workflows.")
+    print("Composite Workflow Capability BOM snapshot validation passed: 7 workflows.")
