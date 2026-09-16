@@ -182,10 +182,14 @@ def main() -> int:
         if args.self_test:
             self_test()
         decision, diff = evaluate(args.candidate_root, candidate_tree_sha=args.candidate_tree_sha)
-        print(workflow_capability_bom.canonical_json({
-            "decision": decision,
-            "diff": diff,
-        }), end="")
+        public_result = {
+            "decision": {"allowed": decision["allowed"]},
+            "diff": {
+                "expansions": [None] * len(diff["expansions"]),
+                "reductions": [None] * len(diff["reductions"]),
+            },
+        }
+        print(workflow_capability_bom.canonical_json(public_result), end="")
         return 0
     except (OSError, ValueError):
         print("ERROR: trusted capability admission rejected candidate input", file=sys.stderr)
