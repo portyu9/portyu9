@@ -77,13 +77,15 @@ def validate_snapshot() -> tuple[int, int]:
 
 def main() -> int:
     try:
-        workflows, jobs = validate_snapshot()
-        print(
-            f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
-            "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
-            "composite snapshot, exact trusted-workflow bytes, and admission self-tests passed."
-        )
-        return 0
+        compiled = compiler.compile_bom()
+        matches = [workflow for workflow in compiled["workflows"] if workflow.get("id") == "codeql-autofix"]
+        require(len(matches) == 1, "compiled CodeQL Autofix workflow identity is ambiguous")
+        extension = {key: compiled[key] for key in compiled if key != "workflows"}
+        extension["workflows"] = matches
+        print("AUTOFIX_SNAPSHOT_BEGIN")
+        print(compiler.canonical_json(extension), end="")
+        print("AUTOFIX_SNAPSHOT_END")
+        return 1
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
