@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
-"""Inert acceptance fixture for the trusted CodeQL Autofix controller.
+"""Temporary production acceptance fixture for the trusted CodeQL Autofix controller.
 
-The function below is deliberately never called. It contains no repository secret and exists
-only long enough for CodeQL to report a deterministic clear-text logging finding on ordinary,
-auto-merge-eligible Python source. The trusted controller must remediate this through its
-normal protected PR path; this fixture must not be retained after that proof completes.
+This file intentionally mirrors GitHub CodeQL's documented bad example for
+`py/clear-text-logging-sensitive-data`. Nothing in this repository imports, calls, or executes
+this file. It contains no repository secret and must be removed by the Autofix acceptance flow.
 """
-from __future__ import annotations
-
 import os
 
-
-def codeql_autofix_acceptance_fixture() -> None:
-    """Provide a static CodeQL finding without executing or exposing runtime data."""
-    print(f"[INFO] Environment: {os.environ}")
+# BAD by design for issue #414 acceptance: exact upstream CodeQL example pattern.
+print(f"[INFO] Environment: {os.environ}")
