@@ -172,7 +172,9 @@ def normalize_autofix_status(alert: Mapping[str, Any], value: Any) -> dict[str, 
     require(status in KNOWN_AUTOFIX_STATUS,
             f"Autofix status for alert {number} is unknown: {status!r}")
     description = status_response.get("description")
-    if description is not None:
+    if description == "":
+        description = None
+    elif description is not None:
         description = require_text(description, f"Autofix description for alert {number}", maximum=4000)
     started_at = status_response.get("started_at")
     if started_at is not None:
@@ -247,6 +249,12 @@ def self_test() -> None:
             "Autofix status self-test did not recognize a successful exact alert")
     pending = normalize_autofix_status(selected, {"status": "pending", "description": None, "started_at": None})
     require(pending["ready"] is False, "Autofix status self-test treated pending as ready")
+    empty_description = normalize_autofix_status(
+        selected,
+        {"status": "pending", "description": "", "started_at": None},
+    )
+    require(empty_description["ready"] is False and empty_description["description"] is None,
+            "Autofix status self-test did not canonicalize an empty GitHub description")
 
     expect_failure(lambda: discover([first], base_sha=base, pagination_complete=False), "pagination")
     expect_failure(lambda: discover([first, copy.deepcopy(first)], base_sha=base, pagination_complete=True), "duplicates")
