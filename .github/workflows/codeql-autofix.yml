@@ -15,7 +15,7 @@ on:
       - codeql-autofix
 
 permissions:
-  actions: read
+  actions: write
   checks: read
   contents: write
   pull-requests: write
@@ -33,7 +33,7 @@ jobs:
       group: codeql-autofix-controller
       cancel-in-progress: false
     permissions:
-      actions: read
+      actions: write
       checks: read
       contents: write
       pull-requests: write
@@ -239,6 +239,108 @@ jobs:
           path: codeql-autofix-receipt.json
           if-no-files-found: error
           retention-days: 7
+
+      - name: Approve exact protected checks and queue admission retry
+        if: steps.create.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          ALERT_NUMBER: ${{ steps.target.outputs.alert_number }}
+          PR_NUMBER: ${{ steps.create.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.create.outputs.head_sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$ALERT_NUMBER" -gt 0
+          test "$PR_NUMBER" -gt 0
+          test "$RUN_ID" -gt 0
+          BRANCH="codeql-autofix/alert-${ALERT_NUMBER}/run-${RUN_ID}"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .state <<<"$PR")" = "open"
+          test "$(jq -r .base.ref <<<"$PR")" = "main"
+          test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
+          test "$(jq -r .head.ref <<<"$PR")" = "$BRANCH"
+          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+
+          CODEQL_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"
+          DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"
+          PROFILE_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"
+          CAPABILITY_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"
+          for WORKFLOW_ID in "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" "$CAPABILITY_WORKFLOW_ID"; do
+            [[ "$WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
+          done
+          test "$(printf '%s\n' "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" "$CAPABILITY_WORKFLOW_ID" | LC_ALL=C sort -u | wc -l)" = "4"
+
+          COMPLETE=false
+          for ATTEMPT in $(seq 1 60); do
+            RUNS="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
+            test "$(jq -r .total_count <<<"$RUNS")" = "3"
+            MATCHES="$(jq -c --argjson codeql "$CODEQL_WORKFLOW_ID" --argjson dependency "$DEPENDENCY_WORKFLOW_ID" --argjson profile "$PROFILE_WORKFLOW_ID" '[.workflow_runs[] | select(.workflow_id == $codeql or .workflow_id == $dependency or .workflow_id == $profile)]' <<<"$RUNS")"
+            test "$(jq 'length' <<<"$MATCHES")" = "3"
+            test "$(jq '[.[].workflow_id] | unique | length' <<<"$MATCHES")" = "3"
+            jq -e --arg head "$HEAD_SHA" --arg branch "$BRANCH" --arg repo "$TARGET_REPOSITORY" 'all(.[]; .event == "pull_request" and .head_sha == $head and .head_branch == $branch and .head_repository.full_name == $repo)' <<<"$MATCHES" >/dev/null
+
+            COMPLETE=true
+            while IFS=$'\t' read -r CHECK_RUN_ID STATUS CONCLUSION; do
+              [[ "$CHECK_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+              case "$STATUS:$CONCLUSION" in
+                completed:success)
+                  ;;
+                completed:action_required|completed:waiting)
+                  gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve" >/dev/null
+                  COMPLETE=false
+                  ;;
+                queued:null|in_progress:null|waiting:null|pending:null)
+                  COMPLETE=false
+                  ;;
+                *)
+                  echo "ERROR: exact Autofix protected workflow entered forbidden state: ${STATUS}:${CONCLUSION}" >&2
+                  exit 1
+                  ;;
+              esac
+            done < <(jq -r '.[] | [.id, .status, (.conclusion // "null")] | @tsv' <<<"$MATCHES")
+            if [ "$COMPLETE" = "true" ]; then
+              break
+            fi
+            sleep 10
+          done
+          test "$COMPLETE" = "true"
+
+          TRUSTED_READY=false
+          GHAS_READY=false
+          for ATTEMPT in $(seq 1 60); do
+            TRUSTED_RUNS="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request_target&per_page=100")"
+            TRUSTED_MATCHES="$(jq -c --argjson workflow "$CAPABILITY_WORKFLOW_ID" '[.workflow_runs[] | select(.workflow_id == $workflow)]' <<<"$TRUSTED_RUNS")"
+            if [ "$(jq 'length' <<<"$TRUSTED_MATCHES")" = "1" ]; then
+              jq -e --arg head "$HEAD_SHA" --arg branch "$BRANCH" --arg repo "$TARGET_REPOSITORY" '.[0] | .event == "pull_request_target" and .head_sha == $head and .head_branch == $branch and .head_repository.full_name == $repo and .status == "completed" and .conclusion == "success"' <<<"$TRUSTED_MATCHES" >/dev/null && TRUSTED_READY=true || true
+            elif [ "$(jq 'length' <<<"$TRUSTED_MATCHES")" != "0" ]; then
+              echo "ERROR: exact Autofix trusted capability-admission run is ambiguous" >&2
+              exit 1
+            fi
+
+            GHAS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100")"
+            if [ "$(jq -r .total_count <<<"$GHAS")" = "1" ] && jq -e --arg head "$HEAD_SHA" '.check_runs[0] | .head_sha == $head and .status == "completed" and .conclusion == "success"' <<<"$GHAS" >/dev/null; then
+              GHAS_READY=true
+            fi
+            if [ "$TRUSTED_READY" = "true" ] && [ "$GHAS_READY" = "true" ]; then
+              break
+            fi
+            sleep 10
+          done
+          test "$TRUSTED_READY" = "true"
+          test "$GHAS_READY" = "true"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)" = "$HEAD_SHA"
+
+          gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" \
+            -f event_type=codeql-autofix >/dev/null
 
       - name: Verify an existing Autofix PR and enable protected auto-merge
         if: steps.target.outputs.has_target == 'true' && steps.existing.outputs.exists == 'true'

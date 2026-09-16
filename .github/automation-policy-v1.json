@@ -32,7 +32,7 @@
       "path": ".github/workflows/codeql-autofix.yml",
       "triggers": ["repository_dispatch", "schedule", "workflow_run"],
       "permissions": {
-        "actions": "read",
+        "actions": "write",
         "checks": "read",
         "contents": "write",
         "pull-requests": "write",
@@ -43,7 +43,7 @@
           "name": "trusted-codeql-autofix-controller",
           "needs": [],
           "permissions": {
-            "actions": "read",
+            "actions": "write",
             "checks": "read",
             "contents": "write",
             "pull-requests": "write",
