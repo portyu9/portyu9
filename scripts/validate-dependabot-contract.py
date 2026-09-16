@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import sys
 
+from dependabot_admission import self_test as admission_self_test
 from dependabot_pin_diff import self_test as pin_diff_self_test
 from dependabot_pr_identity import self_test as pr_identity_self_test
 
@@ -23,17 +24,17 @@ GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 EXPECTED_DEPENDABOT = """version: 2
 
 updates:
-  - package-ecosystem: \"github-actions\"
-    directory: \"/\"
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
-      interval: \"daily\"
-      time: \"09:00\"
-      timezone: \"America/New_York\"
+      interval: "daily"
+      time: "09:00"
+      timezone: "America/New_York"
     cooldown:
       default-days: 7
     open-pull-requests-limit: 10
     commit-message:
-      prefix: \"chore(deps)\"
+      prefix: "chore(deps)"
 """
 
 REQUIRED_EXTERNAL_ACTIONS = {
@@ -155,6 +156,7 @@ def validate_governance(text: str) -> None:
 def self_test() -> None:
     pin_diff_self_test()
     pr_identity_self_test()
+    admission_self_test()
     good_sha = "a" * 40
     observed = validate_uses_text(
         f"steps:\n  - uses: actions/checkout@{good_sha} # v7\n  - uses : ./.github/actions/local\n  - 'uses' : actions/setup-python@{good_sha} # v6\n",
@@ -193,8 +195,9 @@ def main() -> int:
             "Dependabot governance validation passed: the canonical daily GitHub Actions update-discovery policy is locked; "
             "ordinary version updates have an explicit seven-day release soak while security updates remain immediate; "
             "dependency updates remain individually reviewable; every external action in every workflow is pinned to an immutable "
-            "40-character commit SHA; pin-diff fixtures admit only atomic single-repository Action updates; and PR identity fixtures "
-            "bind the exact Dependabot bot tuple while ordinary human PRs remain deterministic not-applicable."
+            "40-character commit SHA; pin-diff fixtures admit only atomic single-repository Action updates; PR identity fixtures "
+            "bind the exact Dependabot bot tuple while ordinary human PRs remain deterministic not-applicable; and the combined "
+            "admission core binds those proofs to candidate release tag-to-SHA provenance without candidate execution."
         )
         return 0
     except (OSError, ValueError) as exc:
