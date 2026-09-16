@@ -36,7 +36,7 @@
       "baseBomSha256": "aa6254a566f466994baa2d7ab3f49c7084707e3d236c482de8e2638ca5f5e479",
       "candidateBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "expansionSha256": "fa5a3e4c270cb7abf8af391b74e2a8156f33006e3c7e127d6f71d2c414e2779f",
-      "rationale": "Authorize #490's exact trusted repository-dispatch admission and candidate-SHA check publisher for GitHub-token-created CodeQL Autofix PRs. The trusted default-branch workflow binds the exact open same-repository PR, main/base/head/branch identity and immutable controller receipt, evaluates candidate TCB bytes strictly as data, and may publish only the bounded trusted-capability-admission success check to the admitted candidate SHA. All other required checks, GHAS/review-thread proof, exact-head/base race checks, Protect Main, and protected exact-SHA merge remain fail-closed."
+      "rationale": "Authorize #490's exact repository-dispatch admission for GitHub-token-created CodeQL Autofix PRs. Trusted default-branch code binds the open same-repo PR, exact main/base/head/branch and immutable controller receipt, treats candidate TCB bytes strictly as data, and may publish only trusted-capability-admission success to that candidate SHA. Other required checks, GHAS/review-thread proof, race checks, Protect Main, and exact-SHA merge remain fail-closed."
     },
     {
       "id": "cap-codeql-autofix-compare-head-binding",
