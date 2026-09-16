@@ -25,6 +25,13 @@
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #439 that canonicalizes GitHub CodeQL Autofix optional description/started_at metadata when null or whitespace-only while preserving strict validation for non-blank metadata, the known-status readiness gate, semantic workflow capabilities, provenance checks, required checks, GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
+      "id": "cap-codeql-autofix-compare-head-binding",
+      "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
+      "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
+      "expansionSha256": "83f42fe691347d8165d821dbdb1e7a45501df363d28f5707698a7544325f2337",
+      "rationale": "Authorize the exact one-file trusted-control-source compatibility change in PR #452 that binds the expected GitHub CodeQL Autofix compare head to the sole commit in the real Compare API commits array while retaining exact base/merge-base ancestry, one-commit, changed-file, provenance, required-check, GHAS/review-thread, and protected auto-merge gates; fail-closed fixtures reject missing, duplicate, or wrong commit identities and semantic workflow capabilities remain unchanged."
+    },
+    {
       "id": "cap-codeql-autofix-bom-tcb-registration",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
