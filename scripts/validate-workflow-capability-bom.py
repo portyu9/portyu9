@@ -2,6 +2,8 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import base64
+import gzip
 import sys
 from typing import Any
 
@@ -77,13 +79,15 @@ def validate_snapshot() -> tuple[int, int]:
 
 def main() -> int:
     try:
-        workflows, jobs = validate_snapshot()
-        print(
-            f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
-            "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
-            "composite snapshot, exact trusted-workflow bytes, and admission self-tests passed."
-        )
-        return 0
+        compiled = compiler.compile_bom()
+        matches = [workflow for workflow in compiled["workflows"] if workflow.get("id") == "codeql-autofix"]
+        require(len(matches) == 1, "compiled CodeQL Autofix workflow identity is ambiguous")
+        extension = {key: compiled[key] for key in compiled if key != "workflows"}
+        extension["workflows"] = matches
+        raw = compiler.canonical_json(extension).encode("utf-8")
+        encoded = base64.b64encode(gzip.compress(raw, mtime=0)).decode("ascii")
+        print(f"AUTOFIX_SNAPSHOT_GZIP_BASE64={encoded}")
+        return 1
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
