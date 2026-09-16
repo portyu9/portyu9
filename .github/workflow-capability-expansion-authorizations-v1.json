@@ -18,6 +18,13 @@
       "rationale": "Authorize the exact trusted-source boundary registration in PR #430 that protects the future compiler-generated .github/workflow-capability-bom-v1-codeql-autofix.json snapshot before any production CodeQL Autofix workflow or seventh-workflow snapshot is introduced."
     },
     {
+      "id": "cap-codeql-autofix-production-controller",
+      "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
+      "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
+      "expansionSha256": "1d8d049a07c32c258cb3d2c8e94520523c5a2a7023d5d1be5ca1c7bef181041b",
+      "rationale": "Authorize the exact clean seven-workflow CodeQL Autofix production candidate in PR #433 after hardened GraphQL mutation classification and prior TCB registration. The expansion adds the default-branch-trusted controller, its canonical protected BOM snapshot and trusted controller/snapshot assembly source, with explicit branch, Autofix, pull-request, and graphql-mutation authority while retaining Protect Main as final merge arbiter."
+    },
+    {
       "id": "cap-codeql-autofix-tcb-registration",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
