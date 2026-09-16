@@ -58,6 +58,9 @@ def validate_snapshot() -> tuple[int, int]:
     workflow_capability_admission.self_test()
 
     compiled = compiler.compile_bom()
+    autofix = [workflow for workflow in compiled["workflows"] if workflow.get("id") == "codeql-autofix"]
+    require(len(autofix) == 1, "expected exactly one compiled CodeQL Autofix workflow")
+    print("CODEQL_AUTOFIX_BOM_EXTENSION " + compiler.canonical_json(autofix[0]), end="")
     difference = first_difference(compiled, snapshot)
     if difference is not None:
         raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
