@@ -16,6 +16,13 @@
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "db3b64fcd4d5dedd135ede0971e06d9ea7990e051b3ae3f44079c21e518edb4d",
       "rationale": "Authorize the exact trusted-source boundary registration that protects all current and future scripts/codeql_autofix_* controller modules before any write-capable CodeQL Autofix workflow is introduced."
+    },
+    {
+      "id": "cap-workflow-capability-graphql-hardening",
+      "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
+      "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
+      "expansionSha256": "3db685a54ec049e30c30399f16a481384af84972015b704f179723698aab5ac5",
+      "rationale": "Authorize the exact trusted compiler hardening in PR #426 that makes gh api graphql fail closed, classifies GraphQL mutations explicitly, and exposes enablePullRequestAutoMerge to the semantic mutation inventory; the current six-workflow BOM remains byte-for-byte unchanged."
     }
   ]
 }
