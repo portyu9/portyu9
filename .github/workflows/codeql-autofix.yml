@@ -281,7 +281,13 @@ jobs:
           COMPLETE=false
           for ATTEMPT in $(seq 1 60); do
             RUNS="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
-            test "$(jq -r .total_count <<<"$RUNS")" = "3"
+            RUN_COUNT="$(jq -r .total_count <<<"$RUNS")"
+            [[ "$RUN_COUNT" =~ ^[0-9]+$ ]]
+            if [ "$RUN_COUNT" -lt 3 ]; then
+              sleep 10
+              continue
+            fi
+            test "$RUN_COUNT" = "3"
             MATCHES="$(jq -c --argjson codeql "$CODEQL_WORKFLOW_ID" --argjson dependency "$DEPENDENCY_WORKFLOW_ID" --argjson profile "$PROFILE_WORKFLOW_ID" '[.workflow_runs[] | select(.workflow_id == $codeql or .workflow_id == $dependency or .workflow_id == $profile)]' <<<"$RUNS")"
             test "$(jq 'length' <<<"$MATCHES")" = "3"
             test "$(jq '[.[].workflow_id] | unique | length' <<<"$MATCHES")" = "3"
