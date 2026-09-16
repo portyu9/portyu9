@@ -15,12 +15,14 @@ EXPECTED_VERSION = "3.13.15"
 EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 EXPECTED_WORKFLOWS = {
     "capability-admission.yml",
+    "codeql-autofix.yml",
     "profile-quality.yml",
     "profile-stats.yml",
     "spotlight-link-sync.yml",
 }
 VERIFY_COMMANDS = {
     "capability-admission.yml": "python3 scripts/verify-python-runtime.py",
+    "codeql-autofix.yml": "python3 scripts/verify-python-runtime.py",
     "profile-quality.yml": "python3 scripts/verify-python-runtime.py",
     "profile-stats.yml": "python3 source/scripts/verify-python-runtime.py",
     "spotlight-link-sync.yml": "python3 source/scripts/verify-python-runtime.py",
