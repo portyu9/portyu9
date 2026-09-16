@@ -8,9 +8,369 @@
       "id": "codeql-autofix",
       "jobs": [
         {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload immutable controller provenance receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted default-branch source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "graphql",
+              "graphqlOperation": "query",
+              "method": "POST",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_run&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/capability-admission.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix",
+              "method": "GET",
+              "mutating": false,
+              "step": "Request and inspect GitHub CodeQL Autofix"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix",
+              "method": "POST",
+              "mutating": true,
+              "step": "Request and inspect GitHub CodeQL Autofix"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits",
+              "method": "POST",
+              "mutating": true,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Discover one exact-main CodeQL alert"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind trusted trigger and current main"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/refs",
+              "method": "POST",
+              "mutating": true,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls",
+              "method": "POST",
+              "mutating": true,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Locate an existing remediation PR"
+            }
+          ],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "${{ steps.create.outputs.receipt_name }}",
+              "operation": "upload",
+              "path": "codeql-autofix-receipt.json",
+              "retention-days": "7",
+              "step": "Upload immutable controller provenance receipt"
+            }
+          ],
           "id": "controller",
+          "mutations": [
+            {
+              "class": "git-ref",
+              "method": "POST",
+              "step": "Commit exact Autofix to a dedicated branch and open one PR",
+              "target": "repos/${TARGET_REPOSITORY}/git/refs"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Approve exact protected checks and queue admission retry",
+              "target": "repos/${TARGET_REPOSITORY}/dispatches"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Commit exact Autofix to a dedicated branch and open one PR",
+              "target": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Request and inspect GitHub CodeQL Autofix",
+              "target": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"
+            },
+            {
+              "class": "pull-request",
+              "method": "POST",
+              "step": "Commit exact Autofix to a dedicated branch and open one PR",
+              "target": "repos/${TARGET_REPOSITORY}/pulls"
+            },
+            {
+              "class": "pull-request-merge",
+              "method": "PUT",
+              "step": "Verify an existing Autofix PR and perform protected merge",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Verify an existing Autofix PR and perform protected merge",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"
+            },
+            {
+              "class": "workflow-run-approval",
+              "method": "POST",
+              "step": "Approve exact protected checks and queue admission retry",
+              "target": "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve"
+            }
+          ],
           "name": "trusted-codeql-autofix-controller",
           "needs": [],
+          "oidc": false,
           "permissions": {
             "actions": "write",
             "checks": "read",
@@ -18,101 +378,60 @@
             "pull-requests": "write",
             "security-events": "write"
           },
-          "steps": [
-            {
-              "id": null,
-              "name": "Checkout exact trusted default-branch source",
-              "run": null,
-              "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
-            },
-            {
-              "id": null,
-              "name": "Set up Python",
-              "run": null,
-              "uses": "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97"
-            },
-            {
-              "id": null,
-              "name": "Verify resolved Python runtime",
-              "run": "python3 scripts/verify-python-runtime.py",
-              "uses": null
-            },
-            {
-              "id": "base",
-              "name": "Bind trusted trigger and current main",
-              "run": "set -euo pipefail\ntest \"$TARGET_REPOSITORY\" = \"portyu9/portyu9\"\n[[ \"$TRUSTED_SHA\" =~ ^[0-9a-f]{40}$ ]]\npython3 scripts/codeql_autofix_controller.py trigger \\\n  --event-name \"$EVENT_NAME\" \\\n  --event-file \"$GITHUB_EVENT_PATH\" \\\n  --trusted-sha \"$TRUSTED_SHA\" \\\n  --out trigger.json\ngh api \"repos/${TARGET_REPOSITORY}/git/ref/heads/main\" > main-ref.json\npython3 scripts/codeql_autofix_controller.py main \\\n  --ref-file main-ref.json \\\n  --expected-sha \"$TRUSTED_SHA\" \\\n  --out main.json\nBASE_SHA=\"$(jq -r .baseSha main.json)\"\n[[ \"$BASE_SHA\" =~ ^[0-9a-f]{40}$ ]]\nprintf 'base_sha=%s\\n' \"$BASE_SHA\" >> \"$GITHUB_OUTPUT\"\n",
-              "uses": null
-            },
-            {
-              "id": "target",
-              "name": "Discover one exact-main CodeQL alert",
-              "run": "set -euo pipefail\ngh api --paginate --slurp \\\n  \"repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100\" \\\n  > alert-pages.json\npython3 scripts/codeql_autofix_controller.py discover \\\n  --alerts-file alert-pages.json \\\n  --base-sha \"$BASE_SHA\" \\\n  --out discovery.json\nif jq -e '.target != null' discovery.json >/dev/null; then\n  jq -c '.target' discovery.json > target.json\n  ALERT_NUMBER=\"$(jq -r .number target.json)\"\n  test \"$ALERT_NUMBER\" -gt 0\n  printf 'has_target=true\\n' >> \"$GITHUB_OUTPUT\"\n  printf 'alert_number=%s\\n' \"$ALERT_NUMBER\" >> \"$GITHUB_OUTPUT\"\nelse\n  printf 'has_target=false\\n' >> \"$GITHUB_OUTPUT\"\nfi\n",
-              "uses": null
-            },
-            {
-              "id": "existing",
-              "name": "Locate an existing remediation PR",
-              "run": "set -euo pipefail\ngh api --paginate --slurp \\\n  \"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100\" \\\n  > open-pr-pages.json\npython3 scripts/codeql_autofix_controller.py locate \\\n  --prs-file open-pr-pages.json \\\n  --alert \"$ALERT_NUMBER\" \\\n  --out existing.json\nEXISTS=\"$(jq -r .exists existing.json)\"\ntest \"$EXISTS\" = \"true\" -o \"$EXISTS\" = \"false\"\nprintf 'exists=%s\\n' \"$EXISTS\" >> \"$GITHUB_OUTPUT\"\nif [ \"$EXISTS\" = \"true\" ]; then\n  printf 'pr_number=%s\\n' \"$(jq -r .pr.prNumber existing.json)\" >> \"$GITHUB_OUTPUT\"\n  printf 'origin_run_id=%s\\n' \"$(jq -r .pr.originRunId existing.json)\" >> \"$GITHUB_OUTPUT\"\n  printf 'head_sha=%s\\n' \"$(jq -r .pr.headSha existing.json)\" >> \"$GITHUB_OUTPUT\"\nfi\n",
-              "uses": null
-            },
-            {
-              "id": "autofix",
-              "name": "Request and inspect GitHub CodeQL Autofix",
-              "run": "set -euo pipefail\ngh api -X POST \\\n  \"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix\" \\\n  > autofix-create.json\ngh api \\\n  \"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix\" \\\n  > autofix-status.json\npython3 scripts/codeql_autofix_controller.py status \\\n  --target-file target.json \\\n  --status-file autofix-status.json \\\n  --out normalized-autofix.json\nREADY=\"$(jq -r .ready normalized-autofix.json)\"\ntest \"$READY\" = \"true\" -o \"$READY\" = \"false\"\nprintf 'ready=%s\\n' \"$READY\" >> \"$GITHUB_OUTPUT\"\n",
-              "uses": null
-            },
-            {
-              "id": "create",
-              "name": "Commit exact Autofix to a dedicated branch and open one PR",
-              "run": "set -euo pipefail\n[[ \"$BASE_SHA\" =~ ^[0-9a-f]{40}$ ]]\ntest \"$ALERT_NUMBER\" -gt 0\ntest \"$RUN_ID\" -gt 0\ntest \"$RUN_ATTEMPT\" -gt 0\nBRANCH=\"codeql-autofix/alert-${ALERT_NUMBER}/run-${RUN_ID}\"\nTARGET_REF=\"refs/heads/${BRANCH}\"\n\nif gh api \"repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}\" > existing-ref.json 2>/dev/null; then\n  echo \"ERROR: deterministic Autofix branch already exists without an open matching PR\" >&2\n  exit 1\nfi\n\ngh api -X POST \"repos/${TARGET_REPOSITORY}/git/refs\" \\\n  -f ref=\"$TARGET_REF\" \\\n  -f sha=\"$BASE_SHA\" \\\n  > created-ref.json\ntest \"$(jq -r .ref created-ref.json)\" = \"$TARGET_REF\"\ntest \"$(jq -r .object.sha created-ref.json)\" = \"$BASE_SHA\"\n\ngh api -X POST \\\n  \"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits\" \\\n  -f target_ref=\"$TARGET_REF\" \\\n  -f message=\"CodeQL Autofix alert #${ALERT_NUMBER}\" \\\n  > autofix-commit.json\npython3 scripts/codeql_autofix_controller.py commit \\\n  --response-file autofix-commit.json \\\n  --branch \"$BRANCH\" \\\n  --out committed.json\nHEAD_SHA=\"$(jq -r .headSha committed.json)\"\n[[ \"$HEAD_SHA\" =~ ^[0-9a-f]{40}$ ]]\ntest \"$HEAD_SHA\" != \"$BASE_SHA\"\n\ngh api \"repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}\" > compare.json\npython3 scripts/codeql_autofix_controller.py compare \\\n  --compare-file compare.json \\\n  --base-sha \"$BASE_SHA\" \\\n  --head-sha \"$HEAD_SHA\" \\\n  --out compare-proof.json\n\nRULE_ID=\"$(jq -r .ruleId target.json)\"\nPR_BODY=\"Trusted GitHub CodeQL Autofix for alert #${ALERT_NUMBER} (${RULE_ID}). Generated by ${RUN_ID}; protected checks and exact-head admission remain mandatory before protected merge can be attempted.\"\ngh api -X POST \"repos/${TARGET_REPOSITORY}/pulls\" \\\n  -f title=\"CodeQL Autofix alert #${ALERT_NUMBER}\" \\\n  -f head=\"$BRANCH\" \\\n  -f base=\"main\" \\\n  -f body=\"$PR_BODY\" \\\n  -F draft=false \\\n  > created-pr.json\npython3 scripts/codeql_autofix_controller.py receipt \\\n  --run-id \"$RUN_ID\" \\\n  --run-attempt \"$RUN_ATTEMPT\" \\\n  --event-name \"$EVENT_NAME\" \\\n  --base-sha \"$BASE_SHA\" \\\n  --target-file target.json \\\n  --branch \"$BRANCH\" \\\n  --head-sha \"$HEAD_SHA\" \\\n  --pr-file created-pr.json \\\n  --out codeql-autofix-receipt.json\nPR_NUMBER=\"$(jq -r .prNumber codeql-autofix-receipt.json)\"\nRECEIPT_NAME=\"codeql-autofix-receipt-run-${RUN_ID}-alert-${ALERT_NUMBER}\"\nprintf 'created=true\\n' >> \"$GITHUB_OUTPUT\"\nprintf 'pr_number=%s\\n' \"$PR_NUMBER\" >> \"$GITHUB_OUTPUT\"\nprintf 'head_sha=%s\\n' \"$HEAD_SHA\" >> \"$GITHUB_OUTPUT\"\nprintf 'receipt_name=%s\\n' \"$RECEIPT_NAME\" >> \"$GITHUB_OUTPUT\"\n",
-              "uses": null
-            },
-            {
-              "id": null,
-              "name": "Upload immutable controller provenance receipt",
-              "run": null,
-              "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-            },
-            {
-              "id": null,
-              "name": "Approve exact protected checks and queue admission retry",
-              "run": "set -euo pipefail\ntest \"$TARGET_REPOSITORY\" = \"portyu9/portyu9\"\n[[ \"$BASE_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$HEAD_SHA\" =~ ^[0-9a-f]{40}$ ]]\ntest \"$ALERT_NUMBER\" -gt 0\ntest \"$PR_NUMBER\" -gt 0\ntest \"$RUN_ID\" -gt 0\nBRANCH=\"codeql-autofix/alert-${ALERT_NUMBER}/run-${RUN_ID}\"\ntest \"$(gh api \"repos/${TARGET_REPOSITORY}/git/ref/heads/main\" --jq .object.sha)\" = \"$BASE_SHA\"\ntest \"$(gh api \"repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}\" --jq .object.sha)\" = \"$HEAD_SHA\"\nPR=\"$(gh api \"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}\")\"\ntest \"$(jq -r .state <<<\"$PR\")\" = \"open\"\ntest \"$(jq -r .base.ref <<<\"$PR\")\" = \"main\"\ntest \"$(jq -r .base.sha <<<\"$PR\")\" = \"$BASE_SHA\"\ntest \"$(jq -r .head.ref <<<\"$PR\")\" = \"$BRANCH\"\ntest \"$(jq -r .head.sha <<<\"$PR\")\" = \"$HEAD_SHA\"\ntest \"$(jq -r .head.repo.full_name <<<\"$PR\")\" = \"$TARGET_REPOSITORY\"\n\nCODEQL_WORKFLOW_ID=\"$(gh api \"repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml\" --jq .id)\"\nDEPENDENCY_WORKFLOW_ID=\"$(gh api \"repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml\" --jq .id)\"\nPROFILE_WORKFLOW_ID=\"$(gh api \"repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml\" --jq .id)\"\nCAPABILITY_WORKFLOW_ID=\"$(gh api \"repos/${TARGET_REPOSITORY}/actions/workflows/capability-admission.yml\" --jq .id)\"\nfor WORKFLOW_ID in \"$CODEQL_WORKFLOW_ID\" \"$DEPENDENCY_WORKFLOW_ID\" \"$PROFILE_WORKFLOW_ID\" \"$CAPABILITY_WORKFLOW_ID\"; do\n  [[ \"$WORKFLOW_ID\" =~ ^[1-9][0-9]*$ ]]\ndone\ntest \"$(printf '%s\\n' \"$CODEQL_WORKFLOW_ID\" \"$DEPENDENCY_WORKFLOW_ID\" \"$PROFILE_WORKFLOW_ID\" \"$CAPABILITY_WORKFLOW_ID\" | LC_ALL=C sort -u | wc -l)\" = \"4\"\n\nCOMPLETE=false\nfor ATTEMPT in $(seq 1 60); do\n  RUNS=\"$(gh api \"repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100\")\"\n  RUN_COUNT=\"$(jq -r .total_count <<<\"$RUNS\")\"\n  [[ \"$RUN_COUNT\" =~ ^[0-9]+$ ]]\n  if [ \"$RUN_COUNT\" -lt 3 ]; then\n    sleep 10\n    continue\n  fi\n  test \"$RUN_COUNT\" = \"3\"\n  MATCHES=\"$(jq -c --argjson codeql \"$CODEQL_WORKFLOW_ID\" --argjson dependency \"$DEPENDENCY_WORKFLOW_ID\" --argjson profile \"$PROFILE_WORKFLOW_ID\" '[.workflow_runs[] | select(.workflow_id == $codeql or .workflow_id == $dependency or .workflow_id == $profile)]' <<<\"$RUNS\")\"\n  test \"$(jq 'length' <<<\"$MATCHES\")\" = \"3\"\n  test \"$(jq '[.[].workflow_id] | unique | length' <<<\"$MATCHES\")\" = \"3\"\n  jq -e --arg head \"$HEAD_SHA\" --arg branch \"$BRANCH\" --arg repo \"$TARGET_REPOSITORY\" 'all(.[]; .event == \"pull_request\" and .head_sha == $head and .head_branch == $branch and .head_repository.full_name == $repo)' <<<\"$MATCHES\" >/dev/null\n\n  COMPLETE=true\n  while IFS=$'\\t' read -r CHECK_RUN_ID STATUS CONCLUSION; do\n    [[ \"$CHECK_RUN_ID\" =~ ^[1-9][0-9]*$ ]]\n    case \"$STATUS:$CONCLUSION\" in\n      completed:success)\n        ;;\n      completed:action_required|completed:waiting)\n        gh api --method POST \"repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve\" >/dev/null\n        COMPLETE=false\n        ;;\n      queued:null|in_progress:null|waiting:null|pending:null)\n        COMPLETE=false\n        ;;\n      *)\n        echo \"ERROR: exact Autofix protected workflow entered forbidden state: ${STATUS}:${CONCLUSION}\" >&2\n        exit 1\n        ;;\n    esac\n  done < <(jq -r '.[] | [.id, .status, (.conclusion // \"null\")] | @tsv' <<<\"$MATCHES\")\n  if [ \"$COMPLETE\" = \"true\" ]; then\n    break\n  fi\n  sleep 10\ndone\ntest \"$COMPLETE\" = \"true\"\n\nCAPABILITY_COMPLETE=false\nfor ATTEMPT in $(seq 1 60); do\n  CAPABILITY_RUNS=\"$(gh api \"repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_run&per_page=100\")\"\n  CAPABILITY_MATCHES=\"$(jq -c --argjson workflow \"$CAPABILITY_WORKFLOW_ID\" '[.workflow_runs[] | select(.workflow_id == $workflow)]' <<<\"$CAPABILITY_RUNS\")\"\n  test \"$(jq 'length' <<<\"$CAPABILITY_MATCHES\")\" -le 1\n  if [ \"$(jq 'length' <<<\"$CAPABILITY_MATCHES\")\" = \"0\" ]; then\n    sleep 10\n    continue\n  fi\n  jq -e --arg head \"$HEAD_SHA\" --arg branch \"$BRANCH\" --arg repo \"$TARGET_REPOSITORY\" '.[0].event == \"workflow_run\" and .[0].head_sha == $head and .[0].head_branch == $branch and .[0].head_repository.full_name == $repo' <<<\"$CAPABILITY_MATCHES\" >/dev/null\n  CAPABILITY_STATUS=\"$(jq -r '.[0].status' <<<\"$CAPABILITY_MATCHES\")\"\n  CAPABILITY_CONCLUSION=\"$(jq -r '(.[0].conclusion // \"null\")' <<<\"$CAPABILITY_MATCHES\")\"\n  case \"$CAPABILITY_STATUS:$CAPABILITY_CONCLUSION\" in\n    completed:success)\n      CAPABILITY_COMPLETE=true\n      break\n      ;;\n    queued:null|in_progress:null|waiting:null|pending:null)\n      ;;\n    *)\n      echo \"ERROR: trusted capability admission entered forbidden state: ${CAPABILITY_STATUS}:${CAPABILITY_CONCLUSION}\" >&2\n      exit 1\n      ;;\n  esac\n  sleep 10\ndone\ntest \"$CAPABILITY_COMPLETE\" = \"true\"\n",
-              "uses": null
-            },
-            {
-              "id": null,
-              "name": "Verify an existing Autofix PR and perform protected merge",
-              "run": "set -euo pipefail\ntest \"$TARGET_REPOSITORY\" = \"portyu9/portyu9\"\n[[ \"$BASE_SHA\" =~ ^[0-9a-f]{40}$ ]]\ntest \"$ALERT_NUMBER\" -gt 0\n\nPR_NUMBER=\"\"\nORIGIN_RUN_ID=\"\"\nHEAD_SHA=\"\"\nif [ \"$EXISTS\" = \"true\" ]; then\n  PR_NUMBER=\"$EXISTING_PR_NUMBER\"\n  ORIGIN_RUN_ID=\"$EXISTING_ORIGIN_RUN_ID\"\n  HEAD_SHA=\"$EXISTING_HEAD_SHA\"\nelif [ \"$CREATED\" = \"true\" ]; then\n  PR_NUMBER=\"$CREATED_PR_NUMBER\"\n  ORIGIN_RUN_ID=\"$CURRENT_RUN_ID\"\n  HEAD_SHA=\"$CREATED_HEAD_SHA\"\nelse\n  exit 0\nfi\ntest \"$PR_NUMBER\" -gt 0\ntest \"$ORIGIN_RUN_ID\" -gt 0\n[[ \"$HEAD_SHA\" =~ ^[0-9a-f]{40}$ ]]\n\nPR=\"$(gh api \"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}\")\"\ntest \"$(jq -r .state <<<\"$PR\")\" = \"open\"\ntest \"$(jq -r .draft <<<\"$PR\")\" = \"false\"\ntest \"$(jq -r .user.login <<<\"$PR\")\" = \"github-actions[bot]\"\ntest \"$(jq -r .base.ref <<<\"$PR\")\" = \"main\"\ntest \"$(jq -r .base.sha <<<\"$PR\")\" = \"$BASE_SHA\"\ntest \"$(jq -r .head.sha <<<\"$PR\")\" = \"$HEAD_SHA\"\ntest \"$(jq -r .head.repo.full_name <<<\"$PR\")\" = \"$TARGET_REPOSITORY\"\nBRANCH=\"codeql-autofix/alert-${ALERT_NUMBER}/run-${ORIGIN_RUN_ID}\"\ntest \"$(jq -r .head.ref <<<\"$PR\")\" = \"$BRANCH\"\ntest \"$(gh api \"repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}\" --jq .object.sha)\" = \"$HEAD_SHA\"\ntest \"$(gh api \"repos/${TARGET_REPOSITORY}/git/ref/heads/main\" --jq .object.sha)\" = \"$BASE_SHA\"\n\nCOMPARE=\"$(gh api \"repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}\")\"\nprintf '%s\\n' \"$COMPARE\" > verify-compare.json\npython3 scripts/codeql_autofix_controller.py compare \\\n  --compare-file verify-compare.json \\\n  --base-sha \"$BASE_SHA\" \\\n  --head-sha \"$HEAD_SHA\" \\\n  --out verify-compare-proof.json\n\nORIGIN_RUN=\"$(gh api \"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}\")\"\ntest \"$(jq -r .name <<<\"$ORIGIN_RUN\")\" = \"CodeQL Autofix controller\"\ntest \"$(jq -r .event <<<\"$ORIGIN_RUN\")\" = \"workflow_run\" -o \"$(jq -r .event <<<\"$ORIGIN_RUN\")\" = \"schedule\" -o \"$(jq -r .event <<<\"$ORIGIN_RUN\")\" = \"repository_dispatch\"\ntest \"$(jq -r .head_sha <<<\"$ORIGIN_RUN\")\" = \"$BASE_SHA\"\nRECEIPT_NAME=\"codeql-autofix-receipt-run-${ORIGIN_RUN_ID}-alert-${ALERT_NUMBER}\"\nARTIFACTS=\"$(gh api \"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100\")\"\nRECEIPT_ARTIFACT=\"$(jq -c --arg name \"$RECEIPT_NAME\" '[.artifacts[] | select(.name == $name and .expired == false)]' <<<\"$ARTIFACTS\")\"\ntest \"$(jq 'length' <<<\"$RECEIPT_ARTIFACT\")\" = \"1\"\nARTIFACT_ID=\"$(jq -r '.[0].id' <<<\"$RECEIPT_ARTIFACT\")\"\ntest \"$ARTIFACT_ID\" -gt 0\nrm -rf receipt-download\nmkdir -p receipt-download\ngh api \"repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip\" > receipt.zip\nunzip -q receipt.zip -d receipt-download\ntest -f receipt-download/codeql-autofix-receipt.json\ntest ! -L receipt-download/codeql-autofix-receipt.json\ntest \"$(find receipt-download -maxdepth 1 -type f | wc -l)\" = \"1\"\nRECEIPT_RUN_ID=\"$(jq -r .runId receipt-download/codeql-autofix-receipt.json)\"\nRECEIPT_RUN_ATTEMPT=\"$(jq -r .runAttempt receipt-download/codeql-autofix-receipt.json)\"\ntest \"$RECEIPT_RUN_ID\" = \"$ORIGIN_RUN_ID\"\ntest \"$RECEIPT_RUN_ATTEMPT\" -gt 0\nORIGIN_ATTEMPT_RUN=\"$(gh api \"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_RUN_ATTEMPT}\")\"\nprintf '%s\\n' \"$ORIGIN_ATTEMPT_RUN\" > origin-run.json\npython3 scripts/codeql_autofix_controller.py verify-receipt \\\n  --receipt-file receipt-download/codeql-autofix-receipt.json \\\n  --origin-run-file origin-run.json \\\n  --current-repository \"$TARGET_REPOSITORY\" \\\n  --current-base-sha \"$BASE_SHA\" \\\n  --current-alert \"$ALERT_NUMBER\" \\\n  --current-pr-number \"$PR_NUMBER\" \\\n  --current-branch \"$BRANCH\" \\\n  --current-head-sha \"$HEAD_SHA\" \\\n  --out receipt-proof.json\n\npython3 scripts/codeql_autofix_controller.py changed-files \\\n  --pr-number \"$PR_NUMBER\" \\\n  --compare-file verify-compare.json \\\n  --base-sha \"$BASE_SHA\" \\\n  --head-sha \"$HEAD_SHA\" \\\n  --out changed-files.json\n\ngh api --paginate --slurp \\\n  \"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?per_page=100\" \\\n  > check-pages.json\npython3 scripts/codeql_autofix_controller.py checks \\\n  --check-pages-file check-pages.json \\\n  --required validate-contracts \\\n  --required trusted-capability-admission \\\n  --required integration-pinned-upstream \\\n  --required dependency-review \\\n  --required analyze-actions \\\n  --required analyze-python \\\n  --expected-app-id 15368 \\\n  --codeql-app-id 57789 \\\n  --out check-proof.json\n\ngh api --paginate --slurp \\\n  \"repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&ref=refs/pull/${PR_NUMBER}/merge&per_page=100\" \\\n  > pr-alert-pages.json\ngh api --paginate --slurp \\\n  \"repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100\" \\\n  > current-open-alert-pages.json\npython3 scripts/codeql_autofix_controller.py alerts-proof \\\n  --target-file target.json \\\n  --pr-alerts-file pr-alert-pages.json \\\n  --open-alerts-file current-open-alert-pages.json \\\n  --head-sha \"$HEAD_SHA\" \\\n  --out alert-proof.json\n\ngh api graphql \\\n  -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' \\\n  -f owner=portyu9 \\\n  -f name=portyu9 \\\n  -F number=\"$PR_NUMBER\" \\\n  > review-threads.json\npython3 scripts/codeql_autofix_controller.py reviews \\\n  --threads-file review-threads.json \\\n  --out review-proof.json\n\nFINAL_PR=\"$(gh api \"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}\")\"\ntest \"$(jq -r .state <<<\"$FINAL_PR\")\" = \"open\"\ntest \"$(jq -r .draft <<<\"$FINAL_PR\")\" = \"false\"\ntest \"$(jq -r .base.sha <<<\"$FINAL_PR\")\" = \"$BASE_SHA\"\ntest \"$(jq -r .head.sha <<<\"$FINAL_PR\")\" = \"$HEAD_SHA\"\ntest \"$(gh api \"repos/${TARGET_REPOSITORY}/git/ref/heads/main\" --jq .object.sha)\" = \"$BASE_SHA\"\ntest \"$(gh api \"repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}\" --jq .object.sha)\" = \"$HEAD_SHA\"\n\ngh api --method PUT \\\n  \"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge\" \\\n  -f merge_method=merge \\\n  -f sha=\"$HEAD_SHA\" \\\n  -f commit_title=\"CodeQL Autofix alert #${ALERT_NUMBER} (#${PR_NUMBER})\" \\\n  -f commit_message=\"Protected autonomous merge after exact-head CodeQL Autofix admission.\" \\\n  > merge-result.json\ntest \"$(jq -r .merged merge-result.json)\" = \"true\"\nMERGE_SHA=\"$(jq -r .sha merge-result.json)\"\n[[ \"$MERGE_SHA\" =~ ^[0-9a-f]{40}$ ]]\ntest \"$(gh api \"repos/${TARGET_REPOSITORY}/git/ref/heads/main\" --jq .object.sha)\" = \"$MERGE_SHA\"\n",
-              "uses": null
-            },
-            {
-              "id": null,
-              "name": "Post Set up Python",
-              "run": null,
-              "uses": null
-            },
-            {
-              "id": null,
-              "name": "Post Checkout exact trusted default-branch source",
-              "run": null,
-              "uses": null
-            }
-          ]
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
         }
       ],
+      "name": "CodeQL Autofix controller",
       "path": ".github/workflows/codeql-autofix.yml",
-      "permissions": {
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "repository_dispatch": {
+          "types": [
+            "codeql-autofix"
+          ]
+        },
+        "schedule": {
+          "cron": [
+            "37 * * * *"
+          ]
+        },
+        "workflow_run": {
+          "branches": [
+            "main"
+          ],
+          "types": [
+            "completed"
+          ],
+          "workflows": [
+            "CodeQL"
+          ]
+        }
+      },
+      "workflowPermissions": {
         "actions": "write",
         "checks": "read",
         "contents": "write",
         "pull-requests": "write",
         "security-events": "write"
-      },
-      "triggers": [
-        "repository_dispatch",
-        "schedule",
-        "workflow_run"
-      ]
+      }
     }
   ]
 }
