@@ -71,7 +71,7 @@
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
       "expansionSha256": "2db55c82028a0e82f8d18d57466702390b0d8ed761c94b93d62114b447c2d5b7",
-      "rationale": "Authorize the exact complete four-file CodeQL Autofix protected-check bootstrap candidate derived from #456 plus its compiler-generated canonical CodeQL Autofix capability snapshot. The trusted controller remains limited to approving the exact protected runs bound to the immutable Autofix head and dispatching the existing admission retry; candidate execution, direct-main mutation, required checks, GHAS/review-thread proof, immutable receipt admission, and final Protect Main authority remain unchanged."
+      "rationale": "Authorize the exact four-file successor to #456, adding only its compiler-generated canonical CodeQL Autofix capability snapshot. The trusted controller remains bound to the immutable Autofix head, exact protected checks, GHAS/review-thread proof, immutable receipt admission, and final Protect Main authority."
     },
     {
       "id": "cap-codeql-autofix-tcb-registration",
