@@ -2,6 +2,8 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import base64
+import gzip
 import sys
 from typing import Any
 
@@ -82,9 +84,9 @@ def main() -> int:
         require(len(matches) == 1, "compiled CodeQL Autofix workflow identity is ambiguous")
         extension = {key: compiled[key] for key in compiled if key != "workflows"}
         extension["workflows"] = matches
-        print("AUTOFIX_SNAPSHOT_BEGIN")
-        print(compiler.canonical_json(extension), end="")
-        print("AUTOFIX_SNAPSHOT_END")
+        raw = compiler.canonical_json(extension).encode("utf-8")
+        encoded = base64.b64encode(gzip.compress(raw, mtime=0)).decode("ascii")
+        print(f"AUTOFIX_SNAPSHOT_GZIP_BASE64={encoded}")
         return 1
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
