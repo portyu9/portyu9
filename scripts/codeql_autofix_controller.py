@@ -148,6 +148,11 @@ def validate_compare(value: Any, base_sha: str, head_sha: str) -> dict[str, Any]
             "Autofix branch is not a direct descendant of the exact base")
     require(value.get("status") in {"ahead", "identical"}, "Autofix compare has an unexpected ancestry status")
     require(value.get("ahead_by") == 1, "Autofix must add exactly one commit")
+    commits = value.get("commits")
+    require(isinstance(commits, list), "Autofix compare is missing commits")
+    require(len(commits) == 1, "Autofix compare must contain exactly one commit")
+    head = commits[0]
+    require(isinstance(head, Mapping) and head.get("sha") == head_sha, "compare head identity mismatch")
     files = value.get("files")
     require(isinstance(files, list), "Autofix compare is missing changed files")
     paths: list[str] = []
@@ -158,8 +163,6 @@ def validate_compare(value: Any, base_sha: str, head_sha: str) -> dict[str, Any]
         require(item.get("status") in {"modified", "added", "removed", "renamed"}, "Autofix compare file status changed")
         paths.append(filename)
     allowed = admission.validate_changed_files(paths)
-    head = value.get("head_commit")
-    require(isinstance(head, Mapping) and head.get("sha") == head_sha, "compare head identity mismatch")
     return {"baseSha": base_sha, "headSha": head_sha, "changedFiles": list(allowed)}
 
 
@@ -325,14 +328,37 @@ def admit_existing(*, receipt: Any, workflow_run: Any, artifact: Any, pr_respons
 
 def self_test() -> None:
     base = "a" * 40
+    head = "b" * 40
     event = {"workflow_run": {"name": "CodeQL", "conclusion": "success", "head_branch": "main", "head_sha": base}}
     require(validate_trigger("workflow_run", event, base)["trustedSha"] == base, "trigger positive fixture changed")
     current_main({"object": {"sha": base}}, base)
     pages = [[{"number": 1, "state": "open", "base": {"ref": "main", "sha": base},
-               "head": {"ref": "codeql-autofix/alert-4/run-123", "sha": "b" * 40}, "draft": False, "node_id": "PR_x"}]]
+               "head": {"ref": "codeql-autofix/alert-4/run-123", "sha": head}, "draft": False, "node_id": "PR_x"}]]
     located = locate_existing(pages, 4)
     require(located["exists"] and located["pr"]["originRunId"] == 123, "existing PR locator changed")
     require(flatten_pages([[1], [2]]) == [1, 2], "pagination flattening changed")
+
+    compare = {
+        "base_commit": {"sha": base},
+        "merge_base_commit": {"sha": base},
+        "status": "ahead",
+        "ahead_by": 1,
+        "commits": [{"sha": head}],
+        "files": [{"filename": "scripts/autofix_acceptance_fixture.py", "status": "modified"}],
+    }
+    require(validate_compare(compare, base, head)["headSha"] == head, "compare positive fixture changed")
+    compare_mutations = (
+        ({**compare, "commits": []}, "exactly one commit"),
+        ({**compare, "commits": [{"sha": head}, {"sha": "c" * 40}]}, "exactly one commit"),
+        ({**compare, "commits": [{"sha": "c" * 40}]}, "compare head identity mismatch"),
+    )
+    for mutated, expected in compare_mutations:
+        try:
+            validate_compare(mutated, base, head)
+        except ControllerError as exc:
+            require(expected in str(exc), f"compare self-test failed for the wrong reason: {exc}")
+        else:
+            require(False, f"compare self-test accepted forbidden mutation expected to trigger: {expected}")
 
 
 def main() -> int:
