@@ -60,6 +60,13 @@
       "rationale": "Authorize the exact clean seven-workflow CodeQL Autofix production candidate in PR #433 after hardened GraphQL mutation classification and prior TCB registration. The expansion adds the default-branch-trusted controller, its canonical protected BOM snapshot and trusted controller/snapshot assembly source, with explicit branch, Autofix, pull-request, and graphql-mutation authority while retaining Protect Main as final merge arbiter."
     },
     {
+      "id": "cap-codeql-autofix-protected-check-bootstrap",
+      "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
+      "candidateBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
+      "expansionSha256": "221b97bd03284ed43abd455c6031ae8d5cac75cd51b6abe203ee44ba3e13cf89",
+      "rationale": "Authorize PR #456's exact CodeQL Autofix protected-check bootstrap. The trusted default-branch controller may approve only the three exact GitHub-token-created protected pull_request runs bound to the immutable Autofix head, wait for existing capability-admission and GHAS success on that head, then emit the existing codeql-autofix dispatch for immutable-receipt admission. Candidate execution, direct-main mutation, required checks, and final admission remain unchanged."
+    },
+    {
       "id": "cap-codeql-autofix-tcb-registration",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
