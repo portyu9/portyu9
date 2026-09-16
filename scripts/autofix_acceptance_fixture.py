@@ -6,10 +6,14 @@ models a Flask request value flowing into `eval` so the repository's pinned Code
 has a deterministic `py/code-injection` target on ordinary auto-merge-eligible Python source.
 The fixture must be removed by the Autofix acceptance flow.
 """
+import ast
 from flask import request
 
 
 def codeql_autofix_acceptance_fixture() -> str:
     """Deliberately vulnerable static fixture; never invoked by repository code or workflows."""
     expression = request.args.get("expression", "")
-    return str(eval(expression))
+    try:
+        return str(ast.literal_eval(expression))
+    except (ValueError, SyntaxError):
+        return ""
