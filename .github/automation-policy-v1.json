@@ -54,16 +54,22 @@
     },
     "capability-admission": {
       "path": ".github/workflows/capability-admission.yml",
-      "triggers": ["pull_request_target", "workflow_run"],
+      "triggers": ["pull_request_target", "repository_dispatch"],
       "permissions": {
-        "contents": "read"
+        "actions": "read",
+        "checks": "write",
+        "contents": "read",
+        "pull-requests": "read"
       },
       "jobs": {
         "admission": {
           "name": "trusted-capability-admission",
           "needs": [],
           "permissions": {
-            "contents": "read"
+            "actions": "read",
+            "checks": "write",
+            "contents": "read",
+            "pull-requests": "read"
           }
         }
       }

@@ -45,16 +45,68 @@
               "method": "GET",
               "mutating": false,
               "step": "Fetch exact candidate capability source as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify immutable Autofix controller provenance"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify immutable Autofix controller provenance"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify immutable Autofix controller provenance"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/check-runs",
+              "method": "POST",
+              "mutating": true,
+              "step": "Publish exact candidate trusted admission check"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
             }
           ],
           "artifacts": [],
           "id": "admission",
-          "mutations": [],
+          "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Publish exact candidate trusted admission check",
+              "target": "repos/${TARGET_REPOSITORY}/check-runs"
+            }
+          ],
           "name": "trusted-capability-admission",
           "needs": [],
           "oidc": false,
           "permissions": {
-            "contents": "read"
+            "actions": "read",
+            "checks": "write",
+            "contents": "read",
+            "pull-requests": "read"
           },
           "references": {
             "env": [
@@ -89,20 +141,17 @@
             "ready_for_review"
           ]
         },
-        "workflow_run": {
-          "branches": [
-            "codeql-autofix/**"
-          ],
+        "repository_dispatch": {
           "types": [
-            "requested"
-          ],
-          "workflows": [
-            "Profile quality"
+            "codeql-autofix-admission"
           ]
         }
       },
       "workflowPermissions": {
-        "contents": "read"
+        "actions": "read",
+        "checks": "write",
+        "contents": "read",
+        "pull-requests": "read"
       }
     }
   ]
