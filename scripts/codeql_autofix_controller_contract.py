@@ -22,7 +22,7 @@ DISPATCH_TYPE = "codeql-autofix"
 FALLBACK_CRON = "37 * * * *"
 ALLOWED_EVENTS = {"workflow_run", "schedule", "repository_dispatch"}
 EXPECTED_PERMISSIONS = {
-    "actions": "read",
+    "actions": "write",
     "checks": "read",
     "contents": "write",
     "pull-requests": "write",
@@ -33,6 +33,8 @@ ALLOWED_MUTATIONS = {
     "POST /repos/{repository}/code-scanning/alerts/{alert}/autofix",
     "POST /repos/{repository}/code-scanning/alerts/{alert}/autofix/commits",
     "POST /repos/{repository}/pulls",
+    "POST /repos/{repository}/actions/runs/{run}/approve",
+    "POST /repos/{repository}/dispatches",
     "GRAPHQL enablePullRequestAutoMerge",
 }
 FORBIDDEN_MUTATION_FRAGMENTS = {
@@ -263,7 +265,7 @@ def self_test() -> None:
     expect_failure(lambda: validate_blueprint(bad_trigger), "blueprint differs")
 
     bad_permission = expected_blueprint()
-    bad_permission["permissions"]["actions"] = "write"
+    bad_permission["permissions"]["actions"] = "read"
     expect_failure(lambda: validate_blueprint(bad_permission), "blueprint differs")
 
     receipt, workflow_run, artifact = fixture()

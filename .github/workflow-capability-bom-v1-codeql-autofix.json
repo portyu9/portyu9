@@ -57,6 +57,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}",
               "method": "GET",
               "mutating": false,
@@ -68,6 +75,48 @@
               "method": "GET",
               "mutating": false,
               "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request_target&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/capability-admission.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
             },
             {
               "client": "gh-api",
@@ -109,6 +158,13 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100",
               "method": "GET",
               "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
               "step": "Verify an existing Autofix PR and enable protected auto-merge"
             },
             {
@@ -127,10 +183,38 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}",
               "method": "GET",
               "mutating": false,
               "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
             },
             {
               "client": "gh-api",
@@ -166,6 +250,20 @@
               "method": "POST",
               "mutating": true,
               "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
             },
             {
               "client": "gh-api",
@@ -217,6 +315,12 @@
             {
               "class": "github-api-post",
               "method": "POST",
+              "step": "Approve exact protected checks and queue admission retry",
+              "target": "repos/${TARGET_REPOSITORY}/dispatches"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
               "step": "Commit exact Autofix to a dedicated branch and open one PR",
               "target": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"
             },
@@ -237,13 +341,19 @@
               "method": "POST",
               "step": "Commit exact Autofix to a dedicated branch and open one PR",
               "target": "repos/${TARGET_REPOSITORY}/pulls"
+            },
+            {
+              "class": "workflow-run-approval",
+              "method": "POST",
+              "step": "Approve exact protected checks and queue admission retry",
+              "target": "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve"
             }
           ],
           "name": "trusted-codeql-autofix-controller",
           "needs": [],
           "oidc": false,
           "permissions": {
-            "actions": "read",
+            "actions": "write",
             "checks": "read",
             "contents": "write",
             "pull-requests": "write",
@@ -297,7 +407,7 @@
         }
       },
       "workflowPermissions": {
-        "actions": "read",
+        "actions": "write",
         "checks": "read",
         "contents": "write",
         "pull-requests": "write",
