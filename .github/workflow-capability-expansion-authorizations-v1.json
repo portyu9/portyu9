@@ -11,6 +11,13 @@
       "rationale": "Authorize the exact trusted-control-source change in PR #412 that fixes CodeQL alert #4 (py/clear-text-logging-sensitive-data) by removing caught exception contents from stderr; semantic workflow capabilities remain byte-for-byte unchanged."
     },
     {
+      "id": "cap-codeql-autofix-bom-tcb-registration",
+      "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
+      "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
+      "expansionSha256": "e8a02ea8efd4c5cd1ab2c964c3a9a789c7b882ef0a824ff57fd35399df77b390",
+      "rationale": "Authorize the exact trusted-source boundary registration in PR #430 that protects the future compiler-generated .github/workflow-capability-bom-v1-codeql-autofix.json snapshot before any production CodeQL Autofix workflow or seventh-workflow snapshot is introduced."
+    },
+    {
       "id": "cap-codeql-autofix-tcb-registration",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
