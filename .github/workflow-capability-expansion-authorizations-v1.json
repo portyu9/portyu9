@@ -109,6 +109,13 @@
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #442 that canonicalizes surrounding whitespace in GitHub CodeQL Autofix optional description/started_at metadata while preserving null/blank canonicalization, strict non-blank type/length/control-character validation, the known-status readiness gate, semantic workflow capabilities, provenance checks, required checks, GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
+      "id": "cap-codeql-autofix-workflow-run-admission",
+      "baseBomSha256": "326d0be824f7f5c0ae1913663531a96764371531b345151079e733172e4b1e6f",
+      "candidateBomSha256": "aa6254a566f466994baa2d7ab3f49c7084707e3d236c482de8e2638ca5f5e479",
+      "expansionSha256": "9bfe284fa2319244184e15655eef00c1532d87d3a1c433f92c2474f6e4a9a1c1",
+      "rationale": "Authorize #484's exact trusted workflow-run admission path for GitHub-token-created CodeQL Autofix PRs: read-only Capability admission may start only from Profile quality requested runs on codeql-autofix branches, bind the sole bot PR's exact repository/base/head identity, and evaluate candidate bytes strictly as data; the controller only waits for that exact head-bound admission context. Protect Main, six required checks, candidate non-execution, provenance, GHAS, review-thread, and exact-SHA protected merge gates remain fail-closed."
+    },
+    {
       "id": "cap-workflow-capability-graphql-hardening",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
