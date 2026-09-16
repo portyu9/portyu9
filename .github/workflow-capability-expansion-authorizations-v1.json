@@ -74,6 +74,13 @@
       "rationale": "Authorize the exact four-file successor to #456, adding only its compiler-generated canonical CodeQL Autofix capability snapshot. The trusted controller remains bound to the immutable Autofix head, exact protected checks, GHAS/review-thread proof, immutable receipt admission, and final Protect Main authority."
     },
     {
+      "id": "cap-codeql-autofix-receipt-attempt-binding",
+      "baseBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
+      "candidateBomSha256": "dc9249bc85f73d5774cc80660b06767975467828034e2ab2123bf01c19d75162",
+      "expansionSha256": "4fac041d6e416f9b27fd34ade2257460638ced9c9b1b2b5e968635b70ccb4e46",
+      "rationale": "Authorize PR #466's exact two-file compatibility change that binds Autofix provenance to the immutable receipt's recorded GitHub Actions attempt by fetching the attempt-specific run object. The change adds only one read-only API surface, removes the moving latest-attempt read, retains exact run/attempt/workflow/event/head validation, and leaves permissions, mutations, candidate execution, required checks, GHAS/review-thread proof, and Protect Main unchanged."
+    },
+    {
       "id": "cap-codeql-autofix-tcb-registration",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
