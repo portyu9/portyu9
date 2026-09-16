@@ -14,6 +14,7 @@ CANDIDATE_TREE_SHA = "bdf3cecd9b730ca2bf3e3bcf626246eafb0d2d9e"
 def main() -> int:
     base_root = Path("/tmp/codeql-autofix-auth-base")
     subprocess.run(["rm", "-rf", str(base_root)], check=True)
+    subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", BASE_SHA], check=True)
     subprocess.run(["git", "worktree", "add", "--detach", str(base_root), BASE_SHA], check=True)
     sys.path.insert(0, str(base_root / "scripts"))
 
