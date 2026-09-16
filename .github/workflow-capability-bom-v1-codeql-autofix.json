@@ -35,25 +35,17 @@
             {
               "client": "gh-api",
               "endpoint": "graphql",
-              "graphqlOperation": "mutation",
-              "method": "POST",
-              "mutating": true,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "graphql",
               "graphqlOperation": "query",
               "method": "POST",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
@@ -67,32 +59,18 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request_target&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/capability-admission.yml",
               "method": "GET",
               "mutating": false,
               "step": "Approve exact protected checks and queue admission retry"
@@ -106,6 +84,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml",
               "method": "GET",
               "mutating": false,
@@ -116,6 +101,13 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml",
               "method": "GET",
               "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/check-runs",
+              "method": "POST",
+              "mutating": true,
               "step": "Approve exact protected checks and queue admission retry"
             },
             {
@@ -144,7 +136,7 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
@@ -152,6 +144,20 @@
               "method": "GET",
               "mutating": false,
               "step": "Discover one exact-main CodeQL alert"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
             },
             {
               "client": "gh-api",
@@ -165,14 +171,14 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
@@ -228,14 +234,21 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
@@ -270,21 +283,28 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Verify an existing Autofix PR and protected-merge exact head"
             },
             {
               "client": "gh-api",
@@ -316,6 +336,12 @@
               "class": "github-api-post",
               "method": "POST",
               "step": "Approve exact protected checks and queue admission retry",
+              "target": "repos/${TARGET_REPOSITORY}/check-runs"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Approve exact protected checks and queue admission retry",
               "target": "repos/${TARGET_REPOSITORY}/dispatches"
             },
             {
@@ -331,16 +357,22 @@
               "target": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"
             },
             {
-              "class": "graphql-mutation",
-              "method": "POST",
-              "step": "Verify an existing Autofix PR and enable protected auto-merge",
-              "target": "graphql"
-            },
-            {
               "class": "pull-request",
               "method": "POST",
               "step": "Commit exact Autofix to a dedicated branch and open one PR",
               "target": "repos/${TARGET_REPOSITORY}/pulls"
+            },
+            {
+              "class": "pull-request-merge",
+              "method": "PUT",
+              "step": "Verify an existing Autofix PR and protected-merge exact head",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Verify an existing Autofix PR and protected-merge exact head",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"
             },
             {
               "class": "workflow-run-approval",
@@ -354,7 +386,7 @@
           "oidc": false,
           "permissions": {
             "actions": "write",
-            "checks": "read",
+            "checks": "write",
             "contents": "write",
             "pull-requests": "write",
             "security-events": "write"
@@ -408,7 +440,7 @@
       },
       "workflowPermissions": {
         "actions": "write",
-        "checks": "read",
+        "checks": "write",
         "contents": "write",
         "pull-requests": "write",
         "security-events": "write"
