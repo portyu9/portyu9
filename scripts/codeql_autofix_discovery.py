@@ -59,6 +59,18 @@ def normalize_optional_metadata(value: Any, label: str, *, maximum: int) -> str 
     return require_text(normalized, label, maximum=maximum)
 
 
+def normalize_description_metadata(value: Any, label: str, *, maximum: int) -> str | None:
+    """Canonicalize GitHub's explanatory Autofix prose without changing authority semantics."""
+    if value is None:
+        return None
+    require(isinstance(value, str), f"{label} must be a string or null")
+    require("\x00" not in value, f"{label} contains forbidden control characters")
+    normalized = " ".join(value.split())
+    if normalized == "":
+        return None
+    return require_text(normalized, label, maximum=maximum)
+
+
 def normalize_location(value: Any) -> dict[str, Any]:
     location = require_mapping(value, "CodeQL alert location")
     path = require_text(location.get("path"), "CodeQL alert path")
@@ -181,7 +193,7 @@ def normalize_autofix_status(alert: Mapping[str, Any], value: Any) -> dict[str, 
     status = status_response.get("status")
     require(status in KNOWN_AUTOFIX_STATUS,
             f"Autofix status for alert {number} is unknown: {status!r}")
-    description = normalize_optional_metadata(
+    description = normalize_description_metadata(
         status_response.get("description"),
         f"Autofix description for alert {number}",
         maximum=4000,
@@ -283,6 +295,26 @@ def self_test() -> None:
         padded_metadata["description"] == "Replace the sensitive exception log with a constant message."
         and padded_metadata["startedAt"] == "2026-09-15T22:00:00Z",
         "Autofix status self-test did not canonicalize surrounding whitespace in optional GitHub metadata",
+    )
+    multiline_description = normalize_autofix_status(
+        selected,
+        {
+            "status": "success",
+            "description": "Replace the sensitive exception log\nwith a constant message.\r\nNo authority data is carried here.",
+            "started_at": "2026-09-15T22:00:00Z",
+        },
+    )
+    require(
+        multiline_description["description"]
+        == "Replace the sensitive exception log with a constant message. No authority data is carried here.",
+        "Autofix status self-test did not canonicalize multiline explanatory description metadata",
+    )
+    expect_failure(
+        lambda: normalize_autofix_status(
+            selected,
+            {"status": "pending", "description": "safe\x00unsafe", "started_at": None},
+        ),
+        "forbidden control characters",
     )
     expect_failure(
         lambda: normalize_autofix_status(
