@@ -88,6 +88,17 @@
             "synchronize",
             "ready_for_review"
           ]
+        },
+        "workflow_run": {
+          "branches": [
+            "codeql-autofix/**"
+          ],
+          "types": [
+            "requested"
+          ],
+          "workflows": [
+            "Profile quality"
+          ]
         }
       },
       "workflowPermissions": {
