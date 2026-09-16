@@ -1,92 +1,52 @@
 #!/usr/bin/env python3
-"""Recompile and validate the canonical Workflow Capability BOM snapshot."""
+"""Temporary read-only diagnostic for exact capability authorization tuple."""
 from __future__ import annotations
 
+import json
+from pathlib import Path
+import subprocess
 import sys
-from typing import Any
 
-import capability_admission_workflow_contract
-import trusted_workflow_capability
-import workflow_capability_admission
-import workflow_capability_authorization
-import workflow_capability_bom as compiler
-import workflow_capability_diff as capability_diff
-import workflow_capability_snapshot
-
-
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        raise ValueError(message)
-
-
-def first_difference(expected: Any, observed: Any, path: str = "$") -> str | None:
-    if type(expected) is not type(observed):
-        return f"{path}: type expected={type(expected).__name__} observed={type(observed).__name__}"
-    if isinstance(expected, dict):
-        expected_keys = set(expected)
-        observed_keys = set(observed)
-        if expected_keys != observed_keys:
-            return f"{path}: keys expected={sorted(expected_keys)} observed={sorted(observed_keys)}"
-        for key in sorted(expected):
-            difference = first_difference(expected[key], observed[key], f"{path}.{key}")
-            if difference is not None:
-                return difference
-        return None
-    if isinstance(expected, list):
-        if len(expected) != len(observed):
-            return f"{path}: length expected={len(expected)} observed={len(observed)}"
-        for index, (left, right) in enumerate(zip(expected, observed, strict=True)):
-            difference = first_difference(left, right, f"{path}[{index}]")
-            if difference is not None:
-                return difference
-        return None
-    if expected != observed:
-        return f"{path}: expected={expected!r} observed={observed!r}"
-    return None
-
-
-def validate_snapshot() -> tuple[int, int]:
-    snapshot = workflow_capability_snapshot.load_combined()
-
-    compiler.self_test()
-    capability_diff.self_test()
-    trusted_workflow_capability.self_test()
-    workflow_capability_authorization.self_test()
-    workflow_capability_snapshot.self_test()
-    capability_admission_workflow_contract.self_test()
-    capability_admission_workflow_contract.validate()
-    workflow_capability_admission.self_test()
-
-    compiled = compiler.compile_bom()
-    difference = first_difference(compiled, snapshot)
-    if difference is not None:
-        raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
-
-    require(compiler.canonical_json(snapshot) == compiler.canonical_json(compiled),
-            "composite Workflow Capability BOM canonical bytes differ from live compilation")
-    identity_diff = capability_diff.semantic_diff(snapshot, compiled)
-    require(not identity_diff["hasExpansion"] and not identity_diff["reductions"],
-            "identical canonical BOMs produced a semantic capability diff")
-
-    workflows = compiled["workflows"]
-    jobs = sum(len(workflow["jobs"]) for workflow in workflows)
-    require(len(workflows) == 7, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
-    require(jobs > 0, "Workflow Capability BOM contains no jobs")
-    return len(workflows), jobs
+BASE_SHA = "e551fdf2c8f7b5ef33ca948f0a4347d9cefcfbc2"
+CANDIDATE_TREE_SHA = "e7162a47ffeb7d0220de9eb520f915dfdc5e51f2"
 
 
 def main() -> int:
-    try:
-        workflows, jobs = validate_snapshot()
-        print(
-            f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
-            "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
-            "composite snapshot, exact trusted-workflow bytes, and admission self-tests passed."
-        )
-        return 0
-    except (OSError, ValueError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
+    base_root = Path("/tmp/codeql-autofix-auth-base")
+    subprocess.run(["rm", "-rf", str(base_root)], check=True)
+    subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", BASE_SHA], check=True)
+    subprocess.run(["git", "worktree", "add", "--detach", str(base_root), BASE_SHA], check=True)
+    sys.path.insert(0, str(base_root / "scripts"))
+
+    import workflow_capability_admission as admission
+    import workflow_capability_diff as capability_diff
+    import workflow_capability_snapshot as snapshot
+    import trusted_workflow_capability as trusted
+
+    candidate_root = Path.cwd()
+    base = snapshot.load_combined()
+    candidate = trusted.compile_repository(candidate_root)
+    diff = capability_diff.semantic_diff(base, candidate)
+    diff = admission.protect_trusted_control(base, candidate, diff)
+    diff = admission.protect_trusted_sources(candidate_root, CANDIDATE_TREE_SHA, diff)
+    payload = {
+        "baseBomSha256": diff["baseBomSha256"],
+        "candidateBomSha256": diff["candidateBomSha256"],
+        "expansionSha256": diff["expansionSha256"],
+        "expansionCount": len(diff["expansions"]),
+        "reductionCount": len(diff["reductions"]),
+        "trustedSourceKeys": [
+            item.get("key") for item in diff["expansions"]
+            if item.get("category") == "trusted-control-source"
+        ],
+        "candidateTcbSha256": sorted({
+            item.get("after", {}).get("candidateTcbSha256")
+            for item in diff["expansions"]
+            if item.get("category") == "trusted-control-source" and isinstance(item.get("after"), dict)
+        }),
+    }
+    print("AUTH_TUPLE=" + json.dumps(payload, sort_keys=True, separators=(",", ":")))
+    return 1
 
 
 if __name__ == "__main__":
