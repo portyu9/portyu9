@@ -49,6 +49,15 @@ def require_text(value: Any, label: str, *, maximum: int = 500) -> str:
     return value
 
 
+def normalize_optional_metadata(value: Any, label: str, *, maximum: int) -> str | None:
+    if value is None:
+        return None
+    require(isinstance(value, str), f"{label} must be a string or null")
+    if value.strip() == "":
+        return None
+    return require_text(value, label, maximum=maximum)
+
+
 def normalize_location(value: Any) -> dict[str, Any]:
     location = require_mapping(value, "CodeQL alert location")
     path = require_text(location.get("path"), "CodeQL alert path")
@@ -171,14 +180,16 @@ def normalize_autofix_status(alert: Mapping[str, Any], value: Any) -> dict[str, 
     status = status_response.get("status")
     require(status in KNOWN_AUTOFIX_STATUS,
             f"Autofix status for alert {number} is unknown: {status!r}")
-    description = status_response.get("description")
-    if description == "":
-        description = None
-    elif description is not None:
-        description = require_text(description, f"Autofix description for alert {number}", maximum=4000)
-    started_at = status_response.get("started_at")
-    if started_at is not None:
-        started_at = require_text(started_at, f"Autofix started_at for alert {number}", maximum=64)
+    description = normalize_optional_metadata(
+        status_response.get("description"),
+        f"Autofix description for alert {number}",
+        maximum=4000,
+    )
+    started_at = normalize_optional_metadata(
+        status_response.get("started_at"),
+        f"Autofix started_at for alert {number}",
+        maximum=64,
+    )
     return {
         "repository": REPOSITORY,
         "alertNumber": number,
@@ -199,7 +210,7 @@ def alert_fixture(*, number: int = 4, sha: str = "a" * 40) -> dict[str, Any]:
             "id": "py/clear-text-logging-sensitive-data",
             "security_severity_level": "high",
         },
-        "tool": {"name": "CodeQL"},
+        "tool": {"name": TOOL_NAME},
         "most_recent_instance": {
             "ref": DEFAULT_REF,
             "commit_sha": sha,
@@ -249,12 +260,23 @@ def self_test() -> None:
             "Autofix status self-test did not recognize a successful exact alert")
     pending = normalize_autofix_status(selected, {"status": "pending", "description": None, "started_at": None})
     require(pending["ready"] is False, "Autofix status self-test treated pending as ready")
-    empty_description = normalize_autofix_status(
+    blank_metadata = normalize_autofix_status(
         selected,
-        {"status": "pending", "description": "", "started_at": None},
+        {"status": "pending", "description": "   ", "started_at": "\t"},
     )
-    require(empty_description["ready"] is False and empty_description["description"] is None,
-            "Autofix status self-test did not canonicalize an empty GitHub description")
+    require(
+        blank_metadata["ready"] is False
+        and blank_metadata["description"] is None
+        and blank_metadata["startedAt"] is None,
+        "Autofix status self-test did not canonicalize blank optional GitHub metadata",
+    )
+    expect_failure(
+        lambda: normalize_autofix_status(
+            selected,
+            {"status": "pending", "description": {}, "started_at": None},
+        ),
+        "string or null",
+    )
 
     expect_failure(lambda: discover([first], base_sha=base, pagination_complete=False), "pagination")
     expect_failure(lambda: discover([first, copy.deepcopy(first)], base_sha=base, pagination_complete=True), "duplicates")
