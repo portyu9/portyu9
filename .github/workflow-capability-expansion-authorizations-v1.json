@@ -64,7 +64,7 @@
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
       "expansionSha256": "221b97bd03284ed43abd455c6031ae8d5cac75cd51b6abe203ee44ba3e13cf89",
-      "rationale": "Authorize the exact protected CodeQL Autofix bootstrap candidate reviewed in PR #456. The default-branch controller gains Actions write authority only to approve the three exact GitHub-token-created protected pull_request workflow runs bound to the immutable Autofix head, waits for the existing trusted capability-admission and GHAS proofs on that same head, then emits the already-governed codeql-autofix repository dispatch so the immutable-receipt existing-PR admission pass can run. Candidate execution, direct-main mutation, required-check identities, final admission predicates, and protected auto-merge enforcement remain unchanged."
+      "rationale": "Authorize PR #456's exact CodeQL Autofix protected-check bootstrap. The trusted default-branch controller may approve only the three exact GitHub-token-created protected pull_request runs bound to the immutable Autofix head, wait for existing capability-admission and GHAS success on that head, then emit the existing codeql-autofix dispatch for immutable-receipt admission. Candidate execution, direct-main mutation, required checks, and final admission remain unchanged."
     },
     {
       "id": "cap-codeql-autofix-tcb-registration",
