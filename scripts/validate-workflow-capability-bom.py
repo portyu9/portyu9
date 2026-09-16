@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import gzip
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -63,8 +64,10 @@ def emit_part(candidate: dict[str, object], workflow_id: str) -> None:
     part = {key: candidate[key] for key in candidate if key != "workflows"}
     part["workflows"] = matches
     raw = compiler.canonical_json(part).encode("utf-8")
-    packed = gzip.compress(raw, mtime=0)
-    print(f"BOM_DIAG {workflow_id} {len(raw)} {base64.b64encode(packed).decode('ascii')}")
+    encoded = base64.b64encode(gzip.compress(raw, mtime=0)).decode("ascii")
+    print(f"BOM_META {workflow_id} raw={len(raw)} sha256={hashlib.sha256(raw).hexdigest()} chunks={(len(encoded) + 239) // 240}")
+    for index in range(0, len(encoded), 240):
+        print(f"BOM_CHUNK {workflow_id} {index // 240:03d} {encoded[index:index + 240]}")
 
 
 def main() -> int:
@@ -106,7 +109,7 @@ def main() -> int:
         "candidateTcbSha256": tcb_hashes[0],
         "trustedSourceKeys": source_keys,
     }
-    print("AUTH_TUPLE " + compiler.canonical_json(result).strip())
+    print("AUTH_TUPLE " + json.dumps(result, sort_keys=True, separators=(",", ":")))
     print("ERROR: intentional authorization diagnostic failure", file=sys.stderr)
     return 1
 
