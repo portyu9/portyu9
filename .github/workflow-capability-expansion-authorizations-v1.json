@@ -81,6 +81,13 @@
       "rationale": "Authorize #471's exact two-file terminal authority change: replace GitHub-native auto-merge with an exact-admitted-head protected PR merge and post-merge CodeQL dispatch. Immutable receipt provenance, exact base/head checks, six required contexts, GHAS/review-thread admission, protected-check bootstrap, candidate execution boundaries, and Protect Main remain fail-closed; no bypass or direct-main mutation is introduced."
     },
     {
+      "id": "cap-codeql-autofix-protected-direct-merge-canonical",
+      "baseBomSha256": "dc9249bc85f73d5774cc80660b06767975467828034e2ab2123bf01c19d75162",
+      "candidateBomSha256": "326d0be824f7f5c0ae1913663531a96764371531b345151079e733172e4b1e6f",
+      "expansionSha256": "0f731ed50bc9275ba2296ae3a5fae8194c1a374f2021a5b9433a85bd5a097c96",
+      "rationale": "Authorize #476's exact corrected two-file protected direct-merge candidate. The workflow is unchanged from the reviewed direct-merge design; the protected BOM is now the trusted compiler's exact canonical output, including exact-main CodeQL alert discovery, protected exact-SHA PR merge, and post-merge CodeQL dispatch. Immutable receipt provenance, six required contexts, GHAS/review-thread proof, final race checks, and Protect Main remain fail-closed."
+    },
+    {
       "id": "cap-codeql-autofix-receipt-attempt-binding",
       "baseBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
       "candidateBomSha256": "dc9249bc85f73d5774cc80660b06767975467828034e2ab2123bf01c19d75162",
