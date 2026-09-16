@@ -77,7 +77,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request_target&per_page=100",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_run&per_page=100",
               "method": "GET",
               "mutating": false,
               "step": "Approve exact protected checks and queue admission retry"

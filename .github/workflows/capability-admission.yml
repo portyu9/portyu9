@@ -7,6 +7,13 @@ on:
       - reopened
       - synchronize
       - ready_for_review
+  workflow_run:
+    workflows:
+      - Profile quality
+    types:
+      - requested
+    branches:
+      - "codeql-autofix/**"
 
 permissions:
   contents: read
@@ -23,10 +30,65 @@ jobs:
       contents: read
 
     steps:
+      - name: Bind exact candidate context
+        id: candidate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+
+          case "$EVENT_NAME" in
+            pull_request_target)
+              PR="$(jq -c '.pull_request' "$GITHUB_EVENT_PATH")"
+              HEAD_REPOSITORY="$(jq -r '.head.repo.full_name' <<<"$PR")"
+              ;;
+            workflow_run)
+              test "$(jq -r '.workflow_run.event // ""' "$GITHUB_EVENT_PATH")" = "pull_request"
+              test "$(jq -r '.workflow_run.name // ""' "$GITHUB_EVENT_PATH")" = "Profile quality"
+              test "$(jq -r '.workflow_run.path // ""' "$GITHUB_EVENT_PATH")" = ".github/workflows/profile-quality.yml"
+              test "$(jq -r '.workflow_run.run_attempt // 0' "$GITHUB_EVENT_PATH")" = "1"
+              test "$(jq -r '.workflow_run.actor.login // ""' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"
+              PULLS="$(jq -c '.workflow_run.pull_requests' "$GITHUB_EVENT_PATH")"
+              test "$(jq 'length' <<<"$PULLS")" = "1"
+              PR="$(jq -c '.[0]' <<<"$PULLS")"
+              test "$(jq -r '.workflow_run.head_branch' "$GITHUB_EVENT_PATH")" = "$(jq -r '.head.ref' <<<"$PR")"
+              test "$(jq -r '.workflow_run.head_sha' "$GITHUB_EVENT_PATH")" = "$(jq -r '.head.sha' <<<"$PR")"
+              REPOSITORY_ID="$(jq -r '.repository.id' "$GITHUB_EVENT_PATH")"
+              [[ "$REPOSITORY_ID" =~ ^[1-9][0-9]*$ ]]
+              test "$(jq -r '.base.repo.id' <<<"$PR")" = "$REPOSITORY_ID"
+              test "$(jq -r '.head.repo.id' <<<"$PR")" = "$REPOSITORY_ID"
+              HEAD_REPOSITORY="$TARGET_REPOSITORY"
+              ;;
+            *)
+              echo "ERROR: unsupported capability-admission event: $EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
+
+          BASE_REF="$(jq -r '.base.ref' <<<"$PR")"
+          BASE_SHA="$(jq -r '.base.sha' <<<"$PR")"
+          HEAD_REF="$(jq -r '.head.ref' <<<"$PR")"
+          HEAD_SHA="$(jq -r '.head.sha' <<<"$PR")"
+          test "$BASE_REF" = "main"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            [[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]
+          fi
+
+          printf 'base_ref=%s\n' "$BASE_REF" >> "$GITHUB_OUTPUT"
+          printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
+          printf 'head_repository=%s\n' "$HEAD_REPOSITORY" >> "$GITHUB_OUTPUT"
+          printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
       - name: Checkout exact trusted base
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ steps.candidate.outputs.base_sha }}
           persist-credentials: false
           fetch-depth: 1
 
@@ -42,10 +104,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ steps.candidate.outputs.base_ref }}
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
+          HEAD_REPOSITORY: ${{ steps.candidate.outputs.head_repository }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"

@@ -54,7 +54,7 @@
     },
     "capability-admission": {
       "path": ".github/workflows/capability-admission.yml",
-      "triggers": ["pull_request_target"],
+      "triggers": ["pull_request_target", "workflow_run"],
       "permissions": {
         "contents": "read"
       },
