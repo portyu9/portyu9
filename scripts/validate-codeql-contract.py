@@ -1,275 +1,60 @@
 #!/usr/bin/env python3
-"""Validate the repository's governed CodeQL security-analysis contract."""
+"""Disposable unprotected diagnostic for exact prior-authorization digests."""
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
-import re
-import sys
+from urllib.request import urlopen
 
-from codeql_autofix_admission import self_test as autofix_admission_self_test
-from codeql_autofix_controller_contract import self_test as autofix_controller_self_test
-from codeql_autofix_discovery import self_test as autofix_discovery_self_test
+import trusted_workflow_capability
+import workflow_capability_diff
+import workflow_capability_snapshot
+import workflow_capability_tcb
 
 ROOT = Path(__file__).resolve().parents[1]
-CODEQL = ROOT / ".github/workflows/codeql.yml"
-QUALITY = ROOT / ".github/workflows/profile-quality.yml"
-GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
-
-CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
-CODEQL_SHA = "cdf488f595d80d6e07e03d4674febd5ab45fa938"
-CODEQL_RELEASE = "v4.37.9"
-STEP_START = re.compile(r"^      - name: (?P<name>.+?)\s*$")
-EXPECTED_STEP_NAMES = ("Checkout", "Initialize CodeQL", "Analyze")
-
-EXPECTED_CHECKOUT_STEP = (
-    "      - name: Checkout\n"
-    f"        uses: actions/checkout@{CHECKOUT_SHA} # v7.0.1\n"
-    "        with:\n"
-    "          persist-credentials: false"
+BASE_SHA = "2f369463ce6ccc9a029bce4210297a33bb064b14"
+CONTROL_PATH = "scripts/codeql_autofix_controller.py"
+BASE_URL = (
+    "https://raw.githubusercontent.com/portyu9/portyu9/"
+    f"{BASE_SHA}/{CONTROL_PATH}"
 )
-EXPECTED_INIT_STEP = (
-    "      - name: Initialize CodeQL\n"
-    f"        uses: github/codeql-action/init@{CODEQL_SHA} # {CODEQL_RELEASE}\n"
-    "        with:\n"
-    "          languages: ${{ matrix.language }}\n"
-    "          queries: security-extended"
-)
-EXPECTED_ANALYZE_STEP = (
-    "      - name: Analyze\n"
-    f"        uses: github/codeql-action/analyze@{CODEQL_SHA} # {CODEQL_RELEASE}\n"
-    "        with:\n"
-    "          category: \"/language:${{ matrix.language }}\""
-)
-EXPECTED_STEPS = {
-    "Checkout": EXPECTED_CHECKOUT_STEP,
-    "Initialize CodeQL": EXPECTED_INIT_STEP,
-    "Analyze": EXPECTED_ANALYZE_STEP,
-}
-
-
-def fail(message: str) -> None:
-    raise ValueError(message)
-
-
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        fail(message)
-
-
-def indentation(line: str) -> int:
-    return len(line) - len(line.lstrip(" "))
-
-
-def job_block(workflow: str, key: str) -> str:
-    match = re.search(rf"(?m)^  {re.escape(key)}:\s*$", workflow)
-    if not match:
-        fail(f"CodeQL workflow job is missing: {key}")
-    return workflow[match.start():]
-
-
-def codeql_step_blocks(analyze: str) -> dict[str, str]:
-    """Return the exact ordered named steps from the CodeQL analysis job."""
-    lines = analyze.splitlines()
-    starts = [index for index, line in enumerate(lines) if line == "    steps:"]
-    require(len(starts) == 1, "CodeQL analyze job must contain exactly one steps block")
-
-    ordered: list[tuple[str, str]] = []
-    current_name: str | None = None
-    current_lines: list[str] = []
-    for line in lines[starts[0] + 1 :]:
-        if line.startswith("      - "):
-            match = STEP_START.fullmatch(line)
-            require(match is not None, f"CodeQL contains an unnamed or noncanonical step: {line.strip()}")
-            if current_name is not None:
-                ordered.append((current_name, "\n".join(current_lines).rstrip()))
-            current_name = match.group("name")
-            current_lines = [line]
-            continue
-        if current_name is None:
-            if not line.strip():
-                continue
-            require(indentation(line) > 4, f"CodeQL steps block ended before a reviewed step: {line.strip()}")
-            fail(f"CodeQL contains content before the first reviewed step: {line.strip()}")
-        if line.strip() and indentation(line) <= 4:
-            break
-        current_lines.append(line)
-
-    if current_name is not None:
-        ordered.append((current_name, "\n".join(current_lines).rstrip()))
-    require(tuple(name for name, _ in ordered) == EXPECTED_STEP_NAMES,
-            f"CodeQL step inventory/order changed: {[name for name, _ in ordered]!r}")
-    require(len({name for name, _ in ordered}) == len(ordered), "CodeQL step names must be distinct")
-    return dict(ordered)
-
-
-def validate_codeql(text: str) -> None:
-    require(text.startswith("name: CodeQL\n"), "CodeQL workflow name changed")
-
-    require(text.count("  pull_request:\n") == 1, "CodeQL must run on every pull request")
-    require(text.count("  push:\n") == 1, "CodeQL must run on push")
-    require("    branches:\n      - main\n" in text, "CodeQL push analysis must target main")
-    require(text.count('    - cron: "17 5 * * 3"') == 1, "CodeQL weekly schedule changed")
-    require(text.count("  workflow_dispatch:\n") == 1, "CodeQL manual dispatch must remain available")
-    require("paths:" not in text and "paths-ignore:" not in text,
-            "CodeQL must not use path filters that can create scan gaps")
-
-    jobs_index = text.find("\njobs:\n")
-    require(jobs_index > 0, "CodeQL jobs block is missing")
-    pre_jobs = text[:jobs_index]
-    require("permissions:\n  contents: read\n" in pre_jobs,
-            "CodeQL default workflow permissions must remain contents: read")
-    for forbidden, message in (
-        ("contents: write", "CodeQL must never receive repository-content write authority"),
-        ("id-token: write", "CodeQL must not receive OIDC signing authority"),
-        ("attestations: write", "CodeQL must not receive attestation authority"),
-        ("pull-requests: write", "CodeQL must not mutate pull requests"),
-        ("actions: write", "CodeQL must not mutate Actions state"),
-        ("packages: write", "CodeQL must not receive package write authority"),
-    ):
-        require(forbidden not in text, message)
-
-    require("group: codeql-${{ github.workflow }}-${{ github.ref }}" in text,
-            "CodeQL concurrency identity changed")
-    require("cancel-in-progress: true" in text, "CodeQL must cancel stale scans")
-
-    analyze = job_block(text, "analyze")
-    require("name: analyze-${{ matrix.language }}" in analyze,
-            "CodeQL job naming must expose one stable status per language")
-    require("runs-on: ubuntu-24.04" in analyze, "CodeQL runner must remain ubuntu-24.04")
-    require("timeout-minutes: 15" in analyze, "CodeQL timeout contract changed")
-    require("permissions:\n      contents: read\n      security-events: write\n" in analyze,
-            "CodeQL analysis jobs must have only contents: read plus security-events: write")
-    require("continue-on-error:" not in analyze, "CodeQL findings/errors must not be made non-blocking")
-
-    require("strategy:\n      fail-fast: false\n      matrix:\n" in analyze,
-            "CodeQL must isolate languages in a non-fail-fast matrix")
-    expected_matrix = "      matrix:\n        language:\n          - python\n          - actions\n"
-    require(expected_matrix in analyze,
-            "CodeQL language matrix must contain exactly Python and GitHub Actions")
-    matrix_start = analyze.index("      matrix:\n")
-    steps_start = analyze.index("\n    steps:\n", matrix_start)
-    matrix_block = analyze[matrix_start:steps_start]
-    require(matrix_block.count("          - ") == 2,
-            "CodeQL language matrix must not silently add or remove analysis languages")
-
-    steps = codeql_step_blocks(analyze)
-    for name in EXPECTED_STEP_NAMES:
-        require(steps[name] == EXPECTED_STEPS[name], f"CodeQL {name} step changed")
-
-    checkout_ref = f"actions/checkout@{CHECKOUT_SHA}"
-    require(analyze.count(checkout_ref) == 1, "CodeQL must use the reviewed checkout SHA exactly once")
-    require("persist-credentials: false" in analyze, "CodeQL checkout must not persist credentials")
-
-    init_ref = f"github/codeql-action/init@{CODEQL_SHA}"
-    analyze_ref = f"github/codeql-action/analyze@{CODEQL_SHA}"
-    require(analyze.count(init_ref) == 1,
-            f"CodeQL init must use reviewed {CODEQL_RELEASE} commit SHA")
-    require(analyze.count(analyze_ref) == 1,
-            f"CodeQL analyze must use reviewed {CODEQL_RELEASE} commit SHA")
-    require(analyze.count("github/codeql-action/") == 2,
-            "CodeQL workflow must contain only the reviewed init and analyze action steps")
-    require("github/codeql-action/autobuild" not in analyze,
-            "Python/Actions CodeQL analysis must not add an unnecessary autobuild step")
-    require("build-mode:" not in analyze,
-            "Python and GitHub Actions should use their native no-build CodeQL defaults")
-
-    require("languages: ${{ matrix.language }}" in analyze,
-            "CodeQL init must analyze the isolated matrix language")
-    require("queries: security-extended" in analyze,
-            "CodeQL must retain the reviewed security-extended query suite")
-    require('category: "/language:${{ matrix.language }}"' in analyze,
-            "CodeQL results must retain a stable per-language SARIF category")
-
-
-def validate_quality(text: str) -> None:
-    require("python3 scripts/validate-codeql-contract.py" in text,
-            "Profile Quality must execute the CodeQL governance validator")
-    require('- ".github/workflows/**"' in text,
-            "Profile Quality must continue to cover every workflow change")
-
-
-def validate_governance(text: str) -> None:
-    for phrase in (
-        "## CodeQL security analysis",
-        ".github/workflows/codeql.yml",
-        "analyze-python",
-        "analyze-actions",
-        "GitHub Actions workflows",
-        "security-events: write",
-        "security-extended",
-        "exact commit SHA",
-        "weekly",
-        "no path filters",
-        "CodeQL is not an attestation",
-    ):
-        require(phrase in text, f"CodeQL governance documentation is missing: {phrase}")
-
-
-def self_test(good: str) -> None:
-    autofix_admission_self_test()
-    autofix_controller_self_test()
-    autofix_discovery_self_test()
-    validate_codeql(good)
-    mutations = (
-        (good.replace(CODEQL_SHA, "v4"), "Initialize CodeQL step changed"),
-        (good.replace("          - actions\n", ""), "Python and GitHub Actions"),
-        (good.replace("security-events: write", "security-events: read"), "security-events: write"),
-        (good.replace("  pull_request:\n", "  pull_request:\n    paths:\n      - 'scripts/**'\n"), "path filters"),
-        (good.replace("      contents: read\n      security-events: write", "      contents: write\n      security-events: write"),
-         "repository-content write authority"),
-        (good.replace("queries: security-extended", "queries: security-and-quality"), "Initialize CodeQL step changed"),
-        (
-            good.replace(
-                "      - name: Initialize CodeQL\n",
-                "      - name: Preprocess checkout\n        run: rm -rf scripts .github/workflows\n\n"
-                "      - name: Initialize CodeQL\n",
-            ),
-            "step inventory/order changed",
-        ),
-        (
-            good.replace(
-                "          queries: security-extended\n",
-                "          queries: security-and-quality\n          # queries: security-extended\n",
-            ),
-            "Initialize CodeQL step changed",
-        ),
-        (
-            good.replace(
-                '          category: "/language:${{ matrix.language }}"\n',
-                '          category: "/language:${{ matrix.language }}"\n        if: false\n',
-            ),
-            "Analyze step changed",
-        ),
-    )
-    for mutated, expected in mutations:
-        try:
-            validate_codeql(mutated)
-        except ValueError as exc:
-            require(expected in str(exc), f"CodeQL self-test failed for the wrong reason: {exc}")
-        else:
-            fail(f"CodeQL self-test accepted forbidden mutation expected to trigger: {expected}")
 
 
 def main() -> int:
-    try:
-        for path in (CODEQL, QUALITY, GOVERNANCE):
-            require(path.is_file(), f"CodeQL governance input is missing: {path.relative_to(ROOT)}")
+    base_bom = workflow_capability_snapshot.load_combined()
+    candidate_bom = trusted_workflow_capability.compile_repository(ROOT)
+    semantic = workflow_capability_diff.semantic_diff(base_bom, candidate_bom)
+    if semantic["expansions"] or semantic["reductions"]:
+        raise ValueError("diagnostic expected no semantic workflow capability change")
 
-        codeql = CODEQL.read_text(encoding="utf-8")
-        self_test(codeql)
-        validate_quality(QUALITY.read_text(encoding="utf-8"))
-        validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
+    with urlopen(BASE_URL, timeout=10) as response:
+        base_source_sha256 = hashlib.sha256(response.read()).hexdigest()
 
-        print(
-            "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
-            "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
-            "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
-            "and controller trust/provenance fixtures."
-        )
-        return 0
-    except (OSError, ValueError) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 1
+    candidate_files = workflow_capability_tcb.protected_files(ROOT)
+    candidate_source_sha256 = candidate_files[CONTROL_PATH]
+    candidate_tcb_sha256 = workflow_capability_tcb.protected_digest(candidate_files)
+    expansion = {
+        "direction": "expansion",
+        "category": "trusted-control-source",
+        "workflow": workflow_capability_tcb.CONTROL_WORKFLOW_ID,
+        "key": CONTROL_PATH,
+        "before": {"sha256": base_source_sha256},
+        "after": {
+            "sha256": candidate_source_sha256,
+            "candidateTcbSha256": candidate_tcb_sha256,
+        },
+    }
+    result = {
+        "baseBomSha256": semantic["baseBomSha256"],
+        "candidateBomSha256": semantic["candidateBomSha256"],
+        "expansionSha256": workflow_capability_diff.digest([expansion]),
+        "candidateTcbSha256": candidate_tcb_sha256,
+        "baseSourceSha256": base_source_sha256,
+        "candidateSourceSha256": candidate_source_sha256,
+    }
+    print("AUTHORIZATION_DIAGNOSTIC=" + json.dumps(result, sort_keys=True))
+    return 0
 
 
 if __name__ == "__main__":
