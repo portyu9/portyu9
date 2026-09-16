@@ -272,11 +272,10 @@ jobs:
           CODEQL_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"
           DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"
           PROFILE_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"
-          CAPABILITY_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"
-          for WORKFLOW_ID in "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" "$CAPABILITY_WORKFLOW_ID"; do
+          for WORKFLOW_ID in "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID"; do
             [[ "$WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
           done
-          test "$(printf '%s\n' "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" "$CAPABILITY_WORKFLOW_ID" | LC_ALL=C sort -u | wc -l)" = "4"
+          test "$(printf '%s\n' "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" | LC_ALL=C sort -u | wc -l)" = "3"
 
           COMPLETE=false
           for ATTEMPT in $(seq 1 60); do
@@ -319,15 +318,31 @@ jobs:
           done
           test "$COMPLETE" = "true"
 
+          jq -n \
+            --argjson prNumber "$PR_NUMBER" \
+            --argjson originRunId "$RUN_ID" \
+            --argjson alertNumber "$ALERT_NUMBER" \
+            --arg baseSha "$BASE_SHA" \
+            --arg headSha "$HEAD_SHA" \
+            '{event_type:"codeql-autofix-admission",client_payload:{prNumber:$prNumber,originRunId:$originRunId,alertNumber:$alertNumber,baseSha:$baseSha,headSha:$headSha}}' \
+            > admission-dispatch.json
+          gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
+
           TRUSTED_READY=false
           GHAS_READY=false
           for ATTEMPT in $(seq 1 60); do
-            TRUSTED_RUNS="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_run&per_page=100")"
-            TRUSTED_MATCHES="$(jq -c --argjson workflow "$CAPABILITY_WORKFLOW_ID" '[.workflow_runs[] | select(.workflow_id == $workflow)]' <<<"$TRUSTED_RUNS")"
-            if [ "$(jq 'length' <<<"$TRUSTED_MATCHES")" = "1" ]; then
-              jq -e --arg head "$HEAD_SHA" --arg branch "$BRANCH" --arg repo "$TARGET_REPOSITORY" '.[0] | .event == "workflow_run" and .head_sha == $head and .head_branch == $branch and .head_repository.full_name == $repo and .status == "completed" and .conclusion == "success"' <<<"$TRUSTED_MATCHES" >/dev/null && TRUSTED_READY=true || true
-            elif [ "$(jq 'length' <<<"$TRUSTED_MATCHES")" != "0" ]; then
-              echo "ERROR: exact Autofix trusted capability-admission run is ambiguous" >&2
+            TRUSTED="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100")"
+            TRUSTED_COUNT="$(jq -r .total_count <<<"$TRUSTED")"
+            [[ "$TRUSTED_COUNT" =~ ^[0-9]+$ ]]
+            if [ "$TRUSTED_COUNT" = "1" ]; then
+              if jq -e --arg head "$HEAD_SHA" '.check_runs[0] | .name == "trusted-capability-admission" and .head_sha == $head and .app.id == 15368 and .status == "completed" and .conclusion == "success"' <<<"$TRUSTED" >/dev/null; then
+                TRUSTED_READY=true
+              elif jq -e '.check_runs[0] | .status == "completed" and .conclusion != "success"' <<<"$TRUSTED" >/dev/null; then
+                echo "ERROR: trusted capability-admission check rejected the exact Autofix head" >&2
+                exit 1
+              fi
+            elif [ "$TRUSTED_COUNT" -gt 1 ]; then
+              echo "ERROR: exact Autofix trusted capability-admission check is ambiguous" >&2
               exit 1
             fi
 

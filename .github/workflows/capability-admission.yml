@@ -7,16 +7,15 @@ on:
       - reopened
       - synchronize
       - ready_for_review
-  workflow_run:
-    workflows:
-      - Profile quality
+  repository_dispatch:
     types:
-      - requested
-    branches:
-      - "codeql-autofix/**"
+      - codeql-autofix-admission
 
 permissions:
+  actions: read
+  checks: write
   contents: read
+  pull-requests: read
 
 env:
   PYTHON_VERSION: "3.13.15"
@@ -27,39 +26,52 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
+      actions: read
+      checks: write
       contents: read
+      pull-requests: read
 
     steps:
       - name: Bind exact candidate context
         id: candidate
         env:
+          GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           TARGET_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          DISPATCH=false
 
           case "$EVENT_NAME" in
             pull_request_target)
               PR="$(jq -c '.pull_request' "$GITHUB_EVENT_PATH")"
               HEAD_REPOSITORY="$(jq -r '.head.repo.full_name' <<<"$PR")"
               ;;
-            workflow_run)
-              test "$(jq -r '.workflow_run.event // ""' "$GITHUB_EVENT_PATH")" = "pull_request"
-              test "$(jq -r '.workflow_run.name // ""' "$GITHUB_EVENT_PATH")" = "Profile quality"
-              test "$(jq -r '.workflow_run.path // ""' "$GITHUB_EVENT_PATH")" = ".github/workflows/profile-quality.yml"
-              test "$(jq -r '.workflow_run.run_attempt // 0' "$GITHUB_EVENT_PATH")" = "1"
-              test "$(jq -r '.workflow_run.actor.login // ""' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"
-              PULLS="$(jq -c '.workflow_run.pull_requests' "$GITHUB_EVENT_PATH")"
-              test "$(jq 'length' <<<"$PULLS")" = "1"
-              PR="$(jq -c '.[0]' <<<"$PULLS")"
-              test "$(jq -r '.workflow_run.head_branch' "$GITHUB_EVENT_PATH")" = "$(jq -r '.head.ref' <<<"$PR")"
-              test "$(jq -r '.workflow_run.head_sha' "$GITHUB_EVENT_PATH")" = "$(jq -r '.head.sha' <<<"$PR")"
-              REPOSITORY_ID="$(jq -r '.repository.id' "$GITHUB_EVENT_PATH")"
-              [[ "$REPOSITORY_ID" =~ ^[1-9][0-9]*$ ]]
-              test "$(jq -r '.base.repo.id' <<<"$PR")" = "$REPOSITORY_ID"
-              test "$(jq -r '.head.repo.id' <<<"$PR")" = "$REPOSITORY_ID"
+            repository_dispatch)
+              test "$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")" = "codeql-autofix-admission"
+              PR_NUMBER="$(jq -r '.client_payload.prNumber // 0' "$GITHUB_EVENT_PATH")"
+              ORIGIN_RUN_ID="$(jq -r '.client_payload.originRunId // 0' "$GITHUB_EVENT_PATH")"
+              ALERT_NUMBER="$(jq -r '.client_payload.alertNumber // 0' "$GITHUB_EVENT_PATH")"
+              EXPECTED_BASE_SHA="$(jq -r '.client_payload.baseSha // ""' "$GITHUB_EVENT_PATH")"
+              EXPECTED_HEAD_SHA="$(jq -r '.client_payload.headSha // ""' "$GITHUB_EVENT_PATH")"
+              [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+              [[ "$ORIGIN_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+              [[ "$ALERT_NUMBER" =~ ^[1-9][0-9]*$ ]]
+              [[ "$EXPECTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+              PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+              test "$(jq -r .state <<<"$PR")" = "open"
+              test "$(jq -r .draft <<<"$PR")" = "false"
+              test "$(jq -r .base.ref <<<"$PR")" = "main"
+              test "$(jq -r .base.sha <<<"$PR")" = "$EXPECTED_BASE_SHA"
+              test "$(jq -r .head.sha <<<"$PR")" = "$EXPECTED_HEAD_SHA"
+              test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+              test "$(jq -r .head.ref <<<"$PR")" = "codeql-autofix/alert-${ALERT_NUMBER}/run-${ORIGIN_RUN_ID}"
+              test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_BASE_SHA"
               HEAD_REPOSITORY="$TARGET_REPOSITORY"
+              DISPATCH=true
               ;;
             *)
               echo "ERROR: unsupported capability-admission event: $EVENT_NAME" >&2
@@ -76,12 +88,17 @@ jobs:
           [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
-          if [ "$EVENT_NAME" = "workflow_run" ]; then
+          if [ "$DISPATCH" = "true" ]; then
             [[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]
+            printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
+            printf 'origin_run_id=%s\n' "$ORIGIN_RUN_ID" >> "$GITHUB_OUTPUT"
+            printf 'alert_number=%s\n' "$ALERT_NUMBER" >> "$GITHUB_OUTPUT"
           fi
 
+          printf 'dispatch=%s\n' "$DISPATCH" >> "$GITHUB_OUTPUT"
           printf 'base_ref=%s\n' "$BASE_REF" >> "$GITHUB_OUTPUT"
           printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
+          printf 'head_ref=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"
           printf 'head_repository=%s\n' "$HEAD_REPOSITORY" >> "$GITHUB_OUTPUT"
           printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
@@ -99,6 +116,65 @@ jobs:
 
       - name: Verify resolved Python runtime
         run: python3 scripts/verify-python-runtime.py
+
+      - name: Verify immutable Autofix controller provenance
+        if: steps.candidate.outputs.dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
+          HEAD_REF: ${{ steps.candidate.outputs.head_ref }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
+          ORIGIN_RUN_ID: ${{ steps.candidate.outputs.origin_run_id }}
+          ALERT_NUMBER: ${{ steps.candidate.outputs.alert_number }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$PR_NUMBER" -gt 0
+          test "$ORIGIN_RUN_ID" -gt 0
+          test "$ALERT_NUMBER" -gt 0
+
+          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json
+          python3 scripts/codeql_autofix_controller.py artifact \
+            --artifacts-file artifacts.json \
+            --run-id "$ORIGIN_RUN_ID" \
+            --alert "$ALERT_NUMBER" \
+            --out artifact.json
+          ARTIFACT_ID="$(jq -r .id artifact.json)"
+          test "$ARTIFACT_ID" -gt 0
+          test "$(jq -r .expired artifact.json)" = "false"
+          test "$(jq -r .workflow_run.id artifact.json)" = "$ORIGIN_RUN_ID"
+          test "$(jq -r .workflow_run.head_branch artifact.json)" = "main"
+          test "$(jq -r .workflow_run.head_sha artifact.json)" = "$BASE_SHA"
+
+          gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip
+          unzip -p receipt.zip codeql-autofix-receipt.json > verified-receipt.json
+          test -s verified-receipt.json
+          test "$(jq -r .controllerId verified-receipt.json)" = "portyu9-codeql-autofix-v1"
+          test "$(jq -r .flowId verified-receipt.json)" = "github-codeql-autofix-v1"
+          test "$(jq -r .repository verified-receipt.json)" = "$TARGET_REPOSITORY"
+          test "$(jq -r .workflowPath verified-receipt.json)" = ".github/workflows/codeql-autofix.yml"
+          test "$(jq -r .runId verified-receipt.json)" = "$ORIGIN_RUN_ID"
+          test "$(jq -r .baseSha verified-receipt.json)" = "$BASE_SHA"
+          test "$(jq -r .alertNumber verified-receipt.json)" = "$ALERT_NUMBER"
+          test "$(jq -r .targetBranch verified-receipt.json)" = "$HEAD_REF"
+          test "$(jq -r .autofixCommitSha verified-receipt.json)" = "$HEAD_SHA"
+          test "$(jq -r .prNumber verified-receipt.json)" = "$PR_NUMBER"
+          RECEIPT_ATTEMPT="$(jq -r .runAttempt verified-receipt.json)"
+          [[ "$RECEIPT_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+
+          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json
+          test "$(jq -r .id origin-run.json)" = "$ORIGIN_RUN_ID"
+          test "$(jq -r .run_attempt origin-run.json)" = "$RECEIPT_ATTEMPT"
+          test "$(jq -r .name origin-run.json)" = "CodeQL Autofix controller"
+          test "$(jq -r .path origin-run.json)" = ".github/workflows/codeql-autofix.yml"
+          test "$(jq -r .event origin-run.json)" = "$(jq -r .event verified-receipt.json)"
+          test "$(jq -r .head_branch origin-run.json)" = "main"
+          test "$(jq -r .head_sha origin-run.json)" = "$BASE_SHA"
+          test "$(jq -r .status origin-run.json)" = "in_progress"
+          test "$(jq -r '.conclusion // "null"' origin-run.json)" = "null"
 
       - name: Fetch exact candidate capability source as data
         env:
@@ -182,3 +258,33 @@ jobs:
             > capability-admission.json
           jq -e '.decision.allowed == true' capability-admission.json >/dev/null
           jq -cS '{decision: .decision, expansionCount: (.diff.expansions | length), reductionCount: (.diff.reductions | length)}' capability-admission.json
+
+      - name: Publish exact candidate trusted admission check
+        if: steps.candidate.outputs.dispatch == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
+          ORIGIN_RUN_ID: ${{ steps.candidate.outputs.origin_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$PR_NUMBER" -gt 0
+          test "$ORIGIN_RUN_ID" -gt 0
+          EXTERNAL_ID="codeql-autofix-admission:${ORIGIN_RUN_ID}:${PR_NUMBER}:${HEAD_SHA}"
+          CHECK="$(gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs" \
+            -f name=trusted-capability-admission \
+            -f head_sha="$HEAD_SHA" \
+            -f status=completed \
+            -f conclusion=success \
+            -f external_id="$EXTERNAL_ID" \
+            -f 'output[title]=Trusted capability admission passed' \
+            -f 'output[summary]=Trusted default-branch admission accepted the exact immutable CodeQL Autofix candidate.')"
+          [[ "$(jq -r .id <<<"$CHECK")" =~ ^[1-9][0-9]*$ ]]
+          test "$(jq -r .name <<<"$CHECK")" = "trusted-capability-admission"
+          test "$(jq -r .head_sha <<<"$CHECK")" = "$HEAD_SHA"
+          test "$(jq -r .status <<<"$CHECK")" = "completed"
+          test "$(jq -r .conclusion <<<"$CHECK")" = "success"
+          test "$(jq -r .external_id <<<"$CHECK")" = "$EXTERNAL_ID"
+          test "$(jq -r .app.id <<<"$CHECK")" = "15368"
