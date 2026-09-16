@@ -11,6 +11,13 @@
       "rationale": "Authorize the exact trusted-control-source change in PR #412 that fixes CodeQL alert #4 (py/clear-text-logging-sensitive-data) by removing caught exception contents from stderr; semantic workflow capabilities remain byte-for-byte unchanged."
     },
     {
+      "id": "cap-codeql-autofix-blank-metadata-compat",
+      "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
+      "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
+      "expansionSha256": "f8f3819da6f16794a8636fa2624c52cfe97fc4b577e60edb29fb0bd9f2f24bff",
+      "rationale": "Authorize the exact trusted-control-source compatibility change in PR #439 that canonicalizes GitHub CodeQL Autofix optional description/started_at metadata when null or whitespace-only while preserving strict validation for non-blank metadata, the known-status readiness gate, semantic workflow capabilities, provenance checks, required checks, GHAS/review-thread admission, and protected auto-merge authority unchanged."
+    },
+    {
       "id": "cap-codeql-autofix-bom-tcb-registration",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
