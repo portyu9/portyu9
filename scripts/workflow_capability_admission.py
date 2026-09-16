@@ -181,10 +181,9 @@ def main() -> int:
     try:
         if args.self_test:
             self_test()
-        decision, diff = evaluate(args.candidate_root, candidate_tree_sha=args.candidate_tree_sha)
+        decision, _diff = evaluate(args.candidate_root, candidate_tree_sha=args.candidate_tree_sha)
         print(workflow_capability_bom.canonical_json({
-            "decision": decision,
-            "diff": diff,
+            "allowed": decision["allowed"],
         }), end="")
         return 0
     except (OSError, ValueError):
