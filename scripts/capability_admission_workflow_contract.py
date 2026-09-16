@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "8bd4d488a934983d6cdbe3d2968002cdb94b7d78"
+EXPECTED_GIT_BLOB = "ec26fe497e7b008f2d1d47d265bfe29221890437"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -28,6 +28,11 @@ def validate_text(text: str) -> None:
     for event_type in ("opened", "reopened", "synchronize", "ready_for_review"):
         require(text.count(f"      - {event_type}\n") == 1,
                 f"trusted capability admission event type changed: {event_type}")
+    require(
+        '  workflow_run:\n    workflows:\n      - Profile quality\n    types:\n      - requested\n'
+        '    branches:\n      - "codeql-autofix/**"\n' in text,
+        "trusted capability admission workflow_run trigger changed",
+    )
     require(text.count("permissions:\n  contents: read") == 1,
             "trusted capability admission workflow permission changed")
     require(text.count("    permissions:\n      contents: read") == 1,
@@ -42,13 +47,50 @@ def validate_text(text: str) -> None:
 
     require(text.count(f"uses: {CHECKOUT}") == 1, "trusted admission checkout pin changed")
     require(text.count(f"uses: {SETUP_PYTHON}") == 1, "trusted admission Python setup pin changed")
-    require("ref: ${{ github.event.pull_request.base.sha }}" in text,
-            "trusted admission no longer checks out the exact trusted base SHA")
+    require("- name: Bind exact candidate context" in text,
+            "trusted admission lost exact event-context binding")
+    require("EVENT_NAME: ${{ github.event_name }}" in text,
+            "trusted admission event identity binding changed")
+    require("TARGET_REPOSITORY: ${{ github.repository }}" in text,
+            "trusted admission repository identity binding changed")
+    require('PR="$(jq -c \'.pull_request\' "$GITHUB_EVENT_PATH")"' in text,
+            "trusted admission pull_request_target binding changed")
+    require('PULLS="$(jq -c \'.workflow_run.pull_requests\' "$GITHUB_EVENT_PATH")"' in text,
+            "trusted admission workflow_run PR-set binding changed")
+    require('test "$(jq \'length\' <<<"$PULLS")" = "1"' in text,
+            "trusted admission workflow_run single-PR proof changed")
+    for workflow_run_binding in (
+        '.workflow_run.event // ""',
+        '.workflow_run.name // ""',
+        '.workflow_run.path // ""',
+        '.workflow_run.run_attempt // 0',
+        '.workflow_run.actor.login // ""',
+        'github-actions[bot]',
+        '.workflow_run.head_branch',
+        '.workflow_run.head_sha',
+        '.repository.id',
+        '.base.repo.id',
+        '.head.repo.id',
+    ):
+        require(workflow_run_binding in text,
+                f"trusted admission workflow_run identity proof changed: {workflow_run_binding}")
+    require('[[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]' in text,
+            "trusted admission Autofix branch identity binding changed")
+    for output_name in ("base_ref", "base_sha", "head_repository", "head_sha"):
+        require(f"printf '{output_name}=%s\\n'" in text,
+                f"trusted admission lost verified context output: {output_name}")
+
+    require("ref: ${{ steps.candidate.outputs.base_sha }}" in text,
+            "trusted admission no longer checks out the exact verified trusted base SHA")
     require("persist-credentials: false" in text and "fetch-depth: 1" in text,
             "trusted admission checkout credential/depth boundary changed")
-    require("HEAD_SHA: ${{ github.event.pull_request.head.sha }}" in text,
+    require("BASE_REF: ${{ steps.candidate.outputs.base_ref }}" in text,
+            "trusted admission base ref identity binding changed")
+    require("BASE_SHA: ${{ steps.candidate.outputs.base_sha }}" in text,
+            "trusted admission base SHA identity binding changed")
+    require("HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}" in text,
             "trusted admission candidate head identity binding changed")
-    require("HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}" in text,
+    require("HEAD_REPOSITORY: ${{ steps.candidate.outputs.head_repository }}" in text,
             "trusted admission candidate repository identity binding changed")
 
     for endpoint in (
@@ -77,7 +119,8 @@ def validate_text(text: str) -> None:
 
     require(text.count("actions/checkout@") == 1,
             "trusted admission gained an additional checkout execution surface")
-    require("ref: ${{ github.event.pull_request.head.sha }}" not in text,
+    require("ref: ${{ github.event.pull_request.head.sha }}" not in text and
+            "ref: ${{ steps.candidate.outputs.head_sha }}" not in text,
             "trusted admission must never checkout candidate code")
     require("python3 candidate-capability-source" not in text and
             "source candidate-capability-source" not in text and
@@ -107,8 +150,8 @@ def self_test() -> None:
         raise ValueError("trusted admission contract accepted write authority")
     try:
         validate_text(text.replace(
-            "ref: ${{ github.event.pull_request.base.sha }}",
-            "ref: ${{ github.event.pull_request.head.sha }}",
+            "ref: ${{ steps.candidate.outputs.base_sha }}",
+            "ref: ${{ steps.candidate.outputs.head_sha }}",
             1,
         ))
     except ValueError as exc:
@@ -127,9 +170,16 @@ def self_test() -> None:
                 f"trusted admission tree-binding self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("trusted admission contract accepted an unbound candidate TCB")
+    try:
+        validate_text(text.replace("github-actions[bot]", "portyu9", 1))
+    except ValueError as exc:
+        require("workflow_run identity proof" in str(exc),
+                f"trusted admission bot-binding self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("trusted admission contract accepted a non-bot workflow_run actor")
 
 
 if __name__ == "__main__":
     self_test()
     validate()
-    print("Trusted capability admission workflow contract passed: exact bytes, read-only authority, base-only execution, candidate TCB bound to exact tree.")
+    print("Trusted capability admission workflow contract passed: exact bytes, read-only authority, base-only execution, candidate TCB bound to exact event-derived tree.")

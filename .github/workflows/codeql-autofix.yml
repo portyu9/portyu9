@@ -322,10 +322,10 @@ jobs:
           TRUSTED_READY=false
           GHAS_READY=false
           for ATTEMPT in $(seq 1 60); do
-            TRUSTED_RUNS="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request_target&per_page=100")"
+            TRUSTED_RUNS="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_run&per_page=100")"
             TRUSTED_MATCHES="$(jq -c --argjson workflow "$CAPABILITY_WORKFLOW_ID" '[.workflow_runs[] | select(.workflow_id == $workflow)]' <<<"$TRUSTED_RUNS")"
             if [ "$(jq 'length' <<<"$TRUSTED_MATCHES")" = "1" ]; then
-              jq -e --arg head "$HEAD_SHA" --arg branch "$BRANCH" --arg repo "$TARGET_REPOSITORY" '.[0] | .event == "pull_request_target" and .head_sha == $head and .head_branch == $branch and .head_repository.full_name == $repo and .status == "completed" and .conclusion == "success"' <<<"$TRUSTED_MATCHES" >/dev/null && TRUSTED_READY=true || true
+              jq -e --arg head "$HEAD_SHA" --arg branch "$BRANCH" --arg repo "$TARGET_REPOSITORY" '.[0] | .event == "workflow_run" and .head_sha == $head and .head_branch == $branch and .head_repository.full_name == $repo and .status == "completed" and .conclusion == "success"' <<<"$TRUSTED_MATCHES" >/dev/null && TRUSTED_READY=true || true
             elif [ "$(jq 'length' <<<"$TRUSTED_MATCHES")" != "0" ]; then
               echo "ERROR: exact Autofix trusted capability-admission run is ambiguous" >&2
               exit 1
