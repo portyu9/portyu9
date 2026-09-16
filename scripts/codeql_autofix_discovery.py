@@ -53,9 +53,10 @@ def normalize_optional_metadata(value: Any, label: str, *, maximum: int) -> str 
     if value is None:
         return None
     require(isinstance(value, str), f"{label} must be a string or null")
-    if value.strip() == "":
+    normalized = value.strip()
+    if normalized == "":
         return None
-    return require_text(value, label, maximum=maximum)
+    return require_text(normalized, label, maximum=maximum)
 
 
 def normalize_location(value: Any) -> dict[str, Any]:
@@ -269,6 +270,19 @@ def self_test() -> None:
         and blank_metadata["description"] is None
         and blank_metadata["startedAt"] is None,
         "Autofix status self-test did not canonicalize blank optional GitHub metadata",
+    )
+    padded_metadata = normalize_autofix_status(
+        selected,
+        {
+            "status": "success",
+            "description": "  Replace the sensitive exception log with a constant message.  ",
+            "started_at": " 2026-09-15T22:00:00Z ",
+        },
+    )
+    require(
+        padded_metadata["description"] == "Replace the sensitive exception log with a constant message."
+        and padded_metadata["startedAt"] == "2026-09-15T22:00:00Z",
+        "Autofix status self-test did not canonicalize surrounding whitespace in optional GitHub metadata",
     )
     expect_failure(
         lambda: normalize_autofix_status(
