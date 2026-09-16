@@ -33,7 +33,7 @@
       "triggers": ["repository_dispatch", "schedule", "workflow_run"],
       "permissions": {
         "actions": "write",
-        "checks": "read",
+        "checks": "write",
         "contents": "write",
         "pull-requests": "write",
         "security-events": "write"
@@ -44,7 +44,7 @@
           "needs": [],
           "permissions": {
             "actions": "write",
-            "checks": "read",
+            "checks": "write",
             "contents": "write",
             "pull-requests": "write",
             "security-events": "write"
