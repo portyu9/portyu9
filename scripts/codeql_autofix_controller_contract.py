@@ -33,7 +33,6 @@ ALLOWED_MUTATIONS = {
     "POST /repos/{repository}/code-scanning/alerts/{alert}/autofix",
     "POST /repos/{repository}/code-scanning/alerts/{alert}/autofix/commits",
     "POST /repos/{repository}/pulls",
-    "POST /repos/{repository}/actions/runs/{run}/approve",
     "POST /repos/{repository}/dispatches",
     "GRAPHQL enablePullRequestAutoMerge",
 }
@@ -284,6 +283,10 @@ def self_test() -> None:
     stale_run = dict(workflow_run)
     stale_run["head_sha"] = "c" * 40
     expect_failure(lambda: validate_receipt(receipt, workflow_run=stale_run, artifact=artifact), "base SHA")
+
+    wrong_attempt = dict(workflow_run)
+    wrong_attempt["run_attempt"] = 2
+    expect_failure(lambda: validate_receipt(receipt, workflow_run=wrong_attempt, artifact=artifact), "attempt mismatch")
 
     branch_run = dict(workflow_run)
     branch_run["head_branch"] = "feature"
