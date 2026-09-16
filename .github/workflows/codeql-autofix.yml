@@ -1,0 +1,328 @@
+name: CodeQL Autofix controller
+
+on:
+  workflow_run:
+    workflows:
+      - CodeQL
+    types:
+      - completed
+    branches:
+      - main
+  schedule:
+    - cron: "37 * * * *"
+  repository_dispatch:
+    types:
+      - codeql-autofix
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  pull-requests: write
+  security-events: write
+
+env:
+  PYTHON_VERSION: "3.13.15"
+
+jobs:
+  controller:
+    name: trusted-codeql-autofix-controller
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: codeql-autofix-controller
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      pull-requests: write
+      security-events: write
+
+    steps:
+      - name: Checkout exact trusted default-branch source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
+      - name: Bind trusted trigger and current main
+        id: base
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          TRUSTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          [[ "$TRUSTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          python3 scripts/codeql_autofix_controller.py trigger \
+            --event-name "$EVENT_NAME" \
+            --event-file "$GITHUB_EVENT_PATH" \
+            --trusted-sha "$TRUSTED_SHA" \
+            --out trigger.json
+          gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > main-ref.json
+          python3 scripts/codeql_autofix_controller.py main \
+            --ref-file main-ref.json \
+            --expected-sha "$TRUSTED_SHA" \
+            --out main.json
+          BASE_SHA="$(jq -r .baseSha main.json)"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Discover one exact-main CodeQL alert
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100" \
+            > alert-pages.json
+          python3 scripts/codeql_autofix_controller.py discover \
+            --alerts-file alert-pages.json \
+            --base-sha "$BASE_SHA" \
+            --out discovery.json
+          if jq -e '.target != null' discovery.json >/dev/null; then
+            jq -c '.target' discovery.json > target.json
+            ALERT_NUMBER="$(jq -r .number target.json)"
+            test "$ALERT_NUMBER" -gt 0
+            printf 'has_target=true\n' >> "$GITHUB_OUTPUT"
+            printf 'alert_number=%s\n' "$ALERT_NUMBER" >> "$GITHUB_OUTPUT"
+          else
+            printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Locate an existing remediation PR
+        if: steps.target.outputs.has_target == 'true'
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          ALERT_NUMBER: ${{ steps.target.outputs.alert_number }}
+        run: |
+          set -euo pipefail
+          gh api --paginate --slurp \
+            "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" \
+            > open-pr-pages.json
+          python3 scripts/codeql_autofix_controller.py locate \
+            --prs-file open-pr-pages.json \
+            --alert "$ALERT_NUMBER" \
+            --out existing.json
+          EXISTS="$(jq -r .exists existing.json)"
+          test "$EXISTS" = "true" -o "$EXISTS" = "false"
+          printf 'exists=%s\n' "$EXISTS" >> "$GITHUB_OUTPUT"
+          if [ "$EXISTS" = "true" ]; then
+            printf 'pr_number=%s\n' "$(jq -r .pr.prNumber existing.json)" >> "$GITHUB_OUTPUT"
+            printf 'origin_run_id=%s\n' "$(jq -r .pr.originRunId existing.json)" >> "$GITHUB_OUTPUT"
+            printf 'head_sha=%s\n' "$(jq -r .pr.headSha existing.json)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Request and inspect GitHub CodeQL Autofix
+        if: steps.target.outputs.has_target == 'true' && steps.existing.outputs.exists == 'false'
+        id: autofix
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          ALERT_NUMBER: ${{ steps.target.outputs.alert_number }}
+        run: |
+          set -euo pipefail
+          gh api -X POST \
+            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix" \
+            > autofix-create.json
+          gh api \
+            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix" \
+            > autofix-status.json
+          python3 scripts/codeql_autofix_controller.py status \
+            --target-file target.json \
+            --status-file autofix-status.json \
+            --out normalized-autofix.json
+          READY="$(jq -r .ready normalized-autofix.json)"
+          test "$READY" = "true" -o "$READY" = "false"
+          printf 'ready=%s\n' "$READY" >> "$GITHUB_OUTPUT"
+
+      - name: Commit exact Autofix to a dedicated branch and open one PR
+        if: steps.target.outputs.has_target == 'true' && steps.existing.outputs.exists == 'false' && steps.autofix.outputs.ready == 'true'
+        id: create
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          ALERT_NUMBER: ${{ steps.target.outputs.alert_number }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$ALERT_NUMBER" -gt 0
+          test "$RUN_ID" -gt 0
+          test "$RUN_ATTEMPT" -gt 0
+          BRANCH="codeql-autofix/alert-${ALERT_NUMBER}/run-${RUN_ID}"
+          TARGET_REF="refs/heads/${BRANCH}"
+
+          if gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" > existing-ref.json 2>/dev/null; then
+            echo "ERROR: deterministic Autofix branch already exists without an open matching PR" >&2
+            exit 1
+          fi
+
+          gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs" \
+            -f ref="$TARGET_REF" \
+            -f sha="$BASE_SHA" \
+            > created-ref.json
+          test "$(jq -r .ref created-ref.json)" = "$TARGET_REF"
+          test "$(jq -r .object.sha created-ref.json)" = "$BASE_SHA"
+
+          gh api -X POST \
+            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits" \
+            -f target_ref="$TARGET_REF" \
+            -f message="CodeQL Autofix alert #${ALERT_NUMBER}" \
+            > autofix-commit.json
+          python3 scripts/codeql_autofix_controller.py commit \
+            --response-file autofix-commit.json \
+            --branch "$BRANCH" \
+            --out committed.json
+          HEAD_SHA="$(jq -r .headSha committed.json)"
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$HEAD_SHA" != "$BASE_SHA"
+
+          gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" > compare.json
+          python3 scripts/codeql_autofix_controller.py compare \
+            --compare-file compare.json \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --out compare-proof.json
+
+          RULE_ID="$(jq -r .ruleId target.json)"
+          PR_BODY="Trusted GitHub CodeQL Autofix for alert #${ALERT_NUMBER} (${RULE_ID}). Generated by ${RUN_ID}; protected checks and exact-head admission remain mandatory before auto-merge can be enabled."
+          gh api -X POST "repos/${TARGET_REPOSITORY}/pulls" \
+            -f title="CodeQL Autofix alert #${ALERT_NUMBER}" \
+            -f head="$BRANCH" \
+            -f base="main" \
+            -f body="$PR_BODY" \
+            -F draft=false \
+            > created-pr.json
+          python3 scripts/codeql_autofix_controller.py receipt \
+            --run-id "$RUN_ID" \
+            --run-attempt "$RUN_ATTEMPT" \
+            --event-name "$EVENT_NAME" \
+            --base-sha "$BASE_SHA" \
+            --target-file target.json \
+            --branch "$BRANCH" \
+            --head-sha "$HEAD_SHA" \
+            --pr-file created-pr.json \
+            --out codeql-autofix-receipt.json
+          PR_NUMBER="$(jq -r .prNumber codeql-autofix-receipt.json)"
+          RECEIPT_NAME="codeql-autofix-receipt-run-${RUN_ID}-alert-${ALERT_NUMBER}"
+          printf 'created=true\n' >> "$GITHUB_OUTPUT"
+          printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          printf 'receipt_name=%s\n' "$RECEIPT_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable controller provenance receipt
+        if: steps.create.outputs.created == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.create.outputs.receipt_name }}
+          path: codeql-autofix-receipt.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Verify an existing Autofix PR and enable protected auto-merge
+        if: steps.target.outputs.has_target == 'true' && steps.existing.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          ALERT_NUMBER: ${{ steps.target.outputs.alert_number }}
+          PR_NUMBER: ${{ steps.existing.outputs.pr_number }}
+          ORIGIN_RUN_ID: ${{ steps.existing.outputs.origin_run_id }}
+          EXPECTED_HEAD_SHA: ${{ steps.existing.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$ALERT_NUMBER" -gt 0
+          test "$PR_NUMBER" -gt 0
+          test "$ORIGIN_RUN_ID" -gt 0
+          [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}" > origin-run.json
+          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json
+          python3 scripts/codeql_autofix_controller.py artifact \
+            --artifacts-file artifacts.json \
+            --run-id "$ORIGIN_RUN_ID" \
+            --alert "$ALERT_NUMBER" \
+            --out artifact.json
+          ARTIFACT_ID="$(jq -r .id artifact.json)"
+          test "$ARTIFACT_ID" -gt 0
+          gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip
+          unzip -p receipt.zip codeql-autofix-receipt.json > verified-receipt.json
+          test -s verified-receipt.json
+
+          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > pr.json
+          test "$(jq -r .head.sha pr.json)" = "$EXPECTED_HEAD_SHA"
+          gh api --paginate --slurp \
+            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            > pr-file-pages.json
+          jq -n \
+            --slurpfile pr pr.json \
+            --slurpfile pages pr-file-pages.json \
+            '{pullRequest: $pr[0], files: [$pages[0][][] | .filename]}' \
+            > pr-wrapper.json
+
+          HEAD_SHA="$(jq -r .head.sha pr.json)"
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > admission-main-ref.json
+          gh api --paginate --slurp \
+            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \
+            > check-pages-raw.json
+          jq '[.[].check_runs[]]' check-pages-raw.json > check-pages.json
+          gh api \
+            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \
+            > ghas.json
+          gh api --paginate --slurp \
+            "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100" \
+            > pr-alert-pages.json
+          gh api graphql \
+            -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}' \
+            -f owner='portyu9' \
+            -f name='portyu9' \
+            -F number="$PR_NUMBER" \
+            > review-threads.json
+
+          python3 scripts/codeql_autofix_controller.py admit \
+            --receipt verified-receipt.json \
+            --workflow-run origin-run.json \
+            --artifact artifact.json \
+            --pr pr-wrapper.json \
+            --main-ref admission-main-ref.json \
+            --checks check-pages.json \
+            --ghas ghas.json \
+            --pr-alerts pr-alert-pages.json \
+            --threads review-threads.json \
+            --out admission.json
+          jq -e '.eligible == true' admission.json >/dev/null
+
+          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json
+          gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > final-main-ref.json
+          test "$(jq -r .head.sha final-pr.json)" = "$(jq -r .headSha admission.json)"
+          test "$(jq -r .object.sha final-main-ref.json)" = "$(jq -r .baseSha admission.json)"
+          PR_NODE_ID="$(jq -r .node_id final-pr.json)"
+          test -n "$PR_NODE_ID"
+          gh api graphql \
+            -f query='mutation($pullRequestId:ID!){enablePullRequestAutoMerge(input:{pullRequestId:$pullRequestId,mergeMethod:MERGE}){pullRequest{number merged autoMergeRequest{enabledAt}}}}' \
+            -f pullRequestId="$PR_NODE_ID" \
+            > auto-merge.json
+          test "$(jq -r .data.enablePullRequestAutoMerge.pullRequest.number auto-merge.json)" = "$PR_NUMBER"
+          jq -e '.data.enablePullRequestAutoMerge.pullRequest | (.merged == true or .autoMergeRequest.enabledAt != null)' \
+            auto-merge.json >/dev/null

@@ -1,0 +1,308 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "codeql-autofix",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload immutable controller provenance receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted default-branch source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "graphql",
+              "graphqlOperation": "mutation",
+              "method": "POST",
+              "mutating": true,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "graphql",
+              "graphqlOperation": "query",
+              "method": "POST",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix",
+              "method": "GET",
+              "mutating": false,
+              "step": "Request and inspect GitHub CodeQL Autofix"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix",
+              "method": "POST",
+              "mutating": true,
+              "step": "Request and inspect GitHub CodeQL Autofix"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits",
+              "method": "POST",
+              "mutating": true,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Discover one exact-main CodeQL alert"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind trusted trigger and current main"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/refs",
+              "method": "POST",
+              "mutating": true,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls",
+              "method": "POST",
+              "mutating": true,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and enable protected auto-merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Locate an existing remediation PR"
+            }
+          ],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "${{ steps.create.outputs.receipt_name }}",
+              "operation": "upload",
+              "path": "codeql-autofix-receipt.json",
+              "retention-days": "7",
+              "step": "Upload immutable controller provenance receipt"
+            }
+          ],
+          "id": "controller",
+          "mutations": [
+            {
+              "class": "git-ref",
+              "method": "POST",
+              "step": "Commit exact Autofix to a dedicated branch and open one PR",
+              "target": "repos/${TARGET_REPOSITORY}/git/refs"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Commit exact Autofix to a dedicated branch and open one PR",
+              "target": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Request and inspect GitHub CodeQL Autofix",
+              "target": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"
+            },
+            {
+              "class": "graphql-mutation",
+              "method": "POST",
+              "step": "Verify an existing Autofix PR and enable protected auto-merge",
+              "target": "graphql"
+            },
+            {
+              "class": "pull-request",
+              "method": "POST",
+              "step": "Commit exact Autofix to a dedicated branch and open one PR",
+              "target": "repos/${TARGET_REPOSITORY}/pulls"
+            }
+          ],
+          "name": "trusted-codeql-autofix-controller",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "write",
+            "pull-requests": "write",
+            "security-events": "write"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "CodeQL Autofix controller",
+      "path": ".github/workflows/codeql-autofix.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "repository_dispatch": {
+          "types": [
+            "codeql-autofix"
+          ]
+        },
+        "schedule": {
+          "cron": [
+            "37 * * * *"
+          ]
+        },
+        "workflow_run": {
+          "branches": [
+            "main"
+          ],
+          "types": [
+            "completed"
+          ],
+          "workflows": [
+            "CodeQL"
+          ]
+        }
+      },
+      "workflowPermissions": {
+        "actions": "read",
+        "checks": "read",
+        "contents": "write",
+        "pull-requests": "write",
+        "security-events": "write"
+      }
+    }
+  ]
+}

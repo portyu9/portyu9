@@ -28,6 +28,30 @@
         }
       }
     },
+    "codeql-autofix": {
+      "path": ".github/workflows/codeql-autofix.yml",
+      "triggers": ["repository_dispatch", "schedule", "workflow_run"],
+      "permissions": {
+        "actions": "read",
+        "checks": "read",
+        "contents": "write",
+        "pull-requests": "write",
+        "security-events": "write"
+      },
+      "jobs": {
+        "controller": {
+          "name": "trusted-codeql-autofix-controller",
+          "needs": [],
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "write",
+            "pull-requests": "write",
+            "security-events": "write"
+          }
+        }
+      }
+    },
     "capability-admission": {
       "path": ".github/workflows/capability-admission.yml",
       "triggers": ["pull_request_target"],
