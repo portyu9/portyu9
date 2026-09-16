@@ -77,20 +77,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_run&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/capability-admission.yml",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml",
               "method": "GET",
               "mutating": false,
@@ -154,6 +140,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100",
               "method": "GET",
               "mutating": false,
@@ -179,6 +172,13 @@
               "method": "GET",
               "mutating": false,
               "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve exact protected checks and queue admission retry"
             },
             {
               "client": "gh-api",
@@ -324,6 +324,12 @@
               "method": "POST",
               "step": "Commit exact Autofix to a dedicated branch and open one PR",
               "target": "repos/${TARGET_REPOSITORY}/git/refs"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Approve exact protected checks and queue admission retry",
+              "target": "repos/${TARGET_REPOSITORY}/dispatches"
             },
             {
               "class": "github-api-post",
