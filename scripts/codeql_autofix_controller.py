@@ -146,8 +146,13 @@ def validate_compare(value: Any, base_sha: str, head_sha: str) -> dict[str, Any]
     require(isinstance(base, Mapping) and base.get("sha") == base_sha, "compare base identity mismatch")
     require(isinstance(merge_base, Mapping) and merge_base.get("sha") == base_sha,
             "Autofix branch is not a direct descendant of the exact base")
-    require(value.get("status") in {"ahead", "identical"}, "Autofix compare has an unexpected ancestry status")
+    require(value.get("status") == "ahead", "Autofix compare has an unexpected ancestry status")
     require(value.get("ahead_by") == 1, "Autofix must add exactly one commit")
+    require(value.get("total_commits") == 1, "Autofix compare must report exactly one commit")
+    commits = value.get("commits")
+    require(isinstance(commits, list) and len(commits) == 1, "Autofix compare must expose exactly one commit")
+    head = commits[0]
+    require(isinstance(head, Mapping) and head.get("sha") == head_sha, "compare head identity mismatch")
     files = value.get("files")
     require(isinstance(files, list), "Autofix compare is missing changed files")
     paths: list[str] = []
@@ -158,8 +163,6 @@ def validate_compare(value: Any, base_sha: str, head_sha: str) -> dict[str, Any]
         require(item.get("status") in {"modified", "added", "removed", "renamed"}, "Autofix compare file status changed")
         paths.append(filename)
     allowed = admission.validate_changed_files(paths)
-    head = value.get("head_commit")
-    require(isinstance(head, Mapping) and head.get("sha") == head_sha, "compare head identity mismatch")
     return {"baseSha": base_sha, "headSha": head_sha, "changedFiles": list(allowed)}
 
 
@@ -333,6 +336,19 @@ def self_test() -> None:
     located = locate_existing(pages, 4)
     require(located["exists"] and located["pr"]["originRunId"] == 123, "existing PR locator changed")
     require(flatten_pages([[1], [2]]) == [1, 2], "pagination flattening changed")
+    head = "b" * 40
+    compare_fixture = {
+        "base_commit": {"sha": base},
+        "merge_base_commit": {"sha": base},
+        "status": "ahead",
+        "ahead_by": 1,
+        "total_commits": 1,
+        "commits": [{"sha": head}],
+        "files": [{"filename": "scripts/example.py", "status": "modified"}],
+    }
+    compare_proof = validate_compare(compare_fixture, base, head)
+    require(compare_proof["headSha"] == head and compare_proof["changedFiles"] == ["scripts/example.py"],
+            "REST compare commit identity fixture changed")
 
 
 def main() -> int:
