@@ -358,7 +358,6 @@ jobs:
           test "$ORIGIN_RUN_ID" -gt 0
           [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}" > origin-run.json
           gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json
           python3 scripts/codeql_autofix_controller.py artifact \
             --artifacts-file artifacts.json \
@@ -370,6 +369,10 @@ jobs:
           gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip
           unzip -p receipt.zip codeql-autofix-receipt.json > verified-receipt.json
           test -s verified-receipt.json
+          test "$(jq -r .runId verified-receipt.json)" = "$ORIGIN_RUN_ID"
+          RECEIPT_ATTEMPT="$(jq -r .runAttempt verified-receipt.json)"
+          [[ "$RECEIPT_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json
 
           gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > pr.json
           test "$(jq -r .head.sha pr.json)" = "$EXPECTED_HEAD_SHA"
