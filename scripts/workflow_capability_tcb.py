@@ -20,6 +20,7 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 PROTECTED_EXACT = {
     ".github/workflow-capability-bom-v1.json",
     ".github/workflow-capability-bom-v1-capability-admission.json",
+    ".github/workflow-capability-bom-v1-codeql-autofix.json",
     ".github/workflows/capability-admission.yml",
     "scripts/profile_stats_decision_receipt.py",
     "scripts/spotlight_decision_receipt.py",
@@ -148,6 +149,8 @@ def self_test() -> None:
             "TCB self-test lost admission module")
     require(is_protected_path("scripts/automation_policy.py"),
             "TCB self-test lost Automation Policy loader")
+    require(is_protected_path(".github/workflow-capability-bom-v1-codeql-autofix.json"),
+            "TCB self-test lost CodeQL Autofix BOM extension")
     for path in (
         "scripts/codeql_autofix_admission.py",
         "scripts/codeql_autofix_controller_contract.py",
