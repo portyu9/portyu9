@@ -2,6 +2,16 @@ name: Dependency review
 
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: Exact current main SHA for trusted controller dispatch
+        required: true
+        type: string
+      head_sha:
+        description: Exact candidate head SHA for trusted controller dispatch
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -24,9 +34,27 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Bind exact dispatched candidate
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ inputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$HEAD_SHA"
+          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+
       - name: Review dependency changes
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
+          base-ref: ${{ inputs.base_sha || github.event.pull_request.base.sha }}
+          head-ref: ${{ inputs.head_sha || github.event.pull_request.head.sha }}
           fail-on-severity: moderate
           fail-on-scopes: runtime, development, unknown
           license-check: false
