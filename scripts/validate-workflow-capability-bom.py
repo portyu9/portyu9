@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Diagnostic: report exact Dependabot controller BOM API-surface drift."""
+"""Diagnostic: report exact Dependabot controller BOM API-surface multiplicity drift."""
 from __future__ import annotations
 
+from collections import Counter
 import json
 import sys
 
@@ -21,19 +22,24 @@ def main() -> int:
         observed = next(w for w in snapshot["workflows"] if w["id"] == "dependabot-controller")
         expected_job = next(j for j in expected["jobs"] if j["id"] == "controller")
         observed_job = next(j for j in observed["jobs"] if j["id"] == "controller")
-        expected_surfaces = {stable(item): item for item in expected_job["apiSurfaces"]}
-        observed_surfaces = {stable(item): item for item in observed_job["apiSurfaces"]}
-        print("MISSING_CONTROLLER_API_SURFACES=" + json.dumps(
-            [expected_surfaces[key] for key in sorted(expected_surfaces.keys() - observed_surfaces.keys())],
-            sort_keys=True,
-            separators=(",", ":"),
+        expected_items = {stable(item): item for item in expected_job["apiSurfaces"]}
+        observed_items = {stable(item): item for item in observed_job["apiSurfaces"]}
+        expected_counts = Counter(stable(item) for item in expected_job["apiSurfaces"])
+        observed_counts = Counter(stable(item) for item in observed_job["apiSurfaces"])
+        deltas = []
+        for key in sorted(set(expected_counts) | set(observed_counts)):
+            delta = expected_counts[key] - observed_counts[key]
+            if delta:
+                deltas.append({
+                    "delta": delta,
+                    "expectedCount": expected_counts[key],
+                    "observedCount": observed_counts[key],
+                    "surface": expected_items.get(key, observed_items.get(key)),
+                })
+        print("CONTROLLER_API_SURFACE_MULTIPLICITY_DELTA=" + json.dumps(
+            deltas, sort_keys=True, separators=(",", ":")
         ))
-        print("EXTRA_CONTROLLER_API_SURFACES=" + json.dumps(
-            [observed_surfaces[key] for key in sorted(observed_surfaces.keys() - expected_surfaces.keys())],
-            sort_keys=True,
-            separators=(",", ":"),
-        ))
-        raise ValueError("diagnostic controller BOM surface drift")
+        raise ValueError("diagnostic controller BOM surface multiplicity drift")
     except (OSError, StopIteration, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
