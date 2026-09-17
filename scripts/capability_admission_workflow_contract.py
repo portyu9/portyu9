@@ -227,7 +227,12 @@ def self_test() -> None:
         'EXTERNAL_ID="codeql-autofix-unbound:${PR_NUMBER}"',
         "Autofix proof",
     )
-    expect_failure(text, '    - cron: "*/5 * * * *"', '    - cron: "17 * * * *"', "scheduled Spotlight proof")
+    expect_failure(
+        text,
+        '    - cron: "*/5 * * * *"',
+        '    - cron: "17 * * * *"',
+        "scheduled Spotlight recovery trigger changed",
+    )
     expect_failure(
         text,
         'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"',
