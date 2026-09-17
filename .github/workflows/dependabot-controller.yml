@@ -297,10 +297,7 @@ jobs:
 
             gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
             gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
-            jq -n --arg ref "$HEAD_REF" --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \
-              '{ref:$ref,inputs:{base_sha:$base,head_sha:$head}}' > dependency-dispatch.json
-            gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml/dispatches" \
-              --input dependency-dispatch.json >/dev/null
+            gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
             jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" \
               '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
               > admission-dispatch.json
