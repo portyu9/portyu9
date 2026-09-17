@@ -179,10 +179,11 @@ def derive_codeql_files(
     validator_text = _replace_exact_assignment(validator_text, "CODEQL_RELEASE", str(old_tag), str(target_tag))
 
     compiled = trusted_workflow_capability.compile_repository(candidate_root)
+    extension_ids = {"capability-admission", "codeql-autofix", "dependabot-controller"}
     base_workflows = [
         copy.deepcopy(workflow)
         for workflow in compiled["workflows"]
-        if workflow.get("id") not in {"capability-admission", "codeql-autofix"}
+        if workflow.get("id") not in extension_ids
     ]
     require(len(base_workflows) == 5, "Dependabot reconciliation expected the historical five-workflow base snapshot")
     base_snapshot = {key: copy.deepcopy(compiled[key]) for key in compiled if key != "workflows"}
