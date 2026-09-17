@@ -123,6 +123,13 @@
       "rationale": "Authorize #508's exact bounded continuation for unsupported CodeQL Autofix HTTP 422 outcomes. Trusted queue logic revalidates that exact failure, requires main to remain the bound base, and emits one existing codeql-autofix repository_dispatch with a strictly increasing afterAlert cursor. All other failures remain fail-closed; no alert is dismissed or candidate code executed; protected admission and merge checks remain mandatory."
     },
     {
+      "id": "cap-codeql-autofix-unsupported-continuation-current-tcb",
+      "baseBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
+      "candidateBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
+      "expansionSha256": "6a3935eae5996adb5bdb4c4918ecb0ba0c9deda886f95b177339890e7b800098",
+      "rationale": "Authorize #523's exact current-main bounded continuation for the reviewed unsupported CodeQL Autofix HTTP 422 path, including the protected workflow and canonical BOM source boundary. Trusted logic revalidates only that exact unsupported failure, requires main to remain the bound base, and emits one existing codeql-autofix dispatch with a strictly increasing cursor. All other failures, protected checks, and exact-SHA merge gates remain fail-closed."
+    },
+    {
       "id": "cap-codeql-autofix-unsupported-queue-semantics",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
