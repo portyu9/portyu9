@@ -151,6 +151,13 @@
       "rationale": "Authorize #528's exact trust-boundary registration for scripts/dependabot_* so future Dependabot admission, reconciliation, and controller source is protected before any write-capable automation consumes it. This changes no workflow trigger, permission, semantic capability, or merge authority."
     },
     {
+      "id": "cap-dependabot-codeql-zero-touch-controller-bootstrap",
+      "baseBomSha256": "f22d7bbda55748b7712226e3fbcf2a826c8a9358b99a8108d878a3992f2f24b2",
+      "candidateBomSha256": "ff85ee9f7c852337afce588a1f2a79fe570cf7bba5aed9ac1df244c5afb7ded6",
+      "expansionSha256": "c371bd71ec4ce24f3bb665079082a79ed2601db4e3c43dd3976b9f058c81c7a7",
+      "rationale": "Authorize #533's exact zero-touch Dependabot CodeQL controller bootstrap. Trusted default-branch code accepts only one native grouped github/codeql-action PR, reconciles only deterministic governance bytes, delegates admission for that exact class, runs read-only protected validation on the exact head, dispatches CodeQL, and merges only the expected admitted head after all six contexts pass. No checks:write, security-events:write, bypass, or direct-main authority is added."
+    },
+    {
       "id": "cap-spotlight-scheduled-admission-recovery",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
