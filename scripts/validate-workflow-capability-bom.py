@@ -47,6 +47,10 @@ def first_difference(expected: Any, observed: Any, path: str = "$") -> str | Non
 
 def validate_snapshot() -> tuple[int, int]:
     snapshot = workflow_capability_snapshot.load_combined()
+    compiled = compiler.compile_bom()
+    difference = first_difference(compiled, snapshot)
+    if difference is not None:
+        raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
 
     compiler.self_test()
     capability_diff.self_test()
@@ -56,11 +60,6 @@ def validate_snapshot() -> tuple[int, int]:
     capability_admission_workflow_contract.self_test()
     capability_admission_workflow_contract.validate()
     workflow_capability_admission.self_test()
-
-    compiled = compiler.compile_bom()
-    difference = first_difference(compiled, snapshot)
-    if difference is not None:
-        raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
 
     require(compiler.canonical_json(snapshot) == compiler.canonical_json(compiled),
             "composite Workflow Capability BOM canonical bytes differ from live compilation")
