@@ -45,6 +45,18 @@ def first_difference(expected: Any, observed: Any, path: str = "$") -> str | Non
     return None
 
 
+def codeql_extension(compiled: dict[str, Any]) -> dict[str, Any]:
+    matches = [workflow for workflow in compiled["workflows"] if workflow.get("id") == "codeql-autofix"]
+    require(len(matches) == 1, "diagnostic expected exactly one CodeQL Autofix workflow")
+    return {
+        "schemaVersion": compiled["schemaVersion"],
+        "bomId": compiled["bomId"],
+        "repository": compiled["repository"],
+        "automationPolicyId": compiled["automationPolicyId"],
+        "workflows": matches,
+    }
+
+
 def validate_snapshot() -> tuple[int, int]:
     snapshot = workflow_capability_snapshot.load_combined()
 
@@ -60,6 +72,9 @@ def validate_snapshot() -> tuple[int, int]:
     compiled = compiler.compile_bom()
     difference = first_difference(compiled, snapshot)
     if difference is not None:
+        print("CANONICAL-CODEQL-AUTOFIX-EXTENSION-BEGIN", file=sys.stderr)
+        print(compiler.canonical_json(codeql_extension(compiled)), file=sys.stderr, end="")
+        print("CANONICAL-CODEQL-AUTOFIX-EXTENSION-END", file=sys.stderr)
         raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
 
     require(compiler.canonical_json(snapshot) == compiler.canonical_json(compiled),
