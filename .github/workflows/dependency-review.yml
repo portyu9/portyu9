@@ -2,7 +2,6 @@ name: Dependency review
 
 on:
   pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -25,31 +24,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Bind exact dispatched candidate
-        if: github.event_name == 'workflow_dispatch'
-        id: exact
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TARGET_REPOSITORY: ${{ github.repository }}
-          HEAD_SHA: ${{ github.sha }}
-          HEAD_REF: ${{ github.ref }}
-        run: |
-          set -euo pipefail
-          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
-          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$HEAD_REF" =~ ^refs/heads/dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
-          test "$(git rev-parse HEAD)" = "$HEAD_SHA"
-          BASE_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$BASE_SHA" != "$HEAD_SHA"
-          printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
-          printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
-
       - name: Review dependency changes
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
-          base-ref: ${{ steps.exact.outputs.base_sha || github.event.pull_request.base.sha }}
-          head-ref: ${{ steps.exact.outputs.head_sha || github.event.pull_request.head.sha }}
           fail-on-severity: moderate
           fail-on-scopes: runtime, development, unknown
           license-check: false
