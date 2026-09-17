@@ -76,6 +76,55 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/generated",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
@@ -84,6 +133,13 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact candidate context"
@@ -144,6 +200,11 @@
         "repository_dispatch": {
           "types": [
             "codeql-autofix-admission"
+          ]
+        },
+        "schedule": {
+          "cron": [
+            "*/5 * * * *"
           ]
         }
       },
