@@ -149,6 +149,13 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
               "step": "Validate reconciled candidate and inspect protected checks"
             },
             {
