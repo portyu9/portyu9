@@ -76,12 +76,9 @@
     },
     "dependabot-controller": {
       "path": ".github/workflows/dependabot-controller.yml",
-      "triggers": ["schedule"],
+      "triggers": ["schedule", "workflow_dispatch"],
       "permissions": {
-        "actions": "write",
-        "checks": "read",
-        "contents": "write",
-        "pull-requests": "write"
+        "contents": "read"
       },
       "jobs": {
         "controller": {
@@ -93,12 +90,41 @@
             "contents": "write",
             "pull-requests": "write"
           }
+        },
+        "validation_bind": {
+          "name": "dependabot-validation-bind",
+          "needs": [],
+          "permissions": {
+            "contents": "read",
+            "pull-requests": "read"
+          }
+        },
+        "validate_contracts": {
+          "name": "validate-contracts",
+          "needs": ["validation_bind"],
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "integration": {
+          "name": "integration-pinned-upstream",
+          "needs": ["validation_bind"],
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "dependency_review": {
+          "name": "dependency-review",
+          "needs": ["validation_bind"],
+          "permissions": {
+            "contents": "read"
+          }
         }
       }
     },
     "dependency-review": {
       "path": ".github/workflows/dependency-review.yml",
-      "triggers": ["pull_request", "workflow_dispatch"],
+      "triggers": ["pull_request"],
       "permissions": {
         "contents": "read"
       },
@@ -114,7 +140,7 @@
     },
     "profile-quality": {
       "path": ".github/workflows/profile-quality.yml",
-      "triggers": ["pull_request", "push", "workflow_dispatch"],
+      "triggers": ["pull_request", "push"],
       "permissions": {
         "contents": "read"
       },
