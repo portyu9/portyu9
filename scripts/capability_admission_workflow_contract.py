@@ -221,7 +221,12 @@ def self_test() -> None:
     expect_failure(text, ORDINARY_EVALUATOR, ordinary_bad, "ordinary evaluator lost exact candidate tree binding")
     delegated_bad = DEPENDABOT_EVALUATOR.replace('--candidate-tree-sha "$TREE_SHA"', '--candidate-tree-sha "$HEAD_SHA"')
     expect_failure(text, DEPENDABOT_EVALUATOR, delegated_bad, "delegated evaluator lost exact candidate tree binding")
-    expect_failure(text, ".autofixCommitSha", ".unboundCommitSha", "Autofix proof")
+    expect_failure(
+        text,
+        'EXTERNAL_ID="codeql-autofix-admission:${ORIGIN_RUN_ID}:${PR_NUMBER}:${HEAD_SHA}"',
+        'EXTERNAL_ID="codeql-autofix-unbound:${PR_NUMBER}"',
+        "Autofix proof",
+    )
     expect_failure(text, '    - cron: "*/5 * * * *"', '    - cron: "17 * * * *"', "scheduled Spotlight proof")
     expect_failure(
         text,
