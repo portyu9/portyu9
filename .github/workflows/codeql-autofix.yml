@@ -71,6 +71,15 @@ jobs:
             --event-file "$GITHUB_EVENT_PATH" \
             --trusted-sha "$TRUSTED_SHA" \
             --out trigger.json
+
+          AFTER_ALERT=0
+          if [ "$EVENT_NAME" = "repository_dispatch" ] && jq -e '.client_payload.queueContinuation == true' "$GITHUB_EVENT_PATH" >/dev/null 2>&1; then
+            test "$(jq -r '.sender.login // ""' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"
+            test "$(jq -r '.client_payload.baseSha // ""' "$GITHUB_EVENT_PATH")" = "$TRUSTED_SHA"
+            AFTER_ALERT="$(jq -r '.client_payload.afterAlert // 0' "$GITHUB_EVENT_PATH")"
+            [[ "$AFTER_ALERT" =~ ^[1-9][0-9]*$ ]]
+          fi
+
           gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > main-ref.json
           python3 scripts/codeql_autofix_controller.py main \
             --ref-file main-ref.json \
@@ -79,6 +88,7 @@ jobs:
           BASE_SHA="$(jq -r .baseSha main.json)"
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
+          printf 'after_alert=%s\n' "$AFTER_ALERT" >> "$GITHUB_OUTPUT"
 
       - name: Discover one exact-main CodeQL alert
         id: target
@@ -86,8 +96,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
           BASE_SHA: ${{ steps.base.outputs.base_sha }}
+          AFTER_ALERT: ${{ steps.base.outputs.after_alert }}
         run: |
           set -euo pipefail
+          [[ "$AFTER_ALERT" =~ ^[0-9]+$ ]]
           gh api --paginate --slurp \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100" \
             > alert-pages.json
@@ -95,10 +107,12 @@ jobs:
             --alerts-file alert-pages.json \
             --base-sha "$BASE_SHA" \
             --out discovery.json
-          if jq -e '.target != null' discovery.json >/dev/null; then
-            jq -c '.target' discovery.json > target.json
+          jq -c --argjson after "$AFTER_ALERT" \
+            '[.discovery.alerts[] | select(.number > $after)] | .[0] // null' \
+            discovery.json > target.json
+          if jq -e '. != null' target.json >/dev/null; then
             ALERT_NUMBER="$(jq -r .number target.json)"
-            test "$ALERT_NUMBER" -gt 0
+            test "$ALERT_NUMBER" -gt "$AFTER_ALERT"
             printf 'has_target=true\n' >> "$GITHUB_OUTPUT"
             printf 'alert_number=%s\n' "$ALERT_NUMBER" >> "$GITHUB_OUTPUT"
           else
@@ -136,12 +150,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
           ALERT_NUMBER: ${{ steps.target.outputs.alert_number }}
         run: |
           set -euo pipefail
+          set +e
           gh api -X POST \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix" \
-            > autofix-create.json
+            > autofix-create.json 2> autofix-create.err
+          AUTOFIX_RC=$?
+          set -e
+
+          if [ "$AUTOFIX_RC" -ne 0 ]; then
+            ERROR_TEXT="$(tr -d '\r' < autofix-create.err)"
+            test "$ERROR_TEXT" = "gh: Alert is not supported by autofix. (HTTP 422)"
+            python3 - <<'PY'
+          from codeql_autofix_queue import classify_request_failure
+          result = classify_request_failure(http_status=422, message="Alert is not supported by autofix.")
+          if result != {"classification": "unsupported", "reason": "github-autofix-unsupported"}:
+              raise SystemExit("unexpected unsupported-Autofix classification")
+          PY
+            [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            test "$ALERT_NUMBER" -gt 0
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+            jq -n \
+              --arg baseSha "$BASE_SHA" \
+              --argjson afterAlert "$ALERT_NUMBER" \
+              '{event_type:"codeql-autofix",client_payload:{queueContinuation:true,baseSha:$baseSha,afterAlert:$afterAlert}}' \
+              > unsupported-dispatch.json
+            gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json >/dev/null
+            printf 'ready=false\n' >> "$GITHUB_OUTPUT"
+            printf 'unsupported=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           gh api \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix" \
             > autofix-status.json
@@ -152,6 +194,7 @@ jobs:
           READY="$(jq -r .ready normalized-autofix.json)"
           test "$READY" = "true" -o "$READY" = "false"
           printf 'ready=%s\n' "$READY" >> "$GITHUB_OUTPUT"
+          printf 'unsupported=false\n' >> "$GITHUB_OUTPUT"
 
       - name: Commit exact Autofix to a dedicated branch and open one PR
         if: steps.target.outputs.has_target == 'true' && steps.existing.outputs.exists == 'false' && steps.autofix.outputs.ready == 'true'
