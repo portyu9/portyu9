@@ -438,6 +438,7 @@
               "repository": "actions/checkout",
               "step": "Checkout exact reconciled candidate"
             },
+            {
               "kind": "remote",
               "path": "",
               "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
