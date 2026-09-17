@@ -9,6 +9,11 @@ updates:
       timezone: "America/New_York"
     cooldown:
       default-days: 7
+    groups:
+      codeql-action-release:
+        applies-to: version-updates
+        patterns:
+          - "github/codeql-action/*"
     open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
