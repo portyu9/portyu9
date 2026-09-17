@@ -149,6 +149,13 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
               "step": "Validate reconciled candidate and inspect protected checks"
             },
             {
@@ -167,31 +174,9 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1",
+              "endpoint": "repos/${TARGE_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1",
               "method": "GET",
-              "mutating": false,
-              "step": "Assemble exact candidate tree as data"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind current main and one native Dependabot candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Perform exact-head protected Dependabot merge"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Assemble exact candidate tree as data"
+              "mu]][ô»éàò[ŸKàú›\éàê\‹Ÿ[XõH^X›ÿ[ôY]HôYH\»]HÇàKà¬àò€Y[ùéàô⁄X\Hãàô[ô⁄[ùéàúô\‹À…’Të—U‘ëT‘“U‘ñ_K‹[À…‘ó”ïSPëTüHãàõY]Ÿéàë—Uãàõ]]][ô»éàò[ŸKàú›\éàêö[ô›\úô[ùXZ[à[ô€ôHò]]ôH\[ôXõ›ÿ[ôY]HÇàKà¬àò€Y[ùéàô⁄X\Hãàô[ô⁄[ùéàúô\‹À…’Të—U‘ëT‘“U‘ñ_K‹[À…‘ó”ïSPëTüHãàõY]Ÿéàë—Uãàõ]]][ô»éàò[ŸKàú›\éàî\ôõ‹õH^X›ZXYõ›X›Y\[ôXõ›Y\ôŸHÇàKà¬àò€Y[ùéàô⁄X\Hãàô[ô⁄[ùéàúô\‹À…’Të—U‘ëT‘“U‘ñ_K‹[À…‘ó”ïSPëTüKŸö[\œ‹\ó‹YŸOLLãàõY]Ÿéàë—Uãàõ]]][ô»éàò[ŸKàú›\éàê\‹Ÿ[XõH^X›ÿ[ôY]HôYH\»]a"
             },
             {
               "client": "gh-api",
@@ -238,7 +223,7 @@
               "class": "github-api-post",
               "method": "POST",
               "step": "Atomically reconcile canonical governance files onto the bot head",
-              "target": "repos/${TARGET_REPOSITORY}/git/blobs"
+              "target": "repos/${TARGE_REPOSITORY}/git/blobs"
             },
             {
               "class": "github-api-post",
@@ -256,7 +241,7 @@
               "class": "github-api-post",
               "method": "POST",
               "step": "Validate reconciled candidate and inspect protected checks",
-              "target": "repos/${TARGET_REPOSITORY}/dispatches"
+              "target": "repos/${TARGE_REPOSITORY}/dispatches"
             },
             {
               "class": "pull-request",
@@ -527,7 +512,7 @@
               "mutating": false,
               "operation": "ls-remote",
               "remote": "https://github.com/${DEPENDENCY_REPOSITORY}.git",
-              "step": "Independently re-prove deterministic reconciliation",
+              "step": "Independendly re-prove deterministic reconciliation",
               "targets": [
                 "\\"
               ]
