@@ -354,6 +354,21 @@ jobs:
       head_ref: ${{ steps.bind.outputs.head_ref }}
 
     steps:
+      - name: Checkout static trusted main validation TCB
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
       - name: Bind exact controller-issued validation target
         id: bind
         env:
@@ -402,23 +417,6 @@ jobs:
           printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
           printf 'head_ref=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout static trusted main validation TCB
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: main
-          path: trusted-base
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Verify resolved Python runtime
-        working-directory: trusted-base
-        run: python3 scripts/verify-python-runtime.py
-
       - name: Reconstruct exact reconciled candidate as data
         id: candidate_data
         env:
@@ -428,10 +426,10 @@ jobs:
           HEAD_SHA: ${{ steps.bind.outputs.head_sha }}
         run: |
           set -euo pipefail
-          test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
           CANDIDATE_ROOT="$RUNNER_TEMP/dependabot-validation-candidate"
           rm -rf "$CANDIDATE_ROOT"
-          cp -a trusted-base "$CANDIDATE_ROOT"
+          cp -a . "$CANDIDATE_ROOT"
 
           COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
           test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
@@ -463,10 +461,10 @@ jobs:
           CANDIDATE_ROOT: ${{ steps.candidate_data.outputs.candidate_root }}
         run: |
           set -euo pipefail
-          python3 trusted-base/scripts/dependabot_controller.py probe \
+          python3 scripts/dependabot_controller.py probe \
             --pr dependabot-pr.json \
             --expected-head "$HEAD_SHA" \
-            --base-root trusted-base \
+            --base-root . \
             --candidate-root "$CANDIDATE_ROOT" \
             --out probe.json
           DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository probe.json)"
@@ -476,23 +474,23 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
             "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > release-refs.txt
-          python3 trusted-base/scripts/dependabot_release.py \
+          python3 scripts/dependabot_release.py \
             --refs release-refs.txt \
             --repository "$DEPENDENCY_REPOSITORY" \
             --tag "$CANDIDATE_TAG" \
             --expected-sha "$CANDIDATE_SHA" \
             --out resolved-release-sha.txt
           RESOLVED_SHA="$(cat resolved-release-sha.txt)"
-          python3 trusted-base/scripts/dependabot_controller.py admit \
+          python3 scripts/dependabot_controller.py admit \
             --pr dependabot-pr.json \
             --expected-head "$HEAD_SHA" \
-            --base-root trusted-base \
+            --base-root . \
             --candidate-root "$CANDIDATE_ROOT" \
             --resolved-release-sha "$RESOLVED_SHA" \
             --out dependabot-proof.json
-          python3 trusted-base/scripts/dependabot_controller.py validate \
+          python3 scripts/dependabot_controller.py validate \
             --proof dependabot-proof.json \
-            --base-root trusted-base \
+            --base-root . \
             --candidate-root "$CANDIDATE_ROOT" \
             --changed-paths changed-paths.txt \
             --out reconciled.json
