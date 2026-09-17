@@ -189,6 +189,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Request and inspect GitHub CodeQL Autofix"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}",
               "method": "GET",
               "mutating": false,
@@ -221,6 +228,13 @@
               "method": "GET",
               "mutating": false,
               "step": "Bind trusted trigger and current main"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Request and inspect GitHub CodeQL Autofix"
             },
             {
               "client": "gh-api",
@@ -348,6 +362,12 @@
               "method": "POST",
               "step": "Request and inspect GitHub CodeQL Autofix",
               "target": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Request and inspect GitHub CodeQL Autofix",
+              "target": "repos/${TARGET_REPOSITORY}/dispatches"
             },
             {
               "class": "pull-request",
