@@ -34,6 +34,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Fetch exact candidate capability source as data"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}",
               "method": "GET",
               "mutating": false,
@@ -132,6 +139,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
@@ -139,10 +153,34 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact candidate context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Fetch exact candidate capability source as data"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact candidate context"
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "https://github.com/${DEPENDENCY_REPOSITORY}.git",
+              "step": "Verify delegated Dependabot release provenance",
+              "targets": [
+                "\\"
+              ]
             }
           ],
           "artifacts": [],
@@ -199,7 +237,8 @@
         },
         "repository_dispatch": {
           "types": [
-            "codeql-autofix-admission"
+            "codeql-autofix-admission",
+            "dependabot-admission"
           ]
         },
         "schedule": {
