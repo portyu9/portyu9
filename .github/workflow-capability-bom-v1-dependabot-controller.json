@@ -323,7 +323,7 @@
               "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
-              "step": "Checkout exact reconciled candidate"
+              "step": "Checkout static trusted main dependency-review TCB"
             },
             {
               "kind": "remote",
@@ -366,7 +366,7 @@
               "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
-              "step": "Checkout exact reconciled candidate"
+              "step": "Checkout static trusted main contracts"
             },
             {
               "kind": "remote",
@@ -443,7 +443,7 @@
               "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
-              "step": "Checkout exact reconciled candidate"
+              "step": "Checkout static trusted main contracts"
             },
             {
               "kind": "remote",
@@ -483,14 +483,7 @@
               "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
-              "step": "Checkout exact reconciled candidate"
-            },
-            {
-              "kind": "remote",
-              "path": "",
-              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-              "repository": "actions/checkout",
-              "step": "Checkout exact trusted base as validation TCB"
+              "step": "Checkout static trusted main validation TCB"
             },
             {
               "kind": "remote",
@@ -501,6 +494,20 @@
             }
           ],
           "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Reconstruct exact reconciled candidate as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Reconstruct exact reconciled candidate as data"
+            },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
@@ -514,6 +521,13 @@
               "method": "GET",
               "mutating": false,
               "step": "Bind exact controller-issued validation target"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1",
+              "method": "GET",
+              "mutating": false,
+              "step": "Reconstruct exact reconciled candidate as data"
             },
             {
               "client": "gh-api",

@@ -14,7 +14,7 @@
               "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
-              "step": "Checkout exact trusted base"
+              "step": "Checkout static trusted main"
             },
             {
               "kind": "remote",
@@ -112,20 +112,6 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/generated",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind exact candidate context"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind exact candidate context"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact candidate context"
