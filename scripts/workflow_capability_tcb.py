@@ -32,6 +32,7 @@ PROTECTED_EXACT = {
 PROTECTED_PREFIXES = (
     "scripts/automation_",
     "scripts/codeql_autofix_",
+    "scripts/dependabot_",
     "scripts/workflow_capability_",
 )
 RESERVED_MODULES = {
@@ -159,6 +160,15 @@ def self_test() -> None:
     ):
         require(is_protected_path(path),
                 f"TCB self-test lost CodeQL Autofix controller source: {path}")
+    for path in (
+        "scripts/dependabot_admission.py",
+        "scripts/dependabot_pin_diff.py",
+        "scripts/dependabot_pr_identity.py",
+        "scripts/dependabot_reconciliation.py",
+        "scripts/dependabot_future_module.py",
+    ):
+        require(is_protected_path(path),
+                f"TCB self-test lost Dependabot controller source: {path}")
     require(is_protected_path("scripts/json.py") and is_protected_path("scripts/json/__init__.py"),
             "TCB self-test lost stdlib-shadow protection")
     require(not is_protected_path("scripts/generate-profile-evidence.py"),
