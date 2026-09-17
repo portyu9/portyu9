@@ -74,9 +74,31 @@
         }
       }
     },
+    "dependabot-controller": {
+      "path": ".github/workflows/dependabot-controller.yml",
+      "triggers": ["schedule"],
+      "permissions": {
+        "actions": "write",
+        "checks": "read",
+        "contents": "write",
+        "pull-requests": "write"
+      },
+      "jobs": {
+        "controller": {
+          "name": "trusted-dependabot-codeql-controller",
+          "needs": [],
+          "permissions": {
+            "actions": "write",
+            "checks": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          }
+        }
+      }
+    },
     "dependency-review": {
       "path": ".github/workflows/dependency-review.yml",
-      "triggers": ["pull_request"],
+      "triggers": ["pull_request", "workflow_dispatch"],
       "permissions": {
         "contents": "read"
       },
@@ -92,7 +114,7 @@
     },
     "profile-quality": {
       "path": ".github/workflows/profile-quality.yml",
-      "triggers": ["pull_request", "push"],
+      "triggers": ["pull_request", "push", "workflow_dispatch"],
       "permissions": {
         "contents": "read"
       },
