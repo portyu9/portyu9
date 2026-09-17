@@ -158,6 +158,13 @@
       "rationale": "Authorize #533's exact zero-touch Dependabot CodeQL controller bootstrap. Trusted default-branch code accepts only one native grouped github/codeql-action PR, reconciles only deterministic governance bytes, delegates admission for that exact class, runs read-only protected validation on the exact head, dispatches CodeQL, and merges only the expected admitted head after all six contexts pass. No checks:write, security-events:write, bypass, or direct-main authority is added."
     },
     {
+      "id": "cap-dependabot-codeql-zero-touch-controller-final-tcb",
+      "baseBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
+      "candidateBomSha256": "ff85ee9f7c852337afce588a1f2a79fe570cf7bba5aed9ac1df244c5afb7ded6",
+      "expansionSha256": "2ac5fda0f13a8926ced93e9e2935aa188e665be5b2fe1d9dff1d40871c8808b2",
+      "rationale": "Authorize #533's exact final current-main zero-touch Dependabot CodeQL controller candidate after canonical eight-workflow BOM, runtime, and assurance closure. Trusted default-branch logic accepts only one native grouped github/codeql-action PR, reconciles deterministic governance bytes, delegates admission for that exact class, runs exact-head protected validation, dispatches CodeQL, and merges only the admitted expected head after all six contexts pass."
+    },
+    {
       "id": "cap-spotlight-scheduled-admission-recovery",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
