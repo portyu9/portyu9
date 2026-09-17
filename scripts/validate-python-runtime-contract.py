@@ -8,14 +8,16 @@ import python_runtime_contract_core as core
 
 
 def runtime_probe_pair(command: str) -> re.Pattern[str]:
-    """Require direct setup→probe adjacency while accepting zero or one spacer line."""
+    """Require direct setup→probe adjacency with any setup condition mirrored exactly."""
     return re.compile(
         r"(?m)^      - name: Set up Python\n"
+        r"(?:        if: (?P<condition>[^\n]+)\n)?"
         r"        uses: actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*\n"
         r"        with:\n"
         r"          python-version: \$\{\{ env\.PYTHON_VERSION \}\}\n"
         r"(?:\n)?"
         r"      - name: Verify resolved Python runtime\n"
+        r"(?(condition)        if: (?P=condition)\n)"
         rf"        run: {re.escape(command)}$"
     )
 

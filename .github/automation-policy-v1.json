@@ -54,7 +54,7 @@
     },
     "capability-admission": {
       "path": ".github/workflows/capability-admission.yml",
-      "triggers": ["pull_request_target", "repository_dispatch"],
+      "triggers": ["pull_request_target", "repository_dispatch", "schedule"],
       "permissions": {
         "actions": "read",
         "checks": "write",
