@@ -70,7 +70,7 @@ def validate_snapshot() -> tuple[int, int]:
 
     workflows = compiled["workflows"]
     jobs = sum(len(workflow["jobs"]) for workflow in workflows)
-    require(len(workflows) == 7, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
+    require(len(workflows) == 8, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
     require(jobs > 0, "Workflow Capability BOM contains no jobs")
     return len(workflows), jobs
 
@@ -78,9 +78,16 @@ def validate_snapshot() -> tuple[int, int]:
 def main() -> int:
     try:
         compiled_review = compiler.compile_bom()
-        print("BEGIN REVIEW CANONICAL WORKFLOW CAPABILITY BOM")
-        print(compiler.canonical_json(compiled_review), end="")
-        print("END REVIEW CANONICAL WORKFLOW CAPABILITY BOM")
+        dependabot = [workflow for workflow in compiled_review["workflows"] if workflow["id"] == "dependabot-controller"]
+        require(len(dependabot) == 1, "review compiler lost exact Dependabot controller workflow")
+        extension_review = {
+            key: compiled_review[key]
+            for key in ("automationPolicyId", "bomId", "repository", "schemaVersion")
+        }
+        extension_review["workflows"] = dependabot
+        print("BEGIN REVIEW DEPENDABOT CONTROLLER BOM EXTENSION")
+        print(compiler.canonical_json(extension_review), end="")
+        print("END REVIEW DEPENDABOT CONTROLLER BOM EXTENSION")
         workflows, jobs = validate_snapshot()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
