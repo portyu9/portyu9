@@ -423,6 +423,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
       - name: Independently re-prove deterministic reconciliation
         env:
           PR_NUMBER: ${{ steps.bind.outputs.pr_number }}
@@ -486,6 +489,9 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
 
       - name: Validate exact repository contracts
         env:
