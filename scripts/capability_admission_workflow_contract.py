@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "a23bb60711913db8200614e8316deae496ca9dfc"
+EXPECTED_GIT_BLOB = "832e0bd59478c4b203f3db0b1fa044309ed436d7"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -32,6 +32,8 @@ def validate_text(text: str) -> None:
         "  repository_dispatch:\n    types:\n      - codeql-autofix-admission\n" in text,
         "trusted capability admission repository_dispatch trigger changed",
     )
+    require('  schedule:\n    - cron: "*/5 * * * *"\n' in text,
+            "trusted capability admission scheduled Spotlight recovery trigger changed")
     require("workflow_run:" not in text,
             "trusted capability admission retained default-SHA workflow_run authority")
 
@@ -100,6 +102,40 @@ def validate_text(text: str) -> None:
             "trusted admission Autofix branch/run/alert identity binding changed")
     require('[[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]' in text,
             "trusted admission Autofix branch shape binding changed")
+
+    for spotlight_fragment in (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"',
+        '.user.login == "github-actions[bot]"',
+        '.head.repo.full_name == "portyu9/portyu9"',
+        'test("^automation/spotlight-links/[0-9a-f]{64}$")',
+        '.title == "chore: sync rotating Spotlight links"',
+        '.maintainer_can_modify == false',
+        'test "$MATCH_COUNT" -le 1',
+        'printf \'has_candidate=false\\n\'',
+        'test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"',
+        'test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"',
+        'test "$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")" = "$BASE_SHA"',
+        'test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "github-actions[bot]"',
+        'test "$(jq -r .author.email <<<"$CANDIDATE_COMMIT")" = "41898282+github-actions[bot]@users.noreply.github.com"',
+        'test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "github-actions[bot]"',
+        'test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "41898282+github-actions[bot]@users.noreply.github.com"',
+        'test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"',
+        'COMPARE="$(gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"',
+        'test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"',
+        'test "$(jq -r .behind_by <<<"$COMPARE")" = "0"',
+        'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
+        'test "$(jq \'.files | length\' <<<"$COMPARE")" = "1"',
+        'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
+        'GENERATED_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)"',
+        'gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content',
+        'CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256" | sha256sum | cut -d\' \' -f1)"',
+        'test "$HEAD_REF" = "automation/spotlight-links/${CANDIDATE_ID}"',
+    ):
+        require(spotlight_fragment in text,
+                f"trusted admission scheduled Spotlight identity proof changed: {spotlight_fragment}")
+    require('SPOTLIGHT=true' in text and 'printf \'spotlight=%s\\n\'' in text,
+            "trusted admission lost scheduled Spotlight publication binding")
+
     for output_name in (
         "dispatch", "base_ref", "base_sha", "head_ref", "head_repository", "head_sha",
     ):
@@ -108,6 +144,8 @@ def validate_text(text: str) -> None:
 
     require("ref: ${{ steps.candidate.outputs.base_sha }}" in text,
             "trusted admission no longer checks out the exact verified trusted base SHA")
+    require("if: steps.candidate.outputs.has_candidate == 'true'" in text,
+            "trusted admission no longer skips execution on an empty scheduled recovery scan")
     require("persist-credentials: false" in text and "fetch-depth: 1" in text,
             "trusted admission checkout credential/depth boundary changed")
     require("BASE_REF: ${{ steps.candidate.outputs.base_ref }}" in text,
@@ -182,11 +220,13 @@ def validate_text(text: str) -> None:
         'test "$(jq -r .status <<<"$CHECK")" = "completed"',
         'test "$(jq -r .conclusion <<<"$CHECK")" = "success"',
         'test "$(jq -r .app.id <<<"$CHECK")" = "15368"',
+        'EXTERNAL_ID="codeql-autofix-admission:${ORIGIN_RUN_ID}:${PR_NUMBER}:${HEAD_SHA}"',
+        'EXTERNAL_ID="spotlight-scheduled-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
     ):
         require(publisher_binding in text,
                 f"trusted admission candidate-check binding changed: {publisher_binding}")
-    require("if: steps.candidate.outputs.dispatch == 'true'" in text,
-            "trusted admission candidate-check write is no longer dispatch-only")
+    require("if: steps.candidate.outputs.dispatch == 'true' || steps.candidate.outputs.spotlight == 'true'" in text,
+            "trusted admission candidate-check write is no longer bound to reviewed bot recovery paths")
 
     require(text.count("actions/checkout@") == 1,
             "trusted admission gained an additional checkout execution surface")
@@ -259,9 +299,24 @@ def self_test() -> None:
                 f"trusted admission receipt-binding self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("trusted admission contract accepted an unbound controller receipt")
+    try:
+        validate_text(text.replace('    - cron: "*/5 * * * *"', '    - cron: "17 * * * *"', 1))
+    except ValueError as exc:
+        require("scheduled Spotlight recovery trigger" in str(exc),
+                f"trusted admission schedule self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("trusted admission contract accepted a changed recovery schedule")
+    try:
+        validate_text(text.replace('test "$HEAD_REF" = "automation/spotlight-links/${CANDIDATE_ID}"',
+                                   'test "$HEAD_REF" = "automation/spotlight-links/unbound"', 1))
+    except ValueError as exc:
+        require("scheduled Spotlight identity proof" in str(exc),
+                f"trusted admission Spotlight binding self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("trusted admission contract accepted an unbound Spotlight candidate")
 
 
 if __name__ == "__main__":
     self_test()
     validate()
-    print("Trusted capability admission workflow contract passed: exact bytes, base-only execution, immutable Autofix provenance, data-only candidate TCB evaluation, and one bounded exact-head GitHub Actions check publisher.")
+    print("Trusted capability admission workflow contract passed: exact bytes, base-only execution, immutable Autofix provenance, scheduled deterministic Spotlight recovery, data-only candidate TCB evaluation, and one bounded exact-head GitHub Actions check publisher.")
