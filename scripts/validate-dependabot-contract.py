@@ -33,6 +33,11 @@ updates:
       timezone: "America/New_York"
     cooldown:
       default-days: 7
+    groups:
+      codeql-action-release:
+        applies-to: version-updates
+        patterns:
+          - "github/codeql-action/*"
     open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
@@ -195,11 +200,12 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: the canonical daily GitHub Actions update-discovery policy is locked; "
             "ordinary version updates have an explicit seven-day release soak while security updates remain immediate; "
-            "dependency updates remain individually reviewable; every external action in every workflow is pinned to an immutable "
-            "40-character commit SHA; pin-diff fixtures admit only atomic single-repository Action updates; PR identity fixtures "
-            "bind the exact Dependabot bot tuple while ordinary human PRs remain deterministic not-applicable; the combined "
-            "admission core binds those proofs to candidate release tag-to-SHA provenance without candidate execution; and split "
-            "native fragments can reconcile only when they converge on one exact release and collectively cover every occurrence."
+            "dependency updates remain separately attributable, while github/codeql-action sub-actions are grouped into one atomic "
+            "release PR; every external action in every workflow is pinned to an immutable 40-character commit SHA; pin-diff "
+            "fixtures admit only atomic single-repository Action updates; PR identity fixtures bind the exact Dependabot bot tuple "
+            "while ordinary human PRs remain deterministic not-applicable; the combined admission core binds those proofs to "
+            "candidate release tag-to-SHA provenance without candidate execution; and split native fragments can reconcile only "
+            "when they converge on one exact release and collectively cover every occurrence."
         )
         return 0
     except (OSError, ValueError) as exc:
