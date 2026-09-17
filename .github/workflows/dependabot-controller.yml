@@ -1,0 +1,757 @@
+name: Dependabot controller
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13.15"
+
+jobs:
+  controller:
+    if: github.event_name == 'schedule'
+    name: trusted-dependabot-codeql-controller
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    concurrency:
+      group: dependabot-codeql-controller
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      checks: read
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout exact trusted default-branch source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
+      - name: Bind current main and one native Dependabot candidate
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          [[ "$TRUSTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          MAIN_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          test "$MAIN_SHA" = "$TRUSTED_SHA"
+
+          PRS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
+          MATCHES="$(jq -c '[.[][] | select(
+            .user.login == "dependabot[bot]" and
+            .state == "open" and
+            .draft == false and
+            .head.repo.full_name == "portyu9/portyu9" and
+            (.head.ref | test("^dependabot/github_actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"))
+          )] | sort_by(.number)' <<<"$PRS")"
+          COUNT="$(jq 'length' <<<"$MATCHES")"
+          if [ "$COUNT" = "0" ]; then
+            printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
+            echo "No native GitHub-Actions Dependabot PR requires controller work."
+            exit 0
+          fi
+
+          PR_NUMBER="$(jq -r '.[0].number' <<<"$MATCHES")"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
+          HEAD_SHA="$(jq -r .head.sha dependabot-pr.json)"
+          HEAD_REF="$(jq -r .head.ref dependabot-pr.json)"
+          BASE_SHA="$(jq -r .base.sha dependabot-pr.json)"
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          if [ "$BASE_SHA" != "$MAIN_SHA" ]; then
+            gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
+              -f expected_head_sha="$HEAD_SHA" > update-branch.json
+            test "$(jq -r .message update-branch.json)" = "Updating pull request branch."
+            printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
+            echo "Requested exact-head Dependabot branch update; next scheduled pass will re-prove the new head."
+            exit 0
+          fi
+
+          printf 'has_target=true\n' >> "$GITHUB_OUTPUT"
+          printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
+          printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          printf 'head_ref=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble exact candidate tree as data
+        if: steps.candidate.outputs.has_target == 'true'
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          CANDIDATE_ROOT="$RUNNER_TEMP/dependabot-candidate"
+          rm -rf "$CANDIDATE_ROOT"
+          cp -a . "$CANDIDATE_ROOT"
+
+          gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > pr-file-pages.json
+          jq -r '.[][] | .filename' pr-file-pages.json | LC_ALL=C sort > changed-paths.txt
+          test -s changed-paths.txt
+          test "$(sort -u changed-paths.txt | wc -l)" = "$(wc -l < changed-paths.txt)"
+
+          COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
+          TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          TREE="$(gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
+          test "$(jq -r .truncated <<<"$TREE")" = "false"
+
+          mapfile -t FETCH_PATHS < <(
+            {
+              find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -printf '%p\n' | sed 's#^./##'
+              printf '%s\n' .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py
+            } | LC_ALL=C sort -u
+          )
+          for PATH_VALUE in "${FETCH_PATHS[@]}"; do
+            if ! grep -qxF "$PATH_VALUE" changed-paths.txt && [[ "$PATH_VALUE" != .github/workflows/* ]]; then
+              continue
+            fi
+            ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path and .type == "blob")]' <<<"$TREE")"
+            test "$(jq 'length' <<<"$ENTRY")" = "1"
+            test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
+            BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
+            [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            BLOB="$(gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
+            test "$(jq -r .encoding <<<"$BLOB")" = "base64"
+            mkdir -p "$CANDIDATE_ROOT/$(dirname "$PATH_VALUE")"
+            jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "$CANDIDATE_ROOT/$PATH_VALUE"
+          done
+          printf '%s\n' "$TREE_SHA" > candidate-tree-sha.txt
+          printf 'candidate_root=%s\n' "$CANDIDATE_ROOT" >> "$GITHUB_OUTPUT"
+          printf 'tree_sha=%s\n' "$TREE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Prove bot identity, atomic pin closure, and public release provenance
+        if: steps.candidate.outputs.has_target == 'true'
+        id: proof
+        env:
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+          CANDIDATE_ROOT: ${{ steps.source.outputs.candidate_root }}
+        run: |
+          set -euo pipefail
+          python3 scripts/dependabot_controller.py probe \
+            --pr dependabot-pr.json \
+            --expected-head "$HEAD_SHA" \
+            --base-root . \
+            --candidate-root "$CANDIDATE_ROOT" \
+            --out probe.json
+          DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository probe.json)"
+          CANDIDATE_TAG="$(jq -r .after.tag probe.json)"
+          CANDIDATE_SHA="$(jq -r .after.sha probe.json)"
+          test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
+          [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
+            "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > release-refs.txt
+          python3 scripts/dependabot_release.py \
+            --refs release-refs.txt \
+            --repository "$DEPENDENCY_REPOSITORY" \
+            --tag "$CANDIDATE_TAG" \
+            --expected-sha "$CANDIDATE_SHA" \
+            --out resolved-release-sha.txt
+          RESOLVED_SHA="$(cat resolved-release-sha.txt)"
+          test "$RESOLVED_SHA" = "$CANDIDATE_SHA"
+
+          python3 scripts/dependabot_controller.py admit \
+            --pr dependabot-pr.json \
+            --expected-head "$HEAD_SHA" \
+            --base-root . \
+            --candidate-root "$CANDIDATE_ROOT" \
+            --resolved-release-sha "$RESOLVED_SHA" \
+            --out dependabot-proof.json
+
+          jq -r '.files[]' dependabot-proof.json | LC_ALL=C sort -u > expected-raw-paths.txt
+          { cat expected-raw-paths.txt; printf '%s\n' .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; } \
+            | LC_ALL=C sort -u > expected-reconciled-paths.txt
+          if cmp -s changed-paths.txt expected-raw-paths.txt; then
+            STATE=raw
+          elif cmp -s changed-paths.txt expected-reconciled-paths.txt; then
+            STATE=reconciled
+          else
+            echo "ERROR: Dependabot PR contains files outside raw pin update or exact trusted reconciliation" >&2
+            diff -u expected-reconciled-paths.txt changed-paths.txt || true
+            exit 1
+          fi
+          printf 'state=%s\n' "$STATE" >> "$GITHUB_OUTPUT"
+          printf 'resolved_release_sha=%s\n' "$RESOLVED_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Atomically reconcile canonical governance files onto the bot head
+        if: steps.candidate.outputs.has_target == 'true' && steps.proof.outputs.state == 'raw'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+          HEAD_REF: ${{ steps.candidate.outputs.head_ref }}
+          TREE_SHA: ${{ steps.source.outputs.tree_sha }}
+          CANDIDATE_ROOT: ${{ steps.source.outputs.candidate_root }}
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+          python3 scripts/dependabot_controller.py derive \
+            --proof dependabot-proof.json \
+            --base-root . \
+            --candidate-root "$CANDIDATE_ROOT" \
+            --output-root "$RUNNER_TEMP/derived"
+
+          echo '[]' > tree-entries.json
+          for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do
+            FILE="$RUNNER_TEMP/derived/$PATH_VALUE"
+            test -s "$FILE"
+            CONTENT="$(base64 -w0 < "$FILE")"
+            BLOB="$(gh api --method POST "repos/${TARGET_REPOSITORY}/git/blobs" -f content="$CONTENT" -f encoding=base64)"
+            BLOB_SHA="$(jq -r .sha <<<"$BLOB")"
+            [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            jq --arg path "$PATH_VALUE" --arg sha "$BLOB_SHA" '. + [{path:$path,mode:"100644",type:"blob",sha:$sha}]' \
+              tree-entries.json > tree-entries.next.json
+            mv tree-entries.next.json tree-entries.json
+          done
+          jq -n --arg base_tree "$TREE_SHA" --slurpfile tree tree-entries.json \
+            '{base_tree:$base_tree,tree:$tree[0]}' > tree-request.json
+          NEW_TREE="$(gh api --method POST "repos/${TARGET_REPOSITORY}/git/trees" --input tree-request.json)"
+          NEW_TREE_SHA="$(jq -r .sha <<<"$NEW_TREE")"
+          [[ "$NEW_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          jq -n --arg message 'Reconcile Dependabot CodeQL governance' --arg tree "$NEW_TREE_SHA" --arg parent "$HEAD_SHA" \
+            '{message:$message,tree:$tree,parents:[$parent]}' > commit-request.json
+          NEW_COMMIT="$(gh api --method POST "repos/${TARGET_REPOSITORY}/git/commits" --input commit-request.json)"
+          NEW_HEAD_SHA="$(jq -r .sha <<<"$NEW_COMMIT")"
+          [[ "$NEW_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$NEW_HEAD_SHA" != "$HEAD_SHA"
+
+          gh api --method PATCH "repos/${TARGET_REPOSITORY}/git/refs/heads/${HEAD_REF}" \
+            -f sha="$NEW_HEAD_SHA" -F force=false > updated-ref.json
+          test "$(jq -r .object.sha updated-ref.json)" = "$NEW_HEAD_SHA"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          echo "Reconciled exact derived governance files; next scheduled pass will re-prove the new immutable head."
+
+      - name: Validate reconciled candidate and inspect protected checks
+        if: steps.candidate.outputs.has_target == 'true' && steps.proof.outputs.state == 'reconciled'
+        id: checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+          HEAD_REF: ${{ steps.candidate.outputs.head_ref }}
+          CANDIDATE_ROOT: ${{ steps.source.outputs.candidate_root }}
+        run: |
+          set -euo pipefail
+          python3 scripts/dependabot_controller.py validate \
+            --proof dependabot-proof.json \
+            --base-root . \
+            --candidate-root "$CANDIDATE_ROOT" \
+            --changed-paths changed-paths.txt \
+            --out reconciled.json
+          test "$(jq -r .headSha reconciled.json)" = "$HEAD_SHA"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+
+          READY=true
+          for NAME in validate-contracts integration-pinned-upstream dependency-review trusted-capability-admission analyze-actions analyze-python; do
+            CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100")"
+            if [ "$(jq -r .total_count <<<"$CHECKS")" != "1" ] || ! jq -e --arg head "$HEAD_SHA" '.check_runs[0] | .head_sha == $head and .app.id == 15368 and .status == "completed" and .conclusion == "success"' <<<"$CHECKS" >/dev/null; then
+              READY=false
+            fi
+          done
+          printf 'ready=%s\n' "$READY" >> "$GITHUB_OUTPUT"
+
+          if [ "$READY" != "true" ]; then
+            ACTIVE="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")"
+            if jq -e '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending")] | length > 0' <<<"$ACTIVE" >/dev/null; then
+              printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
+              echo "Exact-head protected checks are already active; next pass will re-evaluate."
+              exit 0
+            fi
+
+            gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
+            gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
+            jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" \
+              '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
+              > admission-dispatch.json
+            gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
+            printf 'dispatched=true\n' >> "$GITHUB_OUTPUT"
+            echo "Dispatched exact-head protected validation; next pass will merge only after every gate is green."
+          else
+            printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Perform exact-head protected Dependabot merge
+        if: steps.candidate.outputs.has_target == 'true' && steps.proof.outputs.state == 'reconciled' && steps.checks.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+          HEAD_REF: ${{ steps.candidate.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .state <<<"$PR")" = "open"
+          test "$(jq -r .draft <<<"$PR")" = "false"
+          test "$(jq -r .base.ref <<<"$PR")" = "main"
+          test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
+          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+          test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
+          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+
+          MERGE="$(gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
+            -f merge_method=merge \
+            -f sha="$HEAD_SHA" \
+            -f commit_title="Dependabot CodeQL Action release" \
+            -f commit_message="Trusted atomic Dependabot CodeQL update merged after exact-head delegated admission and protected checks.")"
+          test "$(jq -r .merged <<<"$MERGE")" = "true"
+          MERGE_SHA="$(jq -r .sha <<<"$MERGE")"
+          [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"
+          gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main >/dev/null
+
+  validation_bind:
+    if: github.event_name == 'workflow_dispatch'
+    name: dependabot-validation-bind
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      pr_number: ${{ steps.bind.outputs.pr_number }}
+      base_sha: ${{ steps.bind.outputs.base_sha }}
+      head_sha: ${{ steps.bind.outputs.head_sha }}
+      head_ref: ${{ steps.bind.outputs.head_ref }}
+
+    steps:
+      - name: Checkout static trusted main validation TCB
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
+      - name: Bind exact controller-issued validation target
+        id: bind
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          HEAD_SHA: ${{ github.sha }}
+          HEAD_REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$ACTOR" = "github-actions[bot]"
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+          BASE_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          PRS="$(gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10")"
+          test "$(jq 'length' <<<"$PRS")" = "1"
+          jq -c '.[0]' <<<"$PRS" > dependabot-pr.json
+          PR_NUMBER="$(jq -r .number dependabot-pr.json)"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          test "$(jq -r .user.login dependabot-pr.json)" = "dependabot[bot]"
+          test "$(jq -r .state dependabot-pr.json)" = "open"
+          test "$(jq -r .draft dependabot-pr.json)" = "false"
+          test "$(jq -r .maintainer_can_modify dependabot-pr.json)" = "false"
+          test "$(jq -r .base.ref dependabot-pr.json)" = "main"
+          test "$(jq -r .base.sha dependabot-pr.json)" = "$BASE_SHA"
+          test "$(jq -r .head.sha dependabot-pr.json)" = "$HEAD_SHA"
+          test "$(jq -r .head.ref dependabot-pr.json)" = "$HEAD_REF"
+          test "$(jq -r .head.repo.full_name dependabot-pr.json)" = "$TARGET_REPOSITORY"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+
+          gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > pr-file-pages.json
+          jq -r '.[][] | .filename' pr-file-pages.json | LC_ALL=C sort > changed-paths.txt
+          cat > expected-paths.txt <<'EOF'
+          .github/action-lock.json
+          .github/workflow-capability-bom-v1.json
+          .github/workflows/codeql.yml
+          scripts/validate-codeql-contract.py
+          EOF
+          cmp -s expected-paths.txt changed-paths.txt
+
+          printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
+          printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          printf 'head_ref=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Reconstruct exact reconciled candidate as data
+        id: candidate_data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ steps.bind.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.bind.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          CANDIDATE_ROOT="$RUNNER_TEMP/dependabot-validation-candidate"
+          rm -rf "$CANDIDATE_ROOT"
+          cp -a . "$CANDIDATE_ROOT"
+
+          COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
+          TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          TREE="$(gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
+          test "$(jq -r .truncated <<<"$TREE")" = "false"
+
+          while IFS= read -r PATH_VALUE; do
+            test -n "$PATH_VALUE"
+            ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path and .type == "blob")]' <<<"$TREE")"
+            test "$(jq 'length' <<<"$ENTRY")" = "1"
+            test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
+            BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
+            [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            BLOB="$(gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
+            test "$(jq -r .encoding <<<"$BLOB")" = "base64"
+            mkdir -p "$CANDIDATE_ROOT/$(dirname "$PATH_VALUE")"
+            jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "$CANDIDATE_ROOT/$PATH_VALUE"
+          done < expected-paths.txt
+
+          printf 'candidate_root=%s\n' "$CANDIDATE_ROOT" >> "$GITHUB_OUTPUT"
+
+      - name: Independently re-prove deterministic reconciliation
+        env:
+          PR_NUMBER: ${{ steps.bind.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.bind.outputs.head_sha }}
+          CANDIDATE_ROOT: ${{ steps.candidate_data.outputs.candidate_root }}
+        run: |
+          set -euo pipefail
+          python3 scripts/dependabot_controller.py probe \
+            --pr dependabot-pr.json \
+            --expected-head "$HEAD_SHA" \
+            --base-root . \
+            --candidate-root "$CANDIDATE_ROOT" \
+            --out probe.json
+          DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository probe.json)"
+          CANDIDATE_TAG="$(jq -r .after.tag probe.json)"
+          CANDIDATE_SHA="$(jq -r .after.sha probe.json)"
+          test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
+            "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > release-refs.txt
+          python3 scripts/dependabot_release.py \
+            --refs release-refs.txt \
+            --repository "$DEPENDENCY_REPOSITORY" \
+            --tag "$CANDIDATE_TAG" \
+            --expected-sha "$CANDIDATE_SHA" \
+            --out resolved-release-sha.txt
+          RESOLVED_SHA="$(cat resolved-release-sha.txt)"
+          python3 scripts/dependabot_controller.py admit \
+            --pr dependabot-pr.json \
+            --expected-head "$HEAD_SHA" \
+            --base-root . \
+            --candidate-root "$CANDIDATE_ROOT" \
+            --resolved-release-sha "$RESOLVED_SHA" \
+            --out dependabot-proof.json
+          python3 scripts/dependabot_controller.py validate \
+            --proof dependabot-proof.json \
+            --base-root . \
+            --candidate-root "$CANDIDATE_ROOT" \
+            --changed-paths changed-paths.txt \
+            --out reconciled.json
+          test "$(jq -r .classification reconciled.json)" = "dependabot-codeql-reconciled"
+          test "$(jq -r .headSha reconciled.json)" = "$HEAD_SHA"
+
+  validate_contracts:
+    if: github.event_name == 'workflow_dispatch' && needs.validation_bind.result == 'success'
+    needs: [validation_bind]
+    name: validate-contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout static trusted main contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact trusted validation base
+        env:
+          BASE_SHA: ${{ needs.validation_bind.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
+      - name: Validate exact repository contracts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/validate-privileged-workflow-identity.py
+          python3 scripts/verify-python-runtime.py
+          python3 scripts/validate-workflow-capability-bom.py
+          python3 scripts/signal_field_pipeline.py --self-test
+          python3 scripts/generate-profile-evidence.py --self-test
+          python3 scripts/check-json-object-uniqueness.py
+          python3 scripts/validate-validator-purity.py
+          python3 scripts/validate-validator-execution-aliases.py
+          python3 scripts/validate-profile-v4.py
+          python3 scripts/validate-engineering-card-geometry.py
+          python3 scripts/validate-first-person-profile-voice.py
+          python3 scripts/validate-profile-cache-contract.py
+          tmp="$(mktemp -d)"
+          mkdir -p "$tmp/ledger" "$tmp/spotlight"
+          python3 scripts/generate-portfolio-evidence-ledger.py "$tmp/ledger" --date 2026-09-04 --offline
+          python3 scripts/validate-portfolio-evidence-ledger.py "$tmp/ledger"
+          python3 scripts/generate-engineering-spotlight.py "$tmp/spotlight" --ledger "$tmp/ledger/portfolio-evidence-ledger.json" --date 2026-09-04
+          python3 scripts/validate-engineering-spotlight.py "$tmp/spotlight" --ledger "$tmp/ledger/portfolio-evidence-ledger.json"
+          python3 scripts/profile_evidence_subjects.py
+          python3 scripts/stage-profile-evidence.py --self-test
+          python3 scripts/validate-profile-evidence-subjects.py
+          python3 scripts/profile_evidence_validation.py
+          python3 scripts/validate-profile-stats-trigger-contract.py
+          python3 scripts/build-profile-evidence-attestation.py --self-test
+          python3 scripts/validate-profile-attestation-schema-binding.py
+          python3 scripts/validate-profile-attestation-contract.py
+          python3 scripts/validate-capability-evidence.py
+          python3 scripts/validate-dependabot-contract.py
+          python3 scripts/validate-action-release-provenance.py
+          python3 scripts/validate-profile-upstream-retry.py
+          python3 scripts/validate-dependency-review-contract.py
+          python3 scripts/validate-workflow-source-shape.py
+          python3 scripts/validate-workflow-authority-contract.py
+          python3 scripts/validate-python-runtime-contract.py
+          python3 scripts/check-python-maintenance-freshness.py
+          python3 scripts/validate-spotlight-ui-merge-authorization.py
+          python3 scripts/validate-workflow-shell-safety.py
+          python3 scripts/validate-codeql-contract.py
+          python3 scripts/write-profile-contract-summary.py --self-test
+          python3 scripts/validate-governance-contract.py
+          python3 scripts/validate-assurance-docs.py
+          python3 scripts/validate-ruleset-contract.py --live
+
+  integration:
+    if: github.event_name == 'workflow_dispatch' && needs.validation_bind.result == 'success'
+    needs: [validation_bind]
+    name: integration-pinned-upstream
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout static trusted main contracts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact trusted validation base
+        env:
+          BASE_SHA: ${{ needs.validation_bind.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
+      - name: Generate actual pinned upstream Signal Field
+        id: stats_primary
+        continue-on-error: true
+        uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
+        with:
+          username: portyu9
+          token: ${{ github.token }}
+          profile: signal-field
+
+      - name: Back off before one exact pinned upstream retry
+        if: steps.stats_primary.outcome == 'failure'
+        run: sleep 60
+
+      - name: Retry exact pinned upstream Signal Field once
+        id: stats_retry
+        if: steps.stats_primary.outcome == 'failure'
+        uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
+        with:
+          username: portyu9
+          token: ${{ github.token }}
+          profile: signal-field
+
+      - name: Select successful exact pinned upstream output
+        id: stats
+        env:
+          PRIMARY_OUTCOME: ${{ steps.stats_primary.outcome }}
+          PRIMARY_READY_DIR: ${{ steps.stats_primary.outputs.ready-dir }}
+          RETRY_OUTCOME: ${{ steps.stats_retry.outcome }}
+          RETRY_READY_DIR: ${{ steps.stats_retry.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          if [ "$PRIMARY_OUTCOME" = "success" ]; then
+            test -n "$PRIMARY_READY_DIR"
+            READY_DIR="$PRIMARY_READY_DIR"
+          else
+            test "$PRIMARY_OUTCOME" = "failure"
+            test "$RETRY_OUTCOME" = "success"
+            test -n "$RETRY_READY_DIR"
+            READY_DIR="$RETRY_READY_DIR"
+          fi
+          echo "ready-dir=$READY_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Exercise canonical profile evidence generation pipeline
+        env:
+          READY_DIR: ${{ steps.stats.outputs.ready-dir }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_USERNAME: portyu9
+        run: |
+          set -euo pipefail
+          python3 scripts/generate-profile-evidence.py \
+            --signal-field-dir "$READY_DIR" \
+            --portfolio-ledger-dir integration-portfolio-evidence \
+            --spotlight-dir integration-engineering-spotlight
+
+      - name: Validate generated engineering card geometry
+        run: python3 scripts/validate-engineering-card-geometry.py --spotlight-dir integration-engineering-spotlight
+
+      - name: Upload exact validation Signal Field
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dependabot-signal-field-${{ needs.validation_bind.outputs.head_sha }}
+          path: ${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Download exact validation Signal Field
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dependabot-signal-field-${{ needs.validation_bind.outputs.head_sha }}
+          path: roundtrip-signal-field
+          digest-mismatch: error
+
+      - name: Revalidate Signal Field artifact round-trip
+        run: |
+          set -euo pipefail
+          python3 scripts/validate-signal-field-v214.py roundtrip-signal-field
+          python3 scripts/validate-generated-signal-field.py roundtrip-signal-field
+
+      - name: Exercise canonical live profile evidence validation boundary
+        env:
+          SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          python3 scripts/validate-profile-evidence-boundary.py \
+            --signal-field-dir "$SIGNAL_FIELD_DIR" \
+            --spotlight-dir integration-engineering-spotlight \
+            --portfolio-ledger-dir integration-portfolio-evidence
+
+      - name: Exercise exact live publication subject staging
+        env:
+          SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          rm -rf integration-profile-evidence
+          python3 scripts/stage-profile-evidence.py integration-profile-evidence \
+            --signal-field-dir "$SIGNAL_FIELD_DIR" \
+            --spotlight-dir integration-engineering-spotlight \
+            --portfolio-ledger-dir integration-portfolio-evidence
+          python3 scripts/validate-profile-evidence-subjects.py --published-root integration-profile-evidence
+
+      - name: Bind generated cache identities to live candidate contracts
+        env:
+          SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          python3 scripts/validate-profile-cache-contract.py \
+            --signal-field-dir "$SIGNAL_FIELD_DIR" \
+            --spotlight-dir integration-engineering-spotlight \
+            --ledger-dir integration-portfolio-evidence
+
+      - name: Write read-only contract summary
+        env:
+          SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
+          SPOTLIGHT_DIR: integration-engineering-spotlight
+          PORTFOLIO_LEDGER_DIR: integration-portfolio-evidence
+        run: python3 scripts/write-profile-contract-summary.py
+
+  dependency_review:
+    if: github.event_name == 'workflow_dispatch' && needs.validation_bind.result == 'success'
+    needs: [validation_bind]
+    name: dependency-review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout static trusted main dependency-review TCB
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact trusted validation base
+        env:
+          BASE_SHA: ${{ needs.validation_bind.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
+
+      - name: Review exact dependency change
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          base-ref: ${{ needs.validation_bind.outputs.base_sha }}
+          head-ref: ${{ needs.validation_bind.outputs.head_sha }}
+          fail-on-severity: moderate
+          fail-on-scopes: runtime, development, unknown
+          license-check: false
+          vulnerability-check: true
+          comment-summary-in-pr: never
+          warn-only: false

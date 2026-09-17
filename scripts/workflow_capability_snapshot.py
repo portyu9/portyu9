@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Load the canonical Workflow Capability BOM as a strict composite snapshot.
 
-The item-12 five-workflow snapshot remains byte-frozen. Item 13 adds trusted workflow
-extensions as small canonical snapshots. This module is the only assembly boundary: callers
-receive one ordinary seven-workflow BOM object whose semantic/canonical representation is
-compared with live trusted compilation.
+The item-12 five-workflow snapshot remains a canonical historical partition. Later trusted
+workflow extensions are stored as one-workflow canonical snapshots. This module is the only
+assembly boundary: callers receive one ordinary eight-workflow BOM object whose semantic and
+canonical representation is compared with live trusted compilation.
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE_SNAPSHOT = ROOT / ".github/workflow-capability-bom-v1.json"
 ADMISSION_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-capability-admission.json"
 AUTOFIX_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-codeql-autofix.json"
+DEPENDABOT_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-dependabot-controller.json"
 EXPECTED_ROOT_KEYS = {"schemaVersion", "bomId", "repository", "automationPolicyId", "workflows"}
 
 
@@ -45,32 +46,45 @@ def load_part(path: Path, label: str) -> dict[str, Any]:
     return payload
 
 
+def one_workflow(extension: dict[str, Any], *, identity: str, path: str, label: str) -> dict[str, Any]:
+    require(len(extension["workflows"]) == 1, f"{label} must contain exactly one workflow")
+    workflow = extension["workflows"][0]
+    require(workflow.get("id") == identity, f"{label} workflow identity changed")
+    require(workflow.get("path") == path, f"{label} workflow path changed")
+    return workflow
+
+
 def load_combined() -> dict[str, Any]:
     base = load_part(BASE_SNAPSHOT, "base Workflow Capability BOM snapshot")
     admission_extension = load_part(ADMISSION_EXTENSION, "Capability admission BOM extension")
     autofix_extension = load_part(AUTOFIX_EXTENSION, "CodeQL Autofix BOM extension")
+    dependabot_extension = load_part(DEPENDABOT_EXTENSION, "Dependabot controller BOM extension")
     require(len(base["workflows"]) == 5, "base Workflow Capability BOM historical workflow count changed")
-    require(len(admission_extension["workflows"]) == 1,
-            "Capability admission BOM extension must contain exactly one workflow")
-    require(len(autofix_extension["workflows"]) == 1,
-            "CodeQL Autofix BOM extension must contain exactly one workflow")
 
-    admission = admission_extension["workflows"][0]
-    require(admission.get("id") == "capability-admission",
-            "Capability admission BOM extension workflow identity changed")
-    require(admission.get("path") == ".github/workflows/capability-admission.yml",
-            "Capability admission BOM extension workflow path changed")
-
-    autofix = autofix_extension["workflows"][0]
-    require(autofix.get("id") == "codeql-autofix",
-            "CodeQL Autofix BOM extension workflow identity changed")
-    require(autofix.get("path") == ".github/workflows/codeql-autofix.yml",
-            "CodeQL Autofix BOM extension workflow path changed")
+    one_workflow(
+        admission_extension,
+        identity="capability-admission",
+        path=".github/workflows/capability-admission.yml",
+        label="Capability admission BOM extension",
+    )
+    one_workflow(
+        autofix_extension,
+        identity="codeql-autofix",
+        path=".github/workflows/codeql-autofix.yml",
+        label="CodeQL Autofix BOM extension",
+    )
+    one_workflow(
+        dependabot_extension,
+        identity="dependabot-controller",
+        path=".github/workflows/dependabot-controller.yml",
+        label="Dependabot controller BOM extension",
+    )
 
     workflows = (
         list(base["workflows"])
         + list(admission_extension["workflows"])
         + list(autofix_extension["workflows"])
+        + list(dependabot_extension["workflows"])
     )
     ids = [workflow.get("id") for workflow in workflows]
     paths = [workflow.get("path") for workflow in workflows]
@@ -85,13 +99,15 @@ def load_combined() -> dict[str, Any]:
 
 def self_test() -> None:
     combined = load_combined()
-    require(len(combined["workflows"]) == 7, "composite Workflow Capability BOM must contain seven workflows")
+    require(len(combined["workflows"]) == 8, "composite Workflow Capability BOM must contain eight workflows")
     require(combined["workflows"][0]["id"] == "capability-admission",
             "composite Workflow Capability BOM ordering changed")
     require(any(workflow["id"] == "codeql-autofix" for workflow in combined["workflows"]),
             "composite Workflow Capability BOM lost CodeQL Autofix workflow")
+    require(any(workflow["id"] == "dependabot-controller" for workflow in combined["workflows"]),
+            "composite Workflow Capability BOM lost Dependabot controller workflow")
 
 
 if __name__ == "__main__":
     self_test()
-    print("Composite Workflow Capability BOM snapshot validation passed: 7 workflows.")
+    print("Composite Workflow Capability BOM snapshot validation passed: 8 workflows.")

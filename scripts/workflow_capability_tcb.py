@@ -21,7 +21,9 @@ PROTECTED_EXACT = {
     ".github/workflow-capability-bom-v1.json",
     ".github/workflow-capability-bom-v1-capability-admission.json",
     ".github/workflow-capability-bom-v1-codeql-autofix.json",
+    ".github/workflow-capability-bom-v1-dependabot-controller.json",
     ".github/workflows/capability-admission.yml",
+    ".github/workflows/dependabot-controller.yml",
     "scripts/profile_stats_decision_receipt.py",
     "scripts/spotlight_decision_receipt.py",
     "scripts/spotlight_profile_links.py",
@@ -121,11 +123,6 @@ def source_expansions(base_root: Path, candidate_root: Path, candidate_tree_sha:
     if not changed:
         return []
 
-    # The exact tree SHA remains a transport/freshness proof for the fetched candidate bytes,
-    # but it is intentionally not part of the authorization digest. The trusted authorization
-    # ledger lives in the repository tree, so binding that tree into a record stored in the
-    # ledger would create a cryptographic self-reference. Instead bind the complete protected
-    # TCB map; ledger-only prior-review PRs cannot change this digest.
     require(candidate_tree_sha is not None and SHA40.fullmatch(candidate_tree_sha) is not None,
             "candidate tree SHA is required for trusted control-source changes")
     candidate_tcb_sha256 = protected_digest(candidate)
@@ -152,6 +149,10 @@ def self_test() -> None:
             "TCB self-test lost Automation Policy loader")
     require(is_protected_path(".github/workflow-capability-bom-v1-codeql-autofix.json"),
             "TCB self-test lost CodeQL Autofix BOM extension")
+    require(is_protected_path(".github/workflow-capability-bom-v1-dependabot-controller.json"),
+            "TCB self-test lost Dependabot controller BOM extension")
+    require(is_protected_path(".github/workflows/dependabot-controller.yml"),
+            "TCB self-test lost privileged Dependabot controller workflow")
     for path in (
         "scripts/codeql_autofix_admission.py",
         "scripts/codeql_autofix_controller_contract.py",
@@ -165,6 +166,9 @@ def self_test() -> None:
         "scripts/dependabot_pin_diff.py",
         "scripts/dependabot_pr_identity.py",
         "scripts/dependabot_reconciliation.py",
+        "scripts/dependabot_controller.py",
+        "scripts/dependabot_release.py",
+        "scripts/dependabot_capability_admission.py",
         "scripts/dependabot_future_module.py",
     ):
         require(is_protected_path(path),

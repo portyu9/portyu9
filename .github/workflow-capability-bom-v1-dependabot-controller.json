@@ -1,0 +1,604 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "dependabot-controller",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted default-branch source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/blobs",
+              "method": "POST",
+              "mutating": true,
+              "step": "Atomically reconcile canonical governance files onto the bot head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Assemble exact candidate tree as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/commits",
+              "method": "POST",
+              "mutating": true,
+              "step": "Atomically reconcile canonical governance files onto the bot head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Assemble exact candidate tree as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Atomically reconcile canonical governance files onto the bot head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Atomically reconcile canonical governance files onto the bot head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Atomically reconcile canonical governance files onto the bot head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind current main and one native Dependabot candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/refs/heads/${HEAD_REF}",
+              "method": "PATCH",
+              "mutating": true,
+              "step": "Atomically reconcile canonical governance files onto the bot head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/trees",
+              "method": "POST",
+              "mutating": true,
+              "step": "Atomically reconcile canonical governance files onto the bot head"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1",
+              "method": "GET",
+              "mutating": false,
+              "step": "Assemble exact candidate tree as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind current main and one native Dependabot candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Assemble exact candidate tree as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Bind current main and one native Dependabot candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind current main and one native Dependabot candidate"
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "https://github.com/${DEPENDENCY_REPOSITORY}.git",
+              "step": "Prove bot identity, atomic pin closure, and public release provenance",
+              "targets": [
+                "\\"
+              ]
+            }
+          ],
+          "artifacts": [],
+          "id": "controller",
+          "mutations": [
+            {
+              "class": "git-ref",
+              "method": "PATCH",
+              "step": "Atomically reconcile canonical governance files onto the bot head",
+              "target": "repos/${TARGET_REPOSITORY}/git/refs/heads/${HEAD_REF}"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Atomically reconcile canonical governance files onto the bot head",
+              "target": "repos/${TARGET_REPOSITORY}/git/blobs"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Atomically reconcile canonical governance files onto the bot head",
+              "target": "repos/${TARGET_REPOSITORY}/git/commits"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Atomically reconcile canonical governance files onto the bot head",
+              "target": "repos/${TARGET_REPOSITORY}/git/trees"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Validate reconciled candidate and inspect protected checks",
+              "target": "repos/${TARGET_REPOSITORY}/dispatches"
+            },
+            {
+              "class": "pull-request",
+              "method": "PUT",
+              "step": "Bind current main and one native Dependabot candidate",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"
+            },
+            {
+              "class": "pull-request-merge",
+              "method": "PUT",
+              "step": "Perform exact-head protected Dependabot merge",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Perform exact-head protected Dependabot merge",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Validate reconciled candidate and inspect protected checks",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Validate reconciled candidate and inspect protected checks",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"
+            }
+          ],
+          "name": "trusted-dependabot-codeql-controller",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "actions": "write",
+            "checks": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout static trusted main dependency-review TCB"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+              "repository": "actions/dependency-review-action",
+              "step": "Review exact dependency change"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [],
+          "id": "dependency_review",
+          "mutations": [],
+          "name": "dependency-review",
+          "needs": [
+            "validation_bind"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload exact validation Signal Field"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout static trusted main contracts"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact validation Signal Field"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
+              "repository": "shinpr/github-profile-stats",
+              "step": "Generate actual pinned upstream Signal Field"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
+              "repository": "shinpr/github-profile-stats",
+              "step": "Retry exact pinned upstream Signal Field once"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "dependabot-signal-field-${{ needs.validation_bind.outputs.head_sha }}",
+              "operation": "download",
+              "path": "roundtrip-signal-field",
+              "step": "Download exact validation Signal Field"
+            },
+            {
+              "if-no-files-found": "error",
+              "name": "dependabot-signal-field-${{ needs.validation_bind.outputs.head_sha }}",
+              "operation": "upload",
+              "path": "${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg",
+              "retention-days": "1",
+              "step": "Upload exact validation Signal Field"
+            }
+          ],
+          "id": "integration",
+          "mutations": [],
+          "name": "integration-pinned-upstream",
+          "needs": [
+            "validation_bind"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout static trusted main contracts"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [],
+          "id": "validate_contracts",
+          "mutations": [],
+          "name": "validate-contracts",
+          "needs": [
+            "validation_bind"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout static trusted main validation TCB"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Reconstruct exact reconciled candidate as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Reconstruct exact reconciled candidate as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact controller-issued validation target"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact controller-issued validation target"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1",
+              "method": "GET",
+              "mutating": false,
+              "step": "Reconstruct exact reconciled candidate as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact controller-issued validation target"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact controller-issued validation target"
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "https://github.com/${DEPENDENCY_REPOSITORY}.git",
+              "step": "Independently re-prove deterministic reconciliation",
+              "targets": [
+                "\\"
+              ]
+            }
+          ],
+          "artifacts": [],
+          "id": "validation_bind",
+          "mutations": [],
+          "name": "dependabot-validation-bind",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Dependabot controller",
+      "path": ".github/workflows/dependabot-controller.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "schedule": {
+          "cron": [
+            "7,22,37,52 * * * *"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}

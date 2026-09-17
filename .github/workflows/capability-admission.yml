@@ -10,6 +10,7 @@ on:
   repository_dispatch:
     types:
       - codeql-autofix-admission
+      - dependabot-admission
   schedule:
     - cron: "*/5 * * * *"
 
@@ -44,6 +45,7 @@ jobs:
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
           DISPATCH=false
+          DEPENDABOT=false
           SPOTLIGHT=false
           HAS_CANDIDATE=true
 
@@ -53,29 +55,58 @@ jobs:
               HEAD_REPOSITORY="$(jq -r '.head.repo.full_name' <<<"$PR")"
               ;;
             repository_dispatch)
-              test "$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")" = "codeql-autofix-admission"
-              PR_NUMBER="$(jq -r '.client_payload.prNumber // 0' "$GITHUB_EVENT_PATH")"
-              ORIGIN_RUN_ID="$(jq -r '.client_payload.originRunId // 0' "$GITHUB_EVENT_PATH")"
-              ALERT_NUMBER="$(jq -r '.client_payload.alertNumber // 0' "$GITHUB_EVENT_PATH")"
-              EXPECTED_BASE_SHA="$(jq -r '.client_payload.baseSha // ""' "$GITHUB_EVENT_PATH")"
-              EXPECTED_HEAD_SHA="$(jq -r '.client_payload.headSha // ""' "$GITHUB_EVENT_PATH")"
-              [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-              [[ "$ORIGIN_RUN_ID" =~ ^[1-9][0-9]*$ ]]
-              [[ "$ALERT_NUMBER" =~ ^[1-9][0-9]*$ ]]
-              [[ "$EXPECTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
-              [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+              ACTION="$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")"
+              case "$ACTION" in
+                codeql-autofix-admission)
+                  PR_NUMBER="$(jq -r '.client_payload.prNumber // 0' "$GITHUB_EVENT_PATH")"
+                  ORIGIN_RUN_ID="$(jq -r '.client_payload.originRunId // 0' "$GITHUB_EVENT_PATH")"
+                  ALERT_NUMBER="$(jq -r '.client_payload.alertNumber // 0' "$GITHUB_EVENT_PATH")"
+                  EXPECTED_BASE_SHA="$(jq -r '.client_payload.baseSha // ""' "$GITHUB_EVENT_PATH")"
+                  EXPECTED_HEAD_SHA="$(jq -r '.client_payload.headSha // ""' "$GITHUB_EVENT_PATH")"
+                  [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+                  [[ "$ORIGIN_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+                  [[ "$ALERT_NUMBER" =~ ^[1-9][0-9]*$ ]]
+                  [[ "$EXPECTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+                  [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-              PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-              test "$(jq -r .state <<<"$PR")" = "open"
-              test "$(jq -r .draft <<<"$PR")" = "false"
-              test "$(jq -r .base.ref <<<"$PR")" = "main"
-              test "$(jq -r .base.sha <<<"$PR")" = "$EXPECTED_BASE_SHA"
-              test "$(jq -r .head.sha <<<"$PR")" = "$EXPECTED_HEAD_SHA"
-              test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
-              test "$(jq -r .head.ref <<<"$PR")" = "codeql-autofix/alert-${ALERT_NUMBER}/run-${ORIGIN_RUN_ID}"
-              test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_BASE_SHA"
-              HEAD_REPOSITORY="$TARGET_REPOSITORY"
-              DISPATCH=true
+                  PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+                  test "$(jq -r .state <<<"$PR")" = "open"
+                  test "$(jq -r .draft <<<"$PR")" = "false"
+                  test "$(jq -r .base.ref <<<"$PR")" = "main"
+                  test "$(jq -r .base.sha <<<"$PR")" = "$EXPECTED_BASE_SHA"
+                  test "$(jq -r .head.sha <<<"$PR")" = "$EXPECTED_HEAD_SHA"
+                  test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+                  test "$(jq -r .head.ref <<<"$PR")" = "codeql-autofix/alert-${ALERT_NUMBER}/run-${ORIGIN_RUN_ID}"
+                  HEAD_REPOSITORY="$TARGET_REPOSITORY"
+                  DISPATCH=true
+                  ;;
+                dependabot-admission)
+                  test "$(jq -r '.sender.login // ""' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"
+                  PR_NUMBER="$(jq -r '.client_payload.prNumber // 0' "$GITHUB_EVENT_PATH")"
+                  EXPECTED_BASE_SHA="$(jq -r '.client_payload.baseSha // ""' "$GITHUB_EVENT_PATH")"
+                  EXPECTED_HEAD_SHA="$(jq -r '.client_payload.headSha // ""' "$GITHUB_EVENT_PATH")"
+                  [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+                  [[ "$EXPECTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+                  [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+                  gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
+                  PR="$(cat dependabot-pr.json)"
+                  test "$(jq -r .state <<<"$PR")" = "open"
+                  test "$(jq -r .draft <<<"$PR")" = "false"
+                  test "$(jq -r .base.ref <<<"$PR")" = "main"
+                  test "$(jq -r .base.sha <<<"$PR")" = "$EXPECTED_BASE_SHA"
+                  test "$(jq -r .head.sha <<<"$PR")" = "$EXPECTED_HEAD_SHA"
+                  test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+                  test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
+                  [[ "$(jq -r .head.ref <<<"$PR")" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+                  HEAD_REPOSITORY="$TARGET_REPOSITORY"
+                  DEPENDABOT=true
+                  ;;
+                *)
+                  echo "ERROR: unsupported capability-admission repository dispatch: $ACTION" >&2
+                  exit 1
+                  ;;
+              esac
               ;;
             schedule)
               MAIN_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
@@ -99,6 +130,7 @@ jobs:
                 HAS_CANDIDATE=false
                 printf 'has_candidate=false\n' >> "$GITHUB_OUTPUT"
                 printf 'dispatch=false\n' >> "$GITHUB_OUTPUT"
+                printf 'dependabot=false\n' >> "$GITHUB_OUTPUT"
                 printf 'spotlight=false\n' >> "$GITHUB_OUTPUT"
                 echo "No exact current-main Spotlight candidate needs admission recovery."
                 exit 0
@@ -124,6 +156,7 @@ jobs:
           [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
 
           if [ "$DISPATCH" = "true" ]; then
             [[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]
@@ -132,10 +165,15 @@ jobs:
             printf 'alert_number=%s\n' "$ALERT_NUMBER" >> "$GITHUB_OUTPUT"
           fi
 
+          if [ "$DEPENDABOT" = "true" ]; then
+            test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
+            [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+            printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          fi
+
           if [ "$SPOTLIGHT" = "true" ]; then
             test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
             [[ "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
-            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
             test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
 
             CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
@@ -171,6 +209,7 @@ jobs:
 
           printf 'has_candidate=%s\n' "$HAS_CANDIDATE" >> "$GITHUB_OUTPUT"
           printf 'dispatch=%s\n' "$DISPATCH" >> "$GITHUB_OUTPUT"
+          printf 'dependabot=%s\n' "$DEPENDABOT" >> "$GITHUB_OUTPUT"
           printf 'spotlight=%s\n' "$SPOTLIGHT" >> "$GITHUB_OUTPUT"
           printf 'base_ref=%s\n' "$BASE_REF" >> "$GITHUB_OUTPUT"
           printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
@@ -178,13 +217,19 @@ jobs:
           printf 'head_repository=%s\n' "$HEAD_REPOSITORY" >> "$GITHUB_OUTPUT"
           printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout exact trusted base
+      - name: Checkout static trusted main
         if: steps.candidate.outputs.has_candidate == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.candidate.outputs.base_sha }}
+          ref: main
           persist-credentials: false
           fetch-depth: 1
+
+      - name: Verify exact trusted base checkout
+        if: steps.candidate.outputs.has_candidate == 'true'
+        env:
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
 
       - name: Set up Python
         if: steps.candidate.outputs.has_candidate == 'true'
@@ -264,6 +309,8 @@ jobs:
           BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
           HEAD_REPOSITORY: ${{ steps.candidate.outputs.head_repository }}
           HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
+          DEPENDABOT: ${{ steps.candidate.outputs.dependabot }}
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
@@ -327,27 +374,93 @@ jobs:
           test "$POLICY_SEEN" = "1"
           test "$WORKFLOW_SEEN" -ge 1
 
+          if [ "$DEPENDABOT" = "true" ]; then
+            test "$PR_NUMBER" -gt 0
+            gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json
+            jq -r '.[][] | .filename' dependabot-file-pages.json | LC_ALL=C sort > dependabot-changed-paths.txt
+            test -s dependabot-changed-paths.txt
+            test "$(sort -u dependabot-changed-paths.txt | wc -l)" = "$(wc -l < dependabot-changed-paths.txt)"
+            for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do
+              ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path and .type == "blob")]' <<<"$TREE")"
+              test "$(jq 'length' <<<"$ENTRY")" = "1"
+              test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
+              BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
+              [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+              BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+              test "$(jq -r .encoding <<<"$BLOB")" = "base64"
+              mkdir -p "candidate-capability-source/$(dirname "$PATH_VALUE")"
+              jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "candidate-capability-source/$PATH_VALUE"
+              test -s "candidate-capability-source/$PATH_VALUE"
+            done
+          fi
+
+      - name: Verify delegated Dependabot release provenance
+        if: steps.candidate.outputs.dependabot == 'true'
+        env:
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/dependabot_controller.py probe \
+            --pr dependabot-pr.json \
+            --expected-head "$HEAD_SHA" \
+            --base-root . \
+            --candidate-root candidate-capability-source \
+            --out dependabot-probe.json
+          DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository dependabot-probe.json)"
+          CANDIDATE_TAG="$(jq -r .after.tag dependabot-probe.json)"
+          CANDIDATE_SHA="$(jq -r .after.sha dependabot-probe.json)"
+          test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
+          [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
+            "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > dependabot-release-refs.txt
+          python3 scripts/dependabot_release.py \
+            --refs dependabot-release-refs.txt \
+            --repository "$DEPENDENCY_REPOSITORY" \
+            --tag "$CANDIDATE_TAG" \
+            --expected-sha "$CANDIDATE_SHA" \
+            --out dependabot-resolved-release-sha.txt
+          test "$(cat dependabot-resolved-release-sha.txt)" = "$CANDIDATE_SHA"
+
       - name: Evaluate trusted semantic capability admission
         if: steps.candidate.outputs.has_candidate == 'true'
+        env:
+          DEPENDABOT: ${{ steps.candidate.outputs.dependabot }}
+          HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
         run: |
           set -euo pipefail
           TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          python3 scripts/workflow_capability_admission.py \
-            candidate-capability-source \
-            --candidate-tree-sha "$TREE_SHA" \
-            > capability-admission.json
+          if [ "$DEPENDABOT" = "true" ]; then
+            RESOLVED_RELEASE_SHA="$(cat dependabot-resolved-release-sha.txt)"
+            [[ "$RESOLVED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            python3 scripts/dependabot_capability_admission.py \
+              candidate-capability-source \
+              --candidate-tree-sha "$TREE_SHA" \
+              --pr dependabot-pr.json \
+              --expected-head-sha "$HEAD_SHA" \
+              --resolved-release-sha "$RESOLVED_RELEASE_SHA" \
+              --changed-paths dependabot-changed-paths.txt \
+              > capability-admission.json
+            test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"
+          else
+            python3 scripts/workflow_capability_admission.py \
+              candidate-capability-source \
+              --candidate-tree-sha "$TREE_SHA" \
+              > capability-admission.json
+          fi
           jq -e '.decision.allowed == true' capability-admission.json >/dev/null
           jq -cS '{decision: .decision, expansionCount: (.diff.expansions | length), reductionCount: (.diff.reductions | length)}' capability-admission.json
 
       - name: Publish exact candidate trusted admission check
-        if: steps.candidate.outputs.dispatch == 'true' || steps.candidate.outputs.spotlight == 'true'
+        if: steps.candidate.outputs.dispatch == 'true' || steps.candidate.outputs.dependabot == 'true' || steps.candidate.outputs.spotlight == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
           PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
           ORIGIN_RUN_ID: ${{ steps.candidate.outputs.origin_run_id }}
+          DEPENDABOT: ${{ steps.candidate.outputs.dependabot }}
           SPOTLIGHT: ${{ steps.candidate.outputs.spotlight }}
           BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
         run: |
@@ -355,7 +468,10 @@ jobs:
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$PR_NUMBER" -gt 0
-          if [ "$SPOTLIGHT" = "true" ]; then
+          if [ "$DEPENDABOT" = "true" ]; then
+            EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+            SUMMARY="Trusted default-branch delegated admission accepted the exact reconciled native Dependabot CodeQL Action candidate."
+          elif [ "$SPOTLIGHT" = "true" ]; then
             EXTERNAL_ID="spotlight-scheduled-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
             SUMMARY="Trusted scheduled admission accepted the exact current-main deterministic README-only Spotlight bot candidate."
           else
