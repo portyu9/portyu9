@@ -49,6 +49,15 @@ def _mapping(value: Any, label: str) -> Mapping[str, Any]:
     return value
 
 
+def _action_identity(value: Mapping[str, Any]) -> str:
+    repository = value.get("repository")
+    path = value.get("path")
+    require(repository == dependabot_controller.CODEQL_REPOSITORY,
+            "delegated Dependabot action repository changed")
+    require(isinstance(path, str), "delegated Dependabot action subpath is malformed")
+    return repository + (f"/{path}" if path else "")
+
+
 def _validate_semantic_bounds(diff: Mapping[str, Any], proof: Mapping[str, Any]) -> None:
     before = _mapping(proof.get("before"), "Dependabot before identity")
     after = _mapping(proof.get("after"), "Dependabot after identity")
@@ -70,13 +79,9 @@ def _validate_semantic_bounds(diff: Mapping[str, Any], proof: Mapping[str, Any])
         category = entry.get("category")
         if category == "action":
             candidate = _mapping(entry.get("after"), "Dependabot candidate action capability")
-            require(candidate.get("repository") == dependabot_controller.CODEQL_REPOSITORY,
-                    "delegated Dependabot expansion introduced another Action repository")
             require(candidate.get("ref") == new_sha,
                     "delegated Dependabot expansion introduced an unproved Action SHA")
-            path = candidate.get("path")
-            full_action = dependabot_controller.CODEQL_REPOSITORY + (str(path) if path else "")
-            require(full_action in actions,
+            require(_action_identity(candidate) in actions,
                     "delegated Dependabot expansion introduced an unproved Action subpath")
             action_expansions.append(entry)
         elif category == "trusted-control-source":
@@ -97,13 +102,9 @@ def _validate_semantic_bounds(diff: Mapping[str, Any], proof: Mapping[str, Any])
         require(entry.get("category") == "action",
                 f"delegated Dependabot admission forbids capability reduction category: {entry.get('category')}")
         previous = _mapping(entry.get("before"), "Dependabot previous action capability")
-        require(previous.get("repository") == dependabot_controller.CODEQL_REPOSITORY,
-                "delegated Dependabot reduction removed another Action repository")
         require(previous.get("ref") == old_sha,
                 "delegated Dependabot reduction removed an unproved Action SHA")
-        path = previous.get("path")
-        full_action = dependabot_controller.CODEQL_REPOSITORY + (str(path) if path else "")
-        require(full_action in actions,
+        require(_action_identity(previous) in actions,
                 "delegated Dependabot reduction removed an unproved Action subpath")
         action_reductions.append(entry)
     require(len(action_reductions) == len(actions),
@@ -157,22 +158,22 @@ def self_test() -> None:
         "expansions": [
             {
                 "category": "action",
-                "after": {"repository": "github/codeql-action", "path": "/init", "ref": "b" * 40},
+                "after": {"repository": "github/codeql-action", "path": "init", "ref": "b" * 40},
             },
             {
                 "category": "action",
-                "after": {"repository": "github/codeql-action", "path": "/analyze", "ref": "b" * 40},
+                "after": {"repository": "github/codeql-action", "path": "analyze", "ref": "b" * 40},
             },
             {"category": "trusted-control-source", "key": BASE_BOM_PATH},
         ],
         "reductions": [
             {
                 "category": "action",
-                "before": {"repository": "github/codeql-action", "path": "/init", "ref": "a" * 40},
+                "before": {"repository": "github/codeql-action", "path": "init", "ref": "a" * 40},
             },
             {
                 "category": "action",
-                "before": {"repository": "github/codeql-action", "path": "/analyze", "ref": "a" * 40},
+                "before": {"repository": "github/codeql-action", "path": "analyze", "ref": "a" * 40},
             },
         ],
     }
