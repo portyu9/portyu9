@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "045dc687738b760dfc9629cfec2442f5f9ff1400"
+EXPECTED_GIT_BLOB = "7f5af3620794863064708cccaf550c4d8c9281cf"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
