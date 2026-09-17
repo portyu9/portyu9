@@ -145,7 +145,6 @@ def validate_governance(text: str) -> None:
         ".github/dependabot.yml",
         "exact commit SHA",
         "separate pull request",
-        "CodeQL sub-actions",
         "actions/attest",
         "actions/checkout",
         "shinpr/github-profile-stats",
