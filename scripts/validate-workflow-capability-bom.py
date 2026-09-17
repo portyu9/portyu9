@@ -2,7 +2,6 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
-import base64
 import sys
 from typing import Any
 
@@ -48,6 +47,7 @@ def first_difference(expected: Any, observed: Any, path: str = "$") -> str | Non
 
 def validate_snapshot() -> tuple[int, int]:
     snapshot = workflow_capability_snapshot.load_combined()
+
     compiler.self_test()
     capability_diff.self_test()
     trusted_workflow_capability.self_test()
@@ -56,15 +56,18 @@ def validate_snapshot() -> tuple[int, int]:
     capability_admission_workflow_contract.self_test()
     capability_admission_workflow_contract.validate()
     workflow_capability_admission.self_test()
+
     compiled = compiler.compile_bom()
     difference = first_difference(compiled, snapshot)
     if difference is not None:
         raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
+
     require(compiler.canonical_json(snapshot) == compiler.canonical_json(compiled),
             "composite Workflow Capability BOM canonical bytes differ from live compilation")
     identity_diff = capability_diff.semantic_diff(snapshot, compiled)
     require(not identity_diff["hasExpansion"] and not identity_diff["reductions"],
             "identical canonical BOMs produced a semantic capability diff")
+
     workflows = compiled["workflows"]
     jobs = sum(len(workflow["jobs"]) for workflow in workflows)
     require(len(workflows) == 8, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
@@ -74,15 +77,6 @@ def validate_snapshot() -> tuple[int, int]:
 
 def main() -> int:
     try:
-        compiled_review = compiler.compile_bom()
-        dependabot = [workflow for workflow in compiled_review["workflows"] if workflow["id"] == "dependabot-controller"]
-        require(len(dependabot) == 1, "review compiler lost exact Dependabot controller workflow")
-        extension_review = {key: compiled_review[key] for key in ("automationPolicyId", "bomId", "repository", "schemaVersion")}
-        extension_review["workflows"] = dependabot
-        payload = compiler.canonical_json(extension_review).encode("utf-8")
-        print("BEGIN REVIEW DEPENDABOT CONTROLLER BOM BASE64")
-        print(base64.b64encode(payload).decode("ascii"))
-        print("END REVIEW DEPENDABOT CONTROLLER BOM BASE64")
         workflows, jobs = validate_snapshot()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
