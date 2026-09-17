@@ -144,6 +144,13 @@
       "rationale": "Authorize #514's exact scheduled Spotlight admission recovery. Trusted default-branch admission may discover at most one exact current-main github-actions[bot] README-only deterministic candidate, reprove bot, ancestry, generated, and README bindings, evaluate candidate TCB bytes only as data, and publish only trusted-capability-admission on that head. No merge authority, candidate execution, bypass, or required-check reduction is introduced."
     },
     {
+      "id": "cap-spotlight-scheduled-admission-recovery-tcb",
+      "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
+      "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
+      "expansionSha256": "87a7c1acb3aa8f2e42cde5b2f519081c7bf8869f94d5f155a3c08073c6315f8e",
+      "rationale": "Authorize #518's exact final Spotlight scheduled admission recovery including the protected workflow and canonical BOM source boundary. Trusted code may discover and reprove at most one exact current-main deterministic github-actions[bot] README-only candidate, evaluate candidate TCB bytes only as data, and publish only trusted-capability-admission on that exact head. Merge authority and all other protected checks remain unchanged."
+    },
+    {
       "id": "cap-workflow-capability-graphql-hardening",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
