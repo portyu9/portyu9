@@ -77,13 +77,20 @@ def validate_snapshot() -> tuple[int, int]:
 
 def main() -> int:
     try:
-        workflows, jobs = validate_snapshot()
-        print(
-            f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
-            "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
-            "composite snapshot, exact trusted-workflow bytes, and admission self-tests passed."
-        )
-        return 0
+        compiled = compiler.compile_bom()
+        admission = [workflow for workflow in compiled["workflows"] if workflow["id"] == "capability-admission"]
+        require(len(admission) == 1, "diagnostic admission workflow selection changed")
+        extension = {
+            "schemaVersion": compiled["schemaVersion"],
+            "bomId": compiled["bomId"],
+            "repository": compiled["repository"],
+            "automationPolicyId": compiled["automationPolicyId"],
+            "workflows": admission,
+        }
+        print("BEGIN_CANONICAL_CAPABILITY_ADMISSION_EXTENSION")
+        print(compiler.canonical_json(extension), end="")
+        print("END_CANONICAL_CAPABILITY_ADMISSION_EXTENSION")
+        return 1
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
