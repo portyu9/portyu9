@@ -165,6 +165,13 @@
       "rationale": "Authorize #533's exact final current-main zero-touch Dependabot CodeQL controller candidate after canonical eight-workflow BOM, runtime, and assurance closure. Trusted default-branch logic accepts only one native grouped github/codeql-action PR, reconciles deterministic governance bytes, delegates admission for that exact class, runs exact-head protected validation, dispatches CodeQL, and merges only the admitted expected head after all six contexts pass."
     },
     {
+      "id": "cap-dependabot-codeql-zero-touch-controller-hardened-tcb",
+      "baseBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
+      "candidateBomSha256": "381e1f75486804a8f58cfc4a95541ed7c1af0d45b61325ff3d4e49cfef18dc93",
+      "expansionSha256": "787a3d24d2c89856868639ec924de295a99cd681e016b26702eaff3eb3f5aece",
+      "rationale": "Authorize #533's hardened zero-touch Dependabot CodeQL controller after removing all candidate-code checkout/execution from trusted validation and switching privileged Capability Admission to literal main with exact-SHA reproof. GitHub CodeQL reports no new PR alerts. The controller still admits only the exact native grouped CodeQL release class, reconstructs candidate bytes as data, requires all six exact-head gates, and merges only the expected admitted head."
+    },
+    {
       "id": "cap-spotlight-scheduled-admission-recovery",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
