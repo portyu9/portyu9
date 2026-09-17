@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "832e0bd59478c4b203f3db0b1fa044309ed436d7"
+EXPECTED_GIT_BLOB = "045dc687738b760dfc9629cfec2442f5f9ff1400"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -29,7 +29,7 @@ def validate_text(text: str) -> None:
         require(text.count(f"      - {event_type}\n") == 1,
                 f"trusted capability admission event type changed: {event_type}")
     require(
-        "  repository_dispatch:\n    types:\n      - codeql-autofix-admission\n" in text,
+        "  repository_dispatch:\n    types:\n      - codeql-autofix-admission\n      - dependabot-admission\n" in text,
         "trusted capability admission repository_dispatch trigger changed",
     )
     require('  schedule:\n    - cron: "*/5 * * * *"\n' in text,
@@ -77,8 +77,11 @@ def validate_text(text: str) -> None:
             "trusted admission repository identity binding changed")
     require('PR="$(jq -c \'.pull_request\' "$GITHUB_EVENT_PATH")"' in text,
             "trusted admission pull_request_target binding changed")
-    require('test "$(jq -r \'.action // ""\' "$GITHUB_EVENT_PATH")" = "codeql-autofix-admission"' in text,
-            "trusted admission dispatch type binding changed")
+    require('ACTION="$(jq -r \'.action // ""\' "$GITHUB_EVENT_PATH")"' in text,
+            "trusted admission dispatch action binding changed")
+    for dispatch_type in ("codeql-autofix-admission)", "dependabot-admission)"):
+        require(text.count(dispatch_type) == 1,
+                f"trusted admission dispatch type binding changed: {dispatch_type}")
     for payload_binding in (
         ".client_payload.prNumber",
         ".client_payload.originRunId",
@@ -102,6 +105,30 @@ def validate_text(text: str) -> None:
             "trusted admission Autofix branch/run/alert identity binding changed")
     require('[[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]' in text,
             "trusted admission Autofix branch shape binding changed")
+
+    for dependabot_fragment in (
+        'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"',
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json',
+        'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
+        '[[ "$(jq -r .head.ref <<<"$PR")" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]',
+        '[[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]',
+        'DEPENDABOT=true',
+        'printf \'dependabot=%s\\n\' "$DEPENDABOT"',
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json',
+        'jq -r \'.[][] | .filename\' dependabot-file-pages.json | LC_ALL=C sort > dependabot-changed-paths.txt',
+        'for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do',
+        'python3 scripts/dependabot_controller.py probe',
+        'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
+        'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
+        'python3 scripts/dependabot_release.py',
+        '--expected-sha "$CANDIDATE_SHA"',
+        'python3 scripts/dependabot_capability_admission.py',
+        '--resolved-release-sha "$RESOLVED_RELEASE_SHA"',
+        '--changed-paths dependabot-changed-paths.txt',
+        'test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"',
+    ):
+        require(dependabot_fragment in text,
+                f"trusted admission delegated Dependabot proof changed: {dependabot_fragment}")
 
     for spotlight_fragment in (
         'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"',
@@ -137,7 +164,7 @@ def validate_text(text: str) -> None:
             "trusted admission lost scheduled Spotlight publication binding")
 
     for output_name in (
-        "dispatch", "base_ref", "base_sha", "head_ref", "head_repository", "head_sha",
+        "dispatch", "dependabot", "base_ref", "base_sha", "head_ref", "head_repository", "head_sha",
     ):
         require(f"printf '{output_name}=%s\\n'" in text,
                 f"trusted admission lost verified context output: {output_name}")
@@ -182,17 +209,17 @@ def validate_text(text: str) -> None:
     require('test "$(jq -r .status origin-run.json)" = "in_progress"' in text,
             "trusted admission no longer proves the origin controller is the live dispatcher")
 
-    for endpoint in (
-        'gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}"',
-        'gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
-        'gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}"',
-    ):
-        require(text.count(endpoint) == 1,
-                f"trusted admission candidate object fetch surface changed: {endpoint}")
+    commit_endpoint = 'gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}"'
+    tree_endpoint = 'gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"'
+    blob_endpoint = 'gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}"'
+    require(text.count(commit_endpoint) == 1, "trusted admission candidate commit fetch surface changed")
+    require(text.count(tree_endpoint) == 1, "trusted admission candidate tree fetch surface changed")
+    require(text.count(blob_endpoint) == 2,
+            "trusted admission candidate blob fetch surface must remain one TCB loop plus one Dependabot-derived-file loop")
     require('test "$(jq -r .truncated <<<"$TREE")" = "false"' in text,
             "trusted admission lost complete candidate-tree proof")
-    require('test "$(jq -r \'.[0].mode\' <<<"$ENTRY")" = "100644"' in text,
-            "trusted admission lost candidate regular-file mode proof")
+    require(text.count('test "$(jq -r \'.[0].mode\' <<<"$ENTRY")" = "100644"') == 2,
+            "trusted admission lost candidate regular-file mode proofs")
     require("candidate-capability-source/.github/workflows" in text and
             "candidate-capability-source/scripts" in text,
             "trusted admission candidate data roots changed")
@@ -203,8 +230,12 @@ def validate_text(text: str) -> None:
             "trusted admission no longer persists the exact candidate tree SHA")
     require('TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"' in text,
             "trusted admission lost cross-step candidate tree SHA binding")
-    require("python3 scripts/workflow_capability_admission.py \\\n            candidate-capability-source \\\n            --candidate-tree-sha \"$TREE_SHA\"" in text,
-            "trusted admission evaluator lost exact candidate tree binding")
+    require("python3 scripts/workflow_capability_admission.py" in text and
+            "--candidate-tree-sha \"$TREE_SHA\"" in text,
+            "trusted admission ordinary evaluator lost exact candidate tree binding")
+    require("python3 scripts/dependabot_capability_admission.py" in text and
+            "--candidate-tree-sha \"$TREE_SHA\"" in text,
+            "trusted admission delegated evaluator lost exact candidate tree binding")
 
     publisher = 'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
     require(text.count(publisher) == 1,
@@ -221,12 +252,16 @@ def validate_text(text: str) -> None:
         'test "$(jq -r .conclusion <<<"$CHECK")" = "success"',
         'test "$(jq -r .app.id <<<"$CHECK")" = "15368"',
         'EXTERNAL_ID="codeql-autofix-admission:${ORIGIN_RUN_ID}:${PR_NUMBER}:${HEAD_SHA}"',
+        'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         'EXTERNAL_ID="spotlight-scheduled-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
     ):
         require(publisher_binding in text,
                 f"trusted admission candidate-check binding changed: {publisher_binding}")
-    require("if: steps.candidate.outputs.dispatch == 'true' || steps.candidate.outputs.spotlight == 'true'" in text,
-            "trusted admission candidate-check write is no longer bound to reviewed bot recovery paths")
+    require(
+        "if: steps.candidate.outputs.dispatch == 'true' || steps.candidate.outputs.dependabot == 'true' || steps.candidate.outputs.spotlight == 'true'"
+        in text,
+        "trusted admission candidate-check write is no longer bound to reviewed bot recovery paths",
+    )
 
     require(text.count("actions/checkout@") == 1,
             "trusted admission gained an additional checkout execution surface")
@@ -249,74 +284,65 @@ def validate() -> None:
     validate_text(data.decode("utf-8"))
 
 
+def expect_failure(text: str, old: str, new: str, expected: str) -> None:
+    require(old in text, f"capability admission self-test fixture missing mutation anchor: {old}")
+    try:
+        validate_text(text.replace(old, new, 1))
+    except ValueError as exc:
+        require(expected in str(exc),
+                f"trusted admission self-test failed for wrong reason: expected={expected!r} observed={exc}")
+    else:
+        raise ValueError(f"trusted admission contract accepted forbidden mutation: {expected}")
+
+
 def self_test() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     validate_text(text)
-    try:
-        validate_text(text.replace("checks: write", "contents: write", 1))
-    except ValueError as exc:
-        require("permission set changed" in str(exc) or "forbidden authority" in str(exc),
-                f"trusted admission permission self-test failed for wrong reason: {exc}")
-    else:
-        raise ValueError("trusted admission contract accepted altered write authority")
-    try:
-        validate_text(text.replace(
-            'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
-            'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
-            1,
-        ))
-    except ValueError as exc:
-        require("candidate-check publisher" in str(exc),
-                f"trusted admission publisher self-test failed for wrong reason: {exc}")
-    else:
-        raise ValueError("trusted admission contract accepted a different mutation surface")
-    try:
-        validate_text(text.replace(
-            "ref: ${{ steps.candidate.outputs.base_sha }}",
-            "ref: ${{ steps.candidate.outputs.head_sha }}",
-            1,
-        ))
-    except ValueError as exc:
-        require(
-            "trusted base SHA" in str(exc)
-            or "checkout candidate" in str(exc)
-            or "forbidden authority" in str(exc),
-            f"trusted admission checkout self-test failed for wrong reason: {exc}",
-        )
-    else:
-        raise ValueError("trusted admission contract accepted candidate checkout")
-    try:
-        validate_text(text.replace("--candidate-tree-sha \"$TREE_SHA\"", "", 1))
-    except ValueError as exc:
-        require("candidate tree binding" in str(exc),
-                f"trusted admission tree-binding self-test failed for wrong reason: {exc}")
-    else:
-        raise ValueError("trusted admission contract accepted an unbound candidate TCB")
-    try:
-        validate_text(text.replace(".autofixCommitSha", ".unboundCommitSha", 1))
-    except ValueError as exc:
-        require("receipt binding" in str(exc),
-                f"trusted admission receipt-binding self-test failed for wrong reason: {exc}")
-    else:
-        raise ValueError("trusted admission contract accepted an unbound controller receipt")
-    try:
-        validate_text(text.replace('    - cron: "*/5 * * * *"', '    - cron: "17 * * * *"', 1))
-    except ValueError as exc:
-        require("scheduled Spotlight recovery trigger" in str(exc),
-                f"trusted admission schedule self-test failed for wrong reason: {exc}")
-    else:
-        raise ValueError("trusted admission contract accepted a changed recovery schedule")
-    try:
-        validate_text(text.replace('test "$HEAD_REF" = "automation/spotlight-links/${CANDIDATE_ID}"',
-                                   'test "$HEAD_REF" = "automation/spotlight-links/unbound"', 1))
-    except ValueError as exc:
-        require("scheduled Spotlight identity proof" in str(exc),
-                f"trusted admission Spotlight binding self-test failed for wrong reason: {exc}")
-    else:
-        raise ValueError("trusted admission contract accepted an unbound Spotlight candidate")
+    expect_failure(text, "checks: write", "contents: write", "permission set changed")
+    expect_failure(
+        text,
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+        "candidate-check publisher",
+    )
+    expect_failure(
+        text,
+        "ref: ${{ steps.candidate.outputs.base_sha }}",
+        "ref: ${{ steps.candidate.outputs.head_sha }}",
+        "trusted base SHA",
+    )
+    expect_failure(text, "--candidate-tree-sha \"$TREE_SHA\"", "--candidate-tree-sha \"$HEAD_SHA\"",
+                   "candidate tree binding")
+    expect_failure(text, ".autofixCommitSha", ".unboundCommitSha", "receipt binding")
+    expect_failure(text, '    - cron: "*/5 * * * *"', '    - cron: "17 * * * *"',
+                   "scheduled Spotlight recovery trigger")
+    expect_failure(text,
+                   'test "$HEAD_REF" = "automation/spotlight-links/${CANDIDATE_ID}"',
+                   'test "$HEAD_REF" = "automation/spotlight-links/unbound"',
+                   "scheduled Spotlight identity proof")
+    expect_failure(text,
+                   'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"',
+                   'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "dependabot[bot]"',
+                   "delegated Dependabot proof")
+    expect_failure(text,
+                   'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
+                   'test -n "$DEPENDENCY_REPOSITORY"',
+                   "delegated Dependabot proof")
+    expect_failure(text,
+                   'test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"',
+                   'test "$(jq -r .decision.allowed capability-admission.json)" = "true"',
+                   "delegated Dependabot proof")
+    expect_failure(text,
+                   'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+                   'EXTERNAL_ID="dependabot-unbound:${PR_NUMBER}"',
+                   "candidate-check binding")
 
 
 if __name__ == "__main__":
     self_test()
     validate()
-    print("Trusted capability admission workflow contract passed: exact bytes, base-only execution, immutable Autofix provenance, scheduled deterministic Spotlight recovery, data-only candidate TCB evaluation, and one bounded exact-head GitHub Actions check publisher.")
+    print(
+        "Trusted capability admission workflow contract passed: exact bytes, base-only execution, immutable Autofix provenance, "
+        "scheduled deterministic Spotlight recovery, exact native Dependabot/release/delegation reproof, data-only candidate TCB "
+        "evaluation, and one bounded exact-head GitHub Actions check publisher."
+    )
