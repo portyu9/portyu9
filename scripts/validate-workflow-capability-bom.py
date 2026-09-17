@@ -60,6 +60,17 @@ def codeql_extension(compiled: dict[str, Any]) -> dict[str, Any]:
 def validate_snapshot() -> tuple[int, int]:
     snapshot = workflow_capability_snapshot.load_combined()
 
+    # Diagnostic carrier only: compile before admission self-tests so a reviewed
+    # capability expansion can expose its canonical snapshot bytes without
+    # pretending that the expansion is already authorized.
+    compiled = compiler.compile_bom()
+    difference = first_difference(compiled, snapshot)
+    if difference is not None:
+        print("CANONICAL-CODEQL-AUTOFIX-EXTENSION-BEGIN", file=sys.stderr)
+        print(compiler.canonical_json(codeql_extension(compiled)), file=sys.stderr, end="")
+        print("CANONICAL-CODEQL-AUTOFIX-EXTENSION-END", file=sys.stderr)
+        raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
+
     compiler.self_test()
     capability_diff.self_test()
     trusted_workflow_capability.self_test()
@@ -68,14 +79,6 @@ def validate_snapshot() -> tuple[int, int]:
     capability_admission_workflow_contract.self_test()
     capability_admission_workflow_contract.validate()
     workflow_capability_admission.self_test()
-
-    compiled = compiler.compile_bom()
-    difference = first_difference(compiled, snapshot)
-    if difference is not None:
-        print("CANONICAL-CODEQL-AUTOFIX-EXTENSION-BEGIN", file=sys.stderr)
-        print(compiler.canonical_json(codeql_extension(compiled)), file=sys.stderr, end="")
-        print("CANONICAL-CODEQL-AUTOFIX-EXTENSION-END", file=sys.stderr)
-        raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
 
     require(compiler.canonical_json(snapshot) == compiler.canonical_json(compiled),
             "composite Workflow Capability BOM canonical bytes differ from live compilation")
