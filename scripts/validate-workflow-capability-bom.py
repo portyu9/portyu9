@@ -2,7 +2,10 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -45,6 +48,32 @@ def first_difference(expected: Any, observed: Any, path: str = "$") -> str | Non
     return None
 
 
+def trusted_diagnostic() -> None:
+    """Disposable carrier: reproduce exact trusted-main admission and expose its rejection tuple."""
+    base_sha = "a1838fe2085b50fc2adf0759cbe53a905b0dbef8"
+    root = Path.cwd().resolve()
+    subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base_sha], check=True)
+    with tempfile.TemporaryDirectory(prefix="trusted-base-") as temporary:
+        trusted = Path(temporary) / "repo"
+        subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        tree_sha = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
+        code = (
+            "from pathlib import Path\n"
+            "import sys\n"
+            "trusted=Path(sys.argv[1]).resolve(); candidate=Path(sys.argv[2]).resolve(); tree=sys.argv[3]\n"
+            "sys.path.insert(0, str(trusted / 'scripts'))\n"
+            "import workflow_capability_admission as admission\n"
+            "try:\n"
+            "    admission.evaluate(candidate, candidate_tree_sha=tree)\n"
+            "except ValueError as exc:\n"
+            "    print('TRUSTED-ADMISSION-DIAGNOSTIC:', exc)\n"
+            "    raise SystemExit(0)\n"
+            "raise SystemExit('trusted diagnostic unexpectedly admitted candidate')\n"
+        )
+        subprocess.run([sys.executable, "-c", code, str(trusted), str(root), tree_sha], check=True)
+        subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=True)
+
+
 def validate_snapshot() -> tuple[int, int]:
     snapshot = workflow_capability_snapshot.load_combined()
 
@@ -77,6 +106,7 @@ def validate_snapshot() -> tuple[int, int]:
 
 def main() -> int:
     try:
+        trusted_diagnostic()
         workflows, jobs = validate_snapshot()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
@@ -84,7 +114,7 @@ def main() -> int:
             "composite snapshot, exact trusted-workflow bytes, and admission self-tests passed."
         )
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
