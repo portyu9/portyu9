@@ -402,19 +402,11 @@ jobs:
           printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
           printf 'head_ref=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout exact trusted base as validation TCB
+      - name: Checkout static trusted main validation TCB
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.bind.outputs.base_sha }}
+          ref: main
           path: trusted-base
-          persist-credentials: false
-          fetch-depth: 1
-
-      - name: Checkout exact reconciled candidate
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ steps.bind.outputs.head_sha }}
-          path: candidate
           persist-credentials: false
           fetch-depth: 1
 
@@ -424,19 +416,58 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Verify resolved Python runtime
+        working-directory: trusted-base
         run: python3 scripts/verify-python-runtime.py
+
+      - name: Reconstruct exact reconciled candidate as data
+        id: candidate_data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ steps.bind.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.bind.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"
+          CANDIDATE_ROOT="$RUNNER_TEMP/dependabot-validation-candidate"
+          rm -rf "$CANDIDATE_ROOT"
+          cp -a trusted-base "$CANDIDATE_ROOT"
+
+          COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
+          TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          TREE="$(gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
+          test "$(jq -r .truncated <<<"$TREE")" = "false"
+
+          while IFS= read -r PATH_VALUE; do
+            test -n "$PATH_VALUE"
+            ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path and .type == "blob")]' <<<"$TREE")"
+            test "$(jq 'length' <<<"$ENTRY")" = "1"
+            test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
+            BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
+            [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            BLOB="$(gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
+            test "$(jq -r .encoding <<<"$BLOB")" = "base64"
+            mkdir -p "$CANDIDATE_ROOT/$(dirname "$PATH_VALUE")"
+            jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "$CANDIDATE_ROOT/$PATH_VALUE"
+          done < expected-paths.txt
+
+          printf 'candidate_root=%s\n' "$CANDIDATE_ROOT" >> "$GITHUB_OUTPUT"
 
       - name: Independently re-prove deterministic reconciliation
         env:
           PR_NUMBER: ${{ steps.bind.outputs.pr_number }}
           HEAD_SHA: ${{ steps.bind.outputs.head_sha }}
+          CANDIDATE_ROOT: ${{ steps.candidate_data.outputs.candidate_root }}
         run: |
           set -euo pipefail
           python3 trusted-base/scripts/dependabot_controller.py probe \
             --pr dependabot-pr.json \
             --expected-head "$HEAD_SHA" \
             --base-root trusted-base \
-            --candidate-root candidate \
+            --candidate-root "$CANDIDATE_ROOT" \
             --out probe.json
           DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository probe.json)"
           CANDIDATE_TAG="$(jq -r .after.tag probe.json)"
@@ -456,13 +487,13 @@ jobs:
             --pr dependabot-pr.json \
             --expected-head "$HEAD_SHA" \
             --base-root trusted-base \
-            --candidate-root candidate \
+            --candidate-root "$CANDIDATE_ROOT" \
             --resolved-release-sha "$RESOLVED_SHA" \
             --out dependabot-proof.json
           python3 trusted-base/scripts/dependabot_controller.py validate \
             --proof dependabot-proof.json \
             --base-root trusted-base \
-            --candidate-root candidate \
+            --candidate-root "$CANDIDATE_ROOT" \
             --changed-paths changed-paths.txt \
             --out reconciled.json
           test "$(jq -r .classification reconciled.json)" = "dependabot-codeql-reconciled"
@@ -478,12 +509,17 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout exact reconciled candidate
+      - name: Checkout static trusted main contracts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.validation_bind.outputs.head_sha }}
+          ref: main
           persist-credentials: false
           fetch-depth: 1
+
+      - name: Verify exact trusted validation base
+        env:
+          BASE_SHA: ${{ needs.validation_bind.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -551,12 +587,17 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout exact reconciled candidate
+      - name: Checkout static trusted main contracts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.validation_bind.outputs.head_sha }}
+          ref: main
           persist-credentials: false
           fetch-depth: 1
+
+      - name: Verify exact trusted validation base
+        env:
+          BASE_SHA: ${{ needs.validation_bind.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -693,12 +734,17 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout exact reconciled candidate
+      - name: Checkout static trusted main dependency-review TCB
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.validation_bind.outputs.head_sha }}
+          ref: main
           persist-credentials: false
           fetch-depth: 1
+
+      - name: Verify exact trusted validation base
+        env:
+          BASE_SHA: ${{ needs.validation_bind.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
 
       - name: Review exact dependency change
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
