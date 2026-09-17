@@ -123,6 +123,13 @@
       "rationale": "Authorize #503's exact trusted-source queue semantics for GitHub CodeQL alerts whose Autofix creation request returns only the reviewed HTTP 422 'Alert is not supported by autofix.' outcome. The source grants no workflow or repository mutation authority, keeps every other API/network failure fail-closed, preserves exact-main alert binding and deterministic ordering, and permits later alerts to remain reachable rather than being starved by one unsupported finding."
     },
     {
+      "id": "cap-codeql-autofix-unsupported-continuation",
+      "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
+      "candidateBomSha256": "88cd6bd2109f424d0a81447224ba8fcc637d5b30bf2f7d68810ad91f9186d708",
+      "expansionSha256": "9579b4b395bdd6a742910c92c2a1679724be47e440d9e5c464ce7401f7757a9a",
+      "rationale": "Authorize #508's exact bounded continuation for GitHub CodeQL alerts whose Autofix creation request returns only the already-reviewed HTTP 422 unsupported outcome. The controller revalidates that exact failure through trusted queue logic, requires main to remain the bound base, and emits one existing codeql-autofix repository_dispatch carrying a strictly increasing afterAlert cursor so a finite exact-main queue converges. Every other Autofix/API failure remains fail-closed; no alert is dismissed, candidate code is not executed, existing protected admission/merge checks remain mandatory, and the continuation cannot move backward or skip an unexamined lower-number alert."
+    },
+    {
       "id": "cap-codeql-autofix-workflow-run-admission",
       "baseBomSha256": "326d0be824f7f5c0ae1913663531a96764371531b345151079e733172e4b1e6f",
       "candidateBomSha256": "aa6254a566f466994baa2d7ab3f49c7084707e3d236c482de8e2638ca5f5e479",
