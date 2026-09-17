@@ -83,8 +83,10 @@ def validate_text(text: str) -> None:
             "trusted capability admission checkout pin changed")
     require(text.count(f"uses: {SETUP_PYTHON}") == 1,
             "trusted capability admission Python setup pin changed")
-    require("ref: ${{ steps.candidate.outputs.base_sha }}" in text,
-            "trusted capability admission no longer checks out exact trusted base")
+    require("ref: main" in text,
+            "trusted capability admission no longer checks out static trusted main")
+    require('run: test "$(git rev-parse HEAD)" = "$BASE_SHA"' in text,
+            "trusted capability admission no longer re-proves the exact checked-out base SHA")
     require("persist-credentials: false" in text and "fetch-depth: 1" in text,
             "trusted capability admission checkout boundary changed")
     require("ref: ${{ github.event.pull_request.head.sha }}" not in text and
@@ -213,9 +215,15 @@ def self_test() -> None:
     )
     expect_failure(
         text,
-        "ref: ${{ steps.candidate.outputs.base_sha }}",
+        "ref: main",
         "ref: ${{ steps.candidate.outputs.head_sha }}",
-        "exact trusted base",
+        "static trusted main",
+    )
+    expect_failure(
+        text,
+        'run: test "$(git rev-parse HEAD)" = "$BASE_SHA"',
+        'run: test -n "$BASE_SHA"',
+        "exact checked-out base SHA",
     )
     ordinary_bad = ORDINARY_EVALUATOR.replace('--candidate-tree-sha "$TREE_SHA"', '--candidate-tree-sha "$HEAD_SHA"')
     expect_failure(text, ORDINARY_EVALUATOR, ordinary_bad, "ordinary evaluator lost exact candidate tree binding")
