@@ -11,6 +11,8 @@ import automation_policy
 ROOT = Path(__file__).resolve().parents[1]
 ADR_DOC = ROOT / ".github" / "AUTOMATION_DECISION_RECEIPTS.md"
 ORIGINAL_VALIDATE_DOC_JOB_GRAPH = core.validate_doc_job_graph
+ORIGINAL_GOV_REQUIRED = core.GOV_REQUIRED
+GOVERNANCE_CHECKPOINT = "**Checkpoint:** 2026-09-17"
 
 SPOTLIGHT_ADR_JOB_IDS = ("decision_receipt", "decision_receipt_attest")
 PROFILE_ADR_JOB_IDS = ("decision_receipt", "decision_receipt_attest")
@@ -93,6 +95,13 @@ def validate_doc_job_graph_with_item11(
     )
 
 
+def current_governance_requirements() -> tuple[str, ...]:
+    return tuple(
+        GOVERNANCE_CHECKPOINT if phrase == core.CHECKPOINT else phrase
+        for phrase in ORIGINAL_GOV_REQUIRED
+    )
+
+
 def self_test_item11_doc(text: str, policy: dict[str, object]) -> None:
     spotlight = workflow_jobs(policy, ".github/workflows/spotlight-link-sync.yml")
     for job_id in SPOTLIGHT_ADR_JOB_IDS:
@@ -111,7 +120,9 @@ def self_test_item11_doc(text: str, policy: dict[str, object]) -> None:
 
 def main() -> int:
     original = core.validate_doc_job_graph
+    original_gov_required = core.GOV_REQUIRED
     core.validate_doc_job_graph = validate_doc_job_graph_with_item11
+    core.GOV_REQUIRED = current_governance_requirements()
     try:
         require(ADR_DOC.is_file() and not ADR_DOC.is_symlink(),
                 "ADR assurance supplement is missing or aliased")
@@ -133,6 +144,7 @@ def main() -> int:
         return 1
     finally:
         core.validate_doc_job_graph = original
+        core.GOV_REQUIRED = original_gov_required
 
 
 if __name__ == "__main__":
