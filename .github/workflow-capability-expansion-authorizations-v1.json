@@ -144,6 +144,13 @@
       "rationale": "Authorize #484's exact trusted workflow-run admission path for GitHub-token-created CodeQL Autofix PRs. Read-only Capability admission may start only from Profile quality requested runs on codeql-autofix branches, bind the sole bot PR's exact repository/base/head identity, and evaluate candidate bytes strictly as data. Protect Main, six required checks, candidate non-execution, provenance, GHAS, review-thread, and exact-SHA protected merge gates remain fail-closed."
     },
     {
+      "id": "cap-dependabot-automation-tcb-registration",
+      "baseBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
+      "candidateBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
+      "expansionSha256": "7ecfd761d5d19440a2ac579c832695f45a8f1fe0a1f984dea527a42217834f4f",
+      "rationale": "Authorize #528's exact trust-boundary registration for scripts/dependabot_* so future Dependabot admission, reconciliation, and controller source is protected before any write-capable automation consumes it. This changes no workflow trigger, permission, semantic capability, or merge authority."
+    },
+    {
       "id": "cap-spotlight-scheduled-admission-recovery",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
