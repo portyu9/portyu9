@@ -49,7 +49,7 @@
       "id": "cap-codeql-autofix-empty-description-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
-      "expansionSha256": "be152a873b8c49f6b29b782052a5abe4105efbc6f557f81849a66738f4657307",
+      "expansionSha256": "be152a873b8f49f6b29b782052a5abe4105efbc6f557f81849a66738f4657307",
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #436 that canonicalizes GitHub CodeQL Autofix's observed empty description metadata to null while preserving the known-status gate, semantic workflow capabilities, provenance validation, required-check/GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
@@ -114,6 +114,13 @@
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "3de3a794da5ff1e059e95c1f0a705daf39e60181a4fb63645541c6701334c2f6",
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #442 that canonicalizes surrounding whitespace in GitHub CodeQL Autofix optional description/started_at metadata while preserving null/blank canonicalization, strict non-blank type/length/control-character validation, the known-status readiness gate, semantic workflow capabilities, provenance checks, required checks, GHAS/review-thread admission, and protected auto-merge authority unchanged."
+    },
+    {
+      "id": "cap-codeql-autofix-unsupported-continuation",
+      "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
+      "candidateBomSha256": "88cd6bd2109f424d0a81447224ba8fcc637d5b30bf2f7d68810ad91f9186d708",
+      "expansionSha256": "9579b4b395bdd6a742910c92c2a1679724be47e440d9e5c464ce7401f7757a9a",
+      "rationale": "Authorize #508's exact bounded continuation for unsupported CodeQL Autofix HTTP 422 outcomes. Trusted queue logic revalidates that exact failure, requires main to remain the bound base, and emits one existing codeql-autofix repository_dispatch with a strictly increasing afterAlert cursor. All other failures remain fail-closed; no alert is dismissed or candidate code executed; protected admission and merge checks remain mandatory."
     },
     {
       "id": "cap-codeql-autofix-unsupported-queue-semantics",
