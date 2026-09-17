@@ -10,6 +10,8 @@ on:
   repository_dispatch:
     types:
       - codeql-autofix-admission
+  schedule:
+    - cron: "*/5 * * * *"
 
 permissions:
   actions: read
@@ -42,6 +44,8 @@ jobs:
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
           DISPATCH=false
+          SPOTLIGHT=false
+          HAS_CANDIDATE=true
 
           case "$EVENT_NAME" in
             pull_request_target)
@@ -73,6 +77,38 @@ jobs:
               HEAD_REPOSITORY="$TARGET_REPOSITORY"
               DISPATCH=true
               ;;
+            schedule)
+              MAIN_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+              [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
+              PRS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
+              MATCHES="$(jq -c --arg main "$MAIN_SHA" '[.[][] | select(
+                .user.login == "github-actions[bot]" and
+                .state == "open" and
+                .draft == false and
+                .base.ref == "main" and
+                .base.sha == $main and
+                .head.repo.full_name == "portyu9/portyu9" and
+                (.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$")) and
+                .title == "chore: sync rotating Spotlight links" and
+                .body == "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." and
+                .maintainer_can_modify == false
+              )]' <<<"$PRS")"
+              MATCH_COUNT="$(jq 'length' <<<"$MATCHES")"
+              test "$MATCH_COUNT" -le 1
+              if [ "$MATCH_COUNT" = "0" ]; then
+                HAS_CANDIDATE=false
+                printf 'has_candidate=false\n' >> "$GITHUB_OUTPUT"
+                printf 'dispatch=false\n' >> "$GITHUB_OUTPUT"
+                printf 'spotlight=false\n' >> "$GITHUB_OUTPUT"
+                echo "No exact current-main Spotlight candidate needs admission recovery."
+                exit 0
+              fi
+              PR="$(jq -c '.[0]' <<<"$MATCHES")"
+              PR_NUMBER="$(jq -r .number <<<"$PR")"
+              [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+              HEAD_REPOSITORY="$TARGET_REPOSITORY"
+              SPOTLIGHT=true
+              ;;
             *)
               echo "ERROR: unsupported capability-admission event: $EVENT_NAME" >&2
               exit 1
@@ -88,6 +124,7 @@ jobs:
           [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+
           if [ "$DISPATCH" = "true" ]; then
             [[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]
             printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
@@ -95,7 +132,46 @@ jobs:
             printf 'alert_number=%s\n' "$ALERT_NUMBER" >> "$GITHUB_OUTPUT"
           fi
 
+          if [ "$SPOTLIGHT" = "true" ]; then
+            test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
+            [[ "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+
+            CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+            test "$(jq '.parents | length' <<<"$CANDIDATE_COMMIT")" = "1"
+            test "$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")" = "$BASE_SHA"
+            test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "github-actions[bot]"
+            test "$(jq -r .author.email <<<"$CANDIDATE_COMMIT")" = "41898282+github-actions[bot]@users.noreply.github.com"
+            test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "github-actions[bot]"
+            test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "41898282+github-actions[bot]@users.noreply.github.com"
+            test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
+
+            COMPARE="$(gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
+            test "$(jq -r .status <<<"$COMPARE")" = "ahead"
+            test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
+            test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
+            test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"
+            test "$(jq -r .behind_by <<<"$COMPARE")" = "0"
+            test "$(jq -r .total_commits <<<"$COMPARE")" = "1"
+            test "$(jq '.files | length' <<<"$COMPARE")" = "1"
+            test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
+            test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
+
+            GENERATED_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)"
+            [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
+            gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content \
+              | tr -d '\n' | base64 --decode > spotlight-candidate-readme.md
+            README_SHA256="$(sha256sum spotlight-candidate-readme.md | cut -d' ' -f1)"
+            [[ "$README_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256" | sha256sum | cut -d' ' -f1)"
+            test "$HEAD_REF" = "automation/spotlight-links/${CANDIDATE_ID}"
+            printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          fi
+
+          printf 'has_candidate=%s\n' "$HAS_CANDIDATE" >> "$GITHUB_OUTPUT"
           printf 'dispatch=%s\n' "$DISPATCH" >> "$GITHUB_OUTPUT"
+          printf 'spotlight=%s\n' "$SPOTLIGHT" >> "$GITHUB_OUTPUT"
           printf 'base_ref=%s\n' "$BASE_REF" >> "$GITHUB_OUTPUT"
           printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
           printf 'head_ref=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"
@@ -103,6 +179,7 @@ jobs:
           printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Checkout exact trusted base
+        if: steps.candidate.outputs.has_candidate == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.candidate.outputs.base_sha }}
@@ -110,11 +187,13 @@ jobs:
           fetch-depth: 1
 
       - name: Set up Python
+        if: steps.candidate.outputs.has_candidate == 'true'
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Verify resolved Python runtime
+        if: steps.candidate.outputs.has_candidate == 'true'
         run: python3 scripts/verify-python-runtime.py
 
       - name: Verify immutable Autofix controller provenance
@@ -177,6 +256,7 @@ jobs:
           test "$(jq -r '.conclusion // "null"' origin-run.json)" = "null"
 
       - name: Fetch exact candidate capability source as data
+        if: steps.candidate.outputs.has_candidate == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
@@ -248,6 +328,7 @@ jobs:
           test "$WORKFLOW_SEEN" -ge 1
 
       - name: Evaluate trusted semantic capability admission
+        if: steps.candidate.outputs.has_candidate == 'true'
         run: |
           set -euo pipefail
           TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"
@@ -260,19 +341,28 @@ jobs:
           jq -cS '{decision: .decision, expansionCount: (.diff.expansions | length), reductionCount: (.diff.reductions | length)}' capability-admission.json
 
       - name: Publish exact candidate trusted admission check
-        if: steps.candidate.outputs.dispatch == 'true'
+        if: steps.candidate.outputs.dispatch == 'true' || steps.candidate.outputs.spotlight == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
           HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
           PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
           ORIGIN_RUN_ID: ${{ steps.candidate.outputs.origin_run_id }}
+          SPOTLIGHT: ${{ steps.candidate.outputs.spotlight }}
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
         run: |
           set -euo pipefail
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$PR_NUMBER" -gt 0
-          test "$ORIGIN_RUN_ID" -gt 0
-          EXTERNAL_ID="codeql-autofix-admission:${ORIGIN_RUN_ID}:${PR_NUMBER}:${HEAD_SHA}"
+          if [ "$SPOTLIGHT" = "true" ]; then
+            EXTERNAL_ID="spotlight-scheduled-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+            SUMMARY="Trusted scheduled admission accepted the exact current-main deterministic README-only Spotlight bot candidate."
+          else
+            test "$ORIGIN_RUN_ID" -gt 0
+            EXTERNAL_ID="codeql-autofix-admission:${ORIGIN_RUN_ID}:${PR_NUMBER}:${HEAD_SHA}"
+            SUMMARY="Trusted default-branch admission accepted the exact immutable CodeQL Autofix candidate."
+          fi
           CHECK="$(gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs" \
             -f name=trusted-capability-admission \
             -f head_sha="$HEAD_SHA" \
@@ -280,7 +370,7 @@ jobs:
             -f conclusion=success \
             -f external_id="$EXTERNAL_ID" \
             -f 'output[title]=Trusted capability admission passed' \
-            -f 'output[summary]=Trusted default-branch admission accepted the exact immutable CodeQL Autofix candidate.')"
+            -f "output[summary]=$SUMMARY")"
           [[ "$(jq -r .id <<<"$CHECK")" =~ ^[1-9][0-9]*$ ]]
           test "$(jq -r .name <<<"$CHECK")" = "trusted-capability-admission"
           test "$(jq -r .head_sha <<<"$CHECK")" = "$HEAD_SHA"
