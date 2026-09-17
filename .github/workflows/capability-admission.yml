@@ -77,7 +77,6 @@ jobs:
                   test "$(jq -r .head.sha <<<"$PR")" = "$EXPECTED_HEAD_SHA"
                   test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
                   test "$(jq -r .head.ref <<<"$PR")" = "codeql-autofix/alert-${ALERT_NUMBER}/run-${ORIGIN_RUN_ID}"
-                  test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_BASE_SHA"
                   HEAD_REPOSITORY="$TARGET_REPOSITORY"
                   DISPATCH=true
                   ;;
@@ -100,7 +99,6 @@ jobs:
                   test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
                   test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
                   [[ "$(jq -r .head.ref <<<"$PR")" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
-                  test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_BASE_SHA"
                   HEAD_REPOSITORY="$TARGET_REPOSITORY"
                   DEPENDABOT=true
                   ;;
@@ -158,6 +156,7 @@ jobs:
           [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
 
           if [ "$DISPATCH" = "true" ]; then
             [[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]
@@ -175,7 +174,6 @@ jobs:
           if [ "$SPOTLIGHT" = "true" ]; then
             test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
             [[ "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
-            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
             test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
 
             CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
@@ -219,13 +217,19 @@ jobs:
           printf 'head_repository=%s\n' "$HEAD_REPOSITORY" >> "$GITHUB_OUTPUT"
           printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout exact trusted base
+      - name: Checkout static trusted main
         if: steps.candidate.outputs.has_candidate == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.candidate.outputs.base_sha }}
+          ref: main
           persist-credentials: false
           fetch-depth: 1
+
+      - name: Verify exact trusted base checkout
+        if: steps.candidate.outputs.has_candidate == 'true'
+        env:
+          BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
 
       - name: Set up Python
         if: steps.candidate.outputs.has_candidate == 'true'
