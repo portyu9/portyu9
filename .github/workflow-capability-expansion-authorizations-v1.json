@@ -172,6 +172,13 @@
       "rationale": "Authorize #528's exact trust-boundary registration for scripts/dependabot_* so future Dependabot admission, reconciliation, and controller source is protected before any write-capable automation consumes it. This changes no workflow trigger, permission, semantic capability, or merge authority."
     },
     {
+      "id": "cap-dependabot-checkset-quiescence",
+      "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
+      "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
+      "expansionSha256": "5075e720aa0b91c71bc9dd38f802ded08c0f38ed9efd1a2f9fee6da4c282a398",
+      "rationale": "Authorize #563's source-only trusted-controller hardening. BOMs are identical: no permission, API, action, secret, OIDC, artifact, or mutation expansion. Terminal readiness now requires complete exact-head required-check responses plus a complete workflow_dispatch run list with zero active validation runs, so trusted validation and spawned CodeQL checks must be quiescent before mergeability and expected-head merge."
+    },
+    {
       "id": "cap-dependabot-codeql-zero-touch-controller-bootstrap",
       "baseBomSha256": "f22d7bbda55748b7712226e3fbcf2a826c8a9358b99a8108d878a3992f2f24b2",
       "candidateBomSha256": "ff85ee9f7c852337afce588a1f2a79fe570cf7bba5aed9ac1df244c5afb7ded6",
