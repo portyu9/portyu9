@@ -13,7 +13,12 @@
   "workflows": {
     "codeql": {
       "path": ".github/workflows/codeql.yml",
-      "triggers": ["pull_request", "push", "schedule", "workflow_dispatch"],
+      "triggers": [
+        "pull_request",
+        "push",
+        "schedule",
+        "workflow_dispatch"
+      ],
       "permissions": {
         "contents": "read"
       },
@@ -30,7 +35,11 @@
     },
     "codeql-autofix": {
       "path": ".github/workflows/codeql-autofix.yml",
-      "triggers": ["repository_dispatch", "schedule", "workflow_run"],
+      "triggers": [
+        "repository_dispatch",
+        "schedule",
+        "workflow_run"
+      ],
       "permissions": {
         "actions": "write",
         "checks": "read",
@@ -54,7 +63,11 @@
     },
     "capability-admission": {
       "path": ".github/workflows/capability-admission.yml",
-      "triggers": ["pull_request_target", "repository_dispatch", "schedule"],
+      "triggers": [
+        "pull_request_target",
+        "repository_dispatch",
+        "schedule"
+      ],
       "permissions": {
         "actions": "read",
         "checks": "write",
@@ -76,7 +89,11 @@
     },
     "dependabot-controller": {
       "path": ".github/workflows/dependabot-controller.yml",
-      "triggers": ["schedule", "workflow_dispatch"],
+      "triggers": [
+        "schedule",
+        "workflow_dispatch",
+        "workflow_run"
+      ],
       "permissions": {
         "contents": "read"
       },
@@ -101,30 +118,52 @@
         },
         "validate_contracts": {
           "name": "validate-contracts",
-          "needs": ["validation_bind"],
+          "needs": [
+            "validation_bind"
+          ],
           "permissions": {
             "contents": "read"
           }
         },
         "integration": {
           "name": "integration-pinned-upstream",
-          "needs": ["validation_bind"],
+          "needs": [
+            "validation_bind"
+          ],
           "permissions": {
             "contents": "read"
           }
         },
         "dependency_review": {
           "name": "dependency-review",
-          "needs": ["validation_bind"],
+          "needs": [
+            "validation_bind"
+          ],
           "permissions": {
             "contents": "read"
+          }
+        },
+        "dispatch_codeql": {
+          "name": "dependabot-dispatch-codeql",
+          "needs": [
+            "validation_bind",
+            "validate_contracts",
+            "integration",
+            "dependency_review"
+          ],
+          "permissions": {
+            "actions": "write",
+            "contents": "read",
+            "pull-requests": "read"
           }
         }
       }
     },
     "dependency-review": {
       "path": ".github/workflows/dependency-review.yml",
-      "triggers": ["pull_request"],
+      "triggers": [
+        "pull_request"
+      ],
       "permissions": {
         "contents": "read"
       },
@@ -140,7 +179,10 @@
     },
     "profile-quality": {
       "path": ".github/workflows/profile-quality.yml",
-      "triggers": ["pull_request", "push"],
+      "triggers": [
+        "pull_request",
+        "push"
+      ],
       "permissions": {
         "contents": "read"
       },
@@ -163,7 +205,11 @@
     },
     "profile-stats": {
       "path": ".github/workflows/profile-stats.yml",
-      "triggers": ["push", "schedule", "workflow_dispatch"],
+      "triggers": [
+        "push",
+        "schedule",
+        "workflow_dispatch"
+      ],
       "permissions": {
         "contents": "read"
       },
@@ -172,13 +218,26 @@
           "group": "profile-stats-planning",
           "cancelInProgress": true,
           "queue": "single",
-          "jobs": ["generate", "attest"]
+          "jobs": [
+            "generate",
+            "attest"
+          ]
         },
         "terminal": {
           "group": "profile-stats-terminal",
           "cancelInProgress": false,
           "queue": "max",
-          "jobs": ["lease", "attest_publish", "stage", "publish", "receipt", "receipt_attest", "dispatch", "decision_receipt", "decision_receipt_attest"]
+          "jobs": [
+            "lease",
+            "attest_publish",
+            "stage",
+            "publish",
+            "receipt",
+            "receipt_attest",
+            "dispatch",
+            "decision_receipt",
+            "decision_receipt_attest"
+          ]
         }
       },
       "lease": {
@@ -197,7 +256,13 @@
           "issuedAt",
           "expiresAt"
         ],
-        "boundJobs": ["attest_publish", "publish", "receipt_attest", "dispatch", "decision_receipt_attest"],
+        "boundJobs": [
+          "attest_publish",
+          "publish",
+          "receipt_attest",
+          "dispatch",
+          "decision_receipt_attest"
+        ],
         "minimumRemainingSeconds": {
           "attest_publish": 300,
           "publish": 240,
@@ -216,21 +281,28 @@
         },
         "attest": {
           "name": "prepare-attestation-read-only",
-          "needs": ["generate"],
+          "needs": [
+            "generate"
+          ],
           "permissions": {
             "contents": "read"
           }
         },
         "lease": {
           "name": "mint-mutation-lease-read-only",
-          "needs": ["attest"],
+          "needs": [
+            "attest"
+          ],
           "permissions": {
             "actions": "read"
           }
         },
         "attest_publish": {
           "name": "attest-write-only",
-          "needs": ["attest", "lease"],
+          "needs": [
+            "attest",
+            "lease"
+          ],
           "permissions": {
             "contents": "read",
             "id-token": "write",
@@ -239,28 +311,46 @@
         },
         "stage": {
           "name": "stage-publication-read-only",
-          "needs": ["generate", "attest", "lease", "attest_publish"],
+          "needs": [
+            "generate",
+            "attest",
+            "lease",
+            "attest_publish"
+          ],
           "permissions": {
             "contents": "read"
           }
         },
         "publish": {
           "name": "publish-write-only",
-          "needs": ["stage", "lease", "attest"],
+          "needs": [
+            "stage",
+            "lease",
+            "attest"
+          ],
           "permissions": {
             "contents": "write"
           }
         },
         "receipt": {
           "name": "prepare-publication-receipt-read-only",
-          "needs": ["publish", "stage", "lease", "attest"],
+          "needs": [
+            "publish",
+            "stage",
+            "lease",
+            "attest"
+          ],
           "permissions": {
             "contents": "read"
           }
         },
         "receipt_attest": {
           "name": "attest-publication-receipt-write-only",
-          "needs": ["receipt", "lease", "attest"],
+          "needs": [
+            "receipt",
+            "lease",
+            "attest"
+          ],
           "permissions": {
             "contents": "read",
             "id-token": "write",
@@ -269,14 +359,21 @@
         },
         "dispatch": {
           "name": "dispatch-spotlight-link-sync",
-          "needs": ["receipt_attest", "lease", "attest"],
+          "needs": [
+            "receipt_attest",
+            "lease",
+            "attest"
+          ],
           "permissions": {
             "actions": "write"
           }
         },
         "decision_receipt": {
           "name": "prepare-automation-decision-receipt-read-only",
-          "needs": ["dispatch", "lease"],
+          "needs": [
+            "dispatch",
+            "lease"
+          ],
           "permissions": {
             "contents": "read",
             "actions": "read"
@@ -284,7 +381,11 @@
         },
         "decision_receipt_attest": {
           "name": "attest-automation-decision-receipt-write-only",
-          "needs": ["decision_receipt", "lease", "attest"],
+          "needs": [
+            "decision_receipt",
+            "lease",
+            "attest"
+          ],
           "permissions": {
             "contents": "read",
             "id-token": "write",
@@ -295,7 +396,10 @@
     },
     "spotlight-link-sync": {
       "path": ".github/workflows/spotlight-link-sync.yml",
-      "triggers": ["schedule", "workflow_dispatch"],
+      "triggers": [
+        "schedule",
+        "workflow_dispatch"
+      ],
       "permissions": {
         "contents": "read"
       },
@@ -304,13 +408,27 @@
           "group": "spotlight-link-sync-planning",
           "cancelInProgress": true,
           "queue": "single",
-          "jobs": ["plan", "budget", "quarantine"]
+          "jobs": [
+            "plan",
+            "budget",
+            "quarantine"
+          ]
         },
         "terminal": {
           "group": "spotlight-link-sync-terminal",
           "cancelInProgress": false,
           "queue": "max",
-          "jobs": ["lease", "reconcile", "propose", "approve", "authorize", "authorize_attest", "merge", "decision_receipt", "decision_receipt_attest"]
+          "jobs": [
+            "lease",
+            "reconcile",
+            "propose",
+            "approve",
+            "authorize",
+            "authorize_attest",
+            "merge",
+            "decision_receipt",
+            "decision_receipt_attest"
+          ]
         }
       },
       "lease": {
@@ -329,7 +447,14 @@
           "issuedAt",
           "expiresAt"
         ],
-        "boundJobs": ["reconcile", "propose", "approve", "authorize_attest", "merge", "decision_receipt_attest"],
+        "boundJobs": [
+          "reconcile",
+          "propose",
+          "approve",
+          "authorize_attest",
+          "merge",
+          "decision_receipt_attest"
+        ],
         "minimumRemainingSeconds": {
           "reconcile": 240,
           "propose": 300,
@@ -349,14 +474,19 @@
         },
         "lease": {
           "name": "mint-mutation-lease-read-only",
-          "needs": ["plan"],
+          "needs": [
+            "plan"
+          ],
           "permissions": {
             "actions": "read"
           }
         },
         "reconcile": {
           "name": "reconcile-stale-candidates-write",
-          "needs": ["plan", "lease"],
+          "needs": [
+            "plan",
+            "lease"
+          ],
           "permissions": {
             "contents": "write",
             "pull-requests": "write"
@@ -364,21 +494,31 @@
         },
         "budget": {
           "name": "mutation-budget-read-only",
-          "needs": ["plan"],
+          "needs": [
+            "plan"
+          ],
           "permissions": {
             "actions": "read"
           }
         },
         "quarantine": {
           "name": "mutation-budget-quarantine-read-only",
-          "needs": ["plan", "budget"],
+          "needs": [
+            "plan",
+            "budget"
+          ],
           "permissions": {
             "contents": "read"
           }
         },
         "propose": {
           "name": "propose-readme-only-write",
-          "needs": ["plan", "lease", "reconcile", "budget"],
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "budget"
+          ],
           "permissions": {
             "contents": "write",
             "pull-requests": "write"
@@ -386,7 +526,13 @@
         },
         "approve": {
           "name": "approve-bot-pr-checks-only",
-          "needs": ["plan", "lease", "reconcile", "budget", "propose"],
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "budget",
+            "propose"
+          ],
           "permissions": {
             "contents": "read",
             "actions": "write"
@@ -394,7 +540,14 @@
         },
         "authorize": {
           "name": "prepare-merge-authorization-read-only",
-          "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve"],
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "budget",
+            "propose",
+            "approve"
+          ],
           "permissions": {
             "contents": "read",
             "pull-requests": "read",
@@ -404,7 +557,13 @@
         },
         "authorize_attest": {
           "name": "attest-merge-authorization-write-only",
-          "needs": ["authorize", "lease", "plan", "propose", "approve"],
+          "needs": [
+            "authorize",
+            "lease",
+            "plan",
+            "propose",
+            "approve"
+          ],
           "permissions": {
             "contents": "read",
             "id-token": "write",
@@ -413,7 +572,16 @@
         },
         "merge": {
           "name": "merge-readme-only-terminal-write",
-          "needs": ["plan", "lease", "reconcile", "budget", "propose", "approve", "authorize", "authorize_attest"],
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "budget",
+            "propose",
+            "approve",
+            "authorize",
+            "authorize_attest"
+          ],
           "permissions": {
             "contents": "write",
             "pull-requests": "read",
@@ -423,7 +591,14 @@
         },
         "decision_receipt": {
           "name": "prepare-automation-decision-receipt-read-only",
-          "needs": ["plan", "lease", "reconcile", "propose", "approve", "merge"],
+          "needs": [
+            "plan",
+            "lease",
+            "reconcile",
+            "propose",
+            "approve",
+            "merge"
+          ],
           "permissions": {
             "contents": "read",
             "pull-requests": "read",
@@ -432,7 +607,11 @@
         },
         "decision_receipt_attest": {
           "name": "attest-automation-decision-receipt-write-only",
-          "needs": ["decision_receipt", "lease", "plan"],
+          "needs": [
+            "decision_receipt",
+            "lease",
+            "plan"
+          ],
           "permissions": {
             "contents": "read",
             "id-token": "write",
@@ -445,32 +624,168 @@
   "transactionMachines": {
     "profile-stats": {
       "initialState": "idle",
-      "states": ["idle", "proposed", "approved", "mutated", "verified", "completed", "no-change"],
-      "terminalStates": ["completed", "no-change"],
+      "states": [
+        "idle",
+        "proposed",
+        "approved",
+        "mutated",
+        "verified",
+        "completed",
+        "no-change"
+      ],
+      "terminalStates": [
+        "completed",
+        "no-change"
+      ],
       "maintenanceJobs": [],
       "transitions": [
-        {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["generate"]},
-        {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["attest"]},
-        {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["attest", "lease", "attest_publish", "stage"]},
-        {"from": "approved", "to": "no-change", "phase": "terminalize", "jobs": ["stage"]},
-        {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["publish"]},
-        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["receipt", "receipt_attest"]},
-        {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["dispatch", "decision_receipt", "decision_receipt_attest"]}
+        {
+          "from": "idle",
+          "to": "proposed",
+          "phase": "propose",
+          "jobs": [
+            "generate"
+          ]
+        },
+        {
+          "from": "proposed",
+          "to": "no-change",
+          "phase": "terminalize",
+          "jobs": [
+            "attest"
+          ]
+        },
+        {
+          "from": "proposed",
+          "to": "approved",
+          "phase": "approve",
+          "jobs": [
+            "attest",
+            "lease",
+            "attest_publish",
+            "stage"
+          ]
+        },
+        {
+          "from": "approved",
+          "to": "no-change",
+          "phase": "terminalize",
+          "jobs": [
+            "stage"
+          ]
+        },
+        {
+          "from": "approved",
+          "to": "mutated",
+          "phase": "mutate",
+          "jobs": [
+            "publish"
+          ]
+        },
+        {
+          "from": "mutated",
+          "to": "verified",
+          "phase": "verify",
+          "jobs": [
+            "receipt",
+            "receipt_attest"
+          ]
+        },
+        {
+          "from": "verified",
+          "to": "completed",
+          "phase": "terminalize",
+          "jobs": [
+            "dispatch",
+            "decision_receipt",
+            "decision_receipt_attest"
+          ]
+        }
       ]
     },
     "spotlight-link-sync": {
       "initialState": "idle",
-      "states": ["idle", "proposed", "approved", "mutated", "verified", "completed", "no-change", "quarantined"],
-      "terminalStates": ["completed", "no-change", "quarantined"],
-      "maintenanceJobs": ["reconcile"],
+      "states": [
+        "idle",
+        "proposed",
+        "approved",
+        "mutated",
+        "verified",
+        "completed",
+        "no-change",
+        "quarantined"
+      ],
+      "terminalStates": [
+        "completed",
+        "no-change",
+        "quarantined"
+      ],
+      "maintenanceJobs": [
+        "reconcile"
+      ],
       "transitions": [
-        {"from": "idle", "to": "proposed", "phase": "propose", "jobs": ["plan", "lease"]},
-        {"from": "proposed", "to": "no-change", "phase": "terminalize", "jobs": ["plan"]},
-        {"from": "proposed", "to": "approved", "phase": "approve", "jobs": ["budget"]},
-        {"from": "proposed", "to": "quarantined", "phase": "terminalize", "jobs": ["budget", "quarantine"]},
-        {"from": "approved", "to": "mutated", "phase": "mutate", "jobs": ["propose"]},
-        {"from": "mutated", "to": "verified", "phase": "verify", "jobs": ["approve", "authorize", "authorize_attest"]},
-        {"from": "verified", "to": "completed", "phase": "terminalize", "jobs": ["merge", "decision_receipt", "decision_receipt_attest"]}
+        {
+          "from": "idle",
+          "to": "proposed",
+          "phase": "propose",
+          "jobs": [
+            "plan",
+            "lease"
+          ]
+        },
+        {
+          "from": "proposed",
+          "to": "no-change",
+          "phase": "terminalize",
+          "jobs": [
+            "plan"
+          ]
+        },
+        {
+          "from": "proposed",
+          "to": "approved",
+          "phase": "approve",
+          "jobs": [
+            "budget"
+          ]
+        },
+        {
+          "from": "proposed",
+          "to": "quarantined",
+          "phase": "terminalize",
+          "jobs": [
+            "budget",
+            "quarantine"
+          ]
+        },
+        {
+          "from": "approved",
+          "to": "mutated",
+          "phase": "mutate",
+          "jobs": [
+            "propose"
+          ]
+        },
+        {
+          "from": "mutated",
+          "to": "verified",
+          "phase": "verify",
+          "jobs": [
+            "approve",
+            "authorize",
+            "authorize_attest"
+          ]
+        },
+        {
+          "from": "verified",
+          "to": "completed",
+          "phase": "terminalize",
+          "jobs": [
+            "merge",
+            "decision_receipt",
+            "decision_receipt_attest"
+          ]
+        }
       ]
     }
   },
