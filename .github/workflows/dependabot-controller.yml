@@ -329,6 +329,10 @@ jobs:
             test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
           }
 
+          workflow_dispatch_runs() {
+            gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100"
+          }
+
           checks_ready() {
             local ready=true
             local count observed_count active active_total active_count
@@ -349,7 +353,7 @@ jobs:
               fi
             done
 
-            active="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")"
+            active="$(workflow_dispatch_runs)"
             active_total="$(jq -r '.total_count // empty' <<<"$active")"
             active_count="$(jq '.workflow_runs | length' <<<"$active")"
             if ! [[ "$active_total" =~ ^[0-9]+$ ]] || ! [[ "$active_count" =~ ^[0-9]+$ ]] || [ "$active_total" != "$active_count" ]; then
@@ -433,7 +437,7 @@ jobs:
           fi
 
           if [ "$READY" != "true" ]; then
-            ACTIVE="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")"
+            ACTIVE="$(workflow_dispatch_runs)"
             if jq -e '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending")] | length > 0' <<<"$ACTIVE" >/dev/null; then
               printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
               echo "Exact-head protected checks are already active; bounded convergence will re-evaluate them."
