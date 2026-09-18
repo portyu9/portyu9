@@ -19,7 +19,7 @@ env:
 
 jobs:
   controller:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/'))
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch == 'main' || startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/')))
     name: trusted-dependabot-codeql-controller
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -66,9 +66,13 @@ jobs:
               ;;
             workflow_run)
               test "$WAKE_WORKFLOW" = "Profile quality" || test "$WAKE_WORKFLOW" = "CodeQL"
-              test "$WAKE_EVENT" = "pull_request" || test "$WAKE_EVENT" = "workflow_dispatch"
               test "$WAKE_HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
-              [[ "$WAKE_HEAD_BRANCH" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+              if [ "$WAKE_HEAD_BRANCH" = "main" ]; then
+                test "$WAKE_EVENT" = "push" || test "$WAKE_EVENT" = "workflow_dispatch"
+              else
+                test "$WAKE_EVENT" = "pull_request" || test "$WAKE_EVENT" = "workflow_dispatch"
+                [[ "$WAKE_HEAD_BRANCH" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+              fi
               ;;
             *)
               echo "ERROR: unsupported Dependabot controller wake event: $EVENT_NAME" >&2
