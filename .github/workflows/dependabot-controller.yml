@@ -466,16 +466,41 @@ jobs:
           HEAD_REF: ${{ steps.candidate.outputs.head_ref }}
         run: |
           set -euo pipefail
-          PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-          test "$(jq -r .state <<<"$PR")" = "open"
-          test "$(jq -r .draft <<<"$PR")" = "false"
-          test "$(jq -r .base.ref <<<"$PR")" = "main"
-          test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
-          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
-          test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
-          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
-          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+          MERGE_ELIGIBLE=false
+          for ATTEMPT in $(seq 1 12); do
+            PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            test "$(jq -r .state <<<"$PR")" = "open"
+            test "$(jq -r .draft <<<"$PR")" = "false"
+            test "$(jq -r .base.ref <<<"$PR")" = "main"
+            test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
+            test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+            test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
+            test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+
+            MERGEABLE="$(jq -r '.mergeable // ""' <<<"$PR")"
+            MERGEABLE_STATE="$(jq -r '.mergeable_state // ""' <<<"$PR")"
+            if [ "$MERGEABLE" = "true" ] && [ "$MERGEABLE_STATE" = "clean" ]; then
+              MERGE_ELIGIBLE=true
+              echo "GitHub protected-merge eligibility converged on bounded attempt ${ATTEMPT}."
+              break
+            fi
+            case "$MERGEABLE_STATE" in
+              ""|unknown|blocked)
+                sleep 5
+                ;;
+              behind|dirty|draft|unstable)
+                echo "ERROR: non-transient protected-merge state after exact-head check convergence: ${MERGEABLE_STATE}" >&2
+                exit 1
+                ;;
+              *)
+                echo "ERROR: unsupported protected-merge state after exact-head check convergence: ${MERGEABLE_STATE}" >&2
+                exit 1
+                ;;
+            esac
+          done
+          test "$MERGE_ELIGIBLE" = "true"
 
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
           COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
