@@ -193,6 +193,13 @@
       "rationale": "Authorize #541's source-only Dependabot identity fix after the live #516 controller proved GitHub may report native dependabot[bot] as CONTRIBUTOR. Exact bot login/ID/node/type/app URLs, same-repo Dependabot head, immutable expected head, and maintainer mutation lock remain authoritative. Only NONE or CONTRIBUTOR association is allowed; OWNER, MEMBER, COLLABORATOR, malformed, and unknown values remain fail-closed."
     },
     {
+      "id": "cap-dependabot-validation-bind-full-pr-tcb",
+      "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
+      "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
+      "expansionSha256": "b608f64512c9f406d46c6097f14c117dfab329a0c9733367a5f34c27c9cfb9aa",
+      "rationale": "Authorize #546's exact full-PR Dependabot validation binder. The collection query still proves one matching open PR, then trusted validation hydrates GET /pulls/{number} so detailed state/draft/maintainer/base/head assertions use the complete GitHub PR schema. This adds one read-only API surface only; permissions, triggers, candidate-data boundary, delegated admission, CodeQL sequencing, and exact-head merge authority are unchanged."
+    },
+    {
       "id": "cap-spotlight-scheduled-admission-recovery",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
