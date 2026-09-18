@@ -109,9 +109,10 @@
           }
         },
         "validation_bind": {
-          "name": "dependabot-validation-bind",
+          "name": "trusted-capability-admission",
           "needs": [],
           "permissions": {
+            "checks": "read",
             "contents": "read",
             "pull-requests": "read"
           }
