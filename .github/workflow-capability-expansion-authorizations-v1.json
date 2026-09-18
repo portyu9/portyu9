@@ -277,6 +277,13 @@
       "rationale": "Authorize #565's GitHub-native real-user bot PR approval workflow. The workflow is event-driven, read-only with GITHUB_TOKEN, executes no candidate code, independently binds recognized bot identity/current main/exact head/required checks/quiescence/unresolved threads, and uses the isolated portyu9-review-identity credential only for the final exact-head APPROVE review. Missing credential fails closed by no-op."
     },
     {
+      "id": "cap-portyu9-bot-review-immutable-tuple-proof",
+      "baseBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
+      "candidateBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
+      "expansionSha256": "48eb9745fc0832bea878d8ff5c68ff288043350b3fb21aff708b8961cdbf55f2",
+      "rationale": "Authorize #572's exact protected-source hardening after live proof that GitHub can carry old APPROVED reviews across an automated head update while reporting the new commit_id. Producer and all three merge consumers keep existing authority but now require a v2 review-body marker bound to exact base+head SHAs in addition to portyu9/APPROVED/commit_id. No new mutation authority or required-check reduction."
+    },
+    {
       "id": "cap-pr-native-dependabot-admission-context",
       "baseBomSha256": "82945c362cc9c5aaf4df583b9a932d01fbf385671cca113919c98166bcef71b0",
       "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
