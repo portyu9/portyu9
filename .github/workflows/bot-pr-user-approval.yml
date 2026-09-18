@@ -222,7 +222,7 @@ jobs:
             check_required_contexts "$HEAD_SHA" "$LANE"
             check_quiescent_runs "$HEAD_SHA"
 
-            BODY="Automated exact-head approval by portyu9 after all six protected gates completed successfully for \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
+            BODY="Automated exact-head approval by portyu9 after all lane-required protected gates completed successfully for \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
             jq -n --arg body "$BODY" --arg commit "$HEAD_SHA"               '{event:"APPROVE",body:$body,commit_id:$commit}' > review-request.json
             REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
             test "$(jq -r .state <<<"$REVIEW_RESPONSE")" = "APPROVED"
