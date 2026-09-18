@@ -4,6 +4,13 @@
   "repository": "portyu9/portyu9",
   "authorizations": [
     {
+      "id": "cap-bot-pr-stewardship-native-admission-gate",
+      "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
+      "candidateBomSha256": "14fae0e37c39df7314307f0fb35fd2df61bfa9a91d3c39f4b0f2765e320c60ba",
+      "expansionSha256": "6db23ce18e02f69ede4693ef6d84b4e738d2c67498cb01804b6d5d0f66d03e48",
+      "rationale": "Authorize #552's exact frozen bot-PR stewardship and native Dependabot admission gate. Dependabot trusted-main admission publishes an exact proof consumed by a native required Actions job; Dependabot, CodeQL Autofix, and Spotlight may request portyu9 as reviewer and post one idempotent exact-head automation-approval comment only after their governed gates succeed. Required checks, candidate-data trust boundaries, ruleset enforcement, and exact-head merge remain fail-closed; no bypass is added."
+    },
+    {
       "id": "cap-codeql-alert-4-logging-fix",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
