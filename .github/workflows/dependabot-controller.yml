@@ -422,9 +422,10 @@ jobs:
 
           PRS="$(gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10")"
           test "$(jq 'length' <<<"$PRS")" = "1"
-          jq -c '.[0]' <<<"$PRS" > dependabot-pr.json
-          PR_NUMBER="$(jq -r .number dependabot-pr.json)"
+          PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
+          test "$(jq -r .number dependabot-pr.json)" = "$PR_NUMBER"
           test "$(jq -r .user.login dependabot-pr.json)" = "dependabot[bot]"
           test "$(jq -r .state dependabot-pr.json)" = "open"
           test "$(jq -r .draft dependabot-pr.json)" = "false"
