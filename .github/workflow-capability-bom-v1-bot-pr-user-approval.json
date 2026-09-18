@@ -1,0 +1,181 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "bot-pr-user-approval",
+      "jobs": [
+        {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "graphql",
+              "graphqlOperation": "query",
+              "method": "POST",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=${name}&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "user",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            }
+          ],
+          "artifacts": [],
+          "id": "approve",
+          "mutations": [
+            {
+              "class": "pull-request",
+              "method": "POST",
+              "step": "Approve only exact green governed bot PRs as portyu9",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"
+            }
+          ],
+          "name": "exact-head-portyu9-review",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [
+              "PORTYU9_BOT_REVIEW_TOKEN"
+            ],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Bot PR user approval",
+      "path": ".github/workflows/bot-pr-user-approval.yml",
+      "references": {
+        "env": [],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [
+          "PORTYU9_BOT_REVIEW_TOKEN"
+        ],
+        "vars": []
+      },
+      "triggers": {
+        "workflow_dispatch": {},
+        "workflow_run": {
+          "types": [
+            "completed"
+          ],
+          "workflows": [
+            "Profile quality",
+            "CodeQL",
+            "Dependency review",
+            "Capability admission",
+            "CodeQL Autofix controller",
+            "Spotlight link sync",
+            "Dependabot controller"
+          ]
+        }
+      },
+      "workflowPermissions": {
+        "actions": "read",
+        "checks": "read",
+        "contents": "read",
+        "pull-requests": "read"
+      }
+    }
+  ]
+}
