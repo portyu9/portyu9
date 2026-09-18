@@ -207,6 +207,13 @@
       "rationale": "Authorize #539's event-driven Dependabot controller liveness TCB. Profile Quality or CodeQL completion may only wake trusted default-branch code; every pass re-proves live main, native bot PR identity, exact head/base, atomic CodeQL release closure, and provenance. Reconciliation dispatches data-only validation/admission, a no-checkout terminal job dispatches CodeQL only after three read-only gates, and merge remains exact-head after all six contexts pass."
     },
     {
+      "id": "cap-dependabot-duplicate-check-convergence",
+      "baseBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
+      "candidateBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
+      "expansionSha256": "e8e5600822e69d3e1000ef582762c89b97273d39dce4e4b76db9b45fcc804b46",
+      "rationale": "Authorize #556's exact trusted-controller source change for duplicate required-check convergence. The semantic capability BOM is unchanged. The controller now accepts one or more exact-head GitHub Actions runs for each required context only when every returned latest run is from app 15368, bound to the exact candidate head, completed, and successful. Any missing, pending, failed, mismatched, or foreign duplicate still blocks convergence and merge."
+    },
+    {
       "id": "cap-dependabot-native-author-association-tcb",
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
