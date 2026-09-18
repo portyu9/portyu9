@@ -516,18 +516,19 @@ jobs:
           done
           test "$MERGE_ELIGIBLE" = "true"
 
+          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head)] | length' <<<"$REVIEWS")"
+          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
           [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
           test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
-            echo "ERROR: exact-head APPROVED review by portyu9 is required before autonomous Dependabot merge." >&2
+            echo "ERROR: exact-base/head marker-bound APPROVED review by portyu9 is required before autonomous Dependabot merge." >&2
             exit 1
           }
 
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
           COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
           if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
-            printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: all six protected exact-head gates are green for \`${HEAD_SHA}\` and an exact-head APPROVED review by @portyu9 is verified. No manual workflow approval is required. Continuing with the governed expected-head merge."
+            printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: all six protected exact-head gates are green for \`${HEAD_SHA}\` and an exact-base/head marker-bound APPROVED review by @portyu9 is verified. No manual workflow approval is required. Continuing with the governed expected-head merge."
             gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
             test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
           fi
