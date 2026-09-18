@@ -235,6 +235,13 @@
       "rationale": "Authorize #561's exact trusted-controller source change for bounded GitHub merge-eligibility propagation. No capability BOM, permission, API-surface, or mutation changes occur. After all six exact-head gates are green, the controller repeatedly re-proves the same open PR/base/head and refs, waits only for transient mergeability propagation, requires mergeable=true and mergeable_state=clean, and then uses the existing expected-head merge path."
     },
     {
+      "id": "cap-dependabot-merge-rejection-diagnostics",
+      "baseBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
+      "candidateBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
+      "expansionSha256": "3f1bf1ccfa794c80dc3b1ba8e8146dbc588b63290807d9ca7b14bf0b831b40db",
+      "rationale": "Authorize #581's exact source-only Dependabot terminal merge diagnostics. The semantic Workflow Capability BOM is unchanged. The trusted controller keeps the same merge endpoint, expected-head SHA, token permissions, merge method, required checks, review proof, quiescence, TOCTOU guards, and fail-closed behavior; it only preserves the existing merge API response body/stderr across a nonzero gh exit so GitHub's rejection reason can be surfaced."
+    },
+    {
       "id": "cap-dependabot-native-author-association-tcb",
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
