@@ -284,6 +284,13 @@
       "rationale": "Authorize #572's exact protected-source hardening after live proof that GitHub can carry old APPROVED reviews across an automated head update while reporting the new commit_id. Producer and all three merge consumers keep existing authority but now require a v2 review-body marker bound to exact base+head SHAs in addition to portyu9/APPROVED/commit_id. No new mutation authority or required-check reduction."
     },
     {
+      "id": "cap-post-review-event-driven-controller-wake",
+      "baseBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
+      "candidateBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
+      "expansionSha256": "3e902e5c56496fd20922bb903bda0b34b6e95350a122b317b5f2efce0ce51d12",
+      "rationale": "Authorize #575's event-driven post-review convergence wake. Only after an exact-base/head v2 APPROVED review by portyu9, the reviewer may dispatch the governed Dependabot, CodeQL, or Spotlight workflow using Actions write while retaining read-only contents. The same reviewed candidate preserves the historical Autofix single-commit REST-compare consistency hardening from b8fa48282cf0ee2ea61d22a88a5de2debbe5465f."
+    },
+    {
       "id": "cap-pr-native-dependabot-admission-context",
       "baseBomSha256": "82945c362cc9c5aaf4df583b9a932d01fbf385671cca113919c98166bcef71b0",
       "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
