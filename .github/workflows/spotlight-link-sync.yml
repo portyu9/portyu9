@@ -656,6 +656,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+      pull-requests: write
     outputs:
       codeql_run_id: ${{ steps.authorize.outputs.codeql_run_id }}
       codeql_check_suite_id: ${{ steps.authorize.outputs.codeql_check_suite_id }}
@@ -802,6 +803,20 @@ jobs:
             sleep 10
           done
           test "$ALL_SUCCESS" = "true"
+
+          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
+          test "$(jq 'length' <<<"$PRS")" = "1"
+          PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
+          COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
+          if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
+            APPROVAL_BODY="${APPROVAL_MARKER}
+Automation-approved: the exact Spotlight head \`${HEAD_SHA}\` passed all three protected PR workflows. @portyu9 is requested as reviewer for visibility; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path."
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
+            test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
+          fi
+
           echo "codeql_run_id=$CODEQL_RUN_ID" >> "$GITHUB_OUTPUT"
           echo "codeql_check_suite_id=$CODEQL_CHECK_SUITE_ID" >> "$GITHUB_OUTPUT"
           echo "dependency_run_id=$DEPENDENCY_RUN_ID" >> "$GITHUB_OUTPUT"
@@ -980,7 +995,7 @@ jobs:
       queue: max
     permissions:
       contents: write
-      pull-requests: write
+      pull-requests: read
       checks: read
       attestations: read
     outputs:
@@ -1118,15 +1133,6 @@ jobs:
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
           echo "Spotlight terminal stage: pre-merge-roots-verified" >&2
-
-          APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
-          COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
-          if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
-            APPROVAL_BODY="${APPROVAL_MARKER}
-Automation-approved: the exact Spotlight head \`${HEAD_SHA}\` passed protected checks and the attested merge-authorization boundary. @portyu9 is requested as reviewer for visibility; no manual workflow approval is required. Continuing with the governed expected-head merge."
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
-            test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
-          fi
 
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
           RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"
