@@ -19,7 +19,7 @@ env:
 
 jobs:
   controller:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch == 'main' || startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/')))
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_run'
     name: trusted-dependabot-codeql-controller
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -54,10 +54,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
-          WAKE_WORKFLOW: ${{ github.event.workflow_run.name }}
-          WAKE_EVENT: ${{ github.event.workflow_run.event }}
-          WAKE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          WAKE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          WAKE_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
@@ -65,8 +62,17 @@ jobs:
             schedule)
               ;;
             workflow_run)
+              [[ "$WAKE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+              WAKE="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}")"
+              test "$(jq -r .id <<<"$WAKE")" = "$WAKE_RUN_ID"
+              WAKE_WORKFLOW="$(jq -r .name <<<"$WAKE")"
+              WAKE_EVENT="$(jq -r .event <<<"$WAKE")"
+              WAKE_HEAD_BRANCH="$(jq -r '.head_branch // ""' <<<"$WAKE")"
+              WAKE_HEAD_SHA="$(jq -r .head_sha <<<"$WAKE")"
               test "$WAKE_WORKFLOW" = "Profile quality" || test "$WAKE_WORKFLOW" = "CodeQL"
-              test "$WAKE_HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
+              test "$(jq -r .repository.full_name <<<"$WAKE")" = "$TARGET_REPOSITORY"
+              test "$(jq -r .head_repository.full_name <<<"$WAKE")" = "$TARGET_REPOSITORY"
+              [[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
               if [ "$WAKE_HEAD_BRANCH" = "main" ]; then
                 test "$WAKE_EVENT" = "push" || test "$WAKE_EVENT" = "workflow_dispatch"
               else
