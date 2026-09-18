@@ -172,6 +172,13 @@
       "rationale": "Authorize #533's hardened zero-touch Dependabot CodeQL controller after removing all candidate-code checkout/execution from trusted validation and switching privileged Capability Admission to literal main with exact-SHA reproof. GitHub CodeQL reports no new PR alerts. The controller still admits only the exact native grouped CodeQL release class, reconstructs candidate bytes as data, requires all six exact-head gates, and merges only the expected admitted head."
     },
     {
+      "id": "cap-dependabot-controller-main-wake-tcb",
+      "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
+      "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
+      "expansionSha256": "503fc98763de0704d7a88661a71045bcb0a8aec3c9c53103133d75e535abcf84",
+      "rationale": "Authorize #543's main-completion wake hardening for the trusted Dependabot controller. Profile Quality or CodeQL completion on main may only wake default-branch code; every pass re-proves live main, native Dependabot PR identity, exact base/head, release provenance, and file closure before any update. No semantic BOM capability changes; this binds only the reviewed protected-source TCB digest. Exact-head merge gates remain unchanged."
+    },
+    {
       "id": "cap-dependabot-controller-workflow-run-liveness-tcb",
       "baseBomSha256": "381e1f75486804a8f58cfc4a95541ed7c1af0d45b61325ff3d4e49cfef18dc93",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
