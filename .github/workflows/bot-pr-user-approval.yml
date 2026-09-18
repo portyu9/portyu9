@@ -193,11 +193,12 @@ jobs:
             check_required_contexts "$HEAD_SHA" "$LANE"
             check_quiescent_runs "$HEAD_SHA"
 
+            REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"
             REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-            EXISTING="$(jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head)] | length' <<<"$REVIEWS")"
+            EXISTING="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
             [[ "$EXISTING" =~ ^[0-9]+$ ]]
             if [ "$EXISTING" -gt 0 ]; then
-              echo "PR #${PR_NUMBER} already has an exact-head portyu9 approval."
+              echo "PR #${PR_NUMBER} already has an exact-base/head marker-bound portyu9 approval."
               continue
             fi
 
@@ -222,11 +223,12 @@ jobs:
             check_required_contexts "$HEAD_SHA" "$LANE"
             check_quiescent_runs "$HEAD_SHA"
 
-            BODY="Automated exact-head approval by portyu9 after all lane-required protected gates completed successfully for \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
+            printf -v BODY '%s\n%s' "$REVIEW_MARKER" "Automated exact-base/head approval by portyu9 after all lane-required protected gates completed successfully for base \`${MAIN_SHA}\` and head \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
             jq -n --arg body "$BODY" --arg commit "$HEAD_SHA"               '{event:"APPROVE",body:$body,commit_id:$commit}' > review-request.json
             REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
             test "$(jq -r .state <<<"$REVIEW_RESPONSE")" = "APPROVED"
             test "$(jq -r .user.login <<<"$REVIEW_RESPONSE")" = "portyu9"
             test "$(jq -r .commit_id <<<"$REVIEW_RESPONSE")" = "$HEAD_SHA"
-            echo "Submitted exact-head portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
+            test "$(jq -r .body <<<"$REVIEW_RESPONSE" | grep -Fxc "$REVIEW_MARKER")" = "1"
+            echo "Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
           done < <(jq -c '.[]' <<<"$CANDIDATES")

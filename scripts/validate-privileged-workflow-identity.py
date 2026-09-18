@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v30"
+VERSION = "governed-workflow-byte-identity-v31"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "9ab99bbb96ff01d63f7866f6b02592f5f7d3820d",
+    ".github/workflows/bot-pr-user-approval.yml": "fd54544e436a5a5845b614fe85d60fd796839c51",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "1cbaff32fd052308dff17c2ba82f9c0d46b837a5",
+    ".github/workflows/spotlight-link-sync.yml": "244c11ae9bd11b94424df95de9dcf122a828806c",
 }
 
 OLD_MERGE_IF = (
@@ -145,11 +145,14 @@ def validate_item10_mac(spotlight: str) -> None:
         'test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"',
         'echo "Spotlight terminal stage: attestation-cryptographic-verified" >&2',
         'echo "Spotlight terminal stage: attestation-statement-verified" >&2',
+        'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"',
         'repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100',
         '.user.login == "portyu9"',
         '.state == "APPROVED"',
         '.commit_id == $head',
-        'echo "Spotlight terminal stage: exact-head-portyu9-approval-verified" >&2',
+        '--arg marker "$REVIEW_MARKER"',
+        'contains($marker)',
+        'echo "Spotlight terminal stage: exact-base-head-portyu9-approval-verified" >&2',
         'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
     ):
         require(fragment in merge, f"Spotlight terminal MAC verification contract is missing: {fragment}")
@@ -285,7 +288,7 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     v21.validate_spotlight_mutation_budget(projected)
 
 
-def validate_bot_review_liveness(bot_review: str) -> None:
+def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     for fragment in (
         'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
         'dependabot|codeql-autofix)',
@@ -296,8 +299,13 @@ def validate_bot_review_liveness(bot_review: str) -> None:
         'Skipping governed bot PR #${PR_NUMBER}: base is stale relative to current main.',
         'check_required_contexts "$HEAD_SHA" "$LANE"',
         'all lane-required protected gates completed successfully',
+        'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"',
+        '--arg marker "$REVIEW_MARKER"',
+        'contains($marker)',
+        'exact-base/head marker-bound portyu9 approval',
+        'grep -Fxc "$REVIEW_MARKER"',
     ):
-        require(fragment in bot_review, f"Bot PR user approval liveness contract is missing: {fragment}")
+        require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
     require(
         'for name in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do'
         not in bot_review,
@@ -311,6 +319,31 @@ def validate_bot_review_liveness(bot_review: str) -> None:
         'test "$(jq -r .base.sha <<<"$PR")" = "$MAIN_SHA"' not in bot_review,
         "Bot PR user approval must skip stale-base candidates instead of globally failing the reviewer pass",
     )
+    require(
+        '.state == "APPROVED" and .commit_id == $head)] | length' not in bot_review,
+        "Bot PR user approval must not treat GitHub commit_id alone as immutable exact-head proof",
+    )
+
+    consumers = (
+        ("Dependabot", dependabot, 'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"'),
+        ("CodeQL Autofix", autofix, 'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${ADMITTED_BASE_SHA} head=${ADMITTED_HEAD_SHA} -->"'),
+        ("Spotlight", spotlight, 'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"'),
+    )
+    for label, workflow, marker in consumers:
+        for fragment in (
+            marker,
+            '--arg marker "$REVIEW_MARKER"',
+            '.user.login == "portyu9"',
+            '.state == "APPROVED"',
+            '.commit_id == $head',
+            'contains($marker)',
+            'marker-bound APPROVED review by portyu9',
+        ):
+            require(fragment in workflow, f"{label} marker-bound portyu9 review proof is missing: {fragment}")
+        require(
+            '.state == "APPROVED" and .commit_id == $head)] | length' not in workflow,
+            f"{label} regressed to mutable GitHub commit_id-only review proof",
+        )
 
 
 def self_test() -> None:
@@ -329,14 +362,16 @@ def main() -> int:
         require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
 
         bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
-        validate_bot_review_liveness(bot_review)
+        dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
+        autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
+        spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
 
         profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         v21.validate_profile_stats_freshness(profile)
         v21.validate_profile_stats_lease_binding(profile)
         v21.validate_profile_stats_receipt(profile)
 
-        spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         validate_v21_spotlight_invariants(spotlight)
         validate_item10_mac(spotlight)
         validate_item11_receipts(profile, spotlight)
@@ -345,7 +380,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "bot-review lane-specific gate/retry liveness locked · item-10 MAC ordering and terminal proof guards retained · "
+            "bot-review lane-specific liveness plus immutable base/head marker proof locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0

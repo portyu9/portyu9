@@ -95,14 +95,15 @@ SPOTLIGHT_REVIEWER_STEWARDSHIP = "          REQUESTED=\"$(jq '[.requested_review
 SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n      pull-requests: write\n"
 LEGACY_SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n"
 SPOTLIGHT_APPROVAL_AUDIT = "          PRS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10\")\"\n          test \"$(jq 'length' <<<\"$PRS\")\" = \"1\"\n          PR_NUMBER=\"$(jq -r '.[0].number' <<<\"$PRS\")\"\n          [[ \"$PR_NUMBER\" =~ ^[1-9][0-9]*$ ]]\n          APPROVAL_MARKER=\"<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->\"\n          COMMENTS=\"$(gh api --paginate --slurp \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100\")\"\n          if ! jq -e --arg marker \"$APPROVAL_MARKER\" '[.[][] | select(.body | contains($marker))] | length > 0' <<<\"$COMMENTS\" >/dev/null; then\n            printf -v APPROVAL_BODY '%s\\n%s' \"$APPROVAL_MARKER\" \"Automation-approved: the exact Spotlight head \\`${HEAD_SHA}\\` passed all three protected PR workflows. An exact-head APPROVED review by @portyu9 is required before terminal merge; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path.\"\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments\" -f body=\"$APPROVAL_BODY\" > approval-comment.json\n            test \"$(jq -r .body approval-comment.json | grep -Fxc \"$APPROVAL_BODY\")\" = \"1\"\n          fi\n\n"
-SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF = """          REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head)] | length' <<<"$REVIEWS")"
+SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF = """          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
+          REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
           [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
           test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
-            echo "ERROR: exact-head APPROVED review by portyu9 is required before autonomous Spotlight merge." >&2
+            echo "ERROR: exact-base/head marker-bound APPROVED review by portyu9 is required before autonomous Spotlight merge." >&2
             exit 1
           }
-          echo "Spotlight terminal stage: exact-head-portyu9-approval-verified" >&2
+          echo "Spotlight terminal stage: exact-base-head-portyu9-approval-verified" >&2
 
 """
 
@@ -132,7 +133,7 @@ def project_item9_sync_with_marker(sync: str) -> str:
         raise ValueError("Spotlight item-9 approval-audit projection anchor changed")
     projected = projected.replace(SPOTLIGHT_APPROVAL_AUDIT, "", 1)
     if projected.count(SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF) != 1:
-        raise ValueError("Spotlight item-9 exact-head-review projection anchor changed")
+        raise ValueError("Spotlight item-9 marker-bound review projection anchor changed")
     projected = projected.replace(SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF, "", 1)
     if projected.count(IMMUTABLE_ANCHOR) != 1:
         raise ValueError("Spotlight item-9 immutable-candidate projection anchor changed")
