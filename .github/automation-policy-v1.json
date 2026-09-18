@@ -630,6 +630,31 @@
           }
         }
       }
+    },
+    "bot-pr-user-approval": {
+      "path": ".github/workflows/bot-pr-user-approval.yml",
+      "triggers": [
+        "workflow_dispatch",
+        "workflow_run"
+      ],
+      "permissions": {
+        "actions": "read",
+        "checks": "read",
+        "contents": "read",
+        "pull-requests": "read"
+      },
+      "jobs": {
+        "approve": {
+          "name": "exact-head-portyu9-review",
+          "needs": [],
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          }
+        }
+      }
     }
   },
   "transactionMachines": {
