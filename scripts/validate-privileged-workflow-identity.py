@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v28"
+VERSION = "governed-workflow-byte-identity-v29"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "4e606e502fdd17280ed1cfd7314597dc35835b1f",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "782d2c0398a982a80e8b57abdce7c25c7ad10590",
+    ".github/workflows/spotlight-link-sync.yml": "1cbaff32fd052308dff17c2ba82f9c0d46b837a5",
 }
 
 OLD_MERGE_IF = (
@@ -145,6 +145,11 @@ def validate_item10_mac(spotlight: str) -> None:
         'test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"',
         'echo "Spotlight terminal stage: attestation-cryptographic-verified" >&2',
         'echo "Spotlight terminal stage: attestation-statement-verified" >&2',
+        'repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100',
+        '.user.login == "portyu9"',
+        '.state == "APPROVED"',
+        '.commit_id == $head',
+        'echo "Spotlight terminal stage: exact-head-portyu9-approval-verified" >&2',
         'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
     ):
         require(fragment in merge, f"Spotlight terminal MAC verification contract is missing: {fragment}")
