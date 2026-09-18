@@ -188,6 +188,20 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments",
+              "method": "POST",
+              "mutating": true,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
@@ -213,6 +227,13 @@
               "method": "PUT",
               "mutating": true,
               "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers",
+              "method": "POST",
+              "mutating": true,
+              "step": "Bind current main and one native Dependabot candidate"
             },
             {
               "client": "gh-api",
@@ -277,6 +298,18 @@
               "method": "POST",
               "step": "Validate reconciled candidate and inspect protected checks",
               "target": "repos/${TARGET_REPOSITORY}/dispatches"
+            },
+            {
+              "class": "issue-or-pr-metadata",
+              "method": "POST",
+              "step": "Perform exact-head protected Dependabot merge",
+              "target": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"
+            },
+            {
+              "class": "pull-request",
+              "method": "POST",
+              "step": "Bind current main and one native Dependabot candidate",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"
             },
             {
               "class": "pull-request",
@@ -573,6 +606,13 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify exact delegated admission proof"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}",
               "method": "GET",
               "mutating": false,
@@ -594,10 +634,24 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify exact delegated admission proof"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact controller-issued validation target"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify exact delegated admission proof"
             },
             {
               "client": "gh-api",
@@ -641,10 +695,11 @@
           "artifacts": [],
           "id": "validation_bind",
           "mutations": [],
-          "name": "dependabot-validation-bind",
+          "name": "trusted-capability-admission",
           "needs": [],
           "oidc": false,
           "permissions": {
+            "checks": "read",
             "contents": "read",
             "pull-requests": "read"
           },

@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "f1015c426a5e4dec319ab9d93e138f7b3d0d9c1a"
+EXPECTED_GIT_BLOB = "0ec11e5856dd3134a19783cc1fc586c246eed1c9"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -165,11 +165,14 @@ def validate_text(text: str) -> None:
     require(text.count(publisher) == 1,
             "trusted capability admission exact candidate-check publisher surface changed")
     for publisher_binding in (
-        "-f name=trusted-capability-admission",
+        '-f name="$CHECK_NAME"',
         '-f head_sha="$HEAD_SHA"',
         "-f status=completed",
         "-f conclusion=success",
         '-f external_id="$EXTERNAL_ID"',
+        'test "$(jq -r .name <<<"$CHECK")" = "$CHECK_NAME"',
+        'CHECK_NAME="trusted-capability-admission-proof"',
+        'CHECK_NAME="trusted-capability-admission"',
         'test "$(jq -r .app.id <<<"$CHECK")" = "15368"',
     ):
         require(publisher_binding in text,

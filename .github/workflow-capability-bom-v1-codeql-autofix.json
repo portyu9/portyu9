@@ -266,6 +266,20 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments",
+              "method": "POST",
+              "mutating": true,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls",
               "method": "POST",
               "mutating": true,
@@ -312,6 +326,13 @@
               "method": "PUT",
               "mutating": true,
               "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers",
+              "method": "POST",
+              "mutating": true,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
             },
             {
               "client": "gh-api",
@@ -370,10 +391,22 @@
               "target": "repos/${TARGET_REPOSITORY}/dispatches"
             },
             {
+              "class": "issue-or-pr-metadata",
+              "method": "POST",
+              "step": "Verify an existing Autofix PR and perform protected merge",
+              "target": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"
+            },
+            {
               "class": "pull-request",
               "method": "POST",
               "step": "Commit exact Autofix to a dedicated branch and open one PR",
               "target": "repos/${TARGET_REPOSITORY}/pulls"
+            },
+            {
+              "class": "pull-request",
+              "method": "POST",
+              "step": "Commit exact Autofix to a dedicated branch and open one PR",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"
             },
             {
               "class": "pull-request-merge",
