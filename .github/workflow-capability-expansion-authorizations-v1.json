@@ -179,6 +179,13 @@
       "rationale": "Authorize #539's event-driven Dependabot controller liveness TCB. Profile Quality or CodeQL completion may only wake trusted default-branch code; every pass re-proves live main, native bot PR identity, exact head/base, atomic CodeQL release closure, and provenance. Reconciliation dispatches data-only validation/admission, a no-checkout terminal job dispatches CodeQL only after three read-only gates, and merge remains exact-head after all six contexts pass."
     },
     {
+      "id": "cap-dependabot-native-author-association-tcb",
+      "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
+      "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
+      "expansionSha256": "870f086500ff1f927662e267bbea4f168fa43d3ffda166d4ff713028f8d14475",
+      "rationale": "Authorize #541's source-only Dependabot identity fix after the live #516 controller proved GitHub may report native dependabot[bot] as CONTRIBUTOR. Exact bot login/ID/node/type/app URLs, same-repo Dependabot head, immutable expected head, and maintainer mutation lock remain authoritative. Only NONE or CONTRIBUTOR association is allowed; OWNER, MEMBER, COLLABORATOR, malformed, and unknown values remain fail-closed."
+    },
+    {
       "id": "cap-spotlight-scheduled-admission-recovery",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
