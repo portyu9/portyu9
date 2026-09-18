@@ -281,7 +281,7 @@
       "baseBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
       "candidateBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
       "expansionSha256": "48eb9745fc0832bea878d8ff5c68ff288043350b3fb21aff708b8961cdbf55f2",
-      "rationale": "Authorize #572's exact protected-source hardening after live proof that GitHub can carry historical APPROVED reviews forward across an automated Dependabot head update while reporting the new commit_id. The trusted producer and all three autonomous merge consumers retain their existing permissions, triggers, API surfaces, bot identities, and required checks, but now require an immutable v2 review-body marker bound to the exact base and head SHAs in addition to portyu9/APPROVED/commit_id. This is a strict merge-authorization reduction: no new mutation authority or required-check reduction is introduced."
+      "rationale": "Authorize #572's exact protected-source hardening after live proof that GitHub can carry old APPROVED reviews across an automated head update while reporting the new commit_id. Producer and all three merge consumers keep existing authority but now require a v2 review-body marker bound to exact base+head SHAs in addition to portyu9/APPROVED/commit_id. No new mutation authority or required-check reduction."
     },
     {
       "id": "cap-pr-native-dependabot-admission-context",
