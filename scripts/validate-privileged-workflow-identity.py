@@ -12,7 +12,7 @@ VERSION = "governed-workflow-byte-identity-v27"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "751c94434676a598b3a941f39ee85230d504178f",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "8d185d8e15f81c237f5a5b72e19c9554c3652f0d",
+    ".github/workflows/spotlight-link-sync.yml": "782d2c0398a982a80e8b57abdce7c25c7ad10590",
 }
 
 OLD_MERGE_IF = (

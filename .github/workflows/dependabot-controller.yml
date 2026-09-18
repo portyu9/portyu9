@@ -108,6 +108,14 @@ jobs:
           [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
+          REQUESTED="$(jq '[.requested_reviewers[]? | select(.login == "portyu9")] | length' dependabot-pr.json)"
+          [[ "$REQUESTED" =~ ^[0-9]+$ ]]
+          if [ "$REQUESTED" = "0" ]; then
+            gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+              -f 'reviewers[]=portyu9' > requested-reviewer.json
+            test "$(jq '[.requested_reviewers[]? | select(.login == "portyu9")] | length' requested-reviewer.json)" = "1"
+          fi
+
           if [ "$BASE_SHA" != "$MAIN_SHA" ]; then
             gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
               -f expected_head_sha="$HEAD_SHA" > update-branch.json
@@ -387,6 +395,14 @@ jobs:
           test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
           test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
 
+          APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
+          COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
+          if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
+            printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: all six protected exact-head gates are green for \`${HEAD_SHA}\`. @portyu9 is requested as reviewer for visibility; no manual workflow approval is required. Continuing with the governed expected-head merge."
+            gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
+            test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
+          fi
+
           MERGE="$(gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
             -f merge_method=merge \
             -f sha="$HEAD_SHA" \
@@ -400,10 +416,11 @@ jobs:
 
   validation_bind:
     if: github.event_name == 'workflow_dispatch'
-    name: dependabot-validation-bind
+    name: trusted-capability-admission
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
+      checks: read
       contents: read
       pull-requests: read
     outputs:
@@ -556,6 +573,44 @@ jobs:
             --out reconciled.json
           test "$(jq -r .classification reconciled.json)" = "dependabot-codeql-reconciled"
           test "$(jq -r .headSha reconciled.json)" = "$HEAD_SHA"
+
+      - name: Verify exact delegated admission proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.bind.outputs.pr_number }}
+          BASE_SHA: ${{ steps.bind.outputs.base_sha }}
+          HEAD_SHA: ${{ steps.bind.outputs.head_sha }}
+          HEAD_REF: ${{ steps.bind.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+          EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+
+          for ATTEMPT in $(seq 1 30); do
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+            CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"
+            if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ] && jq -e --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
+              .check_runs[0] |
+              .name == "trusted-capability-admission-proof" and
+              .head_sha == $head and
+              .app.id == 15368 and
+              .status == "completed" and
+              .conclusion == "success" and
+              .external_id == $external
+            ' <<<"$CHECKS" >/dev/null; then
+              echo "Consumed exact trusted-main delegated admission proof on bounded attempt ${ATTEMPT}."
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "ERROR: exact trusted-main delegated admission proof did not arrive inside the bounded gate window" >&2
+          exit 1
 
   validate_contracts:
     if: github.event_name == 'workflow_dispatch' && needs.validation_bind.result == 'success'

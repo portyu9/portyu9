@@ -268,6 +268,9 @@ jobs:
             --pr-file created-pr.json \
             --out codeql-autofix-receipt.json
           PR_NUMBER="$(jq -r .prNumber codeql-autofix-receipt.json)"
+          gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+            -f 'reviewers[]=portyu9' > requested-reviewer.json
+          test "$(jq '[.requested_reviewers[]? | select(.login == "portyu9")] | length' requested-reviewer.json)" = "1"
           RECEIPT_NAME="codeql-autofix-receipt-run-${RUN_ID}-alert-${ALERT_NUMBER}"
           printf 'created=true\n' >> "$GITHUB_OUTPUT"
           printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
@@ -493,6 +496,15 @@ jobs:
 
           ADMITTED_HEAD_SHA="$(jq -r .headSha admission.json)"
           [[ "$ADMITTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"
+          COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
+          if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
+            printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: the exact CodeQL Autofix head \`${ADMITTED_HEAD_SHA}\` passed trusted admission, protected checks, GHAS CodeQL, and review-thread closure. @portyu9 is requested as reviewer for visibility; no manual workflow approval is required. Continuing with the governed expected-head merge."
+            gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
+            test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
+          fi
+
           gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
             -f merge_method=merge \
             -f sha="$ADMITTED_HEAD_SHA" \

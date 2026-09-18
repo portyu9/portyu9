@@ -1239,11 +1239,38 @@
               "method": "GET",
               "mutating": false,
               "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
             }
           ],
           "artifacts": [],
           "id": "approve",
           "mutations": [
+            {
+              "class": "issue-or-pr-metadata",
+              "method": "POST",
+              "step": "Approve and wait for only the exact README-only automation checks",
+              "target": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"
+            },
             {
               "class": "workflow-run-approval",
               "method": "POST",
@@ -1262,7 +1289,8 @@
           "oidc": false,
           "permissions": {
             "actions": "write",
-            "contents": "read"
+            "contents": "read",
+            "pull-requests": "write"
           },
           "references": {
             "env": [],
@@ -1945,6 +1973,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10",
               "method": "GET",
               "mutating": false,
@@ -1991,6 +2026,12 @@
               "method": "POST",
               "step": "Create or reuse immutable README-only candidate",
               "target": "repos/${GITHUB_REPOSITORY}/pulls"
+            },
+            {
+              "class": "pull-request",
+              "method": "POST",
+              "step": "Create or reuse immutable README-only candidate",
+              "target": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"
             }
           ],
           "name": "propose-readme-only-write",
