@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: read
+  actions: write
   checks: read
   contents: read
   pull-requests: read
@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 6
     environment: portyu9-review-identity
     permissions:
-      actions: read
+      actions: write
       checks: read
       contents: read
       pull-requests: read
@@ -136,6 +136,25 @@ jobs:
             ' <<<"$runs" >/dev/null
           }
 
+          wake_governed_lane_after_review() {
+            local lane="$1" head_ref="$2"
+            case "$lane" in
+              dependabot)
+                gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$head_ref" >/dev/null
+                ;;
+              codeql-autofix)
+                gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main >/dev/null
+                ;;
+              spotlight)
+                gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" -f ref=main >/dev/null
+                ;;
+              *)
+                echo "ERROR: cannot wake unknown governed bot lane: $lane" >&2
+                return 1
+                ;;
+            esac
+          }
+
           while IFS= read -r CANDIDATE; do
             [ -n "$CANDIDATE" ] || continue
             PR_NUMBER="$(jq -r .number <<<"$CANDIDATE")"
@@ -231,4 +250,6 @@ jobs:
             test "$(jq -r .commit_id <<<"$REVIEW_RESPONSE")" = "$HEAD_SHA"
             test "$(jq -r .body <<<"$REVIEW_RESPONSE" | grep -Fxc "$REVIEW_MARKER")" = "1"
             echo "Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
+            wake_governed_lane_after_review "$LANE" "$HEAD_REF"
+            echo "Dispatched event-driven post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
           done < <(jq -c '.[]' <<<"$CANDIDATES")

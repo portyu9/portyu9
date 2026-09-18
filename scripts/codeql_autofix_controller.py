@@ -146,8 +146,9 @@ def validate_compare(value: Any, base_sha: str, head_sha: str) -> dict[str, Any]
     require(isinstance(base, Mapping) and base.get("sha") == base_sha, "compare base identity mismatch")
     require(isinstance(merge_base, Mapping) and merge_base.get("sha") == base_sha,
             "Autofix branch is not a direct descendant of the exact base")
-    require(value.get("status") in {"ahead", "identical"}, "Autofix compare has an unexpected ancestry status")
+    require(value.get("status") == "ahead", "Autofix compare has an unexpected ancestry status")
     require(value.get("ahead_by") == 1, "Autofix must add exactly one commit")
+    require(value.get("total_commits") == 1, "Autofix compare must report exactly one commit")
     commits = value.get("commits")
     require(isinstance(commits, list), "Autofix compare is missing commits")
     require(len(commits) == 1, "Autofix compare must contain exactly one commit")
@@ -343,11 +344,13 @@ def self_test() -> None:
         "merge_base_commit": {"sha": base},
         "status": "ahead",
         "ahead_by": 1,
+        "total_commits": 1,
         "commits": [{"sha": head}],
         "files": [{"filename": "scripts/autofix_acceptance_fixture.py", "status": "modified"}],
     }
     require(validate_compare(compare, base, head)["headSha"] == head, "compare positive fixture changed")
     compare_mutations = (
+        ({**compare, "total_commits": 2}, "exactly one commit"),
         ({**compare, "commits": []}, "exactly one commit"),
         ({**compare, "commits": [{"sha": head}, {"sha": "c" * 40}]}, "exactly one commit"),
         ({**compare, "commits": [{"sha": "c" * 40}]}, "compare head identity mismatch"),

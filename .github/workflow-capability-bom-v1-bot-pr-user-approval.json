@@ -27,6 +27,27 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=${name}&filter=latest&per_page=100",
               "method": "GET",
               "mutating": false,
@@ -118,13 +139,31 @@
               "method": "POST",
               "step": "Approve only exact green governed bot PRs as portyu9",
               "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Approve only exact green governed bot PRs as portyu9",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Approve only exact green governed bot PRs as portyu9",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Approve only exact green governed bot PRs as portyu9",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches"
             }
           ],
           "name": "exact-head-portyu9-review",
           "needs": [],
           "oidc": false,
           "permissions": {
-            "actions": "read",
+            "actions": "write",
             "checks": "read",
             "contents": "read",
             "pull-requests": "read"
@@ -171,7 +210,7 @@
         }
       },
       "workflowPermissions": {
-        "actions": "read",
+        "actions": "write",
         "checks": "read",
         "contents": "read",
         "pull-requests": "read"
