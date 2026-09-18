@@ -573,6 +573,13 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify exact delegated admission proof"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}",
               "method": "GET",
               "mutating": false,
@@ -594,10 +601,24 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify exact delegated admission proof"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact controller-issued validation target"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify exact delegated admission proof"
             },
             {
               "client": "gh-api",
@@ -608,7 +629,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact controller-issued validation target"
@@ -622,7 +643,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact controller-issued validation target"
@@ -641,10 +662,11 @@
           "artifacts": [],
           "id": "validation_bind",
           "mutations": [],
-          "name": "dependabot-validation-bind",
+          "name": "trusted-capability-admission",
           "needs": [],
           "oidc": false,
           "permissions": {
+            "checks": "read",
             "contents": "read",
             "pull-requests": "read"
           },
