@@ -242,6 +242,13 @@
       "rationale": "Authorize #541's source-only Dependabot identity fix after the live #516 controller proved GitHub may report native dependabot[bot] as CONTRIBUTOR. Exact bot login/ID/node/type/app URLs, same-repo Dependabot head, immutable expected head, and maintainer mutation lock remain authoritative. Only NONE or CONTRIBUTOR association is allowed; OWNER, MEMBER, COLLABORATOR, malformed, and unknown values remain fail-closed."
     },
     {
+      "id": "cap-dependabot-post-review-main-wake",
+      "baseBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
+      "candidateBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
+      "expansionSha256": "9558ce47eaa297b49ea59ed7b5f5b135c76e61dceb8fa524fba6d09a03632828",
+      "rationale": "Authorize #578's exact source-only Dependabot post-review liveness change. After an exact-base/head v2 APPROVED review by portyu9, the already-authorized Dependabot workflow dispatch targets main so the trusted controller can re-prove the current candidate immediately. No workflow capability BOM, endpoint, token permission, required check, merge method, bypass, or candidate execution authority changes."
+    },
+    {
       "id": "cap-dependabot-terminal-convergence-tcb",
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
