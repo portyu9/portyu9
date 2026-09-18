@@ -331,12 +331,12 @@ jobs:
 
           checks_ready() {
             local ready=true
-            local count
+            local count observed_count active active_total active_count
             for NAME in validate-contracts integration-pinned-upstream dependency-review trusted-capability-admission analyze-actions analyze-python; do
               CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100")"
-              count="$(jq -r .total_count <<<"$CHECKS")"
-              [[ "$count" =~ ^[0-9]+$ ]]
-              if [ "$count" -lt 1 ] || ! jq -e --arg head "$HEAD_SHA" '
+              count="$(jq -r '.total_count // empty' <<<"$CHECKS")"
+              observed_count="$(jq '.check_runs | length' <<<"$CHECKS")"
+              if ! [[ "$count" =~ ^[0-9]+$ ]] || ! [[ "$observed_count" =~ ^[0-9]+$ ]] || [ "$count" != "$observed_count" ] || [ "$count" -lt 1 ] || ! jq -e --arg head "$HEAD_SHA" '
                 (.check_runs | length) > 0 and
                 all(.check_runs[];
                   .head_sha == $head and
@@ -348,6 +348,16 @@ jobs:
                 ready=false
               fi
             done
+
+            active="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")"
+            active_total="$(jq -r '.total_count // empty' <<<"$active")"
+            active_count="$(jq '.workflow_runs | length' <<<"$active")"
+            if ! [[ "$active_total" =~ ^[0-9]+$ ]] || ! [[ "$active_count" =~ ^[0-9]+$ ]] || [ "$active_total" != "$active_count" ]; then
+              ready=false
+            elif jq -e '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending")] | length > 0' <<<"$active" >/dev/null; then
+              ready=false
+            fi
+
             test "$ready" = "true"
           }
 
