@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v33"
+VERSION = "governed-workflow-byte-identity-v34"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "f9853eddbc79380915a46817adb090e0ea56bafe",
+    ".github/workflows/bot-pr-user-approval.yml": "424290446ca50ce4816b6559ccb7d3772add1942",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "244c11ae9bd11b94424df95de9dcf122a828806c",
@@ -351,6 +351,18 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     wake_pos = bot_review.index('wake_governed_lane_after_review "$LANE" "$HEAD_REF"')
     require(review_mutation_pos < wake_pos,
             "Bot PR controller wake must occur only after the real-user exact-base/head approval mutation")
+    require(
+        'repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main' in bot_review,
+        "Dependabot post-review wake must dispatch the trusted controller on main",
+    )
+    for fragment in (
+        "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
+        'test "$WAKE_REF" = "refs/heads/main"',
+        'test "$WAKE_ACTOR" = "github-actions[bot]"',
+        "startsWith(github.ref, 'refs/heads/dependabot/github_actions/')",
+        'Dependabot merge API rejected exact-head merge: ${MERGE_MESSAGE}',
+    ):
+        require(fragment in dependabot, f"Dependabot trusted post-review dispatch contract is missing: {fragment}")
 
     consumers = (
         ("Dependabot", dependabot, 'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"'),

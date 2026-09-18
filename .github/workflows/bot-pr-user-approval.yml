@@ -140,7 +140,7 @@ jobs:
             local lane="$1" head_ref="$2"
             case "$lane" in
               dependabot)
-                gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$head_ref" >/dev/null
+                gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main >/dev/null
                 ;;
               codeql-autofix)
                 gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main >/dev/null
