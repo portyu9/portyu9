@@ -1,0 +1,197 @@
+name: Bot PR user approval
+
+on:
+  workflow_run:
+    workflows:
+      - Profile quality
+      - CodeQL
+      - Dependency review
+      - Capability admission
+      - CodeQL Autofix controller
+      - Spotlight link sync
+      - Dependabot controller
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: bot-pr-user-approval
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    name: exact-head-portyu9-review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    environment: portyu9-review-identity
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Approve only exact green governed bot PRs as portyu9
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW_TOKEN: ${{ secrets.PORTYU9_BOT_REVIEW_TOKEN }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+
+          if [ -z "${REVIEW_TOKEN:-}" ]; then
+            echo "::notice::PORTYU9_BOT_REVIEW_TOKEN is not configured in the portyu9-review-identity environment; no user review was submitted."
+            exit 0
+          fi
+
+          REVIEW_LOGIN="$(GH_TOKEN="$REVIEW_TOKEN" gh api user --jq .login)"
+          test "$REVIEW_LOGIN" = "portyu9"
+
+          MAIN_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
+          CANDIDATES="$(jq -c --arg repo "$TARGET_REPOSITORY" '
+            [.[][] | select(
+              .state == "open" and
+              .draft == false and
+              .base.ref == "main" and
+              .head.repo.full_name == $repo and
+              (
+                (
+                  .user.login == "dependabot[bot]" and
+                  (.head.ref | test("^dependabot/github_actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"))
+                ) or
+                (
+                  .user.login == "github-actions[bot]" and
+                  (
+                    (.head.ref | test("^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$")) or
+                    (.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$"))
+                  )
+                )
+              )
+            )] | sort_by(.number)
+          ' <<<"$PR_PAGES")"
+          CANDIDATE_COUNT="$(jq 'length' <<<"$CANDIDATES")"
+          [[ "$CANDIDATE_COUNT" =~ ^[0-9]+$ ]]
+          test "$CANDIDATE_COUNT" -le 20
+
+          check_required_contexts() {
+            local head="$1" name checks total count
+            for name in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do
+              checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=${name}&filter=latest&per_page=100")"
+              total="$(jq -r '.total_count // empty' <<<"$checks")"
+              count="$(jq '.check_runs | length' <<<"$checks")"
+              [[ "$total" =~ ^[0-9]+$ ]]
+              [[ "$count" =~ ^[0-9]+$ ]]
+              test "$total" = "$count"
+              test "$count" -ge 1
+              jq -e --arg head "$head" '
+                all(.check_runs[];
+                  .head_sha == $head and
+                  .app.id == 15368 and
+                  .status == "completed" and
+                  .conclusion == "success"
+                )
+              ' <<<"$checks" >/dev/null
+            done
+          }
+
+          check_quiescent_runs() {
+            local head="$1" runs total count
+            runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")"
+            total="$(jq -r '.total_count // empty' <<<"$runs")"
+            count="$(jq '.workflow_runs | length' <<<"$runs")"
+            [[ "$total" =~ ^[0-9]+$ ]]
+            [[ "$count" =~ ^[0-9]+$ ]]
+            test "$total" = "$count"
+            jq -e '
+              [.workflow_runs[] |
+                select(
+                  .status == "queued" or
+                  .status == "in_progress" or
+                  .status == "waiting" or
+                  .status == "pending"
+                )
+              ] | length == 0
+            ' <<<"$runs" >/dev/null
+          }
+
+          while IFS= read -r CANDIDATE; do
+            [ -n "$CANDIDATE" ] || continue
+            PR_NUMBER="$(jq -r .number <<<"$CANDIDATE")"
+            [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+
+            PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            test "$(jq -r .state <<<"$PR")" = "open"
+            test "$(jq -r .draft <<<"$PR")" = "false"
+            test "$(jq -r .base.ref <<<"$PR")" = "main"
+            test "$(jq -r .base.sha <<<"$PR")" = "$MAIN_SHA"
+            test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+
+            HEAD_SHA="$(jq -r .head.sha <<<"$PR")"
+            HEAD_REF="$(jq -r .head.ref <<<"$PR")"
+            AUTHOR="$(jq -r .user.login <<<"$PR")"
+            [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+            case "$AUTHOR" in
+              'dependabot[bot]')
+                [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+                ;;
+              'github-actions[bot]')
+                if [[ ! "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]] &&
+                   [[ ! "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]; then
+                  echo "ERROR: governed bot branch grammar changed for PR #${PR_NUMBER}" >&2
+                  exit 1
+                fi
+                ;;
+              *)
+                echo "ERROR: governed bot author changed for PR #${PR_NUMBER}" >&2
+                exit 1
+                ;;
+            esac
+
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MAIN_SHA"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+
+            THREADS="$(gh api graphql               -F owner=portyu9               -F repo=portyu9               -F number="$PR_NUMBER"               -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}')"
+            test "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' <<<"$THREADS")" = "false"
+            test "$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$THREADS")" = "0"
+
+            check_required_contexts "$HEAD_SHA"
+            check_quiescent_runs "$HEAD_SHA"
+
+            REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+            EXISTING="$(jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head)] | length' <<<"$REVIEWS")"
+            [[ "$EXISTING" =~ ^[0-9]+$ ]]
+            if [ "$EXISTING" -gt 0 ]; then
+              echo "PR #${PR_NUMBER} already has an exact-head portyu9 approval."
+              continue
+            fi
+
+            PR_NOW="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            test "$(jq -r .state <<<"$PR_NOW")" = "open"
+            test "$(jq -r .draft <<<"$PR_NOW")" = "false"
+            test "$(jq -r .base.sha <<<"$PR_NOW")" = "$MAIN_SHA"
+            test "$(jq -r .head.sha <<<"$PR_NOW")" = "$HEAD_SHA"
+            test "$(jq -r .head.ref <<<"$PR_NOW")" = "$HEAD_REF"
+            test "$(jq -r .head.repo.full_name <<<"$PR_NOW")" = "$TARGET_REPOSITORY"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MAIN_SHA"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+            check_required_contexts "$HEAD_SHA"
+            check_quiescent_runs "$HEAD_SHA"
+
+            BODY="Automated exact-head approval by portyu9 after all six protected gates completed successfully for \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
+            jq -n --arg body "$BODY" --arg commit "$HEAD_SHA"               '{event:"APPROVE",body:$body,commit_id:$commit}' > review-request.json
+            REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
+            test "$(jq -r .state <<<"$REVIEW_RESPONSE")" = "APPROVED"
+            test "$(jq -r .user.login <<<"$REVIEW_RESPONSE")" = "portyu9"
+            test "$(jq -r .commit_id <<<"$REVIEW_RESPONSE")" = "$HEAD_SHA"
+            echo "Submitted exact-head portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
+          done < <(jq -c '.[]' <<<"$CANDIDATES")
