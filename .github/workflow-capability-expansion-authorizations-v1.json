@@ -221,6 +221,13 @@
       "rationale": "Authorize #556's exact incremental immutable workflow-run wake binding after the already-accepted duplicate-check convergence. The controller may GET the triggering Actions run by immutable run ID, then fail closed on workflow identity, event, repository, head repository, branch, and SHA before any bot-PR approval or merge logic runs. This adds one read-only trusted wake surface only; existing approval, required checks, provenance, and exact-head merge authority are unchanged."
     },
     {
+      "id": "cap-dependabot-merge-eligibility-convergence",
+      "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
+      "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
+      "expansionSha256": "31044d5572490dccd8a78eb9b48b960ca602b777cc399e7cac20ab46b7a40fcb",
+      "rationale": "Authorize #561's exact trusted-controller source change for bounded GitHub merge-eligibility propagation. No capability BOM, permission, API-surface, or mutation changes occur. After all six exact-head gates are green, the controller repeatedly re-proves the same open PR/base/head and refs, waits only for transient mergeability propagation, requires mergeable=true and mergeable_state=clean, and then uses the existing expected-head merge path."
+    },
+    {
       "id": "cap-dependabot-native-author-association-tcb",
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
