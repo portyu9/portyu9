@@ -325,9 +325,20 @@ jobs:
 
           checks_ready() {
             local ready=true
+            local count
             for NAME in validate-contracts integration-pinned-upstream dependency-review trusted-capability-admission analyze-actions analyze-python; do
               CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100")"
-              if [ "$(jq -r .total_count <<<"$CHECKS")" != "1" ] || ! jq -e --arg head "$HEAD_SHA" '.check_runs[0] | .head_sha == $head and .app.id == 15368 and .status == "completed" and .conclusion == "success"' <<<"$CHECKS" >/dev/null; then
+              count="$(jq -r .total_count <<<"$CHECKS")"
+              [[ "$count" =~ ^[0-9]+$ ]]
+              if [ "$count" -lt 1 ] || ! jq -e --arg head "$HEAD_SHA" '
+                (.check_runs | length) > 0 and
+                all(.check_runs[];
+                  .head_sha == $head and
+                  .app.id == 15368 and
+                  .status == "completed" and
+                  .conclusion == "success"
+                )
+              ' <<<"$CHECKS" >/dev/null; then
                 ready=false
               fi
             done
