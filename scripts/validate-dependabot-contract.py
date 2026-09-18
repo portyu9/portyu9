@@ -154,6 +154,8 @@ def validate_governance(text: str) -> None:
         "Dependency review / dependency-review",
         "delegated Dependabot CodeQL",
         "workflow_run liveness",
+        "newly advanced base",
+        "stale native Dependabot PR",
         "eventual-consistency recovery trigger",
         "dependabot-dispatch-codeql",
         "candidate bytes as data",
