@@ -309,8 +309,6 @@ jobs:
             --changed-paths changed-paths.txt \
             --out reconciled.json
           test "$(jq -r .headSha reconciled.json)" = "$HEAD_SHA"
-          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
 
           assert_transaction() {
             test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
