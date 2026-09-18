@@ -144,6 +144,13 @@
       "rationale": "Authorize #484's exact trusted workflow-run admission path for GitHub-token-created CodeQL Autofix PRs. Read-only Capability admission may start only from Profile quality requested runs on codeql-autofix branches, bind the sole bot PR's exact repository/base/head identity, and evaluate candidate bytes strictly as data. Protect Main, six required checks, candidate non-execution, provenance, GHAS, review-thread, and exact-SHA protected merge gates remain fail-closed."
     },
     {
+      "id": "cap-dependabot-admission-pr-metadata-persistence-tcb",
+      "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
+      "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
+      "expansionSha256": "62da5fe9ecf379b76d6b7d523fc3f73f0e5e223e3aaddf569972b3e009aa11d4",
+      "rationale": "Authorize #548's exact source-only Dependabot admission persistence fix. The trusted workflow already binds the full PR before checkout; this stores that same JSON under RUNNER_TEMP so checkout cannot delete it before release-provenance and delegated-admission evaluation. Semantic BOM, permissions, triggers, API/mutation surfaces, candidate-data boundary, check publisher, and merge authority are unchanged."
+    },
+    {
       "id": "cap-dependabot-automation-tcb-registration",
       "baseBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
       "candidateBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
