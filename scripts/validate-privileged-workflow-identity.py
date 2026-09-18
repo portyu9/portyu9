@@ -12,7 +12,7 @@ VERSION = "governed-workflow-byte-identity-v27"
 EXPECTED = {
     ".github/workflows/profile-quality.yml": "751c94434676a598b3a941f39ee85230d504178f",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "8d185d8e15f81c237f5a5b72e19c9554c3652f0d",
+    ".github/workflows/spotlight-link-sync.yml": "c28b371e150e0d9142d5d2a9ddd9bafe3541c2a7",
 }
 
 OLD_MERGE_IF = (
@@ -114,8 +114,8 @@ def validate_item10_mac(spotlight: str) -> None:
         "Spotlight terminal merge MAC dependency closure changed",
     )
     require(
-        "permissions:\n      contents: write\n      pull-requests: read\n      checks: read\n      attestations: read" in merge,
-        "Spotlight terminal merge must retain only merge authority plus read-only certificate verification",
+        "permissions:\n      contents: write\n      pull-requests: write\n      checks: read\n      attestations: read" in merge,
+        "Spotlight terminal merge must retain exact merge/comment authority plus read-only certificate verification",
     )
     for fragment in (
         "- name: Download attested merge authorization artifact",
