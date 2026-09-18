@@ -535,8 +535,8 @@
             "propose"
           ],
           "permissions": {
-            "actions": "write",
             "contents": "read",
+            "actions": "write",
             "pull-requests": "write"
           }
         },
