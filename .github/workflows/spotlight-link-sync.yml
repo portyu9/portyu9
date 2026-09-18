@@ -811,8 +811,7 @@ jobs:
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
           COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
           if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
-            APPROVAL_BODY="${APPROVAL_MARKER}
-Automation-approved: the exact Spotlight head \`${HEAD_SHA}\` passed all three protected PR workflows. @portyu9 is requested as reviewer for visibility; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path."
+            printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: the exact Spotlight head \`${HEAD_SHA}\` passed all three protected PR workflows. @portyu9 is requested as reviewer for visibility; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path."
             gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
             test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
           fi
