@@ -179,7 +179,7 @@ def derive_codeql_files(
     validator_text = _replace_exact_assignment(validator_text, "CODEQL_RELEASE", str(old_tag), str(target_tag))
 
     compiled = trusted_workflow_capability.compile_repository(candidate_root)
-    extension_ids = {"capability-admission", "codeql-autofix", "dependabot-controller"}
+    extension_ids = {"bot-pr-user-approval", "capability-admission", "codeql-autofix", "dependabot-controller"}
     base_workflows = [
         copy.deepcopy(workflow)
         for workflow in compiled["workflows"]

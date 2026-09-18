@@ -8,8 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v27"
+VERSION = "governed-workflow-byte-identity-v28"
 EXPECTED = {
+    ".github/workflows/bot-pr-user-approval.yml": "4e606e502fdd17280ed1cfd7314597dc35835b1f",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "782d2c0398a982a80e8b57abdce7c25c7ad10590",
