@@ -17,6 +17,7 @@ DEPENDABOT_NODE_ID = "MDM6Qm90NDk2OTkzMzM="
 DEPENDABOT_TYPE = "Bot"
 DEPENDABOT_HTML_URL = "https://github.com/apps/dependabot"
 DEPENDABOT_API_URL = "https://api.github.com/users/dependabot%5Bbot%5D"
+NON_PRIVILEGED_AUTHOR_ASSOCIATIONS = frozenset({"NONE", "CONTRIBUTOR"})
 HEAD_REF = re.compile(
     r"^dependabot/github_actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"
 )
@@ -76,7 +77,11 @@ def classify_pr_identity(
 
     require(pr.get("state") == "open", "Dependabot admission applies only to an open pull request")
     require(pr.get("draft") is False, "Dependabot admission does not admit draft pull requests")
-    require(pr.get("author_association") == "NONE", "Dependabot PR author association changed")
+    association = pr.get("author_association")
+    require(
+        isinstance(association, str) and association in NON_PRIVILEGED_AUTHOR_ASSOCIATIONS,
+        "Dependabot PR author association is privileged, unknown, or changed",
+    )
     require(pr.get("maintainer_can_modify") is False, "Dependabot PR must disable maintainer head mutation")
     require(type(pr.get("number")) is int and pr["number"] > 0, "Dependabot PR number is invalid")
     require(type(pr.get("commits")) is int and pr["commits"] >= 1,
@@ -196,9 +201,22 @@ def self_test() -> None:
     mutable["maintainer_can_modify"] = True
     expect_failure(mutable, "disable maintainer head mutation")
 
-    associated = fixture()
-    associated["author_association"] = "MEMBER"
-    expect_failure(associated, "author association changed")
+    contributor = fixture()
+    contributor["author_association"] = "CONTRIBUTOR"
+    contributor_result = classify_pr_identity(
+        contributor,
+        repository="portyu9/portyu9",
+        expected_head_sha="a" * 40,
+    )
+    require(
+        contributor_result["classification"] == "dependabot-github-actions",
+        "native Dependabot CONTRIBUTOR association must remain applicable",
+    )
+
+    for association in ("OWNER", "MEMBER", "COLLABORATOR", "FIRST_TIMER", "FIRST_TIME_CONTRIBUTOR", "MANNEQUIN", "", None):
+        associated = fixture()
+        associated["author_association"] = association
+        expect_failure(associated, "privileged, unknown, or changed")
 
     zero_commits = fixture()
     zero_commits["commits"] = 0
@@ -209,6 +227,7 @@ def main() -> int:
     self_test()
     print(
         "Dependabot PR identity self-test passed: exact bot tuple + native github_actions head identity; "
+        "NONE/CONTRIBUTOR associations remain non-privileged while privileged/unknown associations fail closed; "
         "ordinary human PRs are deterministic not-applicable."
     )
     return 0
