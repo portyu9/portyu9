@@ -108,6 +108,14 @@ jobs:
           [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
+          REQUESTED="$(jq '[.requested_reviewers[]? | select(.login == "portyu9")] | length' dependabot-pr.json)"
+          [[ "$REQUESTED" =~ ^[0-9]+$ ]]
+          if [ "$REQUESTED" = "0" ]; then
+            gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+              -f 'reviewers[]=portyu9' > requested-reviewer.json
+            test "$(jq '[.requested_reviewers[]? | select(.login == "portyu9")] | length' requested-reviewer.json)" = "1"
+          fi
+
           if [ "$BASE_SHA" != "$MAIN_SHA" ]; then
             gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
               -f expected_head_sha="$HEAD_SHA" > update-branch.json
@@ -386,6 +394,15 @@ jobs:
           test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
           test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
           test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+
+          APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
+          COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
+          if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
+            APPROVAL_BODY="${APPROVAL_MARKER}
+Automation-approved: all six protected exact-head gates are green for \`${HEAD_SHA}\`. @portyu9 is requested as reviewer for visibility; no manual workflow approval is required. Continuing with the governed expected-head merge."
+            gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
+            test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
+          fi
 
           MERGE="$(gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
             -f merge_method=merge \
