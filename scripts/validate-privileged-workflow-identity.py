@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v34"
+VERSION = "governed-workflow-byte-identity-v35"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "424290446ca50ce4816b6559ccb7d3772add1942",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
@@ -360,6 +360,11 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'test "$WAKE_REF" = "refs/heads/main"',
         'test "$WAKE_ACTOR" = "github-actions[bot]"',
         "startsWith(github.ref, 'refs/heads/dependabot/github_actions/')",
+        'MERGE_BODY="$RUNNER_TEMP/dependabot-merge-response.json"',
+        'MERGE_ERR="$RUNNER_TEMP/dependabot-merge-error.txt"',
+        'MERGE_STATUS=$?',
+        'if [ "$MERGE_STATUS" -ne 0 ]; then',
+        'Dependabot merge API request failed: ${MERGE_MESSAGE}',
         'Dependabot merge API rejected exact-head merge: ${MERGE_MESSAGE}',
     ):
         require(fragment in dependabot, f"Dependabot trusted post-review dispatch contract is missing: {fragment}")
