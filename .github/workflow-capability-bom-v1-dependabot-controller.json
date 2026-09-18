@@ -188,6 +188,27 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments",
+              "method": "POST",
+              "mutating": true,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind current main and one native Dependabot candidate"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
@@ -216,16 +237,16 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch",
-              "method": "PUT",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers",
+              "method": "POST",
               "mutating": true,
               "step": "Bind current main and one native Dependabot candidate"
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
-              "method": "GET",
-              "mutating": false,
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch",
+              "method": "PUT",
+              "mutating": true,
               "step": "Bind current main and one native Dependabot candidate"
             },
             {
@@ -279,16 +300,28 @@
               "target": "repos/${TARGET_REPOSITORY}/dispatches"
             },
             {
-              "class": "pull-request",
-              "method": "PUT",
-              "step": "Bind current main and one native Dependabot candidate",
-              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"
+              "class": "issue-or-pr-metadata",
+              "method": "POST",
+              "step": "Perform exact-head protected Dependabot merge",
+              "target": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"
             },
             {
               "class": "pull-request-merge",
               "method": "PUT",
               "step": "Perform exact-head protected Dependabot merge",
               "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"
+            },
+            {
+              "class": "pull-request",
+              "method": "POST",
+              "step": "Bind current main and one native Dependabot candidate",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"
+            },
+            {
+              "class": "pull-request",
+              "method": "PUT",
+              "step": "Bind current main and one native Dependabot candidate",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"
             },
             {
               "class": "workflow-dispatch",
