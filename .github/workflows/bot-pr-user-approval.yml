@@ -47,8 +47,8 @@ jobs:
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
 
           if [ -z "${REVIEW_TOKEN:-}" ]; then
-            echo "::notice::PORTYU9_BOT_REVIEW_TOKEN is not configured in the portyu9-review-identity environment; no user review was submitted."
-            exit 0
+            echo "::error::PORTYU9_BOT_REVIEW_TOKEN is required in the portyu9-review-identity environment; autonomous user approval is disabled until this credential is configured."
+            exit 1
           fi
 
           REVIEW_LOGIN="$(GH_TOKEN="$REVIEW_TOKEN" gh api user --jq .login)"
