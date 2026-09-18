@@ -14,7 +14,7 @@
               "path": "",
               "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
               "repository": "actions/checkout",
-              "step": "Checkout exact trusted default-branch source"
+              "step": "Checkout static trusted main controller source"
             },
             {
               "kind": "remote",
@@ -41,10 +41,10 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches",
               "method": "POST",
               "mutating": true,
-              "step": "Validate reconciled candidate and inspect protected checks"
+              "step": "Atomically reconcile canonical governance files onto the bot head"
             },
             {
               "client": "gh-api",
@@ -59,6 +59,13 @@
               "method": "GET",
               "mutating": false,
               "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Atomically reconcile canonical governance files onto the bot head"
             },
             {
               "client": "gh-api",
@@ -245,6 +252,12 @@
               "class": "github-api-post",
               "method": "POST",
               "step": "Atomically reconcile canonical governance files onto the bot head",
+              "target": "repos/${TARGET_REPOSITORY}/dispatches"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Atomically reconcile canonical governance files onto the bot head",
               "target": "repos/${TARGET_REPOSITORY}/git/blobs"
             },
             {
@@ -280,13 +293,13 @@
             {
               "class": "workflow-dispatch",
               "method": "POST",
-              "step": "Perform exact-head protected Dependabot merge",
-              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"
+              "step": "Atomically reconcile canonical governance files onto the bot head",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"
             },
             {
               "class": "workflow-dispatch",
               "method": "POST",
-              "step": "Validate reconciled candidate and inspect protected checks",
+              "step": "Perform exact-head protected Dependabot merge",
               "target": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"
             },
             {
@@ -348,6 +361,70 @@
           "references": {
             "env": [],
             "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Dispatch CodeQL after exact read-only validation"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Dispatch CodeQL after exact read-only validation"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Dispatch CodeQL after exact read-only validation"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Dispatch CodeQL after exact read-only validation"
+            }
+          ],
+          "artifacts": [],
+          "id": "dispatch_codeql",
+          "mutations": [
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Dispatch CodeQL after exact read-only validation",
+              "target": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"
+            }
+          ],
+          "name": "dependabot-dispatch-codeql",
+          "needs": [
+            "validation_bind",
+            "validate_contracts",
+            "integration",
+            "dependency_review"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "write",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
             "secrets": [],
             "vars": []
           }
@@ -594,7 +671,16 @@
             "7,22,37,52 * * * *"
           ]
         },
-        "workflow_dispatch": {}
+        "workflow_dispatch": {},
+        "workflow_run": {
+          "types": [
+            "completed"
+          ],
+          "workflows": [
+            "Profile quality",
+            "CodeQL"
+          ]
+        }
       },
       "workflowPermissions": {
         "contents": "read"
