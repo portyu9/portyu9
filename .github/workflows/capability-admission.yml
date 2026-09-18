@@ -89,8 +89,8 @@ jobs:
                   [[ "$EXPECTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-                  gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
-                  PR="$(cat dependabot-pr.json)"
+                  gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"
+                  PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"
                   test "$(jq -r .state <<<"$PR")" = "open"
                   test "$(jq -r .draft <<<"$PR")" = "false"
                   test "$(jq -r .base.ref <<<"$PR")" = "main"
@@ -401,7 +401,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/dependabot_controller.py probe \
-            --pr dependabot-pr.json \
+            --pr "$RUNNER_TEMP/dependabot-pr.json" \
             --expected-head "$HEAD_SHA" \
             --base-root . \
             --candidate-root candidate-capability-source \
@@ -437,7 +437,7 @@ jobs:
             python3 scripts/dependabot_capability_admission.py \
               candidate-capability-source \
               --candidate-tree-sha "$TREE_SHA" \
-              --pr dependabot-pr.json \
+              --pr "$RUNNER_TEMP/dependabot-pr.json" \
               --expected-head-sha "$HEAD_SHA" \
               --resolved-release-sha "$RESOLVED_RELEASE_SHA" \
               --changed-paths dependabot-changed-paths.txt \

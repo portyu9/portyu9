@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "7f5af3620794863064708cccaf550c4d8c9281cf"
+EXPECTED_GIT_BLOB = "f1015c426a5e4dec319ab9d93e138f7b3d0d9c1a"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -19,7 +19,7 @@ ORDINARY_EVALUATOR = """            python3 scripts/workflow_capability_admissio
 DEPENDABOT_EVALUATOR = """            python3 scripts/dependabot_capability_admission.py \\
               candidate-capability-source \\
               --candidate-tree-sha "$TREE_SHA" \\
-              --pr dependabot-pr.json \\
+              --pr "$RUNNER_TEMP/dependabot-pr.json" \\
               --expected-head-sha "$HEAD_SHA" \\
               --resolved-release-sha "$RESOLVED_RELEASE_SHA" \\
               --changed-paths dependabot-changed-paths.txt \\
@@ -130,7 +130,8 @@ def validate_text(text: str) -> None:
     for dependabot_binding in (
         "dependabot-admission)",
         'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"',
-        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json',
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"',
         'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
         '[[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]',
         'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json',
