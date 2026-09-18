@@ -470,17 +470,20 @@ jobs:
           test "$PR_NUMBER" -gt 0
           if [ "$DEPENDABOT" = "true" ]; then
             EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+            CHECK_NAME="trusted-capability-admission-proof"
             SUMMARY="Trusted default-branch delegated admission accepted the exact reconciled native Dependabot CodeQL Action candidate."
           elif [ "$SPOTLIGHT" = "true" ]; then
             EXTERNAL_ID="spotlight-scheduled-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+            CHECK_NAME="trusted-capability-admission"
             SUMMARY="Trusted scheduled admission accepted the exact current-main deterministic README-only Spotlight bot candidate."
           else
             test "$ORIGIN_RUN_ID" -gt 0
             EXTERNAL_ID="codeql-autofix-admission:${ORIGIN_RUN_ID}:${PR_NUMBER}:${HEAD_SHA}"
+            CHECK_NAME="trusted-capability-admission"
             SUMMARY="Trusted default-branch admission accepted the exact immutable CodeQL Autofix candidate."
           fi
           CHECK="$(gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs" \
-            -f name=trusted-capability-admission \
+            -f name="$CHECK_NAME" \
             -f head_sha="$HEAD_SHA" \
             -f status=completed \
             -f conclusion=success \
@@ -488,7 +491,7 @@ jobs:
             -f 'output[title]=Trusted capability admission passed' \
             -f "output[summary]=$SUMMARY")"
           [[ "$(jq -r .id <<<"$CHECK")" =~ ^[1-9][0-9]*$ ]]
-          test "$(jq -r .name <<<"$CHECK")" = "trusted-capability-admission"
+          test "$(jq -r .name <<<"$CHECK")" = "$CHECK_NAME"
           test "$(jq -r .head_sha <<<"$CHECK")" = "$HEAD_SHA"
           test "$(jq -r .status <<<"$CHECK")" = "completed"
           test "$(jq -r .conclusion <<<"$CHECK")" = "success"
