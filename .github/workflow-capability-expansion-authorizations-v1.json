@@ -200,6 +200,13 @@
       "rationale": "Authorize #541's source-only Dependabot identity fix after the live #516 controller proved GitHub may report native dependabot[bot] as CONTRIBUTOR. Exact bot login/ID/node/type/app URLs, same-repo Dependabot head, immutable expected head, and maintainer mutation lock remain authoritative. Only NONE or CONTRIBUTOR association is allowed; OWNER, MEMBER, COLLABORATOR, malformed, and unknown values remain fail-closed."
     },
     {
+      "id": "cap-dependabot-terminal-convergence-tcb",
+      "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
+      "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
+      "expansionSha256": "842e3ef45027f32131d6cc0b8c07bb638b45acb24c44241df26ef7cf3cfa288f",
+      "rationale": "Authorize #550's exact source-only Dependabot terminal convergence hardening. The trusted controller reuses existing main/head identity and six read-only check queries during a bounded post-dispatch convergence window, then enters the existing exact-head merge only after all required contexts succeed. Semantic BOM, triggers, permissions, mutation surfaces, candidate-data boundary, check publishers, merge endpoint, and bypass authority are unchanged."
+    },
+    {
       "id": "cap-dependabot-validation-bind-full-pr-tcb",
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
