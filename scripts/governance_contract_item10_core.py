@@ -187,18 +187,39 @@ def validate_publish_write_surface(publish: str) -> None:
 def validate_quality(text: str) -> None:
     require("name: Profile quality" in text, "Profile quality workflow name changed")
     require('PYTHON_VERSION: "3.13.15"' in text, "Profile quality Python version is not explicit")
-    require(text.count("runs-on: ubuntu-24.04") == 2, "Both Profile Quality jobs must pin ubuntu-24.04")
-    require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "Both Profile Quality jobs must use reviewed checkout")
-    require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2, "Both Profile Quality jobs must use reviewed setup-python")
+    require(text.count("runs-on: ubuntu-24.04") == 3, "All three Profile Quality jobs must pin ubuntu-24.04")
+    require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "Only the two evidence-validation Profile Quality jobs may use reviewed checkout")
+    require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2, "Only the two evidence-validation Profile Quality jobs may use reviewed setup-python")
     require("cancel-in-progress: true" in text, "Profile Quality must cancel stale runs")
     require('- ".github/REFRESH_CADENCE.md"' in text, "Profile Quality push paths must cover refresh governance")
 
     validate = job_block(text, "validate", "integration")
-    integration = job_block(text, "integration", None)
+    integration = job_block(text, "integration", "dependabot_admission")
+    dependabot_admission = job_block(text, "dependabot_admission", None)
     require("name: validate-contracts" in validate, "Required contract-check job name changed")
     require("name: integration-pinned-upstream" in integration, "Required integration-check job name changed")
     require("permissions:\n      contents: read" in validate and "permissions:\n      contents: read" in integration,
-            "Profile Quality jobs must remain read-only")
+            "Profile Quality evidence-validation jobs must remain read-only")
+    require(
+        "permissions:\n      checks: read\n      contents: read\n      pull-requests: read" in dependabot_admission,
+        "PR-native Dependabot admission gate must remain checks/contents/pull-requests read-only",
+    )
+    require("actions/checkout@" not in dependabot_admission and "actions/setup-python@" not in dependabot_admission,
+            "PR-native Dependabot admission gate must not checkout or execute candidate repository code")
+    for fragment in (
+        "github.event.pull_request.user.login == 'dependabot[bot]'",
+        "github.event.pull_request.head.repo.full_name == github.repository",
+        "startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')",
+        "'trusted-capability-admission' || 'dependabot-admission-not-applicable'",
+        'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+        "check_name=trusted-capability-admission-proof",
+        '.name == "trusted-capability-admission-proof"',
+        ".app.id == 15368",
+        '.status == "completed"',
+        '.conclusion == "success"',
+    ):
+        require(fragment in dependabot_admission,
+                f"PR-native Dependabot admission gate contract changed: {fragment}")
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in integration,
             "PR integration must execute reviewed pinned upstream generator")
     require("python3 scripts/signal_field_pipeline.py --self-test" in validate,

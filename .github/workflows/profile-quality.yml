@@ -310,3 +310,79 @@ jobs:
           SPOTLIGHT_DIR: integration-engineering-spotlight
           PORTFOLIO_LEDGER_DIR: integration-portfolio-evidence
         run: python3 scripts/write-profile-contract-summary.py
+
+  dependabot_admission:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/') && 'trusted-capability-admission' || 'dependabot-admission-not-applicable' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      checks: read
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Consume exact trusted-main Dependabot admission proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$PR_AUTHOR" = "dependabot[bot]"
+          test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
+          test "$BASE_REF" = "main"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+          EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+
+          for ATTEMPT in $(seq 1 36); do
+            PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            test "$(jq -r .state <<<"$PR")" = "open"
+            test "$(jq -r .draft <<<"$PR")" = "false"
+            test "$(jq -r .user.login <<<"$PR")" = "dependabot[bot]"
+            test "$(jq -r .base.ref <<<"$PR")" = "$BASE_REF"
+            test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
+            test "$(jq -r .head.repo.full_name <<<"$PR")" = "$HEAD_REPOSITORY"
+            test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
+            test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+
+            CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"
+            if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ] && jq -e \
+              --arg head "$HEAD_SHA" \
+              --arg base "$BASE_SHA" \
+              --arg external "$EXTERNAL_ID" \
+              --argjson pr "$PR_NUMBER" '
+                .check_runs[0] |
+                .name == "trusted-capability-admission-proof" and
+                .head_sha == $head and
+                .app.id == 15368 and
+                .status == "completed" and
+                .conclusion == "success" and
+                .external_id == $external and
+                ([.pull_requests[]? | select(.number == $pr and .head.sha == $head and .base.sha == $base)] | length == 1)
+              ' <<<"$CHECKS" >/dev/null; then
+              echo "Consumed exact trusted-main Dependabot admission proof on bounded attempt ${ATTEMPT}."
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "ERROR: exact trusted-main Dependabot admission proof did not arrive inside the bounded PR-native gate window" >&2
+          exit 1
+
