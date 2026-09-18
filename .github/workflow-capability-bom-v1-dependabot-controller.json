@@ -279,6 +279,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch",
               "method": "PUT",
               "mutating": true,
