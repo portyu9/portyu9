@@ -27,7 +27,28 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve",
+              "method": "POST",
+              "mutating": true,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml",
               "method": "GET",
               "mutating": false,
               "step": "Validate reconciled candidate and inspect protected checks"
@@ -51,6 +72,20 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches",
               "method": "POST",
               "mutating": true,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml",
+              "method": "GET",
+              "mutating": false,
               "step": "Validate reconciled candidate and inspect protected checks"
             },
             {
@@ -340,6 +375,12 @@
               "method": "POST",
               "step": "Validate reconciled candidate and inspect protected checks",
               "target": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"
+            },
+            {
+              "class": "workflow-run-approval",
+              "method": "POST",
+              "step": "Validate reconciled candidate and inspect protected checks",
+              "target": "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve"
             }
           ],
           "name": "trusted-dependabot-codeql-controller",
