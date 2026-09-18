@@ -1802,6 +1802,13 @@
               "method": "PUT",
               "mutating": true,
               "step": "Merge exact approved head and clean up immutable candidate branch"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Merge exact approved head and clean up immutable candidate branch"
             }
           ],
           "artifacts": [

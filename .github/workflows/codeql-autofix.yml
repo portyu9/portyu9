@@ -497,10 +497,18 @@ jobs:
           ADMITTED_HEAD_SHA="$(jq -r .headSha admission.json)"
           [[ "$ADMITTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
 
+          REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$ADMITTED_HEAD_SHA" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head)] | length' <<<"$REVIEWS")"
+          [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
+          test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
+            echo "ERROR: exact-head APPROVED review by portyu9 is required before autonomous CodeQL Autofix merge." >&2
+            exit 1
+          }
+
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"
           COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
           if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
-            printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: the exact CodeQL Autofix head \`${ADMITTED_HEAD_SHA}\` passed trusted admission, protected checks, GHAS CodeQL, and review-thread closure. @portyu9 is requested as reviewer for visibility; no manual workflow approval is required. Continuing with the governed expected-head merge."
+            printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: the exact CodeQL Autofix head \`${ADMITTED_HEAD_SHA}\` passed trusted admission, protected checks, GHAS CodeQL, review-thread closure, and an exact-head APPROVED review by @portyu9. No manual workflow approval is required. Continuing with the governed expected-head merge."
             gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
             test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
           fi
