@@ -1,6 +1,12 @@
 name: Dependabot controller
 
 on:
+  workflow_run:
+    workflows:
+      - Profile quality
+      - CodeQL
+    types:
+      - completed
   schedule:
     - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
@@ -13,7 +19,7 @@ env:
 
 jobs:
   controller:
-    if: github.event_name == 'schedule'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/'))
     name: trusted-dependabot-codeql-controller
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -27,10 +33,10 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout exact trusted default-branch source
+      - name: Checkout static trusted main controller source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: main
           persist-credentials: false
           fetch-depth: 1
 
@@ -47,13 +53,31 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
-          TRUSTED_SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          WAKE_WORKFLOW: ${{ github.event.workflow_run.name }}
+          WAKE_EVENT: ${{ github.event.workflow_run.event }}
+          WAKE_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WAKE_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
-          [[ "$TRUSTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          case "$EVENT_NAME" in
+            schedule)
+              ;;
+            workflow_run)
+              test "$WAKE_WORKFLOW" = "Profile quality" || test "$WAKE_WORKFLOW" = "CodeQL"
+              test "$WAKE_EVENT" = "pull_request" || test "$WAKE_EVENT" = "workflow_dispatch"
+              test "$WAKE_HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
+              [[ "$WAKE_HEAD_BRANCH" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+              ;;
+            *)
+              echo "ERROR: unsupported Dependabot controller wake event: $EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
           MAIN_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
-          test "$MAIN_SHA" = "$TRUSTED_SHA"
+          [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$MAIN_SHA"
 
           PRS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
           MATCHES="$(jq -c '[.[][] | select(
@@ -208,6 +232,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
           BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
           HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
           HEAD_REF: ${{ steps.candidate.outputs.head_ref }}
@@ -252,7 +277,13 @@ jobs:
             -f sha="$NEW_HEAD_SHA" -F force=false > updated-ref.json
           test "$(jq -r .object.sha updated-ref.json)" = "$NEW_HEAD_SHA"
           test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-          echo "Reconciled exact derived governance files; next scheduled pass will re-prove the new immutable head."
+
+          jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$NEW_HEAD_SHA" \
+            '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
+            > admission-dispatch.json
+          gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
+          gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
+          echo "Reconciled exact derived governance files and dispatched admission plus read-only validation for the new immutable head."
 
       - name: Validate reconciled candidate and inspect protected checks
         if: steps.candidate.outputs.has_target == 'true' && steps.proof.outputs.state == 'reconciled'
@@ -294,14 +325,13 @@ jobs:
               exit 0
             fi
 
-            gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
             gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
             jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" \
               '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
               > admission-dispatch.json
             gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
             printf 'dispatched=true\n' >> "$GITHUB_OUTPUT"
-            echo "Dispatched exact-head protected validation; next pass will merge only after every gate is green."
+            echo "Dispatched exact-head admission and read-only validation; validation will sequence CodeQL after its three gates succeed."
           else
             printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
           fi
@@ -755,3 +785,48 @@ jobs:
           vulnerability-check: true
           comment-summary-in-pr: never
           warn-only: false
+
+  dispatch_codeql:
+    if: github.event_name == 'workflow_dispatch' && needs.validation_bind.result == 'success' && needs.validate_contracts.result == 'success' && needs.integration.result == 'success' && needs.dependency_review.result == 'success'
+    needs: [validation_bind, validate_contracts, integration, dependency_review]
+    name: dependabot-dispatch-codeql
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Dispatch CodeQL after exact read-only validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          PR_NUMBER: ${{ needs.validation_bind.outputs.pr_number }}
+          BASE_SHA: ${{ needs.validation_bind.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.validation_bind.outputs.head_sha }}
+          HEAD_REF: ${{ needs.validation_bind.outputs.head_ref }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$ACTOR" = "github-actions[bot]"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+
+          PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .state <<<"$PR")" = "open"
+          test "$(jq -r .draft <<<"$PR")" = "false"
+          test "$(jq -r .base.ref <<<"$PR")" = "main"
+          test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
+          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+          test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
+          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+
+          gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
+          echo "Dispatched CodeQL only after exact read-only Dependabot validation succeeded."
+
