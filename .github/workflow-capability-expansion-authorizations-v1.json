@@ -158,6 +158,13 @@
       "rationale": "Authorize #548's exact source-only Dependabot admission persistence fix. The trusted workflow already binds the full PR before checkout; this stores that same JSON under RUNNER_TEMP so checkout cannot delete it before release-provenance and delegated-admission evaluation. Semantic BOM, permissions, triggers, API/mutation surfaces, candidate-data boundary, check publisher, and merge authority are unchanged."
     },
     {
+      "id": "cap-dependabot-auto-approve-pr-workflows",
+      "baseBomSha256": "14fae0e37c39df7314307f0fb35fd2df61bfa9a91d3c39f4b0f2765e320c60ba",
+      "candidateBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
+      "expansionSha256": "fe1330b557b934203b65689552bced42ab7975059ee50fa0aa1d7e3f341067b7",
+      "rationale": "Authorize #554's exact frozen Dependabot workflow-approval capability. After trusted identity, pin provenance, exact-head/base, reconciliation, and canonical workflow-ID proof, the controller may approve only the three exact pull_request runs for CodeQL, Dependency Review, and Profile Quality when GitHub marks them action_required/waiting. No repository-wide approval relaxation, bypass, new trigger, or weakened merge/check rule is added; ambiguous or mismatched run sets fail closed."
+    },
+    {
       "id": "cap-dependabot-automation-tcb-registration",
       "baseBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
       "candidateBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
