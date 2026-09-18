@@ -188,13 +188,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Perform exact-head protected Dependabot merge"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments",
               "method": "POST",
               "mutating": true,
@@ -202,10 +195,10 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
+              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Bind current main and one native Dependabot candidate"
+              "step": "Perform exact-head protected Dependabot merge"
             },
             {
               "client": "gh-api",
@@ -247,6 +240,13 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch",
               "method": "PUT",
               "mutating": true,
+              "step": "Bind current main and one native Dependabot candidate"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
+              "method": "GET",
+              "mutating": false,
               "step": "Bind current main and one native Dependabot candidate"
             },
             {
@@ -306,12 +306,6 @@
               "target": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"
             },
             {
-              "class": "pull-request-merge",
-              "method": "PUT",
-              "step": "Perform exact-head protected Dependabot merge",
-              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"
-            },
-            {
               "class": "pull-request",
               "method": "POST",
               "step": "Bind current main and one native Dependabot candidate",
@@ -322,6 +316,12 @@
               "method": "PUT",
               "step": "Bind current main and one native Dependabot candidate",
               "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"
+            },
+            {
+              "class": "pull-request-merge",
+              "method": "PUT",
+              "step": "Perform exact-head protected Dependabot merge",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"
             },
             {
               "class": "workflow-dispatch",
@@ -662,7 +662,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact controller-issued validation target"
@@ -676,7 +676,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact controller-issued validation target"
