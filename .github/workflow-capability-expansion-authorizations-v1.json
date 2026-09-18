@@ -263,6 +263,13 @@
       "rationale": "Authorize #568's exact-head real-user approval requirement across the governed bot merge lanes. Dependabot, CodeQL Autofix, and Spotlight must re-fetch the current PR/head and verify an APPROVED review authored by portyu9 for that exact commit before terminal merge proceeds. Existing six protected checks, trusted admission, branch/ref proofs, quiescence, workflow approval, and expected-head merge remain fail-closed; no bypass is added."
     },
     {
+      "id": "cap-exact-head-portyu9-bot-approval-final",
+      "baseBomSha256": "7e4d61592ffa9988ab0d70ab74cfb7bd0ac12e20e4c54c3f4ee9395a083da16a",
+      "candidateBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
+      "expansionSha256": "f3d444de554265d254813bda3ce8efee7daadeabcb3e4f14b589b21249a078d7",
+      "rationale": "Authorize #568's final frozen exact-head portyu9 approval design after canonical BOM and authority-contract stabilization. The three governed bot merge lanes add only read-only review-list proof before terminal merge, and Spotlight's historical authority projection is updated to preserve that current proof while comparing legacy item-9 semantics. Six protected checks, trusted admission, exact refs, quiescence, expected-head merge, and no-bypass policy remain fail-closed."
+    },
+    {
       "id": "cap-github-native-bot-pr-user-approval",
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "7e4d61592ffa9988ab0d70ab74cfb7bd0ac12e20e4c54c3f4ee9395a083da16a",
