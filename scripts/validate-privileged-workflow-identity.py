@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v31"
+VERSION = "governed-workflow-byte-identity-v32"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "fd54544e436a5a5845b614fe85d60fd796839c51",
+    ".github/workflows/bot-pr-user-approval.yml": "49369e7ef0045c426f9967a34ed81ba9b4baf13d",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "244c11ae9bd11b94424df95de9dcf122a828806c",
@@ -304,6 +304,8 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'contains($marker)',
         'exact-base/head marker-bound portyu9 approval',
         'grep -Fxc "$REVIEW_MARKER"',
+        '::error::PORTYU9_BOT_REVIEW_TOKEN is required in the portyu9-review-identity environment',
+        'exit 1',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
     require(
@@ -322,6 +324,11 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     require(
         '.state == "APPROVED" and .commit_id == $head)] | length' not in bot_review,
         "Bot PR user approval must not treat GitHub commit_id alone as immutable exact-head proof",
+    )
+    require(
+        '::notice::PORTYU9_BOT_REVIEW_TOKEN is not configured' not in bot_review
+        and 'no user review was submitted.\n            exit 0' not in bot_review,
+        "Bot PR user approval must fail closed instead of reporting success when the real-user credential is absent",
     )
 
     consumers = (
