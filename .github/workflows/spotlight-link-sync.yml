@@ -1133,14 +1133,15 @@ jobs:
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
           echo "Spotlight terminal stage: pre-merge-roots-verified" >&2
 
+          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head)] | length' <<<"$REVIEWS")"
+          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
           [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
           test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
-            echo "ERROR: exact-head APPROVED review by portyu9 is required before autonomous Spotlight merge." >&2
+            echo "ERROR: exact-base/head marker-bound APPROVED review by portyu9 is required before autonomous Spotlight merge." >&2
             exit 1
           }
-          echo "Spotlight terminal stage: exact-head-portyu9-approval-verified" >&2
+          echo "Spotlight terminal stage: exact-base-head-portyu9-approval-verified" >&2
 
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
           RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"
