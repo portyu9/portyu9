@@ -84,8 +84,20 @@ jobs:
           test "$CANDIDATE_COUNT" -le 20
 
           check_required_contexts() {
-            local head="$1" name checks total count
-            for name in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do
+            local head="$1" lane="$2" name checks total count
+            local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)
+            case "$lane" in
+              spotlight)
+                ;;
+              dependabot|codeql-autofix)
+                required+=(trusted-capability-admission)
+                ;;
+              *)
+                echo "ERROR: unknown governed bot lane: $lane" >&2
+                return 1
+                ;;
+            esac
+            for name in "${required[@]}"; do
               checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=${name}&filter=latest&per_page=100")"
               total="$(jq -r '.total_count // empty' <<<"$checks")"
               count="$(jq '.check_runs | length' <<<"$checks")"
@@ -133,20 +145,28 @@ jobs:
             test "$(jq -r .state <<<"$PR")" = "open"
             test "$(jq -r .draft <<<"$PR")" = "false"
             test "$(jq -r .base.ref <<<"$PR")" = "main"
-            test "$(jq -r .base.sha <<<"$PR")" = "$MAIN_SHA"
+            if [ "$(jq -r .base.sha <<<"$PR")" != "$MAIN_SHA" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: base is stale relative to current main."
+              continue
+            fi
             test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
 
             HEAD_SHA="$(jq -r .head.sha <<<"$PR")"
             HEAD_REF="$(jq -r .head.ref <<<"$PR")"
             AUTHOR="$(jq -r .user.login <<<"$PR")"
             [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+            LANE=""
             case "$AUTHOR" in
               'dependabot[bot]')
                 [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+                LANE="dependabot"
                 ;;
               'github-actions[bot]')
-                if [[ ! "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]] &&
-                   [[ ! "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]; then
+                if [[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]; then
+                  LANE="codeql-autofix"
+                elif [[ "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]; then
+                  LANE="spotlight"
+                else
                   echo "ERROR: governed bot branch grammar changed for PR #${PR_NUMBER}" >&2
                   exit 1
                 fi
@@ -157,14 +177,20 @@ jobs:
                 ;;
             esac
 
-            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MAIN_SHA"
-            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+            if [ "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" != "$MAIN_SHA" ]; then
+              echo "Current main moved during bot-review evaluation; ending this pass without approval."
+              exit 0
+            fi
+            if [ "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" != "$HEAD_SHA" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: head moved during review evaluation."
+              continue
+            fi
 
             THREADS="$(gh api graphql               -F owner=portyu9               -F repo=portyu9               -F number="$PR_NUMBER"               -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}')"
             test "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' <<<"$THREADS")" = "false"
             test "$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$THREADS")" = "0"
 
-            check_required_contexts "$HEAD_SHA"
+            check_required_contexts "$HEAD_SHA" "$LANE"
             check_quiescent_runs "$HEAD_SHA"
 
             REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
@@ -176,15 +202,24 @@ jobs:
             fi
 
             PR_NOW="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-            test "$(jq -r .state <<<"$PR_NOW")" = "open"
-            test "$(jq -r .draft <<<"$PR_NOW")" = "false"
-            test "$(jq -r .base.sha <<<"$PR_NOW")" = "$MAIN_SHA"
-            test "$(jq -r .head.sha <<<"$PR_NOW")" = "$HEAD_SHA"
-            test "$(jq -r .head.ref <<<"$PR_NOW")" = "$HEAD_REF"
-            test "$(jq -r .head.repo.full_name <<<"$PR_NOW")" = "$TARGET_REPOSITORY"
-            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MAIN_SHA"
-            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
-            check_required_contexts "$HEAD_SHA"
+            if [ "$(jq -r .state <<<"$PR_NOW")" != "open" ] ||
+               [ "$(jq -r .draft <<<"$PR_NOW")" != "false" ] ||
+               [ "$(jq -r .base.sha <<<"$PR_NOW")" != "$MAIN_SHA" ] ||
+               [ "$(jq -r .head.sha <<<"$PR_NOW")" != "$HEAD_SHA" ] ||
+               [ "$(jq -r .head.ref <<<"$PR_NOW")" != "$HEAD_REF" ] ||
+               [ "$(jq -r .head.repo.full_name <<<"$PR_NOW")" != "$TARGET_REPOSITORY" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: exact PR identity changed before approval."
+              continue
+            fi
+            if [ "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" != "$MAIN_SHA" ]; then
+              echo "Current main moved before final bot-review authorization; ending this pass without approval."
+              exit 0
+            fi
+            if [ "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" != "$HEAD_SHA" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: head ref changed before approval."
+              continue
+            fi
+            check_required_contexts "$HEAD_SHA" "$LANE"
             check_quiescent_runs "$HEAD_SHA"
 
             BODY="Automated exact-head approval by portyu9 after all six protected gates completed successfully for \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
