@@ -110,8 +110,20 @@ def load_combined() -> dict[str, Any]:
 def self_test() -> None:
     combined = load_combined()
     require(len(combined["workflows"]) == 9, "composite Workflow Capability BOM must contain nine workflows")
-    require(combined["workflows"][0]["id"] == "capability-admission",
-            "composite Workflow Capability BOM ordering changed")
+    require(
+        [workflow["path"] for workflow in combined["workflows"]] == [
+            ".github/workflows/bot-pr-user-approval.yml",
+            ".github/workflows/capability-admission.yml",
+            ".github/workflows/codeql-autofix.yml",
+            ".github/workflows/codeql.yml",
+            ".github/workflows/dependabot-controller.yml",
+            ".github/workflows/dependency-review.yml",
+            ".github/workflows/profile-quality.yml",
+            ".github/workflows/profile-stats.yml",
+            ".github/workflows/spotlight-link-sync.yml",
+        ],
+        "composite Workflow Capability BOM ordering changed",
+    )
     require(any(workflow["id"] == "codeql-autofix" for workflow in combined["workflows"]),
             "composite Workflow Capability BOM lost CodeQL Autofix workflow")
     require(any(workflow["id"] == "dependabot-controller" for workflow in combined["workflows"]),
