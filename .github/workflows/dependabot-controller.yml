@@ -334,7 +334,72 @@ jobs:
             test "$ready" = "true"
           }
 
+          approve_exact_pr_workflows() {
+            local codeql_workflow_id dependency_workflow_id profile_workflow_id expected_id
+            local runs total count observed name run run_count run_id check_suite_id run_attempt status conclusion
+            codeql_workflow_id="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"
+            dependency_workflow_id="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"
+            profile_workflow_id="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"
+            [[ "$codeql_workflow_id" =~ ^[1-9][0-9]*$ ]]
+            [[ "$dependency_workflow_id" =~ ^[1-9][0-9]*$ ]]
+            [[ "$profile_workflow_id" =~ ^[1-9][0-9]*$ ]]
+            expected="$(jq -cn --argjson codeql "$codeql_workflow_id" --argjson dependency "$dependency_workflow_id" --argjson profile "$profile_workflow_id" \
+              '[{"name":"CodeQL","workflow_id":$codeql},{"name":"Dependency review","workflow_id":$dependency},{"name":"Profile quality","workflow_id":$profile}] | sort_by(.name)')"
+
+            for attempt in $(seq 1 12); do
+              assert_transaction
+              runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
+              total="$(jq -r '.total_count // empty' <<<"$runs")"
+              count="$(jq '.[("workflow" + "_runs")] | length' <<<"$runs")"
+              [[ "$total" =~ ^[0-9]+$ ]]
+              [[ "$count" =~ ^[0-9]+$ ]]
+              test "$total" = "$count" || { echo "Canonical Dependabot PR workflow-run response is incomplete." >&2; exit 1; }
+              test "$total" -le 3 || { echo "Canonical Dependabot PR workflow-run set is ambiguous." >&2; exit 1; }
+              if [ "$total" = "3" ]; then
+                observed="$(jq -c '[.[("workflow" + "_runs")][] | {name,workflow_id}] | sort_by(.name)' <<<"$runs")"
+                test "$observed" = "$expected" || { echo "Canonical Dependabot PR workflow-run identities changed." >&2; exit 1; }
+                for name in "CodeQL" "Dependency review" "Profile quality"; do
+                  case "$name" in
+                    "CodeQL") expected_id="$codeql_workflow_id" ;;
+                    "Dependency review") expected_id="$dependency_workflow_id" ;;
+                    "Profile quality") expected_id="$profile_workflow_id" ;;
+                    *) exit 1 ;;
+                  esac
+                  run_count="$(jq --arg name "$name" --argjson workflow_id "$expected_id" '[.[("workflow" + "_runs")][] | select(.name == $name and .workflow_id == $workflow_id)] | length' <<<"$runs")"
+                  test "$run_count" = "1"
+                  run="$(jq -c --arg name "$name" --argjson workflow_id "$expected_id" '[.[("workflow" + "_runs")][] | select(.name == $name and .workflow_id == $workflow_id)][0]' <<<"$runs")"
+                  run_id="$(jq -r .id <<<"$run")"
+                  check_suite_id="$(jq -r .check_suite_id <<<"$run")"
+                  run_attempt="$(jq -r .run_attempt <<<"$run")"
+                  status="$(jq -r .status <<<"$run")"
+                  conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
+                  [[ "$run_id" =~ ^[1-9][0-9]*$ ]]
+                  [[ "$check_suite_id" =~ ^[1-9][0-9]*$ ]]
+                  [[ "$run_attempt" =~ ^[1-9][0-9]*$ ]]
+                  test "$(jq -r .head_sha <<<"$run")" = "$HEAD_SHA"
+                  test "$(jq -r .head_branch <<<"$run")" = "$HEAD_REF"
+                  test "$(jq -r .event <<<"$run")" = "pull_request"
+                  test "$(jq -r .workflow_id <<<"$run")" = "$expected_id"
+                  test "$(jq -r .repository.full_name <<<"$run")" = "$TARGET_REPOSITORY"
+                  test "$(jq -r .head_repository.full_name <<<"$run")" = "$TARGET_REPOSITORY"
+                  if [ "$status" = "action_required" ] || [ "$status" = "waiting" ] || [ "$conclusion" = "action_required" ]; then
+                    gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve" >/dev/null
+                    echo "Approved exact canonical Dependabot PR workflow: ${name} run ${run_id}."
+                  elif [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then
+                    echo "Canonical Dependabot PR workflow completed unsuccessfully before approval: ${name} (${conclusion})." >&2
+                    exit 1
+                  fi
+                done
+                return 0
+              fi
+              sleep 5
+            done
+            echo "ERROR: exact canonical Dependabot PR workflow-run set did not materialize inside the bounded approval window" >&2
+            exit 1
+          }
+
           assert_transaction
+          approve_exact_pr_workflows
           READY=false
           if checks_ready; then
             READY=true
