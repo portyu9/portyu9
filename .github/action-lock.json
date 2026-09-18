@@ -1,5 +1,4 @@
 {
-  "version": "github-actions-identity-lock-v1",
   "actions": {
     "actions/attest": {
       "sha": "1e69f48acb82d1966a394da916b4c1698aa569d6",
@@ -26,16 +25,17 @@
       "tag": "v7.0.1"
     },
     "github/codeql-action/analyze": {
-      "sha": "cdf488f595d80d6e07e03d4674febd5ab45fa938",
-      "tag": "v4.37.9"
+      "sha": "b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+      "tag": "v4.38.0"
     },
     "github/codeql-action/init": {
-      "sha": "cdf488f595d80d6e07e03d4674febd5ab45fa938",
-      "tag": "v4.37.9"
+      "sha": "b96794f015dfd88f77b49b1c93e0fa7110f94c63",
+      "tag": "v4.38.0"
     },
     "shinpr/github-profile-stats": {
       "sha": "49b5f7091182a45f3ef93923505b660c6da5f835",
       "tag": "v0.2.0"
     }
-  }
+  },
+  "version": "github-actions-identity-lock-v1"
 }
