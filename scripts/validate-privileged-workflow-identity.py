@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v29"
+VERSION = "governed-workflow-byte-identity-v30"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "4e606e502fdd17280ed1cfd7314597dc35835b1f",
+    ".github/workflows/bot-pr-user-approval.yml": "9ab99bbb96ff01d63f7866f6b02592f5f7d3820d",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "1cbaff32fd052308dff17c2ba82f9c0d46b837a5",
@@ -285,6 +285,34 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     v21.validate_spotlight_mutation_budget(projected)
 
 
+def validate_bot_review_liveness(bot_review: str) -> None:
+    for fragment in (
+        'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
+        'dependabot|codeql-autofix)',
+        'required+=(trusted-capability-admission)',
+        'LANE="dependabot"',
+        'LANE="codeql-autofix"',
+        'LANE="spotlight"',
+        'Skipping governed bot PR #${PR_NUMBER}: base is stale relative to current main.',
+        'check_required_contexts "$HEAD_SHA" "$LANE"',
+        'all lane-required protected gates completed successfully',
+    ):
+        require(fragment in bot_review, f"Bot PR user approval liveness contract is missing: {fragment}")
+    require(
+        'for name in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do'
+        not in bot_review,
+        "Bot PR user approval regressed to one global six-check set instead of lane-specific gates",
+    )
+    require(
+        bot_review.count('check_required_contexts "$HEAD_SHA" "$LANE"') == 2,
+        "Bot PR user approval must re-prove the lane-specific gate set before and immediately before review mutation",
+    )
+    require(
+        'test "$(jq -r .base.sha <<<"$PR")" = "$MAIN_SHA"' not in bot_review,
+        "Bot PR user approval must skip stale-base candidates instead of globally failing the reviewer pass",
+    )
+
+
 def self_test() -> None:
     v21.self_test()
 
@@ -300,6 +328,9 @@ def main() -> int:
             observed[relative] = actual
         require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
 
+        bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+        validate_bot_review_liveness(bot_review)
+
         profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         v21.validate_profile_stats_freshness(profile)
         v21.validate_profile_stats_lease_binding(profile)
@@ -314,8 +345,8 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "item-10 MAC ordering and terminal proof guards retained · item-11 ADR recovery/preparation/signing boundaries "
-            "byte-locked with exact lease closure and no signer-side authored execution surface."
+            "bot-review lane-specific gate/retry liveness locked · item-10 MAC ordering and terminal proof guards retained · "
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0
     except (OSError, ValueError) as exc:
