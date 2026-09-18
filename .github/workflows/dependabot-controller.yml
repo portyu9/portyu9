@@ -312,32 +312,59 @@ jobs:
           test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
           test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
 
-          READY=true
-          for NAME in validate-contracts integration-pinned-upstream dependency-review trusted-capability-admission analyze-actions analyze-python; do
-            CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100")"
-            if [ "$(jq -r .total_count <<<"$CHECKS")" != "1" ] || ! jq -e --arg head "$HEAD_SHA" '.check_runs[0] | .head_sha == $head and .app.id == 15368 and .status == "completed" and .conclusion == "success"' <<<"$CHECKS" >/dev/null; then
-              READY=false
-            fi
-          done
-          printf 'ready=%s\n' "$READY" >> "$GITHUB_OUTPUT"
+          assert_transaction() {
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+          }
+
+          checks_ready() {
+            local ready=true
+            for NAME in validate-contracts integration-pinned-upstream dependency-review trusted-capability-admission analyze-actions analyze-python; do
+              CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100")"
+              if [ "$(jq -r .total_count <<<"$CHECKS")" != "1" ] || ! jq -e --arg head "$HEAD_SHA" '.check_runs[0] | .head_sha == $head and .app.id == 15368 and .status == "completed" and .conclusion == "success"' <<<"$CHECKS" >/dev/null; then
+                ready=false
+              fi
+            done
+            test "$ready" = "true"
+          }
+
+          assert_transaction
+          READY=false
+          if checks_ready; then
+            READY=true
+          fi
 
           if [ "$READY" != "true" ]; then
             ACTIVE="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")"
             if jq -e '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending")] | length > 0' <<<"$ACTIVE" >/dev/null; then
               printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
-              echo "Exact-head protected checks are already active; next pass will re-evaluate."
-              exit 0
+              echo "Exact-head protected checks are already active; bounded convergence will re-evaluate them."
+            else
+              gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
+              jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" \
+                '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
+                > admission-dispatch.json
+              gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
+              printf 'dispatched=true\n' >> "$GITHUB_OUTPUT"
+              echo "Dispatched exact-head admission and read-only validation; validation will sequence CodeQL after its three gates succeed."
             fi
 
-            gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
-            jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" \
-              '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
-              > admission-dispatch.json
-            gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
-            printf 'dispatched=true\n' >> "$GITHUB_OUTPUT"
-            echo "Dispatched exact-head admission and read-only validation; validation will sequence CodeQL after its three gates succeed."
+            for ATTEMPT in $(seq 1 24); do
+              sleep 15
+              assert_transaction
+              if checks_ready; then
+                READY=true
+                echo "All six exact-head protected checks converged successfully on bounded attempt ${ATTEMPT}."
+                break
+              fi
+            done
           else
             printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
+          fi
+
+          printf 'ready=%s\n' "$READY" >> "$GITHUB_OUTPUT"
+          if [ "$READY" != "true" ]; then
+            echo "Exact-head checks did not converge inside the bounded controller window; a later trusted wake may retry."
           fi
 
       - name: Perform exact-head protected Dependabot merge
