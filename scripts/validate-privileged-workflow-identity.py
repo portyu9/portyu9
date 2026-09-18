@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v32"
+VERSION = "governed-workflow-byte-identity-v33"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "49369e7ef0045c426f9967a34ed81ba9b4baf13d",
+    ".github/workflows/bot-pr-user-approval.yml": "f9853eddbc79380915a46817adb090e0ea56bafe",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "244c11ae9bd11b94424df95de9dcf122a828806c",
@@ -330,6 +330,27 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         and 'no user review was submitted.\n            exit 0' not in bot_review,
         "Bot PR user approval must fail closed instead of reporting success when the real-user credential is absent",
     )
+
+    require(
+        bot_review.count("actions: write") == 2 and "actions: read" not in bot_review,
+        "Bot PR user approval must retain Actions-only wake authority at workflow and job scope",
+    )
+    require("contents: write" not in bot_review,
+            "Bot PR user approval must not acquire repository-contents write authority")
+    for fragment in (
+        'wake_governed_lane_after_review "$LANE" "$HEAD_REF"',
+        'repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches',
+        'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
+        'repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches',
+        'Dispatched event-driven post-review convergence wake',
+    ):
+        require(fragment in bot_review, f"Bot PR post-review event-driven wake contract is missing: {fragment}")
+    require('repos/${TARGET_REPOSITORY}/dispatches' not in bot_review,
+            "Bot PR reviewer must not gain generic repository-dispatch authority")
+    review_mutation_pos = bot_review.index('REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST')
+    wake_pos = bot_review.index('wake_governed_lane_after_review "$LANE" "$HEAD_REF"')
+    require(review_mutation_pos < wake_pos,
+            "Bot PR controller wake must occur only after the real-user exact-base/head approval mutation")
 
     consumers = (
         ("Dependabot", dependabot, 'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"'),

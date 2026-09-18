@@ -638,7 +638,7 @@
         "workflow_run"
       ],
       "permissions": {
-        "actions": "read",
+        "actions": "write",
         "checks": "read",
         "contents": "read",
         "pull-requests": "read"
@@ -648,7 +648,7 @@
           "name": "exact-head-portyu9-review",
           "needs": [],
           "permissions": {
-            "actions": "read",
+            "actions": "write",
             "checks": "read",
             "contents": "read",
             "pull-requests": "read"
