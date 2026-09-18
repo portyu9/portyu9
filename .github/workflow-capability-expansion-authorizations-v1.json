@@ -242,6 +242,13 @@
       "rationale": "Authorize #581's exact source-only Dependabot terminal merge diagnostics. The semantic Workflow Capability BOM is unchanged. The trusted controller keeps the same merge endpoint, expected-head SHA, token permissions, merge method, required checks, review proof, quiescence, TOCTOU guards, and fail-closed behavior; it only preserves the existing merge API response body/stderr across a nonzero gh exit so GitHub's rejection reason can be surfaced."
     },
     {
+      "id": "cap-dependabot-merge-rejection-diagnostics-current-main",
+      "baseBomSha256": "cdebc55d3881977b1658ace0b15f7d93b325809dca1c53c1247faef732a5d30b",
+      "candidateBomSha256": "cdebc55d3881977b1658ace0b15f7d93b325809dca1c53c1247faef732a5d30b",
+      "expansionSha256": "c3327c37c9850af86fdeea9a53df58b192f0a99ebcbe29e1b692cb708d7bab5c",
+      "rationale": "Authorize #581's rebased source-only Dependabot terminal merge diagnostics measured against accepted main 41e57df753855c158a4f7c68daef01b739850495 and target tree 376d2b7eb8583e5589be5ee79eccc9de2923dc62. The semantic BOM is unchanged. No endpoint, permission, merge method, bypass, required check, review proof, quiescence, or TOCTOU guard changes; only existing merge API response body/stderr is preserved so GitHub's exact rejection is surfaced fail-closed."
+    },
+    {
       "id": "cap-dependabot-native-author-association-tcb",
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
