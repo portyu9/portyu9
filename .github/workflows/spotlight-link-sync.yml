@@ -180,6 +180,7 @@ jobs:
       pull-requests: write
     outputs:
       stale_cleanups_json: ${{ steps.reconcile.outputs.stale_cleanups_json }}
+      stale_cleanup_effect_present: ${{ steps.reconcile.outputs.stale_cleanup_effect_present }}
 
     steps:
       - name: Remove only stale validated automation candidates
@@ -199,6 +200,7 @@ jobs:
           set -euo pipefail
           STALE_CLEANUPS_JSON='[]'
           echo "stale_cleanups_json=$STALE_CLEANUPS_JSON" >> "$GITHUB_OUTPUT"
+          echo "stale_cleanup_effect_present=false" >> "$GITHUB_OUTPUT"
           # Verify exact short-lived mutation lease.
           LEASE_TTL_SECONDS=1800
           LEASE_MIN_REMAINING_SECONDS=240
@@ -342,6 +344,7 @@ jobs:
               '{candidateBranch:$branch,headSha:$head,prNumber:$pr,prClosed:$closed}')"
             STALE_CLEANUPS_JSON="$(jq -c --argjson entry "$CLEANUP_ENTRY" '. + [$entry]' <<<"$STALE_CLEANUPS_JSON")"
             echo "stale_cleanups_json=$STALE_CLEANUPS_JSON" >> "$GITHUB_OUTPUT"
+            echo "stale_cleanup_effect_present=true" >> "$GITHUB_OUTPUT"
           done < <(jq -r '.[] | [.ref, .object.sha] | @tsv' <<<"$REFS")
 
           {
@@ -1255,7 +1258,7 @@ jobs:
           echo "Spotlight terminal stage: cleanup-verified" >&2
 
   decision_receipt:
-    if: always() && needs.lease.result == 'success' && (needs.reconcile.outputs.stale_cleanups_json != '[]' || needs.propose.result == 'success' || needs.approve.outputs.approval_requests_json != '[]' || needs.merge.result == 'success')
+    if: always() && needs.lease.result == 'success' && (needs.reconcile.outputs.stale_cleanup_effect_present == 'true' || needs.propose.result == 'success' || needs.merge.result == 'success')
     name: prepare-automation-decision-receipt-read-only
     needs: [plan, lease, reconcile, propose, approve, merge]
     runs-on: ubuntu-24.04
