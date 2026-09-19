@@ -130,12 +130,17 @@ SPOTLIGHT_POST_CHECK_REVIEW_WAIT = """          REVIEW_MARKER="<!-- portyu9-bot-
 SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF = """          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
           PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+          LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
           [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
-          test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
-            echo "ERROR: exact-base/head marker-bound APPROVED review by portyu9 is required before autonomous Spotlight merge." >&2
+          test "$PORTYU9_APPROVAL_COUNT" = "1" || {
+            echo "ERROR: exactly one exact-base/head marker-bound APPROVED review by portyu9 is required before autonomous Spotlight merge." >&2
             exit 1
           }
-          echo "Spotlight terminal stage: exact-base-head-portyu9-approval-verified" >&2
+          if [ "$LATEST_MANUAL_DECISIVE_STATE" = "CHANGES_REQUESTED" ]; then
+            echo "ERROR: latest manual exact-head portyu9 review requests changes; autonomous Spotlight merge is vetoed." >&2
+            exit 1
+          fi
+          echo "Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified" >&2
 
 """
 

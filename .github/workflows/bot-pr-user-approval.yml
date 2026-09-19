@@ -243,10 +243,24 @@ jobs:
 
             REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"
             REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-            EXISTING="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
-            [[ "$EXISTING" =~ ^[0-9]+$ ]]
-            if [ "$EXISTING" -gt 0 ]; then
-              echo "PR #${PR_NUMBER} already has an exact-base/head marker-bound portyu9 approval."
+            MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
+            [[ "$MARKER_REVIEW_COUNT" =~ ^[0-9]+$ ]]
+            test "$MARKER_REVIEW_COUNT" -le 1 || {
+              echo "ERROR: governed bot PR #${PR_NUMBER} has multiple marker-bound portyu9 reviews for the exact head." >&2
+              exit 1
+            }
+            if [ "$LATEST_MANUAL_DECISIVE_STATE" = "CHANGES_REQUESTED" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: a later manual exact-head CHANGES_REQUESTED veto by portyu9 is active."
+              continue
+            fi
+            if [ "$MARKER_REVIEW_COUNT" = "1" ]; then
+              MARKER_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].state' <<<"$REVIEWS")"
+              if [ "$MARKER_STATE" = "APPROVED" ]; then
+                echo "PR #${PR_NUMBER} already has an exact-base/head marker-bound portyu9 approval."
+              else
+                echo "Skipping governed bot PR #${PR_NUMBER}: the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued."
+              fi
               continue
             fi
 
@@ -287,6 +301,19 @@ jobs:
                 continue
               fi
               exit "$READY_STATUS"
+            fi
+
+            REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+            RACE_MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            RACE_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
+            [[ "$RACE_MARKER_REVIEW_COUNT" =~ ^[0-9]+$ ]]
+            if [ "$RACE_MARKER_REVIEW_COUNT" -gt 0 ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: a marker-bound portyu9 review appeared before the review mutation."
+              continue
+            fi
+            if [ "$RACE_MANUAL_DECISIVE_STATE" = "CHANGES_REQUESTED" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation."
+              continue
             fi
 
             printf -v BODY '%s\n%s' "$REVIEW_MARKER" "Automated exact-base/head approval by portyu9 after all lane-required protected gates completed successfully for base \`${MAIN_SHA}\` and head \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
