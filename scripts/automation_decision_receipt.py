@@ -36,7 +36,7 @@ SHA64 = re.compile(r"^[0-9a-f]{64}$")
 POSITIVE = re.compile(r"^[1-9][0-9]*$")
 CANDIDATE_BRANCH = re.compile(r"^automation/spotlight-links/[0-9a-f]{64}$")
 PROFILE_EVENTS = {"push", "schedule", "workflow_dispatch"}
-SPOTLIGHT_EVENTS = {"schedule", "workflow_dispatch"}
+SPOTLIGHT_EVENTS = {"push", "schedule", "workflow_dispatch"}
 WORKFLOW_NAMES = {"CodeQL", "Dependency review", "Profile quality"}
 EFFECT_KEYS = {"ordinal", "job", "kind", "outcome", "target", "observation"}
 EFFECT_KINDS = {
@@ -496,6 +496,15 @@ def self_test() -> None:
                 "Automation Decision Receipt subject does not bind exact receipt bytes")
 
     spotlight, spotlight_env = fixture(SPOTLIGHT_WORKFLOW)
+    spotlight_push_env = dict(spotlight_env)
+    spotlight_push_env["GITHUB_EVENT_NAME"] = "push"
+    push_receipt, push_subject = build(copy.deepcopy(spotlight), spotlight_push_env)
+    require(hashlib.sha256(canonical_bytes(push_receipt)).hexdigest() == push_subject["receiptSha256"],
+            "Spotlight push Automation Decision Receipt subject does not bind exact receipt bytes")
+    wrong_spotlight_event = dict(spotlight_env)
+    wrong_spotlight_event["GITHUB_EVENT_NAME"] = "pull_request"
+    expect_failure(copy.deepcopy(spotlight), wrong_spotlight_event, "event identity")
+
     wrong_ordinal = copy.deepcopy(spotlight)
     wrong_ordinal["effects"][1]["ordinal"] = 3
     expect_failure(wrong_ordinal, dict(spotlight_env), "ordinals")

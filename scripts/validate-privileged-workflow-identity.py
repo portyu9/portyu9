@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v40"
+VERSION = "governed-workflow-byte-identity-v41"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "7e50a4efd1c704e425ae5ad7c916e165f28ffd05",
+    ".github/workflows/bot-pr-user-approval.yml": "e51d23bf9b9820a22247bf85ec15b772d91dfc79",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "acbd17d8d6c4a3ad941b1089c990fa18987a8d06",
@@ -345,12 +345,16 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'wake_governed_lane_after_review "$LANE" "$HEAD_REF"',
         'repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches',
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
-        'repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches',
+        'Spotlight parent workflow bounded-waits for the exact review; no post-review recovery wake is required.',
         'Dispatched event-driven post-review convergence wake',
     ):
         require(fragment in bot_review, f"Bot PR post-review event-driven wake contract is missing: {fragment}")
     require('repos/${TARGET_REPOSITORY}/dispatches' not in bot_review,
             "Bot PR reviewer must not gain generic repository-dispatch authority")
+    require(
+        'repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches' not in bot_review,
+        "Spotlight reviewer must not reintroduce the redundant post-review recovery wake",
+    )
     review_mutation_pos = bot_review.index('REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST')
     wake_pos = bot_review.index('wake_governed_lane_after_review "$LANE" "$HEAD_REF"')
     require(review_mutation_pos < wake_pos,
