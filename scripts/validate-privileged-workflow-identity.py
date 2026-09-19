@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v41"
+VERSION = "governed-workflow-byte-identity-v42"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "e51d23bf9b9820a22247bf85ec15b772d91dfc79",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "acbd17d8d6c4a3ad941b1089c990fa18987a8d06",
+    ".github/workflows/spotlight-link-sync.yml": "fa390f613eaa8a8ee888545370cfe445b27ff791",
 }
 
 OLD_MERGE_IF = (
@@ -198,8 +198,22 @@ def validate_item11_receipts(profile: str, spotlight: str) -> None:
 
     spotlight_prepare = job_block(spotlight, "decision_receipt", "decision_receipt_attest")
     spotlight_signer = job_block(spotlight, "decision_receipt_attest", None)
-    require("if: always() && needs.lease.result == 'success'" in spotlight_prepare,
-            "Spotlight ADR preparer lost safe always() recovery entry")
+    receipt_gate = (
+        "if: always() && needs.lease.result == 'success' && "
+        "(needs.reconcile.outputs.stale_cleanup_effect_present == 'true' || "
+        "needs.propose.result == 'success' || needs.merge.result == 'success')"
+    )
+    require(receipt_gate in spotlight_prepare,
+            "Spotlight ADR preparer lost explicit durable-effect gate")
+    for fragment in (
+        "stale_cleanup_effect_present: ${{ steps.reconcile.outputs.stale_cleanup_effect_present }}",
+        'echo "stale_cleanup_effect_present=false" >> "$GITHUB_OUTPUT"',
+        'echo "stale_cleanup_effect_present=true" >> "$GITHUB_OUTPUT"',
+    ):
+        require(fragment in spotlight, f"Spotlight ADR stale-effect signal contract is missing: {fragment}")
+    require("needs.reconcile.outputs.stale_cleanups_json != '[]'" not in spotlight_prepare
+            and "needs.approve.outputs.approval_requests_json != '[]'" not in spotlight_prepare,
+            "Spotlight ADR preparer must not gate on skipped-job JSON string inequality")
     require("name: prepare-automation-decision-receipt-read-only" in spotlight_prepare,
             "Spotlight ADR preparer identity changed")
     require("needs: [plan, lease, reconcile, propose, approve, merge]" in spotlight_prepare,
