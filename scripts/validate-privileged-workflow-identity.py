@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v37"
+VERSION = "governed-workflow-byte-identity-v38"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "424290446ca50ce4816b6559ccb7d3772add1942",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "dd834f9235bb1a3f08091e6b3dd83dbbbfd143da",
+    ".github/workflows/spotlight-link-sync.yml": "5fda75119422a5f9bdcd1913a90328875a8a393f",
 }
 
 OLD_MERGE_IF = (
@@ -397,6 +397,9 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         "workflow_dispatch|schedule)",
         'test "$ACTOR" = "github-actions[bot]"',
         'SPOTLIGHT_MODE="delegated"',
+        'DISCOVERED_PR="$(jq -c \'.[0]\' <<<"$MATCHES")"',
+        'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
+        'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
         'EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         '-f details_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"',
     )
@@ -416,9 +419,12 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'EXPECTED_TRUSTED_EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"',
         'Spotlight terminal stage: trusted-admission-live-reproof-verified',
+        'jq -e --arg body "$APPROVAL_BODY" \'.body == $body\' approval-comment.json >/dev/null',
     )
     for fragment in spotlight_fragments:
         require(fragment in spotlight, f"Spotlight event-driven admission proof contract is missing: {fragment}")
+    require('grep -Fxc "$APPROVAL_BODY"' not in spotlight,
+            "Spotlight approval comment verification must compare the complete multiline body atomically")
 
 
 def self_test() -> None:
