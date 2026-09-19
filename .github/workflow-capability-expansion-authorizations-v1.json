@@ -330,7 +330,7 @@
       "baseBomSha256": "9266befda8c06d60c5e9fd8dfefc677149a92d177ee763b586778cdb6fd5eb61",
       "candidateBomSha256": "023edf4092ba15ff8e9777fe5501e64ab622e4bba1afa7fa7dac596bf64434a7",
       "expansionSha256": "cdced143775cb9fbc2e9b0e4d7acefada8fac5b21450af0e9e10b29528487936",
-      "rationale": "Authorize #606's frozen final Spotlight race hardening. Read-only merge authorization now ignores scheduled admission proofs unless the embedded producer independently re-proves the exact trusted workflow_dispatch/main/base/bot/run identity, and the existing post-check approval job bounded-waits for the exact marker-bound portyu9 review before releasing authorization. The semantic expansion adds only the exact PR-review GET/reproof call multiplicity; terminal merge remains non-polling, attested, lease-bound, required-check protected, and exact-head fail-closed."
+      "rationale": "Authorize #606's frozen Spotlight race hardening. Merge authorization ignores scheduled admission proofs unless the embedded producer re-proves the exact trusted workflow_dispatch/main/base/bot/run identity. The existing post-check approval job bounded-waits for the exact marker-bound portyu9 review before authorization. Terminal merge remains non-polling, attested, lease-bound, required-check protected, and exact-head fail-closed."
     },
     {
       "id": "cap-github-native-bot-pr-user-approval",
