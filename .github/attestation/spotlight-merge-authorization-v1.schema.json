@@ -157,8 +157,8 @@
             "runId": {"type": "integer", "minimum": 1},
             "runAttempt": {"type": "integer", "minimum": 1},
             "checkSuiteId": {"type": "integer", "minimum": 1},
-            "event": {"const": "pull_request_target"},
-            "headBranch": {"type": "string", "pattern": "^automation/spotlight-links/[0-9a-f]{64}$"},
+            "event": {"const": "workflow_dispatch"},
+            "headBranch": {"const": "main"},
             "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
             "repository": {"const": "portyu9/portyu9"},
             "headRepository": {"const": "portyu9/portyu9"},
@@ -169,14 +169,17 @@
         "checkRun": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["name", "checkSuiteId", "appId", "status", "conclusion", "headSha"],
+          "required": ["name", "checkRunId", "checkSuiteId", "appId", "status", "conclusion", "headSha", "externalId", "detailsUrl"],
           "properties": {
             "name": {"const": "trusted-capability-admission"},
+            "checkRunId": {"type": "integer", "minimum": 1},
             "checkSuiteId": {"type": "integer", "minimum": 1},
             "appId": {"const": 15368},
             "status": {"const": "completed"},
             "conclusion": {"const": "success"},
-            "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+            "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+            "externalId": {"type": "string", "pattern": "^spotlight-admission:[1-9][0-9]*:[0-9a-f]{40}:[0-9a-f]{40}$"},
+            "detailsUrl": {"type": "string", "pattern": "^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
           }
         }
       }

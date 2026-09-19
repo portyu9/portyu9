@@ -94,7 +94,7 @@ CURRENT_MAIN_ECHO = '          echo "current_main_sha=$CURRENT_MAIN_SHA" >> "$GI
 SPOTLIGHT_REVIEWER_STEWARDSHIP = "          REQUESTED=\"$(jq '[.requested_reviewers[]? | select(.login == \"portyu9\")] | length' <<<\"$PR\")\"\n          [[ \"$REQUESTED\" =~ ^[0-9]+$ ]]\n          if [ \"$REQUESTED\" = \"0\" ]; then\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers\" \\\n              -f 'reviewers[]=portyu9' > requested-reviewer.json\n            test \"$(jq '[.requested_reviewers[]? | select(.login == \"portyu9\")] | length' requested-reviewer.json)\" = \"1\"\n          fi\n"
 SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n      pull-requests: write\n"
 LEGACY_SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n"
-SPOTLIGHT_APPROVAL_AUDIT = "          PRS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10\")\"\n          test \"$(jq 'length' <<<\"$PRS\")\" = \"1\"\n          PR_NUMBER=\"$(jq -r '.[0].number' <<<\"$PRS\")\"\n          [[ \"$PR_NUMBER\" =~ ^[1-9][0-9]*$ ]]\n          APPROVAL_MARKER=\"<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->\"\n          COMMENTS=\"$(gh api --paginate --slurp \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100\")\"\n          if ! jq -e --arg marker \"$APPROVAL_MARKER\" '[.[][] | select(.body | contains($marker))] | length > 0' <<<\"$COMMENTS\" >/dev/null; then\n            printf -v APPROVAL_BODY '%s\\n%s' \"$APPROVAL_MARKER\" \"Automation-approved: the exact Spotlight head \\`${HEAD_SHA}\\` passed all three protected PR workflows. An exact-head APPROVED review by @portyu9 is required before terminal merge; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path.\"\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments\" -f body=\"$APPROVAL_BODY\" > approval-comment.json\n            test \"$(jq -r .body approval-comment.json | grep -Fxc \"$APPROVAL_BODY\")\" = \"1\"\n          fi\n\n"
+SPOTLIGHT_APPROVAL_AUDIT = "          PRS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10\")\"\n          test \"$(jq 'length' <<<\"$PRS\")\" = \"1\"\n          test \"$(jq -r '.[0].number' <<<\"$PRS\")\" = \"$PR_NUMBER\"\n          APPROVAL_MARKER=\"<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->\"\n          COMMENTS=\"$(gh api --paginate --slurp \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100\")\"\n          if ! jq -e --arg marker \"$APPROVAL_MARKER\" '[.[][] | select(.body | contains($marker))] | length > 0' <<<\"$COMMENTS\" >/dev/null; then\n            printf -v APPROVAL_BODY '%s\\n%s' \"$APPROVAL_MARKER\" \"Automation-approved: the exact Spotlight head \\`${HEAD_SHA}\\` passed all three protected PR workflows. An exact-head APPROVED review by @portyu9 is required before terminal merge; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path.\"\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments\" -f body=\"$APPROVAL_BODY\" > approval-comment.json\n            test \"$(jq -r .body approval-comment.json | grep -Fxc \"$APPROVAL_BODY\")\" = \"1\"\n          fi\n\n"
 SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF = """          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
           PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
@@ -218,23 +218,26 @@ def validate_policy_cross_contracts_with_trusted_admission(
     for fragment in (
         'TRUSTED_CHECK_NAME = "trusted-capability-admission"',
         'TRUSTED_WORKFLOW_NAME = "Capability admission"',
-        'event=pull_request_target',
+        'trusted_run.get("event") == "workflow_dispatch"',
+        'trusted_run.get("head_branch") == "main"',
         '"trustedAdmission"',
     ):
         item9.require(fragment in prepare,
                       f"Spotlight read-only authorization lost trusted admission proof: {fragment}")
     for fragment in (
         '"trustedAdmission"',
-        '"pull_request_target"',
+        '"workflow_dispatch"',
         '"trusted-capability-admission"',
+        'expected_external_id = f"spotlight-admission:{pr_number}:{base}:{head}"',
         'server-side required-check enforcement',
     ):
         item9.require(fragment in builder,
                       f"Spotlight certificate builder lost trusted admission binding: {fragment}")
     for fragment in (
         '"trustedAdmission"',
-        '"pull_request_target"',
+        '"workflow_dispatch"',
         '"trusted-capability-admission"',
+        '"externalId"',
         '"appId": {"const": 15368}',
     ):
         item9.require(fragment in schema,

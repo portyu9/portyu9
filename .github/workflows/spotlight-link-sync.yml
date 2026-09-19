@@ -674,6 +674,7 @@ jobs:
           BASE_SHA: ${{ needs.propose.outputs.base_sha }}
           HEAD_SHA: ${{ needs.propose.outputs.head_sha }}
           CANDIDATE_BRANCH: ${{ needs.propose.outputs.candidate_branch }}
+          PR_NUMBER: ${{ needs.propose.outputs.pr_number }}
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
@@ -723,6 +724,21 @@ jobs:
           test "$(jq '.files | length' <<<"$COMPARE")" = "1"
           test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
           test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
+
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .user.login <<<"$PR")" = "$BOT_NAME"
+          test "$(jq -r .state <<<"$PR")" = "open"
+          test "$(jq -r .draft <<<"$PR")" = "false"
+          test "$(jq -r .base.ref <<<"$PR")" = "main"
+          test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
+          test "$(jq -r .head.ref <<<"$PR")" = "$CANDIDATE_BRANCH"
+          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches" \
+            -f ref=main >/dev/null
+          echo "Dispatched event-driven Spotlight admission proof from trusted main; Capability Admission independently binds the unique current-main candidate."
 
           CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"
           DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"
@@ -806,8 +822,7 @@ jobs:
 
           PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
           test "$(jq 'length' <<<"$PRS")" = "1"
-          PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
-          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          test "$(jq -r '.[0].number' <<<"$PRS")" = "$PR_NUMBER"
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
           COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
           if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
@@ -993,6 +1008,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     permissions:
+      actions: read
       contents: write
       pull-requests: read
       checks: read
@@ -1098,7 +1114,7 @@ jobs:
             exit 1
           }
           EXPECTED_CHECKS="$(jq -cn --arg head "$HEAD_SHA" --argjson codeql "$CODEQL_CHECK_SUITE_ID" --argjson dependency "$DEPENDENCY_CHECK_SUITE_ID" --argjson profile "$PROFILE_CHECK_SUITE_ID" '[{name:"analyze-actions",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"analyze-python",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"dependency-review",check_suite_id:$dependency,status:"completed",conclusion:"success",head_sha:$head},{name:"integration-pinned-upstream",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head},{name:"validate-contracts",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}] | sort_by(.name)')"
-          OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
+          OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts")) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
           test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
           echo "Spotlight terminal stage: required-checks-verified" >&2
 
@@ -1120,6 +1136,37 @@ jobs:
           EXPECTED_CERTIFICATE_CHECKS="$(jq -cn --arg head "$HEAD_SHA" --argjson codeql "$CODEQL_CHECK_SUITE_ID" --argjson dependency "$DEPENDENCY_CHECK_SUITE_ID" --argjson profile "$PROFILE_CHECK_SUITE_ID" '[{name:"analyze-actions",checkSuiteId:$codeql,appId:15368,status:"completed",conclusion:"success",headSha:$head},{name:"analyze-python",checkSuiteId:$codeql,appId:15368,status:"completed",conclusion:"success",headSha:$head},{name:"dependency-review",checkSuiteId:$dependency,appId:15368,status:"completed",conclusion:"success",headSha:$head},{name:"integration-pinned-upstream",checkSuiteId:$profile,appId:15368,status:"completed",conclusion:"success",headSha:$head},{name:"validate-contracts",checkSuiteId:$profile,appId:15368,status:"completed",conclusion:"success",headSha:$head}] | sort_by(.name)')"
           test "$(jq -cS '.checkRuns | sort_by(.name)' "$CERTIFICATE")" = "$(jq -cS . <<<"$EXPECTED_CERTIFICATE_CHECKS")"
           echo "Spotlight terminal stage: certificate-provenance-verified" >&2
+
+          TRUSTED_RUN_ID="$(jq -r '.trustedAdmission.workflowRun.runId' "$CERTIFICATE")"
+          TRUSTED_CHECK_RUN_ID="$(jq -r '.trustedAdmission.checkRun.checkRunId' "$CERTIFICATE")"
+          TRUSTED_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"
+          [[ "$TRUSTED_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$TRUSTED_CHECK_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$TRUSTED_WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
+          TRUSTED_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}")"
+          test "$(jq -r .name <<<"$TRUSTED_RUN")" = "Capability admission"
+          test "$(jq -r .workflow_id <<<"$TRUSTED_RUN")" = "$TRUSTED_WORKFLOW_ID"
+          test "$(jq -r .event <<<"$TRUSTED_RUN")" = "workflow_dispatch"
+          test "$(jq -r .head_branch <<<"$TRUSTED_RUN")" = "main"
+          test "$(jq -r .head_sha <<<"$TRUSTED_RUN")" = "$BASE_SHA"
+          test "$(jq -r .repository.full_name <<<"$TRUSTED_RUN")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .head_repository.full_name <<<"$TRUSTED_RUN")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .actor.login <<<"$TRUSTED_RUN")" = "github-actions[bot]"
+          test "$(jq -r .triggering_actor.login <<<"$TRUSTED_RUN")" = "github-actions[bot]"
+          test "$(jq -r .status <<<"$TRUSTED_RUN")" = "completed"
+          test "$(jq -r .conclusion <<<"$TRUSTED_RUN")" = "success"
+          TRUSTED_CHECK="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}")"
+          EXPECTED_TRUSTED_EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+          EXPECTED_TRUSTED_DETAILS_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}"
+          test "$(jq -r .name <<<"$TRUSTED_CHECK")" = "trusted-capability-admission"
+          test "$(jq -r .head_sha <<<"$TRUSTED_CHECK")" = "$HEAD_SHA"
+          test "$(jq -r .app.id <<<"$TRUSTED_CHECK")" = "15368"
+          test "$(jq -r .status <<<"$TRUSTED_CHECK")" = "completed"
+          test "$(jq -r .conclusion <<<"$TRUSTED_CHECK")" = "success"
+          test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"
+          test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_DETAILS_URL"
+          test "$(jq -r .check_suite.id <<<"$TRUSTED_CHECK")" = "$(jq -r '.trustedAdmission.checkRun.checkSuiteId' "$CERTIFICATE")"
+          echo "Spotlight terminal stage: trusted-admission-live-reproof-verified" >&2
           echo "Spotlight terminal stage: attestation-verification-start" >&2
           gh attestation verify "$SUBJECT" --repo "$GITHUB_REPOSITORY" --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml" --signer-digest "$BASE_SHA" --source-digest "$BASE_SHA" --source-ref refs/heads/main --deny-self-hosted-runners --format json > verified-merge-authorization.json
           echo "Spotlight terminal stage: attestation-cryptographic-verified" >&2

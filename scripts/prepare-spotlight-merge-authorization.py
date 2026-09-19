@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 from typing import Any
 
 REPOSITORY = "portyu9/portyu9"
@@ -230,20 +231,65 @@ def prepare_state() -> dict[str, Any]:
                 f"Spotlight authorization {name} run provenance changed")
         workflow_runs.append(item)
 
-    trusted_runs_payload = gh_json(
-        f"repos/{REPOSITORY}/actions/runs?head_sha={head}&event=pull_request_target&per_page=100"
+    expected_trusted_external_id = f"spotlight-admission:{pr_number}:{base}:{head}"
+    trusted_check: dict[str, Any] | None = None
+    checks: list[dict[str, Any]] = []
+    for attempt in range(1, 25):
+        checks_payload = gh_json(f"repos/{REPOSITORY}/commits/{head}/check-runs?filter=latest&per_page=100")
+        checks_total = checks_payload.get("total_count")
+        observed_checks = checks_payload.get("check_runs")
+        require(type(checks_total) is int and isinstance(observed_checks, list)
+                and checks_total == len(observed_checks),
+                "Spotlight authorization check-run response is incomplete")
+        checks = observed_checks
+        trusted_matches = [
+            check for check in checks
+            if check.get("app", {}).get("id") == 15368
+            and check.get("name") == TRUSTED_CHECK_NAME
+            and check.get("head_sha") == head
+            and check.get("external_id") == expected_trusted_external_id
+        ]
+        require(len(trusted_matches) <= 1,
+                "Spotlight trusted admission exact proof is ambiguous")
+        if trusted_matches:
+            trusted_check = trusted_matches[0]
+            if trusted_check.get("status") == "completed":
+                break
+        if attempt == 24:
+            break
+        time.sleep(5)
+    require(trusted_check is not None,
+            "Spotlight trusted admission exact proof did not materialize")
+    require(trusted_check.get("status") == "completed" and trusted_check.get("conclusion") == "success",
+            "Spotlight trusted admission exact proof is not successful")
+
+    trusted_details_url = trusted_check.get("details_url")
+    require(isinstance(trusted_details_url, str), "Spotlight trusted admission details URL is missing")
+    trusted_details_match = re.fullmatch(
+        rf"https://github\\.com/{re.escape(REPOSITORY)}/actions/runs/([1-9][0-9]*)",
+        trusted_details_url,
     )
-    trusted_total = trusted_runs_payload.get("total_count")
-    trusted_runs = trusted_runs_payload.get("workflow_runs")
-    require(type(trusted_total) is int and isinstance(trusted_runs, list)
-            and trusted_total == len(trusted_runs) == 1,
-            "Spotlight trusted admission workflow-run response is incomplete or ambiguous")
-    trusted_matches = [run for run in trusted_runs
-                       if run.get("name") == TRUSTED_WORKFLOW_NAME
-                       and run.get("workflow_id") == trusted_workflow_id]
-    require(len(trusted_matches) == 1,
+    require(trusted_details_match is not None,
+            "Spotlight trusted admission details URL is not canonical")
+    trusted_run_id = int(trusted_details_match.group(1))
+    trusted_run = gh_json(f"repos/{REPOSITORY}/actions/runs/{trusted_run_id}")
+    require(trusted_run.get("name") == TRUSTED_WORKFLOW_NAME
+            and trusted_run.get("workflow_id") == trusted_workflow_id,
             "Spotlight trusted admission canonical workflow run changed")
-    trusted_run = trusted_matches[0]
+    require(trusted_run.get("event") == "workflow_dispatch"
+            and trusted_run.get("head_branch") == "main"
+            and trusted_run.get("head_sha") == base,
+            "Spotlight trusted admission source identity changed")
+    require(trusted_run.get("path") == ".github/workflows/capability-admission.yml",
+            "Spotlight trusted admission workflow path changed")
+    require(trusted_run.get("repository", {}).get("full_name") == REPOSITORY
+            and trusted_run.get("head_repository", {}).get("full_name") == REPOSITORY,
+            "Spotlight trusted admission repository identity changed")
+    require(trusted_run.get("actor", {}).get("login") == BOT_NAME
+            and trusted_run.get("triggering_actor", {}).get("login") == BOT_NAME,
+            "Spotlight trusted admission actor identity changed")
+    require(trusted_run.get("status") == "completed" and trusted_run.get("conclusion") == "success",
+            "Spotlight trusted admission workflow is not successful")
     trusted_run_item = {
         "name": TRUSTED_WORKFLOW_NAME,
         "workflowId": trusted_workflow_id,
@@ -258,23 +304,8 @@ def prepare_state() -> dict[str, Any]:
         "status": trusted_run.get("status"),
         "conclusion": trusted_run.get("conclusion"),
     }
-    require(trusted_run_item["event"] == "pull_request_target"
-            and trusted_run_item["headBranch"] == branch and trusted_run_item["headSha"] == head
-            and trusted_run_item["repository"] == REPOSITORY
-            and trusted_run_item["headRepository"] == REPOSITORY
-            and trusted_run_item["status"] == "completed" and trusted_run_item["conclusion"] == "success",
-            "Spotlight trusted admission run provenance changed")
 
-    checks_payload = gh_json(f"repos/{REPOSITORY}/commits/{head}/check-runs?filter=latest&per_page=100")
-    checks_total = checks_payload.get("total_count")
-    checks = checks_payload.get("check_runs")
-    require(type(checks_total) is int and isinstance(checks, list) and checks_total == len(checks),
-            "Spotlight authorization check-run response is incomplete")
     actions_checks = [check for check in checks if check.get("app", {}).get("id") == 15368]
-    expected_names = sorted(CHECK_NAMES + (TRUSTED_CHECK_NAME,))
-    require(len(actions_checks) == 6 and sorted(check.get("name") for check in actions_checks) == expected_names,
-            "Spotlight authorization GitHub-Actions check set changed")
-
     suite_by_workflow = {item["name"]: item["checkSuiteId"] for item in workflow_runs}
     check_runs: list[dict[str, Any]] = []
     for name in CHECK_NAMES:
@@ -296,27 +327,24 @@ def prepare_state() -> dict[str, Any]:
                 f"Spotlight authorization required check is not successful on exact head: {name}")
         check_runs.append(item)
 
-    trusted_checks = [check for check in actions_checks if check.get("name") == TRUSTED_CHECK_NAME]
-    require(len(trusted_checks) == 1,
-            "Spotlight trusted admission check run is ambiguous")
-    trusted_check = trusted_checks[0]
-    trusted_suite = positive(trusted_check.get("check_suite", {}).get("id"),
-                             "trusted capability admission check suite ID")
-    require(trusted_suite == trusted_run_item["checkSuiteId"],
-            "Spotlight trusted admission check suite differs from canonical workflow run")
     trusted_check_item = {
         "name": TRUSTED_CHECK_NAME,
-        "checkSuiteId": trusted_suite,
+        "checkRunId": positive(trusted_check.get("id"), "trusted capability admission check run ID"),
+        "checkSuiteId": positive(trusted_check.get("check_suite", {}).get("id"),
+                                 "trusted capability admission check suite ID"),
         "appId": trusted_check.get("app", {}).get("id"),
         "status": trusted_check.get("status"),
         "conclusion": trusted_check.get("conclusion"),
         "headSha": trusted_check.get("head_sha"),
+        "externalId": trusted_check.get("external_id"),
+        "detailsUrl": trusted_details_url,
     }
     require(trusted_check_item["appId"] == 15368
             and trusted_check_item["status"] == "completed"
             and trusted_check_item["conclusion"] == "success"
-            and trusted_check_item["headSha"] == head,
-            "Spotlight trusted admission check is not successful on exact head")
+            and trusted_check_item["headSha"] == head
+            and trusted_check_item["externalId"] == expected_trusted_external_id,
+            "Spotlight trusted admission check success identity changed")
 
     return {
         "pullRequest": expected_pr,

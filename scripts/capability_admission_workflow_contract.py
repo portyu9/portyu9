@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "0ec11e5856dd3134a19783cc1fc586c246eed1c9"
+EXPECTED_GIT_BLOB = "404d54f1e771d5ac608e5c4fad308326a5ac6f82"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -149,6 +149,10 @@ def validate_text(text: str) -> None:
 
     for spotlight_binding in (
         '    - cron: "*/5 * * * *"',
+        "  workflow_dispatch:",
+        'test "$ACTOR" = "github-actions[bot]"',
+        'workflow_dispatch|schedule)',
+        'SPOTLIGHT_MODE="delegated"',
         '.user.login == "github-actions[bot]"',
         'test("^automation/spotlight-links/[0-9a-f]{64}$")',
         'test "$MATCH_COUNT" -le 1',
@@ -156,10 +160,10 @@ def validate_text(text: str) -> None:
         'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
         'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
         'test "$HEAD_REF" = "automation/spotlight-links/${CANDIDATE_ID}"',
-        'EXTERNAL_ID="spotlight-scheduled-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+        'EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
     ):
         require(spotlight_binding in text,
-                f"trusted capability admission scheduled Spotlight proof changed: {spotlight_binding}")
+                f"trusted capability admission Spotlight proof changed: {spotlight_binding}")
 
     publisher = 'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
     require(text.count(publisher) == 1,

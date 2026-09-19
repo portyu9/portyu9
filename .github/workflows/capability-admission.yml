@@ -7,6 +7,7 @@ on:
       - reopened
       - synchronize
       - ready_for_review
+  workflow_dispatch:
   repository_dispatch:
     types:
       - codeql-autofix-admission
@@ -41,12 +42,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           TARGET_REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
           DISPATCH=false
           DEPENDABOT=false
           SPOTLIGHT=false
+          SPOTLIGHT_MODE=""
           HAS_CANDIDATE=true
 
           case "$EVENT_NAME" in
@@ -108,7 +111,13 @@ jobs:
                   ;;
               esac
               ;;
-            schedule)
+            workflow_dispatch|schedule)
+              if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+                test "$ACTOR" = "github-actions[bot]"
+                SPOTLIGHT_MODE="delegated"
+              else
+                SPOTLIGHT_MODE="scheduled"
+              fi
               MAIN_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
               [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
               PRS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
@@ -132,7 +141,8 @@ jobs:
                 printf 'dispatch=false\n' >> "$GITHUB_OUTPUT"
                 printf 'dependabot=false\n' >> "$GITHUB_OUTPUT"
                 printf 'spotlight=false\n' >> "$GITHUB_OUTPUT"
-                echo "No exact current-main Spotlight candidate needs admission recovery."
+                printf 'spotlight_mode=%s\n' "$SPOTLIGHT_MODE" >> "$GITHUB_OUTPUT"
+                echo "No exact current-main Spotlight candidate needs admission."
                 exit 0
               fi
               PR="$(jq -c '.[0]' <<<"$MATCHES")"
@@ -211,6 +221,7 @@ jobs:
           printf 'dispatch=%s\n' "$DISPATCH" >> "$GITHUB_OUTPUT"
           printf 'dependabot=%s\n' "$DEPENDABOT" >> "$GITHUB_OUTPUT"
           printf 'spotlight=%s\n' "$SPOTLIGHT" >> "$GITHUB_OUTPUT"
+          printf 'spotlight_mode=%s\n' "$SPOTLIGHT_MODE" >> "$GITHUB_OUTPUT"
           printf 'base_ref=%s\n' "$BASE_REF" >> "$GITHUB_OUTPUT"
           printf 'base_sha=%s\n' "$BASE_SHA" >> "$GITHUB_OUTPUT"
           printf 'head_ref=%s\n' "$HEAD_REF" >> "$GITHUB_OUTPUT"
@@ -462,6 +473,7 @@ jobs:
           ORIGIN_RUN_ID: ${{ steps.candidate.outputs.origin_run_id }}
           DEPENDABOT: ${{ steps.candidate.outputs.dependabot }}
           SPOTLIGHT: ${{ steps.candidate.outputs.spotlight }}
+          SPOTLIGHT_MODE: ${{ steps.candidate.outputs.spotlight_mode }}
           BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
         run: |
           set -euo pipefail
@@ -473,9 +485,10 @@ jobs:
             CHECK_NAME="trusted-capability-admission-proof"
             SUMMARY="Trusted default-branch delegated admission accepted the exact reconciled native Dependabot CodeQL Action candidate."
           elif [ "$SPOTLIGHT" = "true" ]; then
-            EXTERNAL_ID="spotlight-scheduled-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+            test "$SPOTLIGHT_MODE" = "delegated" || test "$SPOTLIGHT_MODE" = "scheduled"
+            EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
             CHECK_NAME="trusted-capability-admission"
-            SUMMARY="Trusted scheduled admission accepted the exact current-main deterministic README-only Spotlight bot candidate."
+            SUMMARY="Trusted default-branch admission accepted the exact current-main deterministic README-only Spotlight bot candidate."
           else
             test "$ORIGIN_RUN_ID" -gt 0
             EXTERNAL_ID="codeql-autofix-admission:${ORIGIN_RUN_ID}:${PR_NUMBER}:${HEAD_SHA}"
@@ -485,6 +498,7 @@ jobs:
           CHECK="$(gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs" \
             -f name="$CHECK_NAME" \
             -f head_sha="$HEAD_SHA" \
+            -f details_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             -f status=completed \
             -f conclusion=success \
             -f external_id="$EXTERNAL_ID" \

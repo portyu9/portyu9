@@ -96,9 +96,23 @@ def project_item9_sync(sync: str) -> str:
         require(projected.count(current) == 1, f"item-10 projection lost exact {label}")
         projected = projected.replace(current, legacy, 1)
 
-    require(projected.count("      attestations: read\n") == 1,
-            "item-10 projection lost terminal attestation-read permission")
-    projected = projected.replace("      attestations: read\n", "", 1)
+    terminal_permissions = (
+        "    permissions:\n"
+        "      actions: read\n"
+        "      contents: write\n"
+        "      pull-requests: read\n"
+        "      checks: read\n"
+        "      attestations: read\n"
+    )
+    legacy_terminal_permissions = (
+        "    permissions:\n"
+        "      contents: write\n"
+        "      pull-requests: read\n"
+        "      checks: read\n"
+    )
+    require(projected.count(terminal_permissions) == 1,
+            "item-10 projection lost exact terminal read-only Actions/attestation overlay")
+    projected = projected.replace(terminal_permissions, legacy_terminal_permissions, 1)
     require(projected.count(DOWNLOAD_STEP) == 1,
             "item-10 projection lost terminal certificate download")
     projected = projected.replace(DOWNLOAD_STEP, "", 1)
@@ -194,8 +208,8 @@ def validate_item10_authority(sync: str) -> None:
 
     require(NEW_MERGE_IF in merge and NEW_MERGE_NEEDS in merge,
             "Spotlight terminal merge can bypass MAC preparation/signing")
-    require("permissions:\n      contents: write\n      pull-requests: read\n      checks: read\n      attestations: read" in merge,
-            "Spotlight terminal merge authority changed beyond read-only attestation verification")
+    require("permissions:\n      actions: read\n      contents: write\n      pull-requests: read\n      checks: read\n      attestations: read" in merge,
+            "Spotlight terminal merge authority changed beyond exact read-only Actions/attestation verification")
     for forbidden in ("id-token: write", "attestations: write"):
         require(forbidden not in merge, f"Spotlight terminal merge acquired signer authority: {forbidden}")
 

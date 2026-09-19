@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v35"
+VERSION = "governed-workflow-byte-identity-v37"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "424290446ca50ce4816b6559ccb7d3772add1942",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "244c11ae9bd11b94424df95de9dcf122a828806c",
+    ".github/workflows/spotlight-link-sync.yml": "5c084ed20de51b270a1bace2cf4744e2dad5849e",
 }
 
 OLD_MERGE_IF = (
@@ -115,8 +115,8 @@ def validate_item10_mac(spotlight: str) -> None:
         "Spotlight terminal merge MAC dependency closure changed",
     )
     require(
-        "permissions:\n      contents: write\n      pull-requests: read\n      checks: read\n      attestations: read" in merge,
-        "Spotlight terminal merge must retain only merge authority plus read-only certificate verification",
+        "permissions:\n      actions: read\n      contents: write\n      pull-requests: read\n      checks: read\n      attestations: read" in merge,
+        "Spotlight terminal merge must retain only merge authority plus read-only Actions/certificate verification",
     )
     for fragment in (
         "- name: Download attested merge authorization artifact",
@@ -391,6 +391,36 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         )
 
 
+def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
+    capability_fragments = (
+        "workflow_dispatch:",
+        "workflow_dispatch|schedule)",
+        'test "$ACTOR" = "github-actions[bot]"',
+        'SPOTLIGHT_MODE="delegated"',
+        'EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+        '-f details_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"',
+    )
+    for fragment in capability_fragments:
+        require(fragment in capability, f"Capability Admission lost event-driven Spotlight proof binding: {fragment}")
+    require("spotlight-scheduled-admission:" not in capability,
+            "Capability Admission regressed to schedule-specific Spotlight proof identity")
+
+    spotlight_fragments = (
+        'actions/workflows/capability-admission.yml/dispatches',
+        '-f ref=main >/dev/null',
+        'Capability Admission independently binds the unique current-main candidate.',
+        "TRUSTED_RUN_ID=\"$(jq -r '.trustedAdmission.workflowRun.runId' \"$CERTIFICATE\")\"",
+        "TRUSTED_CHECK_RUN_ID=\"$(jq -r '.trustedAdmission.checkRun.checkRunId' \"$CERTIFICATE\")\"",
+        'test "$(jq -r .event <<<"$TRUSTED_RUN")" = "workflow_dispatch"',
+        'test "$(jq -r .head_branch <<<"$TRUSTED_RUN")" = "main"',
+        'EXPECTED_TRUSTED_EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+        'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"',
+        'Spotlight terminal stage: trusted-admission-live-reproof-verified',
+    )
+    for fragment in spotlight_fragments:
+        require(fragment in spotlight, f"Spotlight event-driven admission proof contract is missing: {fragment}")
+
+
 def self_test() -> None:
     v21.self_test()
 
@@ -410,7 +440,9 @@ def main() -> int:
         dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
         autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
+        validate_spotlight_event_admission(spotlight, capability)
 
         profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         v21.validate_profile_stats_freshness(profile)
@@ -425,7 +457,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "bot-review lane-specific liveness plus immutable base/head marker proof locked · item-10 MAC ordering and terminal proof guards retained · "
+            "bot-review lane-specific liveness plus immutable base/head marker proof locked · event-driven Spotlight admission dispatch/proof/live-reproof locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0
