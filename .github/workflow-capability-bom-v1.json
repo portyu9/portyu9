@@ -1245,6 +1245,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches",
               "method": "POST",
               "mutating": true,
@@ -1336,6 +1343,12 @@
               "method": "POST",
               "step": "Approve and wait for only the exact README-only automation checks",
               "target": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Approve and wait for only the exact README-only automation checks",
+              "target": "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches"
             },
             {
               "class": "workflow-dispatch",

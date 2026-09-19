@@ -84,7 +84,7 @@ jobs:
           test "$CANDIDATE_COUNT" -le 20
 
           check_required_contexts() {
-            local head="$1" lane="$2" name checks total count
+            local head="$1" lane="$2" name checks total count active failed
             local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)
             case "$lane" in
               spotlight)
@@ -98,42 +98,55 @@ jobs:
                 ;;
             esac
             for name in "${required[@]}"; do
-              checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=${name}&filter=latest&per_page=100")"
+              checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=${name}&filter=latest&per_page=100")" || {
+                echo "ERROR: failed to fetch required check context ${name} for ${head}." >&2
+                return 1
+              }
               total="$(jq -r '.total_count // empty' <<<"$checks")"
               count="$(jq '.check_runs | length' <<<"$checks")"
-              [[ "$total" =~ ^[0-9]+$ ]]
-              [[ "$count" =~ ^[0-9]+$ ]]
-              test "$total" = "$count"
-              test "$count" -ge 1
-              jq -e --arg head "$head" '
-                all(.check_runs[];
-                  .head_sha == $head and
-                  .app.id == 15368 and
-                  .status == "completed" and
-                  .conclusion == "success"
-                )
-              ' <<<"$checks" >/dev/null
+              [[ "$total" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid required-check total for ${name}." >&2; return 1; }
+              [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid required-check count for ${name}." >&2; return 1; }
+              [ "$total" = "$count" ] || { echo "ERROR: incomplete required-check response for ${name}." >&2; return 1; }
+              if [ "$count" = "0" ]; then
+                echo "Governed bot head ${head} is not ready: required check ${name} has not materialized yet."
+                return 2
+              fi
+              jq -e --arg head "$head" 'all(.check_runs[]; .head_sha == $head and .app.id == 15368)' <<<"$checks" >/dev/null || {
+                echo "ERROR: required check identity changed for ${name} on ${head}." >&2
+                return 1
+              }
+              active="$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks")"
+              [[ "$active" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid active required-check count for ${name}." >&2; return 1; }
+              if [ "$active" -gt 0 ]; then
+                echo "Governed bot head ${head} is not ready: required check ${name} is still active."
+                return 2
+              fi
+              failed="$(jq '[.check_runs[] | select(.status == "completed" and .conclusion != "success")] | length' <<<"$checks")"
+              [[ "$failed" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid failed required-check count for ${name}." >&2; return 1; }
+              if [ "$failed" -gt 0 ]; then
+                echo "ERROR: required check ${name} completed unsuccessfully on ${head}." >&2
+                return 1
+              fi
             done
           }
 
           check_quiescent_runs() {
-            local head="$1" runs total count
-            runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")"
+            local head="$1" runs total count active
+            runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")" || {
+              echo "ERROR: failed to fetch workflow-run quiescence for ${head}." >&2
+              return 1
+            }
             total="$(jq -r '.total_count // empty' <<<"$runs")"
             count="$(jq '.workflow_runs | length' <<<"$runs")"
-            [[ "$total" =~ ^[0-9]+$ ]]
-            [[ "$count" =~ ^[0-9]+$ ]]
-            test "$total" = "$count"
-            jq -e '
-              [.workflow_runs[] |
-                select(
-                  .status == "queued" or
-                  .status == "in_progress" or
-                  .status == "waiting" or
-                  .status == "pending"
-                )
-              ] | length == 0
-            ' <<<"$runs" >/dev/null
+            [[ "$total" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid workflow-run total for ${head}." >&2; return 1; }
+            [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid workflow-run count for ${head}." >&2; return 1; }
+            [ "$total" = "$count" ] || { echo "ERROR: incomplete workflow-run response for ${head}." >&2; return 1; }
+            active="$(jq '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending")] | length' <<<"$runs")"
+            [[ "$active" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid active workflow-run count for ${head}." >&2; return 1; }
+            if [ "$active" -gt 0 ]; then
+              echo "Governed bot head ${head} is not ready: ${active} workflow run(s) remain active."
+              return 2
+            fi
           }
 
           wake_governed_lane_after_review() {
@@ -209,8 +222,26 @@ jobs:
             test "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' <<<"$THREADS")" = "false"
             test "$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$THREADS")" = "0"
 
-            check_required_contexts "$HEAD_SHA" "$LANE"
-            check_quiescent_runs "$HEAD_SHA"
+            if check_required_contexts "$HEAD_SHA" "$LANE"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks are not ready yet."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
+            if check_quiescent_runs "$HEAD_SHA"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: exact head is not quiescent yet."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
 
             REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"
             REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
@@ -239,8 +270,26 @@ jobs:
               echo "Skipping governed bot PR #${PR_NUMBER}: head ref changed before approval."
               continue
             fi
-            check_required_contexts "$HEAD_SHA" "$LANE"
-            check_quiescent_runs "$HEAD_SHA"
+            if check_required_contexts "$HEAD_SHA" "$LANE"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks changed back to not-ready before approval."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
+            if check_quiescent_runs "$HEAD_SHA"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: exact head became active again before approval."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
 
             printf -v BODY '%s\n%s' "$REVIEW_MARKER" "Automated exact-base/head approval by portyu9 after all lane-required protected gates completed successfully for base \`${MAIN_SHA}\` and head \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
             jq -n --arg body "$BODY" --arg commit "$HEAD_SHA"               '{event:"APPROVE",body:$body,commit_id:$commit}' > review-request.json
@@ -248,7 +297,7 @@ jobs:
             test "$(jq -r .state <<<"$REVIEW_RESPONSE")" = "APPROVED"
             test "$(jq -r .user.login <<<"$REVIEW_RESPONSE")" = "portyu9"
             test "$(jq -r .commit_id <<<"$REVIEW_RESPONSE")" = "$HEAD_SHA"
-            test "$(jq -r .body <<<"$REVIEW_RESPONSE" | grep -Fxc "$REVIEW_MARKER")" = "1"
+            jq -e --arg body "$BODY" '.body == $body' <<<"$REVIEW_RESPONSE" >/dev/null
             echo "Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
             wake_governed_lane_after_review "$LANE" "$HEAD_REF"
             echo "Dispatched event-driven post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
