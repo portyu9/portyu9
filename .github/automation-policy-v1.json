@@ -211,6 +211,14 @@
             "contents": "read",
             "pull-requests": "read"
           }
+        },
+        "governed_bot_review": {
+          "name": "trusted-governed-bot-review",
+          "needs": [],
+          "permissions": {
+            "contents": "read",
+            "pull-requests": "read"
+          }
         }
       }
     },

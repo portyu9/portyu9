@@ -13,6 +13,7 @@ UPSTREAM_SHA = "49b5f7091182a45f3ef93923505b660c6da5f835"
 ATTEST_SHA = "1e69f48acb82d1966a394da916b4c1698aa569d6"
 
 ORIGINAL_VALIDATE_STATS = core.validate_stats
+ORIGINAL_VALIDATE_QUALITY = core.validate_quality
 
 
 def require(condition: bool, message: str) -> None:
@@ -31,6 +32,28 @@ def validate_action_identity_projection() -> None:
     ):
         require(value == getattr(core, name),
                 f"Governance adapter {name} differs from frozen contract")
+
+
+
+def validate_quality_native_gate(text: str) -> None:
+    marker = "  governed_bot_review:\n"
+    require(text.count(marker) == 1,
+            "Profile Quality native governed-bot review gate must exist exactly once")
+    gate = text[text.index(marker):]
+    for fragment in (
+        "name: trusted-governed-bot-review",
+        "runs-on: ubuntu-24.04",
+        "permissions:\n      contents: read\n      pull-requests: read",
+        "scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}",
+        "EXPECTED_GATE_BLOB: 0158284c833051fa9a1152a3314b906038ec6a28",
+        'python3 "$TRUSTED_GATE" --self-test',
+        'python3 "$TRUSTED_GATE"',
+    ):
+        require(fragment in gate, f"Profile Quality native review gate contract is missing: {fragment}")
+    for forbidden in ("actions/checkout@", "actions/setup-python@", "contents: write", "pull-requests: write"):
+        require(forbidden not in gate,
+                f"Profile Quality native review gate acquired forbidden authority/execution surface: {forbidden}")
+    ORIGINAL_VALIDATE_QUALITY(text[:text.index(marker)])
 
 
 def validate_stats_item11(text: str) -> None:
@@ -64,13 +87,16 @@ def validate_stats_item11(text: str) -> None:
 
 
 def main() -> int:
-    original = core.validate_stats
+    original_stats = core.validate_stats
+    original_quality = core.validate_quality
     core.validate_stats = validate_stats_item11
+    core.validate_quality = validate_quality_native_gate
     try:
         validate_action_identity_projection()
         return core.main()
     finally:
-        core.validate_stats = original
+        core.validate_stats = original_stats
+        core.validate_quality = original_quality
 
 
 if __name__ == "__main__":

@@ -386,3 +386,42 @@ jobs:
           echo "ERROR: exact trusted-main Dependabot admission proof did not arrive inside the bounded PR-native gate window" >&2
           exit 1
 
+  governed_bot_review:
+    if: github.event_name == 'pull_request'
+    name: trusted-governed-bot-review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Run exact accepted-base governed bot review gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          EVENT_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          EVENT_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_GATE_BLOB: 0158284c833051fa9a1152a3314b906038ec6a28
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          test "$EVENT_BASE_REF" = "main"
+          [[ "$EVENT_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EVENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          TRUSTED_GATE="$RUNNER_TEMP/governed-bot-review-gate.py"
+          gh api -H "Accept: application/vnd.github.raw+json" "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}" > "$TRUSTED_GATE"
+          test -s "$TRUSTED_GATE"
+          GATE_SIZE="$(wc -c < "$TRUSTED_GATE" | tr -d '[:space:]')"
+          [[ "$GATE_SIZE" =~ ^[1-9][0-9]*$ ]]
+          GATE_BLOB="$( { printf 'blob %s\0' "$GATE_SIZE"; cat "$TRUSTED_GATE"; } | sha1sum | cut -d' ' -f1 )"
+          test "$GATE_BLOB" = "$EXPECTED_GATE_BLOB"
+          python3 "$TRUSTED_GATE" --self-test
+          python3 "$TRUSTED_GATE"
