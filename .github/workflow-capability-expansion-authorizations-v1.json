@@ -158,6 +158,13 @@
       "rationale": "Authorize #484's exact trusted workflow-run admission path for GitHub-token-created CodeQL Autofix PRs. Read-only Capability admission may start only from Profile quality requested runs on codeql-autofix branches, bind the sole bot PR's exact repository/base/head identity, and evaluate candidate bytes strictly as data. Protect Main, six required checks, candidate non-execution, provenance, GHAS, review-thread, and exact-SHA protected merge gates remain fail-closed."
     },
     {
+      "id": "cap-complete-autonomous-spotlight-convergence",
+      "baseBomSha256": "cf57c64e11d6322af0c8e234fba72098ae02bcc5c29706e40800c4d0a8b38adc",
+      "candidateBomSha256": "9266befda8c06d60c5e9fd8dfefc677149a92d177ee763b586778cdb6fd5eb61",
+      "expansionSha256": "e38a445f873bdf3ecbfb83550d404064d4d4926db7fe408198b41a0b478d1659",
+      "rationale": "Authorize #601's frozen Spotlight convergence. Trusted admission binds proof to exact workflow run ID/attempt in external_id; normalized details_url is check metadata only. Spotlight adds one trusted-main post-check reviewer dispatch. Missing/active gates are a no-op; trusted admission is required before portyu9 approval; malformed or failed gates hard-fail. Protected checks, marker review, attestation, lease, expected-head merge, candidate non-execution, and no-bypass remain unchanged."
+    },
+    {
       "id": "cap-dependabot-admission-pr-metadata-persistence-tcb",
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
