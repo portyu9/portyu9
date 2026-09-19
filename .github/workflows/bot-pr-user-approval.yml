@@ -87,9 +87,7 @@ jobs:
             local head="$1" lane="$2" name checks total count active failed
             local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)
             case "$lane" in
-              spotlight)
-                ;;
-              dependabot|codeql-autofix)
+              spotlight|dependabot|codeql-autofix)
                 required+=(trusted-capability-admission)
                 ;;
               *)
