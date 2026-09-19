@@ -8,13 +8,15 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v43"
+VERSION = "governed-workflow-byte-identity-v44"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "8fb27ec1e74ac9ed56cf17d674436d4c914739b7",
-    ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
+    ".github/workflows/profile-quality.yml": "14e7bde4668bb26f2e804aafbbcb24e4d4512518",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "f63f478b83ae26932c440d33e0cde0e7f21d2234",
 }
+
+TRUSTED_GOVERNED_BOT_REVIEW_GATE = "0158284c833051fa9a1152a3314b906038ec6a28"
 
 OLD_MERGE_IF = (
     "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && "
@@ -302,6 +304,68 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     v21.validate_spotlight_mutation_budget(projected)
 
 
+
+def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> None:
+    gate = job_block(profile_quality, "governed_bot_review", None)
+    for fragment in (
+        "if: github.event_name == 'pull_request'",
+        "name: trusted-governed-bot-review",
+        "runs-on: ubuntu-24.04",
+        "timeout-minutes: 20",
+        "permissions:\n      contents: read\n      pull-requests: read",
+        "- name: Run exact accepted-base governed bot review gate",
+        "GH_TOKEN: ${{ github.token }}",
+        "GITHUB_TOKEN: ${{ github.token }}",
+        "EXPECTED_GATE_BLOB: 0158284c833051fa9a1152a3314b906038ec6a28",
+        'gh api -H "Accept: application/vnd.github.raw+json" "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}" > "$TRUSTED_GATE"',
+        'GATE_BLOB="$( { printf \'blob %s\\0\' "$GATE_SIZE"; cat "$TRUSTED_GATE"; } | sha1sum | cut -d\' \' -f1 )"',
+        'test "$GATE_BLOB" = "$EXPECTED_GATE_BLOB"',
+        'python3 "$TRUSTED_GATE" --self-test',
+        'python3 "$TRUSTED_GATE"',
+    ):
+        require(fragment in gate, f"native governed-bot review gate contract is missing: {fragment}")
+    require(gate.count("gh api ") == 1,
+            "native governed-bot review gate must have exactly one GitHub API surface")
+    for forbidden in (
+        "actions/checkout@",
+        "actions/setup-python@",
+        "uses:",
+        "--method POST",
+        "--method PUT",
+        "--method PATCH",
+        "--method DELETE",
+        "git push",
+        "/pulls/${PR_NUMBER}/reviews",
+        "/actions/workflows/",
+    ):
+        require(forbidden not in gate,
+                f"native governed-bot review gate acquired forbidden candidate or mutation surface: {forbidden}")
+
+    actual = v21.git_blob_sha(ROOT / "scripts/governed_bot_review_gate.py")
+    require(
+        actual == TRUSTED_GOVERNED_BOT_REVIEW_GATE,
+        "trusted governed-bot review evaluator bytes changed without an explicit byte-lock update",
+    )
+    for fragment in (
+        'REPOSITORY = "portyu9/portyu9"',
+        'REVIEW_LOGIN = "portyu9"',
+        'method="GET"',
+        'return "dependabot"',
+        'return "codeql-autofix"',
+        'return "spotlight"',
+        'return "veto"',
+        'return "revoked"',
+        'return "approved"',
+        'review_decision(api.all_reviews(pr_number), event_base_sha, event_head_sha) == "approved"',
+        'raise GateError("latest manual exact-head portyu9 review requests changes")',
+        'raise GateError("the exact marker-bound portyu9 review was dismissed or revoked")',
+    ):
+        require(fragment in evaluator, f"trusted governed-bot review evaluator contract is missing: {fragment}")
+    for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"', "subprocess"):
+        require(forbidden not in evaluator,
+                f"trusted governed-bot review evaluator acquired mutation/external execution surface: {forbidden}")
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     for fragment in (
         'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
@@ -492,6 +556,10 @@ def main() -> int:
             observed[relative] = actual
         require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
 
+        profile_quality = (ROOT / ".github/workflows/profile-quality.yml").read_text(encoding="utf-8")
+        governed_bot_review_gate = (ROOT / "scripts/governed_bot_review_gate.py").read_text(encoding="utf-8")
+        validate_native_bot_review_gate(profile_quality, governed_bot_review_gate)
+
         bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
         dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
         autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
@@ -513,7 +581,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "bot-review lane-specific liveness plus immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check trust bootstrap plus evaluator byte identity locked · bot-review lane-specific liveness plus immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0
