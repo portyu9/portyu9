@@ -208,9 +208,11 @@ def project_native_review_gate_to_legacy_order(sync: str) -> str:
             "Spotlight item-44 projection cannot isolate the relocated pre-merge root proof")
     projected = projected.replace(roots_block, "", 1)
     review_marker = '          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"\n'
-    core.require(projected.count(review_marker) == 1,
+    merge_start = projected.index("  merge:\n")
+    review_pos = projected.index(review_marker, merge_start)
+    core.require(review_pos > merge_start,
             "Spotlight item-44 projection cannot restore the legacy pre-review root proof")
-    projected = projected.replace(review_marker, roots_block + review_marker, 1)
+    projected = projected[:review_pos] + roots_block + projected[review_pos:]
     return projected
 
 
