@@ -2301,6 +2301,11 @@
         "vars": []
       },
       "triggers": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
         "schedule": {
           "cron": [
             "41 * * * *"

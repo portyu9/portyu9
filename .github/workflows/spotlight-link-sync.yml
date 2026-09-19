@@ -1,9 +1,12 @@
 name: Sync Spotlight profile links
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
   schedule:
-    # Reconcile after the hourly profile-evidence refresh. Most runs are deterministic no-ops.
+    # Eventual-consistency recovery only; main pushes and Profile Stats dispatch are primary.
     - cron: "41 * * * *"
 
 permissions:

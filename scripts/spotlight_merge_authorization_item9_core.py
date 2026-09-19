@@ -315,6 +315,8 @@ def legacy_dispatch_view(stats: str) -> str:
 
 
 def validate(sync: str, stats: str, policy: str) -> None:
+    require("  push:\n    branches:\n      - main\n" in sync,
+            "Spotlight synchronization must retain event-driven main-push reconciliation")
     require("  workflow_dispatch:\n" in sync,
             "Spotlight synchronization must retain a manual recovery dispatch")
     require('  schedule:\n' in sync and '    - cron: "41 * * * *"' in sync,
@@ -390,6 +392,10 @@ def expect_failure(sync: str, stats: str, policy: str, expected: str) -> None:
 
 
 def self_test(sync: str, stats: str, policy: str) -> None:
+    expect_failure(
+        sync.replace("  push:\n    branches:\n      - main\n", "", 1),
+        stats, policy, "must retain event-driven main-push reconciliation",
+    )
     expect_failure(
         sync.replace("  workflow_dispatch:\n", "  workflow_dispatch:\n    inputs:\n      merge_ui_after_checks:\n        type: boolean\n", 1),
         stats, policy, "must not depend on a manual merge input",
