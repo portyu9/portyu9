@@ -152,7 +152,7 @@ def validate_item10_mac(spotlight: str) -> None:
         '.commit_id == $head',
         '--arg marker "$REVIEW_MARKER"',
         'contains($marker)',
-        'echo "Spotlight terminal stage: exact-base-head-portyu9-approval-verified" >&2',
+        'echo "Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified" >&2',
         'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
     ):
         require(fragment in merge, f"Spotlight terminal MAC verification contract is missing: {fragment}")
