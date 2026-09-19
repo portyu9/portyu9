@@ -351,7 +351,7 @@
       "baseBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
       "candidateBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
       "expansionSha256": "5552c484daa2a1faf522cfc7d0899d37c66affcc3679b4a36bd9fc329d2dc3b3",
-      "rationale": "Authorize #623's exact PR-native governed-bot review check. Profile Quality adds one constant read-only pull_request job that fetches the byte-locked evaluator only from the exact accepted base SHA, verifies its Git blob before execution, and for Dependabot, CodeQL Autofix, and Spotlight requires the exact marker-bound portyu9 approval with manual CHANGES_REQUESTED veto and revocation fail-closed semantics. The new capability is one GET surface only; no write permission, candidate checkout, third-party action, review mutation, merge/ref mutation, workflow dispatch, required-check reduction, or bypass authority is added."
+      "rationale": "Authorize #623's exact PR-native governed-bot review check. Profile Quality adds one read-only PR job that fetches the byte-locked evaluator only from the exact accepted base SHA. Governed bot lanes require the exact marker-bound portyu9 approval and honor manual CHANGES_REQUESTED veto/revocation semantics. Capability expands by one GET surface only; no write permission, candidate checkout, third-party action, review/merge/ref mutation, workflow dispatch, check reduction, or bypass is added."
     },
     {
       "id": "cap-portyu9-bot-review-immutable-tuple-proof",
