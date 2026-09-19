@@ -298,6 +298,13 @@
       "rationale": "Authorize #568's final frozen exact-head portyu9 approval design after canonical BOM and authority-contract stabilization. The three governed bot merge lanes add only read-only review-list proof before terminal merge, and Spotlight's historical authority projection is updated to preserve that current proof while comparing legacy item-9 semantics. Six protected checks, trusted admission, exact refs, quiescence, expected-head merge, and no-bypass policy remain fail-closed."
     },
     {
+      "id": "cap-final-event-driven-spotlight-admission",
+      "baseBomSha256": "ffa1a9077f0184fa60d963dccaac69585b33c317375e04cb63028fa71e823bda",
+      "candidateBomSha256": "5aa10d81307af5e34fc072740b71fc37d99efaa2e980f976777ff12c6ae2894c",
+      "expansionSha256": "7396a2a10d1911bf0644e884b3e0c2714b946086f951b0430c9f3ad99e7aa9bd",
+      "rationale": "Authorize #584's final snapshot-aligned event-driven Spotlight admission proof. Trusted main workflow_dispatch independently binds the unique current-main bot PR and emits the exact candidate-head proof; terminal merge still requires protected checks, immutable portyu9 review, attested authorization, lease validity, and expected-head merge."
+    },
+    {
       "id": "cap-github-native-bot-pr-user-approval",
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "7e4d61592ffa9988ab0d70ab74cfb7bd0ac12e20e4c54c3f4ee9395a083da16a",
