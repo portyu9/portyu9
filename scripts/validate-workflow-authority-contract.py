@@ -165,13 +165,13 @@ def project_native_review_gate_to_legacy_order(sync: str) -> str:
     native_selector = (
         ' or .name == "trusted-governed-bot-review"'
     )
-    require(sync.count(native_expected) == 1,
+    core.require(sync.count(native_expected) == 1,
             "Spotlight item-44 projection lost the exact native review-gate expected-check entry")
-    require(sync.count(native_selector) == 1,
+    core.require(sync.count(native_selector) == 1,
             "Spotlight item-44 projection lost the exact native review-gate selector")
     projected = sync.replace(native_expected, "", 1)
     projected = projected.replace(native_selector, "", 1)
-    require(
+    core.require(
         projected.count('Spotlight terminal stage: required-checks-and-native-review-gate-verified') == 1,
         "Spotlight item-44 projection lost the post-review native-gate stage marker",
     )
@@ -186,7 +186,7 @@ def project_native_review_gate_to_legacy_order(sync: str) -> str:
         '"repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"\n'
     )
     checks_end_marker = '          echo "Spotlight terminal stage: required-checks-verified" >&2\n\n'
-    require(projected.count(checks_start_marker) == 1 and projected.count(checks_end_marker) == 1,
+    core.require(projected.count(checks_start_marker) == 1 and projected.count(checks_end_marker) == 1,
             "Spotlight item-44 projection cannot isolate the canonical required-check proof")
     checks_start = projected.index(checks_start_marker)
     checks_end = projected.index(checks_end_marker, checks_start) + len(checks_end_marker)
@@ -194,7 +194,7 @@ def project_native_review_gate_to_legacy_order(sync: str) -> str:
     projected = projected[:checks_start] + projected[checks_end:]
 
     certificate_marker = '          CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"\n'
-    require(projected.count(certificate_marker) == 1,
+    core.require(projected.count(certificate_marker) == 1,
             "Spotlight item-44 projection cannot restore the pre-certificate required-check proof")
     projected = projected.replace(certificate_marker, checks_block + certificate_marker, 1)
 
@@ -204,11 +204,11 @@ def project_native_review_gate_to_legacy_order(sync: str) -> str:
         '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"\n'
         '          echo "Spotlight terminal stage: pre-merge-roots-verified" >&2\n\n'
     )
-    require(projected.count(roots_block) == 1,
+    core.require(projected.count(roots_block) == 1,
             "Spotlight item-44 projection cannot isolate the relocated pre-merge root proof")
     projected = projected.replace(roots_block, "", 1)
     review_marker = '          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"\n'
-    require(projected.count(review_marker) == 1,
+    core.require(projected.count(review_marker) == 1,
             "Spotlight item-44 projection cannot restore the legacy pre-review root proof")
     projected = projected.replace(review_marker, roots_block + review_marker, 1)
     return projected
