@@ -281,8 +281,10 @@ def validate_trusted_admission(value: Any, env: dict[str, str]) -> dict[str, Any
             "merge authorization trusted admission check identity changed")
     positive_int(check.get("checkRunId"), "trusted admission checkRunId")
     positive_int(check.get("checkSuiteId"), "trusted admission checkSuiteId")
-    expected_external_id = f"spotlight-admission:{pr_number}:{base}:{head}"
-    expected_details_url = f"https://github.com/{REPOSITORY}/actions/runs/{workflow['runId']}"
+    expected_external_id = (
+        f"spotlight-admission:{workflow['runId']}:{workflow['runAttempt']}:{pr_number}:{base}:{head}"
+    )
+    expected_details_url = f"https://github.com/{REPOSITORY}/runs/{check['checkRunId']}"
     require(check.get("appId") == 15368 and check.get("status") == "completed"
             and check.get("conclusion") == "success" and check.get("headSha") == head
             and check.get("externalId") == expected_external_id
@@ -405,8 +407,8 @@ def fixture() -> tuple[dict[str, Any], dict[str, str]]:
         "checkRun": {"name": "trusted-capability-admission", "checkRunId": 4004,
                      "checkSuiteId": 4005, "appId": 15368, "status": "completed",
                      "conclusion": "success", "headSha": head,
-                     "externalId": f"spotlight-admission:123:{base}:{head}",
-                     "detailsUrl": f"https://github.com/{REPOSITORY}/actions/runs/2004"},
+                     "externalId": f"spotlight-admission:2004:1:123:{base}:{head}",
+                     "detailsUrl": f"https://github.com/{REPOSITORY}/runs/4004"},
     }
     state = {
         "pullRequest": {"number": 123, "title": PR_TITLE, "body": PR_BODY, "baseRef": "main",
@@ -454,11 +456,11 @@ def self_test() -> None:
     expect_failure(extra_check, dict(env), "exactly five check runs")
 
     wrong_trusted_external = copy.deepcopy(state)
-    wrong_trusted_external["trustedAdmission"]["checkRun"]["externalId"] = "spotlight-admission:999:" + ("a" * 40) + ":" + ("d" * 40)
+    wrong_trusted_external["trustedAdmission"]["checkRun"]["externalId"] = "spotlight-admission:999:1:123:" + ("a" * 40) + ":" + ("d" * 40)
     expect_failure(wrong_trusted_external, dict(env), "trusted admission check success identity changed")
 
     wrong_trusted_details = copy.deepcopy(state)
-    wrong_trusted_details["trustedAdmission"]["checkRun"]["detailsUrl"] = "https://github.com/portyu9/portyu9/actions/runs/9999"
+    wrong_trusted_details["trustedAdmission"]["checkRun"]["detailsUrl"] = "https://github.com/portyu9/portyu9/runs/9999"
     expect_failure(wrong_trusted_details, dict(env), "trusted admission check success identity changed")
 
     wrong_trusted_event = copy.deepcopy(state)

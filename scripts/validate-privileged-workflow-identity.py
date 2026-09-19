@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v38"
+VERSION = "governed-workflow-byte-identity-v39"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "424290446ca50ce4816b6559ccb7d3772add1942",
+    ".github/workflows/bot-pr-user-approval.yml": "7e50a4efd1c704e425ae5ad7c916e165f28ffd05",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "5fda75119422a5f9bdcd1913a90328875a8a393f",
+    ".github/workflows/spotlight-link-sync.yml": "c7dcfc288f08a3bde086543fc9f0afebaaeb78c8",
 }
 
 OLD_MERGE_IF = (
@@ -291,7 +291,7 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     for fragment in (
         'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
-        'dependabot|codeql-autofix)',
+        'spotlight|dependabot|codeql-autofix)',
         'required+=(trusted-capability-admission)',
         'LANE="dependabot"',
         'LANE="codeql-autofix"',
@@ -303,7 +303,11 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         '--arg marker "$REVIEW_MARKER"',
         'contains($marker)',
         'exact-base/head marker-bound portyu9 approval',
-        'grep -Fxc "$REVIEW_MARKER"',
+        'return 2',
+        'lane-required checks are not ready yet.',
+        'exact head is not quiescent yet.',
+        'completed unsuccessfully on ${head}.',
+        'jq -e --arg body "$BODY" \'.body == $body\' <<<"$REVIEW_RESPONSE" >/dev/null',
         '::error::PORTYU9_BOT_REVIEW_TOKEN is required in the portyu9-review-identity environment',
         'exit 1',
     ):
@@ -400,7 +404,9 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'DISCOVERED_PR="$(jq -c \'.[0]\' <<<"$MATCHES")"',
         'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
         'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
-        'EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+        '[[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]',
+        '[[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]',
+        'EXTERNAL_ID="spotlight-admission:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         '-f details_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"',
     )
     for fragment in capability_fragments:
@@ -413,11 +419,17 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         '-f ref=main >/dev/null',
         'Capability Admission independently binds the unique current-main candidate.',
         "TRUSTED_RUN_ID=\"$(jq -r '.trustedAdmission.workflowRun.runId' \"$CERTIFICATE\")\"",
+        "TRUSTED_RUN_ATTEMPT=\"$(jq -r '.trustedAdmission.workflowRun.runAttempt' \"$CERTIFICATE\")\"",
         "TRUSTED_CHECK_RUN_ID=\"$(jq -r '.trustedAdmission.checkRun.checkRunId' \"$CERTIFICATE\")\"",
+        'test "$(jq -r .run_attempt <<<"$TRUSTED_RUN")" = "$TRUSTED_RUN_ATTEMPT"',
         'test "$(jq -r .event <<<"$TRUSTED_RUN")" = "workflow_dispatch"',
         'test "$(jq -r .head_branch <<<"$TRUSTED_RUN")" = "main"',
-        'EXPECTED_TRUSTED_EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+        'EXPECTED_TRUSTED_EXTERNAL_ID="spotlight-admission:${TRUSTED_RUN_ID}:${TRUSTED_RUN_ATTEMPT}:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"',
+        'CERTIFIED_TRUSTED_DETAILS_URL="$(jq -r \'.trustedAdmission.checkRun.detailsUrl\' "$CERTIFICATE")"',
+        'test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"',
+        'actions/workflows/bot-pr-user-approval.yml/dispatches',
+        'Dispatched exact post-check portyu9 review evaluation from trusted main.',
         'Spotlight terminal stage: trusted-admission-live-reproof-verified',
         'jq -e --arg body "$APPROVAL_BODY" \'.body == $body\' approval-comment.json >/dev/null',
     )

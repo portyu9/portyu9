@@ -231,7 +231,9 @@ def prepare_state() -> dict[str, Any]:
                 f"Spotlight authorization {name} run provenance changed")
         workflow_runs.append(item)
 
-    expected_trusted_external_id = f"spotlight-admission:{pr_number}:{base}:{head}"
+    trusted_external_pattern = re.compile(
+        rf"spotlight-admission:([1-9][0-9]*):([1-9][0-9]*):{pr_number}:{re.escape(base)}:{re.escape(head)}"
+    )
     trusted_check: dict[str, Any] | None = None
     checks: list[dict[str, Any]] = []
     for attempt in range(1, 25):
@@ -247,7 +249,8 @@ def prepare_state() -> dict[str, Any]:
             if check.get("app", {}).get("id") == 15368
             and check.get("name") == TRUSTED_CHECK_NAME
             and check.get("head_sha") == head
-            and check.get("external_id") == expected_trusted_external_id
+            and isinstance(check.get("external_id"), str)
+            and trusted_external_pattern.fullmatch(check["external_id"]) is not None
         ]
         require(len(trusted_matches) <= 1,
                 "Spotlight trusted admission exact proof is ambiguous")
@@ -263,15 +266,22 @@ def prepare_state() -> dict[str, Any]:
     require(trusted_check.get("status") == "completed" and trusted_check.get("conclusion") == "success",
             "Spotlight trusted admission exact proof is not successful")
 
-    trusted_details_url = trusted_check.get("details_url")
-    require(isinstance(trusted_details_url, str), "Spotlight trusted admission details URL is missing")
-    trusted_details_match = re.fullmatch(
-        rf"https://github\\.com/{re.escape(REPOSITORY)}/actions/runs/([1-9][0-9]*)",
-        trusted_details_url,
+    trusted_external_id = trusted_check.get("external_id")
+    require(isinstance(trusted_external_id, str),
+            "Spotlight trusted admission external identity is missing")
+    trusted_identity_match = trusted_external_pattern.fullmatch(trusted_external_id)
+    require(trusted_identity_match is not None,
+            "Spotlight trusted admission external identity is not canonical")
+    trusted_run_id = int(trusted_identity_match.group(1))
+    trusted_run_attempt = int(trusted_identity_match.group(2))
+    expected_trusted_external_id = (
+        f"spotlight-admission:{trusted_run_id}:{trusted_run_attempt}:{pr_number}:{base}:{head}"
     )
-    require(trusted_details_match is not None,
-            "Spotlight trusted admission details URL is not canonical")
-    trusted_run_id = int(trusted_details_match.group(1))
+    require(trusted_external_id == expected_trusted_external_id,
+            "Spotlight trusted admission external identity changed")
+    trusted_details_url = trusted_check.get("details_url")
+    require(isinstance(trusted_details_url, str) and bool(trusted_details_url),
+            "Spotlight trusted admission details URL is missing")
     trusted_run = gh_json(f"repos/{REPOSITORY}/actions/runs/{trusted_run_id}")
     require(trusted_run.get("name") == TRUSTED_WORKFLOW_NAME
             and trusted_run.get("workflow_id") == trusted_workflow_id,
@@ -288,6 +298,8 @@ def prepare_state() -> dict[str, Any]:
     require(trusted_run.get("actor", {}).get("login") == BOT_NAME
             and trusted_run.get("triggering_actor", {}).get("login") == BOT_NAME,
             "Spotlight trusted admission actor identity changed")
+    require(positive(trusted_run.get("run_attempt"), "Capability admission run attempt") == trusted_run_attempt,
+            "Spotlight trusted admission workflow attempt changed")
     require(trusted_run.get("status") == "completed" and trusted_run.get("conclusion") == "success",
             "Spotlight trusted admission workflow is not successful")
     trusted_run_item = {
