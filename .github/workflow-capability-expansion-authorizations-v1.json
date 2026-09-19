@@ -326,6 +326,13 @@
       "rationale": "Authorize #584 frozen head 3e0d648d150d3f89b4b16dc0363e1fcab0d8bbba: event-driven trusted-main Spotlight admission plus terminal live run/check reproof. Actions access at terminal merge is read-only; exact protected checks, marker-bound portyu9 approval, attested authorization, lease, no-bypass ruleset, and expected-head merge remain required."
     },
     {
+      "id": "cap-final-spotlight-proof-selection-review-race",
+      "baseBomSha256": "9266befda8c06d60c5e9fd8dfefc677149a92d177ee763b586778cdb6fd5eb61",
+      "candidateBomSha256": "023edf4092ba15ff8e9777fe5501e64ab622e4bba1afa7fa7dac596bf64434a7",
+      "expansionSha256": "cdced143775cb9fbc2e9b0e4d7acefada8fac5b21450af0e9e10b29528487936",
+      "rationale": "Authorize #606's frozen final Spotlight race hardening. Read-only merge authorization now ignores scheduled admission proofs unless the embedded producer independently re-proves the exact trusted workflow_dispatch/main/base/bot/run identity, and the existing post-check approval job bounded-waits for the exact marker-bound portyu9 review before releasing authorization. The semantic expansion adds only the exact PR-review GET/reproof call multiplicity; terminal merge remains non-polling, attested, lease-bound, required-check protected, and exact-head fail-closed."
+    },
+    {
       "id": "cap-github-native-bot-pr-user-approval",
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "7e4d61592ffa9988ab0d70ab74cfb7bd0ac12e20e4c54c3f4ee9395a083da16a",
