@@ -2,7 +2,7 @@
 
 `spotlight-link-sync.yml` has standing authorization to reconcile and merge one narrowly defined automation-managed presentation change: the guarded rotating Spotlight direct-link block in `README.md`. This authorization applies only to content-addressed candidate branches under the fixed `automation/spotlight-links/` prefix that are created by the reviewed synchronization workflow. Each exact candidate branch suffix is the SHA-256 of the sealed `(main source SHA, generated SHA, proposed README SHA-256)` tuple; there is no shared mutable Spotlight branch.
 
-Scheduled reconciliation and the post-publication bot dispatch may therefore complete the merge automatically. A manual `workflow_dispatch` follows the same guarded path and does not add broader authority. The workflow has no merge-authorization input and there is no alternate comment-, issue-, or actor-driven merge path.
+Event-driven `main`-push reconciliation, scheduled reconciliation, and the post-publication bot dispatch may therefore complete the merge automatically. A manual `workflow_dispatch` follows the same guarded path and does not add broader authority. The workflow has no merge-authorization input and there is no alternate comment-, issue-, or actor-driven merge path.
 
 Standing authorization is conditional, not a bypass. The workflow must reconstruct the exact published Spotlight projection from the validated Portfolio Evidence Ledger, byte-compare all six generated card variants, bind the proposal to the exact reviewed `main` and `generated` SHAs, seal the proposed README digest, and prove that the candidate head is exactly one README-only commit whose sole parent is that reviewed `main` SHA and whose author/committer identity is the reviewed GitHub Actions bot identity.
 

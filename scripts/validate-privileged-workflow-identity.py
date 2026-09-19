@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "424290446ca50ce4816b6559ccb7d3772add1942",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "5c084ed20de51b270a1bace2cf4744e2dad5849e",
+    ".github/workflows/spotlight-link-sync.yml": "dd834f9235bb1a3f08091e6b3dd83dbbbfd143da",
 }
 
 OLD_MERGE_IF = (
@@ -457,7 +457,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "bot-review lane-specific liveness plus immutable base/head marker proof locked · event-driven Spotlight admission dispatch/proof/live-reproof locked · item-10 MAC ordering and terminal proof guards retained · "
+            "bot-review lane-specific liveness plus immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0

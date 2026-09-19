@@ -408,6 +408,7 @@
     "spotlight-link-sync": {
       "path": ".github/workflows/spotlight-link-sync.yml",
       "triggers": [
+        "push",
         "schedule",
         "workflow_dispatch"
       ],
