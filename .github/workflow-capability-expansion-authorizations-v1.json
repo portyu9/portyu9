@@ -347,6 +347,13 @@
       "rationale": "Authorize #565's GitHub-native real-user bot PR approval workflow. The workflow is event-driven, read-only with GITHUB_TOKEN, executes no candidate code, independently binds recognized bot identity/current main/exact head/required checks/quiescence/unresolved threads, and uses the isolated portyu9-review-identity credential only for the final exact-head APPROVE review. Missing credential fails closed by no-op."
     },
     {
+      "id": "cap-native-governed-bot-review-check",
+      "baseBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
+      "candidateBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
+      "expansionSha256": "5552c484daa2a1faf522cfc7d0899d37c66affcc3679b4a36bd9fc329d2dc3b3",
+      "rationale": "Authorize #623's exact PR-native governed-bot review check. Profile Quality adds one constant read-only pull_request job that fetches the byte-locked evaluator only from the exact accepted base SHA, verifies its Git blob before execution, and for Dependabot, CodeQL Autofix, and Spotlight requires the exact marker-bound portyu9 approval with manual CHANGES_REQUESTED veto and revocation fail-closed semantics. The new capability is one GET surface only; no write permission, candidate checkout, third-party action, review mutation, merge/ref mutation, workflow dispatch, required-check reduction, or bypass authority is added."
+    },
+    {
       "id": "cap-portyu9-bot-review-immutable-tuple-proof",
       "baseBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
       "candidateBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
