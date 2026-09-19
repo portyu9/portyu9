@@ -235,36 +235,63 @@ def prepare_state() -> dict[str, Any]:
         rf"spotlight-admission:([1-9][0-9]*):([1-9][0-9]*):{pr_number}:{re.escape(base)}:{re.escape(head)}"
     )
     trusted_check: dict[str, Any] | None = None
-    checks: list[dict[str, Any]] = []
     for attempt in range(1, 25):
-        checks_payload = gh_json(f"repos/{REPOSITORY}/commits/{head}/check-runs?filter=latest&per_page=100")
-        checks_total = checks_payload.get("total_count")
-        observed_checks = checks_payload.get("check_runs")
-        require(type(checks_total) is int and isinstance(observed_checks, list)
-                and checks_total == len(observed_checks),
-                "Spotlight authorization check-run response is incomplete")
-        checks = observed_checks
+        proof_payload = gh_json(f"repos/{REPOSITORY}/commits/{head}/check-runs?filter=all&per_page=100")
+        proof_total = proof_payload.get("total_count")
+        proof_checks = proof_payload.get("check_runs")
+        require(type(proof_total) is int and isinstance(proof_checks, list)
+                and proof_total == len(proof_checks),
+                "Spotlight trusted admission proof response is incomplete")
         trusted_matches = [
-            check for check in checks
+            check for check in proof_checks
             if check.get("app", {}).get("id") == 15368
             and check.get("name") == TRUSTED_CHECK_NAME
             and check.get("head_sha") == head
             and isinstance(check.get("external_id"), str)
             and trusted_external_pattern.fullmatch(check["external_id"]) is not None
+            and check.get("status") == "completed"
+            and check.get("conclusion") == "success"
         ]
-        require(len(trusted_matches) <= 1,
-                "Spotlight trusted admission exact proof is ambiguous")
-        if trusted_matches:
-            trusted_check = trusted_matches[0]
-            if trusted_check.get("status") == "completed":
+        for check in trusted_matches:
+            positive(check.get("id"), "trusted capability admission check run ID")
+        trusted_matches.sort(key=lambda check: check["id"], reverse=True)
+        for check in trusted_matches:
+            identity = trusted_external_pattern.fullmatch(check["external_id"])
+            require(identity is not None, "Spotlight trusted admission external identity is not canonical")
+            candidate_run_id = int(identity.group(1))
+            candidate_run_attempt = int(identity.group(2))
+            candidate_run = gh_json(f"repos/{REPOSITORY}/actions/runs/{candidate_run_id}")
+            if (
+                candidate_run.get("name") == TRUSTED_WORKFLOW_NAME
+                and candidate_run.get("workflow_id") == trusted_workflow_id
+                and candidate_run.get("event") == "workflow_dispatch"
+                and candidate_run.get("head_branch") == "main"
+                and candidate_run.get("head_sha") == base
+                and candidate_run.get("path") == ".github/workflows/capability-admission.yml"
+                and candidate_run.get("repository", {}).get("full_name") == REPOSITORY
+                and candidate_run.get("head_repository", {}).get("full_name") == REPOSITORY
+                and candidate_run.get("actor", {}).get("login") == BOT_NAME
+                and candidate_run.get("triggering_actor", {}).get("login") == BOT_NAME
+                and candidate_run.get("run_attempt") == candidate_run_attempt
+                and candidate_run.get("status") == "completed"
+                and candidate_run.get("conclusion") == "success"
+            ):
+                trusted_check = check
                 break
+        if trusted_check is not None:
+            break
         if attempt == 24:
             break
         time.sleep(5)
     require(trusted_check is not None,
-            "Spotlight trusted admission exact proof did not materialize")
-    require(trusted_check.get("status") == "completed" and trusted_check.get("conclusion") == "success",
-            "Spotlight trusted admission exact proof is not successful")
+            "Spotlight trusted workflow-dispatch admission proof did not materialize")
+
+    checks_payload = gh_json(f"repos/{REPOSITORY}/commits/{head}/check-runs?filter=latest&per_page=100")
+    checks_total = checks_payload.get("total_count")
+    checks = checks_payload.get("check_runs")
+    require(type(checks_total) is int and isinstance(checks, list)
+            and checks_total == len(checks),
+            "Spotlight authorization check-run response is incomplete")
 
     trusted_external_id = trusted_check.get("external_id")
     require(isinstance(trusted_external_id, str),

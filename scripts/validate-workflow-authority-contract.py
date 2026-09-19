@@ -100,6 +100,33 @@ SPOTLIGHT_POST_CHECK_REVIEW_WAKE = """          gh api --method POST "repos/${GI
           echo "Dispatched exact post-check portyu9 review evaluation from trusted main."
 
 """
+SPOTLIGHT_POST_CHECK_REVIEW_WAIT = """          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
+          PORTYU9_APPROVAL_COUNT=0
+          for REVIEW_ATTEMPT in $(seq 1 24); do
+            REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+            PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
+            if [ "$PORTYU9_APPROVAL_COUNT" -ge 1 ]; then
+              break
+            fi
+            if [ "$REVIEW_ATTEMPT" -lt 24 ]; then
+              sleep 5
+            fi
+          done
+          test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
+            echo "ERROR: exact-base/head portyu9 review did not materialize after the post-check dispatch." >&2
+            exit 1
+          }
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .state <<<"$PR_AFTER_REVIEW")" = "open"
+          test "$(jq -r .base.sha <<<"$PR_AFTER_REVIEW")" = "$BASE_SHA"
+          test "$(jq -r .head.sha <<<"$PR_AFTER_REVIEW")" = "$HEAD_SHA"
+          echo "Observed exact-base/head marker-bound portyu9 approval before merge authorization."
+
+"""
+
 SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF = """          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
           PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
@@ -140,6 +167,9 @@ def project_item9_sync_with_marker(sync: str) -> str:
     if projected.count(SPOTLIGHT_POST_CHECK_REVIEW_WAKE) != 1:
         raise ValueError("Spotlight item-9 post-check review-wake projection anchor changed")
     projected = projected.replace(SPOTLIGHT_POST_CHECK_REVIEW_WAKE, "", 1)
+    if projected.count(SPOTLIGHT_POST_CHECK_REVIEW_WAIT) != 1:
+        raise ValueError("Spotlight item-9 post-check review-wait projection anchor changed")
+    projected = projected.replace(SPOTLIGHT_POST_CHECK_REVIEW_WAIT, "", 1)
     if projected.count(SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF) != 1:
         raise ValueError("Spotlight item-9 marker-bound review projection anchor changed")
     projected = projected.replace(SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF, "", 1)
@@ -229,6 +259,12 @@ def validate_policy_cross_contracts_with_trusted_admission(
         'trusted_run.get("event") == "workflow_dispatch"',
         'trusted_run.get("head_branch") == "main"',
         'trusted_external_pattern = re.compile(',
+        'check-runs?filter=all&per_page=100',
+        'trusted_matches.sort(key=lambda check: check["id"], reverse=True)',
+        'candidate_run.get("event") == "workflow_dispatch"',
+        'candidate_run.get("head_branch") == "main"',
+        'candidate_run.get("head_sha") == base',
+        'Spotlight trusted workflow-dispatch admission proof did not materialize',
         'trusted_run_attempt = int(trusted_identity_match.group(2))',
         '"trustedAdmission"',
     ):

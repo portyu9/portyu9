@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v39"
+VERSION = "governed-workflow-byte-identity-v40"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7e50a4efd1c704e425ae5ad7c916e165f28ffd05",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "c7dcfc288f08a3bde086543fc9f0afebaaeb78c8",
+    ".github/workflows/spotlight-link-sync.yml": "acbd17d8d6c4a3ad941b1089c990fa18987a8d06",
 }
 
 OLD_MERGE_IF = (
@@ -430,6 +430,9 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"',
         'actions/workflows/bot-pr-user-approval.yml/dispatches',
         'Dispatched exact post-check portyu9 review evaluation from trusted main.',
+        'for REVIEW_ATTEMPT in $(seq 1 24); do',
+        'exact-base/head portyu9 review did not materialize after the post-check dispatch.',
+        'Observed exact-base/head marker-bound portyu9 approval before merge authorization.',
         'Spotlight terminal stage: trusted-admission-live-reproof-verified',
         'jq -e --arg body "$APPROVAL_BODY" \'.body == $body\' approval-comment.json >/dev/null',
     )
