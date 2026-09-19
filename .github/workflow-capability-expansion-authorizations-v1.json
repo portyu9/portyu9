@@ -162,7 +162,7 @@
       "baseBomSha256": "cf57c64e11d6322af0c8e234fba72098ae02bcc5c29706e40800c4d0a8b38adc",
       "candidateBomSha256": "9266befda8c06d60c5e9fd8dfefc677149a92d177ee763b586778cdb6fd5eb61",
       "expansionSha256": "e38a445f873bdf3ecbfb83550d404064d4d4926db7fe408198b41a0b478d1659",
-      "rationale": "Authorize #601's exact frozen final autonomous Spotlight convergence capability. Trusted Capability Admission binds the published proof to its immutable workflow run ID and attempt in external_id while treating GitHub's normalized check-run details URL only as exact check metadata; Spotlight adds one narrow trusted-main dispatch to the existing bot-pr-user-approval workflow after its exact protected PR workflows complete; and the real-user reviewer treats missing/in-progress gates as a successful no-op, requires trusted-capability-admission before approval, and still hard-fails malformed, ambiguous, incomplete, or completed-unsuccessful required gates. Existing exact-base/head review markers, protected checks, attested merge authorization, lease, expected-head merge, permissions, secrets, candidate non-execution, and no-bypass guarantees remain fail-closed."
+      "rationale": "Authorize #601's frozen Spotlight convergence. Trusted admission binds proof to exact workflow run ID/attempt in external_id; normalized details_url is check metadata only. Spotlight adds one trusted-main post-check reviewer dispatch. Missing/active gates are a no-op; trusted admission is required before portyu9 approval; malformed or failed gates hard-fail. Protected checks, marker review, attestation, lease, expected-head merge, candidate non-execution, and no-bypass remain unchanged."
     },
     {
       "id": "cap-dependabot-admission-pr-metadata-persistence-tcb",
