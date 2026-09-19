@@ -135,6 +135,53 @@ def project_item9(sync: str) -> str:
     return legacy
 
 
+NATIVE_REVIEW_GATE_FRAGMENTS = (
+    'REVIEW_GATE_READY=false',
+    'for ATTEMPT in $(seq 1 12); do',
+    'REVIEW_GATE_CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"',
+    'select(.name == "trusted-governed-bot-review" and .app.id == 15368 and .head_sha == $head)',
+    'test "$REVIEW_GATE_MATCH_COUNT" -le 1 || {',
+    'test "$REVIEW_GATE_READY" = "true" || {',
+    'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+    'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"',
+    'test "$(jq -r .base.sha <<<"$FINAL_PR")" = "$BASE_SHA"',
+    'test "$(jq -r .head.sha <<<"$FINAL_PR")" = "$HEAD_SHA"',
+    'Spotlight terminal stage: trusted-governed-bot-review-live-reproof-verified',
+)
+
+
+def validate_native_governed_bot_review_overlay(sync: str) -> None:
+    merge = core.job_block(sync, "merge", None)
+    for fragment in NATIVE_REVIEW_GATE_FRAGMENTS:
+        require(fragment in merge,
+                f"Spotlight post-review native governed-bot gate proof is missing: {fragment}")
+    review = merge.index(
+        'Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified'
+    )
+    gate = merge.index('REVIEW_GATE_READY=false')
+    mutation = merge.index(
+        'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
+    )
+    require(review < gate < mutation,
+            "Spotlight native governed-bot gate must be consumed after review/veto proof and before merge mutation")
+
+
+def self_test_native_governed_bot_review_overlay(sync: str) -> None:
+    validate_native_governed_bot_review_overlay(sync)
+    mutated = sync.replace(
+        'select(.name == "trusted-governed-bot-review" and .app.id == 15368 and .head_sha == $head)',
+        'select(.name == "spoofed-governed-bot-review" and .app.id == 15368 and .head_sha == $head)',
+        1,
+    )
+    try:
+        validate_native_governed_bot_review_overlay(mutated)
+    except ValueError as exc:
+        require("native governed-bot gate proof" in str(exc),
+                f"native review-gate self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("native review-gate self-test accepted a substituted required context")
+
+
 def validate_preparer_script_with_trusted_admission(text: str) -> None:
     require("def gh_json(endpoint: str)" in text and '["gh", "api", endpoint]' in text,
             "Spotlight MAC preparer must retain one GET-only GitHub API helper")
@@ -228,12 +275,14 @@ def main() -> int:
         core.validate_preparer_script(preparer)
         core.validate_builder_script(builder, builder_core)
         core.validate_mac(sync)
+        validate_native_governed_bot_review_overlay(sync)
+        self_test_native_governed_bot_review_overlay(sync)
         core.self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
             "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state plus the separate trusted capability-admission proof, "
-            "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance "
-            "and the CLI's direct verified statement before expected-head mutation."
+            "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance, "
+            "the exact post-review trusted-governed-bot-review context, and the CLI's direct verified statement before expected-head mutation."
         )
         return 0
     except (OSError, ValueError) as exc:
