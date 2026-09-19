@@ -129,7 +129,7 @@ jobs:
           }
 
           check_quiescent_runs() {
-            local head="$1" runs total count active
+            local head="$1" head_ref="$2" runs total count active_profile unexpected_active
             runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")" || {
               echo "ERROR: failed to fetch workflow-run quiescence for ${head}." >&2
               return 1
@@ -139,10 +139,45 @@ jobs:
             [[ "$total" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid workflow-run total for ${head}." >&2; return 1; }
             [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid workflow-run count for ${head}." >&2; return 1; }
             [ "$total" = "$count" ] || { echo "ERROR: incomplete workflow-run response for ${head}." >&2; return 1; }
-            active="$(jq '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending")] | length' <<<"$runs")"
-            [[ "$active" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid active workflow-run count for ${head}." >&2; return 1; }
-            if [ "$active" -gt 0 ]; then
-              echo "Governed bot head ${head} is not ready: ${active} workflow run(s) remain active."
+
+            # Profile Quality intentionally remains active while trusted-governed-bot-review
+            # waits for this exact reviewer. Exempt only that one canonical PR workflow run;
+            # every other exact-head run must be quiescent before the review mutation.
+            active_profile="$(jq --arg head "$head" --arg head_ref "$head_ref" --arg repo "$TARGET_REPOSITORY" '[
+              .workflow_runs[] |
+              select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending") |
+              select(
+                .name == "Profile quality" and
+                .path == ".github/workflows/profile-quality.yml" and
+                .event == "pull_request" and
+                .head_sha == $head and
+                .head_branch == $head_ref and
+                .repository.full_name == $repo and
+                .head_repository.full_name == $repo
+              )
+            ] | length' <<<"$runs")"
+            [[ "$active_profile" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid active Profile Quality run count for ${head}." >&2; return 1; }
+            [ "$active_profile" -le 1 ] || {
+              echo "ERROR: multiple canonical active Profile Quality runs exist for ${head}." >&2
+              return 1
+            }
+
+            unexpected_active="$(jq --arg head "$head" --arg head_ref "$head_ref" --arg repo "$TARGET_REPOSITORY" '[
+              .workflow_runs[] |
+              select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending") |
+              select((
+                .name == "Profile quality" and
+                .path == ".github/workflows/profile-quality.yml" and
+                .event == "pull_request" and
+                .head_sha == $head and
+                .head_branch == $head_ref and
+                .repository.full_name == $repo and
+                .head_repository.full_name == $repo
+              ) | not)
+            ] | length' <<<"$runs")"
+            [[ "$unexpected_active" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid unexpected active workflow-run count for ${head}." >&2; return 1; }
+            if [ "$unexpected_active" -gt 0 ]; then
+              echo "Governed bot head ${head} is not ready: ${unexpected_active} non-Profile-Quality workflow run(s) remain active."
               return 2
             fi
           }
@@ -230,7 +265,7 @@ jobs:
               fi
               exit "$READY_STATUS"
             fi
-            if check_quiescent_runs "$HEAD_SHA"; then
+            if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
               :
             else
               READY_STATUS=$?
@@ -294,7 +329,7 @@ jobs:
               fi
               exit "$READY_STATUS"
             fi
-            if check_quiescent_runs "$HEAD_SHA"; then
+            if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
               :
             else
               READY_STATUS=$?
