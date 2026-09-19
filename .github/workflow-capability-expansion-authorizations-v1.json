@@ -18,6 +18,13 @@
       "rationale": "Authorize #552's exact frozen bot-PR stewardship and native Dependabot admission gate. Dependabot trusted-main admission publishes an exact proof consumed by a native required Actions job; Dependabot, CodeQL Autofix, and Spotlight may request portyu9 as reviewer and post one idempotent exact-head automation-approval comment only after their governed gates succeed. Required checks, candidate-data trust boundaries, ruleset enforcement, and exact-head merge remain fail-closed; no bypass is added."
     },
     {
+      "id": "cap-bot-review-manual-veto",
+      "baseBomSha256": "d0b6bf53a561bcfb6c10218a5bb8e4660de5ec95e4a0e2182037caf4d30270ce",
+      "candidateBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
+      "expansionSha256": "37a32acaa8643d091f730c74e5ddce1d167b691314490280bed4b8facd83b121",
+      "rationale": "Authorize #617's exact protected-source hardening so manual exact-head portyu9 CHANGES_REQUESTED reviews veto governed bot approval and merge, dismissed/revoked automation reviews are not silently reissued, and terminal Dependabot, CodeQL Autofix, and Spotlight merges require exactly one marker-bound approval. No new endpoint, mutation class, permission, bypass, direct-main authority, or candidate execution is added."
+    },
+    {
       "id": "cap-codeql-alert-4-logging-fix",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
