@@ -1234,6 +1234,54 @@ jobs:
           fi
           echo "Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified" >&2
 
+          # The reviewer intentionally depends only on the pre-review lane gates. Once the
+          # exact review exists, consume the server-native review gate without creating a
+          # circular dependency.
+          REVIEW_GATE_READY=false
+          for ATTEMPT in $(seq 1 12); do
+            REVIEW_GATE_CHECKS="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+            REVIEW_GATE_TOTAL="$(jq -r '.total_count // empty' <<<"$REVIEW_GATE_CHECKS")"
+            REVIEW_GATE_COUNT="$(jq '.check_runs | length' <<<"$REVIEW_GATE_CHECKS")"
+            [[ "$REVIEW_GATE_TOTAL" =~ ^[0-9]+$ ]]
+            [[ "$REVIEW_GATE_COUNT" =~ ^[0-9]+$ ]]
+            test "$REVIEW_GATE_TOTAL" = "$REVIEW_GATE_COUNT" || {
+              echo "Spotlight post-review native-gate check-run response is incomplete." >&2
+              exit 1
+            }
+            REVIEW_GATE_MATCHES="$(jq --arg head "$HEAD_SHA" '[.check_runs[] | select(.name == "trusted-governed-bot-review" and .app.id == 15368 and .head_sha == $head)]' <<<"$REVIEW_GATE_CHECKS")"
+            REVIEW_GATE_MATCH_COUNT="$(jq 'length' <<<"$REVIEW_GATE_MATCHES")"
+            [[ "$REVIEW_GATE_MATCH_COUNT" =~ ^[0-9]+$ ]]
+            test "$REVIEW_GATE_MATCH_COUNT" -le 1 || {
+              echo "ERROR: trusted-governed-bot-review check is ambiguous on the exact Spotlight head." >&2
+              exit 1
+            }
+            if [ "$REVIEW_GATE_MATCH_COUNT" = "1" ]; then
+              if jq -e '.[0] | .status == "completed" and .conclusion == "success"' <<<"$REVIEW_GATE_MATCHES" >/dev/null; then
+                REVIEW_GATE_READY=true
+                break
+              fi
+              if jq -e '.[0] | .status == "completed" and .conclusion != "success"' <<<"$REVIEW_GATE_MATCHES" >/dev/null; then
+                echo "ERROR: trusted-governed-bot-review rejected the exact Spotlight head." >&2
+                exit 1
+              fi
+            fi
+            sleep 5
+          done
+          test "$REVIEW_GATE_READY" = "true" || {
+            echo "ERROR: trusted-governed-bot-review did not converge after the exact marker-bound review." >&2
+            exit 1
+          }
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          FINAL_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .state <<<"$FINAL_PR")" = "open"
+          test "$(jq -r .base.ref <<<"$FINAL_PR")" = "main"
+          test "$(jq -r .base.sha <<<"$FINAL_PR")" = "$BASE_SHA"
+          test "$(jq -r .head.sha <<<"$FINAL_PR")" = "$HEAD_SHA"
+          test "$(jq -r .head.ref <<<"$FINAL_PR")" = "$CANDIDATE_BRANCH"
+          test "$(jq -r .head.repo.full_name <<<"$FINAL_PR")" = "$GITHUB_REPOSITORY"
+          echo "Spotlight terminal stage: trusted-governed-bot-review-live-reproof-verified" >&2
+
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
           RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"
           test "$(jq -r .merged <<<"$RESULT")" = "true"
