@@ -8,7 +8,7 @@
       "baseBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
       "candidateBomSha256": "cf57c64e11d6322af0c8e234fba72098ae02bcc5c29706e40800c4d0a8b38adc",
       "expansionSha256": "fefcf2b1e852a99e422a8c98947e93dd5d462c9049cec547e514e73782968dc2",
-      "rationale": "Authorize #595's exact frozen autonomous Spotlight convergence fix. Capability Admission keeps bounded list discovery but hydrates the exact discovered PR before relying on full-PR maintainer_can_modify and re-proves bot, current-main base, same-repo deterministic head, title/body, and immutable candidate identity; Spotlight replaces a multiline grep line-count false failure with exact JSON body equality. The canonical Capability Admission snapshot and byte/authority contracts are updated accordingly. No trigger, write permission, mutation class, secret, OIDC authority, required-check reduction, merge bypass, or candidate execution is added."
+      "rationale": "Authorize #595's exact frozen Spotlight convergence fix: Capability Admission hydrates the unique discovered PR before trusting full-PR metadata, and Spotlight verifies the complete multiline approval comment by exact JSON equality. Bot/current-main/head/title/body proofs remain fail-closed. No trigger, write permission, mutation class, secret, OIDC authority, required-check reduction, merge bypass, or candidate execution is added."
     },
     {
       "id": "cap-bot-pr-stewardship-native-admission-gate",
