@@ -127,7 +127,7 @@ def project_item9(sync: str) -> str:
             "Spotlight item-9 current-main output projection changed")
     legacy = legacy.replace(CURRENT_MAIN_OUTPUT, "", 1)
     legacy = legacy.replace(CURRENT_MAIN_ECHO, "", 1)
-    current_check_selector = 'select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts"))'
+    current_check_selector = 'select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "trusted-governed-bot-review" or .name == "validate-contracts"))'
     legacy_check_selector = 'select(.app.id == 15368)'
     require(legacy.count(current_check_selector) == 1,
             "Spotlight item-9 required-check selector projection changed")
@@ -136,17 +136,9 @@ def project_item9(sync: str) -> str:
 
 
 NATIVE_REVIEW_GATE_FRAGMENTS = (
-    'REVIEW_GATE_READY=false',
-    'for ATTEMPT in $(seq 1 12); do',
-    'REVIEW_GATE_CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"',
-    'select(.name == "trusted-governed-bot-review" and .app.id == 15368 and .head_sha == $head)',
-    'test "$REVIEW_GATE_MATCH_COUNT" -le 1 || {',
-    'test "$REVIEW_GATE_READY" = "true" || {',
-    'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
-    'test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"',
-    'test "$(jq -r .base.sha <<<"$FINAL_PR")" = "$BASE_SHA"',
-    'test "$(jq -r .head.sha <<<"$FINAL_PR")" = "$HEAD_SHA"',
-    'Spotlight terminal stage: trusted-governed-bot-review-live-reproof-verified',
+    '{name:"trusted-governed-bot-review",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}',
+    'select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "trusted-governed-bot-review" or .name == "validate-contracts"))',
+    'Spotlight terminal stage: required-checks-and-native-review-gate-verified',
 )
 
 
@@ -155,22 +147,26 @@ def validate_native_governed_bot_review_overlay(sync: str) -> None:
     for fragment in NATIVE_REVIEW_GATE_FRAGMENTS:
         require(fragment in merge,
                 f"Spotlight post-review native governed-bot gate proof is missing: {fragment}")
+    check_read = 'CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"'
+    require(merge.count(check_read) == 1,
+            "Spotlight terminal merge must retain exactly one canonical generic check-run read")
     review = merge.index(
         'Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified'
     )
-    gate = merge.index('REVIEW_GATE_READY=false')
+    gate = merge.index(check_read)
+    roots = merge.index('Spotlight terminal stage: pre-merge-roots-verified')
     mutation = merge.index(
         'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
     )
-    require(review < gate < mutation,
-            "Spotlight native governed-bot gate must be consumed after review/veto proof and before merge mutation")
+    require(review < gate < roots < mutation,
+            "Spotlight native governed-bot gate and root reproof must run after review/veto proof and before merge mutation")
 
 
 def self_test_native_governed_bot_review_overlay(sync: str) -> None:
     validate_native_governed_bot_review_overlay(sync)
     mutated = sync.replace(
-        'select(.name == "trusted-governed-bot-review" and .app.id == 15368 and .head_sha == $head)',
-        'select(.name == "spoofed-governed-bot-review" and .app.id == 15368 and .head_sha == $head)',
+        '{name:"trusted-governed-bot-review",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}',
+        '{name:"spoofed-governed-bot-review",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}',
         1,
     )
     try:
