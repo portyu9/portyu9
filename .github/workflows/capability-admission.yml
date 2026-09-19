@@ -130,8 +130,7 @@ jobs:
                 .head.repo.full_name == "portyu9/portyu9" and
                 (.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$")) and
                 .title == "chore: sync rotating Spotlight links" and
-                .body == "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." and
-                .maintainer_can_modify == false
+                .body == "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force."
               )]' <<<"$PRS")"
               MATCH_COUNT="$(jq 'length' <<<"$MATCHES")"
               test "$MATCH_COUNT" -le 1
@@ -145,9 +144,21 @@ jobs:
                 echo "No exact current-main Spotlight candidate needs admission."
                 exit 0
               fi
-              PR="$(jq -c '.[0]' <<<"$MATCHES")"
-              PR_NUMBER="$(jq -r .number <<<"$PR")"
+              DISCOVERED_PR="$(jq -c '.[0]' <<<"$MATCHES")"
+              PR_NUMBER="$(jq -r .number <<<"$DISCOVERED_PR")"
               [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+              PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+              test "$(jq -r .number <<<"$PR")" = "$PR_NUMBER"
+              test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"
+              test "$(jq -r .state <<<"$PR")" = "open"
+              test "$(jq -r .draft <<<"$PR")" = "false"
+              test "$(jq -r .base.ref <<<"$PR")" = "main"
+              test "$(jq -r .base.sha <<<"$PR")" = "$MAIN_SHA"
+              test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+              [[ "$(jq -r .head.ref <<<"$PR")" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
+              test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"
+              test "$(jq -r .body <<<"$PR")" = "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force."
+              test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
               HEAD_REPOSITORY="$TARGET_REPOSITORY"
               SPOTLIGHT=true
               ;;
