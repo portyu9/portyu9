@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "e30215998f7613bc80d646b72609e1232f759d40"
+EXPECTED_GIT_BLOB = "c36186a71e0879643390e37213a6bc55705b7c31"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -163,7 +163,9 @@ def validate_text(text: str) -> None:
         'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
         'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
         'test "$HEAD_REF" = "automation/spotlight-links/${CANDIDATE_ID}"',
-        'EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+        '[[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]',
+        '[[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]',
+        'EXTERNAL_ID="spotlight-admission:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
     ):
         require(spotlight_binding in text,
                 f"trusted capability admission Spotlight proof changed: {spotlight_binding}")
