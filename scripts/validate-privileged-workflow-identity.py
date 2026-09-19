@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v42"
+VERSION = "governed-workflow-byte-identity-v43"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "e51d23bf9b9820a22247bf85ec15b772d91dfc79",
+    ".github/workflows/bot-pr-user-approval.yml": "8fb27ec1e74ac9ed56cf17d674436d4c914739b7",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "fa390f613eaa8a8ee888545370cfe445b27ff791",
+    ".github/workflows/spotlight-link-sync.yml": "f63f478b83ae26932c440d33e0cde0e7f21d2234",
 }
 
 OLD_MERGE_IF = (
@@ -152,7 +152,7 @@ def validate_item10_mac(spotlight: str) -> None:
         '.commit_id == $head',
         '--arg marker "$REVIEW_MARKER"',
         'contains($marker)',
-        'echo "Spotlight terminal stage: exact-base-head-portyu9-approval-verified" >&2',
+        'echo "Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified" >&2',
         'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
     ):
         require(fragment in merge, f"Spotlight terminal MAC verification contract is missing: {fragment}")
@@ -323,6 +323,14 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'completed unsuccessfully on ${head}.',
         'jq -e --arg body "$BODY" \'.body == $body\' <<<"$REVIEW_RESPONSE" >/dev/null',
         '::error::PORTYU9_BOT_REVIEW_TOKEN is required in the portyu9-review-identity environment',
+        'MARKER_REVIEW_COUNT=',
+        'LATEST_MANUAL_DECISIVE_STATE=',
+        'RACE_MANUAL_DECISIVE_STATE=',
+        '(.state == "APPROVED" or .state == "CHANGES_REQUESTED")',
+        'contains($marker)) | not',
+        'a later manual exact-head CHANGES_REQUESTED veto by portyu9 is active.',
+        'the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued.',
+        'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
         'exit 1',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
@@ -411,6 +419,15 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
             '.state == "APPROVED" and .commit_id == $head)] | length' not in workflow,
             f"{label} regressed to mutable GitHub commit_id-only review proof",
         )
+        for fragment in (
+            'LATEST_MANUAL_DECISIVE_STATE=',
+            '(.state == "APPROVED" or .state == "CHANGES_REQUESTED")',
+            'contains($marker)) | not',
+            'test "$PORTYU9_APPROVAL_COUNT" = "1"',
+            'latest manual exact-head portyu9 review requests changes; autonomous ',
+            ' merge is vetoed.',
+        ):
+            require(fragment in workflow, f"{label} manual portyu9 veto contract is missing: {fragment}")
 
 
 def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
