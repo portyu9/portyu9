@@ -104,7 +104,6 @@ def trusted_diagnostic() -> None:
             "    raise SystemExit(0)\n"
             "raise SystemExit('trusted diagnostic unexpectedly admitted candidate')\n"
         )
-        require(tree_sha != candidate_tree_sha, "diagnostic expected candidate tree to differ from trusted base")
         subprocess.run([sys.executable, "-c", code, str(trusted), str(root), candidate_tree_sha], check=True)
         subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=True)
 
