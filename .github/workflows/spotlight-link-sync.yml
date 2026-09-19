@@ -834,6 +834,10 @@ jobs:
             jq -e --arg body "$APPROVAL_BODY" '.body == $body' approval-comment.json >/dev/null
           fi
 
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
+            -f ref=main >/dev/null
+          echo "Dispatched exact post-check portyu9 review evaluation from trusted main."
+
           echo "codeql_run_id=$CODEQL_RUN_ID" >> "$GITHUB_OUTPUT"
           echo "codeql_check_suite_id=$CODEQL_CHECK_SUITE_ID" >> "$GITHUB_OUTPUT"
           echo "dependency_run_id=$DEPENDENCY_RUN_ID" >> "$GITHUB_OUTPUT"
@@ -1141,14 +1145,17 @@ jobs:
           echo "Spotlight terminal stage: certificate-provenance-verified" >&2
 
           TRUSTED_RUN_ID="$(jq -r '.trustedAdmission.workflowRun.runId' "$CERTIFICATE")"
+          TRUSTED_RUN_ATTEMPT="$(jq -r '.trustedAdmission.workflowRun.runAttempt' "$CERTIFICATE")"
           TRUSTED_CHECK_RUN_ID="$(jq -r '.trustedAdmission.checkRun.checkRunId' "$CERTIFICATE")"
           TRUSTED_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"
           [[ "$TRUSTED_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$TRUSTED_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
           [[ "$TRUSTED_CHECK_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$TRUSTED_WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
           TRUSTED_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}")"
           test "$(jq -r .name <<<"$TRUSTED_RUN")" = "Capability admission"
           test "$(jq -r .workflow_id <<<"$TRUSTED_RUN")" = "$TRUSTED_WORKFLOW_ID"
+          test "$(jq -r .run_attempt <<<"$TRUSTED_RUN")" = "$TRUSTED_RUN_ATTEMPT"
           test "$(jq -r .event <<<"$TRUSTED_RUN")" = "workflow_dispatch"
           test "$(jq -r .head_branch <<<"$TRUSTED_RUN")" = "main"
           test "$(jq -r .head_sha <<<"$TRUSTED_RUN")" = "$BASE_SHA"
@@ -1159,15 +1166,16 @@ jobs:
           test "$(jq -r .status <<<"$TRUSTED_RUN")" = "completed"
           test "$(jq -r .conclusion <<<"$TRUSTED_RUN")" = "success"
           TRUSTED_CHECK="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}")"
-          EXPECTED_TRUSTED_EXTERNAL_ID="spotlight-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
-          EXPECTED_TRUSTED_DETAILS_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}"
+          EXPECTED_TRUSTED_EXTERNAL_ID="spotlight-admission:${TRUSTED_RUN_ID}:${TRUSTED_RUN_ATTEMPT}:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+          CERTIFIED_TRUSTED_DETAILS_URL="$(jq -r '.trustedAdmission.checkRun.detailsUrl' "$CERTIFICATE")"
+          test -n "$CERTIFIED_TRUSTED_DETAILS_URL"
           test "$(jq -r .name <<<"$TRUSTED_CHECK")" = "trusted-capability-admission"
           test "$(jq -r .head_sha <<<"$TRUSTED_CHECK")" = "$HEAD_SHA"
           test "$(jq -r .app.id <<<"$TRUSTED_CHECK")" = "15368"
           test "$(jq -r .status <<<"$TRUSTED_CHECK")" = "completed"
           test "$(jq -r .conclusion <<<"$TRUSTED_CHECK")" = "success"
           test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"
-          test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_DETAILS_URL"
+          test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"
           test "$(jq -r .check_suite.id <<<"$TRUSTED_CHECK")" = "$(jq -r '.trustedAdmission.checkRun.checkSuiteId' "$CERTIFICATE")"
           echo "Spotlight terminal stage: trusted-admission-live-reproof-verified" >&2
           echo "Spotlight terminal stage: attestation-verification-start" >&2
