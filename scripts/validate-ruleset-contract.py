@@ -29,14 +29,16 @@ API = f"{API_ORIGIN}{API_PATH}"
 EXPECTED_INTEGRATION_ID = 15368
 EXPECTED_RULESET_NAMES = ("Protect Main", "Protect generated")
 
-EXPECTED_CONTEXTS = {
+LEGACY_CONTEXTS = frozenset({
     "validate-contracts",
     "trusted-capability-admission",
     "integration-pinned-upstream",
     "dependency-review",
     "analyze-actions",
     "analyze-python",
-}
+})
+EXPECTED_CONTEXTS = frozenset({*LEGACY_CONTEXTS, "trusted-governed-bot-review"})
+LIVE_MIGRATION_CONTEXT_SETS = (LEGACY_CONTEXTS, EXPECTED_CONTEXTS)
 
 
 class PublicRateLimitError(ValueError):
@@ -88,10 +90,16 @@ def validate_live_pr_parameters(pr: Any, desired: dict[str, Any]) -> None:
     )
 
 
-def required_status_context_map(entries: Any, expected_integration: int) -> dict[str, int]:
-    """Return exact required-check identities without string/numeric coercion or duplicate collapse."""
+def required_status_context_map(
+    entries: Any,
+    expected_integration: int,
+    *,
+    allowed_context_sets: tuple[frozenset[str], ...] = (EXPECTED_CONTEXTS,),
+) -> dict[str, int]:
+    """Return exact required-check identities without coercion, duplicate collapse, or set drift."""
     require(isinstance(entries, list), "Protect Main: live required statuses are malformed")
-    require(len(entries) == len(EXPECTED_CONTEXTS), "Protect Main: live required status count differs from contract")
+    allowed_sizes = {len(contexts) for contexts in allowed_context_sets}
+    require(len(entries) in allowed_sizes, "Protect Main: live required status count differs from contract")
     observed: dict[str, int] = {}
     for entry in entries:
         require(isinstance(entry, dict), "Protect Main: live required status entry is malformed")
@@ -104,7 +112,10 @@ def required_status_context_map(entries: Any, expected_integration: int) -> dict
             f"Protect Main: required status integration identity differs for {context}: {integration_id!r}",
         )
         observed[context] = integration_id
-    require(set(observed) == EXPECTED_CONTEXTS, "Protect Main: live required status contexts differ from contract")
+    require(
+        frozenset(observed) in allowed_context_sets,
+        "Protect Main: live required status contexts differ from every reviewed migration state",
+    )
     return observed
 
 
@@ -170,9 +181,9 @@ def validate_source(payload: dict[str, Any]) -> None:
     contexts = checks.get("contexts")
     require(
         isinstance(contexts, list)
-        and len(contexts) == 6
+        and len(contexts) == len(EXPECTED_CONTEXTS)
         and all(isinstance(context, str) and context for context in contexts)
-        and set(contexts) == EXPECTED_CONTEXTS,
+        and frozenset(contexts) == EXPECTED_CONTEXTS,
         "Protect Main required status contexts changed",
     )
 
@@ -401,7 +412,11 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
     )
     expected_integration = desired_status["integration_id"]
     require(exact_int(expected_integration, EXPECTED_INTEGRATION_ID), "Protect Main: source integration identity is malformed")
-    required_status_context_map(status.get("required_status_checks"), expected_integration)
+    required_status_context_map(
+        status.get("required_status_checks"),
+        expected_integration,
+        allowed_context_sets=LIVE_MIGRATION_CONTEXT_SETS,
+    )
 
     generated_rules = rule_map(details["Protect generated"])
     require(set(generated_rules) == {"deletion", "non_fast_forward"}, "Protect generated: live rule inventory differs from contract")
@@ -554,8 +569,35 @@ def self_test(payload: dict[str, Any]) -> None:
         {"context": context, "integration_id": EXPECTED_INTEGRATION_ID}
         for context in sorted(EXPECTED_CONTEXTS)
     ]
-    require(set(required_status_context_map(canonical_statuses, EXPECTED_INTEGRATION_ID)) == EXPECTED_CONTEXTS,
-            "required status identity fixture changed")
+    require(
+        set(required_status_context_map(canonical_statuses, EXPECTED_INTEGRATION_ID)) == set(EXPECTED_CONTEXTS),
+        "required status identity fixture changed",
+    )
+    legacy_statuses = [
+        {"context": context, "integration_id": EXPECTED_INTEGRATION_ID}
+        for context in sorted(LEGACY_CONTEXTS)
+    ]
+    require(
+        set(required_status_context_map(
+            legacy_statuses,
+            EXPECTED_INTEGRATION_ID,
+            allowed_context_sets=LIVE_MIGRATION_CONTEXT_SETS,
+        )) == set(LEGACY_CONTEXTS),
+        "legacy migration status fixture changed",
+    )
+    unexpected_statuses = [dict(entry) for entry in canonical_statuses]
+    unexpected_statuses[-1]["context"] = "unexpected-context"
+    try:
+        required_status_context_map(
+            unexpected_statuses,
+            EXPECTED_INTEGRATION_ID,
+            allowed_context_sets=LIVE_MIGRATION_CONTEXT_SETS,
+        )
+    except ValueError as exc:
+        require("every reviewed migration state" in str(exc),
+                f"migration status self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test accepted an unreviewed migration context set")
     malformed_statuses = [dict(entry) for entry in canonical_statuses]
     malformed_statuses[0]["integration_id"] = float(EXPECTED_INTEGRATION_ID)
     try:
@@ -645,7 +687,7 @@ def main() -> int:
         suffix = " + live observable GitHub control-plane state" if args.live else ""
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
-            f"six required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity and observable drift fail closed."
+            f"seven required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity and observable drift fail closed."
         )
         if unobservable:
             print(

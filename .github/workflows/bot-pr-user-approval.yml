@@ -22,7 +22,7 @@ permissions:
 
 concurrency:
   group: bot-pr-user-approval
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   approve:
@@ -258,6 +258,8 @@ jobs:
               MARKER_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].state' <<<"$REVIEWS")"
               if [ "$MARKER_STATE" = "APPROVED" ]; then
                 echo "PR #${PR_NUMBER} already has an exact-base/head marker-bound portyu9 approval."
+                wake_governed_lane_after_review "$LANE" "$HEAD_REF"
+                echo "Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
               else
                 echo "Skipping governed bot PR #${PR_NUMBER}: the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued."
               fi

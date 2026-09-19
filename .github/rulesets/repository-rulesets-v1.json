@@ -5,7 +5,9 @@
     "Protect Main": {
       "target": "branch",
       "enforcement": "active",
-      "include": ["~DEFAULT_BRANCH"],
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
       "exclude": [],
       "bypassActors": [],
       "rules": {
@@ -17,7 +19,9 @@
           "dismiss_stale_reviews_on_push": false,
           "require_code_owner_review": false,
           "require_last_push_approval": false,
-          "allowed_merge_methods": ["merge"]
+          "allowed_merge_methods": [
+            "merge"
+          ]
         },
         "required_status_checks": {
           "strict_required_status_checks_policy": true,
@@ -26,6 +30,7 @@
           "contexts": [
             "validate-contracts",
             "trusted-capability-admission",
+            "trusted-governed-bot-review",
             "integration-pinned-upstream",
             "dependency-review",
             "analyze-actions",
@@ -37,7 +42,9 @@
     "Protect generated": {
       "target": "branch",
       "enforcement": "active",
-      "include": ["refs/heads/generated"],
+      "include": [
+        "refs/heads/generated"
+      ],
       "exclude": [],
       "bypassActors": [],
       "rules": {

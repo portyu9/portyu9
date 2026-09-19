@@ -115,7 +115,45 @@ def project_profile_item9(stats: str) -> str:
     return stats[:stats.index(marker)] + LEGACY_PROFILE_DISPATCH
 
 
+def project_native_review_gate_to_item10_order(sync: str) -> str:
+    """Relocate item-44 proof blocks only inside the synthetic item-10/item-9 view."""
+    checks_start_marker = (
+        '          CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' '
+        '"repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"\n'
+    )
+    checks_end_marker = (
+        '          echo "Spotlight terminal stage: required-checks-and-native-review-gate-verified" >&2\n\n'
+    )
+    require(sync.count(checks_start_marker) == 1 and sync.count(checks_end_marker) == 1,
+            "Spotlight item-44 projection cannot isolate the canonical native-gate check proof")
+    checks_start = sync.index(checks_start_marker)
+    checks_end = sync.index(checks_end_marker, checks_start) + len(checks_end_marker)
+    checks_block = sync[checks_start:checks_end]
+    projected = sync[:checks_start] + sync[checks_end:]
+
+    certificate_marker = '          CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"\n'
+    require(projected.count(certificate_marker) == 1,
+            "Spotlight item-44 projection cannot restore the pre-certificate check proof")
+    projected = projected.replace(certificate_marker, checks_block + certificate_marker, 1)
+
+    roots_block = (
+        '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n'
+        '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"\n'
+        '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"\n'
+        '          echo "Spotlight terminal stage: pre-merge-roots-verified" >&2\n\n'
+    )
+    require(projected.count(roots_block) == 1,
+            "Spotlight item-44 projection cannot isolate the relocated pre-merge root proof")
+    projected = projected.replace(roots_block, "", 1)
+    review_marker = '          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"\n'
+    merge_start = projected.index("  merge:\n")
+    review_pos = projected.index(review_marker, merge_start)
+    projected = projected[:review_pos] + roots_block + projected[review_pos:]
+    return projected
+
+
 def project_item9(sync: str) -> str:
+    sync = project_native_review_gate_to_item10_order(sync)
     legacy = ORIGINAL_PROJECT_ITEM9(sync)
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
             "Spotlight item-9 immutable-candidate projection anchor changed")
@@ -127,12 +165,69 @@ def project_item9(sync: str) -> str:
             "Spotlight item-9 current-main output projection changed")
     legacy = legacy.replace(CURRENT_MAIN_OUTPUT, "", 1)
     legacy = legacy.replace(CURRENT_MAIN_ECHO, "", 1)
-    current_check_selector = 'select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts"))'
+    native_expected = (
+        '{name:"trusted-governed-bot-review",check_suite_id:$profile,status:"completed",'
+        'conclusion:"success",head_sha:$head},'
+    )
+    require(legacy.count(native_expected) == 1,
+            "Spotlight item-9 native review-gate expected-check projection changed")
+    legacy = legacy.replace(native_expected, "", 1)
+    require(legacy.count('Spotlight terminal stage: required-checks-and-native-review-gate-verified') == 1,
+            "Spotlight item-9 native review-gate stage projection changed")
+    legacy = legacy.replace(
+        'Spotlight terminal stage: required-checks-and-native-review-gate-verified',
+        'Spotlight terminal stage: required-checks-verified',
+        1,
+    )
+    current_check_selector = 'select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "trusted-governed-bot-review" or .name == "validate-contracts"))'
     legacy_check_selector = 'select(.app.id == 15368)'
     require(legacy.count(current_check_selector) == 1,
             "Spotlight item-9 required-check selector projection changed")
     legacy = legacy.replace(current_check_selector, legacy_check_selector, 1)
     return legacy
+
+
+NATIVE_REVIEW_GATE_FRAGMENTS = (
+    '{name:"trusted-governed-bot-review",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}',
+    'select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "trusted-governed-bot-review" or .name == "validate-contracts"))',
+    'Spotlight terminal stage: required-checks-and-native-review-gate-verified',
+)
+
+
+def validate_native_governed_bot_review_overlay(sync: str) -> None:
+    merge = core.job_block(sync, "merge", None)
+    for fragment in NATIVE_REVIEW_GATE_FRAGMENTS:
+        require(fragment in merge,
+                f"Spotlight post-review native governed-bot gate proof is missing: {fragment}")
+    check_read = 'CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"'
+    require(merge.count(check_read) == 1,
+            "Spotlight terminal merge must retain exactly one canonical generic check-run read")
+    review = merge.index(
+        'Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified'
+    )
+    gate = merge.index(check_read)
+    roots = merge.index('Spotlight terminal stage: pre-merge-roots-verified')
+    mutation = merge.index(
+        'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
+    )
+    require(review < gate < roots < mutation,
+            "Spotlight native governed-bot gate and root reproof must run after review/veto proof and before merge mutation")
+
+
+def self_test_native_governed_bot_review_overlay(sync: str) -> None:
+    validate_native_governed_bot_review_overlay(sync)
+    mutated = sync.replace(
+        '{name:"trusted-governed-bot-review",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}',
+        '{name:"spoofed-governed-bot-review",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}',
+        1,
+    )
+    try:
+        validate_native_governed_bot_review_overlay(mutated)
+    except ValueError as exc:
+        require("native governed-bot gate proof" in str(exc),
+                f"native review-gate self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("native review-gate self-test accepted a substituted required context")
 
 
 def validate_preparer_script_with_trusted_admission(text: str) -> None:
@@ -228,12 +323,14 @@ def main() -> int:
         core.validate_preparer_script(preparer)
         core.validate_builder_script(builder, builder_core)
         core.validate_mac(sync)
+        validate_native_governed_bot_review_overlay(sync)
+        self_test_native_governed_bot_review_overlay(sync)
         core.self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
             "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state plus the separate trusted capability-admission proof, "
-            "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance "
-            "and the CLI's direct verified statement before expected-head mutation."
+            "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance, "
+            "the exact post-review trusted-governed-bot-review context, and the CLI's direct verified statement before expected-head mutation."
         )
         return 0
     except (OSError, ValueError) as exc:

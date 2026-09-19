@@ -156,7 +156,68 @@ def strip_item11_tail(workflow: str, label: str) -> str:
     return projected[:projected.index(marker)] + LEGACY_PROFILE_DISPATCH
 
 
+def project_native_review_gate_to_legacy_order(sync: str) -> str:
+    """Project the item-44 post-review native gate back to the frozen pre-item-44 ordering."""
+    native_expected = (
+        '{name:"trusted-governed-bot-review",check_suite_id:$profile,status:"completed",'
+        'conclusion:"success",head_sha:$head},'
+    )
+    native_selector = (
+        ' or .name == "trusted-governed-bot-review"'
+    )
+    core.require(sync.count(native_expected) == 1,
+            "Spotlight item-44 projection lost the exact native review-gate expected-check entry")
+    core.require(sync.count(native_selector) == 1,
+            "Spotlight item-44 projection lost the exact native review-gate selector")
+    projected = sync.replace(native_expected, "", 1)
+    projected = projected.replace(native_selector, "", 1)
+    core.require(
+        projected.count('Spotlight terminal stage: required-checks-and-native-review-gate-verified') == 1,
+        "Spotlight item-44 projection lost the post-review native-gate stage marker",
+    )
+    projected = projected.replace(
+        'Spotlight terminal stage: required-checks-and-native-review-gate-verified',
+        'Spotlight terminal stage: required-checks-verified',
+        1,
+    )
+
+    checks_start_marker = (
+        '          CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' '
+        '"repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"\n'
+    )
+    checks_end_marker = '          echo "Spotlight terminal stage: required-checks-verified" >&2\n\n'
+    core.require(projected.count(checks_start_marker) == 1 and projected.count(checks_end_marker) == 1,
+            "Spotlight item-44 projection cannot isolate the canonical required-check proof")
+    checks_start = projected.index(checks_start_marker)
+    checks_end = projected.index(checks_end_marker, checks_start) + len(checks_end_marker)
+    checks_block = projected[checks_start:checks_end]
+    projected = projected[:checks_start] + projected[checks_end:]
+
+    certificate_marker = '          CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"\n'
+    core.require(projected.count(certificate_marker) == 1,
+            "Spotlight item-44 projection cannot restore the pre-certificate required-check proof")
+    projected = projected.replace(certificate_marker, checks_block + certificate_marker, 1)
+
+    roots_block = (
+        '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n'
+        '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"\n'
+        '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"\n'
+        '          echo "Spotlight terminal stage: pre-merge-roots-verified" >&2\n\n'
+    )
+    core.require(projected.count(roots_block) == 1,
+            "Spotlight item-44 projection cannot isolate the relocated pre-merge root proof")
+    projected = projected.replace(roots_block, "", 1)
+    review_marker = '          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"\n'
+    merge_start = projected.index("  merge:\n")
+    review_pos = projected.index(review_marker, merge_start)
+    core.require(review_pos > merge_start,
+            "Spotlight item-44 projection cannot restore the legacy pre-review root proof")
+    projected = projected[:review_pos] + roots_block + projected[review_pos:]
+    return projected
+
+
 def project_item9_sync_with_marker(sync: str) -> str:
+    sync = project_native_review_gate_to_legacy_order(sync)
     projected = ORIGINAL_PROJECT_ITEM9_SYNC(sync)
     if projected.count(SPOTLIGHT_REVIEWER_STEWARDSHIP) != 1:
         raise ValueError("Spotlight item-9 reviewer-stewardship projection anchor changed")

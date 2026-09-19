@@ -1139,20 +1139,6 @@ jobs:
           done
           test "$(printf '%s\n' "$CODEQL_RUN_ID" "$DEPENDENCY_RUN_ID" "$PROFILE_RUN_ID" | LC_ALL=C sort -u | wc -l)" = "3"
           test "$(printf '%s\n' "$CODEQL_CHECK_SUITE_ID" "$DEPENDENCY_CHECK_SUITE_ID" "$PROFILE_CHECK_SUITE_ID" | LC_ALL=C sort -u | wc -l)" = "3"
-          CHECKS="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
-          CHECKS_TOTAL="$(jq -r '.total_count // empty' <<<"$CHECKS")"
-          CHECKS_COUNT="$(jq '.check_runs | length' <<<"$CHECKS")"
-          [[ "$CHECKS_TOTAL" =~ ^[0-9]+$ ]]
-          [[ "$CHECKS_COUNT" =~ ^[0-9]+$ ]]
-          test "$CHECKS_TOTAL" = "$CHECKS_COUNT" || {
-            echo "Spotlight terminal check-run response is incomplete." >&2
-            exit 1
-          }
-          EXPECTED_CHECKS="$(jq -cn --arg head "$HEAD_SHA" --argjson codeql "$CODEQL_CHECK_SUITE_ID" --argjson dependency "$DEPENDENCY_CHECK_SUITE_ID" --argjson profile "$PROFILE_CHECK_SUITE_ID" '[{name:"analyze-actions",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"analyze-python",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"dependency-review",check_suite_id:$dependency,status:"completed",conclusion:"success",head_sha:$head},{name:"integration-pinned-upstream",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head},{name:"validate-contracts",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}] | sort_by(.name)')"
-          OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts")) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
-          test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
-          echo "Spotlight terminal stage: required-checks-verified" >&2
-
           CERTIFICATE="merge-authorization-input/spotlight-merge-authorization.json"
           SUBJECT="merge-authorization-input/spotlight-merge-authorization.subject.json"
           [[ "$EXPECTED_CERTIFICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
@@ -1214,11 +1200,6 @@ jobs:
           MATCHING_STATEMENTS="$(jq --slurpfile expected "$CERTIFICATE" --arg predicate_type "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json" --arg subject_digest "$EXPECTED_SUBJECT_SHA256" '[.[] | .verificationResult.statement | select(.predicateType == $predicate_type and .predicate == $expected[0] and (.subject | type == "array" and length == 1) and .subject[0].digest.sha256 == $subject_digest)] | length' verified-merge-authorization.json)"
           test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"
           echo "Spotlight terminal stage: attestation-statement-verified" >&2
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
-          echo "Spotlight terminal stage: pre-merge-roots-verified" >&2
-
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
           PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
@@ -1233,6 +1214,25 @@ jobs:
             exit 1
           fi
           echo "Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified" >&2
+
+          CHECKS="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          CHECKS_TOTAL="$(jq -r '.total_count // empty' <<<"$CHECKS")"
+          CHECKS_COUNT="$(jq '.check_runs | length' <<<"$CHECKS")"
+          [[ "$CHECKS_TOTAL" =~ ^[0-9]+$ ]]
+          [[ "$CHECKS_COUNT" =~ ^[0-9]+$ ]]
+          test "$CHECKS_TOTAL" = "$CHECKS_COUNT" || {
+            echo "Spotlight terminal check-run response is incomplete." >&2
+            exit 1
+          }
+          EXPECTED_CHECKS="$(jq -cn --arg head "$HEAD_SHA" --argjson codeql "$CODEQL_CHECK_SUITE_ID" --argjson dependency "$DEPENDENCY_CHECK_SUITE_ID" --argjson profile "$PROFILE_CHECK_SUITE_ID" '[{name:"analyze-actions",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"analyze-python",check_suite_id:$codeql,status:"completed",conclusion:"success",head_sha:$head},{name:"dependency-review",check_suite_id:$dependency,status:"completed",conclusion:"success",head_sha:$head},{name:"integration-pinned-upstream",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head},{name:"trusted-governed-bot-review",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head},{name:"validate-contracts",check_suite_id:$profile,status:"completed",conclusion:"success",head_sha:$head}] | sort_by(.name)')"
+          OBSERVED_CHECKS="$(jq -c '[.check_runs[] | select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "trusted-governed-bot-review" or .name == "validate-contracts")) | {name,check_suite_id:.check_suite.id,status,conclusion,head_sha}] | sort_by(.name)' <<<"$CHECKS")"
+          test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
+          echo "Spotlight terminal stage: required-checks-and-native-review-gate-verified" >&2
+
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          echo "Spotlight terminal stage: pre-merge-roots-verified" >&2
 
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
           RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"

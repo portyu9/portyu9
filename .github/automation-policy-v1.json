@@ -848,6 +848,11 @@
       "job": "admission"
     },
     {
+      "context": "trusted-governed-bot-review",
+      "workflow": "profile-quality",
+      "job": "governed_bot_review"
+    },
+    {
       "context": "integration-pinned-upstream",
       "workflow": "profile-quality",
       "job": "integration"
