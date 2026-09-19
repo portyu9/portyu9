@@ -372,7 +372,7 @@
       "baseBomSha256": "023edf4092ba15ff8e9777fe5501e64ab622e4bba1afa7fa7dac596bf64434a7",
       "candidateBomSha256": "d0b6bf53a561bcfb6c10218a5bb8e4660de5ec95e4a0e2182037caf4d30270ce",
       "expansionSha256": "a0e68a5a736628e479d6a2b7f56c626688fff407b1da29af522a80b8dbe310e4",
-      "rationale": "Authorize #611's exact post-success Spotlight cleanup across the trusted control-source boundary. The runtime capability delta is reductive: it removes the redundant Spotlight post-review workflow_dispatch API surface/mutation, while the reviewed ADR core adds push as an accepted Spotlight event identity so successful push-triggered merges can produce clean decision receipts. No new mutation endpoint, permission, secret, OIDC authority, required-check reduction, merge capability, or bypass is introduced; this entry authorizes only the exact protected-source bytes identified by diagnostic #612."
+      "rationale": "Authorize #611's exact post-success Spotlight cleanup across the trusted control-source boundary. Runtime authority is reduced by removing the redundant Spotlight post-review workflow dispatch; the ADR core also accepts push so successful push-triggered Spotlight merges can emit clean decision receipts. No new mutation endpoint, permission, secret, OIDC authority, required-check reduction, merge capability, or bypass is introduced."
     },
     {
       "id": "cap-spotlight-scheduled-admission-recovery",
