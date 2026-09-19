@@ -74,7 +74,23 @@ def project_item9(sync: str) -> str:
     legacy = legacy.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
     require(legacy.count(NEW_MERGE_NEEDS) == 1, "item-10 merge-needs projection is ambiguous")
     legacy = legacy.replace(NEW_MERGE_NEEDS, OLD_MERGE_NEEDS, 1)
-    legacy = legacy.replace("      attestations: read\n", "", 1)
+    terminal_permissions = (
+        "    permissions:\n"
+        "      actions: read\n"
+        "      contents: write\n"
+        "      pull-requests: read\n"
+        "      checks: read\n"
+        "      attestations: read\n"
+    )
+    legacy_terminal_permissions = (
+        "    permissions:\n"
+        "      contents: write\n"
+        "      pull-requests: read\n"
+        "      checks: read\n"
+    )
+    require(legacy.count(terminal_permissions) == 1,
+            "item-10 terminal read-only Actions/attestation projection is ambiguous")
+    legacy = legacy.replace(terminal_permissions, legacy_terminal_permissions, 1)
     require(legacy.count(DOWNLOAD_STEP) == 1, "item-10 merge artifact-download projection is ambiguous")
     legacy = legacy.replace(DOWNLOAD_STEP, "", 1)
     legacy = legacy.replace(
@@ -175,8 +191,10 @@ def validate_mac(sync: str) -> None:
 
     require(NEW_MERGE_IF in merge and NEW_MERGE_NEEDS in merge,
             "Spotlight terminal merge can bypass MAC preparation/signing")
-    require("attestations: read" in merge,
-            "Spotlight terminal merge lacks explicit read-only attestation verification authority")
+    require(
+        "permissions:\n      actions: read\n      contents: write\n      pull-requests: read\n      checks: read\n      attestations: read" in merge,
+        "Spotlight terminal merge lacks exact read-only Actions/attestation verification authority",
+    )
     for fragment in (
         "- name: Download attested merge authorization artifact",
         "EXPECTED_CERTIFICATE_SHA256: ${{ needs.authorize.outputs.certificate_sha256 }}",
@@ -228,7 +246,7 @@ def expect_failure(sync: str, stats: str, policy: str, expected: str) -> None:
 
 def self_test(sync: str, stats: str, policy: str) -> None:
     item9.self_test(project_item9(sync), stats, policy)
-    expect_failure(sync.replace("      attestations: read\n", "", 1), stats, policy, "lacks explicit read-only")
+    expect_failure(sync.replace("      attestations: read\n", "", 1), stats, policy, "terminal read-only Actions/attestation projection is ambiguous")
     expect_failure(sync.replace('gh attestation verify "$SUBJECT"', 'echo "$SUBJECT"', 1),
                    stats, policy, "terminal MAC consumption contract is missing")
     expect_failure(sync.replace('.verificationResult.statement', '.attestation', 1),

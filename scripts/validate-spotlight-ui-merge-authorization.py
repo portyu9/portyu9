@@ -127,6 +127,11 @@ def project_item9(sync: str) -> str:
             "Spotlight item-9 current-main output projection changed")
     legacy = legacy.replace(CURRENT_MAIN_OUTPUT, "", 1)
     legacy = legacy.replace(CURRENT_MAIN_ECHO, "", 1)
+    current_check_selector = 'select(.app.id == 15368 and (.name == "analyze-actions" or .name == "analyze-python" or .name == "dependency-review" or .name == "integration-pinned-upstream" or .name == "validate-contracts"))'
+    legacy_check_selector = 'select(.app.id == 15368)'
+    require(legacy.count(current_check_selector) == 1,
+            "Spotlight item-9 required-check selector projection changed")
+    legacy = legacy.replace(current_check_selector, legacy_check_selector, 1)
     return legacy
 
 
@@ -143,13 +148,16 @@ def validate_preparer_script_with_trusted_admission(text: str) -> None:
         'compare/{base}...{head}',
         'actions/runs?head_sha={head}&event=pull_request&per_page=100',
         'total == len(runs) == 3',
-        'actions/runs?head_sha={head}&event=pull_request_target&per_page=100',
-        'trusted_total == len(trusted_runs) == 1',
+        'expected_trusted_external_id = f"spotlight-admission:{pr_number}:{base}:{head}"',
+        'check.get("external_id") == expected_trusted_external_id',
+        'trusted_run.get("event") == "workflow_dispatch"',
+        'trusted_run.get("head_branch") == "main"',
         'TRUSTED_WORKFLOW_NAME = "Capability admission"',
         'TRUSTED_CHECK_NAME = "trusted-capability-admission"',
         'check-runs?filter=latest&per_page=100',
-        'checks_total == len(checks)',
-        'len(actions_checks) == 6',
+        'checks_total == len(observed_checks)',
+        'for attempt in range(1, 25):',
+        'len(trusted_matches) <= 1',
         '"trustedAdmission"',
     ):
         require(fragment in text,
@@ -162,7 +170,9 @@ def validate_builder_script_with_trusted_admission(wrapper: str, builder_core: s
         '"trustedAdmission"',
         '"Capability admission"',
         '"trusted-capability-admission"',
-        '"pull_request_target"',
+        '"workflow_dispatch"',
+        'expected_external_id = f"spotlight-admission:{pr_number}:{base}:{head}"',
+        'expected_details_url = f"https://github.com/{REPOSITORY}/actions/runs/{workflow[\'runId\']}"',
         'server-side required-check enforcement',
         'def validate_trusted_admission(',
     ):
@@ -173,7 +183,10 @@ def validate_builder_script_with_trusted_admission(wrapper: str, builder_core: s
         '"trustedAdmission"',
         '"Capability admission"',
         '"trusted-capability-admission"',
-        '"event": {"const": "pull_request_target"}',
+        '"event": {"const": "workflow_dispatch"}',
+        '"headBranch": {"const": "main"}',
+        '"externalId"',
+        '"detailsUrl"',
         '"appId": {"const": 15368}',
     ):
         require(fragment in schema,

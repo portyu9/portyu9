@@ -258,14 +258,15 @@ def validate_trusted_admission(value: Any, env: dict[str, str]) -> dict[str, Any
         "name", "workflowId", "runId", "runAttempt", "checkSuiteId", "event", "headBranch",
         "headSha", "repository", "headRepository", "status", "conclusion",
     }, "merge authorization trusted admission workflow-run shape changed")
-    branch = env_value(env, "CANDIDATE_BRANCH", BRANCH)
+    base = env_value(env, "BASE_SHA", SHA40)
     head = env_value(env, "HEAD_SHA", SHA40)
+    pr_number = env_value(env, "PR_NUMBER", POSITIVE)
     require(workflow.get("name") == "Capability admission",
             "merge authorization trusted admission workflow identity changed")
     for field in ("workflowId", "runId", "runAttempt", "checkSuiteId"):
         positive_int(workflow.get(field), f"trusted admission {field}")
-    require(workflow.get("event") == "pull_request_target"
-            and workflow.get("headBranch") == branch and workflow.get("headSha") == head,
+    require(workflow.get("event") == "workflow_dispatch"
+            and workflow.get("headBranch") == "main" and workflow.get("headSha") == base,
             "merge authorization trusted admission source identity changed")
     require(workflow.get("repository") == REPOSITORY and workflow.get("headRepository") == REPOSITORY,
             "merge authorization trusted admission repository identity changed")
@@ -273,15 +274,19 @@ def validate_trusted_admission(value: Any, env: dict[str, str]) -> dict[str, Any
             "merge authorization trusted admission workflow is not successful")
 
     require(isinstance(check, dict) and set(check) == {
-        "name", "checkSuiteId", "appId", "status", "conclusion", "headSha",
+        "name", "checkRunId", "checkSuiteId", "appId", "status", "conclusion", "headSha",
+        "externalId", "detailsUrl",
     }, "merge authorization trusted admission check-run shape changed")
     require(check.get("name") == "trusted-capability-admission",
             "merge authorization trusted admission check identity changed")
+    positive_int(check.get("checkRunId"), "trusted admission checkRunId")
     positive_int(check.get("checkSuiteId"), "trusted admission checkSuiteId")
-    require(check.get("checkSuiteId") == workflow["checkSuiteId"],
-            "merge authorization trusted admission check suite is not bound to its workflow run")
+    expected_external_id = f"spotlight-admission:{pr_number}:{base}:{head}"
+    expected_details_url = f"https://github.com/{REPOSITORY}/actions/runs/{workflow['runId']}"
     require(check.get("appId") == 15368 and check.get("status") == "completed"
-            and check.get("conclusion") == "success" and check.get("headSha") == head,
+            and check.get("conclusion") == "success" and check.get("headSha") == head
+            and check.get("externalId") == expected_external_id
+            and check.get("detailsUrl") == expected_details_url,
             "merge authorization trusted admission check success identity changed")
     return {"workflowRun": workflow, "checkRun": check}
 
@@ -394,11 +399,14 @@ def fixture() -> tuple[dict[str, Any], dict[str, str]]:
                "status": "completed", "conclusion": "success", "headSha": head} for name in CHECK_NAMES]
     trusted = {
         "workflowRun": {"name": "Capability admission", "workflowId": 104, "runId": 2004,
-                        "runAttempt": 1, "checkSuiteId": 3004, "event": "pull_request_target",
-                        "headBranch": branch, "headSha": head, "repository": REPOSITORY,
+                        "runAttempt": 1, "checkSuiteId": 3004, "event": "workflow_dispatch",
+                        "headBranch": "main", "headSha": base, "repository": REPOSITORY,
                         "headRepository": REPOSITORY, "status": "completed", "conclusion": "success"},
-        "checkRun": {"name": "trusted-capability-admission", "checkSuiteId": 3004, "appId": 15368,
-                     "status": "completed", "conclusion": "success", "headSha": head},
+        "checkRun": {"name": "trusted-capability-admission", "checkRunId": 4004,
+                     "checkSuiteId": 4005, "appId": 15368, "status": "completed",
+                     "conclusion": "success", "headSha": head,
+                     "externalId": f"spotlight-admission:123:{base}:{head}",
+                     "detailsUrl": f"https://github.com/{REPOSITORY}/actions/runs/2004"},
     }
     state = {
         "pullRequest": {"number": 123, "title": PR_TITLE, "body": PR_BODY, "baseRef": "main",
@@ -445,9 +453,13 @@ def self_test() -> None:
     extra_check["checkRuns"].append(copy.deepcopy(extra_check["checkRuns"][0]))
     expect_failure(extra_check, dict(env), "exactly five check runs")
 
-    wrong_trusted_suite = copy.deepcopy(state)
-    wrong_trusted_suite["trustedAdmission"]["checkRun"]["checkSuiteId"] = 3001
-    expect_failure(wrong_trusted_suite, dict(env), "trusted admission check suite is not bound")
+    wrong_trusted_external = copy.deepcopy(state)
+    wrong_trusted_external["trustedAdmission"]["checkRun"]["externalId"] = "spotlight-admission:999:" + ("a" * 40) + ":" + ("d" * 40)
+    expect_failure(wrong_trusted_external, dict(env), "trusted admission check success identity changed")
+
+    wrong_trusted_details = copy.deepcopy(state)
+    wrong_trusted_details["trustedAdmission"]["checkRun"]["detailsUrl"] = "https://github.com/portyu9/portyu9/actions/runs/9999"
+    expect_failure(wrong_trusted_details, dict(env), "trusted admission check success identity changed")
 
     wrong_trusted_event = copy.deepcopy(state)
     wrong_trusted_event["trustedAdmission"]["workflowRun"]["event"] = "pull_request"
