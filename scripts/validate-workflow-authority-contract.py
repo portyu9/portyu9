@@ -95,11 +95,12 @@ SPOTLIGHT_REVIEWER_STEWARDSHIP = "          REQUESTED=\"$(jq '[.requested_review
 SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n      pull-requests: write\n"
 LEGACY_SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n"
 SPOTLIGHT_APPROVAL_AUDIT = "          PRS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10\")\"\n          test \"$(jq 'length' <<<\"$PRS\")\" = \"1\"\n          test \"$(jq -r '.[0].number' <<<\"$PRS\")\" = \"$PR_NUMBER\"\n          APPROVAL_MARKER=\"<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->\"\n          COMMENTS=\"$(gh api --paginate --slurp \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100\")\"\n          if ! jq -e --arg marker \"$APPROVAL_MARKER\" '[.[][] | select(.body | contains($marker))] | length > 0' <<<\"$COMMENTS\" >/dev/null; then\n            printf -v APPROVAL_BODY '%s\\n%s' \"$APPROVAL_MARKER\" \"Automation-approved: the exact Spotlight head \\`${HEAD_SHA}\\` passed all three protected PR workflows. An exact-head APPROVED review by @portyu9 is required before terminal merge; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path.\"\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments\" -f body=\"$APPROVAL_BODY\" > approval-comment.json\n            jq -e --arg body \"$APPROVAL_BODY\" '.body == $body' approval-comment.json >/dev/null\n          fi\n\n"
-SPOTLIGHT_POST_CHECK_REVIEW_WAKE = """          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
+SPOTLIGHT_POST_CHECK_REVIEW_WAKE = """          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\
             -f ref=main >/dev/null
           echo "Dispatched exact post-check portyu9 review evaluation from trusted main."
 
-          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
+"""
+SPOTLIGHT_POST_CHECK_REVIEW_WAIT = """          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           PORTYU9_APPROVAL_COUNT=0
           for REVIEW_ATTEMPT in $(seq 1 24); do
             REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
@@ -166,6 +167,9 @@ def project_item9_sync_with_marker(sync: str) -> str:
     if projected.count(SPOTLIGHT_POST_CHECK_REVIEW_WAKE) != 1:
         raise ValueError("Spotlight item-9 post-check review-wake projection anchor changed")
     projected = projected.replace(SPOTLIGHT_POST_CHECK_REVIEW_WAKE, "", 1)
+    if projected.count(SPOTLIGHT_POST_CHECK_REVIEW_WAIT) != 1:
+        raise ValueError("Spotlight item-9 post-check review-wait projection anchor changed")
+    projected = projected.replace(SPOTLIGHT_POST_CHECK_REVIEW_WAIT, "", 1)
     if projected.count(SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF) != 1:
         raise ValueError("Spotlight item-9 marker-bound review projection anchor changed")
     projected = projected.replace(SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF, "", 1)
