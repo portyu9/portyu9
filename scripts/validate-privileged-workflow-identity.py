@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v44"
+VERSION = "governed-workflow-byte-identity-v45"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "8fb27ec1e74ac9ed56cf17d674436d4c914739b7",
     ".github/workflows/profile-quality.yml": "14e7bde4668bb26f2e804aafbbcb24e4d4512518",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "f63f478b83ae26932c440d33e0cde0e7f21d2234",
+    ".github/workflows/spotlight-link-sync.yml": "52aee7b24d8e8385d4ad51bba91fc583c5c6552a",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "0158284c833051fa9a1152a3314b906038ec6a28"
@@ -581,7 +581,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check trust bootstrap plus evaluator byte identity locked · bot-review lane-specific liveness plus immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check trust bootstrap plus evaluator byte identity locked · bot-review lane-specific liveness plus immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0
