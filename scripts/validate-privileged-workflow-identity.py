@@ -10,7 +10,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v39"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "ff3d3f816dfdb6c5de036f343766825b35252f3b",
+    ".github/workflows/bot-pr-user-approval.yml": "7e50a4efd1c704e425ae5ad7c916e165f28ffd05",
     ".github/workflows/profile-quality.yml": "ee94b8ca68d8c033638da28d17054a0053fa80f0",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "c7dcfc288f08a3bde086543fc9f0afebaaeb78c8",
@@ -291,7 +291,7 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     for fragment in (
         'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
-        'dependabot|codeql-autofix)',
+        'spotlight|dependabot|codeql-autofix)',
         'required+=(trusted-capability-admission)',
         'LANE="dependabot"',
         'LANE="codeql-autofix"',
