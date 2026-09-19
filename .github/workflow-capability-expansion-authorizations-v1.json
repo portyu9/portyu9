@@ -368,6 +368,13 @@
       "rationale": "Authorize #589's exact GitHub-native Spotlight main-push reconciliation wake using the nine-workflow composite capability BOM identities consumed by trusted admission. This corrects the ineffective #590 snapshot-only BOM hashes; the expansion remains exactly the reviewed push-on-main trigger plus canonical BOM trusted-control-source binding, with no new job permission, mutation surface, secret/reference, OIDC authority, or merge bypass."
     },
     {
+      "id": "cap-spotlight-post-success-cleanup",
+      "baseBomSha256": "023edf4092ba15ff8e9777fe5501e64ab622e4bba1afa7fa7dac596bf64434a7",
+      "candidateBomSha256": "d0b6bf53a561bcfb6c10218a5bb8e4660de5ec95e4a0e2182037caf4d30270ce",
+      "expansionSha256": "a0e68a5a736628e479d6a2b7f56c626688fff407b1da29af522a80b8dbe310e4",
+      "rationale": "Authorize #611's exact post-success Spotlight cleanup across the trusted control-source boundary. The runtime capability delta is reductive: it removes the redundant Spotlight post-review workflow_dispatch API surface/mutation, while the reviewed ADR core adds push as an accepted Spotlight event identity so successful push-triggered merges can produce clean decision receipts. No new mutation endpoint, permission, secret, OIDC authority, required-check reduction, merge capability, or bypass is introduced; this entry authorizes only the exact protected-source bytes identified by diagnostic #612."
+    },
+    {
       "id": "cap-spotlight-scheduled-admission-recovery",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
