@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v46"
+VERSION = "governed-workflow-byte-identity-v47"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "9144beeda9382824ee214d812d4a6012687e282b",
+    ".github/workflows/bot-pr-user-approval.yml": "b955651a86b5dd51d146ecaa173461d7853769fa",
     ".github/workflows/profile-quality.yml": "14e7bde4668bb26f2e804aafbbcb24e4d4512518",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "3a2cae6fd4eecc295323a1ac329f7175ddc4c406",
@@ -399,6 +399,17 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'group: bot-pr-user-approval',
         'cancel-in-progress: true',
         'Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE}).',
+        'local head="$1" head_ref="$2" runs total count active_profile unexpected_active',
+        '.name == "Profile quality" and',
+        '.path == ".github/workflows/profile-quality.yml" and',
+        '.event == "pull_request" and',
+        '.head_sha == $head and',
+        '.head_branch == $head_ref and',
+        '.repository.full_name == $repo and',
+        '.head_repository.full_name == $repo',
+        '[ "$active_profile" -le 1 ] || {',
+        'multiple canonical active Profile Quality runs exist for ${head}.',
+        'non-Profile-Quality workflow run(s) remain active.',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
     require(
@@ -409,6 +420,18 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     require(
         bot_review.count('check_required_contexts "$HEAD_SHA" "$LANE"') == 2,
         "Bot PR user approval must re-prove the lane-specific gate set before and immediately before review mutation",
+    )
+    require(
+        bot_review.count('check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"') == 2,
+        "Bot PR user approval must re-prove exact-head quiescence with immutable head-ref binding before and immediately before review mutation",
+    )
+    require(
+        'check_quiescent_runs "$HEAD_SHA"' not in bot_review,
+        "Bot PR quiescence proof must bind the exact governed head ref instead of head SHA alone",
+    )
+    require(
+        'active="$(jq \'[.workflow_runs[] | select(.status == "queued"' not in bot_review,
+        "Bot PR reviewer must not globally wait on the review-dependent Profile Quality run",
     )
     require(
         bot_review.count('wake_governed_lane_after_review "$LANE" "$HEAD_REF"') == 2,
@@ -593,7 +616,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check trust bootstrap plus evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check trust bootstrap plus evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, canonical Profile-Quality quiescence exemption, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0
