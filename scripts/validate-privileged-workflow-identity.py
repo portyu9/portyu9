@@ -426,7 +426,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "Bot PR user approval must re-prove exact-head quiescence with immutable head-ref binding before and immediately before review mutation",
     )
     require(
-        'check_quiescent_runs "$HEAD_SHA"' not in bot_review,
+        'if check_quiescent_runs "$HEAD_SHA"; then' not in bot_review,
         "Bot PR quiescence proof must bind the exact governed head ref instead of head SHA alone",
     )
     require(
