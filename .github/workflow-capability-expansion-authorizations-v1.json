@@ -359,6 +359,13 @@
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "3db685a54ec049e30c30399f16a481384af84972015b704f179723698aab5ac5",
       "rationale": "Authorize the exact trusted compiler hardening in PR #426 that makes gh api graphql fail closed, classifies GraphQL mutations explicitly, and exposes enablePullRequestAutoMerge to the semantic mutation inventory; the current six-workflow BOM remains byte-for-byte unchanged."
+    },
+    {
+      "id": "cap-spotlight-main-push-reconciliation",
+      "baseBomSha256": "08c235bfa2878ab1e6a30abbeab715d3286892782a8f2025d52384aa4c332f3c",
+      "candidateBomSha256": "ee2a1fefe5fdc58680bfa8cbca368b10afc67547dfad285284fee072a0f828f7",
+      "expansionSha256": "671ca7710df1e6190b8dc5256a58ffb6b9f68d158e63aeb0c08a9bd08cba96bf",
+      "rationale": "Authorize #589's exact GitHub-native Spotlight main-push reconciliation wake. The new push trigger on main grants no additional job permission or mutation surface; it only starts the existing lease-bound stale-only reconciliation and guarded README transaction graph immediately after accepted main movement, while Profile Stats dispatch remains publication-coupled and the hourly schedule remains fallback-only."
     }
   ]
 }
