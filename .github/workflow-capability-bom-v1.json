@@ -1294,7 +1294,21 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
               "step": "Approve and wait for only the exact README-only automation checks"
@@ -1323,6 +1337,20 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
               "method": "GET",
               "mutating": false,
               "step": "Approve and wait for only the exact README-only automation checks"
