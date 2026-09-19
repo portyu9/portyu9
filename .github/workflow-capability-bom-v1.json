@@ -191,6 +191,36 @@
           }
         },
         {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Run exact accepted-base governed bot review gate"
+            }
+          ],
+          "artifacts": [],
+          "id": "governed_bot_review",
+          "mutations": [],
+          "name": "trusted-governed-bot-review",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
           "actions": [
             {
               "kind": "remote",
