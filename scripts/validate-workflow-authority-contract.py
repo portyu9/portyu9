@@ -95,11 +95,37 @@ SPOTLIGHT_REVIEWER_STEWARDSHIP = "          REQUESTED=\"$(jq '[.requested_review
 SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n      pull-requests: write\n"
 LEGACY_SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n"
 SPOTLIGHT_APPROVAL_AUDIT = "          PRS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10\")\"\n          test \"$(jq 'length' <<<\"$PRS\")\" = \"1\"\n          test \"$(jq -r '.[0].number' <<<\"$PRS\")\" = \"$PR_NUMBER\"\n          APPROVAL_MARKER=\"<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->\"\n          COMMENTS=\"$(gh api --paginate --slurp \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100\")\"\n          if ! jq -e --arg marker \"$APPROVAL_MARKER\" '[.[][] | select(.body | contains($marker))] | length > 0' <<<\"$COMMENTS\" >/dev/null; then\n            printf -v APPROVAL_BODY '%s\\n%s' \"$APPROVAL_MARKER\" \"Automation-approved: the exact Spotlight head \\`${HEAD_SHA}\\` passed all three protected PR workflows. An exact-head APPROVED review by @portyu9 is required before terminal merge; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path.\"\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments\" -f body=\"$APPROVAL_BODY\" > approval-comment.json\n            jq -e --arg body \"$APPROVAL_BODY\" '.body == $body' approval-comment.json >/dev/null\n          fi\n\n"
-SPOTLIGHT_POST_CHECK_REVIEW_WAKE = """          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\
+SPOTLIGHT_POST_CHECK_REVIEW_WAKE = """          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
             -f ref=main >/dev/null
           echo "Dispatched exact post-check portyu9 review evaluation from trusted main."
 
+          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
+          PORTYU9_APPROVAL_COUNT=0
+          for REVIEW_ATTEMPT in $(seq 1 24); do
+            REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+            PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
+            if [ "$PORTYU9_APPROVAL_COUNT" -ge 1 ]; then
+              break
+            fi
+            if [ "$REVIEW_ATTEMPT" -lt 24 ]; then
+              sleep 5
+            fi
+          done
+          test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
+            echo "ERROR: exact-base/head portyu9 review did not materialize after the post-check dispatch." >&2
+            exit 1
+          }
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r .state <<<"$PR_AFTER_REVIEW")" = "open"
+          test "$(jq -r .base.sha <<<"$PR_AFTER_REVIEW")" = "$BASE_SHA"
+          test "$(jq -r .head.sha <<<"$PR_AFTER_REVIEW")" = "$HEAD_SHA"
+          echo "Observed exact-base/head marker-bound portyu9 approval before merge authorization."
+
 """
+
 SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF = """          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
           PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
@@ -229,6 +255,12 @@ def validate_policy_cross_contracts_with_trusted_admission(
         'trusted_run.get("event") == "workflow_dispatch"',
         'trusted_run.get("head_branch") == "main"',
         'trusted_external_pattern = re.compile(',
+        'check-runs?filter=all&per_page=100',
+        'trusted_matches.sort(key=lambda check: check["id"], reverse=True)',
+        'candidate_run.get("event") == "workflow_dispatch"',
+        'candidate_run.get("head_branch") == "main"',
+        'candidate_run.get("head_sha") == base',
+        'Spotlight trusted workflow-dispatch admission proof did not materialize',
         'trusted_run_attempt = int(trusted_identity_match.group(2))',
         '"trustedAdmission"',
     ):
