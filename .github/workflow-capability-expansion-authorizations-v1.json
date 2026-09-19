@@ -305,6 +305,13 @@
       "rationale": "Authorize #584's final snapshot-aligned event-driven Spotlight admission proof. Trusted main workflow_dispatch independently binds the unique current-main bot PR and emits the exact candidate-head proof; terminal merge still requires protected checks, immutable portyu9 review, attested authorization, lease validity, and expected-head merge."
     },
     {
+      "id": "cap-final-spotlight-live-reproof",
+      "baseBomSha256": "cdebc55d3881977b1658ace0b15f7d93b325809dca1c53c1247faef732a5d30b",
+      "candidateBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
+      "expansionSha256": "43ceb6fc2e5f95bac2e08c3754b37755ff8b1e223de5ec0df4f81d6ea10e3c50",
+      "rationale": "Authorize #584 frozen head 3e0d648d150d3f89b4b16dc0363e1fcab0d8bbba: event-driven trusted-main Spotlight admission plus terminal live run/check reproof. Actions access at terminal merge is read-only; exact protected checks, marker-bound portyu9 approval, attested authorization, lease, no-bypass ruleset, and expected-head merge remain required."
+    },
+    {
       "id": "cap-github-native-bot-pr-user-approval",
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "7e4d61592ffa9988ab0d70ab74cfb7bd0ac12e20e4c54c3f4ee9395a083da16a",
