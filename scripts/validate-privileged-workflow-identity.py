@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v45"
+VERSION = "governed-workflow-byte-identity-v46"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "8fb27ec1e74ac9ed56cf17d674436d4c914739b7",
+    ".github/workflows/bot-pr-user-approval.yml": "9144beeda9382824ee214d812d4a6012687e282b",
     ".github/workflows/profile-quality.yml": "14e7bde4668bb26f2e804aafbbcb24e4d4512518",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "3a2cae6fd4eecc295323a1ac329f7175ddc4c406",
@@ -396,6 +396,9 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued.',
         'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
         'exit 1',
+        'group: bot-pr-user-approval',
+        'cancel-in-progress: true',
+        'Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE}).',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
     require(
@@ -406,6 +409,10 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     require(
         bot_review.count('check_required_contexts "$HEAD_SHA" "$LANE"') == 2,
         "Bot PR user approval must re-prove the lane-specific gate set before and immediately before review mutation",
+    )
+    require(
+        bot_review.count('wake_governed_lane_after_review "$LANE" "$HEAD_REF"') == 2,
+        "Bot PR reviewer must wake once on an already-valid marker review and once after a newly-created review",
     )
     require(
         'test "$(jq -r .base.sha <<<"$PR")" = "$MAIN_SHA"' not in bot_review,
@@ -441,10 +448,15 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches' not in bot_review,
         "Spotlight reviewer must not reintroduce the redundant post-review recovery wake",
     )
+    marker_approved_pos = bot_review.index('if [ "$MARKER_STATE" = "APPROVED" ]; then')
+    recovery_wake_pos = bot_review.index('wake_governed_lane_after_review "$LANE" "$HEAD_REF"', marker_approved_pos)
+    continue_pos = bot_review.index('              continue', recovery_wake_pos)
+    require(marker_approved_pos < recovery_wake_pos < continue_pos,
+            "Bot PR existing-marker recovery wake must occur before the reviewer skips the already-approved candidate")
     review_mutation_pos = bot_review.index('REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST')
-    wake_pos = bot_review.index('wake_governed_lane_after_review "$LANE" "$HEAD_REF"')
-    require(review_mutation_pos < wake_pos,
-            "Bot PR controller wake must occur only after the real-user exact-base/head approval mutation")
+    post_mutation_wake_pos = bot_review.rindex('wake_governed_lane_after_review "$LANE" "$HEAD_REF"')
+    require(review_mutation_pos < post_mutation_wake_pos,
+            "Bot PR new-review controller wake must occur only after the real-user exact-base/head approval mutation")
     require(
         'repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main' in bot_review,
         "Dependabot post-review wake must dispatch the trusted controller on main",
@@ -581,7 +593,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check trust bootstrap plus evaluator byte identity locked · bot-review lane-specific liveness plus immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check trust bootstrap plus evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0
