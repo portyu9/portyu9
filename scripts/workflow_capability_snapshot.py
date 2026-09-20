@@ -202,6 +202,19 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
     ):
         require(fragment in source,
                 f"ruleset reconciler least-authority installation proof changed: {fragment}")
+    for fragment in (
+        '[[ "$ADMIN_APP_ID" =~ ^[1-9][0-9]*$ ]]',
+        '[[ "$ADMIN_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]',
+        'test -n "$ADMIN_PRIVATE_KEY"',
+        'test "$TOKEN_EXPIRES_EPOCH" -gt "$((NOW + 120))"',
+        'test "$TOKEN_EXPIRES_EPOCH" -le "$((NOW + 3700))"',
+        'if [ "$PREWRITE_STATE" = "successor" ]; then',
+        'echo "outcome=already-applied-before-write" >> "$GITHUB_OUTPUT"',
+        'test "$PREWRITE_STATE" = "predecessor"',
+        'ERROR: ruleset mutation did not converge to the exact reviewed successor; no automatic retry will occur.',
+    ):
+        require(fragment in source,
+                f"ruleset reconciler transaction guard changed: {fragment}")
 
 
 def self_test() -> None:
