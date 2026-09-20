@@ -400,7 +400,7 @@
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "expansionSha256": "ee6c874e5be7faca0d1edd04b0ed5bd08a77975a85b83b1fff9a49b55d107555",
-      "rationale": "Authorize #664's exact Ruleset reconciler App-JWT transport hardening. The two existing GitHub App JWT calls keep the same endpoints, methods, secrets, selected-repository Administration scope, installation-token narrowing, ruleset mutation, readback, receipt, attestation, and no-bypass behavior, but now set the documented Authorization: Bearer scheme explicitly instead of relying on GitHub CLI's implicit token scheme. The composite Workflow Capability BOM is unchanged; no trigger, permission, secret, OIDC authority, mutation surface, protected-check reduction, merge capability, or bypass is added."
+      "rationale": "Authorize #664's exact Ruleset reconciler App-JWT transport hardening. The two existing App JWT calls keep the same endpoints, methods, secrets, selected-repository Administration scope, token narrowing, ruleset write/readback, receipt, attestation, and no-bypass behavior, but now set the documented Authorization: Bearer scheme explicitly. Composite BOM is unchanged; no trigger, permission, OIDC authority, mutation surface, check reduction, merge capability, or bypass is added."
     },
     {
       "id": "cap-ruleset-drift-sentinel-readonly",
