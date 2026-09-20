@@ -1254,69 +1254,6 @@
       }
     },
     {
-      "id": "ruleset-drift-sentinel",
-      "jobs": [
-        {
-          "actions": [
-            {
-              "kind": "remote",
-              "path": "",
-              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-              "repository": "actions/checkout",
-              "step": "Checkout exact trusted main"
-            }
-          ],
-          "apiSurfaces": [
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Require current trusted main"
-            }
-          ],
-          "artifacts": [],
-          "id": "detect",
-          "mutations": [],
-          "name": "ruleset-drift-sentinel",
-          "needs": [],
-          "oidc": false,
-          "permissions": {
-            "contents": "read"
-          },
-          "references": {
-            "env": [],
-            "githubToken": [
-              "github.token"
-            ],
-            "secrets": [],
-            "vars": []
-          }
-        }
-      ],
-      "name": "Ruleset drift sentinel",
-      "path": ".github/workflows/ruleset-drift-sentinel.yml",
-      "references": {
-        "env": [],
-        "githubToken": [
-          "github.token"
-        ],
-        "secrets": [],
-        "vars": []
-      },
-      "triggers": {
-        "schedule": {
-          "cron": [
-            "23 */6 * * *"
-          ]
-        },
-        "workflow_dispatch": {}
-      },
-      "workflowPermissions": {
-        "contents": "read"
-      }
-    },
-    {
       "id": "spotlight-link-sync",
       "jobs": [
         {
