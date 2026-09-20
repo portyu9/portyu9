@@ -689,6 +689,7 @@
     "ruleset-reconciler": {
       "path": ".github/workflows/ruleset-reconciler.yml",
       "triggers": [
+        "push",
         "workflow_dispatch"
       ],
       "permissions": {
