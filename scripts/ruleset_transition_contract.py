@@ -40,6 +40,16 @@ EXPECTED_STATUS_KEYS = {
     "required_status_checks",
 }
 EXPECTED_CHECK_KEYS = {"context", "integration_id"}
+EXPECTED_CONTEXT_ORDER = (
+    "validate-contracts",
+    "trusted-capability-admission",
+    "trusted-governed-bot-review",
+    "integration-pinned-upstream",
+    "dependency-review",
+    "analyze-actions",
+    "analyze-python",
+)
+EXPECTED_CONTEXTS = frozenset(EXPECTED_CONTEXT_ORDER)
 
 
 def require(condition: bool, message: str) -> None:
@@ -87,7 +97,7 @@ def normalize_payload(value: Any) -> dict[str, Any]:
         rule_type = rule.get("type")
         require(isinstance(rule_type, str) and rule_type not in observed, "ruleset rule identity malformed/duplicated")
         observed[rule_type] = rule
-    require(tuple(observed) == EXPECTED_RULE_TYPES, "ruleset rule ordering/inventory changed")
+    require(set(observed) == set(EXPECTED_RULE_TYPES), "ruleset rule inventory changed")
 
     for rule_type in ("deletion", "non_fast_forward"):
         require(set(observed[rule_type]) == {"type"}, f"{rule_type} rule gained parameters")
@@ -138,7 +148,18 @@ def normalize_payload(value: Any) -> dict[str, Any]:
         require(isinstance(context, str) and context and context not in names, "required status context malformed/duplicated")
         names.add(context)
         exact_int(check.get("integration_id"), 15368)
-    return value
+    require(names <= EXPECTED_CONTEXTS, "required status context inventory contains unreviewed identity")
+
+    # GitHub does not define semantic ordering for rules or required-status entries and
+    # may return the same ruleset in a different array order than it was submitted.
+    # Canonicalize those arrays before hashing while preserving exact closed-world
+    # identities, primitive types, parameters, and membership.
+    canonical = json.loads(json.dumps(value))
+    canonical_rules = {rule["type"]: rule for rule in canonical["rules"]}
+    canonical["rules"] = [canonical_rules[rule_type] for rule_type in EXPECTED_RULE_TYPES]
+    canonical_checks = canonical_rules["required_status_checks"]["parameters"]["required_status_checks"]
+    canonical_checks.sort(key=lambda check: EXPECTED_CONTEXT_ORDER.index(check["context"]))
+    return canonical
 
 
 def load_contract() -> dict[str, Any]:
@@ -248,6 +269,24 @@ def self_test() -> None:
             "predecessor classification changed")
     require(classify({"id": RULESET_ID, **successor}, transition)[0] == "successor",
             "successor classification changed")
+
+    # GitHub's live Protect Main currently returns the exact predecessor checks in
+    # this semantically equivalent order. The reconciler must not mistake ordering
+    # drift for control-plane drift.
+    reordered_predecessor = json.loads(json.dumps(predecessor))
+    predecessor_checks = reordered_predecessor["rules"][3]["parameters"]["required_status_checks"]
+    predecessor_checks[:] = [predecessor_checks[index] for index in (0, 2, 4, 5, 3, 1)]
+    state, digest = classify({"id": RULESET_ID, **reordered_predecessor}, transition)
+    require(state == "predecessor" and digest == transition["predecessorDigest"],
+            "live-order predecessor canonicalization changed")
+
+    reordered_successor = json.loads(json.dumps(successor))
+    reordered_successor["rules"].reverse()
+    status_rule = next(rule for rule in reordered_successor["rules"] if rule["type"] == "required_status_checks")
+    status_rule["parameters"]["required_status_checks"].reverse()
+    state, digest = classify({"id": RULESET_ID, **reordered_successor}, transition)
+    require(state == "successor" and digest == transition["successorDigest"],
+            "rules/check ordering canonicalization changed")
 
     redacted_predecessor = {"id": RULESET_ID, **json.loads(json.dumps(predecessor))}
     redacted_predecessor.pop("bypass_actors")
