@@ -1,434 +1,434 @@
 {
+  "schemaVersion": 1,
+  "ledgerId": "workflow-capability-expansion-authorizations-v1",
+  "repository": "portyu9/portyu9",
   "authorizations": [
     {
+      "id": "cap-autonomous-spotlight-admission-convergence",
       "baseBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
       "candidateBomSha256": "cf57c64e11d6322af0c8e234fba72098ae02bcc5c29706e40800c4d0a8b38adc",
       "expansionSha256": "fefcf2b1e852a99e422a8c98947e93dd5d462c9049cec547e514e73782968dc2",
-      "id": "cap-autonomous-spotlight-admission-convergence",
       "rationale": "Authorize #595's exact frozen Spotlight convergence fix: Capability Admission hydrates the unique discovered PR before trusting full-PR metadata, and Spotlight verifies the complete multiline approval comment by exact JSON equality. Bot/current-main/head/title/body proofs remain fail-closed. No trigger, write permission, mutation class, secret, OIDC authority, required-check reduction, merge bypass, or candidate execution is added."
     },
     {
+      "id": "cap-bot-pr-stewardship-native-admission-gate",
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "14fae0e37c39df7314307f0fb35fd2df61bfa9a91d3c39f4b0f2765e320c60ba",
       "expansionSha256": "6db23ce18e02f69ede4693ef6d84b4e738d2c67498cb01804b6d5d0f66d03e48",
-      "id": "cap-bot-pr-stewardship-native-admission-gate",
       "rationale": "Authorize #552's exact frozen bot-PR stewardship and native Dependabot admission gate. Dependabot trusted-main admission publishes an exact proof consumed by a native required Actions job; Dependabot, CodeQL Autofix, and Spotlight may request portyu9 as reviewer and post one idempotent exact-head automation-approval comment only after their governed gates succeed. Required checks, candidate-data trust boundaries, ruleset enforcement, and exact-head merge remain fail-closed; no bypass is added."
     },
     {
+      "id": "cap-bot-review-manual-veto",
       "baseBomSha256": "d0b6bf53a561bcfb6c10218a5bb8e4660de5ec95e4a0e2182037caf4d30270ce",
       "candidateBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
       "expansionSha256": "37a32acaa8643d091f730c74e5ddce1d167b691314490280bed4b8facd83b121",
-      "id": "cap-bot-review-manual-veto",
       "rationale": "Authorize #617's exact protected-source hardening so manual exact-head portyu9 CHANGES_REQUESTED reviews veto governed bot approval and merge, dismissed/revoked automation reviews are not silently reissued, and terminal Dependabot, CodeQL Autofix, and Spotlight merges require exactly one marker-bound approval. No new endpoint, mutation class, permission, bypass, direct-main authority, or candidate execution is added."
     },
     {
+      "id": "cap-codeql-alert-4-logging-fix",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "e3297194c6592e785860dce2094f86c339e54c59e9a3990282700d6fde3639f5",
-      "id": "cap-codeql-alert-4-logging-fix",
       "rationale": "Authorize the exact trusted-control-source change in PR #412 that fixes CodeQL alert #4 (py/clear-text-logging-sensitive-data) by removing caught exception contents from stderr; semantic workflow capabilities remain byte-for-byte unchanged."
     },
     {
+      "id": "cap-codeql-alert-4-public-admission-output",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "b41bb49b0c31ebf82922c7431a1b4410f38073b964547e44f0253cc253110119",
-      "id": "cap-codeql-alert-4-public-admission-output",
       "rationale": "Authorize the exact one-file trusted-control-source remediation in PR #448 for CodeQL alert #4. The CLI retains the capability-admission workflow's required decision.allowed and diff expansion/reduction length contract while redacting candidate-derived authorization, BOM, TCB, path, and semantic-detail values from public output; evaluation, prior authorization, and fail-closed behavior remain unchanged."
     },
     {
+      "id": "cap-codeql-autofix-blank-metadata-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "f8f3819da6f16794a8636fa2624c52cfe97fc4b577e60edb29fb0bd9f2f24bff",
-      "id": "cap-codeql-autofix-blank-metadata-compat",
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #439 that canonicalizes GitHub CodeQL Autofix optional description/started_at metadata when null or whitespace-only while preserving strict validation for non-blank metadata, the known-status readiness gate, semantic workflow capabilities, provenance checks, required checks, GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
+      "id": "cap-codeql-autofix-bom-tcb-registration",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "e8a02ea8efd4c5cd1ab2c964c3a9a789c7b882ef0a824ff57fd35399df77b390",
-      "id": "cap-codeql-autofix-bom-tcb-registration",
       "rationale": "Authorize the exact trusted-source boundary registration in PR #430 that protects the future compiler-generated .github/workflow-capability-bom-v1-codeql-autofix.json snapshot before any production CodeQL Autofix workflow or seventh-workflow snapshot is introduced."
     },
     {
+      "id": "cap-codeql-autofix-candidate-check-publisher",
       "baseBomSha256": "aa6254a566f466994baa2d7ab3f49c7084707e3d236c482de8e2638ca5f5e479",
       "candidateBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "expansionSha256": "fa5a3e4c270cb7abf8af391b74e2a8156f33006e3c7e127d6f71d2c414e2779f",
-      "id": "cap-codeql-autofix-candidate-check-publisher",
       "rationale": "Authorize #490's exact repository-dispatch admission for GitHub-token-created CodeQL Autofix PRs. Trusted default-branch code binds the open same-repo PR, exact main/base/head/branch and immutable controller receipt, treats candidate TCB bytes strictly as data, and may publish only trusted-capability-admission success to that candidate SHA. Other required checks, GHAS/review-thread proof, race checks, Protect Main, and exact-SHA merge remain fail-closed."
     },
     {
+      "id": "cap-codeql-autofix-compare-head-binding",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "83f42fe691347d8165d821dbdb1e7a45501df363d28f5707698a7544325f2337",
-      "id": "cap-codeql-autofix-compare-head-binding",
       "rationale": "Authorize the exact one-file trusted-control-source compatibility change in PR #452 that binds the expected GitHub CodeQL Autofix compare head to the sole commit in the real Compare API commits array while retaining exact base/merge-base ancestry, one-commit, changed-file, provenance, required-check, GHAS/review-thread, and protected auto-merge gates; fail-closed fixtures reject missing, duplicate, or wrong commit identities and semantic workflow capabilities remain unchanged."
     },
     {
+      "id": "cap-codeql-autofix-empty-description-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "be152a873b8f49f6b29b782052a5abe4105efbc6f557f81849a66738f4657307",
-      "id": "cap-codeql-autofix-empty-description-compat",
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #436 that canonicalizes GitHub CodeQL Autofix's observed empty description metadata to null while preserving the known-status gate, semantic workflow capabilities, provenance validation, required-check/GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
+      "id": "cap-codeql-autofix-multiline-description-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "86cfd0d8b0a61ee8cf88beecbce05a8a5fa52af626ca51fd657e8f5787a675bf",
-      "id": "cap-codeql-autofix-multiline-description-compat",
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #445 that canonicalizes GitHub CodeQL Autofix explanatory description whitespace, including line breaks and tabs, to single spaces while preserving NUL rejection, the maximum-length guard, strict started_at scalar validation, the known-status readiness gate, semantic workflow capabilities, provenance checks, required checks, GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
+      "id": "cap-codeql-autofix-production-controller",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "1d8d049a07c32c258cb3d2c8e94520523c5a2a7023d5d1be5ca1c7bef181041b",
-      "id": "cap-codeql-autofix-production-controller",
       "rationale": "Authorize the exact clean seven-workflow CodeQL Autofix production candidate in PR #433 after hardened GraphQL mutation classification and prior TCB registration. The expansion adds the default-branch-trusted controller, its canonical protected BOM snapshot and trusted controller/snapshot assembly source, with explicit branch, Autofix, pull-request, and graphql-mutation authority while retaining Protect Main as final merge arbiter."
     },
     {
+      "id": "cap-codeql-autofix-protected-check-bootstrap",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
       "expansionSha256": "221b97bd03284ed43abd455c6031ae8d5cac75cd51b6abe203ee44ba3e13cf89",
-      "id": "cap-codeql-autofix-protected-check-bootstrap",
       "rationale": "Authorize PR #456's exact CodeQL Autofix protected-check bootstrap. The trusted default-branch controller may approve only the three exact GitHub-token-created protected pull_request runs bound to the immutable Autofix head, wait for existing capability-admission and GHAS success on that head, then emit the existing codeql-autofix dispatch for immutable-receipt admission. Candidate execution, direct-main mutation, required checks, and final admission remain unchanged."
     },
     {
+      "id": "cap-codeql-autofix-protected-check-bootstrap-snapshot",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
       "expansionSha256": "2db55c82028a0e82f8d18d57466702390b0d8ed761c94b93d62114b447c2d5b7",
-      "id": "cap-codeql-autofix-protected-check-bootstrap-snapshot",
       "rationale": "Authorize the exact four-file successor to #456, adding only its compiler-generated canonical CodeQL Autofix capability snapshot. The trusted controller remains bound to the immutable Autofix head, exact protected checks, GHAS/review-thread proof, immutable receipt admission, and final Protect Main authority."
     },
     {
+      "id": "cap-codeql-autofix-protected-direct-merge",
       "baseBomSha256": "dc9249bc85f73d5774cc80660b06767975467828034e2ab2123bf01c19d75162",
       "candidateBomSha256": "326d0be824f7f5c0ae1913663531a96764371531b345151079e733172e4b1e6f",
       "expansionSha256": "fc73d0a4b18d6f955c7f01e2683469c4b71c6f0e69528ccd18638656285f1e28",
-      "id": "cap-codeql-autofix-protected-direct-merge",
       "rationale": "Authorize #471's exact two-file terminal authority change: replace GitHub-native auto-merge with an exact-admitted-head protected PR merge and post-merge CodeQL dispatch. Immutable receipt provenance, exact base/head checks, six required contexts, GHAS/review-thread admission, protected-check bootstrap, candidate execution boundaries, and Protect Main remain fail-closed; no bypass or direct-main mutation is introduced."
     },
     {
+      "id": "cap-codeql-autofix-protected-direct-merge-canonical",
       "baseBomSha256": "dc9249bc85f73d5774cc80660b06767975467828034e2ab2123bf01c19d75162",
       "candidateBomSha256": "326d0be824f7f5c0ae1913663531a96764371531b345151079e733172e4b1e6f",
       "expansionSha256": "0f731ed50bc9275ba2296ae3a5fae8194c1a374f2021a5b9433a85bd5a097c96",
-      "id": "cap-codeql-autofix-protected-direct-merge-canonical",
       "rationale": "Authorize #476's exact corrected two-file protected direct-merge candidate. The workflow is unchanged from the reviewed direct-merge design; the protected BOM is now the trusted compiler's exact canonical output, including exact-main CodeQL alert discovery, protected exact-SHA PR merge, and post-merge CodeQL dispatch. Immutable receipt provenance, six required contexts, GHAS/review-thread proof, final race checks, and Protect Main remain fail-closed."
     },
     {
+      "id": "cap-codeql-autofix-receipt-attempt-binding",
       "baseBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
       "candidateBomSha256": "dc9249bc85f73d5774cc80660b06767975467828034e2ab2123bf01c19d75162",
       "expansionSha256": "4fac041d6e416f9b27fd34ade2257460638ced9c9b1b2b5e968635b70ccb4e46",
-      "id": "cap-codeql-autofix-receipt-attempt-binding",
       "rationale": "Authorize PR #466's exact two-file compatibility change that binds Autofix provenance to the immutable receipt's recorded GitHub Actions attempt by fetching the attempt-specific run object. The change adds only one read-only API surface, removes the moving latest-attempt read, retains exact run/attempt/workflow/event/head validation, and leaves permissions, mutations, candidate execution, required checks, GHAS/review-thread proof, and Protect Main unchanged."
     },
     {
+      "id": "cap-codeql-autofix-tcb-registration",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "db3b64fcd4d5dedd135ede0971e06d9ea7990e051b3ae3f44079c21e518edb4d",
-      "id": "cap-codeql-autofix-tcb-registration",
       "rationale": "Authorize the exact trusted-source boundary registration that protects all current and future scripts/codeql_autofix_* controller modules before any write-capable CodeQL Autofix workflow is introduced."
     },
     {
+      "id": "cap-codeql-autofix-trim-metadata-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "3de3a794da5ff1e059e95c1f0a705daf39e60181a4fb63645541c6701334c2f6",
-      "id": "cap-codeql-autofix-trim-metadata-compat",
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #442 that canonicalizes surrounding whitespace in GitHub CodeQL Autofix optional description/started_at metadata while preserving null/blank canonicalization, strict non-blank type/length/control-character validation, the known-status readiness gate, semantic workflow capabilities, provenance checks, required checks, GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
+      "id": "cap-codeql-autofix-unsupported-continuation",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "88cd6bd2109f424d0a81447224ba8fcc637d5b30bf2f7d68810ad91f9186d708",
       "expansionSha256": "9579b4b395bdd6a742910c92c2a1679724be47e440d9e5c464ce7401f7757a9a",
-      "id": "cap-codeql-autofix-unsupported-continuation",
       "rationale": "Authorize #508's exact bounded continuation for unsupported CodeQL Autofix HTTP 422 outcomes. Trusted queue logic revalidates that exact failure, requires main to remain the bound base, and emits one existing codeql-autofix repository_dispatch with a strictly increasing afterAlert cursor. All other failures remain fail-closed; no alert is dismissed or candidate code executed; protected admission and merge checks remain mandatory."
     },
     {
+      "id": "cap-codeql-autofix-unsupported-continuation-current-tcb",
       "baseBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
       "candidateBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
       "expansionSha256": "6a3935eae5996adb5bdb4c4918ecb0ba0c9deda886f95b177339890e7b800098",
-      "id": "cap-codeql-autofix-unsupported-continuation-current-tcb",
       "rationale": "Authorize #523's exact current-main bounded continuation for the reviewed unsupported CodeQL Autofix HTTP 422 path, including the protected workflow and canonical BOM source boundary. Trusted logic revalidates only that exact unsupported failure, requires main to remain the bound base, and emits one existing codeql-autofix dispatch with a strictly increasing cursor. All other failures, protected checks, and exact-SHA merge gates remain fail-closed."
     },
     {
+      "id": "cap-codeql-autofix-unsupported-queue-semantics",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "expansionSha256": "4f79e4106eb591246e09a804198cbb1030c3667531c0548f8722d02d4ba153ac",
-      "id": "cap-codeql-autofix-unsupported-queue-semantics",
       "rationale": "Authorize #503's exact trusted-source queue semantics for GitHub CodeQL alerts whose Autofix creation request returns only the reviewed HTTP 422 'Alert is not supported by autofix.' outcome. The source grants no workflow or repository mutation authority, keeps every other API/network failure fail-closed, preserves exact-main alert binding and deterministic ordering, and permits later alerts to remain reachable rather than being starved by one unsupported finding."
     },
     {
+      "id": "cap-codeql-autofix-workflow-run-admission",
       "baseBomSha256": "326d0be824f7f5c0ae1913663531a96764371531b345151079e733172e4b1e6f",
       "candidateBomSha256": "aa6254a566f466994baa2d7ab3f49c7084707e3d236c482de8e2638ca5f5e479",
       "expansionSha256": "9bfe284fa2319244184e15655eef00c1532d87d3a1c433f92c2474f6e4a9a1c1",
-      "id": "cap-codeql-autofix-workflow-run-admission",
       "rationale": "Authorize #484's exact trusted workflow-run admission path for GitHub-token-created CodeQL Autofix PRs. Read-only Capability admission may start only from Profile quality requested runs on codeql-autofix branches, bind the sole bot PR's exact repository/base/head identity, and evaluate candidate bytes strictly as data. Protect Main, six required checks, candidate non-execution, provenance, GHAS, review-thread, and exact-SHA protected merge gates remain fail-closed."
     },
     {
+      "id": "cap-complete-autonomous-spotlight-convergence",
       "baseBomSha256": "cf57c64e11d6322af0c8e234fba72098ae02bcc5c29706e40800c4d0a8b38adc",
       "candidateBomSha256": "9266befda8c06d60c5e9fd8dfefc677149a92d177ee763b586778cdb6fd5eb61",
       "expansionSha256": "e38a445f873bdf3ecbfb83550d404064d4d4926db7fe408198b41a0b478d1659",
-      "id": "cap-complete-autonomous-spotlight-convergence",
       "rationale": "Authorize #601's frozen Spotlight convergence. Trusted admission binds proof to exact workflow run ID/attempt in external_id; normalized details_url is check metadata only. Spotlight adds one trusted-main post-check reviewer dispatch. Missing/active gates are a no-op; trusted admission is required before portyu9 approval; malformed or failed gates hard-fail. Protected checks, marker review, attestation, lease, expected-head merge, candidate non-execution, and no-bypass remain unchanged."
     },
     {
+      "id": "cap-dependabot-admission-pr-metadata-persistence-tcb",
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "expansionSha256": "62da5fe9ecf379b76d6b7d523fc3f73f0e5e223e3aaddf569972b3e009aa11d4",
-      "id": "cap-dependabot-admission-pr-metadata-persistence-tcb",
       "rationale": "Authorize #548's exact source-only Dependabot admission persistence fix. The trusted workflow already binds the full PR before checkout; this stores that same JSON under RUNNER_TEMP so checkout cannot delete it before release-provenance and delegated-admission evaluation. Semantic BOM, permissions, triggers, API/mutation surfaces, candidate-data boundary, check publisher, and merge authority are unchanged."
     },
     {
+      "id": "cap-dependabot-auto-approve-pr-workflows",
       "baseBomSha256": "14fae0e37c39df7314307f0fb35fd2df61bfa9a91d3c39f4b0f2765e320c60ba",
       "candidateBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "expansionSha256": "fe1330b557b934203b65689552bced42ab7975059ee50fa0aa1d7e3f341067b7",
-      "id": "cap-dependabot-auto-approve-pr-workflows",
       "rationale": "Authorize #554's exact frozen Dependabot workflow-approval capability. After trusted identity, pin provenance, exact-head/base, reconciliation, and canonical workflow-ID proof, the controller may approve only the three exact pull_request runs for CodeQL, Dependency Review, and Profile Quality when GitHub marks them action_required/waiting. No repository-wide approval relaxation, bypass, new trigger, or weakened merge/check rule is added; ambiguous or mismatched run sets fail closed."
     },
     {
+      "id": "cap-dependabot-automation-tcb-registration",
       "baseBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
       "candidateBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
       "expansionSha256": "7ecfd761d5d19440a2ac579c832695f45a8f1fe0a1f984dea527a42217834f4f",
-      "id": "cap-dependabot-automation-tcb-registration",
       "rationale": "Authorize #528's exact trust-boundary registration for scripts/dependabot_* so future Dependabot admission, reconciliation, and controller source is protected before any write-capable automation consumes it. This changes no workflow trigger, permission, semantic capability, or merge authority."
     },
     {
+      "id": "cap-dependabot-checkset-quiescence",
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "expansionSha256": "5075e720aa0b91c71bc9dd38f802ded08c0f38ed9efd1a2f9fee6da4c282a398",
-      "id": "cap-dependabot-checkset-quiescence",
       "rationale": "Authorize #563's source-only trusted-controller hardening. BOMs are identical: no permission, API, action, secret, OIDC, artifact, or mutation expansion. Terminal readiness now requires complete exact-head required-check responses plus a complete workflow_dispatch run list with zero active validation runs, so trusted validation and spawned CodeQL checks must be quiescent before mergeability and expected-head merge."
     },
     {
+      "id": "cap-dependabot-codeql-zero-touch-controller-bootstrap",
       "baseBomSha256": "f22d7bbda55748b7712226e3fbcf2a826c8a9358b99a8108d878a3992f2f24b2",
       "candidateBomSha256": "ff85ee9f7c852337afce588a1f2a79fe570cf7bba5aed9ac1df244c5afb7ded6",
       "expansionSha256": "c371bd71ec4ce24f3bb665079082a79ed2601db4e3c43dd3976b9f058c81c7a7",
-      "id": "cap-dependabot-codeql-zero-touch-controller-bootstrap",
       "rationale": "Authorize #533's exact zero-touch Dependabot CodeQL controller bootstrap. Trusted default-branch code accepts only one native grouped github/codeql-action PR, reconciles only deterministic governance bytes, delegates admission for that exact class, runs read-only protected validation on the exact head, dispatches CodeQL, and merges only the expected admitted head after all six contexts pass. No checks:write, security-events:write, bypass, or direct-main authority is added."
     },
     {
+      "id": "cap-dependabot-codeql-zero-touch-controller-final-tcb",
       "baseBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
       "candidateBomSha256": "ff85ee9f7c852337afce588a1f2a79fe570cf7bba5aed9ac1df244c5afb7ded6",
       "expansionSha256": "2ac5fda0f13a8926ced93e9e2935aa188e665be5b2fe1d9dff1d40871c8808b2",
-      "id": "cap-dependabot-codeql-zero-touch-controller-final-tcb",
       "rationale": "Authorize #533's exact final current-main zero-touch Dependabot CodeQL controller candidate after canonical eight-workflow BOM, runtime, and assurance closure. Trusted default-branch logic accepts only one native grouped github/codeql-action PR, reconciles deterministic governance bytes, delegates admission for that exact class, runs exact-head protected validation, dispatches CodeQL, and merges only the admitted expected head after all six contexts pass."
     },
     {
+      "id": "cap-dependabot-codeql-zero-touch-controller-hardened-tcb",
       "baseBomSha256": "0885c4bb086c2772420fbf0d0f1ced54d488ef798ea9447b839b7263d6151006",
       "candidateBomSha256": "381e1f75486804a8f58cfc4a95541ed7c1af0d45b61325ff3d4e49cfef18dc93",
       "expansionSha256": "787a3d24d2c89856868639ec924de295a99cd681e016b26702eaff3eb3f5aece",
-      "id": "cap-dependabot-codeql-zero-touch-controller-hardened-tcb",
       "rationale": "Authorize #533's hardened zero-touch Dependabot CodeQL controller after removing all candidate-code checkout/execution from trusted validation and switching privileged Capability Admission to literal main with exact-SHA reproof. GitHub CodeQL reports no new PR alerts. The controller still admits only the exact native grouped CodeQL release class, reconstructs candidate bytes as data, requires all six exact-head gates, and merges only the expected admitted head."
     },
     {
+      "id": "cap-dependabot-controller-main-wake-tcb",
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "expansionSha256": "503fc98763de0704d7a88661a71045bcb0a8aec3c9c53103133d75e535abcf84",
-      "id": "cap-dependabot-controller-main-wake-tcb",
       "rationale": "Authorize #543's main-completion wake hardening for the trusted Dependabot controller. Profile Quality or CodeQL completion on main may only wake default-branch code; every pass re-proves live main, native Dependabot PR identity, exact base/head, release provenance, and file closure before any update. No semantic BOM capability changes; this binds only the reviewed protected-source TCB digest. Exact-head merge gates remain unchanged."
     },
     {
+      "id": "cap-dependabot-controller-workflow-run-liveness-tcb",
       "baseBomSha256": "381e1f75486804a8f58cfc4a95541ed7c1af0d45b61325ff3d4e49cfef18dc93",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "expansionSha256": "5c1dfbcc599383cf837d18324e7c65789bef338392a209abb6e45b8eb36fc892",
-      "id": "cap-dependabot-controller-workflow-run-liveness-tcb",
       "rationale": "Authorize #539's event-driven Dependabot controller liveness TCB. Profile Quality or CodeQL completion may only wake trusted default-branch code; every pass re-proves live main, native bot PR identity, exact head/base, atomic CodeQL release closure, and provenance. Reconciliation dispatches data-only validation/admission, a no-checkout terminal job dispatches CodeQL only after three read-only gates, and merge remains exact-head after all six contexts pass."
     },
     {
+      "id": "cap-dependabot-duplicate-check-convergence",
       "baseBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "candidateBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "expansionSha256": "e8e5600822e69d3e1000ef582762c89b97273d39dce4e4b76db9b45fcc804b46",
-      "id": "cap-dependabot-duplicate-check-convergence",
       "rationale": "Authorize #556's exact trusted-controller source change for duplicate required-check convergence. The semantic capability BOM is unchanged. The controller now accepts one or more exact-head GitHub Actions runs for each required context only when every returned latest run is from app 15368, bound to the exact candidate head, completed, and successful. Any missing, pending, failed, mismatched, or foreign duplicate still blocks convergence and merge."
     },
     {
+      "id": "cap-dependabot-immutable-workflow-run-wake-binding",
       "baseBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "candidateBomSha256": "82945c362cc9c5aaf4df583b9a932d01fbf385671cca113919c98166bcef71b0",
       "expansionSha256": "3eea6a94686eadf56be86dad63b67cdaf3a19aa61794a7729adc5a5767b867e4",
-      "id": "cap-dependabot-immutable-workflow-run-wake-binding",
       "rationale": "Authorize #556's exact incremental immutable workflow-run wake binding after the already-accepted duplicate-check convergence. The controller may GET the triggering Actions run by immutable run ID, then fail closed on workflow identity, event, repository, head repository, branch, and SHA before any bot-PR approval or merge logic runs. This adds one read-only trusted wake surface only; existing approval, required checks, provenance, and exact-head merge authority are unchanged."
     },
     {
+      "id": "cap-dependabot-merge-eligibility-convergence",
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "expansionSha256": "31044d5572490dccd8a78eb9b48b960ca602b777cc399e7cac20ab46b7a40fcb",
-      "id": "cap-dependabot-merge-eligibility-convergence",
       "rationale": "Authorize #561's exact trusted-controller source change for bounded GitHub merge-eligibility propagation. No capability BOM, permission, API-surface, or mutation changes occur. After all six exact-head gates are green, the controller repeatedly re-proves the same open PR/base/head and refs, waits only for transient mergeability propagation, requires mergeable=true and mergeable_state=clean, and then uses the existing expected-head merge path."
     },
     {
+      "id": "cap-dependabot-merge-rejection-diagnostics",
       "baseBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
       "candidateBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
       "expansionSha256": "3f1bf1ccfa794c80dc3b1ba8e8146dbc588b63290807d9ca7b14bf0b831b40db",
-      "id": "cap-dependabot-merge-rejection-diagnostics",
       "rationale": "Authorize #581's exact source-only Dependabot terminal merge diagnostics. The semantic Workflow Capability BOM is unchanged. The trusted controller keeps the same merge endpoint, expected-head SHA, token permissions, merge method, required checks, review proof, quiescence, TOCTOU guards, and fail-closed behavior; it only preserves the existing merge API response body/stderr across a nonzero gh exit so GitHub's rejection reason can be surfaced."
     },
     {
+      "id": "cap-dependabot-merge-rejection-diagnostics-current-main",
       "baseBomSha256": "cdebc55d3881977b1658ace0b15f7d93b325809dca1c53c1247faef732a5d30b",
       "candidateBomSha256": "cdebc55d3881977b1658ace0b15f7d93b325809dca1c53c1247faef732a5d30b",
       "expansionSha256": "c3327c37c9850af86fdeea9a53df58b192f0a99ebcbe29e1b692cb708d7bab5c",
-      "id": "cap-dependabot-merge-rejection-diagnostics-current-main",
       "rationale": "Authorize #581's rebased source-only Dependabot terminal merge diagnostics measured against accepted main 41e57df753855c158a4f7c68daef01b739850495 and target tree 376d2b7eb8583e5589be5ee79eccc9de2923dc62. The semantic BOM is unchanged. No endpoint, permission, merge method, bypass, required check, review proof, quiescence, or TOCTOU guard changes; only existing merge API response body/stderr is preserved so GitHub's exact rejection is surfaced fail-closed."
     },
     {
+      "id": "cap-dependabot-native-author-association-tcb",
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "expansionSha256": "870f086500ff1f927662e267bbea4f168fa43d3ffda166d4ff713028f8d14475",
-      "id": "cap-dependabot-native-author-association-tcb",
       "rationale": "Authorize #541's source-only Dependabot identity fix after the live #516 controller proved GitHub may report native dependabot[bot] as CONTRIBUTOR. Exact bot login/ID/node/type/app URLs, same-repo Dependabot head, immutable expected head, and maintainer mutation lock remain authoritative. Only NONE or CONTRIBUTOR association is allowed; OWNER, MEMBER, COLLABORATOR, malformed, and unknown values remain fail-closed."
     },
     {
+      "id": "cap-dependabot-post-review-main-wake",
       "baseBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
       "candidateBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
       "expansionSha256": "9558ce47eaa297b49ea59ed7b5f5b135c76e61dceb8fa524fba6d09a03632828",
-      "id": "cap-dependabot-post-review-main-wake",
       "rationale": "Authorize #578's exact source-only Dependabot post-review liveness change. After an exact-base/head v2 APPROVED review by portyu9, the already-authorized Dependabot workflow dispatch targets main so the trusted controller can re-prove the current candidate immediately. No workflow capability BOM, endpoint, token permission, required check, merge method, bypass, or candidate execution authority changes."
     },
     {
+      "id": "cap-dependabot-terminal-convergence-tcb",
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "expansionSha256": "842e3ef45027f32131d6cc0b8c07bb638b45acb24c44241df26ef7cf3cfa288f",
-      "id": "cap-dependabot-terminal-convergence-tcb",
       "rationale": "Authorize #550's exact source-only Dependabot terminal convergence hardening. The trusted controller reuses existing main/head identity and six read-only check queries during a bounded post-dispatch convergence window, then enters the existing exact-head merge only after all required contexts succeed. Semantic BOM, triggers, permissions, mutation surfaces, candidate-data boundary, check publishers, merge endpoint, and bypass authority are unchanged."
     },
     {
+      "id": "cap-dependabot-validation-bind-full-pr-tcb",
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "expansionSha256": "b608f64512c9f406d46c6097f14c117dfab329a0c9733367a5f34c27c9cfb9aa",
-      "id": "cap-dependabot-validation-bind-full-pr-tcb",
       "rationale": "Authorize #546's exact full-PR Dependabot validation binder. The collection query still proves one matching open PR, then trusted validation hydrates GET /pulls/{number} so detailed state/draft/maintainer/base/head assertions use the complete GitHub PR schema. This adds one read-only API surface only; permissions, triggers, candidate-data boundary, delegated admission, CodeQL sequencing, and exact-head merge authority are unchanged."
     },
     {
+      "id": "cap-event-driven-spotlight-admission",
       "baseBomSha256": "89f398e66f130ac00709f621d41e092cc7b19dbaf998df4778212bc62380c3a3",
       "candidateBomSha256": "5aa10d81307af5e34fc072740b71fc37d99efaa2e980f976777ff12c6ae2894c",
       "expansionSha256": "e5e815e13d7001c780f234f2141ce26e25f93b51e6152af5bd4647e0d1dcc76c",
-      "id": "cap-event-driven-spotlight-admission",
       "rationale": "Authorize #584's exact event-driven Spotlight admission proof: trusted main workflow_dispatch independently binds the unique current-main bot PR, publishes an exact tuple-bound check, and terminal Spotlight merge re-proves that run/check live without reducing required checks, review proof, attestation, lease, or expected-head merge safeguards."
     },
     {
+      "id": "cap-exact-head-portyu9-bot-approval",
       "baseBomSha256": "7e4d61592ffa9988ab0d70ab74cfb7bd0ac12e20e4c54c3f4ee9395a083da16a",
       "candidateBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
       "expansionSha256": "4ba25fcfcebe6fcb5c339dd1105e3ddcee7d1c81ebd45c59e8fa217932b4f4e4",
-      "id": "cap-exact-head-portyu9-bot-approval",
       "rationale": "Authorize #568's exact-head real-user approval requirement across the governed bot merge lanes. Dependabot, CodeQL Autofix, and Spotlight must re-fetch the current PR/head and verify an APPROVED review authored by portyu9 for that exact commit before terminal merge proceeds. Existing six protected checks, trusted admission, branch/ref proofs, quiescence, workflow approval, and expected-head merge remain fail-closed; no bypass is added."
     },
     {
+      "id": "cap-exact-head-portyu9-bot-approval-final",
       "baseBomSha256": "7e4d61592ffa9988ab0d70ab74cfb7bd0ac12e20e4c54c3f4ee9395a083da16a",
       "candidateBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
       "expansionSha256": "f3d444de554265d254813bda3ce8efee7daadeabcb3e4f14b589b21249a078d7",
-      "id": "cap-exact-head-portyu9-bot-approval-final",
       "rationale": "Authorize #568's final frozen exact-head portyu9 approval design after canonical BOM and authority-contract stabilization. The three governed bot merge lanes add only read-only review-list proof before terminal merge, and Spotlight's historical authority projection is updated to preserve that current proof while comparing legacy item-9 semantics. Six protected checks, trusted admission, exact refs, quiescence, expected-head merge, and no-bypass policy remain fail-closed."
     },
     {
+      "id": "cap-final-event-driven-spotlight-admission",
       "baseBomSha256": "ffa1a9077f0184fa60d963dccaac69585b33c317375e04cb63028fa71e823bda",
       "candidateBomSha256": "5aa10d81307af5e34fc072740b71fc37d99efaa2e980f976777ff12c6ae2894c",
       "expansionSha256": "7396a2a10d1911bf0644e884b3e0c2714b946086f951b0430c9f3ad99e7aa9bd",
-      "id": "cap-final-event-driven-spotlight-admission",
       "rationale": "Authorize #584's final snapshot-aligned event-driven Spotlight admission proof. Trusted main workflow_dispatch independently binds the unique current-main bot PR and emits the exact candidate-head proof; terminal merge still requires protected checks, immutable portyu9 review, attested authorization, lease validity, and expected-head merge."
     },
     {
+      "id": "cap-final-spotlight-live-reproof",
       "baseBomSha256": "cdebc55d3881977b1658ace0b15f7d93b325809dca1c53c1247faef732a5d30b",
       "candidateBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "expansionSha256": "43ceb6fc2e5f95bac2e08c3754b37755ff8b1e223de5ec0df4f81d6ea10e3c50",
-      "id": "cap-final-spotlight-live-reproof",
       "rationale": "Authorize #584 frozen head 3e0d648d150d3f89b4b16dc0363e1fcab0d8bbba: event-driven trusted-main Spotlight admission plus terminal live run/check reproof. Actions access at terminal merge is read-only; exact protected checks, marker-bound portyu9 approval, attested authorization, lease, no-bypass ruleset, and expected-head merge remain required."
     },
     {
+      "id": "cap-final-spotlight-proof-selection-review-race",
       "baseBomSha256": "9266befda8c06d60c5e9fd8dfefc677149a92d177ee763b586778cdb6fd5eb61",
       "candidateBomSha256": "023edf4092ba15ff8e9777fe5501e64ab622e4bba1afa7fa7dac596bf64434a7",
       "expansionSha256": "cdced143775cb9fbc2e9b0e4d7acefada8fac5b21450af0e9e10b29528487936",
-      "id": "cap-final-spotlight-proof-selection-review-race",
       "rationale": "Authorize #606's frozen Spotlight race hardening. Merge authorization ignores scheduled admission proofs unless the embedded producer re-proves the exact trusted workflow_dispatch/main/base/bot/run identity. The existing post-check approval job bounded-waits for the exact marker-bound portyu9 review before authorization. Terminal merge remains non-polling, attested, lease-bound, required-check protected, and exact-head fail-closed."
     },
     {
+      "id": "cap-github-native-bot-pr-user-approval",
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "7e4d61592ffa9988ab0d70ab74cfb7bd0ac12e20e4c54c3f4ee9395a083da16a",
       "expansionSha256": "e62af7526df95c79367e55c793b74b20835afcb4aaa942adf8d8eca09ced8b3b",
-      "id": "cap-github-native-bot-pr-user-approval",
       "rationale": "Authorize #565's GitHub-native real-user bot PR approval workflow. The workflow is event-driven, read-only with GITHUB_TOKEN, executes no candidate code, independently binds recognized bot identity/current main/exact head/required checks/quiescence/unresolved threads, and uses the isolated portyu9-review-identity credential only for the final exact-head APPROVE review. Missing credential fails closed by no-op."
     },
     {
+      "id": "cap-native-governed-bot-review-check",
       "baseBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
       "candidateBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
       "expansionSha256": "5552c484daa2a1faf522cfc7d0899d37c66affcc3679b4a36bd9fc329d2dc3b3",
-      "id": "cap-native-governed-bot-review-check",
       "rationale": "Authorize #623's exact PR-native governed-bot review check. Profile Quality adds one read-only PR job that fetches the byte-locked evaluator only from the exact accepted base SHA. Governed bot lanes require the exact marker-bound portyu9 approval and honor manual CHANGES_REQUESTED veto/revocation semantics. Capability expands by one GET surface only; no write permission, candidate checkout, third-party action, review/merge/ref mutation, workflow dispatch, check reduction, or bypass is added."
     },
     {
+      "id": "cap-portyu9-bot-review-immutable-tuple-proof",
       "baseBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
       "candidateBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
       "expansionSha256": "48eb9745fc0832bea878d8ff5c68ff288043350b3fb21aff708b8961cdbf55f2",
-      "id": "cap-portyu9-bot-review-immutable-tuple-proof",
       "rationale": "Authorize #572's exact protected-source hardening after live proof that GitHub can carry old APPROVED reviews across an automated head update while reporting the new commit_id. Producer and all three merge consumers keep existing authority but now require a v2 review-body marker bound to exact base+head SHAs in addition to portyu9/APPROVED/commit_id. No new mutation authority or required-check reduction."
     },
     {
+      "id": "cap-post-review-event-driven-controller-wake",
       "baseBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
       "candidateBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
       "expansionSha256": "3e902e5c56496fd20922bb903bda0b34b6e95350a122b317b5f2efce0ce51d12",
-      "id": "cap-post-review-event-driven-controller-wake",
       "rationale": "Authorize #575's event-driven post-review convergence wake. Only after an exact-base/head v2 APPROVED review by portyu9, the reviewer may dispatch the governed Dependabot, CodeQL, or Spotlight workflow using Actions write while retaining read-only contents. The same reviewed candidate preserves the historical Autofix single-commit REST-compare consistency hardening from b8fa48282cf0ee2ea61d22a88a5de2debbe5465f."
     },
     {
+      "id": "cap-pr-native-dependabot-admission-context",
       "baseBomSha256": "82945c362cc9c5aaf4df583b9a932d01fbf385671cca113919c98166bcef71b0",
       "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "expansionSha256": "b9818e7eda3bec4d885d251a9e7dda22e459eb7cfcf34cd4d1f22841313eb19d",
-      "id": "cap-pr-native-dependabot-admission-context",
       "rationale": "Authorize #559's exact PR-native Dependabot admission gate. The existing trusted-main semantic proof remains authoritative; the added Profile Quality pull_request job is read-only, executes no candidate repository code, re-proves the exact live PR/base/head, and succeeds only after consuming the exact trusted-capability-admission-proof. This gives Protect Main an eligible-event GitHub Actions check without weakening admission, reviewer visibility, workflow approval, or exact-head merge."
     },
     {
+      "id": "cap-ruleset-drift-sentinel-readonly",
       "baseBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
       "candidateBomSha256": "fa6b3f682f08ecbb2cb0adea615f2946ad9379daa73df4ffb7c5b3138f5150b0",
       "expansionSha256": "5254000338d5a29916ea52d21d134ac0c8277e88150164236c9f09e6a5a791c9",
-      "id": "cap-ruleset-drift-sentinel-readonly",
       "rationale": "Authorize #633's exact read-only Ruleset drift sentinel: scheduled/manual trusted-main execution with contents: read only, pinned checkout, exact live-main SHA proof, and the existing fail-closed ruleset GET validator. No mutation, new secret, reviewer-token use, OIDC, artifact, bypass, direct-main write, or Administration authority is added; the frozen five-workflow base BOM remains unchanged and the sentinel is isolated as a one-workflow extension."
     },
     {
+      "id": "cap-ruleset-reconciler-least-authority",
       "baseBomSha256": "5922c1265624e7127bb5bfee82010dd4136c688b83e70f52fa531f6376ca5773",
       "candidateBomSha256": "409f02b03504ae37e101452782c6860dc2c385c61ae418a73c8330e63c4568b0",
       "expansionSha256": "c621744c042e5cc6d007ca51b6122ad7627f16e09a9bee27bfa9271f75f5a6e8",
-      "id": "cap-ruleset-reconciler-least-authority",
       "rationale": "Authorize #637's exact manual-only least-authority Protect Main reconciler: read-only planning, a dedicated repository-selected GitHub App installation token narrowed to Administration write, one reviewed ruleset PUT from exact predecessor to exact successor, immediate readback with no blind retry, and a separate OIDC receipt attestation. The reviewer token is never reused; no bypass, direct-main content write, candidate execution, or required-check reduction is added."
     },
     {
+      "id": "cap-ruleset-reconciler-runtime-hardening",
       "baseBomSha256": "fa6b3f682f08ecbb2cb0adea615f2946ad9379daa73df4ffb7c5b3138f5150b0",
       "candidateBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
       "expansionSha256": "4cf93a4d1aea269a9dcdbd1cf6b2c428429d379ecab62821fc412b0681c09f94",
-      "id": "cap-ruleset-reconciler-runtime-hardening",
       "rationale": "Authorize #637's hardened exact ruleset reconciler after runtime audit: serialized admin writes, corrected GitHub App JWT construction, explicit read-only redaction handling, exact selected-repository App/install token authority proofs, canonical capability attribution, expanded negative transition tests, and locked transaction guards. No reviewer-token reuse, bypass, direct-main content write, candidate execution, generic settings writer, or required-check reduction is introduced."
     },
     {
+      "id": "cap-spotlight-main-push-reconciliation",
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
       "expansionSha256": "671ca7710df1e6190b8dc5256a58ffb6b9f68d158e63aeb0c08a9bd08cba96bf",
-      "id": "cap-spotlight-main-push-reconciliation",
       "rationale": "Authorize #589's exact GitHub-native Spotlight main-push reconciliation wake using the nine-workflow composite capability BOM identities consumed by trusted admission. This corrects the ineffective #590 snapshot-only BOM hashes; the expansion remains exactly the reviewed push-on-main trigger plus canonical BOM trusted-control-source binding, with no new job permission, mutation surface, secret/reference, OIDC authority, or merge bypass."
     },
     {
+      "id": "cap-spotlight-post-success-cleanup",
       "baseBomSha256": "023edf4092ba15ff8e9777fe5501e64ab622e4bba1afa7fa7dac596bf64434a7",
       "candidateBomSha256": "d0b6bf53a561bcfb6c10218a5bb8e4660de5ec95e4a0e2182037caf4d30270ce",
       "expansionSha256": "a0e68a5a736628e479d6a2b7f56c626688fff407b1da29af522a80b8dbe310e4",
-      "id": "cap-spotlight-post-success-cleanup",
       "rationale": "Authorize #611's exact post-success Spotlight cleanup across the trusted control-source boundary. Runtime authority is reduced by removing the redundant Spotlight post-review workflow dispatch; the ADR core also accepts push so successful push-triggered Spotlight merges can emit clean decision receipts. No new mutation endpoint, permission, secret, OIDC authority, required-check reduction, merge capability, or bypass is introduced."
     },
     {
+      "id": "cap-spotlight-scheduled-admission-recovery",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
       "expansionSha256": "618ca9922bf513f39e060cc44ba605ccf7f979d750e07e50e551f4e46f8d474b",
-      "id": "cap-spotlight-scheduled-admission-recovery",
       "rationale": "Authorize #514's exact scheduled Spotlight admission recovery. Trusted default-branch admission may discover at most one exact current-main github-actions[bot] README-only deterministic candidate, reprove bot, ancestry, generated, and README bindings, evaluate candidate TCB bytes only as data, and publish only trusted-capability-admission on that head. No merge authority, candidate execution, bypass, or required-check reduction is introduced."
     },
     {
+      "id": "cap-spotlight-scheduled-admission-recovery-tcb",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
       "expansionSha256": "87a7c1acb3aa8f2e42cde5b2f519081c7bf8869f94d5f155a3c08073c6315f8e",
-      "id": "cap-spotlight-scheduled-admission-recovery-tcb",
       "rationale": "Authorize #518's exact final Spotlight scheduled admission recovery including the protected workflow and canonical BOM source boundary. Trusted code may discover and reprove at most one exact current-main deterministic github-actions[bot] README-only candidate, evaluate candidate TCB bytes only as data, and publish only trusted-capability-admission on that exact head. Merge authority and all other protected checks remain unchanged."
     },
     {
+      "id": "cap-workflow-capability-graphql-hardening",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "3db685a54ec049e30c30399f16a481384af84972015b704f179723698aab5ac5",
-      "id": "cap-workflow-capability-graphql-hardening",
       "rationale": "Authorize the exact trusted compiler hardening in PR #426 that makes gh api graphql fail closed, classifies GraphQL mutations explicitly, and exposes enablePullRequestAutoMerge to the semantic mutation inventory; the current six-workflow BOM remains byte-for-byte unchanged."
     }
-  ],
-  "ledgerId": "workflow-capability-expansion-authorizations-v1",
-  "repository": "portyu9/portyu9",
-  "schemaVersion": 1
+  ]
 }
