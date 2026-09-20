@@ -164,7 +164,7 @@ jobs:
           rm -f app-private-key.pem
           unset ADMIN_PRIVATE_KEY
 
-          GH_TOKEN="$APP_JWT" gh api "app/installations/${ADMIN_INSTALLATION_ID}" > installation.json
+          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" "app/installations/${ADMIN_INSTALLATION_ID}" > installation.json
           jq -e --argjson app "$ADMIN_APP_ID" --argjson installation "$ADMIN_INSTALLATION_ID" '
             .id == $installation and
             .app_id == $app and
@@ -177,7 +177,7 @@ jobs:
             ((.permissions.metadata // "read") == "read")
           ' installation.json >/dev/null
 
-          GH_TOKEN="$APP_JWT" gh api --method POST \
+          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --method POST \
             "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens" \
             -f 'repositories[]=portyu9' \
             -f 'permissions[administration]=write' > installation-token.json
