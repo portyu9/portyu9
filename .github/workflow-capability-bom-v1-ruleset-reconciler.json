@@ -275,7 +275,17 @@
             "main"
           ]
         },
-        "workflow_dispatch": {}
+        "workflow_dispatch": {},
+        "workflow_run": {
+          "types": [
+            "completed"
+          ],
+          "workflows": [
+            "CodeQL Autofix controller",
+            "Dependabot controller",
+            "Sync Spotlight profile links"
+          ]
+        }
       },
       "workflowPermissions": {
         "contents": "read"
