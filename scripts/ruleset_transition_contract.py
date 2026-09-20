@@ -201,6 +201,32 @@ def classify(value: Any, transition: dict[str, Any]) -> tuple[str, str]:
         return "successor", digest
     raise ValueError(f"live Protect Main state is outside the reviewed transition envelope: {digest}")
 
+def classify_observable(value: Any, transition: dict[str, Any]) -> tuple[str, str, bool]:
+    """Classify observable state without treating a redacted bypass list as an exact empty list.
+
+    Planning may establish a predecessor/successor hint when the ordinary Actions
+    token does not expose bypass_actors. The administration-scope writer must still
+    call classify() on its exact live response before any mutation.
+    """
+    require(isinstance(value, dict), "live ruleset detail must be an object")
+    exact_int(value.get("id"), RULESET_ID)
+    bypass = value.get("bypass_actors")
+    if isinstance(bypass, list):
+        state, digest = classify(value, transition)
+        return state, digest, True
+
+    projected = {
+        "id": value.get("id"),
+        "name": value.get("name"),
+        "target": value.get("target"),
+        "enforcement": value.get("enforcement"),
+        "bypass_actors": [],
+        "conditions": value.get("conditions"),
+        "rules": value.get("rules"),
+    }
+    state, digest = classify(projected, transition)
+    return state, digest, False
+
 
 def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -214,6 +240,17 @@ def self_test() -> None:
             "predecessor classification changed")
     require(classify({"id": RULESET_ID, **successor}, transition)[0] == "successor",
             "successor classification changed")
+    redacted_predecessor = {"id": RULESET_ID, **json.loads(json.dumps(predecessor))}
+    redacted_predecessor.pop("bypass_actors")
+    state, digest, bypass_observable = classify_observable(redacted_predecessor, transition)
+    require(state == "predecessor" and digest == transition["predecessorDigest"] and not bypass_observable,
+            "read-only predecessor classification changed")
+
+    redacted_successor = {"id": RULESET_ID, **json.loads(json.dumps(successor))}
+    redacted_successor["bypass_actors"] = None
+    state, digest, bypass_observable = classify_observable(redacted_successor, transition)
+    require(state == "successor" and digest == transition["successorDigest"] and not bypass_observable,
+            "read-only successor classification changed")
 
     mutated = json.loads(json.dumps(predecessor))
     mutated["rules"][2]["parameters"]["allowed_merge_methods"] = ["merge", "squash"]
@@ -253,6 +290,9 @@ def parser() -> argparse.ArgumentParser:
     classify_cmd = sub.add_parser("classify")
     classify_cmd.add_argument("--live", required=True, type=Path)
 
+    observable_cmd = sub.add_parser("classify-observable")
+    observable_cmd.add_argument("--live", required=True, type=Path)
+
     emit = sub.add_parser("emit-put")
     emit.add_argument("--transition-digest", required=True)
     emit.add_argument("--output", required=True, type=Path)
@@ -290,6 +330,16 @@ def main() -> int:
             value = json.loads(args.live.read_text(encoding="utf-8"))
             state, digest = classify(value, transition)
             print(json.dumps({"state": state, "digest": digest}, sort_keys=True))
+            return 0
+
+        if args.command == "classify-observable":
+            value = json.loads(args.live.read_text(encoding="utf-8"))
+            state, digest, bypass_observable = classify_observable(value, transition)
+            print(json.dumps({
+                "stateHint": state,
+                "expectedStateDigest": digest,
+                "bypassActorsObservable": bypass_observable,
+            }, sort_keys=True))
             return 0
 
         if args.command == "emit-put":
