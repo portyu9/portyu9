@@ -18,6 +18,8 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable
 
+import ruleset_transition_contract
+
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / ".github" / "rulesets" / "repository-rulesets-v1.json"
 DOC = ROOT / ".github" / "RULESETS.md"
@@ -442,6 +444,28 @@ def expect_collection_failure(collection: Any, expected: str) -> None:
 
 
 def self_test(payload: dict[str, Any]) -> None:
+    # The deliberate administration transition is pure source logic. Exercise its
+    # exact predecessor/successor classifier here so runtime-only ordering or digest
+    # regressions fail in ordinary protected PR validation before any admin run.
+    ruleset_transition_contract.self_test()
+    transition = ruleset_transition_contract.load_contract()
+    transition_predecessor = next(
+        rule for rule in transition["predecessor"]["rules"] if rule["type"] == "required_status_checks"
+    )["parameters"]["required_status_checks"]
+    transition_successor = next(
+        rule for rule in transition["successor"]["rules"] if rule["type"] == "required_status_checks"
+    )["parameters"]["required_status_checks"]
+    require(
+        frozenset(entry["context"] for entry in transition_predecessor) == LEGACY_CONTEXTS
+        and all(entry["integration_id"] == EXPECTED_INTEGRATION_ID for entry in transition_predecessor),
+        "ruleset transition predecessor no longer matches the exact legacy required-check state",
+    )
+    require(
+        frozenset(entry["context"] for entry in transition_successor) == EXPECTED_CONTEXTS
+        and all(entry["integration_id"] == EXPECTED_INTEGRATION_ID for entry in transition_successor),
+        "ruleset transition successor no longer matches the exact desired required-check state",
+    )
+
     encoded = json.dumps(payload)
     mutation = json.loads(encoded)
     mutation["rulesets"]["Protect Main"]["rules"]["pull_request"]["required_review_thread_resolution"] = False
