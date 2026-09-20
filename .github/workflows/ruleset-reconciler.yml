@@ -295,7 +295,7 @@ jobs:
           name: ruleset-reconciliation-receipt
           path: receipt
 
-      - name: Re-prove observable successor and receipt identity
+      - name: Re-prove successor and receipt identity
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_RECEIPT_SHA256: ${{ needs.reconcile.outputs.receipt_sha256 }}
