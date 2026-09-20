@@ -31,7 +31,7 @@ API = f"{API_ORIGIN}{API_PATH}"
 EXPECTED_INTEGRATION_ID = 15368
 EXPECTED_RULESET_NAMES = ("Protect Main", "Protect generated")
 
-LEGACY_CONTEXTS = frozenset({
+TRANSITION_PREDECESSOR_CONTEXTS = frozenset({
     "validate-contracts",
     "trusted-capability-admission",
     "integration-pinned-upstream",
@@ -39,8 +39,7 @@ LEGACY_CONTEXTS = frozenset({
     "analyze-actions",
     "analyze-python",
 })
-EXPECTED_CONTEXTS = frozenset({*LEGACY_CONTEXTS, "trusted-governed-bot-review"})
-LIVE_MIGRATION_CONTEXT_SETS = (LEGACY_CONTEXTS, EXPECTED_CONTEXTS)
+EXPECTED_CONTEXTS = frozenset({*TRANSITION_PREDECESSOR_CONTEXTS, "trusted-governed-bot-review"})
 
 
 class PublicRateLimitError(ValueError):
@@ -92,16 +91,10 @@ def validate_live_pr_parameters(pr: Any, desired: dict[str, Any]) -> None:
     )
 
 
-def required_status_context_map(
-    entries: Any,
-    expected_integration: int,
-    *,
-    allowed_context_sets: tuple[frozenset[str], ...] = (EXPECTED_CONTEXTS,),
-) -> dict[str, int]:
-    """Return exact required-check identities without coercion, duplicate collapse, or set drift."""
+def required_status_context_map(entries: Any, expected_integration: int) -> dict[str, int]:
+    """Return the exact final required-check identities without coercion or duplicate collapse."""
     require(isinstance(entries, list), "Protect Main: live required statuses are malformed")
-    allowed_sizes = {len(contexts) for contexts in allowed_context_sets}
-    require(len(entries) in allowed_sizes, "Protect Main: live required status count differs from contract")
+    require(len(entries) == len(EXPECTED_CONTEXTS), "Protect Main: live required status count differs from contract")
     observed: dict[str, int] = {}
     for entry in entries:
         require(isinstance(entry, dict), "Protect Main: live required status entry is malformed")
@@ -115,8 +108,8 @@ def required_status_context_map(
         )
         observed[context] = integration_id
     require(
-        frozenset(observed) in allowed_context_sets,
-        "Protect Main: live required status contexts differ from every reviewed migration state",
+        frozenset(observed) == EXPECTED_CONTEXTS,
+        "Protect Main: live required status contexts differ from the final reviewed state",
     )
     return observed
 
@@ -417,7 +410,6 @@ def validate_live(payload: dict[str, Any]) -> tuple[str, ...]:
     required_status_context_map(
         status.get("required_status_checks"),
         expected_integration,
-        allowed_context_sets=LIVE_MIGRATION_CONTEXT_SETS,
     )
 
     generated_rules = rule_map(details["Protect generated"])
@@ -456,7 +448,7 @@ def self_test(payload: dict[str, Any]) -> None:
         rule for rule in transition["successor"]["rules"] if rule["type"] == "required_status_checks"
     )["parameters"]["required_status_checks"]
     require(
-        frozenset(entry["context"] for entry in transition_predecessor) == LEGACY_CONTEXTS
+        frozenset(entry["context"] for entry in transition_predecessor) == TRANSITION_PREDECESSOR_CONTEXTS
         and all(entry["integration_id"] == EXPECTED_INTEGRATION_ID for entry in transition_predecessor),
         "ruleset transition predecessor no longer matches the exact legacy required-check state",
     )
@@ -597,31 +589,27 @@ def self_test(payload: dict[str, Any]) -> None:
         set(required_status_context_map(canonical_statuses, EXPECTED_INTEGRATION_ID)) == set(EXPECTED_CONTEXTS),
         "required status identity fixture changed",
     )
-    legacy_statuses = [
+    predecessor_statuses = [
         {"context": context, "integration_id": EXPECTED_INTEGRATION_ID}
-        for context in sorted(LEGACY_CONTEXTS)
+        for context in sorted(TRANSITION_PREDECESSOR_CONTEXTS)
     ]
-    require(
-        set(required_status_context_map(
-            legacy_statuses,
-            EXPECTED_INTEGRATION_ID,
-            allowed_context_sets=LIVE_MIGRATION_CONTEXT_SETS,
-        )) == set(LEGACY_CONTEXTS),
-        "legacy migration status fixture changed",
-    )
+    try:
+        required_status_context_map(predecessor_statuses, EXPECTED_INTEGRATION_ID)
+    except ValueError as exc:
+        require("count differs from contract" in str(exc),
+                f"final-state predecessor rejection self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("ruleset self-test accepted the retired six-context predecessor as live final state")
+
     unexpected_statuses = [dict(entry) for entry in canonical_statuses]
     unexpected_statuses[-1]["context"] = "unexpected-context"
     try:
-        required_status_context_map(
-            unexpected_statuses,
-            EXPECTED_INTEGRATION_ID,
-            allowed_context_sets=LIVE_MIGRATION_CONTEXT_SETS,
-        )
+        required_status_context_map(unexpected_statuses, EXPECTED_INTEGRATION_ID)
     except ValueError as exc:
-        require("every reviewed migration state" in str(exc),
-                f"migration status self-test failed for wrong reason: {exc}")
+        require("final reviewed state" in str(exc),
+                f"final-state context self-test failed for wrong reason: {exc}")
     else:
-        raise ValueError("ruleset self-test accepted an unreviewed migration context set")
+        raise ValueError("ruleset self-test accepted an unreviewed final context set")
     malformed_statuses = [dict(entry) for entry in canonical_statuses]
     malformed_statuses[0]["integration_id"] = float(EXPECTED_INTEGRATION_ID)
     try:
