@@ -393,7 +393,7 @@
       "baseBomSha256": "9cb8b46ec43b6e0eeb59503edaa3dc8910f824c90c3de5dd51368d55b02f5084",
       "candidateBomSha256": "d21ffde78b3297bdbec53823c4b5ffc78ecf308a24b68a0562aac907e40f1a61",
       "expansionSha256": "d7c5a760cb24e11ab4589e665ce8d89a7d8feb695827638a0bbe71bd05e9bc8b",
-      "rationale": "Authorize #650's exact central wake coverage for GitHub-token-suppressed autonomous main merges. Ruleset reconciler retains its reviewed push/manual entrypoints and adds completed workflow_run wakes only for the exact CodeQL Autofix controller, Dependabot controller, and Spotlight workflow name/path pairs. Trusted planning proves exact repository/main/source identity and no-ops when the controller head already equals current main; only a main advance continues into the unchanged exact predecessor/successor, repository-selected Administration App, serialized PUT, readback/no-blind-retry, receipt, attestation, and no-bypass path. No new permission, secret, API mutation, OIDC authority, merge authority, or required-check reduction is added."
+      "rationale": "Authorize #650's central wake coverage for GitHub-token-suppressed autonomous main merges. Ruleset reconciler adds completed workflow_run wakes only for the exact CodeQL Autofix, Dependabot, and Spotlight name/path pairs. Trusted planning proves repo/main identity and no-ops when the controller head equals current main; only a main advance reaches the unchanged predecessor/successor Administration-App reconcile, readback, receipt, attestation, and no-bypass path."
     },
     {
       "id": "cap-ruleset-reconciler-least-authority",
