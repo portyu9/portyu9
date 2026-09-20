@@ -1,6 +1,9 @@
 name: Ruleset reconciler
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -13,6 +16,8 @@ jobs:
     timeout-minutes: 4
     permissions:
       contents: read
+    outputs:
+      live_state: ${{ steps.plan.outputs.live_state }}
     steps:
       - name: Checkout exact trusted main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,8 +45,10 @@ jobs:
           STATE_HINT="$(jq -r .stateHint <<<"$OBSERVABLE")"
           test "$STATE_HINT" = "predecessor" -o "$STATE_HINT" = "successor"
           jq -e '.bypassActorsObservable | type == "boolean"' <<<"$OBSERVABLE" >/dev/null
+          echo "live_state=$STATE_HINT" >> "$GITHUB_OUTPUT"
 
   reconcile:
+    if: needs.plan.outputs.live_state == 'predecessor'
     name: ruleset-transition-admin-write
     needs: [plan]
     runs-on: ubuntu-24.04
