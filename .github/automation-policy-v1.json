@@ -413,6 +413,25 @@
         }
       }
     },
+    "ruleset-drift-sentinel": {
+      "path": ".github/workflows/ruleset-drift-sentinel.yml",
+      "triggers": [
+        "schedule",
+        "workflow_dispatch"
+      ],
+      "permissions": {
+        "contents": "read"
+      },
+      "jobs": {
+        "detect": {
+          "name": "ruleset-drift-sentinel",
+          "needs": [],
+          "permissions": {
+            "contents": "read"
+          }
+        }
+      }
+    },
     "spotlight-link-sync": {
       "path": ".github/workflows/spotlight-link-sync.yml",
       "triggers": [
