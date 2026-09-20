@@ -252,7 +252,21 @@ jobs:
             fi
 
             THREADS="$(gh api graphql               -F owner=portyu9               -F repo=portyu9               -F number="$PR_NUMBER"               -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}')"
-            test "$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' <<<"$THREADS")" = "false"
+            jq -e '
+              (.errors == null) and
+              (.data | type == "object") and
+              (.data.repository | type == "object") and
+              (.data.repository.pullRequest | type == "object") and
+              (.data.repository.pullRequest.reviewThreads | type == "object") and
+              (.data.repository.pullRequest.reviewThreads.pageInfo | type == "object") and
+              (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | type == "boolean") and
+              (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false) and
+              (.data.repository.pullRequest.reviewThreads.nodes | type == "array") and
+              all(
+                .data.repository.pullRequest.reviewThreads.nodes[];
+                (type == "object") and (.isResolved | type == "boolean")
+              )
+            ' <<<"$THREADS" >/dev/null
             test "$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$THREADS")" = "0"
 
             if check_required_contexts "$HEAD_SHA" "$LANE"; then

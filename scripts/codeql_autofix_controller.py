@@ -303,6 +303,7 @@ def security_evidence(ghas_response: Any, pr_alert_pages: Any, alert_number: int
 
 def unresolved_threads(value: Any) -> int:
     require(isinstance(value, Mapping), "review-thread GraphQL response must be an object")
+    require(value.get("errors") is None, "review-thread GraphQL response contains errors")
     data = value.get("data")
     require(isinstance(data, Mapping), "review-thread GraphQL response lacks data")
     repo = data.get("repository")
@@ -312,11 +313,21 @@ def unresolved_threads(value: Any) -> int:
     threads = pr.get("reviewThreads")
     require(isinstance(threads, Mapping), "review-thread response lacks reviewThreads")
     page_info = threads.get("pageInfo")
-    require(isinstance(page_info, Mapping) and page_info.get("hasNextPage") is False,
-            "review-thread pagination is incomplete")
+    require(isinstance(page_info, Mapping), "review-thread response lacks pageInfo")
+    require(type(page_info.get("hasNextPage")) is bool,
+            "review-thread hasNextPage must be a boolean")
+    require(page_info.get("hasNextPage") is False, "review-thread pagination is incomplete")
     nodes = threads.get("nodes")
     require(isinstance(nodes, list), "review-thread response lacks nodes")
-    return sum(1 for node in nodes if isinstance(node, Mapping) and node.get("isResolved") is False)
+
+    unresolved = 0
+    for node in nodes:
+        require(isinstance(node, Mapping), "review-thread response contains a non-object node")
+        resolved = node.get("isResolved")
+        require(type(resolved) is bool, "review-thread isResolved must be a boolean")
+        if resolved is False:
+            unresolved += 1
+    return unresolved
 
 
 def admit_existing(*, receipt: Any, workflow_run: Any, artifact: Any, pr_response: Any, main_ref: Any,
@@ -360,6 +371,51 @@ def self_test() -> None:
     located = locate_existing(pages, 4)
     require(located["exists"] and located["pr"]["originRunId"] == 123, "existing PR locator changed")
     require(flatten_pages([[1], [2]]) == [1, 2], "pagination flattening changed")
+
+    thread_response = {
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "reviewThreads": {
+                        "nodes": [{"isResolved": True}, {"isResolved": False}],
+                        "pageInfo": {"hasNextPage": False},
+                    }
+                }
+            }
+        }
+    }
+    require(unresolved_threads(thread_response) == 1, "review-thread positive fixture changed")
+    thread_mutations = (
+        ({**thread_response, "errors": [{"message": "partial GraphQL failure"}]}, "contains errors"),
+        ({"data": {"repository": {"pullRequest": {"reviewThreads": {
+            "nodes": [{"isResolved": False}], "pageInfo": {"hasNextPage": True}
+        }}}}}, "pagination is incomplete"),
+        ({"data": {"repository": {"pullRequest": {"reviewThreads": {
+            "nodes": [None], "pageInfo": {"hasNextPage": False}
+        }}}}}, "non-object node"),
+        ({"data": {"repository": {"pullRequest": {"reviewThreads": {
+            "nodes": [{}], "pageInfo": {"hasNextPage": False}
+        }}}}}, "isResolved must be a boolean"),
+        ({"data": {"repository": {"pullRequest": {"reviewThreads": {
+            "nodes": [{"isResolved": "false"}], "pageInfo": {"hasNextPage": False}
+        }}}}}, "isResolved must be a boolean"),
+        ({"data": {"repository": {"pullRequest": {"reviewThreads": {
+            "nodes": [{"isResolved": 0}], "pageInfo": {"hasNextPage": False}
+        }}}}}, "isResolved must be a boolean"),
+        ({"data": {"repository": {"pullRequest": {"reviewThreads": {
+            "nodes": [{"isResolved": None}], "pageInfo": {"hasNextPage": False}
+        }}}}}, "isResolved must be a boolean"),
+        ({"data": {"repository": {"pullRequest": {"reviewThreads": {
+            "nodes": [], "pageInfo": {"hasNextPage": "false"}
+        }}}}}, "hasNextPage must be a boolean"),
+    )
+    for mutated, expected in thread_mutations:
+        try:
+            unresolved_threads(mutated)
+        except ControllerError as exc:
+            require(expected in str(exc), f"review-thread self-test failed for the wrong reason: {exc}")
+        else:
+            require(False, f"review-thread self-test accepted forbidden mutation expected to trigger: {expected}")
 
     ref_branch = "codeql-autofix/alert-4/run-123"
     expected_ref = f"refs/heads/{ref_branch}"
