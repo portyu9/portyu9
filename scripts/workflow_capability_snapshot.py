@@ -3,7 +3,7 @@
 
 The item-12 five-workflow snapshot remains a canonical historical partition. Later trusted
 workflow extensions are stored as one-workflow canonical snapshots. This module is the only
-assembly boundary: callers receive one ordinary nine-workflow BOM object whose semantic and
+assembly boundary: callers receive one ordinary ten-workflow BOM object whose semantic and
 canonical representation is compared with live trusted compilation.
 """
 from __future__ import annotations
@@ -20,6 +20,7 @@ ADMISSION_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-capability-admi
 AUTOFIX_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-codeql-autofix.json"
 DEPENDABOT_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-dependabot-controller.json"
 BOT_PR_USER_APPROVAL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-bot-pr-user-approval.json"
+RULESET_DRIFT_SENTINEL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-drift-sentinel.json"
 EXPECTED_ROOT_KEYS = {"schemaVersion", "bomId", "repository", "automationPolicyId", "workflows"}
 
 
@@ -61,6 +62,7 @@ def load_combined() -> dict[str, Any]:
     autofix_extension = load_part(AUTOFIX_EXTENSION, "CodeQL Autofix BOM extension")
     dependabot_extension = load_part(DEPENDABOT_EXTENSION, "Dependabot controller BOM extension")
     bot_pr_user_approval_extension = load_part(BOT_PR_USER_APPROVAL_EXTENSION, "Bot PR user approval BOM extension")
+    ruleset_drift_sentinel_extension = load_part(RULESET_DRIFT_SENTINEL_EXTENSION, "Ruleset drift sentinel BOM extension")
     require(len(base["workflows"]) == 5, "base Workflow Capability BOM historical workflow count changed")
 
     one_workflow(
@@ -88,6 +90,12 @@ def load_combined() -> dict[str, Any]:
         path=".github/workflows/bot-pr-user-approval.yml",
         label="Bot PR user approval BOM extension",
     )
+    one_workflow(
+        ruleset_drift_sentinel_extension,
+        identity="ruleset-drift-sentinel",
+        path=".github/workflows/ruleset-drift-sentinel.yml",
+        label="Ruleset drift sentinel BOM extension",
+    )
 
     workflows = (
         list(base["workflows"])
@@ -95,6 +103,7 @@ def load_combined() -> dict[str, Any]:
         + list(autofix_extension["workflows"])
         + list(dependabot_extension["workflows"])
         + list(bot_pr_user_approval_extension["workflows"])
+        + list(ruleset_drift_sentinel_extension["workflows"])
     )
     ids = [workflow.get("id") for workflow in workflows]
     paths = [workflow.get("path") for workflow in workflows]
@@ -109,7 +118,7 @@ def load_combined() -> dict[str, Any]:
 
 def self_test() -> None:
     combined = load_combined()
-    require(len(combined["workflows"]) == 9, "composite Workflow Capability BOM must contain nine workflows")
+    require(len(combined["workflows"]) == 10, "composite Workflow Capability BOM must contain ten workflows")
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
             ".github/workflows/bot-pr-user-approval.yml",
@@ -120,6 +129,7 @@ def self_test() -> None:
             ".github/workflows/dependency-review.yml",
             ".github/workflows/profile-quality.yml",
             ".github/workflows/profile-stats.yml",
+            ".github/workflows/ruleset-drift-sentinel.yml",
             ".github/workflows/spotlight-link-sync.yml",
         ],
         "composite Workflow Capability BOM ordering changed",
@@ -130,8 +140,10 @@ def self_test() -> None:
             "composite Workflow Capability BOM lost Dependabot controller workflow")
     require(any(workflow["id"] == "bot-pr-user-approval" for workflow in combined["workflows"]),
             "composite Workflow Capability BOM lost bot PR user approval workflow")
+    require(any(workflow["id"] == "ruleset-drift-sentinel" for workflow in combined["workflows"]),
+            "composite Workflow Capability BOM lost ruleset drift sentinel workflow")
 
 
 if __name__ == "__main__":
     self_test()
-    print("Composite Workflow Capability BOM snapshot validation passed: 9 workflows.")
+    print("Composite Workflow Capability BOM snapshot validation passed: 10 workflows.")

@@ -1,0 +1,43 @@
+name: Ruleset drift sentinel
+
+on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ruleset-drift-sentinel
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: ruleset-drift-sentinel
+    if: github.repository == 'portyu9/portyu9' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Require current trusted main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          LIVE_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          test "$LIVE_MAIN_SHA" = "$EXPECTED_MAIN_SHA"
+
+      - name: Detect repository ruleset drift
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/validate-ruleset-contract.py --live

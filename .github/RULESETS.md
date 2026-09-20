@@ -46,3 +46,12 @@ GitHub currently redacts `bypass_actors` from both the short-lived read-only Act
 The unauthenticated public lookup is only a supplemental attempt to observe that already-documented admin-scope field. Hosted runners share public GitHub API quota with other traffic, so a proven public response of HTTP 403 with `X-RateLimit-Remaining: 0` leaves `bypass_actors` unobservable rather than failing an otherwise authenticated live control-plane comparison. That narrow condition is not interpreted as an empty bypass list; **all other public API failures remain merge-blocking**, and authenticated ruleset-read failures or any observable ruleset mismatch always fail closed.
 
 The connected mutation surface used for my repository may still lack GitHub administration authority. Source review can codify and verify desired ruleset state, but it must not claim a control-plane setting changed unless an authorized settings operation occurred and the observable live gate plus any admin-scope invariant checks return the expected state.
+
+
+## Read-only drift sentinel
+
+`.github/workflows/ruleset-drift-sentinel.yml` is the GitHub-native, read-only drift sentinel for the repository ruleset control plane. It runs every six hours and may also be dispatched manually, but the detection job executes only for `portyu9/portyu9` on `refs/heads/main`.
+
+The sentinel has only `contents: read`. It first reads the live `main` ref and requires it to equal the exact workflow source SHA, then executes the same fail-closed `validate-ruleset-contract.py --live` contract used by Profile Quality. It does not write repository settings, refs, pull requests, reviews, checks, workflow state, attestations, or artifacts, and it does not use `PORTYU9_BOT_REVIEW_TOKEN`.
+
+This sentinel is detection only. Any future ruleset remediation remains a separate, prior-authorized administration capability with a dedicated least-authority identity and exact predecessor/successor transition contract.
