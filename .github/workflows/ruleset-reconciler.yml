@@ -115,10 +115,16 @@ jobs:
           unset ADMIN_PRIVATE_KEY
 
           GH_TOKEN="$APP_JWT" gh api "app/installations/${ADMIN_INSTALLATION_ID}" > installation.json
-          jq -e --argjson installation "$ADMIN_INSTALLATION_ID" '
+          jq -e --argjson app "$ADMIN_APP_ID" --argjson installation "$ADMIN_INSTALLATION_ID" '
             .id == $installation and
+            .app_id == $app and
+            .target_type == "User" and
+            .account.id == 35150859 and
             .account.login == "portyu9" and
-            .repository_selection == "selected"
+            .repository_selection == "selected" and
+            .permissions.administration == "write" and
+            ((.permissions | keys - ["administration", "metadata"]) | length == 0) and
+            ((.permissions.metadata // "read") == "read")
           ' installation.json >/dev/null
 
           GH_TOKEN="$APP_JWT" gh api --method POST \
