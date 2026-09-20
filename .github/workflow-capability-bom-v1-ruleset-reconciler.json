@@ -131,16 +131,16 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-              "repository": "actions/checkout",
-              "step": "Checkout exact trusted main"
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve exact non-secret reconciliation receipt"
             },
             {
               "kind": "remote",
               "path": "",
-              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-              "repository": "actions/upload-artifact",
-              "step": "Preserve exact non-secret reconciliation receipt"
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
             }
           ],
           "apiSurfaces": [
