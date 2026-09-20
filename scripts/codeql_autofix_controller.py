@@ -230,13 +230,48 @@ def select_artifact(value: Any, run_id: int, alert_number: int) -> dict[str, Any
     run_id = positive_int(run_id, "artifact run id")
     alert_number = positive_int(alert_number, "artifact alert number")
     require(isinstance(value, Mapping), "artifact list response must be an object")
+    total_count = value.get("total_count")
+    require(
+        type(total_count) is int and total_count >= 0,
+        "artifact list total_count must be a nonnegative integer",
+    )
     artifacts = value.get("artifacts")
     require(isinstance(artifacts, list), "artifact list is missing artifacts")
+    require(total_count == len(artifacts), "artifact list response is incomplete")
+    require(total_count <= 100, "artifact list exceeds one complete reviewed page")
+
+    normalized: list[dict[str, Any]] = []
+    for raw in artifacts:
+        require(isinstance(raw, Mapping), "artifact list contains a non-object")
+        artifact = dict(raw)
+        positive_int(artifact.get("id"), "artifact id")
+        name = artifact.get("name")
+        require(isinstance(name, str) and bool(name), "artifact name must be a non-empty string")
+        normalized.append(artifact)
+
     expected = contract.receipt_name(run_id, alert_number)
-    matches = [item for item in artifacts if isinstance(item, Mapping) and item.get("name") == expected]
+    matches = [artifact for artifact in normalized if artifact["name"] == expected]
     require(len(matches) == 1, "expected exactly one controller receipt artifact")
-    artifact = dict(matches[0])
-    positive_int(artifact.get("id"), "receipt artifact id")
+    artifact = matches[0]
+
+    require(type(artifact.get("expired")) is bool, "receipt artifact expired must be a boolean")
+    require(artifact["expired"] is False, "controller receipt artifact is expired")
+    digest = artifact.get("digest")
+    require(
+        isinstance(digest, str) and contract.DIGEST.fullmatch(digest) is not None,
+        "receipt artifact digest must be a sha256 digest",
+    )
+    workflow_run = artifact.get("workflow_run")
+    require(isinstance(workflow_run, Mapping), "receipt artifact workflow_run must be an object")
+    require(
+        positive_int(workflow_run.get("id"), "receipt artifact workflow_run id") == run_id,
+        "receipt artifact belongs to another workflow run",
+    )
+    require(
+        workflow_run.get("head_branch") == DEFAULT_BRANCH,
+        "receipt artifact workflow_run head branch changed",
+    )
+    sha(workflow_run.get("head_sha"), "receipt artifact workflow_run head SHA")
     return artifact
 
 
@@ -371,6 +406,53 @@ def self_test() -> None:
     located = locate_existing(pages, 4)
     require(located["exists"] and located["pr"]["originRunId"] == 123, "existing PR locator changed")
     require(flatten_pages([[1], [2]]) == [1, 2], "pagination flattening changed")
+
+    artifact = {
+        "id": 91,
+        "name": contract.receipt_name(123, 4),
+        "expired": False,
+        "digest": "sha256:" + "d" * 64,
+        "workflow_run": {"id": 123, "head_branch": DEFAULT_BRANCH, "head_sha": base},
+    }
+    selected = select_artifact({"total_count": 1, "artifacts": [artifact]}, 123, 4)
+    require(selected["id"] == 91, "artifact-list positive fixture changed")
+    artifact_mutations = (
+        ({"artifacts": [artifact]}, "total_count must be a nonnegative integer"),
+        ({"total_count": True, "artifacts": [artifact]}, "total_count must be a nonnegative integer"),
+        ({"total_count": -1, "artifacts": [artifact]}, "total_count must be a nonnegative integer"),
+        ({"total_count": 2, "artifacts": [artifact]}, "artifact list response is incomplete"),
+        ({"total_count": 1, "artifacts": [None]}, "artifact list contains a non-object"),
+        ({"total_count": 1, "artifacts": [{**artifact, "id": 0}]}, "artifact id must be a positive integer"),
+        ({"total_count": 1, "artifacts": [{**artifact, "name": 7}]}, "artifact name must be a non-empty string"),
+        ({"total_count": 1, "artifacts": [{**artifact, "expired": "false"}]}, "receipt artifact expired must be a boolean"),
+        ({"total_count": 1, "artifacts": [{**artifact, "expired": True}]}, "controller receipt artifact is expired"),
+        ({"total_count": 1, "artifacts": [{**artifact, "digest": "sha256:not-a-digest"}]}, "receipt artifact digest must be a sha256 digest"),
+        ({"total_count": 1, "artifacts": [{**artifact, "workflow_run": None}]}, "receipt artifact workflow_run must be an object"),
+        ({"total_count": 1, "artifacts": [{**artifact, "workflow_run": {"id": "123", "head_branch": DEFAULT_BRANCH, "head_sha": base}}]}, "workflow_run id must be a positive integer"),
+        ({"total_count": 1, "artifacts": [{**artifact, "workflow_run": {"id": 124, "head_branch": DEFAULT_BRANCH, "head_sha": base}}]}, "belongs to another workflow run"),
+        ({"total_count": 1, "artifacts": [{**artifact, "workflow_run": {"id": 123, "head_branch": "other", "head_sha": base}}]}, "head branch changed"),
+        ({"total_count": 1, "artifacts": [{**artifact, "workflow_run": {"id": 123, "head_branch": DEFAULT_BRANCH, "head_sha": "BAD"}}]}, "lowercase SHA-40"),
+        ({"total_count": 1, "artifacts": [{**artifact, "name": "other"}]}, "expected exactly one controller receipt artifact"),
+        ({"total_count": 2, "artifacts": [artifact, {**artifact, "id": 92}]}, "expected exactly one controller receipt artifact"),
+    )
+    for mutated, expected in artifact_mutations:
+        try:
+            select_artifact(mutated, 123, 4)
+        except ControllerError as exc:
+            require(expected in str(exc), f"artifact-list self-test failed for the wrong reason: {exc}")
+        else:
+            require(False, f"artifact-list self-test accepted forbidden mutation expected to trigger: {expected}")
+
+    oversized_artifacts = {
+        "total_count": 101,
+        "artifacts": [{"id": index + 1, "name": f"other-{index}"} for index in range(101)],
+    }
+    try:
+        select_artifact(oversized_artifacts, 123, 4)
+    except ControllerError as exc:
+        require("exceeds one complete reviewed page" in str(exc), f"artifact-list page-bound self-test failed: {exc}")
+    else:
+        require(False, "artifact-list self-test accepted more than one reviewed page")
 
     thread_response = {
         "data": {
