@@ -389,6 +389,13 @@
       "rationale": "Authorize #559's exact PR-native Dependabot admission gate. The existing trusted-main semantic proof remains authoritative; the added Profile Quality pull_request job is read-only, executes no candidate repository code, re-proves the exact live PR/base/head, and succeeds only after consuming the exact trusted-capability-admission-proof. This gives Protect Main an eligible-event GitHub Actions check without weakening admission, reviewer visibility, workflow approval, or exact-head merge."
     },
     {
+      "id": "cap-review-thread-graphql-schema-hardening",
+      "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "expansionSha256": "5d6431769d38cf2addf390f12a9ab5aaa23b42f3550d5de8a8ad178fceb9a1b2",
+      "rationale": "Authorize #659's exact review-thread GraphQL schema hardening. The governed bot reviewer and CodeQL Autofix admission keep the same endpoints and authority but now reject GraphQL errors, incomplete pagination, malformed/non-object nodes, and non-boolean isResolved/hasNextPage primitives before review or merge authorization can proceed. The composite BOM is unchanged; no trigger, permission, secret, OIDC authority, mutation, protected-check reduction, merge capability, or bypass is added."
+    },
+    {
       "id": "cap-ruleset-drift-sentinel-readonly",
       "baseBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
       "candidateBomSha256": "fa6b3f682f08ecbb2cb0adea615f2946ad9379daa73df4ffb7c5b3138f5150b0",

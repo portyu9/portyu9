@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v47"
+VERSION = "governed-workflow-byte-identity-v48"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "b955651a86b5dd51d146ecaa173461d7853769fa",
+    ".github/workflows/bot-pr-user-approval.yml": "7a9058d07ce47c7848c061d6799fa0eb26c66cfb",
     ".github/workflows/profile-quality.yml": "14e7bde4668bb26f2e804aafbbcb24e4d4512518",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "3a2cae6fd4eecc295323a1ac329f7175ddc4c406",
@@ -410,6 +410,11 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         '[ "$active_profile" -le 1 ] || {',
         'multiple canonical active Profile Quality runs exist for ${head}.',
         'non-Profile-Quality workflow run(s) remain active.',
+        '(.errors == null) and',
+        '(.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | type == "boolean") and',
+        '(.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false) and',
+        '(.data.repository.pullRequest.reviewThreads.nodes | type == "array") and',
+        '(type == "object") and (.isResolved | type == "boolean")',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
     require(
