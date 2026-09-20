@@ -307,7 +307,9 @@ jobs:
           test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
           test "sha256:$(sha256sum receipt/ruleset-reconciliation-receipt.json | cut -d' ' -f1)" = "$EXPECTED_RECEIPT_SHA256"
           gh api "repos/portyu9/portyu9/rulesets/22148161" > live-attest.json
-          test "$(python3 scripts/ruleset_transition_contract.py classify --live live-attest.json | jq -r .state)" = "successor"
+          OBSERVABLE="$(python3 scripts/ruleset_transition_contract.py classify-observable --live live-attest.json)"
+          test "$(jq -r .stateHint <<<"$OBSERVABLE")" = "successor"
+          jq -e '.bypassActorsObservable | type == "boolean"' <<<"$OBSERVABLE" >/dev/null
 
       - name: Attest exact reviewed transition receipt
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
