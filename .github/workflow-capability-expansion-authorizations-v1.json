@@ -375,6 +375,13 @@
       "rationale": "Authorize #559's exact PR-native Dependabot admission gate. The existing trusted-main semantic proof remains authoritative; the added Profile Quality pull_request job is read-only, executes no candidate repository code, re-proves the exact live PR/base/head, and succeeds only after consuming the exact trusted-capability-admission-proof. This gives Protect Main an eligible-event GitHub Actions check without weakening admission, reviewer visibility, workflow approval, or exact-head merge."
     },
     {
+      "id": "cap-ruleset-drift-sentinel-readonly",
+      "baseBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
+      "candidateBomSha256": "fa6b3f682f08ecbb2cb0adea615f2946ad9379daa73df4ffb7c5b3138f5150b0",
+      "expansionSha256": "5254000338d5a29916ea52d21d134ac0c8277e88150164236c9f09e6a5a791c9",
+      "rationale": "Authorize #633's exact read-only Ruleset drift sentinel: scheduled/manual trusted-main execution with contents: read only, pinned checkout, exact live-main SHA proof, and the existing fail-closed ruleset GET validator. No mutation, new secret, reviewer-token use, OIDC, artifact, bypass, direct-main write, or Administration authority is added; the frozen five-workflow base BOM remains unchanged and the sentinel is isolated as a one-workflow extension."
+    },
+    {
       "id": "cap-spotlight-main-push-reconciliation",
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
