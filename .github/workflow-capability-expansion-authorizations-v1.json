@@ -389,6 +389,13 @@
       "rationale": "Authorize #637's exact manual-only least-authority Protect Main reconciler: read-only planning, a dedicated repository-selected GitHub App installation token narrowed to Administration write, one reviewed ruleset PUT from exact predecessor to exact successor, immediate readback with no blind retry, and a separate OIDC receipt attestation. The reviewer token is never reused; no bypass, direct-main content write, candidate execution, or required-check reduction is added."
     },
     {
+      "id": "cap-ruleset-reconciler-runtime-hardening",
+      "baseBomSha256": "fa6b3f682f08ecbb2cb0adea615f2946ad9379daa73df4ffb7c5b3138f5150b0",
+      "candidateBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
+      "expansionSha256": "4cf93a4d1aea269a9dcdbd1cf6b2c428429d379ecab62821fc412b0681c09f94",
+      "rationale": "Authorize #637's hardened exact ruleset reconciler after runtime audit: serialized admin writes, corrected GitHub App JWT construction, explicit read-only redaction handling, exact selected-repository App/install token authority proofs, canonical capability attribution, expanded negative transition tests, and locked transaction guards. No reviewer-token reuse, bypass, direct-main content write, candidate execution, generic settings writer, or required-check reduction is introduced."
+    },
+    {
       "id": "cap-spotlight-main-push-reconciliation",
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
