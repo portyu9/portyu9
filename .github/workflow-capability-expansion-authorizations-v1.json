@@ -298,6 +298,13 @@
       "rationale": "Authorize #546's exact full-PR Dependabot validation binder. The collection query still proves one matching open PR, then trusted validation hydrates GET /pulls/{number} so detailed state/draft/maintainer/base/head assertions use the complete GitHub PR schema. This adds one read-only API surface only; permissions, triggers, candidate-data boundary, delegated admission, CodeQL sequencing, and exact-head merge authority are unchanged."
     },
     {
+      "id": "cap-event-driven-ruleset-reconciliation",
+      "baseBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
+      "candidateBomSha256": "9cb8b46ec43b6e0eeb59503edaa3dc8910f824c90c3de5dd51368d55b02f5084",
+      "expansionSha256": "51aeb9f3e7e9f0b03b246f2c4761940bb21ef04f1a367988597aea56053a2759",
+      "rationale": "Authorize #645's exact event-driven Protect Main reconciler wake: every accepted main push performs read-only exact predecessor/successor classification, while the Administration-secret reconcile job runs only for the exact reviewed predecessor. The reviewed transition, selected-repository token narrowing, serialized PUT, readback/no-blind-retry, receipt, attestation, no-bypass policy, and required-check membership remain unchanged."
+    },
+    {
       "id": "cap-event-driven-spotlight-admission",
       "baseBomSha256": "89f398e66f130ac00709f621d41e092cc7b19dbaf998df4778212bc62380c3a3",
       "candidateBomSha256": "5aa10d81307af5e34fc072740b71fc37d99efaa2e980f976777ff12c6ae2894c",
