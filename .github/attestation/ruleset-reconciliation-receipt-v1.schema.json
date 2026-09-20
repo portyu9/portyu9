@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/ruleset-reconciliation-receipt-v1.schema.json",
+  "title": "Ruleset Reconciliation Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "repository",
+    "repositoryId",
+    "workflow",
+    "trustedMainSha",
+    "runId",
+    "runAttempt",
+    "rulesetId",
+    "endpoint",
+    "method",
+    "transitionId",
+    "transitionDigest",
+    "predecessorDigest",
+    "successorDigest",
+    "issuedAtEpoch",
+    "expiresAtEpoch",
+    "writeStatus",
+    "outcome"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "repository": {"const": "portyu9/portyu9"},
+    "repositoryId": {"const": 1355082509},
+    "workflow": {"const": ".github/workflows/ruleset-reconciler.yml"},
+    "trustedMainSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "runId": {"type": "integer", "minimum": 1},
+    "runAttempt": {"type": "integer", "minimum": 1},
+    "rulesetId": {"const": 22148161},
+    "endpoint": {"const": "repos/portyu9/portyu9/rulesets/22148161"},
+    "method": {"const": "PUT"},
+    "transitionId": {"const": "protect-main-add-trusted-governed-bot-review-v1"},
+    "transitionDigest": {"const": "sha256:06debdba96bd6567d08d2672e40e0df24ddc60cd194326d330ff712ce8cbb29b"},
+    "predecessorDigest": {"const": "sha256:cf24f32a0cec1a36e02d98003e9cf4899caac03c49c7f0015fcd9512849462d8"},
+    "successorDigest": {"const": "sha256:399e05f6b83be86e5d31c0fe45943f10c84ca9e15e51a02de9c87cdaf51fa4a1"},
+    "issuedAtEpoch": {"type": "integer", "minimum": 1},
+    "expiresAtEpoch": {"type": "integer", "minimum": 1},
+    "writeStatus": {"type": "integer", "minimum": 0},
+    "outcome": {
+      "enum": [
+        "applied",
+        "ambiguous-response-readback-applied"
+      ]
+    }
+  }
+}
