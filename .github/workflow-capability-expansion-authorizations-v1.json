@@ -39,6 +39,13 @@
       "rationale": "Authorize the exact one-file trusted-control-source remediation in PR #448 for CodeQL alert #4. The CLI retains the capability-admission workflow's required decision.allowed and diff expansion/reduction length contract while redacting candidate-derived authorization, BOM, TCB, path, and semantic-detail values from public output; evaluation, prior authorization, and fail-closed behavior remain unchanged."
     },
     {
+      "id": "cap-codeql-autofix-artifact-list-completeness",
+      "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "expansionSha256": "3e9984eaef7a2d47132f9472a6dfae6d2d18af4e487cdf92df45355aad86efb8",
+      "rationale": "Authorize #673's exact CodeQL Autofix artifact-list completeness hardening. The shared trusted parser now rejects truncated or oversized bounded artifact collections, malformed artifact identities, duplicate/missing receipt artifacts, and malformed selected receipt provenance before privileged admission/merge paths proceed. Composite Workflow Capability is unchanged; no trigger, permission, secret, endpoint, method, mutation, merge capability, required-check reduction, or bypass is added."
+    },
+    {
       "id": "cap-codeql-autofix-blank-metadata-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
@@ -408,6 +415,13 @@
       "candidateBomSha256": "fa6b3f682f08ecbb2cb0adea615f2946ad9379daa73df4ffb7c5b3138f5150b0",
       "expansionSha256": "5254000338d5a29916ea52d21d134ac0c8277e88150164236c9f09e6a5a791c9",
       "rationale": "Authorize #633's exact read-only Ruleset drift sentinel: scheduled/manual trusted-main execution with contents: read only, pinned checkout, exact live-main SHA proof, and the existing fail-closed ruleset GET validator. No mutation, new secret, reviewer-token use, OIDC, artifact, bypass, direct-main write, or Administration authority is added; the frozen five-workflow base BOM remains unchanged and the sentinel is isolated as a one-workflow extension."
+    },
+    {
+      "id": "cap-ruleset-reconciler-attestation-redaction",
+      "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "expansionSha256": "6c41642f8bc4f2b73059e5394e32c8798722ad7713f738f9af10cbc79b6f9d1b",
+      "rationale": "Authorize #679's exact Ruleset reconciliation receipt-attestation redaction fix. The low-authority attestation reuses the already-reviewed observable classifier when GitHub omits bypass_actors, while exact no-bypass predecessor/successor proof remains in the Administration-scoped writer and bound receipt. Composite Workflow Capability is unchanged; no trigger, permission, secret, endpoint, method, mutation, required-check reduction, merge capability, or bypass is added."
     },
     {
       "id": "cap-ruleset-reconciler-autonomous-wake-coverage",
