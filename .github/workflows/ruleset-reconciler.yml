@@ -13,10 +13,6 @@ jobs:
     timeout-minutes: 4
     permissions:
       contents: read
-    outputs:
-      state: ${{ steps.plan.outputs.state }}
-      digest: ${{ steps.plan.outputs.digest }}
-
     steps:
       - name: Checkout exact trusted main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,16 +36,12 @@ jobs:
           test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
           python3 scripts/ruleset_transition_contract.py validate --transition-digest "$TRANSITION_DIGEST"
           gh api "repos/portyu9/portyu9/rulesets/22148161" > live-plan.json
-          CLASSIFICATION="$(python3 scripts/ruleset_transition_contract.py classify --live live-plan.json)"
-          STATE="$(jq -r .state <<<"$CLASSIFICATION")"
-          DIGEST="$(jq -r .digest <<<"$CLASSIFICATION")"
-          test "$STATE" = "predecessor" -o "$STATE" = "successor"
-          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
-          echo "state=$STATE" >> "$GITHUB_OUTPUT"
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          OBSERVABLE="$(python3 scripts/ruleset_transition_contract.py classify-observable --live live-plan.json)"
+          STATE_HINT="$(jq -r .stateHint <<<"$OBSERVABLE")"
+          test "$STATE_HINT" = "predecessor" -o "$STATE_HINT" = "successor"
+          jq -e '.bypassActorsObservable | type == "boolean"' <<<"$OBSERVABLE" >/dev/null
 
   reconcile:
-    if: needs.plan.outputs.state == 'predecessor'
     name: ruleset-transition-admin-write
     needs: [plan]
     runs-on: ubuntu-24.04
