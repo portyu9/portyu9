@@ -340,7 +340,7 @@ def main() -> int:
                 "outcome": outcome,
             }
             write_json(args.output, evidence)
-            print(sha256(evidence))
+            print("sha256:" + hashlib.sha256(args.output.read_bytes()).hexdigest())
             return 0
 
         raise ValueError("unsupported command")
