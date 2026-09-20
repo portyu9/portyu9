@@ -270,6 +270,11 @@
         "vars": []
       },
       "triggers": {
+        "push": {
+          "branches": [
+            "main"
+          ]
+        },
         "workflow_dispatch": {}
       },
       "workflowPermissions": {
