@@ -178,6 +178,16 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
         and 'JWT_EXP="$(ISSUED_AT + 540))"' not in source,
         "ruleset reconciler GitHub App JWT expiry arithmetic changed",
     )
+    require(
+        source.count("scripts/ruleset_transition_contract.py classify-observable --live live-plan.json") == 1
+        and "needs.plan.outputs.state" not in source,
+        "ruleset reconciler planning must treat admin-scope redaction as non-authorizing observable evidence",
+    )
+    require(
+        source.count("scripts/ruleset_transition_contract.py classify --live live-prewrite.json") == 1
+        and source.count("scripts/ruleset_transition_contract.py classify --live live-after.json") == 1,
+        "ruleset reconciler admin writer lost exact prewrite/readback classification",
+    )
 
 
 def self_test() -> None:
