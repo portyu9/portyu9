@@ -20,8 +20,8 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - id: plan
-        name: Prove exact reviewed transition state
+      - name: Prove exact reviewed transition state
+        id: plan
         env:
           GH_TOKEN: ${{ github.token }}
           TRUSTED_MAIN_SHA: ${{ github.sha }}
@@ -64,8 +64,8 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - id: reconcile
-        name: Apply only exact reviewed predecessor to successor
+      - name: Apply only exact reviewed predecessor to successor
+        id: reconcile
         env:
           GH_TOKEN: ${{ github.token }}
           TRUSTED_MAIN_SHA: ${{ github.sha }}
