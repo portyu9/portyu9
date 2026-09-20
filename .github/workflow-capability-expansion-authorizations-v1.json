@@ -393,7 +393,7 @@
       "baseBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
       "candidateBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
       "expansionSha256": "66279c8982cd9da88c5d8835973ab24caf21f736cc339b8fb88da20355ce3c82",
-      "rationale": "Authorize #641's exact trusted verifier hardening: canonicalize semantically unordered ruleset rule/check arrays before hashing while preserving reviewed transition digests, exact context identities, integration id 15368, primitive types, no-bypass policy, PR parameters, target/enforcement/ref conditions, and merge-only policy; also run the pure transition self-tests in protected ruleset validation. No trigger, permission, secret, API, mutation, admin authority, bypass, or check membership is added."
+      "rationale": "Authorize #641's exact trusted verifier hardening: canonicalize semantically unordered ruleset rule/check arrays before hashing while preserving reviewed transition digests, exact context identities, integration id 15368, primitive types, no-bypass policy, PR parameters, target/ref conditions, and merge-only policy; also run pure transition self-tests in protected ruleset validation. No trigger, permission, secret, API, mutation, admin authority, bypass, or check membership is added."
     },
     {
       "id": "cap-ruleset-reconciler-runtime-hardening",
