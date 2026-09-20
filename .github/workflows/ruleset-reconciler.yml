@@ -147,7 +147,7 @@ jobs:
           JWT_IAT="$((ISSUED_AT - 60))"
           JWT_EXP="$((ISSUED_AT + 540))"
           printf '%s' "$ADMIN_PRIVATE_KEY" > app-private-key.pem
-          openssl pkey -in app-private-key.pem -nout >/dev/null
+          openssl pkey -in app-private-key.pem -noout >/dev/null
           JWT_UNSIGNED="$(python3 - "$ADMIN_APP_ID" "$JWT_IAT" "$JWT_EXP" <<'PY'
           import base64
           import json
