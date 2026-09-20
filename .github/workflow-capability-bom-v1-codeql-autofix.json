@@ -196,17 +196,17 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}",
               "method": "GET",
               "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}",
               "method": "GET",
               "mutating": false,
-              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+              "step": "Approve exact protected checks and queue admission retry"
             },
             {
               "client": "gh-api",

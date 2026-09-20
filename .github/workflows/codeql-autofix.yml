@@ -216,10 +216,16 @@ jobs:
           BRANCH="codeql-autofix/alert-${ALERT_NUMBER}/run-${RUN_ID}"
           TARGET_REF="refs/heads/${BRANCH}"
 
-          if gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" > existing-ref.json 2>/dev/null; then
+          gh api "repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}" > matching-refs.json
+          python3 scripts/codeql_autofix_controller.py ref-state \
+            --refs-file matching-refs.json \
+            --branch "$BRANCH" \
+            --out ref-state.json
+          REF_STATE="$(jq -r .state ref-state.json)"
+          test "$REF_STATE" = "absent" || {
             echo "ERROR: deterministic Autofix branch already exists without an open matching PR" >&2
             exit 1
-          fi
+          }
 
           gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs" \
             -f ref="$TARGET_REF" \
