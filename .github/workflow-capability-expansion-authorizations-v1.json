@@ -127,7 +127,7 @@
       "baseBomSha256": "d21ffde78b3297bdbec53823c4b5ffc78ecf308a24b68a0562aac907e40f1a61",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "expansionSha256": "acfa846339992d250e7932fa77eae190c80c4a31f1aaf0959b0c6a085fd8fcc4",
-      "rationale": "Authorize #655's exact fail-closed CodeQL Autofix branch-absence proof. The trusted controller replaces one suppressed exact-ref GET, where any read failure could be mistaken for absence before ref creation, with a successful matching-refs GET plus pure exact schema/cardinality validation. Only a validated empty inventory permits the existing deterministic git-ref POST; existing, non-exact, duplicate, malformed, or API-failed reads remain terminal. Permissions, write endpoints, protected checks, provenance, exact-head merge authority, and candidate non-execution are unchanged."
+      "rationale": "Authorize #655's exact fail-closed CodeQL Autofix branch-absence proof. Replace one suppressed exact-ref GET, where any read failure could be mistaken for absence before ref creation, with a successful matching-refs GET plus strict schema/cardinality validation. Only a validated empty inventory permits the existing ref POST; existing, non-exact, duplicate, malformed, or failed reads are terminal. Permissions, write endpoints, protected checks, provenance, and merge authority are unchanged."
     },
     {
       "id": "cap-codeql-autofix-tcb-registration",
