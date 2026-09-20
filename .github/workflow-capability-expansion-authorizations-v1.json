@@ -431,6 +431,13 @@
       "rationale": "Authorize #641's exact trusted verifier hardening: canonicalize semantically unordered ruleset rule/check arrays before hashing while preserving reviewed transition digests, exact context identities, integration id 15368, primitive types, no-bypass policy, PR parameters, target/ref conditions, and merge-only policy; also run pure transition self-tests in protected ruleset validation. No trigger, permission, secret, API, mutation, admin authority, bypass, or check membership is added."
     },
     {
+      "id": "cap-ruleset-reconciler-private-key-validation",
+      "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "expansionSha256": "1fd14df7f4059b742a1bb08a4051a6bf97517a8151cd01af36529d6524e29940",
+      "rationale": "Authorize #671's exact Ruleset reconciler private-key validation fix. The existing OpenSSL pkey check changes only the invalid -nout option to documented -noout before App-JWT signing. Composite Workflow Capability is unchanged; no trigger, permission, secret, endpoint, method, repository scope, ruleset mutation, receipt, attestation, protected-check reduction, merge capability, or bypass is added."
+    },
+    {
       "id": "cap-ruleset-reconciler-runtime-hardening",
       "baseBomSha256": "fa6b3f682f08ecbb2cb0adea615f2946ad9379daa73df4ffb7c5b3138f5150b0",
       "candidateBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
