@@ -5,6 +5,13 @@ on:
     branches:
       - main
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - CodeQL Autofix controller
+      - Dependabot controller
+      - Sync Spotlight profile links
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -39,6 +46,42 @@ jobs:
           [[ "$TRUSTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
           test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+
+          case "$GITHUB_EVENT_NAME" in
+            push|workflow_dispatch)
+              ;;
+            workflow_run)
+              WAKE_NAME="$(jq -r '.workflow_run.name' "$GITHUB_EVENT_PATH")"
+              WAKE_PATH="$(jq -r '.workflow_run.path' "$GITHUB_EVENT_PATH")"
+              WAKE_STATUS="$(jq -r '.workflow_run.status' "$GITHUB_EVENT_PATH")"
+              WAKE_HEAD_BRANCH="$(jq -r '.workflow_run.head_branch' "$GITHUB_EVENT_PATH")"
+              WAKE_HEAD_SHA="$(jq -r '.workflow_run.head_sha' "$GITHUB_EVENT_PATH")"
+              WAKE_REPOSITORY="$(jq -r '.workflow_run.repository.full_name' "$GITHUB_EVENT_PATH")"
+              WAKE_HEAD_REPOSITORY="$(jq -r '.workflow_run.head_repository.full_name' "$GITHUB_EVENT_PATH")"
+              test "$WAKE_STATUS" = "completed"
+              test "$WAKE_HEAD_BRANCH" = "main"
+              [[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+              test "$WAKE_REPOSITORY" = "$TARGET_REPOSITORY"
+              test "$WAKE_HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
+              case "$WAKE_NAME:$WAKE_PATH" in
+                "CodeQL Autofix controller:.github/workflows/codeql-autofix.yml"|"Dependabot controller:.github/workflows/dependabot-controller.yml"|"Sync Spotlight profile links:.github/workflows/spotlight-link-sync.yml")
+                  ;;
+                *)
+                  echo "ERROR: unreviewed workflow_run wake source." >&2
+                  exit 1
+                  ;;
+              esac
+              if [ "$WAKE_HEAD_SHA" = "$TRUSTED_MAIN_SHA" ]; then
+                echo "live_state=not-applicable" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              ;;
+            *)
+              echo "ERROR: unreviewed Ruleset reconciler event: $GITHUB_EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
+
           python3 scripts/ruleset_transition_contract.py validate --transition-digest "$TRANSITION_DIGEST"
           gh api "repos/portyu9/portyu9/rulesets/22148161" > live-plan.json
           OBSERVABLE="$(python3 scripts/ruleset_transition_contract.py classify-observable --live live-plan.json)"
