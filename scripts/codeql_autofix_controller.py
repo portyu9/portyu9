@@ -126,6 +126,28 @@ def locate_existing(pr_pages: Any, alert_number: int) -> dict[str, Any]:
     return {"exists": bool(matches), "pr": matches[0] if matches else None}
 
 
+def classify_branch_ref_inventory(value: Any, branch: str) -> dict[str, Any]:
+    require(isinstance(branch, str) and BRANCH_RE.fullmatch(branch) is not None,
+            "Autofix branch identity is malformed")
+    expected_ref = f"refs/heads/{branch}"
+    require(isinstance(value, list), "matching-ref response must be an array")
+    require(len(value) <= 1, "matching-ref response is ambiguous")
+
+    if not value:
+        return {"state": "absent", "ref": expected_ref, "sha": None}
+
+    entry = value[0]
+    require(isinstance(entry, Mapping), "matching-ref response contains a non-object")
+    observed_ref = entry.get("ref")
+    require(type(observed_ref) is str, "matching-ref response ref must be a string")
+    require(observed_ref == expected_ref, "matching-ref response contains a non-exact ref")
+    obj = entry.get("object")
+    require(isinstance(obj, Mapping), "matching-ref response is missing object")
+    require(obj.get("type") == "commit", "matching-ref response object type changed")
+    observed_sha = sha(obj.get("sha"), "matching-ref object SHA")
+    return {"state": "existing", "ref": expected_ref, "sha": observed_sha}
+
+
 def normalize_status(target: Mapping[str, Any], status_response: Any) -> dict[str, Any]:
     return discovery.normalize_autofix_status(target, status_response)
 
@@ -339,6 +361,38 @@ def self_test() -> None:
     require(located["exists"] and located["pr"]["originRunId"] == 123, "existing PR locator changed")
     require(flatten_pages([[1], [2]]) == [1, 2], "pagination flattening changed")
 
+    ref_branch = "codeql-autofix/alert-4/run-123"
+    expected_ref = f"refs/heads/{ref_branch}"
+    require(
+        classify_branch_ref_inventory([], ref_branch)
+        == {"state": "absent", "ref": expected_ref, "sha": None},
+        "matching-ref absence fixture changed",
+    )
+    existing_ref = [{"ref": expected_ref, "object": {"type": "commit", "sha": head}}]
+    require(
+        classify_branch_ref_inventory(existing_ref, ref_branch)
+        == {"state": "existing", "ref": expected_ref, "sha": head},
+        "matching-ref existing fixture changed",
+    )
+    ref_mutations = (
+        ({}, "must be an array"),
+        ([None], "non-object"),
+        ([{"ref": 7, "object": {"type": "commit", "sha": head}}], "ref must be a string"),
+        ([{"ref": expected_ref + "/nested", "object": {"type": "commit", "sha": head}}], "non-exact ref"),
+        ([{"ref": expected_ref}], "missing object"),
+        ([{"ref": expected_ref, "object": {"type": "tag", "sha": head}}], "object type changed"),
+        ([{"ref": expected_ref, "object": {"type": "commit", "sha": 7}}], "lowercase SHA-40"),
+        ([{"ref": expected_ref, "object": {"type": "commit", "sha": head}},
+          {"ref": expected_ref, "object": {"type": "commit", "sha": head}}], "ambiguous"),
+    )
+    for mutated, expected in ref_mutations:
+        try:
+            classify_branch_ref_inventory(mutated, ref_branch)
+        except ControllerError as exc:
+            require(expected in str(exc), f"matching-ref self-test failed for the wrong reason: {exc}")
+        else:
+            require(False, f"matching-ref self-test accepted forbidden mutation expected to trigger: {expected}")
+
     compare = {
         "base_commit": {"sha": base},
         "merge_base_commit": {"sha": base},
@@ -394,6 +448,11 @@ def main() -> int:
     p.add_argument("--status-file", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("ref-state")
+    p.add_argument("--refs-file", required=True)
+    p.add_argument("--branch", required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("commit")
     p.add_argument("--response-file", required=True)
     p.add_argument("--branch", required=True)
@@ -439,6 +498,8 @@ def main() -> int:
         target = load(args.target_file)
         require(isinstance(target, Mapping), "target file must be an object")
         dump(args.out, normalize_status(target, load(args.status_file)))
+    elif args.command == "ref-state":
+        dump(args.out, classify_branch_ref_inventory(load(args.refs_file), args.branch))
     elif args.command == "commit":
         dump(args.out, validate_commit_response(load(args.response_file), args.branch))
     elif args.command == "compare":
