@@ -22,6 +22,12 @@ DEPENDABOT_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-dependabot-con
 BOT_PR_USER_APPROVAL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-bot-pr-user-approval.json"
 RULESET_DRIFT_SENTINEL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-drift-sentinel.json"
 RULESET_RECONCILER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-reconciler.json"
+RULESET_RECONCILER_WORKFLOW = ROOT / ".github/workflows/ruleset-reconciler.yml"
+RULESET_RECONCILER_ADMIN_SECRETS = [
+    "PORTYU9_RULESET_ADMIN_APP_ID",
+    "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
+    "PORTYU9_RULESET_ADMIN_PRIVATE_KEY",
+]
 EXPECTED_ROOT_KEYS = {"schemaVersion", "bomId", "repository", "automationPolicyId", "workflows"}
 
 
@@ -125,8 +131,58 @@ def load_combined() -> dict[str, Any]:
     return combined
 
 
+def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
+    matches = [workflow for workflow in combined["workflows"] if workflow.get("id") == "ruleset-reconciler"]
+    require(len(matches) == 1, "composite Workflow Capability BOM must contain exactly one ruleset reconciler")
+    workflow = matches[0]
+    require(
+        workflow["references"]["secrets"] == RULESET_RECONCILER_ADMIN_SECRETS,
+        "ruleset reconciler workflow secret inventory changed",
+    )
+    jobs = {job["id"]: job for job in workflow["jobs"]}
+    reconcile = jobs["reconcile"]
+    require(
+        reconcile["references"]["secrets"] == RULESET_RECONCILER_ADMIN_SECRETS,
+        "ruleset reconciler writer secret inventory changed",
+    )
+    require(
+        reconcile["mutations"] == [
+            {
+                "class": "github-api-post",
+                "method": "POST",
+                "step": "Apply only exact reviewed predecessor to successor",
+                "target": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens",
+            },
+            {
+                "class": "github-api-put",
+                "method": "PUT",
+                "step": "Apply only exact reviewed predecessor to successor",
+                "target": "repos/portyu9/portyu9/rulesets/22148161",
+            },
+        ],
+        "ruleset reconciler writer mutation inventory changed",
+    )
+    source = RULESET_RECONCILER_WORKFLOW.read_text(encoding="utf-8")
+    require("PORTYU9_BOT_REVIEW_TOKEN" not in source,
+            "ruleset reconciler must never reference the bot-review credential")
+    require(
+        source.count(
+            "    concurrency:\n"
+            "      group: ruleset-reconciler-admin-write\n"
+            "      cancel-in-progress: false\n"
+        ) == 1,
+        "ruleset reconciler admin writer lost non-cancellable serialization",
+    )
+    require(
+        source.count('          JWT_EXP="$((ISSUED_AT + 540))"\n') == 1
+        and 'JWT_EXP="$(ISSUED_AT + 540))"' not in source,
+        "ruleset reconciler GitHub App JWT expiry arithmetic changed",
+    )
+
+
 def self_test() -> None:
     combined = load_combined()
+    validate_ruleset_reconciler_safety(combined)
     require(len(combined["workflows"]) == 11, "composite Workflow Capability BOM must contain eleven workflows")
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
