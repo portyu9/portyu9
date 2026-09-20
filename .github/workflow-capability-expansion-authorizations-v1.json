@@ -39,6 +39,13 @@
       "rationale": "Authorize the exact one-file trusted-control-source remediation in PR #448 for CodeQL alert #4. The CLI retains the capability-admission workflow's required decision.allowed and diff expansion/reduction length contract while redacting candidate-derived authorization, BOM, TCB, path, and semantic-detail values from public output; evaluation, prior authorization, and fail-closed behavior remain unchanged."
     },
     {
+      "id": "cap-codeql-autofix-artifact-list-completeness",
+      "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "expansionSha256": "3e9984eaef7a2d47132f9472a6dfae6d2d18af4e487cdf92df45355aad86efb8",
+      "rationale": "Authorize #673's exact CodeQL Autofix artifact-list completeness hardening. The shared trusted parser now rejects truncated or oversized bounded artifact collections, malformed artifact identities, duplicate/missing receipt artifacts, and malformed selected receipt provenance before privileged admission/merge paths proceed. Composite Workflow Capability is unchanged; no trigger, permission, secret, endpoint, method, mutation, merge capability, required-check reduction, or bypass is added."
+    },
+    {
       "id": "cap-codeql-autofix-blank-metadata-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
