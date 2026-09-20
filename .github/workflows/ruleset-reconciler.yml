@@ -54,6 +54,9 @@ jobs:
     needs: [plan]
     runs-on: ubuntu-24.04
     timeout-minutes: 8
+    concurrency:
+      group: ruleset-reconciler-admin-write
+      cancel-in-progress: false
     environment: ruleset-admin-identity
     permissions:
       contents: read
@@ -82,6 +85,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          trap 'rm -f app-private-key.pem installation-token.json' EXIT
           echo "mutated=false" >> "$GITHUB_OUTPUT"
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
           test "$GITHUB_REF" = "refs/heads/main"
@@ -99,7 +103,7 @@ jobs:
           ISSUED_AT="$(date +%s)"
           EXPIRES_AT="$((ISSUED_AT + 480))"
           JWT_IAT="$((ISSUED_AT - 60))"
-          JWT_EXP="$(ISSUED_AT + 540))"
+          JWT_EXP="$((ISSUED_AT + 540))"
           printf '%s' "$ADMIN_PRIVATE_KEY" > app-private-key.pem
           openssl pkey -in app-private-key.pem -nout >/dev/null
           JWT_UNSIGNED="$(python3 - "$ADMIN_APP_ID" "$JWT_IAT" "$JWT_EXP" <<'PY'
@@ -116,6 +120,7 @@ jobs:
           JWT_SIGNATURE="$(printf '%s' "$JWT_UNSIGNED" | openssl dgst -binary -sha256 -sign app-private-key.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
           APP_JWT="${JWT_UNSIGNED}.${JWT_SIGNATURE}"
           rm -f app-private-key.pem
+          unset ADMIN_PRIVATE_KEY
 
           GH_TOKEN="$APP_JWT" gh api "app/installations/${ADMIN_INSTALLATION_ID}" > installation.json
           jq -e --argjson installation "$ADMIN_INSTALLATION_ID" '
@@ -136,6 +141,8 @@ jobs:
           ' installation-token.json >/dev/null
           ADMIN_TOKEN="$(jq -r .token installation-token.json)"
           TOKEN_EXPIRES_AT="$(jq -r .expires_at installation-token.json)"
+          rm -f installation-token.json
+          unset APP_JWT
           TOKEN_EXPIRES_EPOCH="$(python3 - "$TOKEN_EXPIRES_AT" <<'PY'
           from datetime import datetime
           import sys
