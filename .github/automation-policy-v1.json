@@ -685,6 +685,44 @@
           }
         }
       }
+    },
+    "ruleset-reconciler": {
+      "path": ".github/workflows/ruleset-reconciler.yml",
+      "triggers": [
+        "workflow_dispatch"
+      ],
+      "permissions": {
+        "contents": "read"
+      },
+      "jobs": {
+        "plan": {
+          "name": "ruleset-transition-plan-read-only",
+          "needs": [],
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "reconcile": {
+          "name": "ruleset-transition-admin-write",
+          "needs": [
+            "plan"
+          ],
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "attest": {
+          "name": "attest-ruleset-reconciliation-receipt-write-only",
+          "needs": [
+            "reconcile"
+          ],
+          "permissions": {
+            "contents": "read",
+            "id-token": "write",
+            "attestations": "write"
+          }
+        }
+      }
     }
   },
   "transactionMachines": {

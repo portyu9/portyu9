@@ -55,12 +55,16 @@ def validate_snapshot() -> tuple[int, int]:
     workflow_capability_snapshot.self_test()
     capability_admission_workflow_contract.self_test()
     capability_admission_workflow_contract.validate()
-    workflow_capability_admission.self_test()
 
     compiled = compiler.compile_bom()
     difference = first_difference(compiled, snapshot)
     if difference is not None:
         raise ValueError(f"Workflow Capability BOM snapshot differs from compiled source: {difference}")
+
+    # Run the admission self-test only after canonical snapshot parity is proven so
+    # a stale snapshot reports its exact first mismatch instead of surfacing as a
+    # generic trusted-repository capability drift.
+    workflow_capability_admission.self_test()
 
     require(compiler.canonical_json(snapshot) == compiler.canonical_json(compiled),
             "composite Workflow Capability BOM canonical bytes differ from live compilation")
@@ -70,7 +74,7 @@ def validate_snapshot() -> tuple[int, int]:
 
     workflows = compiled["workflows"]
     jobs = sum(len(workflow["jobs"]) for workflow in workflows)
-    require(len(workflows) == 10, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
+    require(len(workflows) == 11, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
     require(jobs > 0, "Workflow Capability BOM contains no jobs")
     return len(workflows), jobs
 

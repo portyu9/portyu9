@@ -22,9 +22,14 @@ PROTECTED_EXACT = {
     ".github/workflow-capability-bom-v1-capability-admission.json",
     ".github/workflow-capability-bom-v1-codeql-autofix.json",
     ".github/workflow-capability-bom-v1-dependabot-controller.json",
+    ".github/attestation/ruleset-reconciliation-receipt-v1.schema.json",
+    ".github/rulesets/ruleset-transitions-v1.json",
+    ".github/workflow-capability-bom-v1-ruleset-reconciler.json",
+    ".github/workflows/ruleset-reconciler.yml",
     ".github/workflows/capability-admission.yml",
     ".github/workflows/dependabot-controller.yml",
     "scripts/profile_stats_decision_receipt.py",
+    "scripts/ruleset_transition_contract.py",
     "scripts/spotlight_decision_receipt.py",
     "scripts/spotlight_profile_links.py",
     "scripts/trusted_workflow_capability.py",
@@ -153,6 +158,15 @@ def self_test() -> None:
             "TCB self-test lost Dependabot controller BOM extension")
     require(is_protected_path(".github/workflows/dependabot-controller.yml"),
             "TCB self-test lost privileged Dependabot controller workflow")
+    for path in (
+        ".github/attestation/ruleset-reconciliation-receipt-v1.schema.json",
+        ".github/rulesets/ruleset-transitions-v1.json",
+        ".github/workflow-capability-bom-v1-ruleset-reconciler.json",
+        ".github/workflows/ruleset-reconciler.yml",
+        "scripts/ruleset_transition_contract.py",
+    ):
+        require(is_protected_path(path),
+                f"TCB self-test lost ruleset reconciler trusted source: {path}")
     for path in (
         "scripts/codeql_autofix_admission.py",
         "scripts/codeql_autofix_controller_contract.py",

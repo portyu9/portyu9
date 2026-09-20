@@ -1,0 +1,268 @@
+name: Ruleset reconciler
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: ruleset-transition-plan-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Prove exact reviewed transition state
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRANSITION_DIGEST: sha256:06debdba96bd6567d08d2672e40e0df24ddc60cd194326d330ff712ce8cbb29b
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$TRUSTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
+          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+          python3 scripts/ruleset_transition_contract.py validate --transition-digest "$TRANSITION_DIGEST"
+          gh api "repos/portyu9/portyu9/rulesets/22148161" > live-plan.json
+          OBSERVABLE="$(python3 scripts/ruleset_transition_contract.py classify-observable --live live-plan.json)"
+          STATE_HINT="$(jq -r .stateHint <<<"$OBSERVABLE")"
+          test "$STATE_HINT" = "predecessor" -o "$STATE_HINT" = "successor"
+          jq -e '.bypassActorsObservable | type == "boolean"' <<<"$OBSERVABLE" >/dev/null
+
+  reconcile:
+    name: ruleset-transition-admin-write
+    needs: [plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    concurrency:
+      group: ruleset-reconciler-admin-write
+      cancel-in-progress: false
+    environment: ruleset-admin-identity
+    permissions:
+      contents: read
+    outputs:
+      mutated: ${{ steps.reconcile.outputs.mutated }}
+      outcome: ${{ steps.reconcile.outputs.outcome }}
+      receipt_sha256: ${{ steps.reconcile.outputs.receipt_sha256 }}
+
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Apply only exact reviewed predecessor to successor
+        id: reconcile
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRANSITION_DIGEST: sha256:06debdba96bd6567d08d2672e40e0df24ddc60cd194326d330ff712ce8cbb29b
+          ADMIN_APP_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_APP_ID }}
+          ADMIN_INSTALLATION_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_INSTALLATION_ID }}
+          ADMIN_PRIVATE_KEY: ${{ secrets.PORTYU9_RULESET_ADMIN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f app-private-key.pem installation-token.json' EXIT
+          echo "mutated=false" >> "$GITHUB_OUTPUT"
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$TRUSTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ADMIN_APP_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$ADMIN_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
+          test -n "$ADMIN_PRIVATE_KEY"
+          test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
+          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+          python3 scripts/ruleset_transition_contract.py validate --transition-digest "$TRANSITION_DIGEST"
+          python3 scripts/ruleset_transition_contract.py emit-put \
+            --transition-digest "$TRANSITION_DIGEST" \
+            --output ruleset-put.json
+
+          ISSUED_AT="$(date +%s)"
+          EXPIRES_AT="$((ISSUED_AT + 480))"
+          JWT_IAT="$((ISSUED_AT - 60))"
+          JWT_EXP="$((ISSUED_AT + 540))"
+          printf '%s' "$ADMIN_PRIVATE_KEY" > app-private-key.pem
+          openssl pkey -in app-private-key.pem -nout >/dev/null
+          JWT_UNSIGNED="$(python3 - "$ADMIN_APP_ID" "$JWT_IAT" "$JWT_EXP" <<'PY'
+          import base64
+          import json
+          import sys
+          def enc(value):
+            raw = json.dumps(value, separators=(",", ":")).encode()
+            return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+          app_id, issued_at, expires_at = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+          print(enc({"alg": "RS256", "typ": "JWT"}) + "." + enc({"iat": issued_at, "exp": expires_at, "iss": app_id}))
+          PY
+          )"
+          JWT_SIGNATURE="$(printf '%s' "$JWT_UNSIGNED" | openssl dgst -binary -sha256 -sign app-private-key.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          APP_JWT="${JWT_UNSIGNED}.${JWT_SIGNATURE}"
+          rm -f app-private-key.pem
+          unset ADMIN_PRIVATE_KEY
+
+          GH_TOKEN="$APP_JWT" gh api "app/installations/${ADMIN_INSTALLATION_ID}" > installation.json
+          jq -e --argjson app "$ADMIN_APP_ID" --argjson installation "$ADMIN_INSTALLATION_ID" '
+            .id == $installation and
+            .app_id == $app and
+            .target_type == "User" and
+            .account.id == 35150859 and
+            .account.login == "portyu9" and
+            .repository_selection == "selected" and
+            .permissions.administration == "write" and
+            ((.permissions | keys - ["administration", "metadata"]) | length == 0) and
+            ((.permissions.metadata // "read") == "read")
+          ' installation.json >/dev/null
+
+          GH_TOKEN="$APP_JWT" gh api --method POST \
+            "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens" \
+            -f 'repositories[]=portyu9' \
+            -f 'permissions[administration]=write' > installation-token.json
+          jq -e '
+            (.token | type == "string" and length > 20) and
+            .permissions.administration == "write" and
+            ((.permissions | keys - ["administration", "metadata"]) | length == 0) and
+            ((.permissions.metadata // "read") == "read")
+          ' installation-token.json >/dev/null
+          ADMIN_TOKEN="$(jq -r .token installation-token.json)"
+          TOKEN_EXPIRES_AT="$(jq -r .expires_at installation-token.json)"
+          rm -f installation-token.json
+          unset APP_JWT
+          TOKEN_EXPIRES_EPOCH="$(python3 - "$TOKEN_EXPIRES_AT" <<'PY'
+          from datetime import datetime
+          import sys
+          value = sys.argv[1].replace("Z", "+00:00")
+          print(int(datetime.fromisoformat(value).timestamp()))
+          PY
+          )"
+          NOW="$(date +%s)"
+          [[ "$TOKEN_EXPIRES_EPOCH" =~ ^[1-9][0-9]*$ ]]
+          test "$TOKEN_EXPIRES_EPOCH" -gt "$((NOW + 120))"
+          test "$TOKEN_EXPIRES_EPOCH" -le "$((NOW + 3700))"
+
+          GH_TOKEN="$ADMIN_TOKEN" gh api "installation/repositories?per_page=100" > token-repositories.json
+          jq -e '
+            .total_count == 1 and
+            (.repositories | length) == 1 and
+            .repositories[0].id == 1355082509 and
+            .repositories[0].name == "portyu9" and
+            .repositories[0].full_name == "portyu9/portyu9" and
+            .repositories[0].owner.login == "portyu9"
+          ' token-repositories.json >/dev/null
+
+          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+          GH_TOKEN="$ADMIN_TOKEN" gh api "repos/portyu9/portyu9/rulesets/22148161" > live-prewrite.json
+          PREWRITE="$(python3 scripts/ruleset_transition_contract.py classify --live live-prewrite.json)"
+          PREWRITE_STATE="$(jq -r .state <<<"$PREWRITE")"
+          if [ "$PREWRITE_STATE" = "successor" ]; then
+            echo "outcome=already-applied-before-write" >> "$GITHUB_OUTPUT"
+            unset ADMIN_TOKEN APP_JWT ADMIN_PRIVATE_KEY
+            exit 0
+          fi
+          test "$PREWRITE_STATE" = "predecessor"
+
+          NOW="$(date +%s)"
+          test "$NOW" -ge "$ISSUED_AT"
+          test "$NOW" -lt "$EXPIRES_AT"
+          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+
+          set +e
+          GH_TOKEN="$ADMIN_TOKEN" gh api --method PUT \
+            "repos/portyu9/portyu9/rulesets/22148161" \
+            --input ruleset-put.json > ruleset-put-response.json
+          WRITE_STATUS="$?"
+          set -e
+
+          GH_TOKEN="$ADMIN_TOKEN" gh api "repos/portyu9/portyu9/rulesets/22148161" > live-after.json
+          AFTER="$(python3 scripts/ruleset_transition_contract.py classify --live live-after.json)"
+          AFTER_STATE="$(jq -r .state <<<"$AFTER")"
+          if [ "$AFTER_STATE" != "successor" ]; then
+            echo "ERROR: ruleset mutation did not converge to the exact reviewed successor; no automatic retry will occur." >&2
+            exit 1
+          fi
+
+          RECEIPT_SHA256="$(python3 scripts/ruleset_transition_contract.py receipt \
+            --before live-prewrite.json \
+            --after live-after.json \
+            --trusted-main-sha "$TRUSTED_MAIN_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --issued-at "$ISSUED_AT" \
+            --expires-at "$EXPIRES_AT" \
+            --write-status "$WRITE_STATUS" \
+            --output ruleset-reconciliation-receipt.json)"
+          [[ "$RECEIPT_SHA256" =~ ^sha256:[0-9a-f]{64}$ ]]
+          OUTCOME="$(jq -r .outcome ruleset-reconciliation-receipt.json)"
+          test "$OUTCOME" = "applied" -o "$OUTCOME" = "ambiguous-response-readback-applied"
+          echo "mutated=true" >> "$GITHUB_OUTPUT"
+          echo "outcome=$OUTCOME" >> "$GITHUB_OUTPUT"
+          echo "receipt_sha256=$RECEIPT_SHA256" >> "$GITHUB_OUTPUT"
+          unset ADMIN_TOKEN APP_JWT ADMIN_PRIVATE_KEY
+
+      - name: Preserve exact non-secret reconciliation receipt
+        if: steps.reconcile.outputs.mutated == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ruleset-reconciliation-receipt
+          path: ruleset-reconciliation-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  attest:
+    if: needs.reconcile.outputs.mutated == 'true'
+    name: attest-ruleset-reconciliation-receipt-write-only
+    needs: [reconcile]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download exact reconciliation receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ruleset-reconciliation-receipt
+          path: receipt
+
+      - name: Re-prove successor and receipt identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_RECEIPT_SHA256: ${{ needs.reconcile.outputs.receipt_sha256 }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_RECEIPT_SHA256" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
+          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+          test "sha256:$(sha256sum receipt/ruleset-reconciliation-receipt.json | cut -d' ' -f1)" = "$EXPECTED_RECEIPT_SHA256"
+          gh api "repos/portyu9/portyu9/rulesets/22148161" > live-attest.json
+          test "$(python3 scripts/ruleset_transition_contract.py classify --live live-attest.json | jq -r .state)" = "successor"
+
+      - name: Attest exact reviewed transition receipt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: .github/rulesets/ruleset-transitions-v1.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/ruleset-reconciliation-receipt-v1.schema.json
+          predicate-path: receipt/ruleset-reconciliation-receipt.json
+          show-summary: true

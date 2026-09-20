@@ -1,0 +1,280 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "ruleset-reconciler",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest exact reviewed transition receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact reconciliation receipt"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove successor and receipt identity"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
+              "method": "GET",
+              "mutating": false,
+              "step": "Re-prove successor and receipt identity"
+            }
+          ],
+          "artifacts": [
+            {
+              "name": "ruleset-reconciliation-receipt",
+              "operation": "download",
+              "path": "receipt",
+              "step": "Download exact reconciliation receipt"
+            }
+          ],
+          "id": "attest",
+          "mutations": [
+            {
+              "class": "attestation",
+              "step": "Attest exact reviewed transition receipt",
+              "target": ".github/rulesets/ruleset-transitions-v1.json"
+            }
+          ],
+          "name": "attest-ruleset-reconciliation-receipt-write-only",
+          "needs": [
+            "reconcile"
+          ],
+          "oidc": true,
+          "permissions": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Prove exact reviewed transition state"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
+              "method": "GET",
+              "mutating": false,
+              "step": "Prove exact reviewed transition state"
+            }
+          ],
+          "artifacts": [],
+          "id": "plan",
+          "mutations": [],
+          "name": "ruleset-transition-plan-read-only",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve exact non-secret reconciliation receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "app/installations/${ADMIN_INSTALLATION_ID}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Apply only exact reviewed predecessor to successor"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens",
+              "method": "POST",
+              "mutating": true,
+              "step": "Apply only exact reviewed predecessor to successor"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "installation/repositories?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Apply only exact reviewed predecessor to successor"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Apply only exact reviewed predecessor to successor"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Apply only exact reviewed predecessor to successor"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Apply only exact reviewed predecessor to successor"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
+              "method": "GET",
+              "mutating": false,
+              "step": "Apply only exact reviewed predecessor to successor"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
+              "method": "GET",
+              "mutating": false,
+              "step": "Apply only exact reviewed predecessor to successor"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Apply only exact reviewed predecessor to successor"
+            }
+          ],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "ruleset-reconciliation-receipt",
+              "operation": "upload",
+              "path": "ruleset-reconciliation-receipt.json",
+              "retention-days": "30",
+              "step": "Preserve exact non-secret reconciliation receipt"
+            }
+          ],
+          "id": "reconcile",
+          "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Apply only exact reviewed predecessor to successor",
+              "target": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens"
+            },
+            {
+              "class": "github-api-put",
+              "method": "PUT",
+              "step": "Apply only exact reviewed predecessor to successor",
+              "target": "repos/portyu9/portyu9/rulesets/22148161"
+            }
+          ],
+          "name": "ruleset-transition-admin-write",
+          "needs": [
+            "plan"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [
+              "PORTYU9_RULESET_ADMIN_APP_ID",
+              "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
+              "PORTYU9_RULESET_ADMIN_PRIVATE_KEY"
+            ],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Ruleset reconciler",
+      "path": ".github/workflows/ruleset-reconciler.yml",
+      "references": {
+        "env": [],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [
+          "PORTYU9_RULESET_ADMIN_APP_ID",
+          "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
+          "PORTYU9_RULESET_ADMIN_PRIVATE_KEY"
+        ],
+        "vars": []
+      },
+      "triggers": {
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}

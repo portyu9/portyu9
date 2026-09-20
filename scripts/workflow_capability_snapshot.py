@@ -3,7 +3,7 @@
 
 The item-12 five-workflow snapshot remains a canonical historical partition. Later trusted
 workflow extensions are stored as one-workflow canonical snapshots. This module is the only
-assembly boundary: callers receive one ordinary ten-workflow BOM object whose semantic and
+assembly boundary: callers receive one ordinary eleven-workflow BOM object whose semantic and
 canonical representation is compared with live trusted compilation.
 """
 from __future__ import annotations
@@ -21,6 +21,13 @@ AUTOFIX_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-codeql-autofix.js
 DEPENDABOT_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-dependabot-controller.json"
 BOT_PR_USER_APPROVAL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-bot-pr-user-approval.json"
 RULESET_DRIFT_SENTINEL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-drift-sentinel.json"
+RULESET_RECONCILER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-reconciler.json"
+RULESET_RECONCILER_WORKFLOW = ROOT / ".github/workflows/ruleset-reconciler.yml"
+RULESET_RECONCILER_ADMIN_SECRETS = [
+    "PORTYU9_RULESET_ADMIN_APP_ID",
+    "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
+    "PORTYU9_RULESET_ADMIN_PRIVATE_KEY",
+]
 EXPECTED_ROOT_KEYS = {"schemaVersion", "bomId", "repository", "automationPolicyId", "workflows"}
 
 
@@ -63,6 +70,7 @@ def load_combined() -> dict[str, Any]:
     dependabot_extension = load_part(DEPENDABOT_EXTENSION, "Dependabot controller BOM extension")
     bot_pr_user_approval_extension = load_part(BOT_PR_USER_APPROVAL_EXTENSION, "Bot PR user approval BOM extension")
     ruleset_drift_sentinel_extension = load_part(RULESET_DRIFT_SENTINEL_EXTENSION, "Ruleset drift sentinel BOM extension")
+    ruleset_reconciler_extension = load_part(RULESET_RECONCILER_EXTENSION, "Ruleset reconciler BOM extension")
     require(len(base["workflows"]) == 5, "base Workflow Capability BOM historical workflow count changed")
 
     one_workflow(
@@ -96,6 +104,12 @@ def load_combined() -> dict[str, Any]:
         path=".github/workflows/ruleset-drift-sentinel.yml",
         label="Ruleset drift sentinel BOM extension",
     )
+    one_workflow(
+        ruleset_reconciler_extension,
+        identity="ruleset-reconciler",
+        path=".github/workflows/ruleset-reconciler.yml",
+        label="Ruleset reconciler BOM extension",
+    )
 
     workflows = (
         list(base["workflows"])
@@ -104,6 +118,7 @@ def load_combined() -> dict[str, Any]:
         + list(dependabot_extension["workflows"])
         + list(bot_pr_user_approval_extension["workflows"])
         + list(ruleset_drift_sentinel_extension["workflows"])
+        + list(ruleset_reconciler_extension["workflows"])
     )
     ids = [workflow.get("id") for workflow in workflows]
     paths = [workflow.get("path") for workflow in workflows]
@@ -116,9 +131,96 @@ def load_combined() -> dict[str, Any]:
     return combined
 
 
+def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
+    matches = [workflow for workflow in combined["workflows"] if workflow.get("id") == "ruleset-reconciler"]
+    require(len(matches) == 1, "composite Workflow Capability BOM must contain exactly one ruleset reconciler")
+    workflow = matches[0]
+    require(
+        workflow["references"]["secrets"] == RULESET_RECONCILER_ADMIN_SECRETS,
+        "ruleset reconciler workflow secret inventory changed",
+    )
+    jobs = {job["id"]: job for job in workflow["jobs"]}
+    reconcile = jobs["reconcile"]
+    require(
+        reconcile["references"]["secrets"] == RULESET_RECONCILER_ADMIN_SECRETS,
+        "ruleset reconciler writer secret inventory changed",
+    )
+    require(
+        reconcile["mutations"] == [
+            {
+                "class": "github-api-post",
+                "method": "POST",
+                "step": "Apply only exact reviewed predecessor to successor",
+                "target": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens",
+            },
+            {
+                "class": "github-api-put",
+                "method": "PUT",
+                "step": "Apply only exact reviewed predecessor to successor",
+                "target": "repos/portyu9/portyu9/rulesets/22148161",
+            },
+        ],
+        "ruleset reconciler writer mutation inventory changed",
+    )
+    source = RULESET_RECONCILER_WORKFLOW.read_text(encoding="utf-8")
+    require("PORTYU9_BOT_REVIEW_TOKEN" not in source,
+            "ruleset reconciler must never reference the bot-review credential")
+    require(
+        source.count(
+            "    concurrency:\n"
+            "      group: ruleset-reconciler-admin-write\n"
+            "      cancel-in-progress: false\n"
+        ) == 1,
+        "ruleset reconciler admin writer lost non-cancellable serialization",
+    )
+    require(
+        source.count('          JWT_EXP="$((ISSUED_AT + 540))"\n') == 1
+        and 'JWT_EXP="$(ISSUED_AT + 540))"' not in source,
+        "ruleset reconciler GitHub App JWT expiry arithmetic changed",
+    )
+    require(
+        source.count("scripts/ruleset_transition_contract.py classify-observable --live live-plan.json") == 1
+        and "needs.plan.outputs.state" not in source,
+        "ruleset reconciler planning must treat admin-scope redaction as non-authorizing observable evidence",
+    )
+    require(
+        source.count("scripts/ruleset_transition_contract.py classify --live live-prewrite.json") == 1
+        and source.count("scripts/ruleset_transition_contract.py classify --live live-after.json") == 1,
+        "ruleset reconciler admin writer lost exact prewrite/readback classification",
+    )
+    for fragment in (
+        '.app_id == $app and',
+        '.target_type == "User" and',
+        '.account.id == 35150859 and',
+        '.account.login == "portyu9" and',
+        '.repository_selection == "selected" and',
+        '.permissions.administration == "write" and',
+        '((.permissions | keys - ["administration", "metadata"]) | length == 0) and',
+        "-f 'permissions[administration]=write' > installation-token.json",
+        '.total_count == 1 and',
+        '.repositories[0].id == 1355082509 and',
+    ):
+        require(fragment in source,
+                f"ruleset reconciler least-authority installation proof changed: {fragment}")
+    for fragment in (
+        '[[ "$ADMIN_APP_ID" =~ ^[1-9][0-9]*$ ]]',
+        '[[ "$ADMIN_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]',
+        'test -n "$ADMIN_PRIVATE_KEY"',
+        'test "$TOKEN_EXPIRES_EPOCH" -gt "$((NOW + 120))"',
+        'test "$TOKEN_EXPIRES_EPOCH" -le "$((NOW + 3700))"',
+        'if [ "$PREWRITE_STATE" = "successor" ]; then',
+        'echo "outcome=already-applied-before-write" >> "$GITHUB_OUTPUT"',
+        'test "$PREWRITE_STATE" = "predecessor"',
+        'ERROR: ruleset mutation did not converge to the exact reviewed successor; no automatic retry will occur.',
+    ):
+        require(fragment in source,
+                f"ruleset reconciler transaction guard changed: {fragment}")
+
+
 def self_test() -> None:
     combined = load_combined()
-    require(len(combined["workflows"]) == 10, "composite Workflow Capability BOM must contain ten workflows")
+    validate_ruleset_reconciler_safety(combined)
+    require(len(combined["workflows"]) == 11, "composite Workflow Capability BOM must contain eleven workflows")
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
             ".github/workflows/bot-pr-user-approval.yml",
@@ -130,6 +232,7 @@ def self_test() -> None:
             ".github/workflows/profile-quality.yml",
             ".github/workflows/profile-stats.yml",
             ".github/workflows/ruleset-drift-sentinel.yml",
+            ".github/workflows/ruleset-reconciler.yml",
             ".github/workflows/spotlight-link-sync.yml",
         ],
         "composite Workflow Capability BOM ordering changed",
@@ -142,8 +245,10 @@ def self_test() -> None:
             "composite Workflow Capability BOM lost bot PR user approval workflow")
     require(any(workflow["id"] == "ruleset-drift-sentinel" for workflow in combined["workflows"]),
             "composite Workflow Capability BOM lost ruleset drift sentinel workflow")
+    require(any(workflow["id"] == "ruleset-reconciler" for workflow in combined["workflows"]),
+            "composite Workflow Capability BOM lost ruleset reconciler workflow")
 
 
 if __name__ == "__main__":
     self_test()
-    print("Composite Workflow Capability BOM snapshot validation passed: 10 workflows.")
+    print("Composite Workflow Capability BOM snapshot validation passed: 11 workflows.")
