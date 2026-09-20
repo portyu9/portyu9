@@ -232,14 +232,23 @@ def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def expect_classification_failure(value: dict[str, Any], transition: dict[str, Any], label: str) -> None:
+    try:
+        classify(value, transition)
+    except ValueError:
+        return
+    raise ValueError(f"self-test accepted forbidden ruleset state: {label}")
+
+
 def self_test() -> None:
     transition = load_contract()
-    predecessor = dict(transition["predecessor"])
-    successor = dict(transition["successor"])
+    predecessor = json.loads(json.dumps(transition["predecessor"]))
+    successor = json.loads(json.dumps(transition["successor"]))
     require(classify({"id": RULESET_ID, **predecessor}, transition)[0] == "predecessor",
             "predecessor classification changed")
     require(classify({"id": RULESET_ID, **successor}, transition)[0] == "successor",
             "successor classification changed")
+
     redacted_predecessor = {"id": RULESET_ID, **json.loads(json.dumps(predecessor))}
     redacted_predecessor.pop("bypass_actors")
     state, digest, bypass_observable = classify_observable(redacted_predecessor, transition)
@@ -252,33 +261,60 @@ def self_test() -> None:
     require(state == "successor" and digest == transition["successorDigest"] and not bypass_observable,
             "read-only successor classification changed")
 
+    expect_classification_failure({"id": RULESET_ID + 1, **predecessor}, transition, "wrong ruleset id")
+
+    mutated = json.loads(json.dumps(predecessor))
+    mutated["enforcement"] = "disabled"
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "enforcement downgrade")
+
+    mutated = json.loads(json.dumps(predecessor))
+    mutated["target"] = "tag"
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "target change")
+
+    mutated = json.loads(json.dumps(predecessor))
+    mutated["conditions"]["ref_name"]["include"] = ["refs/heads/release"]
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "include change")
+
+    mutated = json.loads(json.dumps(predecessor))
+    mutated["conditions"]["ref_name"]["exclude"] = ["refs/heads/main"]
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "exclude change")
+
     mutated = json.loads(json.dumps(predecessor))
     mutated["rules"][2]["parameters"]["allowed_merge_methods"] = ["merge", "squash"]
-    try:
-        classify({"id": RULESET_ID, **mutated}, transition)
-    except ValueError:
-        pass
-    else:
-        raise ValueError("self-test accepted merge-method broadening")
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "merge-method broadening")
+
+    mutated = json.loads(json.dumps(predecessor))
+    mutated["rules"][2]["parameters"]["required_review_thread_resolution"] = False
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "pull-request rule change")
+
+    mutated = json.loads(json.dumps(predecessor))
+    mutated["rules"][2]["parameters"]["required_approving_review_count"] = False
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "malformed integer primitive")
 
     mutated = json.loads(json.dumps(predecessor))
     mutated["bypass_actors"] = [{"actor_id": 1, "actor_type": "RepositoryRole", "bypass_mode": "always"}]
-    try:
-        classify({"id": RULESET_ID, **mutated}, transition)
-    except ValueError:
-        pass
-    else:
-        raise ValueError("self-test accepted bypass actor")
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "bypass actor addition")
 
     mutated = json.loads(json.dumps(predecessor))
     mutated["rules"][3]["parameters"]["required_status_checks"][0]["integration_id"] = 1
-    try:
-        classify({"id": RULESET_ID, **mutated}, transition)
-    except ValueError:
-        pass
-    else:
-        raise ValueError("self-test accepted wrong integration id")
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "wrong integration id")
 
+    mutated = json.loads(json.dumps(predecessor))
+    mutated["rules"][3]["parameters"]["required_status_checks"][0]["integration_id"] = True
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "malformed integration primitive")
+
+    mutated = json.loads(json.dumps(predecessor))
+    mutated["rules"][3]["parameters"]["required_status_checks"].pop()
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "required context removal")
+
+    mutated = json.loads(json.dumps(predecessor))
+    mutated["rules"][3]["parameters"]["required_status_checks"][0]["context"] = "unexpected-context"
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "required context substitution")
+
+    mutated = json.loads(json.dumps(predecessor))
+    checks = mutated["rules"][3]["parameters"]["required_status_checks"]
+    checks.append(json.loads(json.dumps(checks[0])))
+    expect_classification_failure({"id": RULESET_ID, **mutated}, transition, "duplicate required context")
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
