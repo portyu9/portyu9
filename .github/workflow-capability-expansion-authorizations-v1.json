@@ -389,6 +389,13 @@
       "rationale": "Authorize #633's exact read-only Ruleset drift sentinel: scheduled/manual trusted-main execution with contents: read only, pinned checkout, exact live-main SHA proof, and the existing fail-closed ruleset GET validator. No mutation, new secret, reviewer-token use, OIDC, artifact, bypass, direct-main write, or Administration authority is added; the frozen five-workflow base BOM remains unchanged and the sentinel is isolated as a one-workflow extension."
     },
     {
+      "id": "cap-ruleset-reconciler-autonomous-wake-coverage",
+      "baseBomSha256": "9cb8b46ec43b6e0eeb59503edaa3dc8910f824c90c3de5dd51368d55b02f5084",
+      "candidateBomSha256": "d21ffde78b3297bdbec53823c4b5ffc78ecf308a24b68a0562aac907e40f1a61",
+      "expansionSha256": "d7c5a760cb24e11ab4589e665ce8d89a7d8feb695827638a0bbe71bd05e9bc8b",
+      "rationale": "Authorize #650's exact central wake coverage for GitHub-token-suppressed autonomous main merges. Ruleset reconciler retains its reviewed push/manual entrypoints and adds completed workflow_run wakes only for the exact CodeQL Autofix controller, Dependabot controller, and Spotlight workflow name/path pairs. Trusted planning proves exact repository/main/source identity and no-ops when the controller head already equals current main; only a main advance continues into the unchanged exact predecessor/successor, repository-selected Administration App, serialized PUT, readback/no-blind-retry, receipt, attestation, and no-bypass path. No new permission, secret, API mutation, OIDC authority, merge authority, or required-check reduction is added."
+    },
+    {
       "id": "cap-ruleset-reconciler-least-authority",
       "baseBomSha256": "5922c1265624e7127bb5bfee82010dd4136c688b83e70f52fa531f6376ca5773",
       "candidateBomSha256": "409f02b03504ae37e101452782c6860dc2c385c61ae418a73c8330e63c4568b0",
