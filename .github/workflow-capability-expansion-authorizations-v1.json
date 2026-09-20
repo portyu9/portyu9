@@ -389,6 +389,13 @@
       "rationale": "Authorize #637's exact manual-only least-authority Protect Main reconciler: read-only planning, a dedicated repository-selected GitHub App installation token narrowed to Administration write, one reviewed ruleset PUT from exact predecessor to exact successor, immediate readback with no blind retry, and a separate OIDC receipt attestation. The reviewer token is never reused; no bypass, direct-main content write, candidate execution, or required-check reduction is added."
     },
     {
+      "id": "cap-ruleset-reconciler-order-canonicalization",
+      "baseBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
+      "candidateBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
+      "expansionSha256": "66279c8982cd9da88c5d8835973ab24caf21f736cc339b8fb88da20355ce3c82",
+      "rationale": "Authorize #641's exact trusted ruleset-transition verifier hardening: canonicalize semantically unordered GitHub rules and required-check arrays before hashing while preserving the existing reviewed predecessor/successor/transition digests, exact closed-world context identities, integration id 15368, primitive identities, no-bypass requirement, pull-request parameters, target/enforcement/ref conditions, and merge-only policy; additionally execute the pure transition self-tests through protected ruleset validation. No trigger, workflow permission, secret, API endpoint, mutation class, admin authority, required-check membership, bypass, or direct-main write capability is added."
+    },
+    {
       "id": "cap-ruleset-reconciler-runtime-hardening",
       "baseBomSha256": "fa6b3f682f08ecbb2cb0adea615f2946ad9379daa73df4ffb7c5b3138f5150b0",
       "candidateBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
