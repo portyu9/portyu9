@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "repository": "portyu9/portyu9",
+  "repositoryId": 1355082509,
+  "transitions": [
+    {
+      "id": "protect-main-add-trusted-governed-bot-review-v1",
+      "rulesetId": 22148161,
+      "rulesetName": "Protect Main",
+      "method": "PUT",
+      "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
+      "predecessorDigest": "sha256:cf24f32a0cec1a36e02d98003e9cf4899caac03c49c7f0015fcd9512849462d8",
+      "successorDigest": "sha256:399e05f6b83be86e5d31c0fe45943f10c84ca9e15e51a02de9c87cdaf51fa4a1",
+      "transitionDigest": "sha256:06debdba96bd6567d08d2672e40e0df24ddc60cd194326d330ff712ce8cbb29b",
+      "predecessor": {
+        "name": "Protect Main",
+        "target": "branch",
+        "enforcement": "active",
+        "bypass_actors": [],
+        "conditions": {
+          "ref_name": {
+            "exclude": [],
+            "include": ["~DEFAULT_BRANCH"]
+          }
+        },
+        "rules": [
+          {"type": "deletion"},
+          {"type": "non_fast_forward"},
+          {
+            "type": "pull_request",
+            "parameters": {
+              "required_approving_review_count": 0,
+              "dismiss_stale_reviews_on_push": false,
+              "required_reviewers": [],
+              "require_code_owner_review": false,
+              "require_last_push_approval": false,
+              "required_review_thread_resolution": true,
+              "require_extra_approval_for_unattributed_changes": false,
+              "allowed_merge_methods": ["merge"]
+            }
+          },
+          {
+            "type": "required_status_checks",
+            "parameters": {
+              "strict_required_status_checks_policy": true,
+              "do_not_enforce_on_create": false,
+              "required_status_checks": [
+                {"context": "validate-contracts", "integration_id": 15368},
+                {"context": "trusted-capability-admission", "integration_id": 15368},
+                {"context": "integration-pinned-upstream", "integration_id": 15368},
+                {"context": "dependency-review", "integration_id": 15368},
+                {"context": "analyze-actions", "integration_id": 15368},
+                {"context": "analyze-python", "integration_id": 15368}
+              ]
+            }
+          }
+        ]
+      },
+      "successor": {
+        "name": "Protect Main",
+        "target": "branch",
+        "enforcement": "active",
+        "bypass_actors": [],
+        "conditions": {
+          "ref_name": {
+            "exclude": [],
+            "include": ["~DEFAULT_BRANCH"]
+          }
+        },
+        "rules": [
+          {"type": "deletion"},
+          {"type": "non_fast_forward"},
+          {
+            "type": "pull_request",
+            "parameters": {
+              "required_approving_review_count": 0,
+              "dismiss_stale_reviews_on_push": false,
+              "required_reviewers": [],
+              "require_code_owner_review": false,
+              "require_last_push_approval": false,
+              "required_review_thread_resolution": true,
+              "require_extra_approval_for_unattributed_changes": false,
+              "allowed_merge_methods": ["merge"]
+            }
+          },
+          {
+            "type": "required_status_checks",
+            "parameters": {
+              "strict_required_status_checks_policy": true,
+              "do_not_enforce_on_create": false,
+              "required_status_checks": [
+                {"context": "validate-contracts", "integration_id": 15368},
+                {"context": "trusted-capability-admission", "integration_id": 15368},
+                {"context": "trusted-governed-bot-review", "integration_id": 15368},
+                {"context": "integration-pinned-upstream", "integration_id": 15368},
+                {"context": "dependency-review", "integration_id": 15368},
+                {"context": "analyze-actions", "integration_id": 15368},
+                {"context": "analyze-python", "integration_id": 15368}
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
