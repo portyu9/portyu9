@@ -431,6 +431,13 @@
       "rationale": "Authorize #723's read-only Profile Generator Compatibility Witness producer: trusted-main/schedule/manual execution, contents:read/actions:read, exact run/source proof, immutable pinned generator invocation, isolated Signal Field validation, canonical control-plane registration, witness revalidation, and one-day unsigned artifact upload. No OIDC/signing, secret, candidate execution, write mutation, alternate generator, retry broadening, required-check reduction, direct-main write, or bypass."
     },
     {
+      "id": "cap-profile-generator-compatibility-witness-signer-v1",
+      "baseBomSha256": "24099bc5df89be3dffe6299d0ae65804d909388b7254a7ef4bd15d1e994395bc",
+      "candidateBomSha256": "b7238a10559d84f2ba411d8aae2f140dd1448184de5a35440bdf70e910a6f37e",
+      "expansionSha256": "ffd84b966eb507ead5b32b6275c4bb7ace531316219ed2b75caee113f892b78f",
+      "rationale": "Authorize #730's exact isolated Profile Generator Compatibility Witness signer: one downstream same-run digest-checked witness artifact download, exact predicate/subject SHA-256 and four-file raw Signal Field inventory proofs, and one pinned actions/attest call under contents:read, id-token:write, and attestations:write. No checkout, setup-Python, repository-authored Python, Git/gh/token/secret surface, candidate execution, PR/check/ref/content/Actions mutation, generator or retry broadening, required-check reduction, direct-main write, or bypass."
+    },
+    {
       "id": "cap-review-thread-graphql-schema-hardening",
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
