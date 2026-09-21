@@ -319,7 +319,22 @@
               "step": "Set up Python"
             }
           ],
-          "apiSurfaces": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${REPOSITORY}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate action release provenance"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${REPOSITORY}/releases/tags/${TAG}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate action release provenance"
+            }
+          ],
           "artifacts": [],
           "id": "validate",
           "mutations": [],
