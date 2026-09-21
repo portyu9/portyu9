@@ -466,6 +466,13 @@
       "rationale": "Authorize #637's hardened exact ruleset reconciler after runtime audit: serialized admin writes, corrected GitHub App JWT construction, explicit read-only redaction handling, exact selected-repository App/install token authority proofs, canonical capability attribution, expanded negative transition tests, and locked transaction guards. No reviewer-token reuse, bypass, direct-main content write, candidate execution, generic settings writer, or required-check reduction is introduced."
     },
     {
+      "id": "cap-ruleset-recovery-yaml-guard",
+      "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "expansionSha256": "faf57bff751e000a37c4471f07e3a028b32e4f7aace6e41693bffafefea28fba",
+      "rationale": "Authorize #687's exact Ruleset recovery YAML-guard correction. The existing signer keeps identical permissions, actions, subject, API reads and artifact authority; the job guard is YAML-quoted and rebound only to #687's merge push while exact receipt hash/field and live-successor proofs remain. No trigger, secret, endpoint, method, ruleset mutation, signer, attestation target, required-check reduction, merge capability or bypass is added."
+    },
+    {
       "id": "cap-spotlight-main-push-reconciliation",
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
