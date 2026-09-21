@@ -10,10 +10,10 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v59"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "6271af0e6d959af7b859c62cf1e14e8a5520e9cd",
+    ".github/workflows/bot-pr-user-approval.yml": "5d97f4bbdd5943d472e76243b2366f18dc88b714",
     ".github/workflows/profile-quality.yml": "e37c57ab81d28233e3a8e0f5eaacc7011daf1ae4",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "9467c72a98a04bae4f829c89ac5204cad1814472",
+    ".github/workflows/spotlight-link-sync.yml": "05457ba4af6ea12b39c8bf0124a483e34045754c",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -711,6 +711,27 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'ERROR: malformed or incomplete paginated open-PR evidence.',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
+    for fragment in (
+        'wait_for_spotlight_readiness() {',
+        'for attempt in $(seq 1 48); do',
+        'check_required_contexts "$head" "$lane"',
+        'check_quiescent_runs "$head" "$head_ref"',
+        'Spotlight reviewer readiness converged for ${head} on bounded attempt ${attempt}/48.',
+        'Spotlight reviewer bounded-wait: exact-head checks/quiescence are not ready yet',
+        'Spotlight reviewer readiness did not converge inside the bounded 48-attempt window.',
+        'if [ "$LANE" = "spotlight" ]; then',
+        'wait_for_spotlight_readiness "$HEAD_SHA" "$HEAD_REF" "$LANE"',
+        'Spotlight readiness did not converge inside the bounded reviewer window.',
+    ):
+        require(fragment in bot_review, f"Bot PR Spotlight bounded-review liveness contract is missing: {fragment}")
+    spotlight_wait_pos = bot_review.index('wait_for_spotlight_readiness "$HEAD_SHA" "$HEAD_REF" "$LANE"')
+    thread_read_pos = bot_review.index('THREADS="$(gh api graphql', spotlight_wait_pos)
+    marker_read_pos = bot_review.index('REVIEW_MARKER="<!-- portyu9-bot-review:v2', thread_read_pos)
+    require(
+        spotlight_wait_pos < thread_read_pos < marker_read_pos,
+        "Bot PR reviewer must converge Spotlight readiness before fresh review-thread and review-state evidence",
+    )
+
     open_pr_fetch = 'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"'
     require(
         bot_review.count(open_pr_fetch) == 1,
@@ -876,19 +897,13 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"',
         'CERTIFIED_TRUSTED_DETAILS_URL="$(jq -r \'.trustedAdmission.checkRun.detailsUrl\' "$CERTIFICATE")"',
         'test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"',
-        'REVIEW_INDEPENDENT_CHECKS=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission)',
-        'malformed or incomplete review-independent check evidence for ${NAME} on ${HEAD_SHA}.',
-        'All six review-independent protected contexts are exact-head GitHub Actions successes.',
+        'REVIEW_DISPATCHED=false',
         'actions/workflows/bot-pr-user-approval.yml/dispatches',
-        'Dispatched exact review-independent-check portyu9 review evaluation from trusted main.',
+        'Dispatched bounded-retry portyu9 review evaluation from trusted main after exact canonical PR workflow identity materialized.',
+        'test "$REVIEW_DISPATCHED" = "true"',
         'for REVIEW_ATTEMPT in $(seq 1 24); do',
-        'multiple exact marker-bound portyu9 reviews exist before Spotlight authorization.',
-        'latest manual exact-head portyu9 review requests changes; Spotlight authorization is vetoed.',
-        'the exact marker-bound portyu9 review was revoked or dismissed.',
-        'exact-base/head portyu9 review did not materialize after the review-independent-check dispatch.',
+        'exact-base/head portyu9 review did not materialize after the bounded-retry reviewer dispatch.',
         'Observed exact-base/head marker-bound portyu9 approval before merge authorization.',
-        'CANONICAL_RUNS_SUCCESS=false',
-        'All canonical Spotlight-link PR workflows completed successfully after exact user review.',
         'Spotlight terminal stage: trusted-admission-live-reproof-verified',
         'jq -e --arg body "$APPROVAL_BODY" \'.body == $body\' approval-comment.json >/dev/null',
     )
@@ -897,37 +912,16 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
     require('grep -Fxc "$APPROVAL_BODY"' not in spotlight,
             "Spotlight approval comment verification must compare the complete multiline body atomically")
     require(
-        "passed all three protected PR workflows" not in spotlight,
-        "Spotlight must not gate reviewer dispatch on whole-Profile-Quality success",
+        spotlight.count('actions/workflows/bot-pr-user-approval.yml/dispatches') == 1,
+        "Spotlight must dispatch exactly one trusted reviewer wake from its approval job",
     )
-    review_checks_pos = spotlight.index(
-        "REVIEW_INDEPENDENT_CHECKS=(validate-contracts integration-pinned-upstream "
-        "analyze-actions analyze-python dependency-review trusted-capability-admission)"
-    )
-    reviewer_dispatch_pos = spotlight.index(
-        'actions/workflows/bot-pr-user-approval.yml/dispatches'
-    )
-    exact_review_pos = spotlight.index(
-        "Observed exact-base/head marker-bound portyu9 approval before merge authorization."
-    )
-    canonical_success_pos = spotlight.index(
-        "All canonical Spotlight-link PR workflows completed successfully after exact user review."
-    )
+    identities_pos = spotlight.index('OBSERVED_IDENTITIES="$(jq -c')
+    reviewer_dispatch_pos = spotlight.index('actions/workflows/bot-pr-user-approval.yml/dispatches')
+    all_success_pos = spotlight.index('test "$ALL_SUCCESS" = "true"')
+    review_wait_pos = spotlight.index('for REVIEW_ATTEMPT in $(seq 1 24); do')
     require(
-        review_checks_pos < reviewer_dispatch_pos < exact_review_pos < canonical_success_pos,
-        "Spotlight rerun liveness ordering must be independent checks -> reviewer dispatch -> exact review -> full workflow convergence",
-    )
-    require(
-        spotlight.index('test "$REVIEW_RUNS_READY" = "true"') < review_checks_pos,
-        "Spotlight must resolve exact canonical workflow-run identity/approval state before independent-check review authorization",
-    )
-    require(
-        'test "$PORTYU9_APPROVAL_COUNT" = "1"' in spotlight,
-        "Spotlight pre-authorization review wait must require exactly one marker-bound approval",
-    )
-    require(
-        'test "$CANONICAL_RUNS_SUCCESS" = "true"' in spotlight,
-        "Spotlight must require the exact canonical PR workflow set to converge after review",
+        identities_pos < reviewer_dispatch_pos < all_success_pos < review_wait_pos,
+        "Spotlight rerun liveness ordering must dispatch the bounded reviewer after canonical run identity and before whole-workflow convergence",
     )
 
 
@@ -971,7 +965,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, canonical Profile-Quality quiescence exemption, idempotent recovery wake, and immutable base/head marker proof locked · Spotlight rerun-safe independent-check reviewer dispatch and post-review full-workflow convergence ordering locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · rerun-safe early Spotlight reviewer dispatch with unchanged capability surface locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0
