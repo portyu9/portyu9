@@ -29,6 +29,17 @@
             "actions": "read",
             "contents": "read"
           }
+        },
+        "attest": {
+          "name": "attest-action-provenance-witness-write-only",
+          "needs": [
+            "prepare"
+          ],
+          "permissions": {
+            "contents": "read",
+            "id-token": "write",
+            "attestations": "write"
+          }
         }
       }
     },
