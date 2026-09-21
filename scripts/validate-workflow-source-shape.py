@@ -486,7 +486,6 @@ permissions:
   contents: read
 jobs:
   plan:
-    if: "${{ always() && startsWith(github.event.pull_request.title, 'Fix #687') }}"
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@0123456789012345678901234567890123456789 # v7.0.1
@@ -506,6 +505,13 @@ jobs:
 """
     validate_text(safe, "self-test-safe.yml")
 
+    quoted_hash = safe.replace(
+        "  plan:\n    runs-on: ubuntu-24.04",
+        "  plan:\n    if: \"${{ always() && startsWith(github.event.pull_request.title, 'Fix #687') }}\"\n    runs-on: ubuntu-24.04",
+        1,
+    )
+    validate_text(quoted_hash, "self-test-quoted-hash.yml")
+
     cases = (
         (safe.replace("on:\n  pull_request:", "on: [pull_request, pull_request_target]"), "flow-style YAML sequences"),
         (safe.replace("jobs:\n  plan:", "jobs: {plan: {runs-on: ubuntu-24.04}}\nignored:"), "flow-style YAML mappings"),
@@ -519,8 +525,8 @@ jobs:
         (safe.replace("jobs:", "? jobs\n:"), "complex mapping keys"),
         (
             safe.replace(
-                '    if: "${{ always() && startsWith(github.event.pull_request.title, \'Fix #687\') }}"',
-                "    if: always() && (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Merge pull request #685 from portyu9/recover-ruleset-receipt-attestation'))",
+                "  plan:\n    runs-on: ubuntu-24.04",
+                "  plan:\n    if: always() && (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Merge pull request #685 from portyu9/recover-ruleset-receipt-attestation'))\n    runs-on: ubuntu-24.04",
                 1,
             ),
             "plain-scalar inline YAML comments are forbidden",
