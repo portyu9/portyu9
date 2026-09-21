@@ -123,7 +123,11 @@ def strict_json(text: str) -> Any:
 
 
 def canonical_json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True) + "\n"
+    # Builders below already define a closed-world deterministic key order that validators
+    # intentionally re-prove after parsing. Sorting object keys here would destroy that
+    # contract (including release-identity member order) and make emitted witness bytes
+    # fail their own verifier after a disk/artifact round trip.
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=True) + "\n"
 
 
 def digest_bytes(data: bytes) -> str:
@@ -516,6 +520,21 @@ def self_test() -> None:
     validate_predicate(predicate)
     subject = build_subject(predicate)
     validate_subject(subject, predicate)
+
+    # Exercise the actual artifact boundary: build writes canonical JSON bytes, and consumers
+    # parse those bytes before validation. This must preserve every closed-world member order.
+    serialized_predicate = strict_json(canonical_json(predicate))
+    serialized_subject = strict_json(canonical_json(subject))
+    validate_predicate(serialized_predicate)
+    validate_subject(serialized_subject, serialized_predicate)
+    validate_for_consumption(
+        predicate=serialized_predicate,
+        subject=serialized_subject,
+        current_lock_bytes=lock_bytes,
+        current_policy_files=policy_files,
+        now_epoch=1700000000 + TTL_SECONDS - 1,
+    )
+
     validate_for_consumption(
         predicate=predicate,
         subject=subject,
