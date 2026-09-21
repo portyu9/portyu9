@@ -7,7 +7,7 @@
       "id": "cap-action-provenance-witness-consumer-live-v1",
       "baseBomSha256": "027d28fa7b8baeddea2988bf70ca0abe54d940f054d75a4ddec19e7b345a8555",
       "candidateBomSha256": "486e75eb6243bd538ca68aae366ada59f1bd89905d8673f2328c93c76a74be04",
-      "expansionSha256": "0b8d2a3bf3e295856d3b26ecb082eb14cc38b61cc51234a2520ebcc0e3993471",
+      "expansionSha256": "f0080dc5cfc28afa48487d91320f8f805bd55ef06f05f87ae3e9f862eaefd2a2",
       "rationale": "Authorize #715's exact Profile Quality Action provenance witness consumer: actions:read and attestations:read, bounded trusted-main run/artifact discovery, pinned digest-enforced artifact download, and cryptographic attestation verification before witness reuse. No write, OIDC, secret, candidate mutation/execution, required-check reduction, direct-main write, or bypass authority is added."
     },
     {
