@@ -18,6 +18,7 @@ from dependabot_pin_diff import self_test as pin_diff_self_test
 from dependabot_pr_identity import self_test as pr_identity_self_test
 from dependabot_reconciliation import self_test as reconciliation_self_test
 from dependabot_release import self_test as release_self_test
+from workflow_capability_api_collection import self_test as api_collection_self_test
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPENDABOT = ROOT / ".github/dependabot.yml"
@@ -169,6 +170,7 @@ def validate_governance(text: str) -> None:
 
 
 def self_test() -> None:
+    api_collection_self_test()
     pin_diff_self_test()
     pr_identity_self_test()
     admission_self_test()
