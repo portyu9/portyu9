@@ -493,7 +493,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         '(.ref == "main") and',
         '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
         '(.full_name | type == "string" and length > 0)',
-        '(( [.[][] | .number] | length) == ([.[][] | .number] | unique | length))'.replace('((', '(('),
+        '(([.[][] | .number] | length) == ([.[][] | .number] | unique | length))',
         'ERROR: malformed or incomplete paginated open-PR evidence.',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
