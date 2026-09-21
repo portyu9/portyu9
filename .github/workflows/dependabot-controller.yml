@@ -537,15 +537,15 @@ jobs:
           REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
           jq -e '
             (type == "array") and (length >= 1) and (length <= 20) and
-            (all(.[]; (type == "array") and (length <= 100))) and
+            (all(.[]; type == "array" and length <= 100)) and
             (all(.[0:-1][]; length == 100)) and
             (all(.[][];
-              (type == "object") and
-              (.id | (type == "number") and (. == floor) and (. > 0)) and
-              (.user | (type == "object") and (.login | (type == "string") and (length > 0)))) and
-              (.state | (type == "string") and
+              type == "object" and
+              (.id | type == "number" and . == floor and . > 0) and
+              (.user | type == "object" and (.login | type == "string" and length > 0)) and
+              (.state | type == "string" and
                 (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
-              (.commit_id == null or (.commit_id | (type == "string") and test("^[0-9a-f]{40}$"))) and
+              (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
               (.body == null or (.body | type == "string"))
             )) and
             (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
