@@ -9,6 +9,7 @@ release through Git plus strict public GitHub REST metadata before accepting the
 """
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import re
 import subprocess
@@ -325,7 +326,24 @@ def self_test() -> None:
     )
 
 
+def parser() -> argparse.ArgumentParser:
+    value = argparse.ArgumentParser(description=__doc__)
+    mode = value.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--local-only",
+        action="store_true",
+        help="Validate immutable local workflow/action-lock/governance closure without upstream reads.",
+    )
+    mode.add_argument(
+        "--live-only",
+        action="store_true",
+        help="Re-prove only the exact current locked release identities from public upstreams.",
+    )
+    return value
+
+
 def main() -> int:
+    args = parser().parse_args()
     try:
         for path in (
             LOCK,
@@ -338,17 +356,34 @@ def main() -> int:
             require(path.is_file(), f"Action provenance input is missing: {path.relative_to(ROOT)}")
         self_test()
         locked = load_action_lock()
-        observed = discover_workflow_identities()
-        validate_lock_closure(observed, locked)
-        validate_governance_identity_bindings()
-        validate_live_provenance(locked)
-        validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
-        validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
-        print(
-            f"Action release provenance validation passed for {len(locked)} exact action paths: "
-            "workflow identities are closed to action-lock v2, local action execution is forbidden, governance constants are bound, "
-            "and every unique public release matches its immutable repository/release/tag-ref/commit identity."
-        )
+
+        if not args.live_only:
+            observed = discover_workflow_identities()
+            validate_lock_closure(observed, locked)
+            validate_governance_identity_bindings()
+            validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
+            validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
+
+        if not args.local_only:
+            validate_live_provenance(locked)
+
+        if args.local_only:
+            print(
+                f"Action release provenance local closure passed for {len(locked)} exact action paths: "
+                "workflow identities are closed to action-lock v2, local action execution is forbidden, "
+                "and governance constants remain bound without using upstream availability."
+            )
+        elif args.live_only:
+            print(
+                f"Action release provenance live fallback passed for {len(locked)} exact action paths: "
+                "every unique public release matches its immutable repository/release/tag-ref/commit identity."
+            )
+        else:
+            print(
+                f"Action release provenance validation passed for {len(locked)} exact action paths: "
+                "workflow identities are closed to action-lock v2, local action execution is forbidden, governance constants are bound, "
+                "and every unique public release matches its immutable repository/release/tag-ref/commit identity."
+            )
         return 0
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
