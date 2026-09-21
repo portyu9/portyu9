@@ -55,7 +55,7 @@ For the delegated Dependabot CodeQL path, the controller's read-only `dependency
 
 ## Workflow authority firewall
 
-The GitHub Actions surface is a **closed allowlist** of exactly twelve workflows:
+The GitHub Actions surface is a **closed allowlist** of exactly thirteen workflows:
 
 - `action-provenance-witness.yml`
 - `bot-pr-user-approval.yml`
@@ -64,6 +64,7 @@ The GitHub Actions surface is a **closed allowlist** of exactly twelve workflows
 - `codeql.yml`
 - `dependabot-controller.yml`
 - `dependency-review.yml`
+- `profile-generator-compatibility-witness.yml`
 - `profile-quality.yml`
 - `profile-stats.yml`
 - `ruleset-drift-sentinel.yml`
@@ -80,6 +81,7 @@ The **Workflow authority firewall** locks workflow triggers, job inventory, work
 | Dependabot / `trusted-dependabot-codeql-controller` | `actions: write`, `checks: read`, `contents: write`, `pull-requests: write` | progress one exact native CodeQL Action update through stale-base recovery, deterministic governance reconciliation, independent protected validation/admission, and exact-head merge; it cannot mint admission checks or security findings |
 | Action provenance witness / `prepare-action-provenance-witness-read-only` | `actions: read`, `contents: read` | re-prove the exact trusted-main run and existing live Action-release identity, then emit and self-verify one short-lived **unsigned** witness bundle; it has no OIDC, attestation-write, PR/check/ref/content mutation, secret, or candidate-execution authority |
 | Action provenance witness / `attest-action-provenance-witness-write-only` | `contents: read`, `id-token: write`, `attestations: write` | download only the exact same-run prepared witness bundle, verify its predicate/subject SHA-256 identities, and attest the deterministic subject with the frozen custom predicate type; it has no checkout, setup-Python, repository-authored code, Git/gh/API mutation, secret, PR/check/ref/content write, or candidate-execution authority |
+| Profile generator compatibility witness / `prepare-profile-generator-compatibility-witness-read-only` | `actions: read`, `contents: read` | execute the exact immutable pinned profile generator on trusted main, validate an isolated copy through the complete Signal Field pipeline, build/reverify one short-lived unsigned compatibility witness bundle, and upload it for one day; it has no OIDC/signing, secret, candidate execution, or repository mutation authority |
 | Profile Quality / `validate-contracts` | `actions: read`, `attestations: read`, `contents: read` | execute local repository closure unconditionally, discover only bounded successful trusted-main Action-provenance witness runs/artifacts, cryptographically verify an exact current witness when reusable, and otherwise execute the existing public live release proof; it has no write/OIDC/secret/candidate-mutation authority |
 | Profile stats / `mint-mutation-lease-read-only` | `actions: read` | validate the exact current Actions run, re-prove the live generated base, and mint the hash-bound 30-minute transaction capability |
 | Profile stats / `attest-write-only` | `id-token: write`, `attestations: write` | consume only digest-checked reviewed artifacts/predicate and mint my profile evidence attestation after exact lease/predicate proofs |
@@ -95,6 +97,8 @@ The **Workflow authority firewall** locks workflow triggers, job inventory, work
 | Spotlight link sync / `prepare-merge-authorization-read-only` | `contents: read`, `pull-requests: read`, `checks: read`, `actions: read` | independently re-prove the exact live candidate, PR, canonical workflow runs, and five required checks before constructing the deterministic Merge Authorization Certificate |
 | Spotlight link sync / `attest-merge-authorization-write-only` | `contents: read`, `id-token: write`, `attestations: write` | under the exact lease, digest-check and attest only the deterministic Merge Authorization Certificate subject with the reviewed pinned signer action |
 | Spotlight link sync / `merge-readme-only-terminal-write` | `actions: read`, `contents: write`, `pull-requests: read`, `checks: read`, `attestations: read` | independently revalidate the live transaction, live trusted Capability Admission run/check proof, cryptographically verify the exact Merge Authorization Certificate, and only then merge the expected README-only head while the exact lease remains valid |
+
+The Profile Generator Compatibility Witness producer is similarly read-only: `prepare-profile-generator-compatibility-witness-read-only` binds the exact trusted-main run, executes only the immutable pinned generator with the reviewed invocation, validates a separate four-file copy through the complete Signal Field pipeline, and emits only the canonical unsigned compatibility bundle. It has no signer, OIDC, repository mutation, alternate generator, or retry-broadening authority.
 
 The Action provenance witness follows the same authority split: `prepare-action-provenance-witness-read-only` performs all repository checkout, Python execution, run binding, live upstream proof, witness construction, and artifact upload under read-only authority. `attest-action-provenance-witness-write-only` is downstream and receives only digest-checked prepared bytes; its sole side effect is the pinned `actions/attest` call under isolated OIDC/attestation authority. It cannot checkout repository source, execute authored Python, call Git or `gh`, mutate content/PR/check/Actions state, or consume a candidate-authored witness.\n\n`prepare-attestation-read-only` is deliberately outside the write-capable exceptions. It has `contents: read` only, downloads the three immutable evidence sets, executes the canonical validation boundary, computes the scheduled delta, builds the v3 predicate, and uploads exactly one short-lived predicate artifact. It has no OIDC/attestation-write authority.
 
