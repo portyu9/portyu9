@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -45,6 +46,8 @@ PREDICATE_TYPE = "https://github.com/portyu9/portyu9/attestations/profile-genera
 PREDICATE_SCHEMA = ROOT / ".github/attestation/profile-generator-compatibility-witness-v1.schema.json"
 WITNESS_WORKFLOW = ROOT / ".github/workflows/profile-generator-compatibility-witness.yml"
 ARTIFACT_NAME = "profile-generator-compatibility-witness-v1"
+ALLOWED_PRODUCER_EVENTS = frozenset({"push", "schedule", "workflow_dispatch"})
+MAX_DISCOVERY_RESULTS = 100
 EXPECTED_FILES = (
     "signal-field-wide-light.svg",
     "signal-field-wide-dark.svg",
@@ -429,6 +432,274 @@ def consume(
     return value
 
 
+
+def timestamp_epoch(value: Any, label: str) -> int:
+    require(isinstance(value, str) and value.endswith("Z"),
+            f"{label} must be one UTC GitHub timestamp")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as exc:
+        raise ValueError(f"{label} must be one UTC GitHub timestamp") from exc
+    require(parsed.tzinfo is not None and parsed.utcoffset() is not None
+            and parsed.utcoffset().total_seconds() == 0,
+            f"{label} must be UTC")
+    return positive_int(int(parsed.astimezone(timezone.utc).timestamp()), label)
+
+
+def repository_identity(value: Any, label: str) -> None:
+    require(isinstance(value, Mapping), f"{label} must be an object")
+    require(type(value.get("id")) is int and value["id"] == REPOSITORY_ID,
+            f"{label} repository ID changed")
+    require(value.get("full_name") == REPOSITORY,
+            f"{label} repository name changed")
+
+
+def normalize_producer_run(value: Any, *, label: str = "compatibility witness producer run") -> dict[str, Any]:
+    require(isinstance(value, Mapping), f"{label} must be an object")
+    run_id = positive_int(value.get("id"), f"{label} id")
+    run_attempt = positive_int(value.get("run_attempt"), f"{label} run_attempt")
+    require(value.get("name") == WORKFLOW_NAME, f"{label} workflow name changed")
+    require(value.get("path") == WORKFLOW_PATH, f"{label} workflow path changed")
+    require(value.get("event") in ALLOWED_PRODUCER_EVENTS, f"{label} event is not allowed")
+    require(value.get("status") == "completed" and value.get("conclusion") == "success",
+            f"{label} is not one completed successful run")
+    require(value.get("head_branch") == "main", f"{label} head branch changed")
+    head_sha = sha40(value.get("head_sha"), f"{label} head SHA")
+    repository_identity(value.get("repository"), f"{label} repository")
+    repository_identity(value.get("head_repository"), f"{label} head_repository")
+    started_at = value.get("run_started_at")
+    started_epoch = timestamp_epoch(started_at, f"{label} run_started_at")
+    return {
+        "id": run_id,
+        "runAttempt": run_attempt,
+        "headSha": head_sha,
+        "runStartedAt": started_at,
+        "runStartedEpoch": started_epoch,
+    }
+
+
+def select_fresh_witness_run(value: Any, *, now_epoch: int) -> dict[str, Any]:
+    now_epoch = positive_int(now_epoch, "compatibility witness discovery current epoch")
+    require(isinstance(value, Mapping), "compatibility witness run-list response must be an object")
+    total_count = value.get("total_count")
+    require(type(total_count) is int and total_count >= 0,
+            "compatibility witness run-list total_count must be a nonnegative integer")
+    runs = value.get("workflow_runs")
+    require(isinstance(runs, list),
+            "compatibility witness run-list response is missing workflow_runs")
+    require(total_count == len(runs), "compatibility witness run-list response is incomplete")
+    require(total_count <= MAX_DISCOVERY_RESULTS,
+            "compatibility witness run-list exceeds one complete reviewed page")
+
+    normalized = [
+        normalize_producer_run(run, label=f"compatibility witness producer run[{index}]")
+        for index, run in enumerate(runs)
+    ]
+    ids = [run["id"] for run in normalized]
+    require(len(ids) == len(set(ids)),
+            "compatibility witness run-list contains duplicate run IDs")
+    fresh = [
+        run for run in normalized
+        if run["runStartedEpoch"] <= now_epoch < run["runStartedEpoch"] + TTL_SECONDS
+    ]
+    require(fresh, "compatibility witness run-list contains no fresh successful producer run")
+    latest_epoch = max(run["runStartedEpoch"] for run in fresh)
+    latest = [run for run in fresh if run["runStartedEpoch"] == latest_epoch]
+    require(len(latest) == 1,
+            "latest fresh compatibility witness producer run is ambiguous")
+    return latest[0]
+
+
+def validate_attempt_run(value: Any, selected: Mapping[str, Any]) -> dict[str, Any]:
+    observed = normalize_producer_run(
+        value, label="attempt-specific compatibility witness producer run"
+    )
+    for key in ("id", "runAttempt", "headSha", "runStartedAt", "runStartedEpoch"):
+        require(observed[key] == selected.get(key),
+                f"attempt-specific compatibility witness producer run differs from selected run: {key}")
+    return observed
+
+
+def select_witness_artifact(value: Any, selected_run: Mapping[str, Any]) -> dict[str, Any]:
+    require(isinstance(value, Mapping),
+            "compatibility witness artifact-list response must be an object")
+    total_count = value.get("total_count")
+    require(type(total_count) is int and total_count >= 0,
+            "compatibility witness artifact-list total_count must be a nonnegative integer")
+    artifacts = value.get("artifacts")
+    require(isinstance(artifacts, list),
+            "compatibility witness artifact-list response is missing artifacts")
+    require(total_count == len(artifacts),
+            "compatibility witness artifact-list response is incomplete")
+    require(total_count <= MAX_DISCOVERY_RESULTS,
+            "compatibility witness artifact-list exceeds one complete reviewed page")
+    require(total_count == 1,
+            "expected exactly one compatibility witness artifact for selected run")
+
+    artifact = artifacts[0]
+    require(isinstance(artifact, Mapping), "compatibility witness artifact must be an object")
+    artifact_id = positive_int(artifact.get("id"), "compatibility witness artifact id")
+    require(artifact.get("name") == ARTIFACT_NAME,
+            "compatibility witness artifact name changed")
+    require(type(artifact.get("expired")) is bool,
+            "compatibility witness artifact expired must be a boolean")
+    require(artifact["expired"] is False, "compatibility witness artifact is expired")
+    artifact_digest = digest(artifact.get("digest"), "compatibility witness artifact digest")
+    created_epoch = timestamp_epoch(
+        artifact.get("created_at"), "compatibility witness artifact created_at"
+    )
+
+    run_started = positive_int(
+        selected_run.get("runStartedEpoch"), "selected compatibility witness run start epoch"
+    )
+    require(run_started <= created_epoch < run_started + 1800,
+            "compatibility witness artifact creation is outside the selected producer attempt window")
+
+    workflow_run = artifact.get("workflow_run")
+    require(isinstance(workflow_run, Mapping),
+            "compatibility witness artifact workflow_run must be an object")
+    require(
+        positive_int(workflow_run.get("id"), "compatibility witness artifact workflow_run id")
+        == selected_run.get("id"),
+        "compatibility witness artifact belongs to another workflow run",
+    )
+    require(type(workflow_run.get("repository_id")) is int
+            and workflow_run["repository_id"] == REPOSITORY_ID,
+            "compatibility witness artifact workflow_run repository ID changed")
+    require(type(workflow_run.get("head_repository_id")) is int
+            and workflow_run["head_repository_id"] == REPOSITORY_ID,
+            "compatibility witness artifact workflow_run head repository ID changed")
+    require(workflow_run.get("head_branch") == "main",
+            "compatibility witness artifact workflow_run head branch changed")
+    require(
+        sha40(workflow_run.get("head_sha"), "compatibility witness artifact workflow_run head SHA")
+        == selected_run.get("headSha"),
+        "compatibility witness artifact workflow_run head SHA differs from selected run",
+    )
+    return {
+        "id": artifact_id,
+        "name": ARTIFACT_NAME,
+        "digest": artifact_digest,
+        "createdEpoch": created_epoch,
+    }
+
+
+def attestation_verify_args(subject_path: str, source_sha: str) -> list[str]:
+    require(isinstance(subject_path, str) and bool(subject_path)
+            and "\x00" not in subject_path and "\n" not in subject_path,
+            "compatibility witness attestation subject path is invalid")
+    source_sha = sha40(source_sha, "compatibility witness attestation source SHA")
+    return [
+        "gh",
+        "attestation",
+        "verify",
+        subject_path,
+        "--repo",
+        REPOSITORY,
+        "--predicate-type",
+        PREDICATE_TYPE,
+        "--signer-workflow",
+        f"{REPOSITORY}/{WORKFLOW_PATH}",
+        "--signer-digest",
+        source_sha,
+        "--source-digest",
+        source_sha,
+        "--source-ref",
+        SOURCE_REF,
+        "--deny-self-hosted-runners",
+        "--format",
+        "json",
+    ]
+
+
+def validate_verified_attestation(value: Any, predicate: Any, subject: Any) -> None:
+    predicate = validate_predicate(predicate)
+    subject = validate_subject(subject, predicate)
+    require(isinstance(value, list) and len(value) == 1,
+            "compatibility witness attestation verification must return exactly one statement")
+    entry = value[0]
+    require(isinstance(entry, Mapping),
+            "compatibility witness attestation verification entry must be an object")
+    verification = entry.get("verificationResult")
+    require(isinstance(verification, Mapping),
+            "compatibility witness attestation verification result is missing")
+    statement = verification.get("statement")
+    require(isinstance(statement, Mapping),
+            "compatibility witness attestation statement is missing")
+    require(statement.get("predicateType") == PREDICATE_TYPE,
+            "compatibility witness attestation predicate type changed")
+    require(statement.get("predicate") == predicate,
+            "compatibility witness attestation predicate differs from downloaded witness")
+
+    subjects = statement.get("subject")
+    require(isinstance(subjects, list) and len(subjects) == 1,
+            "compatibility witness attestation statement must bind exactly one subject")
+    attested_subject = subjects[0]
+    require(isinstance(attested_subject, Mapping),
+            "compatibility witness attestation subject entry must be an object")
+    require(
+        attested_subject.get("name") == "profile-generator-compatibility-witness-subject.json",
+        "compatibility witness attestation subject name changed",
+    )
+    digests = attested_subject.get("digest")
+    require(isinstance(digests, Mapping) and set(digests) == {"sha256"},
+            "compatibility witness attestation subject digest shape changed")
+    expected = hashlib.sha256(canonical_json(subject).encode("utf-8")).hexdigest()
+    require(digests.get("sha256") == expected,
+            "compatibility witness attestation subject digest differs from downloaded subject")
+
+
+def validate_consumer_evidence(
+    *,
+    run_list: Any,
+    attempt_run: Any,
+    artifact_list: Any,
+    predicate: Any,
+    subject: Any,
+    verified_attestation: Any,
+    current_lock_bytes: bytes,
+    current_policy_files: Mapping[str, bytes],
+    signal_field_dir: Path,
+    now_epoch: int,
+) -> dict[str, Any]:
+    selected = select_fresh_witness_run(run_list, now_epoch=now_epoch)
+    validate_attempt_run(attempt_run, selected)
+    artifact = select_witness_artifact(artifact_list, selected)
+    predicate = validate_predicate(predicate)
+    subject = validate_subject(subject, predicate)
+
+    source = predicate["source"]
+    validity = predicate["validity"]
+    require(source["runId"] == selected["id"],
+            "compatibility witness predicate is bound to another run")
+    require(source["runAttempt"] == selected["runAttempt"],
+            "compatibility witness predicate is bound to another run attempt")
+    require(source["sha"] == selected["headSha"],
+            "compatibility witness predicate is bound to another source SHA")
+    require(validity["issuedAtEpoch"] == selected["runStartedEpoch"],
+            "compatibility witness issuance does not equal selected run start")
+
+    consume(
+        predicate=predicate,
+        subject=subject,
+        lock_bytes=current_lock_bytes,
+        policy_files=current_policy_files,
+        signal_field_dir=signal_field_dir,
+        now_epoch=now_epoch,
+        source_sha=selected["headSha"],
+        run_id=selected["id"],
+        run_attempt=selected["runAttempt"],
+    )
+    validate_verified_attestation(verified_attestation, predicate, subject)
+    return {
+        "runId": selected["id"],
+        "runAttempt": selected["runAttempt"],
+        "sourceSha": selected["headSha"],
+        "artifactId": artifact["id"],
+        "artifactDigest": artifact["digest"],
+        "expiresAtEpoch": validity["expiresAtEpoch"],
+    }
+
 def expect_failure(callable_obj, expected: str) -> None:
     try:
         callable_obj()
@@ -526,6 +797,227 @@ def self_test() -> None:
             predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
             signal_field_dir=directory, now_epoch=1_790_000_001,
             source_sha="a" * 40, run_id=123, run_attempt=2,
+        )
+
+        run = {
+            "id": 123,
+            "run_attempt": 2,
+            "name": WORKFLOW_NAME,
+            "path": WORKFLOW_PATH,
+            "event": "push",
+            "status": "completed",
+            "conclusion": "success",
+            "head_branch": "main",
+            "head_sha": "a" * 40,
+            "run_started_at": "2026-09-21T14:13:20Z",
+            "repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
+            "head_repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
+        }
+        older = copy.deepcopy(run)
+        older["id"] = 122
+        older["run_attempt"] = 1
+        older["run_started_at"] = "2026-09-21T13:56:40Z"
+        run_list = {"total_count": 2, "workflow_runs": [older, run]}
+        selected = select_fresh_witness_run(run_list, now_epoch=1_790_000_001)
+        require(selected["id"] == 123 and selected["runAttempt"] == 2,
+                "canonical compatibility consumer evidence self-test lost selected run")
+
+        artifact = {
+            "id": 91,
+            "name": ARTIFACT_NAME,
+            "expired": False,
+            "digest": "sha256:" + "f" * 64,
+            "created_at": "2026-09-21T14:14:20Z",
+            "workflow_run": {
+                "id": 123,
+                "repository_id": REPOSITORY_ID,
+                "head_repository_id": REPOSITORY_ID,
+                "head_branch": "main",
+                "head_sha": "a" * 40,
+            },
+        }
+        artifact_list = {"total_count": 1, "artifacts": [artifact]}
+        selected_artifact = select_witness_artifact(artifact_list, selected)
+        require(selected_artifact["id"] == 91,
+                "canonical compatibility consumer evidence self-test lost selected artifact")
+
+        subject_sha256 = hashlib.sha256(canonical_json(subject).encode("utf-8")).hexdigest()
+        verified = [{
+            "verificationResult": {
+                "statement": {
+                    "predicateType": PREDICATE_TYPE,
+                    "predicate": copy.deepcopy(predicate),
+                    "subject": [{
+                        "name": "profile-generator-compatibility-witness-subject.json",
+                        "digest": {"sha256": subject_sha256},
+                    }],
+                }
+            }
+        }]
+        evidence = validate_consumer_evidence(
+            run_list=run_list,
+            attempt_run=run,
+            artifact_list=artifact_list,
+            predicate=predicate,
+            subject=subject,
+            verified_attestation=verified,
+            current_lock_bytes=lock_bytes,
+            current_policy_files=policy,
+            signal_field_dir=directory,
+            now_epoch=1_790_000_001,
+        )
+        require(
+            evidence == {
+                "runId": 123,
+                "runAttempt": 2,
+                "sourceSha": "a" * 40,
+                "artifactId": 91,
+                "artifactDigest": "sha256:" + "f" * 64,
+                "expiresAtEpoch": 1_790_000_000 + TTL_SECONDS,
+            },
+            "canonical compatibility consumer evidence result changed",
+        )
+        args = attestation_verify_args(
+            "compatibility/profile-generator-compatibility-witness-subject.json",
+            "a" * 40,
+        )
+        require(args == [
+            "gh", "attestation", "verify",
+            "compatibility/profile-generator-compatibility-witness-subject.json",
+            "--repo", REPOSITORY,
+            "--predicate-type", PREDICATE_TYPE,
+            "--signer-workflow", f"{REPOSITORY}/{WORKFLOW_PATH}",
+            "--signer-digest", "a" * 40,
+            "--source-digest", "a" * 40,
+            "--source-ref", SOURCE_REF,
+            "--deny-self-hosted-runners",
+            "--format", "json",
+        ], "compatibility witness attestation verification command contract changed")
+
+        expect_failure(
+            lambda: select_fresh_witness_run(
+                {"total_count": 3, "workflow_runs": [older, run]},
+                now_epoch=1_790_000_001,
+            ),
+            "run-list response is incomplete",
+        )
+        expect_failure(
+            lambda: select_fresh_witness_run(
+                {"total_count": 101, "workflow_runs": [copy.deepcopy(run) for _ in range(101)]},
+                now_epoch=1_790_000_001,
+            ),
+            "exceeds one complete reviewed page",
+        )
+        duplicate_run = copy.deepcopy(run)
+        duplicate_run["run_started_at"] = "2026-09-21T14:13:19Z"
+        expect_failure(
+            lambda: select_fresh_witness_run(
+                {"total_count": 2, "workflow_runs": [run, duplicate_run]},
+                now_epoch=1_790_000_001,
+            ),
+            "duplicate run IDs",
+        )
+        ambiguous_run = copy.deepcopy(run)
+        ambiguous_run["id"] = 124
+        expect_failure(
+            lambda: select_fresh_witness_run(
+                {"total_count": 2, "workflow_runs": [run, ambiguous_run]},
+                now_epoch=1_790_000_001,
+            ),
+            "latest fresh compatibility witness producer run is ambiguous",
+        )
+        expect_failure(
+            lambda: select_fresh_witness_run(
+                {"total_count": 1, "workflow_runs": [run]},
+                now_epoch=1_790_000_000 + TTL_SECONDS,
+            ),
+            "no fresh successful producer run",
+        )
+        wrong_path_run = copy.deepcopy(run)
+        wrong_path_run["path"] = ".github/workflows/other.yml"
+        expect_failure(
+            lambda: select_fresh_witness_run(
+                {"total_count": 1, "workflow_runs": [wrong_path_run]},
+                now_epoch=1_790_000_001,
+            ),
+            "workflow path changed",
+        )
+        wrong_attempt = copy.deepcopy(run)
+        wrong_attempt["run_attempt"] = 3
+        expect_failure(
+            lambda: validate_attempt_run(wrong_attempt, selected),
+            "differs from selected run: runAttempt",
+        )
+
+        expect_failure(
+            lambda: select_witness_artifact(
+                {"total_count": 2, "artifacts": [artifact]}, selected
+            ),
+            "artifact-list response is incomplete",
+        )
+        duplicate_artifact = copy.deepcopy(artifact)
+        duplicate_artifact["id"] = 92
+        expect_failure(
+            lambda: select_witness_artifact(
+                {"total_count": 2, "artifacts": [artifact, duplicate_artifact]}, selected
+            ),
+            "exactly one compatibility witness artifact",
+        )
+        expired_artifact = copy.deepcopy(artifact)
+        expired_artifact["expired"] = True
+        expect_failure(
+            lambda: select_witness_artifact(
+                {"total_count": 1, "artifacts": [expired_artifact]}, selected
+            ),
+            "artifact is expired",
+        )
+        wrong_artifact_run = copy.deepcopy(artifact)
+        wrong_artifact_run["workflow_run"] = dict(artifact["workflow_run"])
+        wrong_artifact_run["workflow_run"]["id"] = 999
+        expect_failure(
+            lambda: select_witness_artifact(
+                {"total_count": 1, "artifacts": [wrong_artifact_run]}, selected
+            ),
+            "belongs to another workflow run",
+        )
+        old_artifact = copy.deepcopy(artifact)
+        old_artifact["created_at"] = "2026-09-21T13:00:00Z"
+        expect_failure(
+            lambda: select_witness_artifact(
+                {"total_count": 1, "artifacts": [old_artifact]}, selected
+            ),
+            "outside the selected producer attempt window",
+        )
+
+        wrong_type = copy.deepcopy(verified)
+        wrong_type[0]["verificationResult"]["statement"]["predicateType"] = (
+            "https://example.invalid/predicate"
+        )
+        expect_failure(
+            lambda: validate_verified_attestation(wrong_type, predicate, subject),
+            "predicate type changed",
+        )
+        wrong_attested_predicate = copy.deepcopy(verified)
+        wrong_attested_predicate[0]["verificationResult"]["statement"]["predicate"]["source"]["runId"] = 999
+        expect_failure(
+            lambda: validate_verified_attestation(
+                wrong_attested_predicate, predicate, subject
+            ),
+            "predicate differs from downloaded witness",
+        )
+        wrong_attested_subject = copy.deepcopy(verified)
+        wrong_attested_subject[0]["verificationResult"]["statement"]["subject"][0]["digest"]["sha256"] = "e" * 64
+        expect_failure(
+            lambda: validate_verified_attestation(
+                wrong_attested_subject, predicate, subject
+            ),
+            "subject digest differs from downloaded subject",
+        )
+        expect_failure(
+            lambda: validate_verified_attestation(
+                verified + copy.deepcopy(verified), predicate, subject
+            ),
+            "exactly one statement",
         )
         expect_failure(lambda: consume(
             predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
@@ -627,6 +1119,29 @@ def parse_args() -> argparse.Namespace:
     verify.add_argument("--source-sha", required=True)
     verify.add_argument("--run-id", type=int, required=True)
     verify.add_argument("--run-attempt", type=int, required=True)
+
+    select_run = sub.add_parser("select-run")
+    select_run.add_argument("--runs", type=Path, required=True)
+    select_run.add_argument("--now", type=int, required=True)
+    select_run.add_argument("--out", type=Path, required=True)
+
+    select_artifact = sub.add_parser("select-artifact")
+    select_artifact.add_argument("--artifacts", type=Path, required=True)
+    select_artifact.add_argument("--selected-run", type=Path, required=True)
+    select_artifact.add_argument("--out", type=Path, required=True)
+
+    consume_evidence = sub.add_parser("consume-evidence")
+    consume_evidence.add_argument("--run-list", type=Path, required=True)
+    consume_evidence.add_argument("--attempt-run", type=Path, required=True)
+    consume_evidence.add_argument("--artifact-list", type=Path, required=True)
+    consume_evidence.add_argument("--predicate", type=Path, required=True)
+    consume_evidence.add_argument("--subject", type=Path, required=True)
+    consume_evidence.add_argument("--verified-attestation", type=Path, required=True)
+    consume_evidence.add_argument("--signal-field-dir", type=Path, required=True)
+    consume_evidence.add_argument("--lock", type=Path, required=True)
+    consume_evidence.add_argument("--policy-root", type=Path, default=ROOT)
+    consume_evidence.add_argument("--now", type=int, required=True)
+    consume_evidence.add_argument("--out", type=Path, required=True)
     return parser.parse_args()
 
 
@@ -636,6 +1151,30 @@ def main() -> int:
         if args.command == "self-test":
             self_test()
             return 0
+        if args.command == "select-run":
+            selected = select_fresh_witness_run(
+                strict_json(args.runs.read_text(encoding="utf-8")),
+                now_epoch=args.now,
+            )
+            args.out.write_text(canonical_json(selected), encoding="utf-8")
+            print(
+                f"Selected fresh profile generator compatibility witness run "
+                f"{selected['id']} attempt {selected['runAttempt']} at {selected['headSha']}."
+            )
+            return 0
+        if args.command == "select-artifact":
+            selected_run = strict_json(args.selected_run.read_text(encoding="utf-8"))
+            artifact = select_witness_artifact(
+                strict_json(args.artifacts.read_text(encoding="utf-8")),
+                selected_run,
+            )
+            args.out.write_text(canonical_json(artifact), encoding="utf-8")
+            print(
+                f"Selected exact profile generator compatibility witness artifact "
+                f"{artifact['id']} with digest {artifact['digest']}."
+            )
+            return 0
+
         lock_bytes = args.lock.read_bytes()
         policy = policy_files_from_root(args.policy_root)
         if args.command == "build":
@@ -648,6 +1187,29 @@ def main() -> int:
             args.predicate_out.write_text(canonical_json(predicate), encoding="utf-8")
             args.subject_out.write_text(canonical_json(subject), encoding="utf-8")
             return 0
+        if args.command == "consume-evidence":
+            evidence = validate_consumer_evidence(
+                run_list=strict_json(args.run_list.read_text(encoding="utf-8")),
+                attempt_run=strict_json(args.attempt_run.read_text(encoding="utf-8")),
+                artifact_list=strict_json(args.artifact_list.read_text(encoding="utf-8")),
+                predicate=strict_json(args.predicate.read_text(encoding="utf-8")),
+                subject=strict_json(args.subject.read_text(encoding="utf-8")),
+                verified_attestation=strict_json(
+                    args.verified_attestation.read_text(encoding="utf-8")
+                ),
+                current_lock_bytes=lock_bytes,
+                current_policy_files=policy,
+                signal_field_dir=args.signal_field_dir,
+                now_epoch=args.now,
+            )
+            args.out.write_text(canonical_json(evidence), encoding="utf-8")
+            print(
+                f"Accepted cryptographically verified profile generator compatibility witness "
+                f"run {evidence['runId']} attempt {evidence['runAttempt']} "
+                f"through epoch {evidence['expiresAtEpoch']}."
+            )
+            return 0
+
         predicate = strict_json(args.predicate.read_text(encoding="utf-8"))
         subject = strict_json(args.subject.read_text(encoding="utf-8"))
         consume(
