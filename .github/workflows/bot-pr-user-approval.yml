@@ -134,7 +134,7 @@ jobs:
                 (.total_count == (.check_runs | length)) and
                 (all(.check_runs[];
                   type == "object" and
-                  (.id | type == "number" and . == floor and . > 0) and
+                  (.id | (type == "number") and . == floor and . > 0) and
                   (.name == $name) and
                   (.head_sha == $head) and
                   (.app | type == "object" and (.id == 15368)) and
@@ -192,7 +192,7 @@ jobs:
               (.total_count == (.workflow_runs | length)) and
               (all(.workflow_runs[];
                 type == "object" and
-                (.id | type == "number" and . == floor and . > 0) and
+                (.id | (type == "number") and . == floor and . > 0) and
                 (.name | type == "string" and length > 0) and
                 (.path | type == "string" and length > 0) and
                 (.event | type == "string" and length > 0) and
