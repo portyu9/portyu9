@@ -1,0 +1,169 @@
+name: Profile generator compatibility witness
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/action-lock.json"
+      - ".github/attestation/profile-generator-compatibility-witness-v1.schema.json"
+      - ".github/workflows/profile-generator-compatibility-witness.yml"
+      - ".github/workflows/profile-quality.yml"
+      - "scripts/action_identity_lock.py"
+      - "scripts/generate-profile-evidence.py"
+      - "scripts/profile-evidence-generation-v1.json"
+      - "scripts/profile_generator_compatibility_witness.py"
+      - "scripts/signal-field-pipeline-v2.json"
+      - "scripts/signal_field_pipeline.py"
+      - "scripts/validate-generated-signal-field.py"
+      - "scripts/validate-profile-upstream-retry.py"
+      - "scripts/validate-signal-field-v214.py"
+  schedule:
+    - cron: "53 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: profile-generator-compatibility-witness
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13.15"
+
+jobs:
+  prepare:
+    if: github.repository == 'portyu9/portyu9' && github.ref == 'refs/heads/main'
+    name: prepare-profile-generator-compatibility-witness-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      issued_at: ${{ steps.bind.outputs.issued_at }}
+      expires_at: ${{ steps.build.outputs.expires_at }}
+      predicate_sha256: ${{ steps.build.outputs.predicate_sha256 }}
+      subject_sha256: ${{ steps.build.outputs.subject_sha256 }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+
+    steps:
+      - name: Checkout exact trusted source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
+      - name: Bind exact trusted run identity and issuance
+        id: bind
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REPOSITORY_ID" = "1355082509"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$SOURCE_SHA"
+          test "$GITHUB_WORKFLOW_REF" = "portyu9/portyu9/.github/workflows/profile-generator-compatibility-witness.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_SHA" = "$SOURCE_SHA"
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+
+          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"
+          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"
+          test "$(jq -r .run_attempt <<<"$RUN")" = "$GITHUB_RUN_ATTEMPT"
+          test "$(jq -r .head_sha <<<"$RUN")" = "$SOURCE_SHA"
+          test "$(jq -r .head_branch <<<"$RUN")" = "main"
+          test "$(jq -r .path <<<"$RUN")" = ".github/workflows/profile-generator-compatibility-witness.yml"
+          test "$(jq -r .repository.id <<<"$RUN")" = "$GITHUB_REPOSITORY_ID"
+          test "$(jq -r .repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .head_repository.id <<<"$RUN")" = "$GITHUB_REPOSITORY_ID"
+          test "$(jq -r .head_repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"
+          EVENT="$(jq -r .event <<<"$RUN")"
+          case "$EVENT" in
+            push|schedule|workflow_dispatch) ;;
+            *) echo "Unexpected compatibility witness producer event: $EVENT" >&2; exit 1 ;;
+          esac
+
+          RUN_STARTED_AT="$(jq -r '.run_started_at // empty' <<<"$RUN")"
+          test -n "$RUN_STARTED_AT"
+          ISSUED_AT="$(python3 -c 'from datetime import datetime, timezone; import sys; value=sys.argv[1]; parsed=datetime.fromisoformat(value.replace("Z","+00:00")); assert parsed.tzinfo is not None; print(int(parsed.astimezone(timezone.utc).timestamp()))' "$RUN_STARTED_AT")"
+          [[ "$ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
+          NOW="$(date -u +%s)"
+          test "$NOW" -ge "$ISSUED_AT"
+          test "$NOW" -lt "$((ISSUED_AT + 1800))"
+          echo "issued_at=$ISSUED_AT" >> "$GITHUB_OUTPUT"
+
+      - name: Generate exact pinned raw Signal Field
+        id: stats
+        uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
+        with:
+          username: portyu9
+          token: ${{ github.token }}
+          profile: signal-field
+
+      - name: Prove raw generator output compatibility
+        env:
+          RAW_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          test -n "$RAW_DIR"
+          rm -rf compatibility-validation
+          mkdir compatibility-validation
+          for name in             signal-field-wide-light.svg             signal-field-wide-dark.svg             signal-field-compact-light.svg             signal-field-compact-dark.svg
+          do
+            test -f "$RAW_DIR/$name"
+            test ! -L "$RAW_DIR/$name"
+            cp -- "$RAW_DIR/$name" "compatibility-validation/$name"
+          done
+          python3 scripts/signal_field_pipeline.py compatibility-validation
+
+      - name: Build and revalidate deterministic compatibility witness
+        id: build
+        env:
+          ISSUED_AT: ${{ steps.bind.outputs.issued_at }}
+          RAW_DIR: ${{ steps.stats.outputs.ready-dir }}
+        run: |
+          set -euo pipefail
+          [[ "$ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
+          test -n "$RAW_DIR"
+          rm -rf witness
+          mkdir -p witness/raw-signal-field
+          python3 scripts/profile_generator_compatibility_witness.py build             --source-sha "$GITHUB_SHA"             --run-id "$GITHUB_RUN_ID"             --run-attempt "$GITHUB_RUN_ATTEMPT"             --issued-at "$ISSUED_AT"             --signal-field-dir "$RAW_DIR"             --lock .github/action-lock.json             --policy-root .             --predicate-out witness/profile-generator-compatibility-witness.json             --subject-out witness/profile-generator-compatibility-witness-subject.json
+          for name in             signal-field-wide-light.svg             signal-field-wide-dark.svg             signal-field-compact-light.svg             signal-field-compact-dark.svg
+          do
+            cp -- "$RAW_DIR/$name" "witness/raw-signal-field/$name"
+          done
+          python3 scripts/profile_generator_compatibility_witness.py verify             --predicate witness/profile-generator-compatibility-witness.json             --subject witness/profile-generator-compatibility-witness-subject.json             --signal-field-dir witness/raw-signal-field             --lock .github/action-lock.json             --policy-root .             --now "$ISSUED_AT"             --source-sha "$GITHUB_SHA"             --run-id "$GITHUB_RUN_ID"             --run-attempt "$GITHUB_RUN_ATTEMPT"
+          test "$(find witness/raw-signal-field -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" = "4"
+          test -z "$(find witness/raw-signal-field -mindepth 1 -maxdepth 1 ! -type f -print -quit)"
+          test "$(find witness -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" = "2"
+          test "$(find witness -mindepth 1 -maxdepth 1 -type d -printf '%f\n')" = "raw-signal-field"
+          PREDICATE_SHA256="$(sha256sum witness/profile-generator-compatibility-witness.json | cut -d' ' -f1)"
+          SUBJECT_SHA256="$(sha256sum witness/profile-generator-compatibility-witness-subject.json | cut -d' ' -f1)"
+          [[ "$PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          EXPIRES_AT="$((ISSUED_AT + 21600))"
+          echo "predicate_sha256=$PREDICATE_SHA256" >> "$GITHUB_OUTPUT"
+          echo "subject_sha256=$SUBJECT_SHA256" >> "$GITHUB_OUTPUT"
+          echo "expires_at=$EXPIRES_AT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload unsigned reviewed compatibility witness bundle
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: profile-generator-compatibility-witness-v1
+          path: witness/
+          if-no-files-found: error
+          retention-days: 1
