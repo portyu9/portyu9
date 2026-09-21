@@ -617,7 +617,7 @@ jobs:
           EVENT_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           EVENT_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          EXPECTED_GATE_BLOB: 844026bd8a752433dd8b01477e7e1b56b587d0b1
+          EXPECTED_GATE_BLOB: 0158284c833051fa9a1152a3314b906038ec6a28
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
