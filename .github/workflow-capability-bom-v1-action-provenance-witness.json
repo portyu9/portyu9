@@ -1,0 +1,118 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "action-provenance-witness",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload unsigned reviewed witness bundle"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact trusted run identity and issuance"
+            }
+          ],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "action-provenance-witness-v1",
+              "operation": "upload",
+              "path": "witness/",
+              "retention-days": "1",
+              "step": "Upload unsigned reviewed witness bundle"
+            }
+          ],
+          "id": "prepare",
+          "mutations": [],
+          "name": "prepare-action-provenance-witness-read-only",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Action provenance witness",
+      "path": ".github/workflows/action-provenance-witness.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/GOVERNANCE.md",
+            ".github/action-lock.json",
+            ".github/attestation/action-provenance-witness-v1.schema.json",
+            ".github/workflows/action-provenance-witness.yml",
+            ".github/workflows/profile-quality.yml",
+            "scripts/action_identity_lock.py",
+            "scripts/action_provenance_witness.py",
+            "scripts/dependabot_release.py",
+            "scripts/validate-action-release-provenance.py",
+            "scripts/validate-codeql-contract.py",
+            "scripts/validate-dependency-review-contract.py",
+            "scripts/validate-governance-contract.py"
+          ]
+        },
+        "schedule": {
+          "cron": [
+            "41 */2 * * *"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}
