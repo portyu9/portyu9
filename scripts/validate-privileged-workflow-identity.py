@@ -10,10 +10,10 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v53"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "7bbb15421e9ea142da0ecb5c56567b30410e52da",
+    ".github/workflows/bot-pr-user-approval.yml": "952ff5682e704adfe36868002c3a378c096f88e8",
     ".github/workflows/profile-quality.yml": "6293088b283f851dc9ee17933b3ee7092fc48ef9",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "1d03965282514425b64d568f34e8b03d87241b69",
+    ".github/workflows/spotlight-link-sync.yml": "10cd5f2e7784b96d3d87055ca16695dbc1db7b06",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5f357e15eab6948944775a2b040fc8246100007b"
@@ -397,12 +397,12 @@ def validate_pull_review_evidence_schema(workflow: str, label: str, expected_rea
     )
     for fragment in (
         '(type == "array") and (length >= 1) and (length <= 20)',
-        '(all(.[]; (type == "array") and (length <= 100)))',
+        '(all(.[]; type == "array" and length <= 100))',
         '(all(.[0:-1][]; length == 100))',
-        '(.id | (type == "number") and (. == floor) and (. > 0))',
-        '(.user | (type == "object") and (.login | (type == "string") and (length > 0)))',
+        '(.id | type == "number" and . == floor and . > 0)',
+        '(.user | type == "object" and (.login | type == "string" and length > 0))',
         '(. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")',
-        '(.commit_id == null or (.commit_id | (type == "string") and test("^[0-9a-f]{40}$")))',
+        '(.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$")))',
         '(.body == null or (.body | type == "string"))',
         '(([.[][] | .id] | length) == ([.[][] | .id] | unique | length))',
     ):
