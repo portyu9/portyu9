@@ -152,7 +152,75 @@ def project_native_review_gate_to_item10_order(sync: str) -> str:
     return projected
 
 
+def project_strict_pull_review_schema_to_legacy(sync: str) -> str:
+    """Project item-31 review-schema hardening away only for the frozen item-9 proof."""
+    approve_loop = "          for REVIEW_ATTEMPT in $(seq 1 24); do\n"
+    require(sync.count(approve_loop) == 1,
+            "Spotlight item-31 projection cannot isolate the approval review loop")
+    loop_pos = sync.index(approve_loop)
+    approve_start_marker = (
+        '            REVIEW_PAGES="$(gh api --paginate --slurp '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"\n'
+    )
+    approve_end_marker = '            [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]\n'
+    approve_start = sync.index(approve_start_marker, loop_pos)
+    approve_end = sync.index(approve_end_marker, approve_start)
+    approve_block = sync[approve_start:approve_end]
+    for fragment in (
+        'ERROR: malformed or incomplete paginated pull-review evidence.',
+        'has("commit_id") and',
+        'has("body") and',
+        '| unique |',
+        'REVIEWS="$(jq -c \'[.[][]]\' <<<"$REVIEW_PAGES")"',
+    ):
+        require(fragment in approve_block,
+                f"Spotlight item-31 approval projection lost strict review-schema guard: {fragment}")
+    approve_legacy = (
+        '            REVIEWS="$(gh api --paginate --slurp '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"\n'
+        '            PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '
+        '\'[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head '
+        'and ((.body // "") | contains($marker)))] | length\' <<<"$REVIEWS")"\n'
+    )
+    projected = sync[:approve_start] + approve_legacy + sync[approve_end:]
+
+    merge_start = projected.index("  merge:\n")
+    review_marker = '          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"\n'
+    review_pos = projected.index(review_marker, merge_start) + len(review_marker)
+    merge_start_marker = (
+        '          REVIEW_PAGES="$(gh api --paginate --slurp '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"\n'
+    )
+    merge_end_marker = '          [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]\n'
+    schema_start = projected.index(merge_start_marker, review_pos)
+    schema_end = projected.index(merge_end_marker, schema_start)
+    merge_block = projected[schema_start:schema_end]
+    for fragment in (
+        'ERROR: malformed or incomplete paginated pull-review evidence.',
+        'has("commit_id") and',
+        'has("body") and',
+        '| unique |',
+        'LATEST_MANUAL_DECISIVE_STATE=',
+    ):
+        require(fragment in merge_block,
+                f"Spotlight item-31 merge projection lost strict review-schema guard: {fragment}")
+    merge_legacy = (
+        '          REVIEWS="$(gh api --paginate --slurp '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"\n'
+        '          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '
+        '\'[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head '
+        'and ((.body // "") | contains($marker)))] | length\' <<<"$REVIEWS")"\n'
+        '          LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '
+        '\'[.[][] | select(.user.login == "portyu9" and .commit_id == $head and '
+        '(.state == "APPROVED" or .state == "CHANGES_REQUESTED") and '
+        '(((.body // "") | contains($marker)) | not))] | sort_by(.id) | '
+        'if length == 0 then "" else .[-1].state end\' <<<"$REVIEWS")"\n'
+    )
+    return projected[:schema_start] + merge_legacy + projected[schema_end:]
+
+
 def project_item9(sync: str) -> str:
+    sync = project_strict_pull_review_schema_to_legacy(sync)
     sync = project_native_review_gate_to_item10_order(sync)
     legacy = ORIGINAL_PROJECT_ITEM9(sync)
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
