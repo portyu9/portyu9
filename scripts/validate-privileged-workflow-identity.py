@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v57"
+VERSION = "governed-workflow-byte-identity-v58"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "abff43c6362289a9a78df87816aaece5a880ab56",
+    ".github/workflows/bot-pr-user-approval.yml": "d6a83b2451bfc2c466f84ce56e6111820a0d1ae9",
     ".github/workflows/profile-quality.yml": "e37c57ab81d28233e3a8e0f5eaacc7011daf1ae4",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "f80c921b328f120c00a32479e8c2b1b53e335beb",
@@ -431,6 +431,67 @@ def validate_pull_review_evidence_schema(workflow: str, label: str, expected_rea
 
 
 
+
+def validate_bot_review_single_object_evidence_schema(bot_review: str) -> None:
+    for fragment in (
+        'validate_governed_pr_object() {',
+        '--argjson number "$number"',
+        '(.number | type == "number" and . == floor and . > 0 and . == $number) and',
+        '(.user | type == "object" and (.login | type == "string" and length > 0)) and',
+        '(.draft | type == "boolean") and',
+        '(.base | type == "object" and',
+        '(.head | type == "object" and',
+        '(.repo | type == "object" and',
+        'ERROR: malformed governed bot PR evidence for #${PR_NUMBER}.',
+        'ERROR: malformed governed bot PR race evidence for #${PR_NUMBER}.',
+        'ERROR: malformed or mismatched governed bot review response for PR #${PR_NUMBER}.',
+        '(.commit_id | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.body | type == "string" and . == $body)',
+    ):
+        require(
+            fragment in bot_review,
+            f"Bot PR reviewer single-object evidence schema contract is missing: {fragment}",
+        )
+
+    initial_fetch = 'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    initial_schema = 'validate_governed_pr_object "$PR" "$PR_NUMBER"'
+    initial_consumer = 'test "$(jq -r .state <<<"$PR")" = "open"'
+    require(
+        bot_review.index(initial_fetch) < bot_review.index(initial_schema) < bot_review.index(initial_consumer),
+        "Bot PR reviewer must validate initial hydrated PR evidence before field consumption",
+    )
+
+    race_fetch = 'PR_NOW="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    race_schema = 'validate_governed_pr_object "$PR_NOW" "$PR_NUMBER"'
+    race_consumer = 'if [ "$(jq -r .state <<<"$PR_NOW")" != "open" ] ||'
+    require(
+        bot_review.index(race_fetch) < bot_review.index(race_schema) < bot_review.index(race_consumer),
+        "Bot PR reviewer must validate the final PR race snapshot before authorization comparisons",
+    )
+    require(
+        bot_review.count('validate_governed_pr_object "$PR" "$PR_NUMBER"') == 1
+        and bot_review.count('validate_governed_pr_object "$PR_NOW" "$PR_NUMBER"') == 1,
+        "Bot PR reviewer must schema-validate exactly both privileged single-PR reads",
+    )
+
+    review_mutation = 'REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST'
+    review_schema = '(.id | type == "number" and . == floor and . > 0) and'
+    review_success = 'Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER}'
+    mutation_pos = bot_review.index(review_mutation)
+    schema_pos = bot_review.index(review_schema, mutation_pos)
+    success_pos = bot_review.index(review_success, schema_pos)
+    require(
+        mutation_pos < schema_pos < success_pos,
+        "Bot PR reviewer must validate the review-creation response before treating the mutation as successful",
+    )
+    require(
+        bot_review.count("malformed governed bot PR evidence") == 1
+        and bot_review.count("malformed governed bot PR race evidence") == 1
+        and bot_review.count("malformed or mismatched governed bot review response") == 1,
+        "Bot PR reviewer must retain one fail-closed error boundary for each single-object evidence use",
+    )
+
+
 def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
     for fragment in (
         '(.check_runs | type == "array" and length <= 100) and',
@@ -576,6 +637,7 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
 
 
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
+    validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_run_check_evidence_schema(bot_review)
     validate_dependabot_readiness_run_check_evidence_schema(dependabot)
     validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
@@ -600,7 +662,6 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'lane-required checks are not ready yet.',
         'exact head is not quiescent yet.',
         'completed unsuccessfully on ${head}.',
-        'jq -e --arg body "$BODY" \'.body == $body\' <<<"$REVIEW_RESPONSE" >/dev/null',
         '::error::PORTYU9_BOT_REVIEW_TOKEN is required in the portyu9-review-identity environment',
         'MARKER_REVIEW_COUNT=',
         'LATEST_MANUAL_DECISIVE_STATE=',
