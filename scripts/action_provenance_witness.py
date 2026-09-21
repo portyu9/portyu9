@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -44,6 +45,11 @@ PREDICATE_TYPE = (
 )
 PREDICATE_SCHEMA = ROOT / ".github/attestation/action-provenance-witness-v1.schema.json"
 WITNESS_WORKFLOW = ROOT / ".github/workflows/action-provenance-witness.yml"
+WORKFLOW_NAME = "Action provenance witness"
+WORKFLOW_PATH = ".github/workflows/action-provenance-witness.yml"
+ARTIFACT_NAME = "action-provenance-witness-v1"
+ALLOWED_PRODUCER_EVENTS = {"push", "schedule", "workflow_dispatch"}
+MAX_DISCOVERY_RESULTS = 100
 AUTHORITY_SEPARATION = (
     "Live provenance preparation is read-only and separate from the OIDC attestation "
     "writer; neither grants repository mutation authority."
@@ -462,6 +468,245 @@ def validate_for_consumption(
             "Action provenance witness was minted for a different provenance-policy epoch")
 
 
+
+def _timestamp_epoch(value: Any, label: str) -> int:
+    require(isinstance(value, str) and value.endswith("Z"),
+            f"{label} must be one UTC GitHub timestamp")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as exc:
+        raise ValueError(f"{label} must be one UTC GitHub timestamp") from exc
+    require(parsed.tzinfo is not None and parsed.utcoffset() is not None
+            and parsed.utcoffset().total_seconds() == 0,
+            f"{label} must be UTC")
+    epoch = int(parsed.astimezone(timezone.utc).timestamp())
+    return _positive_int(epoch, label)
+
+
+def _repository_identity(value: Any, label: str) -> None:
+    require(isinstance(value, Mapping), f"{label} must be an object")
+    require(type(value.get("id")) is int and value["id"] == REPOSITORY_ID,
+            f"{label} repository ID changed")
+    require(value.get("full_name") == REPOSITORY,
+            f"{label} repository name changed")
+
+
+def normalize_producer_run(value: Any, *, label: str = "witness producer run") -> dict[str, Any]:
+    require(isinstance(value, Mapping), f"{label} must be an object")
+    run_id = _positive_int(value.get("id"), f"{label} id")
+    run_attempt = _positive_int(value.get("run_attempt"), f"{label} run_attempt")
+    require(value.get("name") == WORKFLOW_NAME, f"{label} workflow name changed")
+    require(value.get("path") == WORKFLOW_PATH, f"{label} workflow path changed")
+    require(value.get("event") in ALLOWED_PRODUCER_EVENTS, f"{label} event is not allowed")
+    require(value.get("status") == "completed" and value.get("conclusion") == "success",
+            f"{label} is not one completed successful run")
+    require(value.get("head_branch") == "main", f"{label} head branch changed")
+    head_sha = _sha(value.get("head_sha"), f"{label} head SHA")
+    _repository_identity(value.get("repository"), f"{label} repository")
+    _repository_identity(value.get("head_repository"), f"{label} head_repository")
+    started_at = value.get("run_started_at")
+    started_epoch = _timestamp_epoch(started_at, f"{label} run_started_at")
+    return {
+        "id": run_id,
+        "runAttempt": run_attempt,
+        "headSha": head_sha,
+        "runStartedAt": started_at,
+        "runStartedEpoch": started_epoch,
+    }
+
+
+def select_fresh_witness_run(value: Any, *, now_epoch: int) -> dict[str, Any]:
+    now_epoch = _positive_int(now_epoch, "witness discovery current epoch")
+    require(isinstance(value, Mapping), "witness run-list response must be an object")
+    total_count = value.get("total_count")
+    require(type(total_count) is int and total_count >= 0,
+            "witness run-list total_count must be a nonnegative integer")
+    runs = value.get("workflow_runs")
+    require(isinstance(runs, list), "witness run-list response is missing workflow_runs")
+    require(total_count == len(runs), "witness run-list response is incomplete")
+    require(total_count <= MAX_DISCOVERY_RESULTS,
+            "witness run-list exceeds one complete reviewed page")
+
+    normalized = [
+        normalize_producer_run(run, label=f"witness producer run[{index}]")
+        for index, run in enumerate(runs)
+    ]
+    ids = [run["id"] for run in normalized]
+    require(len(ids) == len(set(ids)), "witness run-list contains duplicate run IDs")
+
+    fresh = [
+        run for run in normalized
+        if run["runStartedEpoch"] <= now_epoch < run["runStartedEpoch"] + TTL_SECONDS
+    ]
+    require(fresh, "witness run-list contains no fresh successful producer run")
+    latest_epoch = max(run["runStartedEpoch"] for run in fresh)
+    latest = [run for run in fresh if run["runStartedEpoch"] == latest_epoch]
+    require(len(latest) == 1, "latest fresh witness producer run is ambiguous")
+    return latest[0]
+
+
+def validate_attempt_run(value: Any, selected: Mapping[str, Any]) -> dict[str, Any]:
+    observed = normalize_producer_run(value, label="attempt-specific witness producer run")
+    for key in ("id", "runAttempt", "headSha", "runStartedAt", "runStartedEpoch"):
+        require(observed[key] == selected.get(key),
+                f"attempt-specific witness producer run differs from selected run: {key}")
+    return observed
+
+
+def select_witness_artifact(value: Any, selected_run: Mapping[str, Any]) -> dict[str, Any]:
+    require(isinstance(value, Mapping), "witness artifact-list response must be an object")
+    total_count = value.get("total_count")
+    require(type(total_count) is int and total_count >= 0,
+            "witness artifact-list total_count must be a nonnegative integer")
+    artifacts = value.get("artifacts")
+    require(isinstance(artifacts, list), "witness artifact-list response is missing artifacts")
+    require(total_count == len(artifacts), "witness artifact-list response is incomplete")
+    require(total_count <= MAX_DISCOVERY_RESULTS,
+            "witness artifact-list exceeds one complete reviewed page")
+    require(total_count == 1, "expected exactly one witness artifact for selected run")
+
+    artifact = artifacts[0]
+    require(isinstance(artifact, Mapping), "witness artifact must be an object")
+    artifact_id = _positive_int(artifact.get("id"), "witness artifact id")
+    require(artifact.get("name") == ARTIFACT_NAME, "witness artifact name changed")
+    require(type(artifact.get("expired")) is bool, "witness artifact expired must be a boolean")
+    require(artifact["expired"] is False, "witness artifact is expired")
+    digest = _digest(artifact.get("digest"), "witness artifact digest")
+    created_epoch = _timestamp_epoch(artifact.get("created_at"), "witness artifact created_at")
+
+    run_started = _positive_int(selected_run.get("runStartedEpoch"), "selected run start epoch")
+    require(run_started <= created_epoch < run_started + 1800,
+            "witness artifact creation is outside the selected producer attempt window")
+
+    workflow_run = artifact.get("workflow_run")
+    require(isinstance(workflow_run, Mapping), "witness artifact workflow_run must be an object")
+    require(_positive_int(workflow_run.get("id"), "witness artifact workflow_run id")
+            == selected_run.get("id"),
+            "witness artifact belongs to another workflow run")
+    require(type(workflow_run.get("repository_id")) is int
+            and workflow_run["repository_id"] == REPOSITORY_ID,
+            "witness artifact workflow_run repository ID changed")
+    require(type(workflow_run.get("head_repository_id")) is int
+            and workflow_run["head_repository_id"] == REPOSITORY_ID,
+            "witness artifact workflow_run head repository ID changed")
+    require(workflow_run.get("head_branch") == "main",
+            "witness artifact workflow_run head branch changed")
+    require(_sha(workflow_run.get("head_sha"), "witness artifact workflow_run head SHA")
+            == selected_run.get("headSha"),
+            "witness artifact workflow_run head SHA differs from selected run")
+    return {
+        "id": artifact_id,
+        "name": ARTIFACT_NAME,
+        "digest": digest,
+        "createdEpoch": created_epoch,
+    }
+
+
+def attestation_verify_args(subject_path: str, source_sha: str) -> list[str]:
+    require(isinstance(subject_path, str) and bool(subject_path)
+            and "\x00" not in subject_path and "\n" not in subject_path,
+            "attestation subject path is invalid")
+    source_sha = _sha(source_sha, "attestation source SHA")
+    return [
+        "gh",
+        "attestation",
+        "verify",
+        subject_path,
+        "--repo",
+        REPOSITORY,
+        "--predicate-type",
+        PREDICATE_TYPE,
+        "--signer-workflow",
+        f"{REPOSITORY}/{WORKFLOW_PATH}",
+        "--signer-digest",
+        source_sha,
+        "--source-digest",
+        source_sha,
+        "--source-ref",
+        SOURCE_REF,
+        "--deny-self-hosted-runners",
+        "--format",
+        "json",
+    ]
+
+
+def validate_verified_attestation(value: Any, predicate: Any, subject: Any) -> None:
+    predicate = validate_predicate(predicate)
+    subject = validate_subject(subject, predicate)
+    require(isinstance(value, list) and len(value) == 1,
+            "witness attestation verification must return exactly one statement")
+    entry = value[0]
+    require(isinstance(entry, Mapping), "witness attestation verification entry must be an object")
+    verification = entry.get("verificationResult")
+    require(isinstance(verification, Mapping),
+            "witness attestation verification result is missing")
+    statement = verification.get("statement")
+    require(isinstance(statement, Mapping), "witness attestation statement is missing")
+    require(statement.get("predicateType") == PREDICATE_TYPE,
+            "witness attestation predicate type changed")
+    require(statement.get("predicate") == predicate,
+            "witness attestation predicate differs from downloaded witness")
+
+    subjects = statement.get("subject")
+    require(isinstance(subjects, list) and len(subjects) == 1,
+            "witness attestation statement must bind exactly one subject")
+    attested_subject = subjects[0]
+    require(isinstance(attested_subject, Mapping),
+            "witness attestation subject entry must be an object")
+    require(attested_subject.get("name") == "action-provenance-witness-subject.json",
+            "witness attestation subject name changed")
+    digests = attested_subject.get("digest")
+    require(isinstance(digests, Mapping) and set(digests) == {"sha256"},
+            "witness attestation subject digest shape changed")
+    expected = hashlib.sha256(canonical_json(subject).encode("utf-8")).hexdigest()
+    require(digests.get("sha256") == expected,
+            "witness attestation subject digest differs from downloaded subject")
+
+
+def validate_consumer_evidence(
+    *,
+    run_list: Any,
+    attempt_run: Any,
+    artifact_list: Any,
+    predicate: Any,
+    subject: Any,
+    verified_attestation: Any,
+    current_lock_bytes: bytes,
+    current_policy_files: Mapping[str, bytes],
+    now_epoch: int,
+) -> dict[str, Any]:
+    selected = select_fresh_witness_run(run_list, now_epoch=now_epoch)
+    validate_attempt_run(attempt_run, selected)
+    artifact = select_witness_artifact(artifact_list, selected)
+    predicate = validate_predicate(predicate)
+    subject = validate_subject(subject, predicate)
+
+    source = predicate["source"]
+    validity = predicate["validity"]
+    require(source["runId"] == selected["id"], "witness predicate is bound to another run")
+    require(source["runAttempt"] == selected["runAttempt"],
+            "witness predicate is bound to another run attempt")
+    require(source["sha"] == selected["headSha"], "witness predicate is bound to another source SHA")
+    require(validity["issuedAtEpoch"] == selected["runStartedEpoch"],
+            "witness issuance does not equal selected run start")
+
+    validate_for_consumption(
+        predicate=predicate,
+        subject=subject,
+        current_lock_bytes=current_lock_bytes,
+        current_policy_files=current_policy_files,
+        now_epoch=now_epoch,
+    )
+    validate_verified_attestation(verified_attestation, predicate, subject)
+    return {
+        "runId": selected["id"],
+        "runAttempt": selected["runAttempt"],
+        "sourceSha": selected["headSha"],
+        "artifactId": artifact["id"],
+        "artifactDigest": artifact["digest"],
+        "expiresAtEpoch": validity["expiresAtEpoch"],
+    }
+
 def _fixture_lock_bytes() -> bytes:
     lightweight = {
         "repositoryId": 1,
@@ -612,6 +857,217 @@ def self_test() -> None:
     require(not is_fresh(predicate, 1700000000 + TTL_SECONDS),
             "Action provenance witness self-test accepted exact-expiry replay")
 
+
+    run = {
+        "id": 123456,
+        "run_attempt": 2,
+        "name": WORKFLOW_NAME,
+        "path": WORKFLOW_PATH,
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "head_branch": "main",
+        "head_sha": "d" * 40,
+        "run_started_at": "2023-11-14T22:13:20Z",
+        "repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
+        "head_repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
+    }
+    older = copy.deepcopy(run)
+    older["id"] = 123455
+    older["run_attempt"] = 1
+    older["run_started_at"] = "2023-11-14T21:56:40Z"
+    run_list = {"total_count": 2, "workflow_runs": [older, run]}
+    selected = select_fresh_witness_run(run_list, now_epoch=1700000001)
+    require(selected["id"] == 123456 and selected["runAttempt"] == 2,
+            "canonical consumer evidence self-test lost selected run")
+
+    artifact = {
+        "id": 91,
+        "name": ARTIFACT_NAME,
+        "expired": False,
+        "digest": "sha256:" + "f" * 64,
+        "created_at": "2023-11-14T22:14:00Z",
+        "workflow_run": {
+            "id": 123456,
+            "repository_id": REPOSITORY_ID,
+            "head_repository_id": REPOSITORY_ID,
+            "head_branch": "main",
+            "head_sha": "d" * 40,
+        },
+    }
+    artifact_list = {"total_count": 1, "artifacts": [artifact]}
+    selected_artifact = select_witness_artifact(artifact_list, selected)
+    require(selected_artifact["id"] == 91,
+            "canonical consumer evidence self-test lost selected artifact")
+
+    subject_sha256 = hashlib.sha256(canonical_json(subject).encode("utf-8")).hexdigest()
+    verified = [{
+        "verificationResult": {
+            "statement": {
+                "predicateType": PREDICATE_TYPE,
+                "predicate": copy.deepcopy(predicate),
+                "subject": [{
+                    "name": "action-provenance-witness-subject.json",
+                    "digest": {"sha256": subject_sha256},
+                }],
+            }
+        }
+    }]
+    evidence = validate_consumer_evidence(
+        run_list=run_list,
+        attempt_run=run,
+        artifact_list=artifact_list,
+        predicate=predicate,
+        subject=subject,
+        verified_attestation=verified,
+        current_lock_bytes=lock_bytes,
+        current_policy_files=policy_files,
+        now_epoch=1700000001,
+    )
+    require(
+        evidence == {
+            "runId": 123456,
+            "runAttempt": 2,
+            "sourceSha": "d" * 40,
+            "artifactId": 91,
+            "artifactDigest": "sha256:" + "f" * 64,
+            "expiresAtEpoch": 1700000000 + TTL_SECONDS,
+        },
+        "canonical consumer evidence result changed",
+    )
+    args = attestation_verify_args("witness/action-provenance-witness-subject.json", "d" * 40)
+    require(args == [
+        "gh", "attestation", "verify", "witness/action-provenance-witness-subject.json",
+        "--repo", REPOSITORY,
+        "--predicate-type", PREDICATE_TYPE,
+        "--signer-workflow", f"{REPOSITORY}/{WORKFLOW_PATH}",
+        "--signer-digest", "d" * 40,
+        "--source-digest", "d" * 40,
+        "--source-ref", SOURCE_REF,
+        "--deny-self-hosted-runners",
+        "--format", "json",
+    ], "witness attestation verification command contract changed")
+
+    _expect_failure(
+        lambda: select_fresh_witness_run(
+            {"total_count": 3, "workflow_runs": [older, run]},
+            now_epoch=1700000001,
+        ),
+        "run-list response is incomplete",
+    )
+    _expect_failure(
+        lambda: select_fresh_witness_run(
+            {"total_count": 101, "workflow_runs": [copy.deepcopy(run) for _ in range(101)]},
+            now_epoch=1700000001,
+        ),
+        "exceeds one complete reviewed page",
+    )
+    duplicate_run = copy.deepcopy(run)
+    duplicate_run["run_started_at"] = "2023-11-14T22:13:19Z"
+    _expect_failure(
+        lambda: select_fresh_witness_run(
+            {"total_count": 2, "workflow_runs": [run, duplicate_run]},
+            now_epoch=1700000001,
+        ),
+        "duplicate run IDs",
+    )
+    ambiguous = copy.deepcopy(run)
+    ambiguous["id"] = 123457
+    _expect_failure(
+        lambda: select_fresh_witness_run(
+            {"total_count": 2, "workflow_runs": [run, ambiguous]},
+            now_epoch=1700000001,
+        ),
+        "latest fresh witness producer run is ambiguous",
+    )
+    _expect_failure(
+        lambda: select_fresh_witness_run(
+            {"total_count": 1, "workflow_runs": [older]},
+            now_epoch=1700000000 + TTL_SECONDS + 1,
+        ),
+        "no fresh successful producer run",
+    )
+    wrong_path_run = copy.deepcopy(run)
+    wrong_path_run["path"] = ".github/workflows/other.yml"
+    _expect_failure(
+        lambda: select_fresh_witness_run(
+            {"total_count": 1, "workflow_runs": [wrong_path_run]},
+            now_epoch=1700000001,
+        ),
+        "workflow path changed",
+    )
+    wrong_attempt = copy.deepcopy(run)
+    wrong_attempt["run_attempt"] = 3
+    _expect_failure(
+        lambda: validate_attempt_run(wrong_attempt, selected),
+        "differs from selected run: runAttempt",
+    )
+
+    _expect_failure(
+        lambda: select_witness_artifact({"total_count": 2, "artifacts": [artifact]}, selected),
+        "artifact-list response is incomplete",
+    )
+    duplicate_artifact = copy.deepcopy(artifact)
+    duplicate_artifact["id"] = 92
+    _expect_failure(
+        lambda: select_witness_artifact(
+            {"total_count": 2, "artifacts": [artifact, duplicate_artifact]},
+            selected,
+        ),
+        "exactly one witness artifact",
+    )
+    expired_artifact = copy.deepcopy(artifact)
+    expired_artifact["expired"] = True
+    _expect_failure(
+        lambda: select_witness_artifact(
+            {"total_count": 1, "artifacts": [expired_artifact]},
+            selected,
+        ),
+        "artifact is expired",
+    )
+    wrong_artifact_run = copy.deepcopy(artifact)
+    wrong_artifact_run["workflow_run"] = dict(artifact["workflow_run"])
+    wrong_artifact_run["workflow_run"]["id"] = 999
+    _expect_failure(
+        lambda: select_witness_artifact(
+            {"total_count": 1, "artifacts": [wrong_artifact_run]},
+            selected,
+        ),
+        "belongs to another workflow run",
+    )
+    old_artifact = copy.deepcopy(artifact)
+    old_artifact["created_at"] = "2023-11-14T20:00:00Z"
+    _expect_failure(
+        lambda: select_witness_artifact(
+            {"total_count": 1, "artifacts": [old_artifact]},
+            selected,
+        ),
+        "outside the selected producer attempt window",
+    )
+
+    wrong_type = copy.deepcopy(verified)
+    wrong_type[0]["verificationResult"]["statement"]["predicateType"] = "https://example.invalid/predicate"
+    _expect_failure(
+        lambda: validate_verified_attestation(wrong_type, predicate, subject),
+        "predicate type changed",
+    )
+    wrong_attested_predicate = copy.deepcopy(verified)
+    wrong_attested_predicate[0]["verificationResult"]["statement"]["predicate"]["source"]["runId"] = 999
+    _expect_failure(
+        lambda: validate_verified_attestation(wrong_attested_predicate, predicate, subject),
+        "predicate differs from downloaded witness",
+    )
+    wrong_attested_subject = copy.deepcopy(verified)
+    wrong_attested_subject[0]["verificationResult"]["statement"]["subject"][0]["digest"]["sha256"] = "e" * 64
+    _expect_failure(
+        lambda: validate_verified_attestation(wrong_attested_subject, predicate, subject),
+        "subject digest differs from downloaded subject",
+    )
+    _expect_failure(
+        lambda: validate_verified_attestation(verified + copy.deepcopy(verified), predicate, subject),
+        "exactly one statement",
+    )
+
     wrong_expiry = copy.deepcopy(predicate)
     wrong_expiry["validity"]["expiresAtEpoch"] += 1
     _expect_failure(lambda: validate_predicate(wrong_expiry), "expiry")
@@ -731,7 +1187,7 @@ def main() -> int:
             print(
                 "Action provenance witness v1 self-test passed: exact lock/policy epoch, "
                 "fixed TTL, run-attempt identity, deterministic release inventory, "
-                "subject binding, freshness, and mismatch rejection are fail-closed."
+                "subject binding, freshness, bounded consumer selection, exact attestation matching, and mismatch rejection are fail-closed."
             )
             return 0
 
