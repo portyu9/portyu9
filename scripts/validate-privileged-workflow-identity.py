@@ -10,7 +10,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v58"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "cfdcebf9050f6407ffdf50d8b9e3e0f974b477c1",
+    ".github/workflows/bot-pr-user-approval.yml": "6271af0e6d959af7b859c62cf1e14e8a5520e9cd",
     ".github/workflows/profile-quality.yml": "e37c57ab81d28233e3a8e0f5eaacc7011daf1ae4",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "f80c921b328f120c00a32479e8c2b1b53e335beb",
@@ -437,7 +437,7 @@ def validate_bot_review_single_object_evidence_schema(bot_review: str) -> None:
         'validate_governed_pr_object() {',
         '--argjson number "$number"',
         '(.number | type == "number" and . == floor and . > 0 and . == $number) and',
-        '(.user | type == "object" and (.login | type == "string" and length > 0)) and',
+        '(.user | (type == "object") and (.login | (type == "string") and length > 0)) and',
         '(.draft | type == "boolean") and',
         '(.base | type == "object" and',
         '(.head | type == "object" and',
