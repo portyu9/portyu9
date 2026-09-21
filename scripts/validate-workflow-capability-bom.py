@@ -93,6 +93,11 @@ def trusted_diagnostic() -> None:
     frozen_source_tree = "6444531dd9e712a6d1808a4eafb95f89c8ce51ab"
     root = Path.cwd().resolve()
 
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=1", "origin", frozen_source_sha],
+        cwd=root,
+        check=True,
+    )
     observed_source = subprocess.check_output(
         ["git", "rev-parse", f"{frozen_source_sha}^{{commit}}"], cwd=root, text=True
     ).strip()
