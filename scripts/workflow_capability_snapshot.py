@@ -3,7 +3,7 @@
 
 The item-12 five-workflow snapshot remains a canonical historical partition. Later trusted
 workflow extensions are stored as one-workflow canonical snapshots. This module is the only
-assembly boundary: callers receive one ordinary twelve-workflow BOM object whose semantic and
+assembly boundary: callers receive one ordinary thirteen-workflow BOM object whose semantic and
 canonical representation is compared with live trusted compilation.
 """
 from __future__ import annotations
@@ -20,6 +20,7 @@ ACTION_PROVENANCE_WITNESS_EXTENSION = ROOT / ".github/workflow-capability-bom-v1
 ADMISSION_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-capability-admission.json"
 AUTOFIX_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-codeql-autofix.json"
 DEPENDABOT_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-dependabot-controller.json"
+PROFILE_GENERATOR_COMPATIBILITY_WITNESS_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-profile-generator-compatibility-witness.json"
 BOT_PR_USER_APPROVAL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-bot-pr-user-approval.json"
 RULESET_DRIFT_SENTINEL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-drift-sentinel.json"
 RULESET_RECONCILER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-reconciler.json"
@@ -70,6 +71,7 @@ def load_combined() -> dict[str, Any]:
     admission_extension = load_part(ADMISSION_EXTENSION, "Capability admission BOM extension")
     autofix_extension = load_part(AUTOFIX_EXTENSION, "CodeQL Autofix BOM extension")
     dependabot_extension = load_part(DEPENDABOT_EXTENSION, "Dependabot controller BOM extension")
+    profile_generator_compatibility_witness_extension = load_part(PROFILE_GENERATOR_COMPATIBILITY_WITNESS_EXTENSION, "Profile generator compatibility witness BOM extension")
     bot_pr_user_approval_extension = load_part(BOT_PR_USER_APPROVAL_EXTENSION, "Bot PR user approval BOM extension")
     ruleset_drift_sentinel_extension = load_part(RULESET_DRIFT_SENTINEL_EXTENSION, "Ruleset drift sentinel BOM extension")
     ruleset_reconciler_extension = load_part(RULESET_RECONCILER_EXTENSION, "Ruleset reconciler BOM extension")
@@ -101,6 +103,13 @@ def load_combined() -> dict[str, Any]:
     )
 
     one_workflow(
+        profile_generator_compatibility_witness_extension,
+        identity="profile-generator-compatibility-witness",
+        path=".github/workflows/profile-generator-compatibility-witness.yml",
+        label="Profile generator compatibility witness BOM extension",
+    )
+
+    one_workflow(
         bot_pr_user_approval_extension,
         identity="bot-pr-user-approval",
         path=".github/workflows/bot-pr-user-approval.yml",
@@ -125,6 +134,7 @@ def load_combined() -> dict[str, Any]:
         + list(admission_extension["workflows"])
         + list(autofix_extension["workflows"])
         + list(dependabot_extension["workflows"])
+        + list(profile_generator_compatibility_witness_extension["workflows"])
         + list(bot_pr_user_approval_extension["workflows"])
         + list(ruleset_drift_sentinel_extension["workflows"])
         + list(ruleset_reconciler_extension["workflows"])
@@ -229,7 +239,7 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
 def self_test() -> None:
     combined = load_combined()
     validate_ruleset_reconciler_safety(combined)
-    require(len(combined["workflows"]) == 12, "composite Workflow Capability BOM must contain twelve workflows")
+    require(len(combined["workflows"]) == 13, "composite Workflow Capability BOM must contain thirteen workflows")
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
             ".github/workflows/action-provenance-witness.yml",
@@ -239,6 +249,7 @@ def self_test() -> None:
             ".github/workflows/codeql.yml",
             ".github/workflows/dependabot-controller.yml",
             ".github/workflows/dependency-review.yml",
+            ".github/workflows/profile-generator-compatibility-witness.yml",
             ".github/workflows/profile-quality.yml",
             ".github/workflows/profile-stats.yml",
             ".github/workflows/ruleset-drift-sentinel.yml",
@@ -253,6 +264,8 @@ def self_test() -> None:
             "composite Workflow Capability BOM lost CodeQL Autofix workflow")
     require(any(workflow["id"] == "dependabot-controller" for workflow in combined["workflows"]),
             "composite Workflow Capability BOM lost Dependabot controller workflow")
+    require(any(workflow["id"] == "profile-generator-compatibility-witness" for workflow in combined["workflows"]),
+            "composite Workflow Capability BOM lost profile generator compatibility witness workflow")
     require(any(workflow["id"] == "bot-pr-user-approval" for workflow in combined["workflows"]),
             "composite Workflow Capability BOM lost bot PR user approval workflow")
     require(any(workflow["id"] == "ruleset-drift-sentinel" for workflow in combined["workflows"]),
@@ -263,4 +276,4 @@ def self_test() -> None:
 
 if __name__ == "__main__":
     self_test()
-    print("Composite Workflow Capability BOM snapshot validation passed: 11 workflows.")
+    print("Composite Workflow Capability BOM snapshot validation passed: 13 workflows.")
