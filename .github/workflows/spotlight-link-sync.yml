@@ -855,7 +855,9 @@ jobs:
                 (.user | type == "object" and (.login | type == "string" and length > 0)) and
                 (.state | type == "string" and
                   (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+                has("commit_id") and
                 (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
+                has("body") and
                 (.body == null or (.body | type == "string"))
               )) and
               (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
@@ -1231,7 +1233,9 @@ jobs:
               (.user | type == "object" and (.login | type == "string" and length > 0)) and
               (.state | type == "string" and
                 (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+              has("commit_id") and
               (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
+              has("body") and
               (.body == null or (.body | type == "string"))
             )) and
             (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
