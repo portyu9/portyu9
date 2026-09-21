@@ -51,8 +51,10 @@ For the delegated Dependabot CodeQL path, the controller's read-only `dependency
 
 ## Workflow authority firewall
 
-The GitHub Actions surface is a **closed allowlist** of exactly eight workflows:
+The GitHub Actions surface is a **closed allowlist** of exactly twelve workflows:
 
+- `action-provenance-witness.yml`
+- `bot-pr-user-approval.yml`
 - `capability-admission.yml`
 - `codeql-autofix.yml`
 - `codeql.yml`
@@ -60,6 +62,8 @@ The GitHub Actions surface is a **closed allowlist** of exactly eight workflows:
 - `dependency-review.yml`
 - `profile-quality.yml`
 - `profile-stats.yml`
+- `ruleset-drift-sentinel.yml`
+- `ruleset-reconciler.yml`
 - `spotlight-link-sync.yml`
 
 The **Workflow authority firewall** locks workflow triggers, job inventory, workflow-level permissions, job-level permissions, executable Action identities, API mutation surfaces, and protected trusted-source bytes. Read-only authority is the default. Both evidence transaction workflows mint a **short-lived mutation lease** before their write-capable transaction jobs may act; the bounded CodeQL Autofix and Dependabot controllers instead use exact default-branch source identity, exact candidate/base freshness, narrowly enumerated mutation surfaces, and independent protected admission before merge.
@@ -70,6 +74,7 @@ The **Workflow authority firewall** locks workflow triggers, job inventory, work
 | Capability admission / `trusted-capability-admission` | `checks: write` plus read-only Actions/content/PR access | execute only trusted default-branch admission code, evaluate candidate bytes as data, and publish the single exact-head admission check for ordinary authorized changes, immutable CodeQL Autofix candidates, deterministic Spotlight recovery, or the narrowly delegated Dependabot CodeQL class |
 | CodeQL Autofix / `trusted-codeql-autofix-controller` | `actions: write`, `checks: read`, `contents: write`, `pull-requests: write`, `security-events: write` | discover exact-main alerts, request GitHub Autofix, create deterministic remediation PRs with immutable provenance receipts, and merge only after independent exact-head admission and protected checks |
 | Dependabot / `trusted-dependabot-codeql-controller` | `actions: write`, `checks: read`, `contents: write`, `pull-requests: write` | progress one exact native CodeQL Action update through stale-base recovery, deterministic governance reconciliation, independent protected validation/admission, and exact-head merge; it cannot mint admission checks or security findings |
+| Action provenance witness / `prepare-action-provenance-witness-read-only` | `actions: read`, `contents: read` | re-prove the exact trusted-main run and existing live Action-release identity, then emit and self-verify one short-lived **unsigned** witness bundle; it has no OIDC, attestation-write, PR/check/ref/content mutation, secret, or candidate-execution authority |
 | Profile stats / `mint-mutation-lease-read-only` | `actions: read` | validate the exact current Actions run, re-prove the live generated base, and mint the hash-bound 30-minute transaction capability |
 | Profile stats / `attest-write-only` | `id-token: write`, `attestations: write` | consume only digest-checked reviewed artifacts/predicate and mint my profile evidence attestation after exact lease/predicate proofs |
 | Profile stats / `publish-write-only` | `contents: write` | verify one sealed publication candidate and fast-forward that exact commit to `generated` under the exact lease |
