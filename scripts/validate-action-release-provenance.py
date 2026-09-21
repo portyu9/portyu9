@@ -25,6 +25,7 @@ from action_identity_lock import (
     repository_for_action,
     self_test as action_lock_self_test,
 )
+from action_provenance_witness import self_test as action_provenance_witness_self_test
 from dependabot_release import (
     resolve_identity,
     self_test as release_identity_self_test,
@@ -299,6 +300,7 @@ def expect_parse_failure(text: str, expected_fragment: str) -> None:
 def self_test() -> None:
     action_lock_self_test()
     release_identity_self_test()
+    action_provenance_witness_self_test()
     a = "a" * 40
     b = "b" * 40
     good = (
