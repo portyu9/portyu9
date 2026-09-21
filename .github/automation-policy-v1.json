@@ -225,6 +225,8 @@
           "name": "validate-contracts",
           "needs": [],
           "permissions": {
+            "actions": "read",
+            "attestations": "read",
             "contents": "read"
           }
         },
