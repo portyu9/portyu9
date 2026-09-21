@@ -9,12 +9,14 @@ release through Git plus strict public GitHub REST metadata before accepting the
 """
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 import re
 import subprocess
 import sys
 from typing import Any
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from action_identity_lock import (
     LOCK,
@@ -46,6 +48,7 @@ PROVENANCE_VALUE = re.compile(
     r"@(?P<sha>[0-9a-f]{40})\s+#\s*(?P<tag>v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)"
 )
 STRING_ASSIGNMENT = re.compile(r'(?m)^(?P<name>[A-Z][A-Z0-9_]*)\s*=\s*"(?P<value>[^"]+)"\s*$')
+PUBLIC_API_MAX_BYTES = 2_000_000
 
 
 def fail(message: str) -> None:
@@ -128,15 +131,43 @@ def validate_lock_closure(
                 f"canonical action identity mismatch for {action}: workflow={observed[action]} lock={expected}")
 
 
-def metadata_prefix(repository: str, tag: str) -> str:
-    require(re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository) is not None,
-            f"invalid metadata repository identity: {repository}")
-    require(SEMVER_TAG.fullmatch(tag) is not None, f"invalid metadata release tag: {tag}")
-    return repository.replace("/", "__") + "@" + tag
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+        return None
+
+
+def fetch_public_api(url: str, label: str) -> str:
+    request = urllib.request.Request(
+        url,
+        method="GET",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "portyu9-action-release-provenance-v2",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    opener = urllib.request.build_opener(NoRedirect())
+    try:
+        with opener.open(request, timeout=20) as response:
+            require(response.status == 200, f"{label}: unexpected HTTP status {response.status}")
+            require(response.geturl() == url, f"{label}: public API request was redirected")
+            raw = response.read(PUBLIC_API_MAX_BYTES + 1)
+            require(len(raw) <= PUBLIC_API_MAX_BYTES, f"{label}: public API response exceeds size bound")
+            content_type = response.headers.get_content_type()
+            require(content_type == "application/json",
+                    f"{label}: unexpected public API content type: {content_type}")
+    except urllib.error.HTTPError as exc:
+        fail(f"{label}: public GitHub API returned HTTP {exc.code}")
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        fail(f"{label}: public GitHub API read failed: {exc}")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        fail(f"{label}: public GitHub API response is not UTF-8: {exc}")
 
 
 def resolve_public_tag(repository: str, tag: str) -> str:
-    """Return exact direct/peeled public tag refs through the reviewed subprocess boundary."""
+    url = f"https://github.com/{repository}.git"
     direct_ref = f"refs/tags/{tag}"
     peeled_ref = f"{direct_ref}^{{}}"
     try:
@@ -156,9 +187,7 @@ def resolve_public_tag(repository: str, tag: str) -> str:
     return completed.stdout
 
 
-def validate_live_provenance(locked: dict[str, dict[str, Any]], metadata_root: Path) -> None:
-    require(metadata_root.is_dir() and not metadata_root.is_symlink(),
-            f"Action release metadata root is missing or aliased: {metadata_root}")
+def validate_live_provenance(locked: dict[str, dict[str, Any]]) -> None:
     repository_tags: dict[tuple[str, str], dict[str, Any]] = {}
     for action, identity in sorted(locked.items()):
         key = (repository_for_action(action), str(identity["tag"]))
@@ -167,19 +196,20 @@ def validate_live_provenance(locked: dict[str, dict[str, Any]], metadata_root: P
                 f"canonical lock maps {key[0]}@{key[1]} to conflicting immutable identities")
         repository_tags[key] = identity
 
-    expected_files: set[str] = set()
     for (repository, tag), expected in sorted(repository_tags.items()):
-        prefix = metadata_prefix(repository, tag)
-        repository_path = metadata_root / f"{prefix}.repository.json"
-        release_path = metadata_root / f"{prefix}.release.json"
-        for metadata_path in (repository_path, release_path):
-            require(metadata_path.is_file() and not metadata_path.is_symlink(),
-                    f"captured Action release metadata is missing or aliased: {metadata_path.name}")
-            expected_files.add(metadata_path.name)
+        encoded_tag = urllib.parse.quote(tag, safe="")
+        repository_json = fetch_public_api(
+            f"https://api.github.com/repos/{repository}",
+            f"{repository}: repository identity",
+        )
+        release_json = fetch_public_api(
+            f"https://api.github.com/repos/{repository}/releases/tags/{encoded_tag}",
+            f"{repository}@{tag}: release identity",
+        )
         observed = resolve_identity(
             resolve_public_tag(repository, tag),
-            repository_path.read_text(encoding="utf-8"),
-            release_path.read_text(encoding="utf-8"),
+            repository_json,
+            release_json,
             repository=repository,
             tag=tag,
             expected_sha=str(expected["sha"]),
@@ -189,11 +219,6 @@ def validate_live_provenance(locked: dict[str, dict[str, Any]], metadata_root: P
             f"verified {repository}@{tag} repo={observed['repositoryId']} release={observed['releaseId']} "
             f"tag-ref={observed['tagRefType']}:{observed['tagRefSha']} -> {observed['sha']}"
         )
-
-    observed_files = {item.name for item in metadata_root.iterdir() if item.is_file()}
-    require(observed_files == expected_files,
-            "captured Action release metadata inventory changed: "
-            f"missing={sorted(expected_files-observed_files)} extra={sorted(observed_files-expected_files)}")
 
 
 def assignments(text: str) -> dict[str, str]:
@@ -298,14 +323,7 @@ def self_test() -> None:
     )
 
 
-def parser() -> argparse.ArgumentParser:
-    value = argparse.ArgumentParser(description=__doc__)
-    value.add_argument("--metadata-root", type=Path, required=True)
-    return value
-
-
 def main() -> int:
-    args = parser().parse_args()
     try:
         for path in (
             LOCK,
@@ -321,7 +339,7 @@ def main() -> int:
         observed = discover_workflow_identities()
         validate_lock_closure(observed, locked)
         validate_governance_identity_bindings()
-        validate_live_provenance(locked, args.metadata_root)
+        validate_live_provenance(locked)
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
         print(
