@@ -60,12 +60,12 @@ jobs:
           PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
           jq -e '
             (type == "array") and (length >= 1) and (length <= 30) and
-            (all(.[]; type == "array" and length <= 100)) and
-            (all(.[0:-1][]; length == 100)) and
+            (all(.[]; (type == "array") and (length <= 100))) and
+            (all(.[0:-1][]; (length == 100))) and
             (all(.[][];
               type == "object" and
               (.number | type == "number" and . == floor and . > 0) and
-              (.user | type == "object" and (.login | type == "string" and length > 0)) and
+              (.user | (type == "object") and (.login | (type == "string") and (length > 0))) and
               (.state == "open") and
               (.draft | type == "boolean") and
               (.base | type == "object" and
@@ -77,8 +77,8 @@ jobs:
                 (.repo | type == "object" and
                   (.full_name | type == "string" and length > 0))) and
               (.title | type == "string" and length > 0) and
-              has("body") and
-              (.body == null or (.body | type == "string"))
+              (has("body")) and
+              (.body == null or ((.body | type) == "string"))
             )) and
             (([.[][] | .number] | length) == ([.[][] | .number] | unique | length))
           ' <<<"$PR_PAGES" >/dev/null || {
