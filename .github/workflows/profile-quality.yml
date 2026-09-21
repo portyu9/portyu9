@@ -134,7 +134,28 @@ jobs:
           METADATA_ROOT="$RUNNER_TEMP/action-release-provenance"
           rm -rf "$METADATA_ROOT"
           mkdir -p "$METADATA_ROOT"
-          while IFS=
+          while read -r REPOSITORY TAG; do
+            [[ "$REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+            [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
+            PREFIX="${REPOSITORY/\//__}@${TAG}"
+            gh api "repos/${REPOSITORY}" > "$METADATA_ROOT/${PREFIX}.repository.json"
+            gh api "repos/${REPOSITORY}/releases/tags/${TAG}" > "$METADATA_ROOT/${PREFIX}.release.json"
+          done < <(
+            jq -r '
+              .actions
+              | to_entries
+              | map({
+                  repository: (.key | split("/") | .[0:2] | join("/")),
+                  tag: .value.tag
+                })
+              | sort_by(.repository, .tag)
+              | unique_by(.repository + "@" + .tag)
+              | .[]
+              | [.repository, .tag]
+              | @tsv
+            ' .github/action-lock.json
+          )
+          python3 scripts/validate-action-release-provenance.py --metadata-root "$METADATA_ROOT"
 
       - name: Validate pinned upstream retry contract
         run: python3 scripts/validate-profile-upstream-retry.py
