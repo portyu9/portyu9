@@ -11,6 +11,13 @@
       "rationale": "Authorize #702's exact read-only Action provenance witness producer: one trusted-main job with contents:read/actions:read, exact run/source reproof, existing live release proof, deterministic witness build/verify, and one-day unsigned artifact retention. No OIDC, attestation writer, secret, candidate execution, PR/check/ref/content mutation, required-check reduction, direct-main write, or bypass is added."
     },
     {
+      "id": "cap-action-provenance-witness-signer-v1",
+      "baseBomSha256": "e71e4c59041ac21125b2d54f2ac17f9429b6ecff9b438612b39f53c8739873a7",
+      "candidateBomSha256": "027d28fa7b8baeddea2988bf70ca0abe54d940f054d75a4ddec19e7b345a8555",
+      "expansionSha256": "7a58ff5a86aa840e27caae776a712df7bbe12beb6f2d2e4b7237a21eaf62ea65",
+      "rationale": "Authorize #706's exact isolated Action provenance witness signer: one downstream same-run artifact download, exact predicate/subject SHA-256 checks, and one pinned actions/attest call under contents:read, id-token:write, attestations:write. No checkout, setup-Python, authored code, Git/gh/API mutation, secret, PR/check/ref/content/Actions write, candidate execution, required-check reduction, direct-main write, or bypass is added."
+    },
+    {
       "id": "cap-action-release-immutable-identity-v2",
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "e1d2524a988db739b724d61a7bc0cc6f2dd92b8449ffe3a6bf192ff1aa5a22b3",
