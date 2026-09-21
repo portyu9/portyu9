@@ -1,0 +1,20 @@
+{
+  "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
+  "expiresAtEpoch": 1789946681,
+  "issuedAtEpoch": 1789946201,
+  "method": "PUT",
+  "outcome": "applied",
+  "predecessorDigest": "sha256:cf24f32a0cec1a36e02d98003e9cf4899caac03c49c7f0015fcd9512849462d8",
+  "repository": "portyu9/portyu9",
+  "repositoryId": 1355082509,
+  "rulesetId": 22148161,
+  "runAttempt": 2,
+  "runId": 35542274848,
+  "schemaVersion": 1,
+  "successorDigest": "sha256:399e05f6b83be86e5d31c0fe45943f10c84ca9e15e51a02de9c87cdaf51fa4a1",
+  "transitionDigest": "sha256:06debdba96bd6567d08d2672e40e0df24ddc60cd194326d330ff712ce8cbb29b",
+  "transitionId": "protect-main-add-trusted-governed-bot-review-v1",
+  "trustedMainSha": "8515f8a890f3066c419df2bbae89f8543caeb6fe",
+  "workflow": ".github/workflows/ruleset-reconciler.yml",
+  "writeStatus": 0
+}
