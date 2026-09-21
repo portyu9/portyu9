@@ -1,41 +1,77 @@
 {
+  "version": "github-actions-identity-lock-v2",
   "actions": {
     "actions/attest": {
+      "repositoryId": 760701061,
+      "releaseId": 365138776,
       "sha": "1e69f48acb82d1966a394da916b4c1698aa569d6",
-      "tag": "v4.2.2"
+      "tag": "v4.2.2",
+      "tagRefSha": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+      "tagRefType": "commit"
     },
     "actions/checkout": {
+      "repositoryId": 197814629,
+      "releaseId": 356804776,
       "sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
-      "tag": "v7.0.1"
+      "tag": "v7.0.1",
+      "tagRefSha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "tagRefType": "commit"
     },
     "actions/dependency-review-action": {
+      "repositoryId": 476372928,
+      "releaseId": 319722492,
       "sha": "a1d282b36b6f3519aa1f3fc636f609c47dddb294",
-      "tag": "v5.0.0"
+      "tag": "v5.0.0",
+      "tagRefSha": "a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+      "tagRefType": "commit"
     },
     "actions/download-artifact": {
+      "repositoryId": 192626254,
+      "releaseId": 295731597,
       "sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-      "tag": "v8.0.1"
+      "tag": "v8.0.1",
+      "tagRefSha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+      "tagRefType": "commit"
     },
     "actions/setup-python": {
+      "repositoryId": 192625525,
+      "releaseId": 356486059,
       "sha": "5fda3b95a4ea91299a34e894583c3862153e4b97",
-      "tag": "v7.0.0"
+      "tag": "v7.0.0",
+      "tagRefSha": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+      "tagRefType": "commit"
     },
     "actions/upload-artifact": {
+      "repositoryId": 192625955,
+      "releaseId": 307659762,
       "sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-      "tag": "v7.0.1"
+      "tag": "v7.0.1",
+      "tagRefSha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+      "tagRefType": "commit"
     },
     "github/codeql-action/analyze": {
+      "repositoryId": 259445878,
+      "releaseId": 385569656,
       "sha": "b96794f015dfd88f77b49b1c93e0fa7110f94c63",
-      "tag": "v4.38.0"
+      "tag": "v4.38.0",
+      "tagRefSha": "4bd7200e1f146b1c937cae12d258b50f41a53cf8",
+      "tagRefType": "tag"
     },
     "github/codeql-action/init": {
+      "repositoryId": 259445878,
+      "releaseId": 385569656,
       "sha": "b96794f015dfd88f77b49b1c93e0fa7110f94c63",
-      "tag": "v4.38.0"
+      "tag": "v4.38.0",
+      "tagRefSha": "4bd7200e1f146b1c937cae12d258b50f41a53cf8",
+      "tagRefType": "tag"
     },
     "shinpr/github-profile-stats": {
+      "repositoryId": 1306572938,
+      "releaseId": 357958496,
       "sha": "49b5f7091182a45f3ef93923505b660c6da5f835",
-      "tag": "v0.2.0"
+      "tag": "v0.2.0",
+      "tagRefSha": "49b5f7091182a45f3ef93923505b660c6da5f835",
+      "tagRefType": "commit"
     }
-  },
-  "version": "github-actions-identity-lock-v1"
+  }
 }
