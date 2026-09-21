@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v56"
+VERSION = "governed-workflow-byte-identity-v57"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "abff43c6362289a9a78df87816aaece5a880ab56",
     ".github/workflows/profile-quality.yml": "e37c57ab81d28233e3a8e0f5eaacc7011daf1ae4",
@@ -496,8 +496,88 @@ def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
 
 
 
+
+def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> None:
+    for fragment in (
+        '(.check_runs | type == "array" and length <= 100) and',
+        '(.name == $name) and',
+        '(.app | type == "object" and (.id == 15368)) and',
+        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
+        'ERROR: malformed or incomplete required-check evidence for ${NAME} on ${HEAD_SHA}.',
+        '(.workflow_runs | type == "array" and length <= 100) and',
+        '(.event == "workflow_dispatch") and',
+        '(.head_sha == $head) and',
+        '(.head_branch == $head_ref) and',
+        '(.repository | type == "object" and (.full_name == $repo)) and',
+        '(.head_repository | type == "object" and (.full_name == $repo)) and',
+        '(([.workflow_runs[] | .id] | length) == ([.workflow_runs[] | .id] | unique | length))',
+        'ERROR: malformed or incomplete exact-head workflow-dispatch run evidence for ${HEAD_SHA}.',
+    ):
+        require(
+            fragment in dependabot,
+            f"Dependabot readiness run/check schema contract is missing: {fragment}",
+        )
+    require(
+        dependabot.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 2,
+        "Dependabot readiness must strictly validate both bounded REST collection totals",
+    )
+    require(
+        dependabot.count('(.id | (type == "number") and . == floor and . > 0) and') == 2,
+        "Dependabot readiness must require positive integer ids at both run/check evidence boundaries",
+    )
+    require(
+        dependabot.count(
+            '. == "queued" or . == "in_progress" or . == "requested" or'
+        ) == 2
+        and dependabot.count(
+            '. == "waiting" or . == "pending" or . == "completed"'
+        ) == 2,
+        "Dependabot readiness must lock the documented six-state check/workflow-run status set at both evidence boundaries",
+    )
+    old_partial_active = (
+        'select(.status == "queued" or .status == "in_progress" or '
+        '.status == "waiting" or .status == "pending")'
+    )
+    require(
+        old_partial_active not in dependabot,
+        "Dependabot readiness must not let requested/unknown workflow-run status disappear from quiescence",
+    )
+    require(
+        dependabot.count('select(.status != "completed")') >= 2,
+        "Dependabot readiness and dispatch suppression must classify every validated non-completed run as active",
+    )
+    require(
+        dependabot.count("malformed or incomplete required-check evidence") == 1
+        and dependabot.count("malformed or incomplete exact-head workflow-dispatch run evidence") == 1,
+        "Dependabot readiness must retain exactly one fail-closed schema boundary for each run/check collection",
+    )
+
+    check_fetch = 'CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100")"'
+    check_schema = '(.check_runs | type == "array" and length <= 100) and'
+    check_ready = 'count="$(jq -r .total_count <<<"$CHECKS")"'
+    require(
+        dependabot.index(check_fetch) < dependabot.index(check_schema) < dependabot.index(check_ready),
+        "Dependabot must validate required-check evidence before readiness decisions",
+    )
+
+    run_fetch = 'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")"'
+    run_schema = '(.workflow_runs | type == "array" and length <= 100) and'
+    first_run_consumer = 'if ! active="$(workflow_dispatch_runs)"; then'
+    require(
+        dependabot.index(run_fetch) < dependabot.index(run_schema) < dependabot.index(first_run_consumer),
+        "Dependabot must validate workflow-dispatch evidence before quiescence filtering",
+    )
+    downstream_runs = 'ACTIVE="$(workflow_dispatch_runs)"'
+    downstream_active = 'select(.status != "completed")'
+    require(
+        dependabot.index(downstream_runs) < dependabot.index(downstream_active, dependabot.index(downstream_runs)),
+        "Dependabot dispatch suppression must consume validated run evidence before activity classification",
+    )
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_run_check_evidence_schema(bot_review)
+    validate_dependabot_readiness_run_check_evidence_schema(dependabot)
     validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
     validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
