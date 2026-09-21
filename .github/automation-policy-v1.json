@@ -11,6 +11,27 @@
   "rulesetContract": ".github/rulesets/repository-rulesets-v1.json",
   "decisionReceiptContract": ".github/automation-decision-receipts-v1.json",
   "workflows": {
+    "action-provenance-witness": {
+      "path": ".github/workflows/action-provenance-witness.yml",
+      "triggers": [
+        "push",
+        "schedule",
+        "workflow_dispatch"
+      ],
+      "permissions": {
+        "contents": "read"
+      },
+      "jobs": {
+        "prepare": {
+          "name": "prepare-action-provenance-witness-read-only",
+          "needs": [],
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          }
+        }
+      }
+    },
     "codeql": {
       "path": ".github/workflows/codeql.yml",
       "triggers": [
