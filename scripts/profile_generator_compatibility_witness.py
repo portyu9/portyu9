@@ -41,10 +41,7 @@ GENERATOR_TAG_REF_TYPE = "commit"
 USERNAME = "portyu9"
 PROFILE = "signal-field"
 CREDENTIAL = "github.token"
-PREDICATE_TYPE = (
-    "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
-    "profile-generator-compatibility-witness-v1.schema.json"
-)
+PREDICATE_TYPE = "https://github.com/portyu9/portyu9/attestations/profile-generator-compatibility/v1"
 PREDICATE_SCHEMA = ROOT / ".github/attestation/profile-generator-compatibility-witness-v1.schema.json"
 WITNESS_WORKFLOW = ROOT / ".github/workflows/profile-generator-compatibility-witness.yml"
 ARTIFACT_NAME = "profile-generator-compatibility-witness-v1"
@@ -473,7 +470,7 @@ def validate_signer_workflow_contract(text: str | None = None) -> None:
     for required in (
         "subject-path: compatibility-witness-attestation-input/profile-generator-compatibility-witness-subject.json",
         "predicate-path: compatibility-witness-attestation-input/profile-generator-compatibility-witness.json",
-        "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-generator-compatibility-witness-v1.schema.json",
+        "predicate-type: https://github.com/portyu9/portyu9/attestations/profile-generator-compatibility/v1",
         "profile-generator-compatibility-witness-subject.json",
         "profile-generator-compatibility-witness.json",
         "raw-signal-field",
