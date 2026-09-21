@@ -53,6 +53,13 @@
       "rationale": "Authorize #617's exact protected-source hardening so manual exact-head portyu9 CHANGES_REQUESTED reviews veto governed bot approval and merge, dismissed/revoked automation reviews are not silently reissued, and terminal Dependabot, CodeQL Autofix, and Spotlight merges require exactly one marker-bound approval. No new endpoint, mutation class, permission, bypass, direct-main authority, or candidate execution is added."
     },
     {
+      "id": "cap-capability-admission-pr-object-schema-hardening",
+      "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
+      "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
+      "expansionSha256": "836cb046c54d6a8011b30017a02c150efe65edb8b745d28467fb6e8dd7a97232",
+      "rationale": "Authorize #772's exact trusted Capability Admission PR-object schema hardening. The three existing PR GETs for CodeQL Autofix, delegated Dependabot, and Spotlight now require strict typed identity/state metadata before existing semantic decisions. Triggers, schedules, permissions, endpoints, evaluator, provenance, candidate execution, check publication, mutations and semantic Workflow Capability remain unchanged; no required-check reduction, direct-main write, ruleset change or bypass is added."
+    },
+    {
       "id": "cap-codeql-alert-4-logging-fix",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
