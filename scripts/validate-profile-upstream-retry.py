@@ -164,7 +164,6 @@ def validate(text: str) -> None:
         "--format json",
         "python3 scripts/profile_generator_compatibility_witness.py consume-evidence",
         '--signal-field-dir "$RAW_DIR"',
-        "python3 scripts/signal_field_pipeline.py profile-generator-compatibility-witness-local-validation",
         'echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"',
     ):
         require(fragment in verify,
@@ -173,6 +172,8 @@ def validate(text: str) -> None:
             "Profile generator compatibility witness must perform exactly one attestation verification")
     require(verify.count("consume-evidence") == 1,
             "Profile generator compatibility witness must consume exactly one evidence bundle")
+    require("signal_field_pipeline.py" not in verify,
+            "Profile generator compatibility witness consumer must not duplicate canonical Signal Field sequencing")
 
     require_action(primary, primary=True)
     require(f"        if: {RETRY_IF}\n" in backoff,
@@ -266,14 +267,13 @@ def self_test(text: str) -> None:
         text.replace("        id: stats_retry\n", "        id: stats_retry\n        continue-on-error: true\n", 1),
         "must fail the integration job",
     )
-    expect_failure(
-        text.replace(
-            "python3 scripts/signal_field_pipeline.py profile-generator-compatibility-witness-local-validation",
-            "true # skipped local compatibility validation",
-            1,
-        ),
-        "cryptographic/local validation changed",
+    injected_pipeline = text.replace(
+        '          echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"\n',
+        '          python3 scripts/signal_field_pipeline.py "$RAW_DIR"\n'
+        '          echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"\n',
+        1,
     )
+    expect_failure(injected_pipeline, "must not duplicate canonical Signal Field sequencing")
     expect_failure(
         text.replace('READY_DIR: ${{ steps.stats.outputs.ready-dir }}',
                      'READY_DIR: ${{ steps.stats_primary.outputs.ready-dir }}', 1),
