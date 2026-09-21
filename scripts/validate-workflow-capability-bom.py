@@ -2,7 +2,11 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,16 +83,84 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+def trusted_diagnostic() -> None:
+    """Disposable carrier: derive the exact frozen #736 tuple with accepted-main admission code."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    trusted_base_sha = "3ab5faee17fd8a3b2744bfd08e958fda2943f891"
+    frozen_source_sha = "9e566569504eefbc3f2048b207f154cd892e316c"
+    frozen_source_tree = "6444531dd9e712a6d1808a4eafb95f89c8ce51ab"
+    root = Path.cwd().resolve()
+
+    observed_source = subprocess.check_output(
+        ["git", "rev-parse", f"{frozen_source_sha}^{{commit}}"], cwd=root, text=True
+    ).strip()
+    observed_tree = subprocess.check_output(
+        ["git", "rev-parse", f"{frozen_source_sha}^{{tree}}"], cwd=root, text=True
+    ).strip()
+    require(observed_source == frozen_source_sha,
+            "trusted diagnostic source commit identity changed")
+    require(observed_tree == frozen_source_tree,
+            "trusted diagnostic source tree identity changed")
+
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=1", "origin", trusted_base_sha],
+        cwd=root,
+        check=True,
+    )
+    with tempfile.TemporaryDirectory(prefix="trusted-base-") as temporary:
+        trusted = Path(temporary) / "repo"
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(trusted), trusted_base_sha],
+            cwd=root,
+            check=True,
+        )
+        try:
+            code = (
+                "from pathlib import Path\n"
+                "import sys\n"
+                "trusted=Path(sys.argv[1]).resolve(); candidate=Path(sys.argv[2]).resolve(); tree=sys.argv[3]\n"
+                "sys.path.insert(0, str(trusted / 'scripts'))\n"
+                "import workflow_capability_admission as admission\n"
+                "try:\n"
+                "    admission.evaluate(candidate, candidate_tree_sha=tree)\n"
+                "except ValueError as exc:\n"
+                "    print('TRUSTED-ADMISSION-DIAGNOSTIC:', exc)\n"
+                "    raise SystemExit(0)\n"
+                "raise SystemExit('trusted diagnostic unexpectedly admitted frozen source')\n"
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    code,
+                    str(trusted),
+                    str(root),
+                    frozen_source_tree,
+                ],
+                cwd=root,
+                check=True,
+            )
+        finally:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(trusted)],
+                cwd=root,
+                check=True,
+            )
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        trusted_diagnostic()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
             "composite snapshot, exact trusted-workflow bytes, and admission self-tests passed."
         )
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
