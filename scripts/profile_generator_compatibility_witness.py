@@ -955,6 +955,16 @@ def self_test() -> None:
             ),
             "artifact-list response is incomplete",
         )
+        expect_failure(
+            lambda: select_witness_artifact(
+                {
+                    "total_count": 101,
+                    "artifacts": [copy.deepcopy(artifact) for _ in range(101)],
+                },
+                selected,
+            ),
+            "artifact-list exceeds one complete reviewed page",
+        )
         duplicate_artifact = copy.deepcopy(artifact)
         duplicate_artifact["id"] = 92
         expect_failure(
@@ -1091,7 +1101,8 @@ def self_test() -> None:
     print(
         "Profile generator compatibility witness contract passed: exact immutable generator + invocation, "
         "six-hour validity, closed compatibility epoch, four-file raw Signal Field identity, duplicate-safe "
-        "canonical predicate/subject binding, stale/mismatch rejection, and no network or mutation authority."
+        "canonical predicate/subject binding, bounded consumer run/artifact selection, exact attestation "
+        "matching, stale/mismatch rejection, and no network or mutation authority."
     )
 
 
