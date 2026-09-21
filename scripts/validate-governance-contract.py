@@ -56,6 +56,7 @@ def validate_quality_native_gate(text: str) -> None:
 
     legacy_quality = text[:text.index(marker)]
     validate = core.job_block(legacy_quality, "validate", "integration")
+    integration = core.job_block(legacy_quality, "integration", "dependabot_admission")
     witness_permissions = (
         "permissions:\n"
         "      actions: read\n"
@@ -63,7 +64,9 @@ def validate_quality_native_gate(text: str) -> None:
         "      contents: read"
     )
     require(validate.count(witness_permissions) == 1,
-            "Profile Quality witness consumer must retain exact actions/attestations/contents read-only authority")
+            "Profile Quality Action-provenance consumer must retain exact read-only authority")
+    require(integration.count(witness_permissions) == 1,
+            "Profile Quality generator-compatibility consumer must retain exact read-only authority")
     for forbidden in (
         "actions: write",
         "attestations: write",
@@ -72,10 +75,15 @@ def validate_quality_native_gate(text: str) -> None:
         "id-token: write",
         "pull-requests: write",
     ):
-        require(forbidden not in validate,
-                f"Profile Quality witness consumer acquired forbidden write authority: {forbidden}")
+        require(forbidden not in validate and forbidden not in integration,
+                f"Profile Quality witness consumers acquired forbidden write authority: {forbidden}")
 
     projected_quality = legacy_quality.replace(
+        witness_permissions,
+        "permissions:\n      contents: read",
+        1,
+    )
+    projected_quality = projected_quality.replace(
         witness_permissions,
         "permissions:\n      contents: read",
         1,
