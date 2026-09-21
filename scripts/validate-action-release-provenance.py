@@ -267,8 +267,38 @@ def validate_governance_identity_bindings() -> None:
 
 
 def validate_quality_contract(text: str) -> None:
-    require("python3 scripts/validate-action-release-provenance.py" in text,
-            "Profile Quality must execute action release provenance verification")
+    require("python3 scripts/validate-action-release-provenance.py --local-only" in text,
+            "Profile Quality must execute immutable local Action provenance closure before witness reuse")
+    require("python3 scripts/validate-action-release-provenance.py --live-only" in text,
+            "Profile Quality must retain the full live upstream Action provenance fallback")
+    require(text.count(
+        "    permissions:\n"
+        "      actions: read\n"
+        "      attestations: read\n"
+        "      contents: read\n"
+    ) == 1, "Profile Quality witness consumer read authority changed")
+    for phrase in (
+        "Discover exact fresh signed Action provenance witness",
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100"',
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}"',
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100"',
+        "python3 scripts/action_provenance_witness.py select-run",
+        "python3 scripts/action_provenance_witness.py select-artifact",
+        "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1",
+        "name: action-provenance-witness-v1",
+        "github-token: ${{ github.token }}",
+        "digest-mismatch: error",
+        'gh attestation verify "$SUBJECT"',
+        "--predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json",
+        '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/action-provenance-witness.yml"',
+        '--signer-digest "$SOURCE_SHA"',
+        '--source-digest "$SOURCE_SHA"',
+        "--source-ref refs/heads/main",
+        "--deny-self-hosted-runners",
+        "python3 scripts/action_provenance_witness.py consume-evidence",
+        "if: steps.action_provenance_witness_verify.outcome != 'success'",
+    ):
+        require(phrase in text, f"Profile Quality witness consumer contract is missing: {phrase}")
     require('- ".github/workflows/**"' in text,
             "Profile Quality push paths must cover workflow action identity changes")
     require('- ".github/action-lock.json"' in text,
