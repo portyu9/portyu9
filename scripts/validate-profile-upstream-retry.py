@@ -230,10 +230,25 @@ def self_test(text: str) -> None:
         text.replace(UPSTREAM_SHA, "0" * 40, 1),
         "exactly two possible live attempts",
     )
+    integration_permissions = (
+        "  integration:\n"
+        "    name: integration-pinned-upstream\n"
+        "    runs-on: ubuntu-24.04\n"
+        "    timeout-minutes: 12\n"
+        "    permissions:\n"
+        "      actions: read\n"
+        "      attestations: read\n"
+        "      contents: read\n"
+    )
+    require(text.count(integration_permissions) == 1,
+            "self-test could not isolate integration witness permissions")
     expect_failure(
-        text.replace("      actions: read\n      attestations: read",
-                     "      actions: write\n      attestations: read", 1),
-        "forbidden write authority",
+        text.replace(
+            integration_permissions,
+            integration_permissions.replace("      actions: read\n", "      actions: write\n"),
+            1,
+        ),
+        "read authority changed",
     )
     expect_failure(
         text.replace(PREDICATE_TYPE, "https://example.invalid/v1", 1),
