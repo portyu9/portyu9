@@ -84,17 +84,21 @@ def validate_snapshot() -> tuple[int, int]:
 
 
 def trusted_diagnostic() -> None:
-    """Disposable carrier: evaluate frozen #760 with exact accepted-main admission code."""
+    """Disposable carrier: evaluate exact frozen #760 with exact accepted-main admission code."""
     if os.environ.get("GITHUB_ACTIONS") != "true":
         return
     base_sha = "cb66886dfb7210da650f769a749b2ad3b30241ba"
+    source_sha = "dc83ea20c46819a3946bf18213be81a8b0fffc5e"
     root = Path.cwd().resolve()
-    subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base_sha], check=True)
-    with tempfile.TemporaryDirectory(prefix="trusted-base-") as temporary:
-        trusted = Path(temporary) / "repo"
+    subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base_sha, source_sha], check=True)
+    with tempfile.TemporaryDirectory(prefix="trusted-admission-") as temporary:
+        temporary_root = Path(temporary)
+        trusted = temporary_root / "trusted"
+        candidate = temporary_root / "candidate"
         subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
         candidate_tree_sha = subprocess.check_output(
-            ["git", "rev-parse", "HEAD^{tree}"], cwd=root, text=True
+            ["git", "rev-parse", "HEAD^{tree}"], cwd=candidate, text=True
         ).strip()
         code = (
             "from pathlib import Path\n"
@@ -107,12 +111,13 @@ def trusted_diagnostic() -> None:
             "except ValueError as exc:\n"
             "    print('TRUSTED-ADMISSION-DIAGNOSTIC:', exc)\n"
             "    raise SystemExit(0)\n"
-            "raise SystemExit('trusted diagnostic unexpectedly admitted candidate')\n"
+            "print('TRUSTED-ADMISSION-DIAGNOSTIC: exact frozen source admitted without authorization tuple')\n"
         )
         subprocess.run(
-            [sys.executable, "-c", code, str(trusted), str(root), candidate_tree_sha],
+            [sys.executable, "-c", code, str(trusted), str(candidate), candidate_tree_sha],
             check=True,
         )
+        subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=True)
         subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=True)
 
 
