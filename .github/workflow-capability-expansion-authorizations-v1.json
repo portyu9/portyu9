@@ -424,6 +424,13 @@
       "rationale": "Authorize #559's exact PR-native Dependabot admission gate. The existing trusted-main semantic proof remains authoritative; the added Profile Quality pull_request job is read-only, executes no candidate repository code, re-proves the exact live PR/base/head, and succeeds only after consuming the exact trusted-capability-admission-proof. This gives Protect Main an eligible-event GitHub Actions check without weakening admission, reviewer visibility, workflow approval, or exact-head merge."
     },
     {
+      "id": "cap-profile-generator-compatibility-witness-producer-v1",
+      "baseBomSha256": "486e75eb6243bd538ca68aae366ada59f1bd89905d8673f2328c93c76a74be04",
+      "candidateBomSha256": "24099bc5df89be3dffe6299d0ae65804d909388b7254a7ef4bd15d1e994395bc",
+      "expansionSha256": "0abdfccc70d42f4267ab5f4b8c4367128760156d41e8a6ceaf9ef30579a6b7b1",
+      "rationale": "Authorize #723's read-only Profile Generator Compatibility Witness producer: trusted-main/schedule/manual execution, contents:read/actions:read, exact run/source proof, immutable pinned generator invocation, isolated Signal Field validation, canonical control-plane registration, witness revalidation, and one-day unsigned artifact upload. No OIDC/signing, secret, candidate execution, write mutation, alternate generator, retry broadening, required-check reduction, direct-main write, or bypass."
+    },
+    {
       "id": "cap-review-thread-graphql-schema-hardening",
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
