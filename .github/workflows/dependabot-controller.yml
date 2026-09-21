@@ -353,35 +353,84 @@ jobs:
           }
 
           workflow_dispatch_runs() {
-            gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100"
+            local runs
+            runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")" || {
+              echo "ERROR: failed to fetch exact-head workflow-dispatch runs for ${HEAD_SHA}." >&2
+              return 1
+            }
+            jq -e --arg head "$HEAD_SHA" --arg head_ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+              (.workflow_runs | type == "array" and length <= 100) and
+              (.total_count == (.workflow_runs | length)) and
+              (all(.workflow_runs[];
+                type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                (.name | type == "string" and length > 0) and
+                (.path | type == "string" and length > 0) and
+                (.event == "workflow_dispatch") and
+                (.head_sha == $head) and
+                (.head_branch == $head_ref) and
+                (.repository | type == "object" and (.full_name == $repo)) and
+                (.head_repository | type == "object" and (.full_name == $repo)) and
+                (.status | type == "string" and
+                  (. == "queued" or . == "in_progress" or . == "requested" or
+                   . == "waiting" or . == "pending" or . == "completed")) and
+                (if .status == "completed"
+                 then (.conclusion | type == "string" and length > 0)
+                 else .conclusion == null
+                 end)
+              )) and
+              (([.workflow_runs[] | .id] | length) == ([.workflow_runs[] | .id] | unique | length))
+            ' <<<"$runs" >/dev/null || {
+              echo "ERROR: malformed or incomplete exact-head workflow-dispatch run evidence for ${HEAD_SHA}." >&2
+              return 1
+            }
+            printf '%s\n' "$runs"
           }
 
           checks_ready() {
             local ready=true
-            local count observed_count active active_total active_count
+            local count observed_count active
             for NAME in validate-contracts integration-pinned-upstream dependency-review trusted-capability-admission analyze-actions analyze-python; do
               CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100")"
-              count="$(jq -r '.total_count // empty' <<<"$CHECKS")"
-              observed_count="$(jq '.check_runs | length' <<<"$CHECKS")"
-              if ! [[ "$count" =~ ^[0-9]+$ ]] || ! [[ "$observed_count" =~ ^[0-9]+$ ]] || [ "$count" != "$observed_count" ] || [ "$count" -lt 1 ] || ! jq -e --arg head "$HEAD_SHA" '
-                (.check_runs | length) > 0 and
-                all(.check_runs[];
-                  .head_sha == $head and
-                  .app.id == 15368 and
-                  .status == "completed" and
-                  .conclusion == "success"
-                )
+              if ! jq -e --arg head "$HEAD_SHA" --arg name "$NAME" '
+                (type == "object") and
+                (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+                (.check_runs | type == "array" and length <= 100) and
+                (.total_count == (.check_runs | length)) and
+                (all(.check_runs[];
+                  type == "object" and
+                  (.id | type == "number" and . == floor and . > 0) and
+                  (.name == $name) and
+                  (.head_sha == $head) and
+                  (.app | type == "object" and (.id == 15368)) and
+                  (.status | type == "string" and
+                    (. == "queued" or . == "in_progress" or . == "requested" or
+                     . == "waiting" or . == "pending" or . == "completed")) and
+                  (if .status == "completed"
+                   then (.conclusion | type == "string" and length > 0)
+                   else .conclusion == null
+                   end)
+                )) and
+                (([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))
               ' <<<"$CHECKS" >/dev/null; then
+                echo "ERROR: malformed or incomplete required-check evidence for ${NAME} on ${HEAD_SHA}." >&2
+                ready=false
+                continue
+              fi
+              count="$(jq -r .total_count <<<"$CHECKS")"
+              observed_count="$(jq '.check_runs | length' <<<"$CHECKS")"
+              if ! [[ "$count" =~ ^[0-9]+$ ]] || ! [[ "$observed_count" =~ ^[0-9]+$ ]] ||
+                 [ "$count" != "$observed_count" ] || [ "$count" -lt 1 ] ||
+                 ! jq -e 'all(.check_runs[]; .status == "completed" and .conclusion == "success")' <<<"$CHECKS" >/dev/null; then
                 ready=false
               fi
             done
 
-            active="$(workflow_dispatch_runs)"
-            active_total="$(jq -r '.total_count // empty' <<<"$active")"
-            active_count="$(jq '.workflow_runs | length' <<<"$active")"
-            if ! [[ "$active_total" =~ ^[0-9]+$ ]] || ! [[ "$active_count" =~ ^[0-9]+$ ]] || [ "$active_total" != "$active_count" ]; then
+            if ! active="$(workflow_dispatch_runs)"; then
               ready=false
-            elif jq -e '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending")] | length > 0' <<<"$active" >/dev/null; then
+            elif jq -e '[.workflow_runs[] | select(.status != "completed")] | length > 0' <<<"$active" >/dev/null; then
               ready=false
             fi
 
@@ -461,7 +510,7 @@ jobs:
 
           if [ "$READY" != "true" ]; then
             ACTIVE="$(workflow_dispatch_runs)"
-            if jq -e '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending")] | length > 0' <<<"$ACTIVE" >/dev/null; then
+            if jq -e '[.workflow_runs[] | select(.status != "completed")] | length > 0' <<<"$ACTIVE" >/dev/null; then
               printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
               echo "Exact-head protected checks are already active; bounded convergence will re-evaluate them."
             else
