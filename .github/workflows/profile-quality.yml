@@ -366,10 +366,6 @@ jobs:
             --policy-root . \
             --now "$WITNESS_NOW" \
             --out accepted-profile-generator-compatibility-witness.json
-          rm -rf profile-generator-compatibility-witness-local-validation
-          mkdir profile-generator-compatibility-witness-local-validation
-          cp -- "$RAW_DIR"/signal-field-*.svg profile-generator-compatibility-witness-local-validation/
-          python3 scripts/signal_field_pipeline.py profile-generator-compatibility-witness-local-validation
           echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Generate actual pinned upstream Signal Field
