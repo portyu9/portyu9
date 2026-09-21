@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEPENDABOT = ROOT / ".github/dependabot.yml"
 WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
+CONTROLLER = WORKFLOWS / "dependabot-controller.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 
 EXPECTED_DEPENDABOT = """version: 2
@@ -128,6 +129,33 @@ def validate_all_workflow_pins() -> None:
     )
 
 
+def validate_controller_collection_contract(text: str) -> None:
+    require(
+        text.count('python3 scripts/workflow_capability_api_collection.py pull-requests') == 1,
+        "Dependabot controller must validate its paginated open-PR collection exactly once",
+    )
+    require(
+        text.count('python3 scripts/workflow_capability_api_collection.py files') == 2,
+        "Dependabot controller must validate both paginated changed-file collections",
+    )
+    require(
+        text.count('repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100') == 1,
+        "Dependabot controller open-PR discovery endpoint count changed",
+    )
+    require(
+        text.count('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100') == 2,
+        "Dependabot controller changed-file endpoint count changed",
+    )
+    require(
+        "jq -r '.[][] | .filename' pr-file-pages.json" not in text,
+        "Dependabot controller must not flatten changed-file pages before schema validation",
+    )
+    require(
+        'MATCHES="$(jq -c \'[.[] | select(' in text,
+        "Dependabot controller must select candidates only from the validated flat PR collection",
+    )
+
+
 def validate_quality_contract(text: str) -> None:
     require(
         '- ".github/dependabot.yml"' in text,
@@ -203,19 +231,20 @@ def self_test() -> None:
 
 def main() -> int:
     try:
-        for path in (DEPENDABOT, QUALITY, GOVERNANCE):
+        for path in (DEPENDABOT, QUALITY, CONTROLLER, GOVERNANCE):
             require(path.is_file(), f"Dependabot governance input is missing: {path.relative_to(ROOT)}")
 
         self_test()
         validate_dependabot(DEPENDABOT.read_text(encoding="utf-8"))
         validate_all_workflow_pins()
+        validate_controller_collection_contract(CONTROLLER.read_text(encoding="utf-8"))
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed paginated PR/file collection evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
