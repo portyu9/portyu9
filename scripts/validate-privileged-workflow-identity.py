@@ -11,12 +11,13 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v53"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "a8740c350a9f512ae9ba1c8f04bd1bb7bbd60dbd",
-    ".github/workflows/profile-quality.yml": "e37c57ab81d28233e3a8e0f5eaacc7011daf1ae4",
+    ".github/workflows/profile-quality.yml": "3d767fa464dc89de15c07ee9f72281cfb8c80fff",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "f80c921b328f120c00a32479e8c2b1b53e335beb",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
+ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "0158284c833051fa9a1152a3314b906038ec6a28"
 
 OLD_MERGE_IF = (
     "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && "
@@ -316,7 +317,7 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         "- name: Run exact accepted-base governed bot review gate",
         "GH_TOKEN: ${{ github.token }}",
         "GITHUB_TOKEN: ${{ github.token }}",
-        "EXPECTED_GATE_BLOB: 844026bd8a752433dd8b01477e7e1b56b587d0b1",
+        "EXPECTED_GATE_BLOB: 0158284c833051fa9a1152a3314b906038ec6a28",
         'gh api -H "Accept: application/vnd.github.raw+json" "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}" > "$TRUSTED_GATE"',
         'GATE_BLOB="$( { printf \'blob %s\\0\' "$GATE_SIZE"; cat "$TRUSTED_GATE"; } | sha1sum | cut -d\' \' -f1 )"',
         'test "$GATE_BLOB" = "$EXPECTED_GATE_BLOB"',
@@ -345,6 +346,10 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
     require(
         actual == TRUSTED_GOVERNED_BOT_REVIEW_GATE,
         "trusted governed-bot review evaluator bytes changed without an explicit byte-lock update",
+    )
+    require(
+        f"EXPECTED_GATE_BLOB: {ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE}" in gate,
+        "Profile Quality staging phase must execute only the exact accepted-base governed-bot evaluator",
     )
     for fragment in (
         'REPOSITORY = "portyu9/portyu9"',
@@ -684,7 +689,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check trust bootstrap plus evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, canonical Profile-Quality quiescence exemption, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, canonical Profile-Quality quiescence exemption, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0
