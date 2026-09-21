@@ -419,6 +419,7 @@ jobs:
       - name: Verify delegated Dependabot release provenance
         if: steps.candidate.outputs.dependabot == 'true'
         env:
+          GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
         run: |
           set -euo pipefail
@@ -436,13 +437,17 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
             "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > dependabot-release-refs.txt
+          gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json
+          gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > dependabot-release.json
           python3 scripts/dependabot_release.py \
             --refs dependabot-release-refs.txt \
+            --repository-json dependabot-release-repository.json \
+            --release-json dependabot-release.json \
             --repository "$DEPENDENCY_REPOSITORY" \
             --tag "$CANDIDATE_TAG" \
             --expected-sha "$CANDIDATE_SHA" \
-            --out dependabot-resolved-release-sha.txt
-          test "$(cat dependabot-resolved-release-sha.txt)" = "$CANDIDATE_SHA"
+            --out dependabot-release-identity.json
+          test "$(jq -r .sha dependabot-release-identity.json)" = "$CANDIDATE_SHA"
 
       - name: Evaluate trusted semantic capability admission
         if: steps.candidate.outputs.has_candidate == 'true'
@@ -454,14 +459,14 @@ jobs:
           TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
           if [ "$DEPENDABOT" = "true" ]; then
-            RESOLVED_RELEASE_SHA="$(cat dependabot-resolved-release-sha.txt)"
+            RESOLVED_RELEASE_SHA="$(jq -r .sha dependabot-release-identity.json)"
             [[ "$RESOLVED_RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
             python3 scripts/dependabot_capability_admission.py \
               candidate-capability-source \
               --candidate-tree-sha "$TREE_SHA" \
               --pr "$RUNNER_TEMP/dependabot-pr.json" \
               --expected-head-sha "$HEAD_SHA" \
-              --resolved-release-sha "$RESOLVED_RELEASE_SHA" \
+              --resolved-release dependabot-release-identity.json \
               --changed-paths dependabot-changed-paths.txt \
               > capability-admission.json
             test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"

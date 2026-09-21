@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-"""Verify every GitHub Action execution surface against one reviewed identity policy.
+"""Verify every GitHub Action execution surface against one immutable release identity policy.
 
-Workflow-local exact SHAs still prevent floating external execution, while the repository
-keeps one versioned lock for every allowed external Action path, reviewed semantic-version
-tag, and immutable commit SHA. Local/composite Actions are not part of that reviewed
-identity model, so they are forbidden until a deliberate governance change introduces a
-separate local-action execution contract. This validator requires exact closure between
-the external lock and all workflow ``uses:`` entries, resolves each locked public release
-tag, and verifies legacy governance constants cannot silently disagree with the canonical
-lock.
+Workflow-local exact SHAs still prevent floating external execution. The canonical action
+lock binds each allowed Action path to repository ID, GitHub release ID, semantic-version tag,
+direct tag-ref object identity/type, and peeled immutable commit SHA. This validator proves
+exact closure between workflow uses-lines and that lock, then re-reads every unique public
+release through Git plus strict public GitHub REST metadata before accepting the identity.
 """
 from __future__ import annotations
 
@@ -16,6 +13,10 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from typing import Any
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from action_identity_lock import (
     LOCK,
@@ -23,6 +24,11 @@ from action_identity_lock import (
     load_action_lock,
     repository_for_action,
     self_test as action_lock_self_test,
+)
+from dependabot_release import (
+    resolve_identity,
+    self_test as release_identity_self_test,
+    validate_expected_identity,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +48,7 @@ PROVENANCE_VALUE = re.compile(
     r"@(?P<sha>[0-9a-f]{40})\s+#\s*(?P<tag>v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)"
 )
 STRING_ASSIGNMENT = re.compile(r'(?m)^(?P<name>[A-Z][A-Z0-9_]*)\s*=\s*"(?P<value>[^"]+)"\s*$')
+PUBLIC_API_MAX_BYTES = 2_000_000
 
 
 def fail(message: str) -> None:
@@ -54,7 +61,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def parse_uses_text(text: str, label: str) -> dict[str, tuple[str, str]]:
-    """Return {full_action_path: (pinned_commit_sha, reviewed_release_tag)}."""
+    """Return full Action path -> (pinned commit SHA, reviewed release tag)."""
     observed: dict[str, tuple[str, str]] = {}
     for line_number, line in enumerate(text.splitlines(), start=1):
         match = USES_LINE.match(line)
@@ -111,7 +118,7 @@ def discover_workflow_identities() -> dict[str, tuple[str, str]]:
 
 def validate_lock_closure(
     observed: dict[str, tuple[str, str]],
-    locked: dict[str, dict[str, str]],
+    locked: dict[str, dict[str, Any]],
 ) -> None:
     observed_actions = set(observed)
     locked_actions = set(locked)
@@ -124,21 +131,39 @@ def validate_lock_closure(
                 f"canonical action identity mismatch for {action}: workflow={observed[action]} lock={expected}")
 
 
-def parse_ls_remote_refs(output: str, repository: str, tag: str) -> dict[str, str]:
-    """Parse exactly one direct tag ref and optional peeled ref without last-wins ambiguity."""
-    direct_ref = f"refs/tags/{tag}"
-    peeled_ref = f"{direct_ref}^{{}}"
-    refs: dict[str, str] = {}
-    for raw in output.splitlines():
-        fields = raw.split("\t", 1)
-        require(len(fields) == 2, f"Unexpected ls-remote output for {repository}@{tag}: {raw}")
-        sha, ref = fields
-        require(SHA40.fullmatch(sha) is not None, f"Invalid remote SHA for {repository}@{tag}: {sha}")
-        require(ref in {direct_ref, peeled_ref}, f"Unexpected remote ref for {repository}@{tag}: {ref}")
-        require(ref not in refs, f"Duplicate remote ref for {repository}@{tag}: {ref}")
-        refs[ref] = sha
-    require(direct_ref in refs, f"Reviewed release tag does not exist: {repository}@{tag}")
-    return refs
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+        return None
+
+
+def fetch_public_api(url: str, label: str) -> str:
+    request = urllib.request.Request(
+        url,
+        method="GET",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "portyu9-action-release-provenance-v2",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    opener = urllib.request.build_opener(NoRedirect())
+    try:
+        with opener.open(request, timeout=20) as response:
+            require(response.status == 200, f"{label}: unexpected HTTP status {response.status}")
+            require(response.geturl() == url, f"{label}: public API request was redirected")
+            raw = response.read(PUBLIC_API_MAX_BYTES + 1)
+            require(len(raw) <= PUBLIC_API_MAX_BYTES, f"{label}: public API response exceeds size bound")
+            content_type = response.headers.get_content_type()
+            require(content_type == "application/json",
+                    f"{label}: unexpected public API content type: {content_type}")
+    except urllib.error.HTTPError as exc:
+        fail(f"{label}: public GitHub API returned HTTP {exc.code}")
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        fail(f"{label}: public GitHub API read failed: {exc}")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        fail(f"{label}: public GitHub API response is not UTF-8: {exc}")
 
 
 def resolve_public_tag(repository: str, tag: str) -> str:
@@ -159,25 +184,41 @@ def resolve_public_tag(repository: str, tag: str) -> str:
         completed.returncode == 0,
         f"git ls-remote failed for {repository}@{tag}: {completed.stderr.strip() or 'unknown error'}",
     )
-
-    refs = parse_ls_remote_refs(completed.stdout, repository, tag)
-    return refs.get(peeled_ref, refs[direct_ref])
+    return completed.stdout
 
 
-def validate_live_provenance(locked: dict[str, dict[str, str]]) -> None:
-    repository_tags: dict[tuple[str, str], str] = {}
+def validate_live_provenance(locked: dict[str, dict[str, Any]]) -> None:
+    repository_tags: dict[tuple[str, str], dict[str, Any]] = {}
     for action, identity in sorted(locked.items()):
-        key = (repository_for_action(action), identity["tag"])
+        key = (repository_for_action(action), str(identity["tag"]))
         previous = repository_tags.get(key)
-        require(previous is None or previous == identity["sha"],
-                f"canonical lock maps {key[0]}@{key[1]} to conflicting SHAs")
-        repository_tags[key] = identity["sha"]
+        require(previous is None or previous == identity,
+                f"canonical lock maps {key[0]}@{key[1]} to conflicting immutable identities")
+        repository_tags[key] = identity
 
-    for (repository, tag), pinned_sha in sorted(repository_tags.items()):
-        resolved = resolve_public_tag(repository, tag)
-        require(resolved == pinned_sha,
-                f"Release provenance mismatch for {repository}@{tag}: tag resolves to {resolved}, lock pins {pinned_sha}")
-        print(f"verified {repository}@{tag} -> {pinned_sha}")
+    for (repository, tag), expected in sorted(repository_tags.items()):
+        encoded_tag = urllib.parse.quote(tag, safe="")
+        repository_json = fetch_public_api(
+            f"https://api.github.com/repos/{repository}",
+            f"{repository}: repository identity",
+        )
+        release_json = fetch_public_api(
+            f"https://api.github.com/repos/{repository}/releases/tags/{encoded_tag}",
+            f"{repository}@{tag}: release identity",
+        )
+        observed = resolve_identity(
+            resolve_public_tag(repository, tag),
+            repository_json,
+            release_json,
+            repository=repository,
+            tag=tag,
+            expected_sha=str(expected["sha"]),
+        )
+        validate_expected_identity(observed, expected, label=f"{repository}@{tag}")
+        print(
+            f"verified {repository}@{tag} repo={observed['repositoryId']} release={observed['releaseId']} "
+            f"tag-ref={observed['tagRefType']}:{observed['tagRefSha']} -> {observed['sha']}"
+        )
 
 
 def assignments(text: str) -> dict[str, str]:
@@ -237,7 +278,9 @@ def validate_governance(text: str) -> None:
         "## Action release provenance",
         "same-line",
         "exact semantic-version",
-        "annotated tags",
+        "repository ID",
+        "release ID",
+        "tag-object",
         "git ls-remote",
         "does not replace",
     ):
@@ -253,17 +296,9 @@ def expect_parse_failure(text: str, expected_fragment: str) -> None:
         fail(f"Parser self-test accepted forbidden provenance drift: {expected_fragment}")
 
 
-def expect_remote_failure(output: str, expected_fragment: str) -> None:
-    try:
-        parse_ls_remote_refs(output, "actions/example", "v1.2.3")
-    except ValueError as exc:
-        require(expected_fragment in str(exc), f"ls-remote self-test failed for wrong reason: {exc}")
-    else:
-        fail(f"ls-remote self-test accepted ambiguous output: {expected_fragment}")
-
-
 def self_test() -> None:
     action_lock_self_test()
+    release_identity_self_test()
     a = "a" * 40
     b = "b" * 40
     good = (
@@ -287,26 +322,6 @@ def self_test() -> None:
         "conflicting identities",
     )
 
-    locked = {
-        "actions/checkout": {"sha": a, "tag": "v7.0.1"},
-        "github/codeql-action/init": {"sha": b, "tag": "v4.37.9"},
-    }
-    validate_lock_closure(observed, locked)
-    try:
-        validate_lock_closure(observed, {"actions/checkout": locked["actions/checkout"]})
-    except ValueError as exc:
-        require("unlocked=" in str(exc), f"lock-closure self-test failed for wrong reason: {exc}")
-    else:
-        fail("lock-closure self-test accepted an unlocked workflow action")
-
-    direct = "refs/tags/v1.2.3"
-    peeled = f"{direct}^{{}}"
-    canonical_remote = f"{a}\t{direct}\n{b}\t{peeled}\n"
-    parsed_remote = parse_ls_remote_refs(canonical_remote, "actions/example", "v1.2.3")
-    require(parsed_remote == {direct: a, peeled: b}, "ls-remote self-test changed canonical annotated-tag parsing")
-    expect_remote_failure(f"{a}\t{direct}\n{b}\t{direct}\n", "Duplicate remote ref")
-    expect_remote_failure(f"{a}\t{direct}\n{a}\t{direct}\n", "Duplicate remote ref")
-
 
 def main() -> int:
     try:
@@ -329,8 +344,8 @@ def main() -> int:
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
         print(
             f"Action release provenance validation passed for {len(locked)} exact action paths: "
-            "workflow identities are closed to the canonical lock, local action execution is forbidden, "
-            "governance constants are bound to it, and every unique public release tag resolves to one unambiguous locked immutable SHA."
+            "workflow identities are closed to action-lock v2, local action execution is forbidden, governance constants are bound, "
+            "and every unique public release matches its immutable repository/release/tag-ref/commit identity."
         )
         return 0
     except (OSError, ValueError) as exc:

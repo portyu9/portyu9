@@ -117,7 +117,7 @@ def evaluate(
     candidate_tree_sha: str,
     pr: Mapping[str, Any],
     expected_head_sha: str,
-    resolved_release_sha: str,
+    resolved_release: Mapping[str, Any],
     changed_paths: list[str],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     proof = dependabot_controller.admit(
@@ -125,7 +125,7 @@ def evaluate(
         expected_head_sha=expected_head_sha,
         base_root=ROOT,
         candidate_root=candidate_root,
-        resolved_release_sha=resolved_release_sha,
+        resolved_release=resolved_release,
     )
     dependabot_controller.validate_reconciled_candidate(
         base_root=ROOT,
@@ -199,7 +199,7 @@ def parser() -> argparse.ArgumentParser:
     value.add_argument("--candidate-tree-sha", required=True)
     value.add_argument("--pr", type=Path, required=True)
     value.add_argument("--expected-head-sha", required=True)
-    value.add_argument("--resolved-release-sha", required=True)
+    value.add_argument("--resolved-release", type=Path, required=True)
     value.add_argument("--changed-paths", type=Path, required=True)
     value.add_argument("--self-test", action="store_true")
     return value
@@ -217,7 +217,7 @@ def main() -> int:
             candidate_tree_sha=args.candidate_tree_sha,
             pr=pr,
             expected_head_sha=args.expected_head_sha,
-            resolved_release_sha=args.resolved_release_sha,
+            resolved_release=strict_json(args.resolved_release),
             changed_paths=changed_paths,
         )
         public = {
