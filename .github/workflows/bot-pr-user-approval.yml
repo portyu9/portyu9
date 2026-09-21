@@ -127,6 +127,30 @@ jobs:
                 echo "ERROR: failed to fetch required check context ${name} for ${head}." >&2
                 return 1
               }
+              jq -e --arg head "$head" --arg name "$name" '
+                (type == "object") and
+                (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+                (.check_runs | type == "array" and length <= 100) and
+                (.total_count == (.check_runs | length)) and
+                (all(.check_runs[];
+                  type == "object" and
+                  (.id | (type == "number") and . == floor and . > 0) and
+                  (.name == $name) and
+                  (.head_sha == $head) and
+                  (.app | type == "object" and (.id == 15368)) and
+                  (.status | type == "string" and
+                    (. == "queued" or . == "in_progress" or . == "requested" or
+                     . == "waiting" or . == "pending" or . == "completed")) and
+                  (if .status == "completed"
+                   then (.conclusion | type == "string" and length > 0)
+                   else .conclusion == null
+                   end)
+                )) and
+                (([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))
+              ' <<<"$checks" >/dev/null || {
+                echo "ERROR: malformed or incomplete required-check evidence for ${name} on ${head}." >&2
+                return 1
+              }
               total="$(jq -r '.total_count // empty' <<<"$checks")"
               count="$(jq '.check_runs | length' <<<"$checks")"
               [[ "$total" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid required-check total for ${name}." >&2; return 1; }
@@ -161,6 +185,32 @@ jobs:
               echo "ERROR: failed to fetch workflow-run quiescence for ${head}." >&2
               return 1
             }
+            jq -e --arg head "$head" '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+              (.workflow_runs | type == "array" and length <= 100) and
+              (.total_count == (.workflow_runs | length)) and
+              (all(.workflow_runs[];
+                type == "object" and
+                (.id | (type == "number") and . == floor and . > 0) and
+                (.name | type == "string" and length > 0) and
+                (.path | type == "string" and length > 0) and
+                (.event | type == "string" and length > 0) and
+                (.head_sha == $head) and
+                (.head_branch | type == "string" and length > 0) and
+                (.repository | type == "object" and
+                  (.full_name | type == "string" and length > 0)) and
+                (.head_repository | type == "object" and
+                  (.full_name | type == "string" and length > 0)) and
+                (.status | type == "string" and
+                  (. == "queued" or . == "in_progress" or . == "requested" or
+                   . == "waiting" or . == "pending" or . == "completed"))
+              )) and
+              (([.workflow_runs[] | .id] | length) == ([.workflow_runs[] | .id] | unique | length))
+            ' <<<"$runs" >/dev/null || {
+              echo "ERROR: malformed or incomplete workflow-run quiescence evidence for ${head}." >&2
+              return 1
+            }
             total="$(jq -r '.total_count // empty' <<<"$runs")"
             count="$(jq '.workflow_runs | length' <<<"$runs")"
             [[ "$total" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid workflow-run total for ${head}." >&2; return 1; }
@@ -172,7 +222,7 @@ jobs:
             # every other exact-head run must be quiescent before the review mutation.
             active_profile="$(jq --arg head "$head" --arg head_ref "$head_ref" --arg repo "$TARGET_REPOSITORY" '[
               .workflow_runs[] |
-              select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending") |
+              select(.status != "completed") |
               select(
                 .name == "Profile quality" and
                 .path == ".github/workflows/profile-quality.yml" and
@@ -191,7 +241,7 @@ jobs:
 
             unexpected_active="$(jq --arg head "$head" --arg head_ref "$head_ref" --arg repo "$TARGET_REPOSITORY" '[
               .workflow_runs[] |
-              select(.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending") |
+              select(.status != "completed") |
               select((
                 .name == "Profile quality" and
                 .path == ".github/workflows/profile-quality.yml" and
