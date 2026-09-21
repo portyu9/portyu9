@@ -19,6 +19,7 @@ import tempfile
 from typing import Any, Mapping
 
 from action_identity_lock import (
+    ENTRY_KEYS,
     load_action_lock,
     parse_action_lock_json,
     repository_for_action,
@@ -109,10 +110,8 @@ def admit(
     expected_head_sha: str,
     base_root: Path,
     candidate_root: Path,
-    resolved_release_sha: str,
+    resolved_release: Mapping[str, Any],
 ) -> dict[str, object]:
-    require(SHA40.fullmatch(resolved_release_sha) is not None,
-            "resolved Dependabot release SHA is invalid")
     result = evaluate_dependabot_admission(
         pr=pr,
         repository=REPOSITORY,
@@ -120,7 +119,7 @@ def admit(
         base_files=workflow_corpus(base_root),
         candidate_files=workflow_corpus(candidate_root),
         trusted_lock=load_action_lock(base_root / ACTION_LOCK),
-        resolve_tag=lambda repository, tag: resolved_release_sha,
+        resolve_release=lambda repository, tag, expected_sha: resolved_release,
     )
     require(result.get("classification") == "allowed", "Dependabot release was not admitted")
     require(result.get("dependencyRepository") == CODEQL_REPOSITORY,
@@ -148,13 +147,19 @@ def derive_codeql_files(
     after = proof.get("after")
     before = proof.get("before")
     require(isinstance(after, Mapping) and isinstance(before, Mapping), "Dependabot proof lost release identities")
-    target_sha = after.get("sha")
-    target_tag = after.get("tag")
-    old_sha = before.get("sha")
-    old_tag = before.get("tag")
-    require(all(isinstance(value, str) for value in (target_sha, target_tag, old_sha, old_tag)),
+    target_identity = {key: after.get(key) for key in ENTRY_KEYS}
+    old_identity = {key: before.get(key) for key in ENTRY_KEYS}
+    target_sha = target_identity["sha"]
+    target_tag = target_identity["tag"]
+    old_sha = old_identity["sha"]
+    old_tag = old_identity["tag"]
+    require(all(value is not None for value in target_identity.values())
+            and all(value is not None for value in old_identity.values()),
+            "Dependabot proof release identities are incomplete")
+    require(isinstance(target_sha, str) and isinstance(target_tag, str)
+            and isinstance(old_sha, str) and isinstance(old_tag, str),
             "Dependabot proof release identities are malformed")
-    require(SHA40.fullmatch(str(target_sha)) is not None and SHA40.fullmatch(str(old_sha)) is not None,
+    require(SHA40.fullmatch(target_sha) is not None and SHA40.fullmatch(old_sha) is not None,
             "Dependabot proof release SHA is malformed")
 
     lock_path = base_root / ACTION_LOCK
@@ -165,13 +170,17 @@ def derive_codeql_files(
     for action in sorted(updated_actions):
         if repository_for_action(action) != CODEQL_REPOSITORY:
             continue
-        require(lock[action] == {"sha": old_sha, "tag": old_tag},
+        require(lock[action] == old_identity,
                 f"trusted CodeQL Action lock base identity drifted for {action}")
-        updated_actions[action] = {"sha": target_sha, "tag": target_tag}
+        updated_actions[action] = dict(target_identity)
         matched.append(action)
     require(matched and set(matched) == set(proof.get("actions", [])),
             "Dependabot proof does not cover every locked CodeQL sub-action")
-    lock_output = canonical_json({"version": payload["version"], "actions": updated_actions})
+    lock_output = json.dumps(
+        {"version": payload["version"], "actions": updated_actions},
+        indent=2,
+        ensure_ascii=True,
+    ) + "\n"
     validate_action_lock_payload(parse_action_lock_json(lock_output))
 
     validator_text = (base_root / CODEQL_VALIDATOR).read_text(encoding="utf-8")
@@ -241,12 +250,19 @@ def self_test() -> None:
     lock = load_action_lock(base / ACTION_LOCK)
     codeql_actions = sorted(action for action in lock if repository_for_action(action) == CODEQL_REPOSITORY)
     require(codeql_actions, "Dependabot controller self-test found no CodeQL actions")
-    old_sha = lock[codeql_actions[0]]["sha"]
-    old_tag = lock[codeql_actions[0]]["tag"]
-    require(all(lock[action] == {"sha": old_sha, "tag": old_tag} for action in codeql_actions),
+    old_identity = dict(lock[codeql_actions[0]])
+    old_sha = str(old_identity["sha"])
+    old_tag = str(old_identity["tag"])
+    require(all(lock[action] == old_identity for action in codeql_actions),
             "Dependabot controller self-test requires one CodeQL base release")
     new_sha = "b" * 40 if old_sha != "b" * 40 else "c" * 40
     new_tag = "v999.0.0"
+    new_identity = dict(old_identity)
+    new_identity["releaseId"] = int(old_identity["releaseId"]) + 1
+    new_identity["sha"] = new_sha
+    new_identity["tag"] = new_tag
+    new_identity["tagRefSha"] = "e" * 40 if new_sha != "e" * 40 else "f" * 40
+    new_identity["tagRefType"] = "tag"
     with tempfile.TemporaryDirectory(prefix="dependabot-controller-") as directory:
         candidate = Path(directory) / "candidate"
         shutil.copytree(base, candidate, symlinks=True)
@@ -262,7 +278,7 @@ def self_test() -> None:
             expected_head_sha="d" * 40,
             base_root=base,
             candidate_root=candidate,
-            resolved_release_sha=new_sha,
+            resolved_release=new_identity,
         )
         derived = derive_codeql_files(base_root=base, candidate_root=candidate, proof=proof)
         write_outputs(derived, candidate)
@@ -288,7 +304,7 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--candidate-root", type=Path, required=True)
         command.add_argument("--out", type=Path, required=True)
         if name == "admit":
-            command.add_argument("--resolved-release-sha", required=True)
+            command.add_argument("--resolved-release", type=Path, required=True)
     derive = sub.add_parser("derive")
     derive.add_argument("--proof", type=Path, required=True)
     derive.add_argument("--base-root", type=Path, required=True)
@@ -326,7 +342,7 @@ def main() -> int:
                     expected_head_sha=args.expected_head,
                     base_root=args.base_root,
                     candidate_root=args.candidate_root,
-                    resolved_release_sha=args.resolved_release_sha,
+                    resolved_release=strict_json(args.resolved_release, "resolved Dependabot release identity"),
                 )
             args.out.write_text(canonical_json(result), encoding="utf-8")
             return 0
