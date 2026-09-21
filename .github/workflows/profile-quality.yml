@@ -213,6 +213,8 @@ jobs:
 
       - name: Validate live Action release provenance fallback
         if: steps.action_provenance_witness_verify.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 scripts/validate-action-release-provenance.py --live-only
 
       - name: Validate pinned upstream retry contract
