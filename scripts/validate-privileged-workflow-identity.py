@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v54"
+VERSION = "governed-workflow-byte-identity-v55"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "a8740c350a9f512ae9ba1c8f04bd1bb7bbd60dbd",
+    ".github/workflows/bot-pr-user-approval.yml": "d116d0190f244b5581366fee0b7e06e8a6bd3aa6",
     ".github/workflows/profile-quality.yml": "e37c57ab81d28233e3a8e0f5eaacc7011daf1ae4",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "f80c921b328f120c00a32479e8c2b1b53e335beb",
@@ -483,8 +483,37 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         '(.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false) and',
         '(.data.repository.pullRequest.reviewThreads.nodes | type == "array") and',
         '(type == "object") and (.isResolved | type == "boolean")',
+        'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"',
+        '(type == "array") and (length >= 1) and (length <= 30) and',
+        '(all(.[]; (type == "array") and (length <= 100))) and',
+        '(all(.[0:-1][]; (length == 100))) and',
+        '(.number | type == "number" and . == floor and . > 0) and',
+        '(.state == "open") and',
+        '(.draft | type == "boolean") and',
+        '(.ref == "main") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
+        '(.full_name | type == "string" and length > 0)',
+        '(([.[][] | .number] | length) == ([.[][] | .number] | unique | length))',
+        '(has("body")) and',
+        '(.body == null or ((.body | type) == "string"))',
+        'ERROR: malformed or incomplete paginated open-PR evidence.',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
+    open_pr_fetch = 'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"'
+    require(
+        bot_review.count(open_pr_fetch) == 1,
+        "Bot PR reviewer open-main PR discovery endpoint count changed",
+    )
+    open_pr_schema = '(type == "array") and (length >= 1) and (length <= 30) and'
+    candidate_filter = 'CANDIDATES="$(jq -c --arg repo "$TARGET_REPOSITORY"'
+    require(
+        bot_review.index(open_pr_fetch) < bot_review.index(open_pr_schema) < bot_review.index(candidate_filter),
+        "Bot PR reviewer must validate the complete open-PR collection before governed candidate filtering",
+    )
+    require(
+        bot_review.count("malformed or incomplete paginated open-PR evidence") == 1,
+        "Bot PR reviewer must have exactly one fail-closed open-PR collection schema boundary",
+    )
     require(
         'for name in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do'
         not in bot_review,
