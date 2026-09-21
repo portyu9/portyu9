@@ -522,6 +522,10 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
         "Dependabot readiness must strictly validate both bounded REST collection totals",
     )
     require(
+        dependabot.count('(.id | (type == "number") and . == floor and . > 0) and') == 2,
+        "Dependabot readiness must require positive integer ids at both run/check evidence boundaries",
+    )
+    require(
         dependabot.count(
             '. == "queued" or . == "in_progress" or . == "requested" or'
         ) == 2
