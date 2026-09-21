@@ -53,7 +53,34 @@ def validate_quality_native_gate(text: str) -> None:
     for forbidden in ("actions/checkout@", "actions/setup-python@", "contents: write", "pull-requests: write"):
         require(forbidden not in gate,
                 f"Profile Quality native review gate acquired forbidden authority/execution surface: {forbidden}")
-    ORIGINAL_VALIDATE_QUALITY(text[:text.index(marker)])
+
+    legacy_quality = text[:text.index(marker)]
+    validate = core.job_block(legacy_quality, "validate", "integration")
+    witness_permissions = (
+        "permissions:\n"
+        "      actions: read\n"
+        "      attestations: read\n"
+        "      contents: read"
+    )
+    require(validate.count(witness_permissions) == 1,
+            "Profile Quality witness consumer must retain exact actions/attestations/contents read-only authority")
+    for forbidden in (
+        "actions: write",
+        "attestations: write",
+        "checks: write",
+        "contents: write",
+        "id-token: write",
+        "pull-requests: write",
+    ):
+        require(forbidden not in validate,
+                f"Profile Quality witness consumer acquired forbidden write authority: {forbidden}")
+
+    projected_quality = legacy_quality.replace(
+        witness_permissions,
+        "permissions:\n      contents: read",
+        1,
+    )
+    ORIGINAL_VALIDATE_QUALITY(projected_quality)
 
 
 def validate_stats_item11(text: str) -> None:
