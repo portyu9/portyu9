@@ -557,6 +557,13 @@
       "rationale": "Authorize #518's exact final Spotlight scheduled admission recovery including the protected workflow and canonical BOM source boundary. Trusted code may discover and reprove at most one exact current-main deterministic github-actions[bot] README-only candidate, evaluate candidate TCB bytes only as data, and publish only trusted-capability-admission on that exact head. Merge authority and all other protected checks remain unchanged."
     },
     {
+      "id": "cap-trusted-controller-api-collection-schema-hardening",
+      "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
+      "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
+      "expansionSha256": "f67e0e6b20404c746e58a22de3a9e48e89bc0774d0a100b1af4a953fd181b51e",
+      "rationale": "Authorize #748's exact protected-TCB hardening of paginated PR/file evidence in Capability Admission and the Dependabot controller. Existing GET endpoints, permissions, candidate selection, merge authority, checks, and semantic Workflow Capability remain unchanged. Complete bounded pages and strict consumed PR/file primitives must validate before decisions. No trigger, secret, OIDC, mutation class, retry, ruleset, check reduction, direct-main write, or bypass is added."
+    },
+    {
       "id": "cap-workflow-capability-graphql-hardening",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
