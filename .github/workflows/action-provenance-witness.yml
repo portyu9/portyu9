@@ -134,3 +134,41 @@ jobs:
           path: witness/
           if-no-files-found: error
           retention-days: 1
+
+  attest:
+    name: attest-action-provenance-witness-write-only
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download exact prepared witness bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: action-provenance-witness-v1
+          path: witness-attestation-input
+          digest-mismatch: error
+
+      - name: Verify exact prepared witness bundle identity
+        env:
+          EXPECTED_PREDICATE_SHA256: ${{ needs.prepare.outputs.predicate_sha256 }}
+          EXPECTED_SUBJECT_SHA256: ${{ needs.prepare.outputs.subject_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(find witness-attestation-input -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)" = $'action-provenance-witness-subject.json\naction-provenance-witness.json'
+          test "$(sha256sum witness-attestation-input/action-provenance-witness.json | cut -d' ' -f1)" = "$EXPECTED_PREDICATE_SHA256"
+          test "$(sha256sum witness-attestation-input/action-provenance-witness-subject.json | cut -d' ' -f1)" = "$EXPECTED_SUBJECT_SHA256"
+
+      - name: Attest exact Action provenance witness
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: witness-attestation-input/action-provenance-witness-subject.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json
+          predicate-path: witness-attestation-input/action-provenance-witness.json
+          show-summary: true
