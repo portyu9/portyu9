@@ -1176,6 +1176,28 @@ def parser() -> argparse.ArgumentParser:
     verify.add_argument("--lock", type=Path, required=True)
     verify.add_argument("--policy-root", type=Path, required=True)
     verify.add_argument("--now", type=int, required=True)
+
+    select_run = sub.add_parser("select-run")
+    select_run.add_argument("--runs", type=Path, required=True)
+    select_run.add_argument("--now", type=int, required=True)
+    select_run.add_argument("--out", type=Path, required=True)
+
+    select_artifact = sub.add_parser("select-artifact")
+    select_artifact.add_argument("--artifacts", type=Path, required=True)
+    select_artifact.add_argument("--selected-run", type=Path, required=True)
+    select_artifact.add_argument("--out", type=Path, required=True)
+
+    consume = sub.add_parser("consume-evidence")
+    consume.add_argument("--run-list", type=Path, required=True)
+    consume.add_argument("--attempt-run", type=Path, required=True)
+    consume.add_argument("--artifact-list", type=Path, required=True)
+    consume.add_argument("--predicate", type=Path, required=True)
+    consume.add_argument("--subject", type=Path, required=True)
+    consume.add_argument("--verified-attestation", type=Path, required=True)
+    consume.add_argument("--lock", type=Path, required=True)
+    consume.add_argument("--policy-root", type=Path, required=True)
+    consume.add_argument("--now", type=int, required=True)
+    consume.add_argument("--out", type=Path, required=True)
     return value
 
 
@@ -1203,6 +1225,51 @@ def main() -> int:
             )
             _write(args.predicate_out, predicate)
             _write(args.subject_out, build_subject(predicate))
+            return 0
+
+        if args.command == "select-run":
+            selected = select_fresh_witness_run(
+                strict_json(args.runs.read_text(encoding="utf-8")),
+                now_epoch=args.now,
+            )
+            _write(args.out, selected)
+            print(
+                f"Selected fresh Action provenance witness run {selected['id']} "
+                f"attempt {selected['runAttempt']} at {selected['headSha']}."
+            )
+            return 0
+
+        if args.command == "select-artifact":
+            selected_run = strict_json(args.selected_run.read_text(encoding="utf-8"))
+            artifact = select_witness_artifact(
+                strict_json(args.artifacts.read_text(encoding="utf-8")),
+                selected_run,
+            )
+            _write(args.out, artifact)
+            print(
+                f"Selected exact Action provenance witness artifact {artifact['id']} "
+                f"with digest {artifact['digest']}."
+            )
+            return 0
+
+        if args.command == "consume-evidence":
+            evidence = validate_consumer_evidence(
+                run_list=strict_json(args.run_list.read_text(encoding="utf-8")),
+                attempt_run=strict_json(args.attempt_run.read_text(encoding="utf-8")),
+                artifact_list=strict_json(args.artifact_list.read_text(encoding="utf-8")),
+                predicate=strict_json(args.predicate.read_text(encoding="utf-8")),
+                subject=strict_json(args.subject.read_text(encoding="utf-8")),
+                verified_attestation=strict_json(args.verified_attestation.read_text(encoding="utf-8")),
+                current_lock_bytes=args.lock.read_bytes(),
+                current_policy_files=policy_files_from_root(args.policy_root),
+                now_epoch=args.now,
+            )
+            _write(args.out, evidence)
+            print(
+                f"Accepted cryptographically verified Action provenance witness "
+                f"run {evidence['runId']} attempt {evidence['runAttempt']} "
+                f"through epoch {evidence['expiresAtEpoch']}."
+            )
             return 0
 
         predicate = strict_json(args.predicate.read_text(encoding="utf-8"))

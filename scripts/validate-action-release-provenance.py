@@ -9,6 +9,8 @@ release through Git plus strict public GitHub REST metadata before accepting the
 """
 from __future__ import annotations
 
+import argparse
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -137,15 +139,27 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def public_api_headers(token: str | None) -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "portyu9-action-release-provenance-v2",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token is None:
+        return headers
+    require(bool(token) and token == token.strip(),
+            "GH_TOKEN must be non-empty and free of surrounding whitespace")
+    require(len(token) <= 1024 and all(0x21 <= ord(character) <= 0x7E for character in token),
+            "GH_TOKEN contains invalid characters")
+    headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def fetch_public_api(url: str, label: str) -> str:
     request = urllib.request.Request(
         url,
         method="GET",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "portyu9-action-release-provenance-v2",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers=public_api_headers(os.environ.get("GH_TOKEN")),
     )
     opener = urllib.request.build_opener(NoRedirect())
     try:
@@ -266,8 +280,38 @@ def validate_governance_identity_bindings() -> None:
 
 
 def validate_quality_contract(text: str) -> None:
-    require("python3 scripts/validate-action-release-provenance.py" in text,
-            "Profile Quality must execute action release provenance verification")
+    require("python3 scripts/validate-action-release-provenance.py --local-only" in text,
+            "Profile Quality must execute immutable local Action provenance closure before witness reuse")
+    require("python3 scripts/validate-action-release-provenance.py --live-only" in text,
+            "Profile Quality must retain the full live upstream Action provenance fallback")
+    require(text.count(
+        "    permissions:\n"
+        "      actions: read\n"
+        "      attestations: read\n"
+        "      contents: read\n"
+    ) == 1, "Profile Quality witness consumer read authority changed")
+    for phrase in (
+        "Discover exact fresh signed Action provenance witness",
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100"',
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}"',
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100"',
+        "python3 scripts/action_provenance_witness.py select-run",
+        "python3 scripts/action_provenance_witness.py select-artifact",
+        "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1",
+        "name: action-provenance-witness-v1",
+        "github-token: ${{ github.token }}",
+        "digest-mismatch: error",
+        'gh attestation verify "$SUBJECT"',
+        "--predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json",
+        '--signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/action-provenance-witness.yml"',
+        '--signer-digest "$SOURCE_SHA"',
+        '--source-digest "$SOURCE_SHA"',
+        "--source-ref refs/heads/main",
+        "--deny-self-hosted-runners",
+        "python3 scripts/action_provenance_witness.py consume-evidence",
+        "if: steps.action_provenance_witness_verify.outcome != 'success'",
+    ):
+        require(phrase in text, f"Profile Quality witness consumer contract is missing: {phrase}")
     require('- ".github/workflows/**"' in text,
             "Profile Quality push paths must cover workflow action identity changes")
     require('- ".github/action-lock.json"' in text,
@@ -301,6 +345,18 @@ def self_test() -> None:
     action_lock_self_test()
     release_identity_self_test()
     action_provenance_witness_self_test()
+    anonymous_headers = public_api_headers(None)
+    require("Authorization" not in anonymous_headers,
+            "anonymous public API headers unexpectedly contain authorization")
+    authenticated_headers = public_api_headers("test-token")
+    require(authenticated_headers.get("Authorization") == "Bearer test-token",
+            "authenticated public API headers lost bearer binding")
+    try:
+        public_api_headers(" bad-token")
+    except ValueError as exc:
+        require("GH_TOKEN" in str(exc), "invalid GH_TOKEN self-test raised the wrong error")
+    else:
+        raise ValueError("public API header self-test accepted malformed GH_TOKEN")
     a = "a" * 40
     b = "b" * 40
     good = (
@@ -325,7 +381,24 @@ def self_test() -> None:
     )
 
 
+def parser() -> argparse.ArgumentParser:
+    value = argparse.ArgumentParser(description=__doc__)
+    mode = value.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--local-only",
+        action="store_true",
+        help="Validate immutable local workflow/action-lock/governance closure without upstream reads.",
+    )
+    mode.add_argument(
+        "--live-only",
+        action="store_true",
+        help="Re-prove only the exact current locked release identities from public upstreams.",
+    )
+    return value
+
+
 def main() -> int:
+    args = parser().parse_args()
     try:
         for path in (
             LOCK,
@@ -338,17 +411,34 @@ def main() -> int:
             require(path.is_file(), f"Action provenance input is missing: {path.relative_to(ROOT)}")
         self_test()
         locked = load_action_lock()
-        observed = discover_workflow_identities()
-        validate_lock_closure(observed, locked)
-        validate_governance_identity_bindings()
-        validate_live_provenance(locked)
-        validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
-        validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
-        print(
-            f"Action release provenance validation passed for {len(locked)} exact action paths: "
-            "workflow identities are closed to action-lock v2, local action execution is forbidden, governance constants are bound, "
-            "and every unique public release matches its immutable repository/release/tag-ref/commit identity."
-        )
+
+        if not args.live_only:
+            observed = discover_workflow_identities()
+            validate_lock_closure(observed, locked)
+            validate_governance_identity_bindings()
+            validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
+            validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
+
+        if not args.local_only:
+            validate_live_provenance(locked)
+
+        if args.local_only:
+            print(
+                f"Action release provenance local closure passed for {len(locked)} exact action paths: "
+                "workflow identities are closed to action-lock v2, local action execution is forbidden, "
+                "and governance constants remain bound without using upstream availability."
+            )
+        elif args.live_only:
+            print(
+                f"Action release provenance live fallback passed for {len(locked)} exact action paths: "
+                "every unique public release matches its immutable repository/release/tag-ref/commit identity."
+            )
+        else:
+            print(
+                f"Action release provenance validation passed for {len(locked)} exact action paths: "
+                "workflow identities are closed to action-lock v2, local action execution is forbidden, governance constants are bound, "
+                "and every unique public release matches its immutable repository/release/tag-ref/commit identity."
+            )
         return 0
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
