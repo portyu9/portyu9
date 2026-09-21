@@ -110,6 +110,25 @@ jobs:
           [[ "$CANDIDATE_COUNT" =~ ^[0-9]+$ ]]
           test "$CANDIDATE_COUNT" -le 20
 
+          validate_governed_pr_object() {
+            local pr="$1" number="$2"
+            jq -e --argjson number "$number" '
+              (type == "object") and
+              (.number | type == "number" and . == floor and . > 0 and . == $number) and
+              (.user | (type == "object") and (.login | (type == "string") and length > 0)) and
+              (.state == "open") and
+              (.draft | type == "boolean") and
+              (.base | type == "object" and
+                (.ref | type == "string" and length > 0) and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
+              (.head | type == "object" and
+                (.ref | type == "string" and length > 0) and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.repo | type == "object" and
+                  (.full_name | type == "string" and length > 0)))
+            ' <<<"$pr" >/dev/null
+          }
+
           check_required_contexts() {
             local head="$1" lane="$2" name checks total count active failed
             local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)
@@ -284,6 +303,10 @@ jobs:
             [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
 
             PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            validate_governed_pr_object "$PR" "$PR_NUMBER" || {
+              echo "ERROR: malformed governed bot PR evidence for #${PR_NUMBER}." >&2
+              exit 1
+            }
             test "$(jq -r .state <<<"$PR")" = "open"
             test "$(jq -r .draft <<<"$PR")" = "false"
             test "$(jq -r .base.ref <<<"$PR")" = "main"
@@ -414,6 +437,10 @@ jobs:
             fi
 
             PR_NOW="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            validate_governed_pr_object "$PR_NOW" "$PR_NUMBER" || {
+              echo "ERROR: malformed governed bot PR race evidence for #${PR_NUMBER}." >&2
+              exit 1
+            }
             if [ "$(jq -r .state <<<"$PR_NOW")" != "open" ] ||
                [ "$(jq -r .draft <<<"$PR_NOW")" != "false" ] ||
                [ "$(jq -r .base.sha <<<"$PR_NOW")" != "$MAIN_SHA" ] ||
@@ -494,10 +521,17 @@ jobs:
             printf -v BODY '%s\n%s' "$REVIEW_MARKER" "Automated exact-base/head approval by portyu9 after all lane-required protected gates completed successfully for base \`${MAIN_SHA}\` and head \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
             jq -n --arg body "$BODY" --arg commit "$HEAD_SHA"               '{event:"APPROVE",body:$body,commit_id:$commit}' > review-request.json
             REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
-            test "$(jq -r .state <<<"$REVIEW_RESPONSE")" = "APPROVED"
-            test "$(jq -r .user.login <<<"$REVIEW_RESPONSE")" = "portyu9"
-            test "$(jq -r .commit_id <<<"$REVIEW_RESPONSE")" = "$HEAD_SHA"
-            jq -e --arg body "$BODY" '.body == $body' <<<"$REVIEW_RESPONSE" >/dev/null
+            jq -e --arg head "$HEAD_SHA" --arg body "$BODY" '
+              (type == "object") and
+              (.id | ((type == "number") and . == floor and . > 0)) and
+              (.user | type == "object" and (.login == "portyu9")) and
+              (.state == "APPROVED") and
+              (.commit_id | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.body | type == "string" and . == $body)
+            ' <<<"$REVIEW_RESPONSE" >/dev/null || {
+              echo "ERROR: malformed or mismatched governed bot review response for PR #${PR_NUMBER}." >&2
+              exit 1
+            }
             echo "Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
             wake_governed_lane_after_review "$LANE" "$HEAD_REF"
             echo "Dispatched event-driven post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
