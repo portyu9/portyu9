@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-generator-compatibility-witness-v1.schema.json",
+  "$id": "https://github.com/portyu9/portyu9/attestations/profile-generator-compatibility/v1",
   "title": "Profile Generator Compatibility Witness v1",
   "type": "object",
   "additionalProperties": false,
@@ -38,7 +38,7 @@
       "additionalProperties":false,
       "required":["id","digest"],
       "properties":{
-        "id":{"const":"https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-generator-compatibility-witness-v1.schema.json"},
+        "id":{"const":"https://github.com/portyu9/portyu9/attestations/profile-generator-compatibility/v1"},
         "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
       }
     },
