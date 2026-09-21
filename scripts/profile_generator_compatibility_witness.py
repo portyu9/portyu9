@@ -46,6 +46,7 @@ PREDICATE_TYPE = (
     "profile-generator-compatibility-witness-v1.schema.json"
 )
 PREDICATE_SCHEMA = ROOT / ".github/attestation/profile-generator-compatibility-witness-v1.schema.json"
+WITNESS_WORKFLOW = ROOT / ".github/workflows/profile-generator-compatibility-witness.yml"
 ARTIFACT_NAME = "profile-generator-compatibility-witness-v1"
 EXPECTED_FILES = (
     "signal-field-wide-light.svg",
@@ -440,8 +441,76 @@ def expect_failure(callable_obj, expected: str) -> None:
         raise ValueError(f"compatibility witness self-test accepted forbidden drift: {expected}")
 
 
+
+def validate_signer_workflow_contract(text: str | None = None) -> None:
+    if text is None:
+        require(WITNESS_WORKFLOW.is_file() and not WITNESS_WORKFLOW.is_symlink(),
+                "profile generator compatibility witness workflow is missing or aliased")
+        text = WITNESS_WORKFLOW.read_text(encoding="utf-8")
+
+    marker = "  attest:\n"
+    require(text.count(marker) == 1,
+            "profile generator compatibility witness signer job identity changed")
+    signer = text[text.index(marker):]
+    require(signer.startswith(
+        "  attest:\n"
+        "    name: attest-profile-generator-compatibility-witness-write-only\n"
+        "    needs: prepare\n"
+        "    runs-on: ubuntu-24.04\n"
+        "    timeout-minutes: 4\n"
+        "    permissions:\n"
+        "      contents: read\n"
+        "      id-token: write\n"
+        "      attestations: write\n"
+    ), "profile generator compatibility witness signer identity/authority changed")
+
+    require(signer.count(
+        "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1"
+    ) == 1, "profile generator compatibility witness signer must download exactly one prepared artifact")
+    require(signer.count(
+        "uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2"
+    ) == 1, "profile generator compatibility witness signer must execute exactly one reviewed attestation action")
+    for required in (
+        "subject-path: compatibility-witness-attestation-input/profile-generator-compatibility-witness-subject.json",
+        "predicate-path: compatibility-witness-attestation-input/profile-generator-compatibility-witness.json",
+        "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-generator-compatibility-witness-v1.schema.json",
+        "profile-generator-compatibility-witness-subject.json",
+        "profile-generator-compatibility-witness.json",
+        "raw-signal-field",
+        "signal-field-wide-light.svg",
+        "signal-field-wide-dark.svg",
+        "signal-field-compact-light.svg",
+        "signal-field-compact-dark.svg",
+        "EXPECTED_PREDICATE_SHA256",
+        "EXPECTED_SUBJECT_SHA256",
+    ):
+        require(required in signer,
+                f"profile generator compatibility witness signer lost required identity: {required}")
+    require(signer.count("        run: |\n") == 1,
+            "profile generator compatibility witness signer authored shell surface changed")
+    for forbidden in (
+        "actions/checkout@",
+        "actions/setup-python@",
+        "python3 ",
+        "git ",
+        "gh ",
+        "GITHUB_TOKEN:",
+        "GH_TOKEN:",
+        "contents: write",
+        "actions: write",
+        "pull-requests: write",
+        "checks: write",
+        "security-events: write",
+        "packages: write",
+        "repository_dispatch",
+        "workflow_dispatch",
+    ):
+        require(forbidden not in signer,
+                f"profile generator compatibility witness signer acquired forbidden surface: {forbidden}")
+
 def self_test() -> None:
     validate_schema_contract()
+    validate_signer_workflow_contract()
     lock_path = ROOT / ".github/action-lock.json"
     require(lock_path.is_file() and not lock_path.is_symlink(), "action-lock is missing or aliased")
     lock_bytes = lock_path.read_bytes()
@@ -498,6 +567,38 @@ def self_test() -> None:
         extra = directory / "extra.svg"
         extra.write_text("<svg/>\n", encoding="utf-8")
         expect_failure(lambda: signal_field_inventory(directory), "file inventory changed")
+
+    workflow_text = WITNESS_WORKFLOW.read_text(encoding="utf-8")
+    expect_failure(
+        lambda: validate_signer_workflow_contract(
+            workflow_text.replace("      contents: read\n      id-token: write",
+                                  "      contents: write\n      id-token: write", 1)
+        ),
+        "signer identity/authority changed",
+    )
+    expect_failure(
+        lambda: validate_signer_workflow_contract(
+            workflow_text.replace(
+                "      - name: Download exact prepared compatibility witness bundle\n",
+                "      - name: Forbidden checkout\n"
+                "        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n\n"
+                "      - name: Download exact prepared compatibility witness bundle\n",
+                1,
+            )
+        ),
+        "forbidden surface: actions/checkout@",
+    )
+    expect_failure(
+        lambda: validate_signer_workflow_contract(
+            workflow_text.replace(
+                '          [[ "$EXPECTED_PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]\n',
+                "          python3 scripts/profile_generator_compatibility_witness.py self-test\n"
+                '          [[ "$EXPECTED_PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]\n',
+                1,
+            )
+        ),
+        "forbidden surface: python3 ",
+    )
     print(
         "Profile generator compatibility witness contract passed: exact immutable generator + invocation, "
         "six-hour validity, closed compatibility epoch, four-file raw Signal Field identity, duplicate-safe "
