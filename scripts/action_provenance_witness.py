@@ -43,6 +43,7 @@ PREDICATE_TYPE = (
     "action-provenance-witness-v1.schema.json"
 )
 PREDICATE_SCHEMA = ROOT / ".github/attestation/action-provenance-witness-v1.schema.json"
+WITNESS_WORKFLOW = ROOT / ".github/workflows/action-provenance-witness.yml"
 AUTHORITY_SEPARATION = (
     "Live provenance preparation is read-only and separate from the OIDC attestation "
     "writer; neither grants repository mutation authority."
@@ -505,8 +506,74 @@ def _expect_failure(function: Any, expected: str) -> None:
         )
 
 
+def validate_signer_workflow_contract(text: str | None = None) -> None:
+    if text is None:
+        require(WITNESS_WORKFLOW.is_file() and not WITNESS_WORKFLOW.is_symlink(),
+                "Action provenance witness workflow is missing or aliased")
+        text = WITNESS_WORKFLOW.read_text(encoding="utf-8")
+
+    marker = "  attest:\n"
+    require(text.count(marker) == 1,
+            "Action provenance witness signer job identity changed")
+    signer = text[text.index(marker):]
+    require(signer.startswith(
+        "  attest:\n"
+        "    name: attest-action-provenance-witness-write-only\n"
+        "    needs: prepare\n"
+        "    runs-on: ubuntu-24.04\n"
+        "    timeout-minutes: 4\n"
+        "    permissions:\n"
+        "      contents: read\n"
+        "      id-token: write\n"
+        "      attestations: write\n"
+    ), "Action provenance witness signer identity/authority changed")
+
+    require(signer.count(
+        "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1"
+    ) == 1, "Action provenance witness signer must download exactly one prepared artifact")
+    require(signer.count(
+        "uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2"
+    ) == 1, "Action provenance witness signer must execute exactly one reviewed attestation action")
+    require(
+        "subject-path: witness-attestation-input/action-provenance-witness-subject.json" in signer
+        and "predicate-path: witness-attestation-input/action-provenance-witness.json" in signer
+        and (
+            "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/"
+            ".github/attestation/action-provenance-witness-v1.schema.json"
+        ) in signer,
+        "Action provenance witness signer subject/predicate identity changed",
+    )
+    require(signer.count("        run: |\n") == 1,
+            "Action provenance witness signer authored shell surface changed")
+    require(
+        'test "$(sha256sum witness-attestation-input/action-provenance-witness.json | cut -d\' \' -f1)" = "$EXPECTED_PREDICATE_SHA256"' in signer
+        and 'test "$(sha256sum witness-attestation-input/action-provenance-witness-subject.json | cut -d\' \' -f1)" = "$EXPECTED_SUBJECT_SHA256"' in signer,
+        "Action provenance witness signer lost exact prepared-byte digest checks",
+    )
+    for forbidden in (
+        "actions/checkout@",
+        "actions/setup-python@",
+        "python3 ",
+        "git ",
+        "gh ",
+        "GITHUB_TOKEN:",
+        "GH_TOKEN:",
+        "contents: write",
+        "actions: write",
+        "pull-requests: write",
+        "checks: write",
+        "security-events: write",
+        "packages: write",
+        "repository_dispatch",
+        "workflow_dispatch",
+    ):
+        require(forbidden not in signer,
+                f"Action provenance witness signer acquired forbidden surface: {forbidden}")
+
+
 def self_test() -> None:
     validate_schema_contract()
+    validate_signer_workflow_contract()
     lock_bytes = _fixture_lock_bytes()
     policy_files = _fixture_policy_files()
     predicate = build_predicate(
@@ -594,6 +661,36 @@ def self_test() -> None:
     _expect_failure(
         lambda: strict_json('{"schemaVersion":1,"schemaVersion":1}'),
         "duplicate object key",
+    )
+
+    workflow_text = WITNESS_WORKFLOW.read_text(encoding="utf-8")
+    _expect_failure(
+        lambda: validate_signer_workflow_contract(
+            workflow_text.replace("      contents: read\n      id-token: write", "      contents: write\n      id-token: write", 1)
+        ),
+        "forbidden surface: contents: write",
+    )
+    _expect_failure(
+        lambda: validate_signer_workflow_contract(
+            workflow_text.replace(
+                "      - name: Download exact prepared witness bundle\n",
+                "      - name: Forbidden checkout\n"
+                "        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n\n"
+                "      - name: Download exact prepared witness bundle\n",
+                1,
+            )
+        ),
+        "forbidden surface: actions/checkout@",
+    )
+    _expect_failure(
+        lambda: validate_signer_workflow_contract(
+            workflow_text.replace(
+                "          set -euo pipefail\n",
+                "          set -euo pipefail\n          python3 scripts/action_provenance_witness.py self-test\n",
+                1,
+            )
+        ),
+        "forbidden surface: python3 ",
     )
 
 
