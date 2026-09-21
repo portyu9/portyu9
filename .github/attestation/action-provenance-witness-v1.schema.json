@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json",
+  "title": "Action Provenance Witness v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion","kind","repository","repositoryId","source","validity","predicateSchema","actionLock","policyEpoch","releases","authority","claim"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "action-provenance-witness"},
+    "repository": {"const": "portyu9/portyu9"},
+    "repositoryId": {"const": 1355082509},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha","ref","workflowRef","runId","runAttempt","runUrl"],
+      "properties": {
+        "sha": {"type":"string","pattern":"^[0-9a-f]{40}$"},
+        "ref": {"const":"refs/heads/main"},
+        "workflowRef": {"const":"portyu9/portyu9/.github/workflows/action-provenance-witness.yml@refs/heads/main"},
+        "runId": {"type":"integer","minimum":1},
+        "runAttempt": {"type":"integer","minimum":1},
+        "runUrl": {"type":"string","pattern":"^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
+      }
+    },
+    "validity": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["issuedAtEpoch","expiresAtEpoch","ttlSeconds"],
+      "properties":{
+        "issuedAtEpoch":{"type":"integer","minimum":1},
+        "expiresAtEpoch":{"type":"integer","minimum":1},
+        "ttlSeconds":{"const":21600}
+      }
+    },
+    "predicateSchema": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["id","digest"],
+      "properties":{
+        "id":{"const":"https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json"},
+        "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "actionLock": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["version","digest","actions"],
+      "properties":{
+        "version":{"const":"github-actions-identity-lock-v2"},
+        "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+        "actions":{"type":"object","minProperties":1,"additionalProperties":{"$ref":"#/$defs/releaseIdentity"}}
+      }
+    },
+    "policyEpoch": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["digest","files"],
+      "properties":{
+        "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+        "files":{
+          "type":"array",
+          "minItems":1,
+          "items":{
+            "type":"object",
+            "additionalProperties":false,
+            "required":["path","digest"],
+            "properties":{
+              "path":{"type":"string","minLength":1},
+              "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+            }
+          }
+        }
+      }
+    },
+    "releases": {
+      "type":"array",
+      "minItems":1,
+      "items":{
+        "type":"object",
+        "additionalProperties":false,
+        "required":["repository","repositoryId","releaseId","sha","tag","tagRefSha","tagRefType"],
+        "properties":{
+          "repository":{"type":"string","pattern":"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+          "repositoryId":{"type":"integer","minimum":1},
+          "releaseId":{"type":"integer","minimum":1},
+          "sha":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+          "tag":{"type":"string","pattern":"^v[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"},
+          "tagRefSha":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+          "tagRefType":{"enum":["commit","tag"]}
+        }
+      }
+    },
+    "authority":{
+      "type":"object",
+      "additionalProperties":false,
+      "required":["preparation","attestation","separation"],
+      "properties":{
+        "preparation":{"const":"contents:read"},
+        "attestation":{"const":"contents:read,id-token:write,attestations:write"},
+        "separation":{"const":"Live provenance preparation is read-only and separate from the OIDC attestation writer; neither grants repository mutation authority."}
+      }
+    },
+    "claim":{"const":"This witness proves that the exact action-lock v2 release set matched public upstream repository/release/tag-ref/commit identity during its bounded validity interval. It does not authorize a different lock or provenance-policy epoch and does not replace local workflow/lock closure, branch protection, or trusted capability admission."}
+  },
+  "$defs":{
+    "releaseIdentity":{
+      "type":"object",
+      "additionalProperties":false,
+      "required":["repositoryId","releaseId","sha","tag","tagRefSha","tagRefType"],
+      "properties":{
+        "repositoryId":{"type":"integer","minimum":1},
+        "releaseId":{"type":"integer","minimum":1},
+        "sha":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+        "tag":{"type":"string","pattern":"^v[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"},
+        "tagRefSha":{"type":"string","pattern":"^[0-9a-f]{40}$"},
+        "tagRefType":{"enum":["commit","tag"]}
+      }
+    }
+  }
+}
