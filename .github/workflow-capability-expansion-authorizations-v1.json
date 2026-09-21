@@ -428,7 +428,7 @@
       "baseBomSha256": "b7238a10559d84f2ba411d8aae2f140dd1448184de5a35440bdf70e910a6f37e",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "expansionSha256": "5a0393b9c51554bb10187f1ab7a1dd271d6a7160e597f9cbbdb8ab8ef6929a03",
-      "rationale": "Authorize #736's exact read-only Profile Generator Compatibility Witness consumer in Profile Quality: actions:read and attestations:read, bounded trusted-main run/attempt/artifact discovery, digest-enforced witness download, exact attestation verification, current compatibility-epoch and raw four-file byte binding, with the immutable live generator primary/60-second/one-retry fallback preserved. No write, OIDC, secret, candidate execution/mutation, Search polling, required-check reduction, direct-main write, or bypass authority is added."
+      "rationale": "Authorize #736's exact read-only Profile Generator Compatibility Witness consumer: actions:read and attestations:read, bounded trusted-main run/attempt/artifact discovery, digest-enforced download, exact attestation verification, current compatibility-epoch and four-file byte binding, plus the unchanged live generator fallback. No write, OIDC, secret, candidate execution/mutation, Search polling, check reduction, direct-main write, or bypass is added."
     },
     {
       "id": "cap-profile-generator-compatibility-witness-producer-v1",
