@@ -4,6 +4,13 @@
   "repository": "portyu9/portyu9",
   "authorizations": [
     {
+      "id": "cap-action-release-immutable-identity-v2",
+      "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
+      "candidateBomSha256": "e1d2524a988db739b724d61a7bc0cc6f2dd92b8449ffe3a6bf192ff1aa5a22b3",
+      "expansionSha256": "fac2640885f1c5cfa2fa3b7bb7826b1439d8a873604cde38479fa4303033dce3",
+      "rationale": "Authorize #693's exact Action release-identity hardening: lock repository ID, release ID, direct tag-ref object/type, and peeled commit SHA, plus strict public read-only repository/release reproof in Profile Quality and delegated Dependabot. Exact pinning, candidate-data isolation, protected checks, exact-head merge, and fail-closed behavior remain; no write permission, mutation, secret, OIDC authority, check reduction, direct-main write, or bypass is added."
+    },
+    {
       "id": "cap-autonomous-spotlight-admission-convergence",
       "baseBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
       "candidateBomSha256": "cf57c64e11d6322af0c8e234fba72098ae02bcc5c29706e40800c4d0a8b38adc",
