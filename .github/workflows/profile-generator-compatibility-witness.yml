@@ -115,6 +115,7 @@ jobs:
 
       - name: Prove raw generator output compatibility
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           RAW_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: |
           set -euo pipefail
