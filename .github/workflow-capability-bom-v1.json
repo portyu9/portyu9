@@ -246,6 +246,13 @@
             {
               "kind": "remote",
               "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact fresh signed Profile Generator Compatibility Witness"
+            },
+            {
+              "kind": "remote",
+              "path": "",
               "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
               "repository": "shinpr/github-profile-stats",
               "step": "Generate actual pinned upstream Signal Field"
@@ -265,8 +272,37 @@
               "step": "Set up Python"
             }
           ],
-          "apiSurfaces": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Discover exact fresh signed Profile Generator Compatibility Witness"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Discover exact fresh signed Profile Generator Compatibility Witness"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Discover exact fresh signed Profile Generator Compatibility Witness"
+            }
+          ],
           "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "profile-generator-compatibility-witness-v1",
+              "operation": "download",
+              "path": "profile-generator-compatibility-witness-consumer",
+              "step": "Download exact fresh signed Profile Generator Compatibility Witness"
+            },
             {
               "digest-mismatch": "error",
               "name": "signal-field-publishable-review",
@@ -289,6 +325,8 @@
           "needs": [],
           "oidc": false,
           "permissions": {
+            "actions": "read",
+            "attestations": "read",
             "contents": "read"
           },
           "references": {

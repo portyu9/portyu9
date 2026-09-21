@@ -289,7 +289,7 @@ def validate_quality_contract(text: str) -> None:
         "      actions: read\n"
         "      attestations: read\n"
         "      contents: read\n"
-    ) == 1, "Profile Quality witness consumer read authority changed")
+    ) == 2, "Profile Quality witness consumers read authority changed")
     for phrase in (
         "Discover exact fresh signed Action provenance witness",
         'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100"',
