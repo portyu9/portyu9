@@ -153,6 +153,44 @@ def predicate_schema_identity() -> dict[str, str]:
     return {"id": PREDICATE_TYPE, "digest": digest_bytes(PREDICATE_SCHEMA.read_bytes())}
 
 
+def _schema_const(schema: Mapping[str, Any], *path: str) -> Any:
+    current: Any = schema
+    for key in path:
+        require(isinstance(current, dict) and key in current,
+                "Action provenance witness schema binding path is missing: " + ".".join(path))
+        current = current[key]
+    return current
+
+
+def validate_schema_contract() -> None:
+    require(PREDICATE_SCHEMA.is_file() and not PREDICATE_SCHEMA.is_symlink(),
+            "Action provenance witness predicate schema is missing or aliased")
+    schema = strict_json(PREDICATE_SCHEMA.read_text(encoding="utf-8"))
+    require(isinstance(schema, dict), "Action provenance witness schema root must be an object")
+    require(schema.get("$id") == PREDICATE_TYPE,
+            "Action provenance witness schema $id differs from predicate type")
+    bindings = {
+        ("properties", "schemaVersion", "const"): SCHEMA_VERSION,
+        ("properties", "kind", "const"): KIND,
+        ("properties", "repository", "const"): REPOSITORY,
+        ("properties", "repositoryId", "const"): REPOSITORY_ID,
+        ("properties", "source", "properties", "ref", "const"): SOURCE_REF,
+        ("properties", "source", "properties", "workflowRef", "const"): WORKFLOW_REF,
+        ("properties", "validity", "properties", "ttlSeconds", "const"): TTL_SECONDS,
+        ("properties", "predicateSchema", "properties", "id", "const"): PREDICATE_TYPE,
+        ("properties", "actionLock", "properties", "version", "const"): ACTION_LOCK_VERSION,
+        ("properties", "authority", "properties", "preparation", "const"): "contents:read",
+        ("properties", "authority", "properties", "attestation", "const"):
+            "contents:read,id-token:write,attestations:write",
+        ("properties", "authority", "properties", "separation", "const"): AUTHORITY_SEPARATION,
+        ("properties", "claim", "const"): CLAIM,
+    }
+    for path, expected in bindings.items():
+        require(_schema_const(schema, *path) == expected,
+                "Action provenance witness executable constant differs from schema: "
+                + ".".join(path))
+
+
 def _normalized_lock(lock_bytes: bytes) -> tuple[Any, dict[str, dict[str, Any]]]:
     try:
         text = lock_bytes.decode("utf-8")
@@ -464,6 +502,7 @@ def _expect_failure(function: Any, expected: str) -> None:
 
 
 def self_test() -> None:
+    validate_schema_contract()
     lock_bytes = _fixture_lock_bytes()
     policy_files = _fixture_policy_files()
     predicate = build_predicate(
