@@ -4,6 +4,13 @@
   "repository": "portyu9/portyu9",
   "authorizations": [
     {
+      "id": "cap-action-provenance-witness-producer-v1",
+      "baseBomSha256": "e1d2524a988db739b724d61a7bc0cc6f2dd92b8449ffe3a6bf192ff1aa5a22b3",
+      "candidateBomSha256": "e71e4c59041ac21125b2d54f2ac17f9429b6ecff9b438612b39f53c8739873a7",
+      "expansionSha256": "96ef84eda8950afe8f586c0ece938300e2ed90bbd31a97ed0580d1997e933d96",
+      "rationale": "Authorize #702's exact read-only Action provenance witness producer: one trusted-main job with contents:read/actions:read, exact run/source reproof, existing live release proof, deterministic witness build/verify, and one-day unsigned artifact retention. No OIDC, attestation writer, secret, candidate execution, PR/check/ref/content mutation, required-check reduction, direct-main write, or bypass is added."
+    },
+    {
       "id": "cap-action-release-immutable-identity-v2",
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "e1d2524a988db739b724d61a7bc0cc6f2dd92b8449ffe3a6bf192ff1aa5a22b3",
