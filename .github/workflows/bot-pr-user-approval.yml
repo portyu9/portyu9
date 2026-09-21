@@ -115,7 +115,7 @@ jobs:
             jq -e --argjson number "$number" '
               (type == "object") and
               (.number | type == "number" and . == floor and . > 0 and . == $number) and
-              (.user | type == "object" and (.login | type == "string" and length > 0)) and
+              (.user | (type == "object") and (.login | (type == "string") and length > 0)) and
               (.state == "open") and
               (.draft | type == "boolean") and
               (.base | type == "object" and
