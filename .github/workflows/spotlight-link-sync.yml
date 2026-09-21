@@ -761,11 +761,11 @@ jobs:
             [[ "$RUNS_COUNT" =~ ^[0-9]+$ ]]
             test "$RUNS_TOTAL" = "$RUNS_COUNT" || { echo "Canonical Spotlight-link workflow-run response is incomplete." >&2; exit 1; }
             test "$RUNS_TOTAL" -le 3 || { echo "Canonical Spotlight-link workflow-run set is ambiguous." >&2; exit 1; }
-            ALL_SUCCESS=false
+            REVIEW_RUNS_READY=false
             if [ "$RUNS_TOTAL" = "3" ]; then
               OBSERVED_IDENTITIES="$(jq -c '[.[("workflow" + "_runs")][] | {name,workflow_id}] | sort_by(.name)' <<<"$RUNS")"
               test "$OBSERVED_IDENTITIES" = "$EXPECTED_IDENTITIES" || { echo "Canonical Spotlight-link workflow-run identities changed." >&2; exit 1; }
-              ALL_SUCCESS=true
+              REVIEW_RUNS_READY=true
               for NAME in "CodeQL" "Dependency review" "Profile quality"; do
                 case "$NAME" in
                   "CodeQL") EXPECTED_ID="$CODEQL_WORKFLOW_ID" ;;
@@ -781,6 +781,15 @@ jobs:
                 RUN_ATTEMPT="$(jq -r .run_attempt <<<"$RUN")"
                 STATUS="$(jq -r .status <<<"$RUN")"
                 CONCLUSION="$(jq -r '.conclusion // ""' <<<"$RUN")"
+                case "$STATUS" in
+                  queued|in_progress|requested|waiting|pending|completed) ;;
+                  *) echo "Canonical Spotlight-link PR workflow has unsupported status: $NAME ($STATUS)." >&2; exit 1 ;;
+                esac
+                if [ "$STATUS" = "completed" ]; then
+                  test -n "$CONCLUSION"
+                else
+                  test -z "$CONCLUSION" || test "$CONCLUSION" = "action_required"
+                fi
                 [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]
                 [[ "$CHECK_SUITE_ID" =~ ^[1-9][0-9]*$ ]]
                 [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
@@ -791,9 +800,9 @@ jobs:
                 test "$(jq -r .repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"
                 test "$(jq -r .head_repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"
                 case "$NAME" in
-                  "CodeQL") CODEQL_RUN_ID="$RUN_ID"; CODEQL_CHECK_SUITE_ID="$CHECK_SUITE_ID" ;;
-                  "Dependency review") DEPENDENCY_RUN_ID="$RUN_ID"; DEPENDENCY_CHECK_SUITE_ID="$CHECK_SUITE_ID" ;;
-                  "Profile quality") PROFILE_RUN_ID="$RUN_ID"; PROFILE_CHECK_SUITE_ID="$CHECK_SUITE_ID" ;;
+                  "CodeQL") CODEQL_RUN_ID="$RUN_ID"; CODEQL_CHECK_SUITE_ID="$CHECK_SUITE_ID"; CODEQL_RUN_ATTEMPT="$RUN_ATTEMPT" ;;
+                  "Dependency review") DEPENDENCY_RUN_ID="$RUN_ID"; DEPENDENCY_CHECK_SUITE_ID="$CHECK_SUITE_ID"; DEPENDENCY_RUN_ATTEMPT="$RUN_ATTEMPT" ;;
+                  "Profile quality") PROFILE_RUN_ID="$RUN_ID"; PROFILE_CHECK_SUITE_ID="$CHECK_SUITE_ID"; PROFILE_RUN_ATTEMPT="$RUN_ATTEMPT" ;;
                   *) exit 1 ;;
                 esac
                 if [ "$STATUS" = "action_required" ] || [ "$STATUS" = "waiting" ] || [ "$CONCLUSION" = "action_required" ]; then
@@ -809,22 +818,83 @@ jobs:
                       echo "approval_requests_json=$APPROVAL_REQUESTS_JSON" >> "$GITHUB_OUTPUT"
                       ;;
                   esac
-                  ALL_SUCCESS=false
+                  REVIEW_RUNS_READY=false
                 elif [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
                   :
                 elif [ "$STATUS" = "completed" ]; then
                   echo "Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION)." >&2
                   exit 1
+                elif [ "$NAME" = "Profile quality" ]; then
+                  echo "Canonical Profile Quality remains active only for the review-dependent native gate."
                 else
-                  ALL_SUCCESS=false
+                  REVIEW_RUNS_READY=false
                 fi
               done
             fi
-            if [ "$ALL_SUCCESS" = "true" ]; then break; fi
+            if [ "$REVIEW_RUNS_READY" = "true" ]; then break; fi
             test "$attempt" -lt 60
             sleep 10
           done
-          test "$ALL_SUCCESS" = "true"
+          test "$REVIEW_RUNS_READY" = "true"
+
+          REVIEW_INDEPENDENT_CHECKS=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission)
+          REVIEW_CHECKS_READY=false
+          for attempt in $(seq 1 60); do
+            REVIEW_CHECKS_READY=true
+            for NAME in "${REVIEW_INDEPENDENT_CHECKS[@]}"; do
+              CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100")" || {
+                echo "ERROR: failed to fetch review-independent check ${NAME} for ${HEAD_SHA}." >&2
+                exit 1
+              }
+              jq -e --arg head "$HEAD_SHA" --arg name "$NAME" '
+                (type == "object") and
+                (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+                (.check_runs | type == "array" and length <= 100) and
+                (.total_count == (.check_runs | length)) and
+                (all(.check_runs[];
+                  type == "object" and
+                  (.id | type == "number" and . == floor and . > 0) and
+                  (.name == $name) and
+                  (.head_sha == $head) and
+                  (.app | type == "object" and .id == 15368) and
+                  (.status | type == "string" and
+                    (. == "queued" or . == "in_progress" or . == "requested" or
+                     . == "waiting" or . == "pending" or . == "completed")) and
+                  (if .status == "completed"
+                   then (.conclusion | type == "string" and length > 0)
+                   else .conclusion == null
+                   end)
+                )) and
+                (([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))
+              ' <<<"$CHECKS" >/dev/null || {
+                echo "ERROR: malformed or incomplete review-independent check evidence for ${NAME} on ${HEAD_SHA}." >&2
+                exit 1
+              }
+              COUNT="$(jq -r .total_count <<<"$CHECKS")"
+              [[ "$COUNT" =~ ^[0-9]+$ ]]
+              if [ "$COUNT" = "0" ]; then
+                REVIEW_CHECKS_READY=false
+                continue
+              fi
+              test "$COUNT" = "1" || {
+                echo "ERROR: ambiguous review-independent check ${NAME} on ${HEAD_SHA}." >&2
+                exit 1
+              }
+              STATUS="$(jq -r '.check_runs[0].status' <<<"$CHECKS")"
+              CONCLUSION="$(jq -r '.check_runs[0].conclusion // ""' <<<"$CHECKS")"
+              if [ "$STATUS" != "completed" ]; then
+                REVIEW_CHECKS_READY=false
+              elif [ "$CONCLUSION" != "success" ]; then
+                echo "ERROR: review-independent check ${NAME} completed unsuccessfully on ${HEAD_SHA}: ${CONCLUSION}." >&2
+                exit 1
+              fi
+            done
+            if [ "$REVIEW_CHECKS_READY" = "true" ]; then break; fi
+            test "$attempt" -lt 60
+            sleep 5
+          done
+          test "$REVIEW_CHECKS_READY" = "true"
+          echo "All six review-independent protected contexts are exact-head GitHub Actions successes."
 
           PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
           test "$(jq 'length' <<<"$PRS")" = "1"
@@ -832,14 +902,14 @@ jobs:
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
           COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
           if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
-            printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: the exact Spotlight head \`${HEAD_SHA}\` passed all three protected PR workflows. An exact-head APPROVED review by @portyu9 is required before terminal merge; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path."
+            printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: the exact Spotlight head \`${HEAD_SHA}\` passed all six review-independent protected contexts. Profile Quality may remain active only while its native governed-review gate waits for the exact-head @portyu9 review; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path."
             gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
             jq -e --arg body "$APPROVAL_BODY" '.body == $body' approval-comment.json >/dev/null
           fi
 
           gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
             -f ref=main >/dev/null
-          echo "Dispatched exact post-check portyu9 review evaluation from trusted main."
+          echo "Dispatched exact review-independent-check portyu9 review evaluation from trusted main."
 
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           PORTYU9_APPROVAL_COUNT=0
@@ -866,17 +936,29 @@ jobs:
               exit 1
             }
             REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+            MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
             PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
+            [[ "$MARKER_REVIEW_COUNT" =~ ^[0-9]+$ ]]
             [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
-            if [ "$PORTYU9_APPROVAL_COUNT" -ge 1 ]; then
+            test "$MARKER_REVIEW_COUNT" -le 1 || { echo "ERROR: multiple exact marker-bound portyu9 reviews exist before Spotlight authorization." >&2; exit 1; }
+            if [ "$LATEST_MANUAL_DECISIVE_STATE" = "CHANGES_REQUESTED" ]; then
+              echo "ERROR: latest manual exact-head portyu9 review requests changes; Spotlight authorization is vetoed." >&2
+              exit 1
+            fi
+            if [ "$MARKER_REVIEW_COUNT" = "1" ] && [ "$PORTYU9_APPROVAL_COUNT" != "1" ]; then
+              echo "ERROR: the exact marker-bound portyu9 review was revoked or dismissed." >&2
+              exit 1
+            fi
+            if [ "$PORTYU9_APPROVAL_COUNT" = "1" ]; then
               break
             fi
             if [ "$REVIEW_ATTEMPT" -lt 24 ]; then
               sleep 5
             fi
           done
-          test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
-            echo "ERROR: exact-base/head portyu9 review did not materialize after the post-check dispatch." >&2
+          test "$PORTYU9_APPROVAL_COUNT" = "1" || {
+            echo "ERROR: exact-base/head portyu9 review did not materialize after the review-independent-check dispatch." >&2
             exit 1
           }
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
@@ -886,6 +968,51 @@ jobs:
           test "$(jq -r .base.sha <<<"$PR_AFTER_REVIEW")" = "$BASE_SHA"
           test "$(jq -r .head.sha <<<"$PR_AFTER_REVIEW")" = "$HEAD_SHA"
           echo "Observed exact-base/head marker-bound portyu9 approval before merge authorization."
+
+          CANONICAL_RUNS_SUCCESS=false
+          for attempt in $(seq 1 60); do
+            CANONICAL_RUNS_SUCCESS=true
+            for SPEC in               "CodeQL:$CODEQL_WORKFLOW_ID:$CODEQL_RUN_ID:$CODEQL_RUN_ATTEMPT:$CODEQL_CHECK_SUITE_ID"               "Dependency review:$DEPENDENCY_WORKFLOW_ID:$DEPENDENCY_RUN_ID:$DEPENDENCY_RUN_ATTEMPT:$DEPENDENCY_CHECK_SUITE_ID"               "Profile quality:$PROFILE_WORKFLOW_ID:$PROFILE_RUN_ID:$PROFILE_RUN_ATTEMPT:$PROFILE_CHECK_SUITE_ID"; do
+              IFS=: read -r NAME EXPECTED_ID RUN_ID RUN_ATTEMPT CHECK_SUITE_ID <<<"$SPEC"
+              LIVE_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")"
+              jq -e --arg name "$NAME" --arg branch "$CANDIDATE_BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"                 --argjson workflow "$EXPECTED_ID" --argjson run "$RUN_ID" --argjson attempt "$RUN_ATTEMPT" --argjson suite "$CHECK_SUITE_ID" '
+                (type == "object") and
+                (.id == $run) and
+                (.name == $name) and
+                (.workflow_id == $workflow) and
+                (.run_attempt == $attempt) and
+                (.check_suite_id == $suite) and
+                (.event == "pull_request") and
+                (.head_branch == $branch) and
+                (.head_sha == $head) and
+                (.repository.full_name == $repo) and
+                (.head_repository.full_name == $repo) and
+                (.status | type == "string" and
+                  (. == "queued" or . == "in_progress" or . == "requested" or
+                   . == "waiting" or . == "pending" or . == "completed")) and
+                (if .status == "completed"
+                 then (.conclusion | type == "string" and length > 0)
+                 else .conclusion == null
+                 end)
+              ' <<<"$LIVE_RUN" >/dev/null || {
+                echo "ERROR: canonical Spotlight-link workflow identity changed after exact user review: ${NAME}." >&2
+                exit 1
+              }
+              STATUS="$(jq -r .status <<<"$LIVE_RUN")"
+              CONCLUSION="$(jq -r '.conclusion // ""' <<<"$LIVE_RUN")"
+              if [ "$STATUS" != "completed" ]; then
+                CANONICAL_RUNS_SUCCESS=false
+              elif [ "$CONCLUSION" != "success" ]; then
+                echo "ERROR: canonical Spotlight-link workflow failed after exact user review: ${NAME} (${CONCLUSION})." >&2
+                exit 1
+              fi
+            done
+            if [ "$CANONICAL_RUNS_SUCCESS" = "true" ]; then break; fi
+            test "$attempt" -lt 60
+            sleep 5
+          done
+          test "$CANONICAL_RUNS_SUCCESS" = "true"
+          echo "All canonical Spotlight-link PR workflows completed successfully after exact user review."
 
           echo "codeql_run_id=$CODEQL_RUN_ID" >> "$GITHUB_OUTPUT"
           echo "codeql_check_suite_id=$CODEQL_CHECK_SUITE_ID" >> "$GITHUB_OUTPUT"
