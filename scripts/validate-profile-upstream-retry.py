@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import sys
 
+from profile_generator_compatibility_witness import self_test as compatibility_witness_self_test
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/profile-quality.yml"
 UPSTREAM_SHA = "49b5f7091182a45f3ef93923505b660c6da5f835"
@@ -170,6 +172,7 @@ def main() -> int:
         text = WORKFLOW.read_text(encoding="utf-8")
         validate(text)
         self_test(text)
+        compatibility_witness_self_test()
         print(
             "Pinned upstream retry validation passed: the immutable upstream Action has one primary attempt, "
             "one 60-second bounded backoff, and one terminal retry; no Search polling is introduced and "
