@@ -234,6 +234,8 @@
           "name": "integration-pinned-upstream",
           "needs": [],
           "permissions": {
+            "actions": "read",
+            "attestations": "read",
             "contents": "read"
           }
         },
