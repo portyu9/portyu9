@@ -759,6 +759,27 @@
           }
         }
       }
+    },
+    "profile-generator-compatibility-witness": {
+      "path": ".github/workflows/profile-generator-compatibility-witness.yml",
+      "triggers": [
+        "push",
+        "schedule",
+        "workflow_dispatch"
+      ],
+      "permissions": {
+        "contents": "read"
+      },
+      "jobs": {
+        "prepare": {
+          "name": "prepare-profile-generator-compatibility-witness-read-only",
+          "needs": [],
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          }
+        }
+      }
     }
   },
   "transactionMachines": {

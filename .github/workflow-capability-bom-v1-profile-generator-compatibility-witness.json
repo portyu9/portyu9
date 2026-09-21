@@ -1,0 +1,126 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "profile-generator-compatibility-witness",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Upload unsigned reviewed compatibility witness bundle"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
+              "repository": "shinpr/github-profile-stats",
+              "step": "Generate exact pinned raw Signal Field"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact trusted run identity and issuance"
+            }
+          ],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "profile-generator-compatibility-witness-v1",
+              "operation": "upload",
+              "path": "witness/",
+              "retention-days": "1",
+              "step": "Upload unsigned reviewed compatibility witness bundle"
+            }
+          ],
+          "id": "prepare",
+          "mutations": [],
+          "name": "prepare-profile-generator-compatibility-witness-read-only",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        }
+      ],
+      "name": "Profile generator compatibility witness",
+      "path": ".github/workflows/profile-generator-compatibility-witness.yml",
+      "references": {
+        "env": [
+          "PYTHON_VERSION"
+        ],
+        "githubToken": [
+          "github.token"
+        ],
+        "secrets": [],
+        "vars": []
+      },
+      "triggers": {
+        "push": {
+          "branches": [
+            "main"
+          ],
+          "paths": [
+            ".github/action-lock.json",
+            ".github/attestation/profile-generator-compatibility-witness-v1.schema.json",
+            ".github/workflows/profile-generator-compatibility-witness.yml",
+            ".github/workflows/profile-quality.yml",
+            "scripts/action_identity_lock.py",
+            "scripts/generate-profile-evidence.py",
+            "scripts/profile-evidence-generation-v1.json",
+            "scripts/profile_generator_compatibility_witness.py",
+            "scripts/signal-field-pipeline-v2.json",
+            "scripts/signal_field_pipeline.py",
+            "scripts/validate-generated-signal-field.py",
+            "scripts/validate-profile-upstream-retry.py",
+            "scripts/validate-signal-field-v214.py"
+          ]
+        },
+        "schedule": {
+          "cron": [
+            "53 */2 * * *"
+          ]
+        },
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}
