@@ -523,7 +523,7 @@ jobs:
             REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
             jq -e --arg head "$HEAD_SHA" --arg body "$BODY" '
               (type == "object") and
-              (.id | type == "number" and . == floor and . > 0) and
+              (.id | (type == "number") and . == floor and . > 0) and
               (.user | type == "object" and (.login == "portyu9")) and
               (.state == "APPROVED") and
               (.commit_id | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
