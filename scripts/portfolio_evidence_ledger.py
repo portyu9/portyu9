@@ -31,6 +31,8 @@ API_BACKOFF_SECONDS = (1.0, 2.0)
 API_MAX_RETRY_AFTER_SECONDS = 5.0
 RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 JOB_PAGE_SIZE = 100
+WORKFLOW_RUN_PAGE_SIZE = 100
+MAX_WORKFLOW_RUN_PAGES = 20
 
 
 def require(condition: bool, message: str) -> None:
@@ -185,12 +187,114 @@ def select_workflow_run(runs: Any, subject: str | None) -> dict[str, Any]:
     return trusted[0] if trusted else {}
 
 
+def select_exact_workflow_run(runs: Any, subject: str, workflow: str) -> dict[str, Any]:
+    """Select only trusted evidence for one workflow on the exact requested subject."""
+    expected_path = f".github/workflows/{workflow}"
+    if not isinstance(runs, list):
+        return {}
+    trusted = [
+        run for run in runs
+        if isinstance(run, dict)
+        and run.get("head_sha") == subject
+        and run.get("path") == expected_path
+        and isinstance(run.get("event"), str)
+        and run["event"] in TRUSTED_WORKFLOW_EVENTS
+        and isinstance(run.get("created_at"), str)
+        and bool(run["created_at"])
+    ]
+    trusted.sort(key=lambda run: run["created_at"], reverse=True)
+    return trusted[0] if trusted else {}
+
+
+def workflow_runs_for_subject(
+    repo: str,
+    subject: str,
+    token: str | None,
+    *,
+    fetcher: Callable[[str, str | None], dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch the complete bounded repository run collection for one exact head SHA."""
+    require(
+        len(subject) == 40 and all(ch in "0123456789abcdef" for ch in subject),
+        f"{repo}: workflow-run subject SHA is malformed",
+    )
+    fetch_page = fetcher or fetch_json
+    base = f"https://api.github.com/repos/{OWNER}/{repo}/actions/runs"
+    first = fetch_page(
+        f"{base}?head_sha={subject}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page=1",
+        token,
+    )
+    total = first.get("total_count")
+    require(
+        isinstance(total, int) and not isinstance(total, bool) and total >= 0,
+        f"{repo}: exact-subject workflow-run total_count is malformed",
+    )
+    expected_pages = max(1, (total + WORKFLOW_RUN_PAGE_SIZE - 1) // WORKFLOW_RUN_PAGE_SIZE)
+    require(
+        expected_pages <= MAX_WORKFLOW_RUN_PAGES,
+        f"{repo}: exact-subject workflow-run collection exceeds bounded pagination",
+    )
+
+    collected: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
+    for page in range(1, expected_pages + 1):
+        payload = first if page == 1 else fetch_page(
+            f"{base}?head_sha={subject}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page={page}",
+            token,
+        )
+        page_total = payload.get("total_count")
+        require(
+            isinstance(page_total, int)
+            and not isinstance(page_total, bool)
+            and page_total == total,
+            f"{repo}: exact-subject workflow-run total_count changed while paging",
+        )
+        page_runs = payload.get("workflow_runs")
+        require(
+            isinstance(page_runs, list),
+            f"{repo}: exact-subject workflow-run page {page} is malformed",
+        )
+        expected_size = (
+            0
+            if total == 0
+            else WORKFLOW_RUN_PAGE_SIZE
+            if page < expected_pages
+            else total - WORKFLOW_RUN_PAGE_SIZE * (expected_pages - 1)
+        )
+        require(
+            len(page_runs) == expected_size,
+            f"{repo}: exact-subject workflow-run page {page} is incomplete: "
+            f"expected {expected_size}, observed {len(page_runs)}",
+        )
+        for run in page_runs:
+            require(isinstance(run, dict), f"{repo}: exact-subject workflow-run entry is malformed")
+            run_id = run.get("id")
+            require(
+                isinstance(run_id, int) and not isinstance(run_id, bool) and run_id > 0,
+                f"{repo}: exact-subject workflow-run id is malformed",
+            )
+            require(run_id not in seen_ids, f"{repo}: duplicate exact-subject workflow-run id {run_id}")
+            seen_ids.add(run_id)
+            require(
+                run.get("head_sha") == subject,
+                f"{repo}: head_sha-filtered workflow-run collection returned a different subject",
+            )
+            collected.append(run)
+
+    require(
+        len(collected) == total,
+        f"{repo}: exact-subject workflow-run pagination did not close: "
+        f"expected {total}, observed {len(collected)}",
+    )
+    return collected
+
+
 def latest_workflow_run(repo: str, workflow: str, subject: str, token: str | None) -> dict[str, Any]:
     encoded = urllib.parse.quote(workflow, safe="")
     base = f"https://api.github.com/repos/{OWNER}/{repo}/actions/workflows/{encoded}/runs"
     if subject != SHA40_ZERO:
-        exact = fetch_json(f"{base}?branch=main&head_sha={subject}&per_page=20", token)
-        selected = select_workflow_run(exact.get("workflow_runs") or [], subject)
+        exact_runs = workflow_runs_for_subject(repo, subject, token)
+        selected = select_exact_workflow_run(exact_runs, subject, workflow)
         if selected:
             return selected
     recent = fetch_json(f"{base}?branch=main&per_page=20", token)
@@ -269,6 +373,25 @@ def workflow_run_primitive_self_test() -> None:
             "trusted run selection accepted a non-string creation timestamp")
     require(select_workflow_run([{**good, "event": True}, good], subject) == good,
             "trusted run selection accepted a non-string event primitive")
+    exact = {**good, "path": ".github/workflows/ci.yml"}
+    stale = {
+        **exact,
+        "id": 125,
+        "head_sha": "2" * 40,
+        "created_at": "2026-09-09T00:00:00Z",
+    }
+    require(
+        select_exact_workflow_run([stale, exact], subject, "ci.yml") == exact,
+        "exact workflow selector preferred a newer different-subject run",
+    )
+    require(
+        select_exact_workflow_run([stale], subject, "ci.yml") == {},
+        "exact workflow selector accepted a different-subject fallback",
+    )
+    require(
+        select_exact_workflow_run([{**exact, "path": ".github/workflows/security.yml"}], subject, "ci.yml") == {},
+        "exact workflow selector accepted the wrong workflow path",
+    )
 
     require(main_revision_from_payload({"object": {"sha": subject}}, "fixture-repo") == subject,
             "main revision primitive fixture changed")
@@ -279,6 +402,106 @@ def workflow_run_primitive_self_test() -> None:
             pass
         else:
             raise ValueError("main revision primitive self-test accepted non-string SHA")
+
+
+def workflow_runs_for_subject_self_test() -> None:
+    """Prove exact-subject run discovery closes pagination before workflow selection."""
+    subject = "1" * 40
+    first_page = [
+        {
+            "id": index,
+            "path": ".github/workflows/security.yml",
+            "event": "push",
+            "head_sha": subject,
+            "created_at": "2026-09-08T00:00:00Z",
+        }
+        for index in range(1, WORKFLOW_RUN_PAGE_SIZE + 1)
+    ]
+    exact_ci = {
+        "id": WORKFLOW_RUN_PAGE_SIZE + 1,
+        "path": ".github/workflows/ci.yml",
+        "event": "push",
+        "head_sha": subject,
+        "created_at": "2026-09-08T00:01:00Z",
+    }
+    pages = {
+        1: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 1, "workflow_runs": first_page},
+        2: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 1, "workflow_runs": [exact_ci]},
+    }
+    requested: list[int] = []
+
+    def fixture_fetch(url: str, token: str | None) -> dict[str, Any]:
+        require(token is None, "workflow-run fixture unexpectedly received a token")
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        require((query.get("head_sha") or [""])[0] == subject,
+                "workflow-run fixture lost exact head_sha filtering")
+        page = int((query.get("page") or ["0"])[0])
+        requested.append(page)
+        return pages[page]
+
+    runs = workflow_runs_for_subject("fixture-repo", subject, None, fetcher=fixture_fetch)
+    require(requested == [1, 2], "exact-subject workflow-run fixture did not fetch every page")
+    require(len(runs) == WORKFLOW_RUN_PAGE_SIZE + 1,
+            "exact-subject workflow-run fixture lost a page")
+    require(
+        select_exact_workflow_run(runs, subject, "ci.yml") == exact_ci,
+        "exact-subject workflow-run discovery lost the required workflow on page two",
+    )
+
+    failure_cases = (
+        (
+            {
+                1: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 1, "workflow_runs": first_page[:-1]},
+                2: pages[2],
+            },
+            "incomplete",
+        ),
+        (
+            {
+                1: pages[1],
+                2: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 2, "workflow_runs": [exact_ci]},
+            },
+            "total_count changed",
+        ),
+        (
+            {
+                1: pages[1],
+                2: {
+                    "total_count": WORKFLOW_RUN_PAGE_SIZE + 1,
+                    "workflow_runs": [{**exact_ci, "id": 1}],
+                },
+            },
+            "duplicate exact-subject workflow-run id",
+        ),
+        (
+            {
+                1: pages[1],
+                2: {
+                    "total_count": WORKFLOW_RUN_PAGE_SIZE + 1,
+                    "workflow_runs": [{**exact_ci, "head_sha": "2" * 40}],
+                },
+            },
+            "returned a different subject",
+        ),
+    )
+    for fixture_pages, expected in failure_cases:
+        def failing_fetch(
+            url: str,
+            token: str | None,
+            *,
+            data: dict[int, dict[str, Any]] = fixture_pages,
+        ) -> dict[str, Any]:
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+            return data[int((query.get("page") or ["0"])[0])]
+
+        try:
+            workflow_runs_for_subject("fixture-repo", subject, None, fetcher=failing_fetch)
+        except ValueError as exc:
+            require(expected in str(exc), f"exact-subject workflow-run self-test failed for wrong reason: {exc}")
+        else:
+            raise ValueError(
+                f"exact-subject workflow-run self-test accepted malformed pagination: {expected}"
+            )
 
 
 def workflow_jobs(
@@ -545,6 +768,7 @@ def summarize(systems: list[dict[str, Any]], field: str) -> dict[str, int]:
 def build_ledger(day: dt.date, token: str | None, offline: bool) -> dict[str, Any]:
     transport_self_test()
     workflow_run_primitive_self_test()
+    workflow_runs_for_subject_self_test()
     workflow_jobs_self_test()
     evidence.self_test()
     reviewed = registry.systems()
