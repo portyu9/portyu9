@@ -205,6 +205,7 @@ jobs:
         if: steps.candidate.outputs.has_target == 'true'
         id: proof
         env:
+          GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.candidate.outputs.pr_number }}
           HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
           CANDIDATE_ROOT: ${{ steps.source.outputs.candidate_root }}
@@ -225,13 +226,17 @@ jobs:
 
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
             "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > release-refs.txt
+          gh api "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json
+          gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json
           python3 scripts/dependabot_release.py \
             --refs release-refs.txt \
+            --repository-json release-repository.json \
+            --release-json release.json \
             --repository "$DEPENDENCY_REPOSITORY" \
             --tag "$CANDIDATE_TAG" \
             --expected-sha "$CANDIDATE_SHA" \
-            --out resolved-release-sha.txt
-          RESOLVED_SHA="$(cat resolved-release-sha.txt)"
+            --out resolved-release.json
+          RESOLVED_SHA="$(jq -r .sha resolved-release.json)"
           test "$RESOLVED_SHA" = "$CANDIDATE_SHA"
 
           python3 scripts/dependabot_controller.py admit \
@@ -239,7 +244,7 @@ jobs:
             --expected-head "$HEAD_SHA" \
             --base-root . \
             --candidate-root "$CANDIDATE_ROOT" \
-            --resolved-release-sha "$RESOLVED_SHA" \
+            --resolved-release resolved-release.json \
             --out dependabot-proof.json
 
           jq -r '.files[]' dependabot-proof.json | LC_ALL=C sort -u > expected-raw-paths.txt
