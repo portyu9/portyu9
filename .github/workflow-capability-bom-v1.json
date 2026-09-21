@@ -241,14 +241,14 @@
               "path": "",
               "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
               "repository": "actions/download-artifact",
-              "step": "Download exact fresh signed Profile Generator Compatibility Witness"
+              "step": "Download Signal Field review artifacts"
             },
             {
               "kind": "remote",
               "path": "",
               "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
               "repository": "actions/download-artifact",
-              "step": "Download Signal Field review artifacts"
+              "step": "Download exact fresh signed Profile Generator Compatibility Witness"
             },
             {
               "kind": "remote",
