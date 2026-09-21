@@ -272,7 +272,7 @@ jobs:
           retention-days: 30
 
   attest:
-    if: always() && (needs.reconcile.outputs.mutated == 'true' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Merge pull request #685 from portyu9/recover-ruleset-receipt-attestation')))
+    if: "${{ always() && (needs.reconcile.outputs.mutated == 'true' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Merge pull request #685 from portyu9/recover-ruleset-receipt-attestation'))) }}"
     name: attest-ruleset-reconciliation-receipt-write-only
     needs: [reconcile]
     runs-on: ubuntu-24.04
