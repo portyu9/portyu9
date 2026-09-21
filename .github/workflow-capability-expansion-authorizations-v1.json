@@ -4,6 +4,13 @@
   "repository": "portyu9/portyu9",
   "authorizations": [
     {
+      "id": "cap-action-provenance-witness-consumer-live-v1",
+      "baseBomSha256": "027d28fa7b8baeddea2988bf70ca0abe54d940f054d75a4ddec19e7b345a8555",
+      "candidateBomSha256": "486e75eb6243bd538ca68aae366ada59f1bd89905d8673f2328c93c76a74be04",
+      "expansionSha256": "0b8d2a3bf3e295856d3b26ecb082eb14cc38b61cc51234a2520ebcc0e3993471",
+      "rationale": "Authorize #715's exact Profile Quality Action provenance witness consumer: actions:read and attestations:read, bounded trusted-main run/artifact discovery, pinned digest-enforced artifact download, and cryptographic attestation verification before witness reuse. No write, OIDC, secret, candidate mutation/execution, required-check reduction, direct-main write, or bypass authority is added."
+    },
+    {
       "id": "cap-action-provenance-witness-producer-v1",
       "baseBomSha256": "e1d2524a988db739b724d61a7bc0cc6f2dd92b8449ffe3a6bf192ff1aa5a22b3",
       "candidateBomSha256": "e71e4c59041ac21125b2d54f2ac17f9429b6ecff9b438612b39f53c8739873a7",
