@@ -314,19 +314,58 @@
             {
               "kind": "remote",
               "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact fresh signed Action provenance witness"
+            },
+            {
+              "kind": "remote",
+              "path": "",
               "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
               "repository": "actions/setup-python",
               "step": "Set up Python"
             }
           ],
-          "apiSurfaces": [],
-          "artifacts": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Discover exact fresh signed Action provenance witness"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Discover exact fresh signed Action provenance witness"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Discover exact fresh signed Action provenance witness"
+            }
+          ],
+          "artifacts": [
+            {
+              "digest-mismatch": "error",
+              "name": "action-provenance-witness-v1",
+              "operation": "download",
+              "path": "action-provenance-witness-consumer",
+              "step": "Download exact fresh signed Action provenance witness"
+            }
+          ],
           "id": "validate",
           "mutations": [],
           "name": "validate-contracts",
           "needs": [],
           "oidc": false,
           "permissions": {
+            "actions": "read",
+            "attestations": "read",
             "contents": "read"
           },
           "references": {
