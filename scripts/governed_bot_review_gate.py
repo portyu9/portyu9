@@ -69,12 +69,14 @@ def validate_review_entries(reviews: list[Any]) -> list[dict[str, Any]]:
         state = item.get("state")
         require(isinstance(state, str) and state in REVIEW_STATES, "review response contains an invalid state")
 
-        commit_id = item.get("commit_id")
+        require("commit_id" in item, "review response is missing commit_id")
+        commit_id = item["commit_id"]
         require(
             commit_id is None or (isinstance(commit_id, str) and SHA_RE.fullmatch(commit_id) is not None),
             "review response contains an invalid commit_id",
         )
-        body = item.get("body")
+        require("body" in item, "review response is missing body")
+        body = item["body"]
         require(body is None or isinstance(body, str), "review response contains an invalid body")
         validated.append(item)
     return validated
@@ -432,7 +434,9 @@ def self_test() -> None:
         ([[{**approved, "state": "UNKNOWN"}]], "invalid review state"),
         ([[{**approved, "commit_id": 123}]], "invalid review commit type"),
         ([[{**approved, "commit_id": "ABC"}]], "invalid review commit shape"),
+        ([[{key: value for key, value in approved.items() if key != "commit_id"}]], "missing review commit_id"),
         ([[{**approved, "body": 123}]], "invalid review body"),
+        ([[{key: value for key, value in approved.items() if key != "body"}]], "missing review body"),
         ([[approved], [veto]], "incomplete non-final page"),
     )
     for fixture, label in malformed_fixtures:
