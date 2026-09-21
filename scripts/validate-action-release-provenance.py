@@ -10,6 +10,7 @@ release through Git plus strict public GitHub REST metadata before accepting the
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -138,15 +139,27 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def public_api_headers(token: str | None) -> dict[str, str]:
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "portyu9-action-release-provenance-v2",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    if token is None:
+        return headers
+    require(bool(token) and token == token.strip(),
+            "GH_TOKEN must be non-empty and free of surrounding whitespace")
+    require(len(token) <= 1024 and all(0x21 <= ord(character) <= 0x7E for character in token),
+            "GH_TOKEN contains invalid characters")
+    headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def fetch_public_api(url: str, label: str) -> str:
     request = urllib.request.Request(
         url,
         method="GET",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "portyu9-action-release-provenance-v2",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
+        headers=public_api_headers(os.environ.get("GH_TOKEN")),
     )
     opener = urllib.request.build_opener(NoRedirect())
     try:
@@ -332,6 +345,18 @@ def self_test() -> None:
     action_lock_self_test()
     release_identity_self_test()
     action_provenance_witness_self_test()
+    anonymous_headers = public_api_headers(None)
+    require("Authorization" not in anonymous_headers,
+            "anonymous public API headers unexpectedly contain authorization")
+    authenticated_headers = public_api_headers("test-token")
+    require(authenticated_headers.get("Authorization") == "Bearer test-token",
+            "authenticated public API headers lost bearer binding")
+    try:
+        public_api_headers(" bad-token")
+    except ValueError as exc:
+        require("GH_TOKEN" in str(exc), "invalid GH_TOKEN self-test raised the wrong error")
+    else:
+        raise ValueError("public API header self-test accepted malformed GH_TOKEN")
     a = "a" * 40
     b = "b" * 40
     good = (
