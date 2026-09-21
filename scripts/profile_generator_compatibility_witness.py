@@ -470,24 +470,47 @@ def validate_signer_workflow_contract(text: str | None = None) -> None:
     require(signer.count(
         "uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2"
     ) == 1, "profile generator compatibility witness signer must execute exactly one reviewed attestation action")
-    require(
-        "subject-path: compatibility-witness-attestation-input/profile-generator-compatibility-witness-subject.json" in signer
-        and "predicate-path: compatibility-witness-attestation-input/profile-generator-compatibility-witness.json" in signer
-        and (
-            "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/"
-            ".github/attestation/profile-generator-compatibility-witness-v1.schema.json"
-        ) in signer,
-        "profile generator compatibility witness signer subject/predicate identity changed",
-    )
+    for required in (
+        "subject-path: compatibility-witness-attestation-input/profile-generator-compatibility-witness-subject.json",
+        "predicate-path: compatibility-witness-attestation-input/profile-generator-compatibility-witness.json",
+        "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-generator-compatibility-witness-v1.schema.json",
+        "profile-generator-compatibility-witness-subject.json",
+        "profile-generator-compatibility-witness.json",
+        "raw-signal-field",
+        "signal-field-wide-light.svg",
+        "signal-field-wide-dark.svg",
+        "signal-field-compact-light.svg",
+        "signal-field-compact-dark.svg",
+        "EXPECTED_PREDICATE_SHA256",
+        "EXPECTED_SUBJECT_SHA256",
+    ):
+        require(required in signer,
+                f"profile generator compatibility witness signer lost required identity: {required}")
     require(signer.count("        run: |\n") == 1,
             "profile generator compatibility witness signer authored shell surface changed")
-    require(
-        'test "$(sha256sum compatibility-witness-attestation-input/profile-generator-compatibility-witness.json | cut -d\' \' -f1)" = "$EXPECTED_PREDICATE_SHA256"' in signer
-        and 'test "$(sha256sum compatibility-witness-attestation-input/profile-generator-compatibility-witness-subject.json | cut -d\' \' -f1)" = "$EXPECTED_SUBJECT_SHA256"' in signer,
-        "profile generator compatibility witness signer lost exact prepared-byte digest checks",
-    )
-    require(
-        "    validate_schema_contract()
+    for forbidden in (
+        "actions/checkout@",
+        "actions/setup-python@",
+        "python3 ",
+        "git ",
+        "gh ",
+        "GITHUB_TOKEN:",
+        "GH_TOKEN:",
+        "contents: write",
+        "actions: write",
+        "pull-requests: write",
+        "checks: write",
+        "security-events: write",
+        "packages: write",
+        "repository_dispatch",
+        "workflow_dispatch",
+    ):
+        require(forbidden not in signer,
+                f"profile generator compatibility witness signer acquired forbidden surface: {forbidden}")
+
+def self_test() -> None:
+    validate_schema_contract()
+    validate_signer_workflow_contract()
     lock_path = ROOT / ".github/action-lock.json"
     require(lock_path.is_file() and not lock_path.is_symlink(), "action-lock is missing or aliased")
     lock_bytes = lock_path.read_bytes()
@@ -576,283 +599,6 @@ def validate_signer_workflow_contract(text: str | None = None) -> None:
         ),
         "forbidden surface: python3 ",
     )
-    print(
-        "Profile generator compatibility witness contract passed: exact immutable generator + invocation, "
-        "six-hour validity, closed compatibility epoch, four-file raw Signal Field identity, duplicate-safe "
-        "canonical predicate/subject binding, stale/mismatch rejection, and no network or mutation authority."
-    )
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("self-test")
-    build = sub.add_parser("build")
-    build.add_argument("--source-sha", required=True)
-    build.add_argument("--run-id", type=int, required=True)
-    build.add_argument("--run-attempt", type=int, required=True)
-    build.add_argument("--issued-at", type=int, required=True)
-    build.add_argument("--signal-field-dir", type=Path, required=True)
-    build.add_argument("--lock", type=Path, required=True)
-    build.add_argument("--policy-root", type=Path, default=ROOT)
-    build.add_argument("--predicate-out", type=Path, required=True)
-    build.add_argument("--subject-out", type=Path, required=True)
-    verify = sub.add_parser("verify")
-    verify.add_argument("--predicate", type=Path, required=True)
-    verify.add_argument("--subject", type=Path, required=True)
-    verify.add_argument("--signal-field-dir", type=Path, required=True)
-    verify.add_argument("--lock", type=Path, required=True)
-    verify.add_argument("--policy-root", type=Path, default=ROOT)
-    verify.add_argument("--now", type=int, required=True)
-    verify.add_argument("--source-sha", required=True)
-    verify.add_argument("--run-id", type=int, required=True)
-    verify.add_argument("--run-attempt", type=int, required=True)
-    return parser.parse_args()
-
-
-def main() -> int:
-    try:
-        args = parse_args()
-        if args.command == "self-test":
-            self_test()
-            return 0
-        lock_bytes = args.lock.read_bytes()
-        policy = policy_files_from_root(args.policy_root)
-        if args.command == "build":
-            predicate = build_predicate(
-                source_sha=args.source_sha, run_id=args.run_id, run_attempt=args.run_attempt,
-                issued_at_epoch=args.issued_at, lock_bytes=lock_bytes, policy_files=policy,
-                signal_field_dir=args.signal_field_dir,
-            )
-            subject = build_subject(predicate)
-            args.predicate_out.write_text(canonical_json(predicate), encoding="utf-8")
-            args.subject_out.write_text(canonical_json(subject), encoding="utf-8")
-            return 0
-        predicate = strict_json(args.predicate.read_text(encoding="utf-8"))
-        subject = strict_json(args.subject.read_text(encoding="utf-8"))
-        consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=args.signal_field_dir, now_epoch=args.now, source_sha=args.source_sha,
-            run_id=args.run_id, run_attempt=args.run_attempt,
-        )
-        print("Profile generator compatibility witness accepted.")
-        return 0
-    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-        print(f"ERROR: profile generator compatibility witness failed: {exc}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-profile-generator-compatibility-witness-subject.json\\nprofile-generator-compatibility-witness.json'" in signer
-        and "    validate_schema_contract()
-    lock_path = ROOT / ".github/action-lock.json"
-    require(lock_path.is_file() and not lock_path.is_symlink(), "action-lock is missing or aliased")
-    lock_bytes = lock_path.read_bytes()
-    policy = policy_files_from_root(ROOT)
-    generator_identity(lock_bytes)
-    with tempfile.TemporaryDirectory() as tmp:
-        directory = Path(tmp)
-        for index, name in enumerate(EXPECTED_FILES, start=1):
-            (directory / name).write_text(f"<svg data-fixture=\"{index}\"/>\n", encoding="utf-8")
-        predicate = build_predicate(
-            source_sha="a" * 40, run_id=123, run_attempt=2, issued_at_epoch=1_790_000_000,
-            lock_bytes=lock_bytes, policy_files=policy, signal_field_dir=directory,
-        )
-        subject = build_subject(predicate)
-        consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="a" * 40, run_id=123, run_attempt=2,
-        )
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=predicate["validity"]["expiresAtEpoch"],
-            source_sha="a" * 40, run_id=123, run_attempt=2,
-        ), "not currently valid")
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="b" * 40, run_id=123, run_attempt=2,
-        ), "source SHA changed")
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="a" * 40, run_id=123, run_attempt=3,
-        ), "run attempt changed")
-        changed_policy = dict(policy)
-        changed_policy["scripts/signal-field-pipeline-v2.json"] += b"\n"
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=changed_policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="a" * 40, run_id=123, run_attempt=2,
-        ), "different compatibility-policy epoch")
-        original = (directory / EXPECTED_FILES[0]).read_bytes()
-        (directory / EXPECTED_FILES[0]).write_bytes(original + b" ")
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="a" * 40, run_id=123, run_attempt=2,
-        ), "Signal Field bytes differ")
-        (directory / EXPECTED_FILES[0]).write_bytes(original)
-        bad = copy.deepcopy(predicate)
-        bad["invocation"]["profile"] = "other"
-        expect_failure(lambda: validate_predicate(bad), "invocation changed")
-        expect_failure(lambda: strict_json('{"x":1,"x":2}'), "duplicate object key")
-        extra = directory / "extra.svg"
-        extra.write_text("<svg/>\n", encoding="utf-8")
-        expect_failure(lambda: signal_field_inventory(directory), "file inventory changed")
-    print(
-        "Profile generator compatibility witness contract passed: exact immutable generator + invocation, "
-        "six-hour validity, closed compatibility epoch, four-file raw Signal Field identity, duplicate-safe "
-        "canonical predicate/subject binding, stale/mismatch rejection, and no network or mutation authority."
-    )
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("self-test")
-    build = sub.add_parser("build")
-    build.add_argument("--source-sha", required=True)
-    build.add_argument("--run-id", type=int, required=True)
-    build.add_argument("--run-attempt", type=int, required=True)
-    build.add_argument("--issued-at", type=int, required=True)
-    build.add_argument("--signal-field-dir", type=Path, required=True)
-    build.add_argument("--lock", type=Path, required=True)
-    build.add_argument("--policy-root", type=Path, default=ROOT)
-    build.add_argument("--predicate-out", type=Path, required=True)
-    build.add_argument("--subject-out", type=Path, required=True)
-    verify = sub.add_parser("verify")
-    verify.add_argument("--predicate", type=Path, required=True)
-    verify.add_argument("--subject", type=Path, required=True)
-    verify.add_argument("--signal-field-dir", type=Path, required=True)
-    verify.add_argument("--lock", type=Path, required=True)
-    verify.add_argument("--policy-root", type=Path, default=ROOT)
-    verify.add_argument("--now", type=int, required=True)
-    verify.add_argument("--source-sha", required=True)
-    verify.add_argument("--run-id", type=int, required=True)
-    verify.add_argument("--run-attempt", type=int, required=True)
-    return parser.parse_args()
-
-
-def main() -> int:
-    try:
-        args = parse_args()
-        if args.command == "self-test":
-            self_test()
-            return 0
-        lock_bytes = args.lock.read_bytes()
-        policy = policy_files_from_root(args.policy_root)
-        if args.command == "build":
-            predicate = build_predicate(
-                source_sha=args.source_sha, run_id=args.run_id, run_attempt=args.run_attempt,
-                issued_at_epoch=args.issued_at, lock_bytes=lock_bytes, policy_files=policy,
-                signal_field_dir=args.signal_field_dir,
-            )
-            subject = build_subject(predicate)
-            args.predicate_out.write_text(canonical_json(predicate), encoding="utf-8")
-            args.subject_out.write_text(canonical_json(subject), encoding="utf-8")
-            return 0
-        predicate = strict_json(args.predicate.read_text(encoding="utf-8"))
-        subject = strict_json(args.subject.read_text(encoding="utf-8"))
-        consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=args.signal_field_dir, now_epoch=args.now, source_sha=args.source_sha,
-            run_id=args.run_id, run_attempt=args.run_attempt,
-        )
-        print("Profile generator compatibility witness accepted.")
-        return 0
-    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
-        print(f"ERROR: profile generator compatibility witness failed: {exc}", file=sys.stderr)
-        return 1
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-signal-field-compact-dark.svg\\nsignal-field-compact-light.svg\\nsignal-field-wide-dark.svg\\nsignal-field-wide-light.svg'" in signer,
-        "profile generator compatibility witness signer raw/prepared inventory contract changed",
-    )
-    for forbidden in (
-        "actions/checkout@",
-        "actions/setup-python@",
-        "python3 ",
-        "git ",
-        "gh ",
-        "GITHUB_TOKEN:",
-        "GH_TOKEN:",
-        "contents: write",
-        "actions: write",
-        "pull-requests: write",
-        "checks: write",
-        "security-events: write",
-        "packages: write",
-        "repository_dispatch",
-        "workflow_dispatch",
-    ):
-        require(forbidden not in signer,
-                f"profile generator compatibility witness signer acquired forbidden surface: {forbidden}")
-
-
-def self_test() -> None:
-    validate_schema_contract()
-    validate_signer_workflow_contract()
-    lock_path = ROOT / ".github/action-lock.json"
-    require(lock_path.is_file() and not lock_path.is_symlink(), "action-lock is missing or aliased")
-    lock_bytes = lock_path.read_bytes()
-    policy = policy_files_from_root(ROOT)
-    generator_identity(lock_bytes)
-    with tempfile.TemporaryDirectory() as tmp:
-        directory = Path(tmp)
-        for index, name in enumerate(EXPECTED_FILES, start=1):
-            (directory / name).write_text(f"<svg data-fixture=\"{index}\"/>\n", encoding="utf-8")
-        predicate = build_predicate(
-            source_sha="a" * 40, run_id=123, run_attempt=2, issued_at_epoch=1_790_000_000,
-            lock_bytes=lock_bytes, policy_files=policy, signal_field_dir=directory,
-        )
-        subject = build_subject(predicate)
-        consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="a" * 40, run_id=123, run_attempt=2,
-        )
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=predicate["validity"]["expiresAtEpoch"],
-            source_sha="a" * 40, run_id=123, run_attempt=2,
-        ), "not currently valid")
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="b" * 40, run_id=123, run_attempt=2,
-        ), "source SHA changed")
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="a" * 40, run_id=123, run_attempt=3,
-        ), "run attempt changed")
-        changed_policy = dict(policy)
-        changed_policy["scripts/signal-field-pipeline-v2.json"] += b"\n"
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=changed_policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="a" * 40, run_id=123, run_attempt=2,
-        ), "different compatibility-policy epoch")
-        original = (directory / EXPECTED_FILES[0]).read_bytes()
-        (directory / EXPECTED_FILES[0]).write_bytes(original + b" ")
-        expect_failure(lambda: consume(
-            predicate=predicate, subject=subject, lock_bytes=lock_bytes, policy_files=policy,
-            signal_field_dir=directory, now_epoch=1_790_000_001,
-            source_sha="a" * 40, run_id=123, run_attempt=2,
-        ), "Signal Field bytes differ")
-        (directory / EXPECTED_FILES[0]).write_bytes(original)
-        bad = copy.deepcopy(predicate)
-        bad["invocation"]["profile"] = "other"
-        expect_failure(lambda: validate_predicate(bad), "invocation changed")
-        expect_failure(lambda: strict_json('{"x":1,"x":2}'), "duplicate object key")
-        extra = directory / "extra.svg"
-        extra.write_text("<svg/>\n", encoding="utf-8")
-        expect_failure(lambda: signal_field_inventory(directory), "file inventory changed")
     print(
         "Profile generator compatibility witness contract passed: exact immutable generator + invocation, "
         "six-hour validity, closed compatibility epoch, four-file raw Signal Field identity, duplicate-safe "
