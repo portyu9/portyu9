@@ -10,7 +10,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v59"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "5d97f4bbdd5943d472e76243b2366f18dc88b714",
+    ".github/workflows/bot-pr-user-approval.yml": "837a05c03b067e6bd8794f6b6c6ed2c0f4b77c6f",
     ".github/workflows/profile-quality.yml": "e37c57ab81d28233e3a8e0f5eaacc7011daf1ae4",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "f80c921b328f120c00a32479e8c2b1b53e335beb",
@@ -730,6 +730,12 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     require(
         spotlight_wait_pos < thread_read_pos < marker_read_pos,
         "Bot PR reviewer must converge Spotlight readiness before fresh review-thread and review-state evidence",
+    )
+    nonspot_guard_pos = bot_review.index('if [ "$LANE" != "spotlight" ]; then', thread_read_pos)
+    nonspot_readiness_pos = bot_review.index('check_required_contexts "$HEAD_SHA" "$LANE"', nonspot_guard_pos)
+    require(
+        thread_read_pos < nonspot_guard_pos < nonspot_readiness_pos < marker_read_pos,
+        "Non-Spotlight lanes must retain fresh thread evidence before their original one-shot readiness checks",
     )
 
     open_pr_fetch = 'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"'
