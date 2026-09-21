@@ -668,7 +668,7 @@ def self_test() -> None:
         lambda: validate_signer_workflow_contract(
             workflow_text.replace("      contents: read\n      id-token: write", "      contents: write\n      id-token: write", 1)
         ),
-        "forbidden surface: contents: write",
+        "signer identity/authority changed",
     )
     _expect_failure(
         lambda: validate_signer_workflow_contract(
@@ -685,8 +685,9 @@ def self_test() -> None:
     _expect_failure(
         lambda: validate_signer_workflow_contract(
             workflow_text.replace(
-                "          set -euo pipefail\n",
-                "          set -euo pipefail\n          python3 scripts/action_provenance_witness.py self-test\n",
+                '          [[ "$EXPECTED_PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]\n',
+                '          python3 scripts/action_provenance_witness.py self-test\n'
+                '          [[ "$EXPECTED_PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]\n',
                 1,
             )
         ),
