@@ -366,7 +366,33 @@ jobs:
             --policy-root . \
             --now "$WITNESS_NOW" \
             --out accepted-profile-generator-compatibility-witness.json
-          echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"
+          ISOLATED_DIR="$RUNNER_TEMP/profile-generator-compatibility-witness-ready"
+          rm -rf "$ISOLATED_DIR"
+          mkdir -p "$ISOLATED_DIR"
+          WORKSPACE_REAL="$(realpath "$GITHUB_WORKSPACE")"
+          ISOLATED_REAL="$(realpath "$ISOLATED_DIR")"
+          case "$ISOLATED_REAL/" in
+            "$WORKSPACE_REAL/"*)
+              echo "Verified witness ready-dir must remain outside trusted source checkout" >&2
+              exit 1
+              ;;
+          esac
+          for name in \
+            signal-field-wide-light.svg \
+            signal-field-wide-dark.svg \
+            signal-field-compact-light.svg \
+            signal-field-compact-dark.svg
+          do
+            test -f "$RAW_DIR/$name"
+            test ! -L "$RAW_DIR/$name"
+            cp -- "$RAW_DIR/$name" "$ISOLATED_DIR/$name"
+            test -f "$ISOLATED_DIR/$name"
+            test ! -L "$ISOLATED_DIR/$name"
+            cmp -- "$RAW_DIR/$name" "$ISOLATED_DIR/$name"
+          done
+          test "$(find "$ISOLATED_DIR" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" = "4"
+          test -z "$(find "$ISOLATED_DIR" -mindepth 1 -maxdepth 1 ! -type f -print -quit)"
+          echo "ready-dir=$ISOLATED_DIR" >> "$GITHUB_OUTPUT"
 
       - name: Generate actual pinned upstream Signal Field
         id: stats_primary
