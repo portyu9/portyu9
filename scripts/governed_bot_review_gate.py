@@ -23,6 +23,7 @@ API_ORIGIN = "https://api.github.com"
 API_VERSION = "2022-11-28"
 PER_PAGE = 100
 MAX_REVIEW_PAGES = 20
+REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"})
 POLL_ATTEMPTS = 216
 POLL_SECONDS = 5
 
@@ -50,6 +51,50 @@ def exact_bool(value: Any) -> bool:
     return type(value) is bool
 
 
+def validate_review_entries(reviews: list[Any]) -> list[dict[str, Any]]:
+    validated: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
+    for item in reviews:
+        require(isinstance(item, dict), "review response contains a non-object entry")
+        review_id = item.get("id")
+        require(exact_int(review_id) and review_id > 0, "review response contains an invalid id")
+        require(review_id not in seen_ids, "review response contains a duplicate id")
+        seen_ids.add(review_id)
+
+        user = item.get("user")
+        require(isinstance(user, dict), "review response contains an invalid user object")
+        login = user.get("login")
+        require(isinstance(login, str) and bool(login), "review response contains an invalid user login")
+
+        state = item.get("state")
+        require(isinstance(state, str) and state in REVIEW_STATES, "review response contains an invalid state")
+
+        require("commit_id" in item, "review response is missing commit_id")
+        commit_id = item["commit_id"]
+        require(
+            commit_id is None or (isinstance(commit_id, str) and SHA_RE.fullmatch(commit_id) is not None),
+            "review response contains an invalid commit_id",
+        )
+        require("body" in item, "review response is missing body")
+        body = item["body"]
+        require(body is None or isinstance(body, str), "review response contains an invalid body")
+        validated.append(item)
+    return validated
+
+
+def flatten_review_pages(payload: Any) -> list[dict[str, Any]]:
+    require(isinstance(payload, list) and bool(payload), "slurped review response must be a non-empty page array")
+    require(len(payload) <= MAX_REVIEW_PAGES, "review pagination exceeded the bounded completeness limit")
+    flattened: list[Any] = []
+    for index, page in enumerate(payload):
+        require(isinstance(page, list), "slurped review response contains a non-array page")
+        require(len(page) <= PER_PAGE, "reviews page exceeded requested page size")
+        if index < len(payload) - 1:
+            require(len(page) == PER_PAGE, "non-final review page is incomplete")
+        flattened.extend(page)
+    return validate_review_entries(flattened)
+
+
 def classify_lane(author: str, head_repository: str, head_ref: str) -> str | None:
     if head_repository != REPOSITORY:
         return None
@@ -67,6 +112,7 @@ def review_marker(base_sha: str, head_sha: str) -> str:
 
 
 def review_decision(reviews: list[Any], base_sha: str, head_sha: str) -> str:
+    reviews = validate_review_entries(reviews)
     marker = review_marker(base_sha, head_sha)
     marker_reviews: list[dict[str, Any]] = []
     manual_decisive: list[dict[str, Any]] = []
@@ -146,9 +192,9 @@ class GitHubApi:
             )
             require(isinstance(payload, list), "reviews endpoint returned a non-array")
             require(len(payload) <= PER_PAGE, "reviews page exceeded requested page size")
-            reviews.extend(payload)
+            reviews.extend(validate_review_entries(payload))
             if len(payload) < PER_PAGE:
-                return reviews
+                return validate_review_entries(reviews)
         raise GateError("review pagination exceeded the bounded completeness limit")
 
 
@@ -375,16 +421,55 @@ def self_test() -> None:
 
     other_head = {**veto, "commit_id": "d" * 40}
     require(review_decision([approved, other_head], base, head) == "approved", "stale-head veto affected exact head")
+
+    require(flatten_review_pages([[approved, veto, lift]]) == [approved, veto, lift],
+            "valid slurped review-page fixture changed")
+    malformed_fixtures = (
+        ([], "empty slurped page array"),
+        ([{}], "non-array page"),
+        ([[{**approved, "id": 0}]], "invalid review id"),
+        ([[approved, {**veto, "id": approved["id"]}]], "duplicate review id"),
+        ([[{**approved, "user": None}]], "invalid review user"),
+        ([[{**approved, "user": {"login": ""}}]], "invalid review login"),
+        ([[{**approved, "state": "UNKNOWN"}]], "invalid review state"),
+        ([[{**approved, "commit_id": 123}]], "invalid review commit type"),
+        ([[{**approved, "commit_id": "ABC"}]], "invalid review commit shape"),
+        ([[{key: value for key, value in approved.items() if key != "commit_id"}]], "missing review commit_id"),
+        ([[{**approved, "body": 123}]], "invalid review body"),
+        ([[{key: value for key, value in approved.items() if key != "body"}]], "missing review body"),
+        ([[approved], [veto]], "incomplete non-final page"),
+    )
+    for fixture, label in malformed_fixtures:
+        try:
+            flatten_review_pages(fixture)
+        except GateError:
+            pass
+        else:
+            raise GateError(f"review schema self-test accepted {label}")
     print("Governed bot review gate self-test passed.")
+
+
+def normalize_review_pages_from_stdin() -> None:
+    try:
+        payload = json.load(sys.stdin)
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise GateError("slurped review response is not valid JSON") from exc
+    reviews = flatten_review_pages(payload)
+    json.dump(reviews, sys.stdout, sort_keys=True, separators=(",", ":"))
+    sys.stdout.write("\n")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--self-test", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--self-test", action="store_true")
+    mode.add_argument("--validate-review-pages", action="store_true")
     args = parser.parse_args()
     try:
         if args.self_test:
             self_test()
+        elif args.validate_review_pages:
+            normalize_review_pages_from_stdin()
         else:
             run_gate()
         return 0

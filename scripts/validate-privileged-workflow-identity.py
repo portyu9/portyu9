@@ -8,15 +8,16 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v52"
+VERSION = "governed-workflow-byte-identity-v53"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "7a9058d07ce47c7848c061d6799fa0eb26c66cfb",
+    ".github/workflows/bot-pr-user-approval.yml": "a8740c350a9f512ae9ba1c8f04bd1bb7bbd60dbd",
     ".github/workflows/profile-quality.yml": "3d767fa464dc89de15c07ee9f72281cfb8c80fff",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "3a2cae6fd4eecc295323a1ac329f7175ddc4c406",
+    ".github/workflows/spotlight-link-sync.yml": "f80c921b328f120c00a32479e8c2b1b53e335beb",
 }
 
-TRUSTED_GOVERNED_BOT_REVIEW_GATE = "0158284c833051fa9a1152a3314b906038ec6a28"
+TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
+ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "0158284c833051fa9a1152a3314b906038ec6a28"
 
 OLD_MERGE_IF = (
     "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && "
@@ -346,6 +347,10 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         actual == TRUSTED_GOVERNED_BOT_REVIEW_GATE,
         "trusted governed-bot review evaluator bytes changed without an explicit byte-lock update",
     )
+    require(
+        f"EXPECTED_GATE_BLOB: {ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE}" in gate,
+        "Profile Quality staging phase must execute only the exact accepted-base governed-bot evaluator",
+    )
     for fragment in (
         'REPOSITORY = "portyu9/portyu9"',
         'REVIEW_LOGIN = "portyu9"',
@@ -359,6 +364,20 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         'review_decision(api.all_reviews(pr_number), event_base_sha, event_head_sha) == "approved"',
         'raise GateError("latest manual exact-head portyu9 review requests changes")',
         'raise GateError("the exact marker-bound portyu9 review was dismissed or revoked")',
+        'REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"})',
+        'def validate_review_entries(reviews: list[Any]) -> list[dict[str, Any]]:',
+        'review response contains a duplicate id',
+        'review response contains an invalid user login',
+        'review response contains an invalid state',
+        'review response is missing commit_id',
+        'review response contains an invalid commit_id',
+        'review response is missing body',
+        'review response contains an invalid body',
+        'def flatten_review_pages(payload: Any) -> list[dict[str, Any]]:',
+        'slurped review response must be a non-empty page array',
+        'non-final review page is incomplete',
+        'mode.add_argument("--validate-review-pages", action="store_true")',
+        'reviews = validate_review_entries(reviews)',
     ):
         require(fragment in evaluator, f"trusted governed-bot review evaluator contract is missing: {fragment}")
     for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"', "subprocess"):
@@ -366,7 +385,56 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
                 f"trusted governed-bot review evaluator acquired mutation/external execution surface: {forbidden}")
 
 
+def validate_pull_review_evidence_schema(workflow: str, label: str, expected_reads: int) -> None:
+    require(
+        workflow.count('/reviews?per_page=100') == expected_reads,
+        f"{label} pull-review endpoint count changed",
+    )
+    require(
+        workflow.count('REVIEW_PAGES="$(gh api --paginate --slurp') == expected_reads,
+        f"{label} must capture each paginated review response before filtering",
+    )
+    require(
+        workflow.count('REVIEWS="$(jq -c \'[.[][]]\' <<<"$REVIEW_PAGES")"') == expected_reads,
+        f"{label} must flatten only a validated paginated review response",
+    )
+    require(
+        workflow.count('ERROR: malformed or incomplete paginated pull-review evidence.') == expected_reads,
+        f"{label} must fail closed at every pull-review evidence read",
+    )
+    for fragment in (
+        '(type == "array") and (length >= 1) and (length <= 20)',
+        '(all(.[]; type == "array" and length <= 100))',
+        '(all(.[0:-1][]; length == 100))',
+        '(.id | type == "number" and . == floor and . > 0)',
+        '(.user | type == "object" and (.login | type == "string" and length > 0))',
+        '(. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")',
+        '(.state | type == "string" and',
+        'has("commit_id") and',
+        '(.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$")))',
+        'has("body") and',
+        '(.body == null or (.body | type == "string"))',
+        '(([.[][] | .id] | length) == ([.[][] | .id] | unique | length))',
+    ):
+        require(
+            workflow.count(fragment) == expected_reads,
+            f"{label} strict review schema contract is missing or duplicated: {fragment}",
+        )
+    require(
+        'REVIEWS="$(gh api --paginate --slurp' not in workflow,
+        f"{label} must not filter raw paginated review evidence directly",
+    )
+    require(
+        '.[][] | select(.user.login == "portyu9"' not in workflow,
+        f"{label} approval/veto selection must consume the validated flattened review set",
+    )
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
+    validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
+    validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
+    validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
+    validate_pull_review_evidence_schema(spotlight, "Spotlight authorization/terminal merge", 2)
     for fragment in (
         'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
         'spotlight|dependabot|codeql-autofix)',
@@ -621,7 +689,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check trust bootstrap plus evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, canonical Profile-Quality quiescence exemption, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, canonical Profile-Quality quiescence exemption, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
         )
         return 0

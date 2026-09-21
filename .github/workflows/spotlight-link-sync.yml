@@ -844,8 +844,29 @@ jobs:
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           PORTYU9_APPROVAL_COUNT=0
           for REVIEW_ATTEMPT in $(seq 1 24); do
-            REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-            PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+            jq -e '
+              (type == "array") and (length >= 1) and (length <= 20) and
+              (all(.[]; type == "array" and length <= 100)) and
+              (all(.[0:-1][]; length == 100)) and
+              (all(.[][];
+                type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                (.user | type == "object" and (.login | type == "string" and length > 0)) and
+                (.state | type == "string" and
+                  (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+                has("commit_id") and
+                (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
+                has("body") and
+                (.body == null or (.body | type == "string"))
+              )) and
+              (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
+            ' <<<"$REVIEW_PAGES" >/dev/null || {
+              echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
+              exit 1
+            }
+            REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+            PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
             [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
             if [ "$PORTYU9_APPROVAL_COUNT" -ge 1 ]; then
               break
@@ -1201,9 +1222,30 @@ jobs:
           test "$MATCHING_STATEMENTS" = "$VERIFIED_COUNT"
           echo "Spotlight terminal stage: attestation-statement-verified" >&2
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
-          REVIEWS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
-          LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
+          REVIEW_PAGES="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          jq -e '
+            (type == "array") and (length >= 1) and (length <= 20) and
+            (all(.[]; type == "array" and length <= 100)) and
+            (all(.[0:-1][]; length == 100)) and
+            (all(.[][];
+              type == "object" and
+              (.id | type == "number" and . == floor and . > 0) and
+              (.user | type == "object" and (.login | type == "string" and length > 0)) and
+              (.state | type == "string" and
+                (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+              has("commit_id") and
+              (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
+              has("body") and
+              (.body == null or (.body | type == "string"))
+            )) and
+            (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
+          ' <<<"$REVIEW_PAGES" >/dev/null || {
+            echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
+            exit 1
+          }
+          REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+          LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
           [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
           test "$PORTYU9_APPROVAL_COUNT" = "1" || {
             echo "ERROR: exactly one exact-base/head marker-bound APPROVED review by portyu9 is required before autonomous Spotlight merge." >&2
