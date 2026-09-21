@@ -449,7 +449,7 @@
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "expansionSha256": "ecd46d0ed5524e089af775b01534b695c3b9b5f7bd3dd2fe2ec6e57d6b72f858",
-      "rationale": "Authorize #743's exact protected-TCB hardening of paginated pull-review evidence. Existing review GET endpoints, permissions, exact-head marker approval, latest manual CHANGES_REQUESTED veto, and merge authority are preserved; page envelopes and every review id/user/state/commit_id/body primitive now fail closed before approval/veto selection, with the accepted-base evaluator transition and frozen Spotlight proof projected explicitly. The semantic Workflow Capability BOM is unchanged; no trigger, permission, secret, endpoint, mutation, required-check reduction, direct-main write, or bypass is added."
+      "rationale": "Authorize #743's exact protected-TCB hardening of paginated pull-review evidence: existing review GET endpoints, permissions, exact-head marker approval, manual CHANGES_REQUESTED veto, and merge authority are unchanged; bounded complete pages and strict review id/user/state/commit_id/body schema now fail closed before decisions. Semantic Workflow Capability is unchanged; no trigger, permission, secret, endpoint, mutation, check reduction, direct-main write, or bypass is added."
     },
     {
       "id": "cap-review-thread-graphql-schema-hardening",
