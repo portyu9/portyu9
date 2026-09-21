@@ -120,8 +120,12 @@ jobs:
               fi
               MAIN_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
               [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
-              PRS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
-              MATCHES="$(jq -c --arg main "$MAIN_SHA" '[.[][] | select(
+              gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" > spotlight-open-pr-pages.json
+              python3 scripts/workflow_capability_api_collection.py pull-requests \
+                --input spotlight-open-pr-pages.json \
+                --out spotlight-open-prs.json
+              PRS="$(cat spotlight-open-prs.json)"
+              MATCHES="$(jq -c --arg main "$MAIN_SHA" '[.[] | select(
                 .user.login == "github-actions[bot]" and
                 .state == "open" and
                 .draft == false and
@@ -399,9 +403,10 @@ jobs:
           if [ "$DEPENDABOT" = "true" ]; then
             test "$PR_NUMBER" -gt 0
             gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json
-            jq -r '.[][] | .filename' dependabot-file-pages.json | LC_ALL=C sort > dependabot-changed-paths.txt
+            python3 scripts/workflow_capability_api_collection.py files \
+              --input dependabot-file-pages.json \
+              --out dependabot-changed-paths.txt
             test -s dependabot-changed-paths.txt
-            test "$(sort -u dependabot-changed-paths.txt | wc -l)" = "$(wc -l < dependabot-changed-paths.txt)"
             for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do
               ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path and .type == "blob")]' <<<"$TREE")"
               test "$(jq 'length' <<<"$ENTRY")" = "1"
