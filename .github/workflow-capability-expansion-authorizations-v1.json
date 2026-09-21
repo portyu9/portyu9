@@ -421,7 +421,7 @@
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "expansionSha256": "73648fdacca838fac7948fdbfc3d81e4abd7640002b348f807982916f3c23e81",
-      "rationale": "Authorize #685's exact one-time historical Ruleset receipt attestation recovery. The existing attest job retains identical OIDC/attestations permissions, subject, API reads, artifact authority, and actions; trusted main additionally binds the immutable production receipt bytes and permits recovery only on PR #685's merge push after exact receipt-field/hash proof and observable successor re-proof. No trigger, permission, secret, endpoint, method, ruleset mutation, signer, attestation target, required-check reduction, merge capability, or bypass is added."
+      "rationale": "Authorize #685's exact one-time historical Ruleset receipt attestation recovery. The existing attest job keeps identical OIDC/attestations permissions, subject, API reads, artifact authority and actions. Recovery is bound only to #685's merge push after exact receipt hash/field proof and observable successor re-proof. No trigger, permission, secret, endpoint, method, ruleset mutation, signer, attestation target, required-check reduction, merge capability or bypass is added."
     },
     {
       "id": "cap-ruleset-reconciler-attestation-redaction",
