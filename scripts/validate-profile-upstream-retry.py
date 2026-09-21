@@ -164,7 +164,20 @@ def validate(text: str) -> None:
         "--format json",
         "python3 scripts/profile_generator_compatibility_witness.py consume-evidence",
         '--signal-field-dir "$RAW_DIR"',
-        'echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"',
+        'ISOLATED_DIR="$RUNNER_TEMP/profile-generator-compatibility-witness-ready"',
+        'WORKSPACE_REAL="$(realpath "$GITHUB_WORKSPACE")"',
+        'ISOLATED_REAL="$(realpath "$ISOLATED_DIR")"',
+        'case "$ISOLATED_REAL/" in',
+        '"$WORKSPACE_REAL/"*)',
+        'signal-field-wide-light.svg',
+        'signal-field-wide-dark.svg',
+        'signal-field-compact-light.svg',
+        'signal-field-compact-dark.svg',
+        'cp -- "$RAW_DIR/$name" "$ISOLATED_DIR/$name"',
+        'cmp -- "$RAW_DIR/$name" "$ISOLATED_DIR/$name"',
+        'test "$(find "$ISOLATED_DIR" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d \' \')" = "4"',
+        'test -z "$(find "$ISOLATED_DIR" -mindepth 1 -maxdepth 1 ! -type f -print -quit)"',
+        'echo "ready-dir=$ISOLATED_DIR" >> "$GITHUB_OUTPUT"',
     ):
         require(fragment in verify,
                 f"Profile generator compatibility witness cryptographic/local validation changed: {fragment}")
@@ -174,6 +187,11 @@ def validate(text: str) -> None:
             "Profile generator compatibility witness must consume exactly one evidence bundle")
     require("signal_field_pipeline.py" not in verify,
             "Profile generator compatibility witness consumer must not duplicate canonical Signal Field sequencing")
+    require('echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"' not in verify,
+            "Verified witness bytes must not expose a ready-dir inside the trusted source checkout")
+    require(verify.count('cp -- "$RAW_DIR/$name" "$ISOLATED_DIR/$name"') == 1 and
+            verify.count('cmp -- "$RAW_DIR/$name" "$ISOLATED_DIR/$name"') == 1,
+            "Verified witness isolation must copy and byte-compare each exact raw Signal Field file once")
 
     require_action(primary, primary=True)
     require(f"        if: {RETRY_IF}\n" in backoff,
@@ -268,12 +286,36 @@ def self_test(text: str) -> None:
         "must fail the integration job",
     )
     injected_pipeline = text.replace(
-        '          echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"\n',
-        '          python3 scripts/signal_field_pipeline.py "$RAW_DIR"\n'
-        '          echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"\n',
+        '          echo "ready-dir=$ISOLATED_DIR" >> "$GITHUB_OUTPUT"\n',
+        '          python3 scripts/signal_field_pipeline.py "$ISOLATED_DIR"\n'
+        '          echo "ready-dir=$ISOLATED_DIR" >> "$GITHUB_OUTPUT"\n',
         1,
     )
     expect_failure(injected_pipeline, "must not duplicate canonical Signal Field sequencing")
+    expect_failure(
+        text.replace(
+            'ISOLATED_DIR="$RUNNER_TEMP/profile-generator-compatibility-witness-ready"',
+            'ISOLATED_DIR="$GITHUB_WORKSPACE/profile-generator-compatibility-witness-ready"',
+            1,
+        ),
+        "cryptographic/local validation changed",
+    )
+    expect_failure(
+        text.replace(
+            '          cmp -- "$RAW_DIR/$name" "$ISOLATED_DIR/$name"\n',
+            '          true # removed byte comparison\n',
+            1,
+        ),
+        "cryptographic/local validation changed",
+    )
+    expect_failure(
+        text.replace(
+            '          echo "ready-dir=$ISOLATED_DIR" >> "$GITHUB_OUTPUT"\n',
+            '          echo "ready-dir=$RAW_DIR" >> "$GITHUB_OUTPUT"\n',
+            1,
+        ),
+        "cryptographic/local validation changed",
+    )
     expect_failure(
         text.replace('READY_DIR: ${{ steps.stats.outputs.ready-dir }}',
                      'READY_DIR: ${{ steps.stats_primary.outputs.ready-dir }}', 1),
