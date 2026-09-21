@@ -72,6 +72,7 @@ CLAIM = (
 POLICY_PATHS = (
     ".github/action-lock.json",
     ".github/attestation/profile-generator-compatibility-witness-v1.schema.json",
+    ".github/workflows/profile-generator-compatibility-witness.yml",
     ".github/workflows/profile-quality.yml",
     "scripts/action_identity_lock.py",
     "scripts/generate-profile-evidence.py",
