@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-generator-compatibility-witness-v1.schema.json",
+  "title": "Profile Generator Compatibility Witness v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion","kind","repository","repositoryId","source","validity","predicateSchema","generator","invocation","compatibilityEpoch","signalField","authority","claim"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "profile-generator-compatibility-witness"},
+    "repository": {"const": "portyu9/portyu9"},
+    "repositoryId": {"const": 1355082509},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha","ref","workflowRef","runId","runAttempt","runUrl"],
+      "properties": {
+        "sha": {"type":"string","pattern":"^[0-9a-f]{40}$"},
+        "ref": {"const":"refs/heads/main"},
+        "workflowRef": {"const":"portyu9/portyu9/.github/workflows/profile-generator-compatibility-witness.yml@refs/heads/main"},
+        "runId": {"type":"integer","minimum":1},
+        "runAttempt": {"type":"integer","minimum":1},
+        "runUrl": {"type":"string","pattern":"^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
+      }
+    },
+    "validity": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["issuedAtEpoch","expiresAtEpoch","ttlSeconds"],
+      "properties":{
+        "issuedAtEpoch":{"type":"integer","minimum":1},
+        "expiresAtEpoch":{"type":"integer","minimum":1},
+        "ttlSeconds":{"const":21600}
+      }
+    },
+    "predicateSchema": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["id","digest"],
+      "properties":{
+        "id":{"const":"https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-generator-compatibility-witness-v1.schema.json"},
+        "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "generator": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["repository","repositoryId","releaseId","sha","tag","tagRefSha","tagRefType"],
+      "properties":{
+        "repository":{"const":"shinpr/github-profile-stats"},
+        "repositoryId":{"const":1306572938},
+        "releaseId":{"const":357958496},
+        "sha":{"const":"49b5f7091182a45f3ef93923505b660c6da5f835"},
+        "tag":{"const":"v0.2.0"},
+        "tagRefSha":{"const":"49b5f7091182a45f3ef93923505b660c6da5f835"},
+        "tagRefType":{"const":"commit"}
+      }
+    },
+    "invocation": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["username","profile","credential"],
+      "properties":{
+        "username":{"const":"portyu9"},
+        "profile":{"const":"signal-field"},
+        "credential":{"const":"github.token"}
+      }
+    },
+    "compatibilityEpoch": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["digest","files"],
+      "properties":{
+        "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+        "files":{
+          "type":"array",
+          "minItems":1,
+          "items":{
+            "type":"object",
+            "additionalProperties":false,
+            "required":["path","digest"],
+            "properties":{
+              "path":{"type":"string","minLength":1},
+              "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+            }
+          }
+        }
+      }
+    },
+    "signalField": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["kind","aggregateDigest","files"],
+      "properties":{
+        "kind":{"const":"raw-pinned-generator-output"},
+        "aggregateDigest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+        "files":{
+          "type":"array",
+          "minItems":4,
+          "maxItems":4,
+          "items":{
+            "type":"object",
+            "additionalProperties":false,
+            "required":["name","size","digest"],
+            "properties":{
+              "name":{"enum":["signal-field-wide-light.svg","signal-field-wide-dark.svg","signal-field-compact-light.svg","signal-field-compact-dark.svg"]},
+              "size":{"type":"integer","minimum":1},
+              "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+            }
+          }
+        }
+      }
+    },
+    "authority":{
+      "type":"object",
+      "additionalProperties":false,
+      "required":["preparation","attestation","separation"],
+      "properties":{
+        "preparation":{"const":"contents:read"},
+        "attestation":{"const":"contents:read,id-token:write,attestations:write"},
+        "separation":{"const":"Compatibility preparation executes the exact pinned generator and validates a copy under read-only authority; the isolated signer only attests the reviewed bundle and neither job grants repository mutation authority."}
+      }
+    },
+    "claim":{"const":"This witness proves only that the exact captured raw output of the immutable pinned profile generator was accepted by the exact compatibility-policy epoch during its bounded validity interval. Consumers must revalidate the captured bytes locally and may not use the witness for a different generator, invocation, compatibility epoch, or output bundle."}
+  }
+}
