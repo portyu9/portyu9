@@ -45,7 +45,7 @@ def validate_quality_native_gate(text: str) -> None:
         "runs-on: ubuntu-24.04",
         "permissions:\n      contents: read\n      pull-requests: read",
         "scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}",
-        "EXPECTED_GATE_BLOB: 0158284c833051fa9a1152a3314b906038ec6a28",
+        "EXPECTED_GATE_BLOB: 5f357e15eab6948944775a2b040fc8246100007b",
         'python3 "$TRUSTED_GATE" --self-test',
         'python3 "$TRUSTED_GATE"',
     ):
