@@ -291,9 +291,28 @@ jobs:
             fi
 
             REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"
-            REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-            MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
-            LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
+            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+            jq -e '
+              (type == "array") and (length >= 1) and (length <= 20) and
+              (all(.[]; (type == "array") and (length <= 100))) and
+              (all(.[0:-1][]; length == 100)) and
+              (all(.[][];
+                (type == "object") and
+                (.id | (type == "number") and (. == floor) and (. > 0)) and
+                (.user | (type == "object") and (.login | (type == "string") and (length > 0)))) and
+                (.state | (type == "string") and
+                  (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+                (.commit_id == null or (.commit_id | (type == "string") and test("^[0-9a-f]{40}$"))) and
+                (.body == null or (.body | type == "string"))
+              )) and
+              (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
+            ' <<<"$REVIEW_PAGES" >/dev/null || {
+              echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
+              exit 1
+            }
+            REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+            MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
             [[ "$MARKER_REVIEW_COUNT" =~ ^[0-9]+$ ]]
             test "$MARKER_REVIEW_COUNT" -le 1 || {
               echo "ERROR: governed bot PR #${PR_NUMBER} has multiple marker-bound portyu9 reviews for the exact head." >&2
@@ -304,7 +323,7 @@ jobs:
               continue
             fi
             if [ "$MARKER_REVIEW_COUNT" = "1" ]; then
-              MARKER_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].state' <<<"$REVIEWS")"
+              MARKER_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].state' <<<"$REVIEWS")"
               if [ "$MARKER_STATE" = "APPROVED" ]; then
                 echo "PR #${PR_NUMBER} already has an exact-base/head marker-bound portyu9 approval."
                 wake_governed_lane_after_review "$LANE" "$HEAD_REF"
@@ -354,9 +373,47 @@ jobs:
               exit "$READY_STATUS"
             fi
 
-            REVIEWS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-            RACE_MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
-            RACE_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[][] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
+            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+
+            jq -e '
+
+              (type == "array") and (length >= 1) and (length <= 20) and
+
+              (all(.[]; (type == "array") and (length <= 100))) and
+
+              (all(.[0:-1][]; length == 100)) and
+
+              (all(.[][];
+
+                (type == "object") and
+
+                (.id | (type == "number") and (. == floor) and (. > 0)) and
+
+                (.user | (type == "object") and (.login | (type == "string") and (length > 0)))) and
+
+                (.state | (type == "string") and
+
+                  (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+
+                (.commit_id == null or (.commit_id | (type == "string") and test("^[0-9a-f]{40}$"))) and
+
+                (.body == null or (.body | type == "string"))
+
+              )) and
+
+              (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
+
+            ' <<<"$REVIEW_PAGES" >/dev/null || {
+
+              echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
+
+              exit 1
+
+            }
+
+            REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+            RACE_MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            RACE_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
             [[ "$RACE_MARKER_REVIEW_COUNT" =~ ^[0-9]+$ ]]
             if [ "$RACE_MARKER_REVIEW_COUNT" -gt 0 ]; then
               echo "Skipping governed bot PR #${PR_NUMBER}: a marker-bound portyu9 review appeared before the review mutation."
