@@ -10,7 +10,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v58"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "d6a83b2451bfc2c466f84ce56e6111820a0d1ae9",
+    ".github/workflows/bot-pr-user-approval.yml": "0ea50425d4a6a30dcd100f6e5de7ffecf23b7680",
     ".github/workflows/profile-quality.yml": "e37c57ab81d28233e3a8e0f5eaacc7011daf1ae4",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "f80c921b328f120c00a32479e8c2b1b53e335beb",
@@ -475,7 +475,7 @@ def validate_bot_review_single_object_evidence_schema(bot_review: str) -> None:
     )
 
     review_mutation = 'REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST'
-    review_schema = '(.id | type == "number" and . == floor and . > 0) and'
+    review_schema = '(.id | (type == "number") and . == floor and . > 0) and'
     review_success = 'Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER}'
     mutation_pos = bot_review.index(review_mutation)
     schema_pos = bot_review.index(review_schema, mutation_pos)
@@ -483,6 +483,10 @@ def validate_bot_review_single_object_evidence_schema(bot_review: str) -> None:
     require(
         mutation_pos < schema_pos < success_pos,
         "Bot PR reviewer must validate the review-creation response before treating the mutation as successful",
+    )
+    require(
+        bot_review.count('(.id | (type == "number") and . == floor and . > 0) and') == 1,
+        "Bot PR reviewer review-response positive-id guard must be syntactically distinct and unique",
     )
     require(
         bot_review.count("malformed governed bot PR evidence") == 1
