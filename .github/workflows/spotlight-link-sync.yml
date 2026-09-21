@@ -853,7 +853,7 @@ jobs:
                 (.total_count == (.check_runs | length)) and
                 (all(.check_runs[];
                   type == "object" and
-                  (.id | type == "number" and . == floor and . > 0) and
+                  (.id as $id | ($id | type == "number") and ($id == ($id | floor)) and ($id > 0)) and
                   (.name == $name) and
                   (.head_sha == $head) and
                   (.app | type == "object" and .id == 15368) and
