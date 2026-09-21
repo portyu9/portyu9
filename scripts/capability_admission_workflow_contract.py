@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "399bbe34d437dbd10b2b5372079e48b570940e58"
+EXPECTED_GIT_BLOB = "72576f3c1f9e6073eafc6e361df26fcfc311c981"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -135,6 +135,9 @@ def validate_text(text: str) -> None:
         'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
         '[[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]',
         'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json',
+        "python3 scripts/workflow_capability_api_collection.py files",
+        "--input dependabot-file-pages.json",
+        "--out dependabot-changed-paths.txt",
         'for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do',
         "python3 scripts/dependabot_controller.py probe",
         'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
@@ -158,6 +161,9 @@ def validate_text(text: str) -> None:
         'test "$ACTOR" = "github-actions[bot]"',
         'workflow_dispatch|schedule)',
         'SPOTLIGHT_MODE="delegated"',
+        "python3 scripts/workflow_capability_api_collection.py pull-requests",
+        "--input spotlight-open-pr-pages.json",
+        "--out spotlight-open-prs.json",
         '.user.login == "github-actions[bot]"',
         'test("^automation/spotlight-links/[0-9a-f]{64}$")',
         'test "$MATCH_COUNT" -le 1',
@@ -225,6 +231,18 @@ def self_test() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     validate_text(text)
     expect_failure(text, "checks: write", "contents: write", "permission set changed", count=2)
+    expect_failure(
+        text,
+        "python3 scripts/workflow_capability_api_collection.py pull-requests",
+        "python3 scripts/broken_api_collection.py pull-requests",
+        "Spotlight proof changed",
+    )
+    expect_failure(
+        text,
+        "python3 scripts/workflow_capability_api_collection.py files",
+        "python3 scripts/broken_api_collection.py files",
+        "delegated Dependabot proof changed",
+    )
     expect_failure(
         text,
         'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
