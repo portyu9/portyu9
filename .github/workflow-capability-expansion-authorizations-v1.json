@@ -561,7 +561,7 @@
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "expansionSha256": "f67e0e6b20404c746e58a22de3a9e48e89bc0774d0a100b1af4a953fd181b51e",
-      "rationale": "Authorize #748's exact protected-TCB hardening of paginated pull-request and changed-file evidence in Capability Admission and the Dependabot controller. Existing GET endpoints, permissions, candidate selection, merge authority, protected checks, and semantic Workflow Capability remain unchanged; complete bounded pages plus strict PR/file primitives and uniqueness are now validated before flattening or authorization decisions. No trigger, secret, OIDC authority, mutation class, retry, ruleset, check reduction, direct-main write, or bypass is added."
+      "rationale": "Authorize #748's exact protected-TCB hardening of paginated PR/file evidence in Capability Admission and the Dependabot controller. Existing GET endpoints, permissions, candidate selection, merge authority, checks, and semantic Workflow Capability remain unchanged. Complete bounded pages and strict consumed PR/file primitives must validate before decisions. No trigger, secret, OIDC, mutation class, retry, ruleset, check reduction, direct-main write, or bypass is added."
     },
     {
       "id": "cap-workflow-capability-graphql-hardening",
