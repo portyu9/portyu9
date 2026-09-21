@@ -44,6 +44,15 @@ SEQUENCE_MAPPING_KEY = re.compile(
     r"^(?P<indent> *)-\s+(?P<key>[A-Za-z0-9_.-]+)\s*:(?:\s.*)?$"
 )
 SEQUENCE_ITEM = re.compile(r"^(?P<indent> *)-\s+.*$")
+RAW_PLAIN_MAPPING = re.compile(
+    r"^(?P<indent> *)(?P<key>[A-Za-z0-9_.-]+)\s*:(?P<value>.*)$"
+)
+RAW_SEQUENCE_MAPPING = re.compile(
+    r"^(?P<indent> *)-\s+(?P<key>[A-Za-z0-9_.-]+)\s*:(?P<value>.*)$"
+)
+ACTION_VERSION_COMMENT = re.compile(
+    r"#\s+v[0-9]+(?:\.[0-9]+){1,3}(?:[-+][A-Za-z0-9_.-]+)?$"
+)
 
 REVIEWED_RUNNER = "ubuntu-24.04"
 JOB_CALL_AUTHORITY_KEYS = {"uses", "with", "secrets"}
@@ -115,6 +124,59 @@ def structural_skeleton(line: str) -> str:
         index += 1
     require(quote is None, "unterminated quoted scalar in workflow source")
     return "".join(result).rstrip()
+
+
+def reject_ambiguous_inline_comment(line: str, label: str, line_number: int) -> None:
+    """Forbid structural inline comments that can truncate plain YAML scalars.
+
+    A quote character encountered inside a YAML plain scalar does not start a quoted YAML
+    scalar. GitHub therefore treats whitespace-plus-# inside expressions such as
+    ``if: startsWith(..., 'Merge pull request #123 ...')`` as a YAML comment even though a
+    naive lexical scanner may think the single quote protects it. Canonical workflow source
+    permits inline comments only for the reviewed immutable Action version annotation form.
+    Quoted scalar values and block-scalar program bodies remain unaffected.
+    """
+    sequence_mapping = RAW_SEQUENCE_MAPPING.fullmatch(line)
+    mapping = sequence_mapping or RAW_PLAIN_MAPPING.fullmatch(line)
+    if mapping is None:
+        return
+
+    key = mapping.group("key")
+    value = mapping.group("value")
+    stripped = value.lstrip()
+    if not stripped or stripped[0] in {"|", ">"}:
+        return
+
+    if stripped[0] in {"'", '"'}:
+        quote = stripped[0]
+        index = 1
+        while index < len(stripped):
+            char = stripped[index]
+            if quote == '"' and char == "\\":
+                index += 2
+                continue
+            if char == quote:
+                if quote == "'" and index + 1 < len(stripped) and stripped[index + 1] == "'":
+                    index += 2
+                    continue
+                tail = stripped[index + 1 :].strip()
+                require(
+                    not tail.startswith("#"),
+                    f"{label}:{line_number}: structural inline YAML comments are forbidden after quoted scalars",
+                )
+                return
+            index += 1
+        raise ValueError(f"{label}:{line_number}: unterminated quoted scalar in workflow source")
+
+    for index, char in enumerate(value):
+        if char != "#" or index == 0 or not value[index - 1].isspace():
+            continue
+        comment = value[index:].strip()
+        if key == "uses" and ACTION_VERSION_COMMENT.fullmatch(comment):
+            return
+        raise ValueError(
+            f"{label}:{line_number}: plain-scalar inline YAML comments are forbidden; quote the complete scalar when # is data"
+        )
 
 
 def reject_duplicate_authority_identities(text: str, label: str, parent: str) -> None:
@@ -341,6 +403,7 @@ def validate_text(text: str, label: str) -> int:
             QUOTED_KEY.match(line) is None,
             f"{label}:{line_number}: quoted mapping keys are outside the canonical workflow source subset",
         )
+        reject_ambiguous_inline_comment(line, label, line_number)
 
         skeleton = structural_skeleton(line)
         stripped = skeleton.strip()
@@ -425,6 +488,7 @@ jobs:
   plan:
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@0123456789012345678901234567890123456789 # v7.0.1
       - name: Safe expression
         env:
           VALUE: ${{ github.ref }}
@@ -441,6 +505,13 @@ jobs:
 """
     validate_text(safe, "self-test-safe.yml")
 
+    quoted_hash = safe.replace(
+        "  plan:\n    runs-on: ubuntu-24.04",
+        "  plan:\n    if: \"${{ always() && startsWith(github.event.pull_request.title, 'Fix #687') }}\"\n    runs-on: ubuntu-24.04",
+        1,
+    )
+    validate_text(quoted_hash, "self-test-quoted-hash.yml")
+
     cases = (
         (safe.replace("on:\n  pull_request:", "on: [pull_request, pull_request_target]"), "flow-style YAML sequences"),
         (safe.replace("jobs:\n  plan:", "jobs: {plan: {runs-on: ubuntu-24.04}}\nignored:"), "flow-style YAML mappings"),
@@ -452,6 +523,16 @@ jobs:
         ("---\n" + safe, "document markers"),
         (safe.replace("jobs:", '"jobs":'), "quoted mapping keys"),
         (safe.replace("jobs:", "? jobs\n:"), "complex mapping keys"),
+        (
+            safe.replace(
+                "  plan:\n    runs-on: ubuntu-24.04",
+                "  plan:\n    if: always() && (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Merge pull request #685 from portyu9/recover-ruleset-receipt-attestation'))\n    runs-on: ubuntu-24.04",
+                1,
+            ),
+            "plain-scalar inline YAML comments are forbidden",
+        ),
+        (safe.replace("name: Safe", "name: Safe # truncated"), "plain-scalar inline YAML comments are forbidden"),
+        (safe.replace("          VALUE: ${{ github.ref }}", "          VALUE: literal # truncated"), "plain-scalar inline YAML comments are forbidden"),
         (safe.replace("  pull_request:\n", "  pull_request:\n  pull_request:\n"), "duplicate mapping key"),
         (safe.replace("  plan:\n", "  plan:\n  plan:\n", 1), "duplicate mapping key"),
         (safe.replace("permissions:\n  contents: read", "permissions:\n  contents: read\n  contents: write"), "duplicate mapping key"),
@@ -489,8 +570,9 @@ def main() -> int:
         validate_quality_binding(QUALITY.read_text(encoding="utf-8"))
         print(
             f"Workflow source-shape validation passed: {workflow_count} workflows · {structural_lines} structural lines · "
-            "block-style canonical YAML enforced, every structural mapping scope uses unique keys, trigger/job authority identities are unique, "
-            "flow mappings/structural aliases rejected, only reviewed simple needs sequences allowed, and every job remains an ordinary "
+            "block-style canonical YAML enforced, structural plain-scalar inline comments rejected except immutable Action version annotations, "
+            "every structural mapping scope uses unique keys, trigger/job authority identities are unique, flow mappings/structural aliases "
+            "rejected, only reviewed simple needs sequences allowed, and every job remains an ordinary "
             f"{REVIEWED_RUNNER} job with reviewed implicit shell semantics and no reusable-workflow/secret-inheritance call authority."
         )
         return 0
