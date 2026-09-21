@@ -186,48 +186,10 @@ jobs:
           set -euo pipefail
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$WITNESS_NOW" =~ ^[1-9][0-9]*$ ]]
-          test "$(find action-provenance-witness-consumer -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)" = 
-      - name: Validate pinned upstream retry contract
-        run: python3 scripts/validate-profile-upstream-retry.py
-
-      - name: Validate Dependency Review governance contract
-        run: python3 scripts/validate-dependency-review-contract.py
-
-      - name: Validate workflow YAML source shape
-        run: python3 scripts/validate-workflow-source-shape.py
-
-      - name: Validate workflow authority firewall
-        run: python3 scripts/validate-workflow-authority-contract.py
-
-      - name: Validate exact Python runtime contract
-        run: python3 scripts/validate-python-runtime-contract.py
-
-      - name: Check Python maintenance freshness
-        run: python3 scripts/check-python-maintenance-freshness.py
-
-      - name: Validate Spotlight UI merge authorization
-        run: python3 scripts/validate-spotlight-ui-merge-authorization.py
-
-      - name: Validate workflow shell safety
-        run: python3 scripts/validate-workflow-shell-safety.py
-
-      - name: Validate CodeQL governance contract
-        run: python3 scripts/validate-codeql-contract.py
-
-      - name: Validate read-only contract summary renderer
-        run: python3 scripts/write-profile-contract-summary.py --self-test
-
-      - name: Validate repository governance contract
-        run: python3 scripts/validate-governance-contract.py
-
-      - name: Validate assurance documentation contract
-        run: python3 scripts/validate-assurance-docs.py
-
-      - name: Validate repository ruleset source + live observable control-plane contract
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/validate-ruleset-contract.py --live
-action-provenance-witness-subject.json\naction-provenance-witness.json'
+          test -f action-provenance-witness-consumer/action-provenance-witness.json
+          test -f "$SUBJECT"
+          test "$(find action-provenance-witness-consumer -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" = "2"
+          test -z "$(find action-provenance-witness-consumer -mindepth 1 -maxdepth 1 ! -type f -print -quit)"
           gh attestation verify "$SUBJECT" \
             --repo "$GITHUB_REPOSITORY" \
             --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/action-provenance-witness-v1.schema.json \
