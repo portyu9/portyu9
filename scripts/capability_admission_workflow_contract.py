@@ -21,7 +21,7 @@ DEPENDABOT_EVALUATOR = """            python3 scripts/dependabot_capability_admi
               --candidate-tree-sha "$TREE_SHA" \\
               --pr "$RUNNER_TEMP/dependabot-pr.json" \\
               --expected-head-sha "$HEAD_SHA" \\
-              --resolved-release-sha "$RESOLVED_RELEASE_SHA" \\
+              --resolved-release dependabot-release-identity.json \\
               --changed-paths dependabot-changed-paths.txt \\
               > capability-admission.json
 """
@@ -140,7 +140,12 @@ def validate_text(text: str) -> None:
         'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
         "python3 scripts/dependabot_release.py",
-        'test "$(cat dependabot-resolved-release-sha.txt)" = "$CANDIDATE_SHA"',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > dependabot-release.json',
+        '--repository-json dependabot-release-repository.json',
+        '--release-json dependabot-release.json',
+        'test "$(jq -r .sha dependabot-release-identity.json)" = "$CANDIDATE_SHA"',
+        '--resolved-release dependabot-release-identity.json',
         'test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"',
         'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
     ):
