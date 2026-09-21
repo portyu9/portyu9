@@ -14,6 +14,7 @@ FRESHNESS_CHECKER = ROOT / "scripts/check-python-maintenance-freshness.py"
 EXPECTED_VERSION = "3.13.15"
 EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 EXPECTED_WORKFLOWS = {
+    "action-provenance-witness.yml",
     "capability-admission.yml",
     "codeql-autofix.yml",
     "dependabot-controller.yml",
@@ -22,6 +23,7 @@ EXPECTED_WORKFLOWS = {
     "spotlight-link-sync.yml",
 }
 VERIFY_COMMANDS = {
+    "action-provenance-witness.yml": "python3 scripts/verify-python-runtime.py",
     "capability-admission.yml": "python3 scripts/verify-python-runtime.py",
     "codeql-autofix.yml": "python3 scripts/verify-python-runtime.py",
     "dependabot-controller.yml": "python3 scripts/verify-python-runtime.py",

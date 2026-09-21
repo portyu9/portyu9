@@ -1,0 +1,136 @@
+name: Action provenance witness
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/GOVERNANCE.md"
+      - ".github/action-lock.json"
+      - ".github/attestation/action-provenance-witness-v1.schema.json"
+      - ".github/workflows/action-provenance-witness.yml"
+      - ".github/workflows/profile-quality.yml"
+      - "scripts/action_identity_lock.py"
+      - "scripts/action_provenance_witness.py"
+      - "scripts/dependabot_release.py"
+      - "scripts/validate-action-release-provenance.py"
+      - "scripts/validate-codeql-contract.py"
+      - "scripts/validate-dependency-review-contract.py"
+      - "scripts/validate-governance-contract.py"
+  schedule:
+    - cron: "41 */2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: action-provenance-witness
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13.15"
+
+jobs:
+  prepare:
+    if: github.repository == 'portyu9/portyu9' && github.ref == 'refs/heads/main'
+    name: prepare-action-provenance-witness-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      issued_at: ${{ steps.bind.outputs.issued_at }}
+      expires_at: ${{ steps.build.outputs.expires_at }}
+      predicate_sha256: ${{ steps.build.outputs.predicate_sha256 }}
+      subject_sha256: ${{ steps.build.outputs.subject_sha256 }}
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+
+    steps:
+      - name: Checkout exact trusted source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
+      - name: Bind exact trusted run identity and issuance
+        id: bind
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REPOSITORY_ID" = "1355082509"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$SOURCE_SHA"
+          test "$GITHUB_WORKFLOW_REF" = "portyu9/portyu9/.github/workflows/action-provenance-witness.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_SHA" = "$SOURCE_SHA"
+          [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+
+          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"
+          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"
+          test "$(jq -r .run_attempt <<<"$RUN")" = "$GITHUB_RUN_ATTEMPT"
+          test "$(jq -r .head_sha <<<"$RUN")" = "$SOURCE_SHA"
+          test "$(jq -r .head_branch <<<"$RUN")" = "main"
+          test "$(jq -r .path <<<"$RUN")" = ".github/workflows/action-provenance-witness.yml"
+          test "$(jq -r .repository.id <<<"$RUN")" = "$GITHUB_REPOSITORY_ID"
+          test "$(jq -r .repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .head_repository.id <<<"$RUN")" = "$GITHUB_REPOSITORY_ID"
+          test "$(jq -r .head_repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"
+          EVENT="$(jq -r .event <<<"$RUN")"
+          case "$EVENT" in
+            push|schedule|workflow_dispatch) ;;
+            *) echo "Unexpected witness producer event: $EVENT" >&2; exit 1 ;;
+          esac
+
+          RUN_STARTED_AT="$(jq -r '.run_started_at // empty' <<<"$RUN")"
+          test -n "$RUN_STARTED_AT"
+          ISSUED_AT="$(python3 -c 'from datetime import datetime, timezone; import sys; value=sys.argv[1]; parsed=datetime.fromisoformat(value.replace("Z","+00:00")); assert parsed.tzinfo is not None; print(int(parsed.astimezone(timezone.utc).timestamp()))' "$RUN_STARTED_AT")"
+          [[ "$ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
+          NOW="$(date -u +%s)"
+          test "$NOW" -ge "$ISSUED_AT"
+          test "$NOW" -lt "$((ISSUED_AT + 1800))"
+          echo "issued_at=$ISSUED_AT" >> "$GITHUB_OUTPUT"
+
+      - name: Prove exact live Action release provenance
+        run: python3 scripts/validate-action-release-provenance.py
+
+      - name: Build and revalidate deterministic witness bytes
+        id: build
+        env:
+          ISSUED_AT: ${{ steps.bind.outputs.issued_at }}
+        run: |
+          set -euo pipefail
+          [[ "$ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
+          mkdir -p witness
+          python3 scripts/action_provenance_witness.py build             --source-sha "$GITHUB_SHA"             --run-id "$GITHUB_RUN_ID"             --run-attempt "$GITHUB_RUN_ATTEMPT"             --issued-at "$ISSUED_AT"             --lock .github/action-lock.json             --policy-root .             --predicate-out witness/action-provenance-witness.json             --subject-out witness/action-provenance-witness-subject.json
+          python3 scripts/action_provenance_witness.py verify             --predicate witness/action-provenance-witness.json             --subject witness/action-provenance-witness-subject.json             --lock .github/action-lock.json             --policy-root .             --now "$ISSUED_AT"
+          PREDICATE_SHA256="$(sha256sum witness/action-provenance-witness.json | cut -d' ' -f1)"
+          SUBJECT_SHA256="$(sha256sum witness/action-provenance-witness-subject.json | cut -d' ' -f1)"
+          [[ "$PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$SUBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          EXPIRES_AT="$((ISSUED_AT + 21600))"
+          echo "predicate_sha256=$PREDICATE_SHA256" >> "$GITHUB_OUTPUT"
+          echo "subject_sha256=$SUBJECT_SHA256" >> "$GITHUB_OUTPUT"
+          echo "expires_at=$EXPIRES_AT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload unsigned reviewed witness bundle
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: action-provenance-witness-v1
+          path: witness/
+          if-no-files-found: error
+          retention-days: 1
