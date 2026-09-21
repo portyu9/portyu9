@@ -52,6 +52,29 @@ jobs:
           SPOTLIGHT_MODE=""
           HAS_CANDIDATE=true
 
+          validate_api_pr_object() {
+            local pr="$1" number="$2"
+            jq -e --argjson number "$number" '
+              (type == "object") and
+              (.number | type == "number" and . == floor and . > 0 and . == $number) and
+              (.user | (type == "object") and (.login | (type == "string") and length > 0)) and
+              (.state == "open") and
+              (.draft | type == "boolean") and
+              (.maintainer_can_modify | type == "boolean") and
+              (.base | type == "object" and
+                (.ref | type == "string" and length > 0) and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
+              (.head | type == "object" and
+                (.ref | type == "string" and length > 0) and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.repo | type == "object" and
+                  (.full_name | type == "string" and length > 0))) and
+              (.title | type == "string" and length > 0) and
+              has("body") and
+              (.body == null or (.body | type == "string"))
+            ' <<<"$pr" >/dev/null
+          }
+
           case "$EVENT_NAME" in
             pull_request_target)
               PR="$(jq -c '.pull_request' "$GITHUB_EVENT_PATH")"
@@ -73,6 +96,10 @@ jobs:
                   [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
 
                   PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+                  validate_api_pr_object "$PR" "$PR_NUMBER" || {
+                    echo "ERROR: malformed CodeQL Autofix capability-admission PR evidence for #${PR_NUMBER}." >&2
+                    exit 1
+                  }
                   test "$(jq -r .state <<<"$PR")" = "open"
                   test "$(jq -r .draft <<<"$PR")" = "false"
                   test "$(jq -r .base.ref <<<"$PR")" = "main"
@@ -94,6 +121,10 @@ jobs:
 
                   gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"
                   PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"
+                  validate_api_pr_object "$PR" "$PR_NUMBER" || {
+                    echo "ERROR: malformed delegated Dependabot capability-admission PR evidence for #${PR_NUMBER}." >&2
+                    exit 1
+                  }
                   test "$(jq -r .state <<<"$PR")" = "open"
                   test "$(jq -r .draft <<<"$PR")" = "false"
                   test "$(jq -r .base.ref <<<"$PR")" = "main"
@@ -152,6 +183,10 @@ jobs:
               PR_NUMBER="$(jq -r .number <<<"$DISCOVERED_PR")"
               [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
               PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+              validate_api_pr_object "$PR" "$PR_NUMBER" || {
+                echo "ERROR: malformed Spotlight capability-admission PR evidence for #${PR_NUMBER}." >&2
+                exit 1
+              }
               test "$(jq -r .number <<<"$PR")" = "$PR_NUMBER"
               test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"
               test "$(jq -r .state <<<"$PR")" = "open"

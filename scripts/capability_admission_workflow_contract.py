@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "72576f3c1f9e6073eafc6e361df26fcfc311c981"
+EXPECTED_GIT_BLOB = "15e96a7e516c9f6c9f209c27cfe83b6f229cca92"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -111,6 +111,65 @@ def validate_text(text: str) -> None:
         'TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"',
     ):
         require(binding in text, f"trusted capability admission identity binding changed: {binding}")
+
+    for pr_schema_fragment in (
+        'validate_api_pr_object() {',
+        '--argjson number "$number"',
+        '(.number | type == "number" and . == floor and . > 0 and . == $number) and',
+        '(.user | (type == "object") and (.login | (type == "string") and length > 0)) and',
+        '(.state == "open") and',
+        '(.draft | type == "boolean") and',
+        '(.maintainer_can_modify | type == "boolean") and',
+        '(.base | type == "object" and',
+        '(.head | type == "object" and',
+        '(.repo | type == "object" and',
+        '(.title | type == "string" and length > 0) and',
+        'has("body") and',
+        '(.body == null or (.body | type == "string"))',
+        'ERROR: malformed CodeQL Autofix capability-admission PR evidence for #${PR_NUMBER}.',
+        'ERROR: malformed delegated Dependabot capability-admission PR evidence for #${PR_NUMBER}.',
+        'ERROR: malformed Spotlight capability-admission PR evidence for #${PR_NUMBER}.',
+    ):
+        require(
+            pr_schema_fragment in text,
+            f"trusted capability admission PR-object schema contract is missing: {pr_schema_fragment}",
+        )
+    schema_call = 'validate_api_pr_object "$PR" "$PR_NUMBER"'
+    require(
+        text.count(schema_call) == 3,
+        "trusted capability admission must schema-validate exactly all three API-hydrated PR objects",
+    )
+
+    codeql_lane = text.index("codeql-autofix-admission)")
+    codeql_fetch = text.index('PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"', codeql_lane)
+    codeql_schema = text.index(schema_call, codeql_fetch)
+    codeql_consumer = text.index('test "$(jq -r .state <<<"$PR")" = "open"', codeql_schema)
+    require(
+        codeql_fetch < codeql_schema < codeql_consumer,
+        "trusted capability admission must validate CodeQL Autofix PR evidence before field consumption",
+    )
+
+    dependabot_lane = text.index("dependabot-admission)")
+    dependabot_fetch = text.index(
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        dependabot_lane,
+    )
+    dependabot_assign = text.index('PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"', dependabot_fetch)
+    dependabot_schema = text.index(schema_call, dependabot_assign)
+    dependabot_consumer = text.index('test "$(jq -r .state <<<"$PR")" = "open"', dependabot_schema)
+    require(
+        dependabot_fetch < dependabot_assign < dependabot_schema < dependabot_consumer,
+        "trusted capability admission must validate delegated Dependabot PR evidence before field consumption",
+    )
+
+    spotlight_lane = text.index("workflow_dispatch|schedule)")
+    spotlight_fetch = text.index('PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"', spotlight_lane)
+    spotlight_schema = text.index(schema_call, spotlight_fetch)
+    spotlight_consumer = text.index('test "$(jq -r .number <<<"$PR")" = "$PR_NUMBER"', spotlight_schema)
+    require(
+        spotlight_fetch < spotlight_schema < spotlight_consumer,
+        "trusted capability admission must validate Spotlight PR evidence before field consumption",
+    )
 
     require(text.count(ORDINARY_EVALUATOR) == 1,
             "ordinary evaluator lost exact candidate tree binding")
