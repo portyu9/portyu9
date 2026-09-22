@@ -70,6 +70,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
               "method": "GET",
               "mutating": false,
@@ -87,6 +94,13 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
               "method": "POST",
               "mutating": true,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100",
+              "method": "GET",
+              "mutating": false,
               "step": "Verify an existing Autofix PR and perform protected merge"
             },
             {
@@ -193,6 +207,13 @@
               "method": "POST",
               "mutating": true,
               "step": "Request and inspect GitHub CodeQL Autofix"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Verify an existing Autofix PR and perform protected merge"
             },
             {
               "client": "gh-api",
@@ -395,6 +416,12 @@
               "class": "github-api-post",
               "method": "POST",
               "step": "Request and inspect GitHub CodeQL Autofix",
+              "target": "repos/${TARGET_REPOSITORY}/dispatches"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Verify an existing Autofix PR and perform protected merge",
               "target": "repos/${TARGET_REPOSITORY}/dispatches"
             },
             {

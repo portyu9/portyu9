@@ -557,8 +557,65 @@ jobs:
           test "$(jq -r .merged merge.json)" = "true"
           MERGE_SHA="$(jq -r .sha merge.json)"
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"
+
+          assert_main_is_merge_sha() {
+            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"
+          }
+          fetch_codeql_dispatch_runs() {
+            gh api --paginate --slurp \
+              "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100"
+          }
+
+          assert_main_is_merge_sha
+          fetch_codeql_dispatch_runs > codeql-dispatch-runs-before.json
+          python3 scripts/codeql_autofix_controller.py followup-select \
+            --before-file codeql-dispatch-runs-before.json \
+            --after-file codeql-dispatch-runs-before.json \
+            --expected-sha "$MERGE_SHA" \
+            --out post-merge-codeql-selection.json
+          test "$(jq -r .state post-merge-codeql-selection.json)" = "pending"
 
           gh api --method POST \
             "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" \
             -f ref=main >/dev/null
+
+          POST_MERGE_CODEQL_RUN_ID=""
+          for attempt in $(seq 1 60); do
+            sleep 2
+            assert_main_is_merge_sha
+            fetch_codeql_dispatch_runs > codeql-dispatch-runs-after.json
+            python3 scripts/codeql_autofix_controller.py followup-select \
+              --before-file codeql-dispatch-runs-before.json \
+              --after-file codeql-dispatch-runs-after.json \
+              --expected-sha "$MERGE_SHA" \
+              --out post-merge-codeql-selection.json
+            if [ "$(jq -r .state post-merge-codeql-selection.json)" = "bound" ]; then
+              POST_MERGE_CODEQL_RUN_ID="$(jq -r .runId post-merge-codeql-selection.json)"
+              break
+            fi
+          done
+          [[ "$POST_MERGE_CODEQL_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+
+          POST_MERGE_CODEQL_STATUS=""
+          POST_MERGE_CODEQL_CONCLUSION=""
+          for attempt in $(seq 1 120); do
+            assert_main_is_merge_sha
+            gh api "repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}" > post-merge-codeql-run.json
+            python3 scripts/codeql_autofix_controller.py followup-run \
+              --run-file post-merge-codeql-run.json \
+              --run-id "$POST_MERGE_CODEQL_RUN_ID" \
+              --expected-sha "$MERGE_SHA" \
+              --out post-merge-codeql-status.json
+            POST_MERGE_CODEQL_STATUS="$(jq -r .status post-merge-codeql-status.json)"
+            POST_MERGE_CODEQL_CONCLUSION="$(jq -r '.conclusion // ""' post-merge-codeql-status.json)"
+            if [ "$POST_MERGE_CODEQL_STATUS" = "completed" ]; then
+              break
+            fi
+            sleep 5
+          done
+          test "$POST_MERGE_CODEQL_STATUS" = "completed"
+          test "$POST_MERGE_CODEQL_CONCLUSION" = "success"
+          assert_main_is_merge_sha
+
+          gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" \
+            -f event_type=codeql-autofix >/dev/null
