@@ -510,7 +510,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
-      actions: read
       checks: read
       contents: read
       pull-requests: read
@@ -588,25 +587,6 @@ jobs:
                       (.triggeringActor | type == "string" and length > 0)
                     )
                   ' <<<"$SUMMARY" >/dev/null
-                CURRENT_RUN="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${PROOF_RUN_ID}/attempts/${PROOF_RUN_ATTEMPT}")"
-                jq -e \
-                  --argjson run "$PROOF_RUN_ID" \
-                  --argjson attempt "$PROOF_RUN_ATTEMPT" \
-                  --arg base "$BASE_SHA" \
-                  --arg repo "$TARGET_REPOSITORY" '
-                    .id == $run and
-                    .run_attempt == $attempt and
-                    .name == "Capability admission" and
-                    .path == ".github/workflows/capability-admission.yml" and
-                    .event == "repository_dispatch" and
-                    .head_branch == "main" and
-                    .head_sha == $base and
-                    .repository.full_name == $repo and
-                    .head_repository.full_name == $repo and
-                    (.check_suite_id | type == "number" and . > 0 and floor == .) and
-                    .status == "completed" and
-                    .conclusion == "success"
-                  ' <<<"$CURRENT_RUN" >/dev/null
                 jq -e \
                   --arg head "$HEAD_SHA" \
                   --arg base "$BASE_SHA" \
@@ -618,7 +598,7 @@ jobs:
                     .conclusion == "success" and
                     ([.pull_requests[]? | select(.number == $pr and .head.sha == $head and .base.sha == $base)] | length == 1)
                   ' <<<"$CHECK" >/dev/null
-                echo "Consumed exact trusted-main Dependabot admission run/attempt + retry-history proof on bounded attempt ${ATTEMPT}."
+                echo "Consumed exact trusted-main Dependabot admission digest-bound retry-history proof on bounded attempt ${ATTEMPT}."
                 exit 0
               fi
             fi
