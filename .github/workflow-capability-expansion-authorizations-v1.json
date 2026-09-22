@@ -592,6 +592,13 @@
       "rationale": "Authorize #687's exact Ruleset recovery YAML-guard correction. The existing signer keeps identical permissions, actions, subject, API reads and artifact authority; the job guard is YAML-quoted and rebound only to #687's merge push while exact receipt hash/field and live-successor proofs remain. No trigger, secret, endpoint, method, ruleset mutation, signer, attestation target, required-check reduction, merge capability or bypass is added."
     },
     {
+      "id": "cap-signed-witness-retry-history-v1",
+      "baseBomSha256": "41af601f83d22181d72cbcc54f35034d8d79f4af3d7bf326fe307b41c116eb5b",
+      "candidateBomSha256": "6afc47443664b9bd28d39b9c6ef795151705010db150b20d22349cbb00c8d464",
+      "expansionSha256": "d987a3de4185a163e7ad0a09b74eef30218d2767317dc8b4d7684e7e5c1dbec7",
+      "rationale": "Authorize #824's exact signed witness retry-history evidence: two existing actions:read producers collect bounded prior attempt GETs and bind contiguous terminal history into already-signed Action provenance and Profile Generator Compatibility predicates. Current runAttempt remains sole authorizing attempt; signer authority, consumers, triggers, writes, OIDC boundaries, required checks, rulesets and bypass surfaces do not expand."
+    },
+    {
       "id": "cap-spotlight-main-push-reconciliation",
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
