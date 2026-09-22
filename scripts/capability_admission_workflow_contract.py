@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "15e96a7e516c9f6c9f209c27cfe83b6f229cca92"
+EXPECTED_GIT_BLOB = "be278149de843e7db553908d627d56ecb2908d38"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -89,6 +89,19 @@ def validate_text(text: str) -> None:
             "trusted capability admission no longer re-proves the exact checked-out base SHA")
     require("persist-credentials: false" in text and "fetch-depth: 1" in text,
             "trusted capability admission checkout boundary changed")
+    checkout_pos = text.index("- name: Checkout static trusted main")
+    setup_pos = text.index("- name: Set up Python")
+    runtime_pos = text.index("- name: Verify resolved Python runtime")
+    bind_pos = text.index("- name: Bind exact candidate context")
+    spotlight_parser_pos = text.index(
+        "python3 scripts/workflow_capability_api_collection.py pull-requests",
+        bind_pos,
+    )
+    exact_base_pos = text.index("- name: Verify exact trusted base checkout", bind_pos)
+    require(
+        checkout_pos < setup_pos < runtime_pos < bind_pos < spotlight_parser_pos < exact_base_pos,
+        "trusted capability admission bootstrap ordering regressed",
+    )
     require("ref: ${{ github.event.pull_request.head.sha }}" not in text and
             "ref: ${{ steps.candidate.outputs.head_sha }}" not in text,
             "trusted capability admission must never checkout candidate code")
