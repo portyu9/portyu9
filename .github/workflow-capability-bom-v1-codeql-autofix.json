@@ -49,6 +49,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve exact protected checks and queue admission retry"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve",
               "method": "POST",
               "mutating": true,
@@ -74,13 +81,6 @@
               "method": "GET",
               "mutating": false,
               "step": "Verify an existing Autofix PR and perform protected merge"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
             },
             {
               "client": "gh-api",
@@ -119,6 +119,20 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Discover one exact-main CodeQL alert"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix",
               "method": "GET",
               "mutating": false,
@@ -140,17 +154,17 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments?per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and perform protected merge"
+              "step": "Request and inspect GitHub CodeQL Autofix"
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Discover one exact-main CodeQL alert"
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments",
+              "method": "POST",
+              "mutating": true,
+              "step": "Request and inspect GitHub CodeQL Autofix"
             },
             {
               "client": "gh-api",
@@ -287,6 +301,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify an existing Autofix PR and perform protected merge"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments",
               "method": "POST",
               "mutating": true,
@@ -294,10 +315,10 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Verify an existing Autofix PR and perform protected merge"
+              "step": "Locate an existing remediation PR"
             },
             {
               "client": "gh-api",
@@ -361,13 +382,6 @@
               "method": "GET",
               "mutating": false,
               "step": "Verify an existing Autofix PR and perform protected merge"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Locate an existing remediation PR"
             }
           ],
           "artifacts": [
@@ -416,6 +430,12 @@
               "class": "github-api-post",
               "method": "POST",
               "step": "Request and inspect GitHub CodeQL Autofix",
+              "target": "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Request and inspect GitHub CodeQL Autofix",
               "target": "repos/${TARGET_REPOSITORY}/dispatches"
             },
             {
@@ -431,6 +451,12 @@
               "target": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"
             },
             {
+              "class": "pull-request-merge",
+              "method": "PUT",
+              "step": "Verify an existing Autofix PR and perform protected merge",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"
+            },
+            {
               "class": "pull-request",
               "method": "POST",
               "step": "Commit exact Autofix to a dedicated branch and open one PR",
@@ -441,12 +467,6 @@
               "method": "POST",
               "step": "Commit exact Autofix to a dedicated branch and open one PR",
               "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"
-            },
-            {
-              "class": "pull-request-merge",
-              "method": "PUT",
-              "step": "Verify an existing Autofix PR and perform protected merge",
-              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"
             },
             {
               "class": "workflow-dispatch",
