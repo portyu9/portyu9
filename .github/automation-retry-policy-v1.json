@@ -212,6 +212,20 @@
       "operationRetry": false,
       "purpose": "Collect exact prior controller attempts as immutable receipt evidence; no protected mutation is repeated.",
       "mutationMode": "none"
+    },
+    {
+      "id": "capability-admission-dependabot-prior-attempt-history",
+      "workflow": ".github/workflows/capability-admission.yml",
+      "job": "admission",
+      "step": "Publish exact candidate trusted admission check",
+      "ordinal": 1,
+      "variable": "HISTORY_ATTEMPT",
+      "maxIterations": 20,
+      "sleepSeconds": 1,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Collect exact prior Capability Admission attempts as durable delegated Dependabot proof evidence; the check publication mutation remains outside the loop.",
+      "mutationMode": "none"
     }
   ],
   "trustedReentry": [
