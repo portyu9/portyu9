@@ -191,8 +191,10 @@ def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) 
             require(mutations and all("/approve" in row and "--method POST" in row for row in mutations),
                     f"guarded observation mutation surface changed: {rule.get('id')}")
             block = loop["block"]
+            owner = named_step(texts[loop["workflow"]], loop["job"], loop["step"])
+            require('APPROVAL_REQUESTED_RUN_IDS=""' in owner,
+                    f"guarded observation lost once-per-run approval dedupe initialization: {rule.get('id')}")
             for fragment in (
-                'APPROVAL_REQUESTED_RUN_IDS=""',
                 'case " $APPROVAL_REQUESTED_RUN_IDS " in',
                 'APPROVAL_REQUESTED_RUN_IDS="',
             ):
