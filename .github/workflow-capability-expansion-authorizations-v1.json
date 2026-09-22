@@ -214,6 +214,13 @@
       "rationale": "Authorize #523's exact current-main bounded continuation for the reviewed unsupported CodeQL Autofix HTTP 422 path, including the protected workflow and canonical BOM source boundary. Trusted logic revalidates only that exact unsupported failure, requires main to remain the bound base, and emits one existing codeql-autofix dispatch with a strictly increasing cursor. All other failures, protected checks, and exact-SHA merge gates remain fail-closed."
     },
     {
+      "id": "cap-codeql-autofix-unsupported-evidence",
+      "baseBomSha256": "66cf98310c4a60413891357bc1eb9707dd20fb888587ec77b54708bfa15ed99b",
+      "candidateBomSha256": "d78302730fd243e92efc1a00e165d8214bf84ba4385992fe3b4582e6ad12fa30",
+      "expansionSha256": "9ac18beb11a84510f1f8eabfaa143574a11ac8e0421c9b6caa201ea0dbb758e7",
+      "rationale": "Authorize #800's exact trusted CodeQL Autofix source transition that, only after the reviewed GitHub HTTP 422 unsupported-Autofix classifier and exact-current-main reproof, reads complete commit comments on that exact main SHA and creates at most one marker-bound github-actions[bot] commit comment carrying the exact alert/base/rule evidence before continuing the already-authorized strictly increasing unsupported-alert queue. Existing alert state, triggers, permissions, secrets, OIDC, candidate execution, PR/merge authority, direct-main mutation, rulesets and bypasses remain unchanged."
+    },
+    {
       "id": "cap-codeql-autofix-unsupported-queue-semantics",
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
