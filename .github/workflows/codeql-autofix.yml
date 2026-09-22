@@ -239,6 +239,19 @@ jobs:
           test "$ALERT_NUMBER" -gt 0
           test "$RUN_ID" -gt 0
           test "$RUN_ATTEMPT" -gt 0
+          test "$RUN_ATTEMPT" -le 20
+
+          : > prior-attempts.ndjson
+          for ATTEMPT_NUMBER in $(seq 1 20); do
+            if [ "$ATTEMPT_NUMBER" -ge "$RUN_ATTEMPT" ]; then
+              break
+            fi
+            gh api "repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}" \
+              | jq -c '.' >> prior-attempts.ndjson
+            sleep 1
+          done
+          jq -s '.' prior-attempts.ndjson > prior-attempts.json
+
           BRANCH="codeql-autofix/alert-${ALERT_NUMBER}/run-${RUN_ID}"
           TARGET_REF="refs/heads/${BRANCH}"
 
@@ -298,6 +311,7 @@ jobs:
             --branch "$BRANCH" \
             --head-sha "$HEAD_SHA" \
             --pr-file created-pr.json \
+            --attempt-history-file prior-attempts.json \
             --out codeql-autofix-receipt.json
           PR_NUMBER="$(jq -r .prNumber codeql-autofix-receipt.json)"
           gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \

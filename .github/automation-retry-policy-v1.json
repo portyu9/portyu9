@@ -198,6 +198,20 @@
       "operationRetry": false,
       "purpose": "Wait for one exact marker-bound portyu9 review after review-independent gates are green.",
       "mutationMode": "none"
+    },
+    {
+      "id": "autofix-controller-prior-attempt-history",
+      "workflow": ".github/workflows/codeql-autofix.yml",
+      "job": "controller",
+      "step": "Commit exact Autofix to a dedicated branch and open one PR",
+      "ordinal": 1,
+      "variable": "ATTEMPT_NUMBER",
+      "maxIterations": 20,
+      "sleepSeconds": 1,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Collect exact prior controller attempts as immutable receipt evidence; no protected mutation is repeated.",
+      "mutationMode": "none"
     }
   ],
   "trustedReentry": [

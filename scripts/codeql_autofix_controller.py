@@ -378,8 +378,89 @@ def validate_compare(value: Any, base_sha: str, head_sha: str) -> dict[str, Any]
     return {"baseSha": base_sha, "headSha": head_sha, "changedFiles": list(allowed)}
 
 
+def normalize_prior_attempt_history(
+    value: Any,
+    *,
+    run_id: int,
+    run_attempt: int,
+    event_name: str,
+    base_sha: str,
+) -> list[dict[str, Any]]:
+    run_id = positive_int(run_id, "run id")
+    run_attempt = positive_int(run_attempt, "run attempt")
+    base_sha = sha(base_sha, "retry-history base SHA")
+    require(
+        run_attempt <= contract.MAX_RECORDED_ATTEMPTS,
+        "Autofix receipt run attempt exceeds bounded retry-history limit",
+    )
+    require(isinstance(value, list), "Autofix retry-history input must be an array")
+    require(
+        len(value) == run_attempt - 1,
+        "Autofix retry-history must contain every prior attempt exactly once",
+    )
+    history: list[dict[str, Any]] = []
+    for expected_attempt, raw in enumerate(value, start=1):
+        require(isinstance(raw, Mapping), "Autofix retry-history contains a non-object attempt")
+        require(
+            positive_int(raw.get("id"), f"Autofix retry-history attempt {expected_attempt} run id") == run_id,
+            "Autofix retry-history run id changed",
+        )
+        require(
+            positive_int(raw.get("run_attempt"), f"Autofix retry-history attempt {expected_attempt} number")
+            == expected_attempt,
+            "Autofix retry-history attempts are not contiguous",
+        )
+        require(
+            raw.get("name") == contract.WORKFLOW_NAME
+            and raw.get("path") == contract.WORKFLOW_PATH
+            and raw.get("event") == event_name,
+            "Autofix retry-history workflow identity changed",
+        )
+        require(
+            raw.get("head_branch") == DEFAULT_BRANCH
+            and sha(raw.get("head_sha"), "Autofix retry-history head SHA") == base_sha,
+            "Autofix retry-history source identity changed",
+        )
+        repository = raw.get("repository")
+        head_repository = raw.get("head_repository")
+        require(
+            isinstance(repository, Mapping)
+            and repository.get("full_name") == REPOSITORY
+            and isinstance(head_repository, Mapping)
+            and head_repository.get("full_name") == REPOSITORY,
+            "Autofix retry-history repository identity changed",
+        )
+        require(raw.get("status") == "completed", "Autofix retry-history prior attempt is not terminal")
+        conclusion = raw.get("conclusion")
+        require(
+            isinstance(conclusion, str) and conclusion in contract.PRIOR_ATTEMPT_CONCLUSIONS,
+            "Autofix retry-history prior attempt conclusion is invalid",
+        )
+        actor = raw.get("actor")
+        triggering_actor = raw.get("triggering_actor")
+        actor_login = actor.get("login") if isinstance(actor, Mapping) else None
+        triggering_login = triggering_actor.get("login") if isinstance(triggering_actor, Mapping) else None
+        require(
+            isinstance(actor_login, str) and bool(actor_login)
+            and isinstance(triggering_login, str) and bool(triggering_login),
+            "Autofix retry-history actor identity is missing",
+        )
+        history.append({
+            "attempt": expected_attempt,
+            "checkSuiteId": positive_int(
+                raw.get("check_suite_id"),
+                f"Autofix retry-history attempt {expected_attempt} check suite id",
+            ),
+            "status": "completed",
+            "conclusion": conclusion,
+            "actor": actor_login,
+            "triggeringActor": triggering_login,
+        })
+    return history
+
+
 def build_receipt(*, run_id: int, run_attempt: int, event_name: str, base_sha: str, target: Mapping[str, Any],
-                  branch: str, head_sha: str, pr_response: Any) -> dict[str, Any]:
+                  branch: str, head_sha: str, pr_response: Any, prior_attempts: Any) -> dict[str, Any]:
     run_id = positive_int(run_id, "run id")
     run_attempt = positive_int(run_attempt, "run attempt")
     alert = positive_int(target.get("number"), "target alert number")
@@ -397,6 +478,13 @@ def build_receipt(*, run_id: int, run_attempt: int, event_name: str, base_sha: s
             "created Autofix PR head mismatch")
     rule_id = target.get("ruleId")
     require(isinstance(rule_id, str), "target rule id is missing")
+    retry_history = normalize_prior_attempt_history(
+        prior_attempts,
+        run_id=run_id,
+        run_attempt=run_attempt,
+        event_name=event_name,
+        base_sha=base_sha,
+    )
     receipt = {
         "controllerId": contract.CONTROLLER_ID,
         "flowId": contract.FLOW_ID,
@@ -404,6 +492,7 @@ def build_receipt(*, run_id: int, run_attempt: int, event_name: str, base_sha: s
         "workflowPath": contract.WORKFLOW_PATH,
         "runId": run_id,
         "runAttempt": run_attempt,
+        "retryHistory": retry_history,
         "event": event_name,
         "baseSha": base_sha,
         "alertNumber": alert,
@@ -681,6 +770,58 @@ def self_test() -> None:
     require(located["exists"] and located["pr"]["originRunId"] == 123, "existing PR locator changed")
     require(flatten_pages([[1], [2]]) == [1, 2], "pagination flattening changed")
 
+    prior_attempt = {
+        "id": 123,
+        "run_attempt": 1,
+        "name": contract.WORKFLOW_NAME,
+        "path": contract.WORKFLOW_PATH,
+        "event": "workflow_run",
+        "head_branch": DEFAULT_BRANCH,
+        "head_sha": base,
+        "status": "completed",
+        "conclusion": "cancelled",
+        "check_suite_id": 3001,
+        "actor": {"login": "portyu9"},
+        "triggering_actor": {"login": "portyu9"},
+        "repository": {"full_name": REPOSITORY},
+        "head_repository": {"full_name": REPOSITORY},
+    }
+    history = normalize_prior_attempt_history(
+        [prior_attempt],
+        run_id=123,
+        run_attempt=2,
+        event_name="workflow_run",
+        base_sha=base,
+    )
+    require(history == [{
+        "attempt": 1,
+        "checkSuiteId": 3001,
+        "status": "completed",
+        "conclusion": "cancelled",
+        "actor": "portyu9",
+        "triggeringActor": "portyu9",
+    }], "Autofix retry-history positive fixture changed")
+    retry_mutations = (
+        ([], 2, "every prior attempt"),
+        ([{**prior_attempt, "run_attempt": 2}], 2, "not contiguous"),
+        ([{**prior_attempt, "status": "in_progress", "conclusion": None}], 2, "not terminal"),
+        ([{**prior_attempt, "head_sha": "c" * 40}], 2, "source identity changed"),
+        ([{**prior_attempt, "actor": {}}], 2, "actor identity is missing"),
+    )
+    for mutated, attempt_number, expected in retry_mutations:
+        try:
+            normalize_prior_attempt_history(
+                mutated,
+                run_id=123,
+                run_attempt=attempt_number,
+                event_name="workflow_run",
+                base_sha=base,
+            )
+        except ControllerError as exc:
+            require(expected in str(exc), f"retry-history self-test failed for the wrong reason: {exc}")
+        else:
+            require(False, f"retry-history self-test accepted forbidden mutation expected to trigger: {expected}")
+
     artifact = {
         "id": 91,
         "name": contract.receipt_name(123, 4),
@@ -909,6 +1050,7 @@ def main() -> int:
     p.add_argument("--branch", required=True)
     p.add_argument("--head-sha", required=True)
     p.add_argument("--pr-file", required=True)
+    p.add_argument("--attempt-history-file", required=True)
     p.add_argument("--out", required=True)
 
     p = sub.add_parser("artifact")
@@ -957,7 +1099,7 @@ def main() -> int:
         require(isinstance(target, Mapping), "target file must be an object")
         dump(args.out, build_receipt(run_id=args.run_id, run_attempt=args.run_attempt, event_name=args.event_name,
                                      base_sha=args.base_sha, target=target, branch=args.branch, head_sha=args.head_sha,
-                                     pr_response=load(args.pr_file)))
+                                     pr_response=load(args.pr_file), prior_attempts=load(args.attempt_history_file)))
     elif args.command == "artifact":
         dump(args.out, select_artifact(load(args.artifacts_file), args.run_id, args.alert))
     elif args.command == "admit":

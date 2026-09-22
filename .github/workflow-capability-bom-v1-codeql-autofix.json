@@ -77,6 +77,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Commit exact Autofix to a dedicated branch and open one PR"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
               "method": "GET",
               "mutating": false,
