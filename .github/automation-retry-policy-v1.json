@@ -226,6 +226,34 @@
       "operationRetry": false,
       "purpose": "Collect exact prior Capability Admission attempts as durable delegated Dependabot proof evidence; the check publication mutation remains outside the loop.",
       "mutationMode": "none"
+    },
+    {
+      "id": "action-provenance-witness-prior-attempt-history",
+      "workflow": ".github/workflows/action-provenance-witness.yml",
+      "job": "prepare",
+      "step": "Bind exact trusted run identity and issuance",
+      "ordinal": 1,
+      "variable": "WITNESS_HISTORY_ATTEMPT",
+      "maxIterations": 20,
+      "sleepSeconds": 1,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Collect exact prior Action provenance witness producer attempts as signed evidence; no mutation is repeated.",
+      "mutationMode": "none"
+    },
+    {
+      "id": "profile-generator-compatibility-witness-prior-attempt-history",
+      "workflow": ".github/workflows/profile-generator-compatibility-witness.yml",
+      "job": "prepare",
+      "step": "Bind exact trusted run identity and issuance",
+      "ordinal": 1,
+      "variable": "WITNESS_HISTORY_ATTEMPT",
+      "maxIterations": 20,
+      "sleepSeconds": 1,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Collect exact prior compatibility witness producer attempts as signed evidence; no mutation is repeated.",
+      "mutationMode": "none"
     }
   ],
   "trustedReentry": [

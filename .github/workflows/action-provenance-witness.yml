@@ -94,6 +94,17 @@ jobs:
             push|schedule|workflow_dispatch) ;;
             *) echo "Unexpected witness producer event: $EVENT" >&2; exit 1 ;;
           esac
+          test "$GITHUB_RUN_ATTEMPT" -le 20
+          : > witness-prior-attempts.ndjson
+          for WITNESS_HISTORY_ATTEMPT in $(seq 1 20); do
+            if [ "$WITNESS_HISTORY_ATTEMPT" -ge "$GITHUB_RUN_ATTEMPT" ]; then
+              break
+            fi
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${WITNESS_HISTORY_ATTEMPT}" \
+              | jq -c '.' >> witness-prior-attempts.ndjson
+            sleep 1
+          done
+          jq -s '.' witness-prior-attempts.ndjson > witness-prior-attempts.json
 
           RUN_STARTED_AT="$(jq -r '.run_started_at // empty' <<<"$RUN")"
           test -n "$RUN_STARTED_AT"
@@ -115,7 +126,7 @@ jobs:
           set -euo pipefail
           [[ "$ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
           mkdir -p witness
-          python3 scripts/action_provenance_witness.py build             --source-sha "$GITHUB_SHA"             --run-id "$GITHUB_RUN_ID"             --run-attempt "$GITHUB_RUN_ATTEMPT"             --issued-at "$ISSUED_AT"             --lock .github/action-lock.json             --policy-root .             --predicate-out witness/action-provenance-witness.json             --subject-out witness/action-provenance-witness-subject.json
+          python3 scripts/action_provenance_witness.py build             --source-sha "$GITHUB_SHA"             --run-id "$GITHUB_RUN_ID"             --run-attempt "$GITHUB_RUN_ATTEMPT"             --attempt-history-file witness-prior-attempts.json             --issued-at "$ISSUED_AT"             --lock .github/action-lock.json             --policy-root .             --predicate-out witness/action-provenance-witness.json             --subject-out witness/action-provenance-witness-subject.json
           python3 scripts/action_provenance_witness.py verify             --predicate witness/action-provenance-witness.json             --subject witness/action-provenance-witness-subject.json             --lock .github/action-lock.json             --policy-root .             --now "$ISSUED_AT"
           PREDICATE_SHA256="$(sha256sum witness/action-provenance-witness.json | cut -d' ' -f1)"
           SUBJECT_SHA256="$(sha256sum witness/action-provenance-witness-subject.json | cut -d' ' -f1)"

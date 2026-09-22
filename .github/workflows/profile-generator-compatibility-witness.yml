@@ -95,6 +95,17 @@ jobs:
             push|schedule|workflow_dispatch) ;;
             *) echo "Unexpected compatibility witness producer event: $EVENT" >&2; exit 1 ;;
           esac
+          test "$GITHUB_RUN_ATTEMPT" -le 20
+          : > witness-prior-attempts.ndjson
+          for WITNESS_HISTORY_ATTEMPT in $(seq 1 20); do
+            if [ "$WITNESS_HISTORY_ATTEMPT" -ge "$GITHUB_RUN_ATTEMPT" ]; then
+              break
+            fi
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${WITNESS_HISTORY_ATTEMPT}" \
+              | jq -c '.' >> witness-prior-attempts.ndjson
+            sleep 1
+          done
+          jq -s '.' witness-prior-attempts.ndjson > witness-prior-attempts.json
 
           RUN_STARTED_AT="$(jq -r '.run_started_at // empty' <<<"$RUN")"
           test -n "$RUN_STARTED_AT"
@@ -141,7 +152,7 @@ jobs:
           test -n "$RAW_DIR"
           rm -rf witness
           mkdir -p witness/raw-signal-field
-          python3 scripts/profile_generator_compatibility_witness.py build             --source-sha "$GITHUB_SHA"             --run-id "$GITHUB_RUN_ID"             --run-attempt "$GITHUB_RUN_ATTEMPT"             --issued-at "$ISSUED_AT"             --signal-field-dir "$RAW_DIR"             --lock .github/action-lock.json             --policy-root .             --predicate-out witness/profile-generator-compatibility-witness.json             --subject-out witness/profile-generator-compatibility-witness-subject.json
+          python3 scripts/profile_generator_compatibility_witness.py build             --source-sha "$GITHUB_SHA"             --run-id "$GITHUB_RUN_ID"             --run-attempt "$GITHUB_RUN_ATTEMPT"             --attempt-history-file witness-prior-attempts.json             --issued-at "$ISSUED_AT"             --signal-field-dir "$RAW_DIR"             --lock .github/action-lock.json             --policy-root .             --predicate-out witness/profile-generator-compatibility-witness.json             --subject-out witness/profile-generator-compatibility-witness-subject.json
           for name in             signal-field-wide-light.svg             signal-field-wide-dark.svg             signal-field-compact-light.svg             signal-field-compact-dark.svg
           do
             cp -- "$RAW_DIR/$name" "witness/raw-signal-field/$name"

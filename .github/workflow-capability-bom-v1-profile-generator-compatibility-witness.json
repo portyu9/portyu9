@@ -97,6 +97,13 @@
               "method": "GET",
               "mutating": false,
               "step": "Bind exact trusted run identity and issuance"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${WITNESS_HISTORY_ATTEMPT}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact trusted run identity and issuance"
             }
           ],
           "artifacts": [

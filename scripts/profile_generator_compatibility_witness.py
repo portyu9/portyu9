@@ -48,6 +48,11 @@ WITNESS_WORKFLOW = ROOT / ".github/workflows/profile-generator-compatibility-wit
 ARTIFACT_NAME = "profile-generator-compatibility-witness-v1"
 ALLOWED_PRODUCER_EVENTS = frozenset({"push", "schedule", "workflow_dispatch"})
 MAX_DISCOVERY_RESULTS = 100
+MAX_RECORDED_ATTEMPTS = 20
+PRIOR_ATTEMPT_CONCLUSIONS = {
+    "action_required", "cancelled", "failure", "neutral", "skipped",
+    "stale", "startup_failure", "success", "timed_out",
+}
 EXPECTED_FILES = (
     "signal-field-wide-light.svg",
     "signal-field-wide-dark.svg",
@@ -88,7 +93,7 @@ POLICY_PATHS = (
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 TOP_LEVEL_KEYS = (
-    "schemaVersion", "kind", "repository", "repositoryId", "source", "validity",
+    "schemaVersion", "kind", "repository", "repositoryId", "source", "retryHistory", "validity",
     "predicateSchema", "generator", "invocation", "compatibilityEpoch", "signalField",
     "authority", "claim",
 )
@@ -254,8 +259,66 @@ def signal_field_inventory(directory: Path) -> dict[str, Any]:
     return {"kind": "raw-pinned-generator-output", "aggregateDigest": aggregate, "files": files}
 
 
+def normalize_retry_history(
+    value: Any, *, run_id: int, run_attempt: int, source_sha: str,
+) -> list[dict[str, Any]]:
+    run_id = positive_int(run_id, "run ID")
+    run_attempt = positive_int(run_attempt, "run attempt")
+    source_sha = sha40(source_sha, "source SHA")
+    require(run_attempt <= MAX_RECORDED_ATTEMPTS,
+            "compatibility witness run attempt exceeds reviewed retry-history bound")
+    require(isinstance(value, list), "compatibility witness retry history input must be an array")
+    require(len(value) == run_attempt - 1,
+            "compatibility witness retry history must contain every prior attempt exactly once")
+    history: list[dict[str, Any]] = []
+    for expected_attempt, raw in enumerate(value, start=1):
+        require(isinstance(raw, Mapping), "compatibility witness retry history contains a non-object")
+        require(positive_int(raw.get("id"), "prior attempt run ID") == run_id,
+                "compatibility witness prior attempt run ID changed")
+        require(positive_int(raw.get("run_attempt"), "prior attempt number") == expected_attempt,
+                "compatibility witness retry-history attempts are not contiguous")
+        require(raw.get("name") == WORKFLOW_NAME and raw.get("path") == WORKFLOW_PATH,
+                "compatibility witness prior attempt workflow identity changed")
+        require(raw.get("event") in ALLOWED_PRODUCER_EVENTS,
+                "compatibility witness prior attempt event changed")
+        require(raw.get("head_branch") == "main"
+                and sha40(raw.get("head_sha"), "prior attempt head SHA") == source_sha,
+                "compatibility witness prior attempt source identity changed")
+        repository = raw.get("repository")
+        head_repository = raw.get("head_repository")
+        require(isinstance(repository, Mapping)
+                and repository.get("id") == REPOSITORY_ID
+                and repository.get("full_name") == REPOSITORY,
+                "compatibility witness prior attempt repository identity changed")
+        require(isinstance(head_repository, Mapping)
+                and head_repository.get("id") == REPOSITORY_ID
+                and head_repository.get("full_name") == REPOSITORY,
+                "compatibility witness prior attempt head-repository identity changed")
+        require(raw.get("status") == "completed",
+                "compatibility witness prior attempt is not terminal")
+        conclusion = raw.get("conclusion")
+        require(conclusion in PRIOR_ATTEMPT_CONCLUSIONS,
+                "compatibility witness prior attempt conclusion is invalid")
+        actor = raw.get("actor")
+        triggering_actor = raw.get("triggering_actor")
+        actor_login = actor.get("login") if isinstance(actor, Mapping) else None
+        triggering_login = triggering_actor.get("login") if isinstance(triggering_actor, Mapping) else None
+        require(isinstance(actor_login, str) and actor_login
+                and isinstance(triggering_login, str) and triggering_login,
+                "compatibility witness prior attempt actor identity is missing")
+        history.append({
+            "attempt": expected_attempt,
+            "checkSuiteId": positive_int(raw.get("check_suite_id"), "prior attempt check-suite ID"),
+            "status": "completed",
+            "conclusion": conclusion,
+            "actor": actor_login,
+            "triggeringActor": triggering_login,
+        })
+    return history
+
+
 def build_predicate(
-    *, source_sha: str, run_id: int, run_attempt: int, issued_at_epoch: int,
+    *, source_sha: str, run_id: int, run_attempt: int, prior_attempts: Any, issued_at_epoch: int,
     lock_bytes: bytes, policy_files: Mapping[str, bytes], signal_field_dir: Path,
 ) -> dict[str, Any]:
     sha40(source_sha, "source SHA")
@@ -275,6 +338,9 @@ def build_predicate(
             "runAttempt": run_attempt,
             "runUrl": f"https://github.com/{REPOSITORY}/actions/runs/{run_id}",
         },
+        "retryHistory": normalize_retry_history(
+            prior_attempts, run_id=run_id, run_attempt=run_attempt, source_sha=source_sha,
+        ),
         "validity": {
             "issuedAtEpoch": issued_at_epoch,
             "expiresAtEpoch": issued_at_epoch + TTL_SECONDS,
@@ -346,11 +412,30 @@ def validate_predicate(predicate: Any) -> dict[str, Any]:
             "compatibility witness source shape/order changed")
     source_sha = sha40(source["sha"], "source.sha")
     run_id = positive_int(source["runId"], "source.runId")
-    positive_int(source["runAttempt"], "source.runAttempt")
+    run_attempt = positive_int(source["runAttempt"], "source.runAttempt")
+    require(run_attempt <= MAX_RECORDED_ATTEMPTS,
+            "compatibility witness run attempt exceeds reviewed retry-history bound")
     require(source["ref"] == SOURCE_REF and source["workflowRef"] == WORKFLOW_REF,
             "compatibility witness trusted source identity changed")
     require(source["runUrl"] == f"https://github.com/{REPOSITORY}/actions/runs/{run_id}",
             "compatibility witness run URL is not canonical")
+    history = predicate["retryHistory"]
+    require(isinstance(history, list) and len(history) == run_attempt - 1,
+            "compatibility witness retryHistory must contain every prior attempt exactly once")
+    for expected_attempt, item in enumerate(history, start=1):
+        require(isinstance(item, dict)
+                and list(item) == ["attempt", "checkSuiteId", "status", "conclusion", "actor", "triggeringActor"],
+                "compatibility witness retryHistory attempt shape/order changed")
+        require(item.get("attempt") == expected_attempt,
+                "compatibility witness retryHistory attempts are not contiguous")
+        positive_int(item.get("checkSuiteId"), "retryHistory.checkSuiteId")
+        require(item.get("status") == "completed",
+                "compatibility witness retryHistory contains a nonterminal attempt")
+        require(item.get("conclusion") in PRIOR_ATTEMPT_CONCLUSIONS,
+                "compatibility witness retryHistory conclusion is invalid")
+        require(isinstance(item.get("actor"), str) and item["actor"]
+                and isinstance(item.get("triggeringActor"), str) and item["triggeringActor"],
+                "compatibility witness retryHistory actor identity is missing")
     validity = predicate["validity"]
     require(isinstance(validity, dict) and list(validity) == ["issuedAtEpoch", "expiresAtEpoch", "ttlSeconds"],
             "compatibility witness validity shape/order changed")
@@ -789,7 +874,23 @@ def self_test() -> None:
         for index, name in enumerate(EXPECTED_FILES, start=1):
             (directory / name).write_text(f"<svg data-fixture=\"{index}\"/>\n", encoding="utf-8")
         predicate = build_predicate(
-            source_sha="a" * 40, run_id=123, run_attempt=2, issued_at_epoch=1_790_000_000,
+            source_sha="a" * 40, run_id=123, run_attempt=2, prior_attempts=[{
+                "id": 123,
+                "run_attempt": 1,
+                "name": WORKFLOW_NAME,
+                "path": WORKFLOW_PATH,
+                "event": "push",
+                "status": "completed",
+                "conclusion": "cancelled",
+                "head_branch": "main",
+                "head_sha": "a" * 40,
+                "check_suite_id": 3001,
+                "actor": {"login": "github-actions[bot]"},
+                "triggering_actor": {"login": "github-actions[bot]"},
+                "repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
+                "head_repository": {"id": REPOSITORY_ID, "full_name": REPOSITORY},
+            }],
+            issued_at_epoch=1_790_000_000,
             lock_bytes=lock_bytes, policy_files=policy, signal_field_dir=directory,
         )
         subject = build_subject(predicate)
@@ -1114,6 +1215,7 @@ def parse_args() -> argparse.Namespace:
     build.add_argument("--source-sha", required=True)
     build.add_argument("--run-id", type=int, required=True)
     build.add_argument("--run-attempt", type=int, required=True)
+    build.add_argument("--attempt-history-file", type=Path, required=True)
     build.add_argument("--issued-at", type=int, required=True)
     build.add_argument("--signal-field-dir", type=Path, required=True)
     build.add_argument("--lock", type=Path, required=True)
@@ -1191,6 +1293,7 @@ def main() -> int:
         if args.command == "build":
             predicate = build_predicate(
                 source_sha=args.source_sha, run_id=args.run_id, run_attempt=args.run_attempt,
+                prior_attempts=strict_json(args.attempt_history_file.read_text(encoding="utf-8")),
                 issued_at_epoch=args.issued_at, lock_bytes=lock_bytes, policy_files=policy,
                 signal_field_dir=args.signal_field_dir,
             )

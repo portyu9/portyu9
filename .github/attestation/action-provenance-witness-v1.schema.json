@@ -4,7 +4,7 @@
   "title": "Action Provenance Witness v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion","kind","repository","repositoryId","source","validity","predicateSchema","actionLock","policyEpoch","releases","authority","claim"],
+  "required": ["schemaVersion","kind","repository","repositoryId","source","retryHistory","validity","predicateSchema","actionLock","policyEpoch","releases","authority","claim"],
   "properties": {
     "schemaVersion": {"const": 1},
     "kind": {"const": "action-provenance-witness"},
@@ -19,8 +19,25 @@
         "ref": {"const":"refs/heads/main"},
         "workflowRef": {"const":"portyu9/portyu9/.github/workflows/action-provenance-witness.yml@refs/heads/main"},
         "runId": {"type":"integer","minimum":1},
-        "runAttempt": {"type":"integer","minimum":1},
+        "runAttempt": {"type":"integer","minimum":1,"maximum":20},
         "runUrl": {"type":"string","pattern":"^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
+      }
+    },
+    "retryHistory": {
+      "type":"array",
+      "maxItems":19,
+      "items":{
+        "type":"object",
+        "additionalProperties":false,
+        "required":["attempt","checkSuiteId","status","conclusion","actor","triggeringActor"],
+        "properties":{
+          "attempt":{"type":"integer","minimum":1,"maximum":19},
+          "checkSuiteId":{"type":"integer","minimum":1},
+          "status":{"const":"completed"},
+          "conclusion":{"enum":["action_required","cancelled","failure","neutral","skipped","stale","startup_failure","success","timed_out"]},
+          "actor":{"type":"string","minLength":1},
+          "triggeringActor":{"type":"string","minLength":1}
+        }
       }
     },
     "validity": {
