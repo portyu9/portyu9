@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "be278149de843e7db553908d627d56ecb2908d38"
+EXPECTED_GIT_BLOB = "e09c33f408ff7a70572185e5cfd126b9b2f0168b"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -223,7 +223,15 @@ def validate_text(text: str) -> None:
         'test "$(jq -r .sha dependabot-release-identity.json)" = "$CANDIDATE_SHA"',
         '--resolved-release dependabot-release-identity.json',
         'test "$(jq -r .decision.authorizationId capability-admission.json)" = "delegated-dependabot-codeql-v1"',
-        'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+        '[[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]',
+        '[[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]',
+        'for HISTORY_ATTEMPT in $(seq 1 20); do',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"',
+        "python3 scripts/dependabot_admission_proof.py build",
+        '--summary-out dependabot-admission-proof-summary.json',
+        '--meta-out dependabot-admission-proof-meta.json',
+        'SUMMARY_SHA256="$(jq -r .summarySha256 dependabot-admission-proof-meta.json)"',
+        'EXTERNAL_ID="dependabot-delegated-admission:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${SUMMARY_SHA256}:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
     ):
         require(dependabot_binding in text,
                 f"trusted capability admission delegated Dependabot proof changed: {dependabot_binding}")
@@ -366,7 +374,7 @@ def self_test() -> None:
     )
     expect_failure(
         text,
-        'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
+        'EXTERNAL_ID="dependabot-delegated-admission:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${SUMMARY_SHA256}:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         'EXTERNAL_ID="dependabot-unbound:${PR_NUMBER}"',
         "delegated Dependabot proof",
     )
