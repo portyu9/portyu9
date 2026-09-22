@@ -57,7 +57,7 @@
       "baseBomSha256": "6afc47443664b9bd28d39b9c6ef795151705010db150b20d22349cbb00c8d464",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "86fc609d78573fee4f560b7d607495e56bc993f982e741809507ef7f80da1083",
-      "rationale": "Authorize #829's exact automated bot-review retry-history evidence: the already-authorized Bot PR user approval job uses its existing Actions authority for one bounded read-only prior-attempt GET surface, validates contiguous terminal same-run history, and binds that history plus the current runId/runAttempt into the existing exact-base/head portyu9 APPROVED review body. The v2 review marker, single guarded review POST, manual-veto/revocation semantics, lane wake mutations, triggers, permissions, secret identity, required checks, rulesets, direct-main authority and bypass surfaces remain unchanged."
+      "rationale": "Authorize #829's exact bot-review retry-history evidence: the existing approval job uses its existing Actions authority for one bounded prior-attempt GET surface and binds contiguous terminal history plus current runId/runAttempt into the existing exact-base/head portyu9 APPROVED review. Review POST, permissions, triggers, secrets, veto/revocation semantics, required checks, rulesets and bypass authority remain unchanged."
     },
     {
       "id": "cap-capability-admission-bootstrap-order-repair",
