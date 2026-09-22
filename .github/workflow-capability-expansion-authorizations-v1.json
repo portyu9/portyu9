@@ -190,7 +190,7 @@
       "baseBomSha256": "ea9eb3e6b10ae247e6d6fedbecb641daf9277f668a515726fb1150d9fb951c7a",
       "candidateBomSha256": "fd49fcf997b2764dfe88171951dca73e4bc3356e9e32595e7fea391d621aee43",
       "expansionSha256": "eb429bac595b8de618a36ebd71cf3a50f53ad383668babfe166de7db00bc5b71",
-      "rationale": "Authorize #811's exact CodeQL Autofix retry-history evidence expansion: the existing trusted controller may read at most the prior 19 exact run-attempt objects before any candidate mutation, validate contiguous terminal history, and preserve attempt/check-suite/actor evidence in the immutable controller receipt while the receipt-producing runAttempt remains the sole current authorization attempt. The new fixed loop is read-only and explicitly classified operationRetry=false. No new permission, trigger, secret, OIDC scope, API mutation, candidate execution, merge authority, required-check change, ruleset change, direct-main write, or bypass is added."
+      "rationale": "Authorize #811's exact CodeQL Autofix retry-history expansion: trusted controller may read up to 19 prior run-attempt objects before mutation, validate contiguous terminal history, and preserve attempt/check-suite/actor evidence in the immutable receipt while current runAttempt remains the only authorizing attempt. The loop is read-only with operationRetry=false. No new permission, trigger, mutation, merge authority, required-check change, ruleset change, direct-main write, or bypass."
     },
     {
       "id": "cap-codeql-autofix-tcb-registration",
