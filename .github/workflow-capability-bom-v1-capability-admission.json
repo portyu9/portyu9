@@ -76,6 +76,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Publish exact candidate trusted admission check"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100",
               "method": "GET",
               "mutating": false,

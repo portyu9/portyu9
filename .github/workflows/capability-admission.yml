@@ -534,9 +534,31 @@ jobs:
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$PR_NUMBER" -gt 0
           if [ "$DEPENDABOT" = "true" ]; then
-            EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
+            [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+            [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+            test "$GITHUB_RUN_ATTEMPT" -le 20
+            : > dependabot-prior-attempts.ndjson
+            for HISTORY_ATTEMPT in $(seq 1 20); do
+              if [ "$HISTORY_ATTEMPT" -ge "$GITHUB_RUN_ATTEMPT" ]; then
+                break
+              fi
+              gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}" \
+                | jq -c '.' >> dependabot-prior-attempts.ndjson
+              sleep 1
+            done
+            jq -s '.' dependabot-prior-attempts.ndjson > dependabot-prior-attempts.json
+            python3 scripts/dependabot_admission_proof.py build \
+              --attempts dependabot-prior-attempts.json \
+              --run-id "$GITHUB_RUN_ID" \
+              --run-attempt "$GITHUB_RUN_ATTEMPT" \
+              --base-sha "$BASE_SHA" \
+              --summary-out dependabot-admission-proof-summary.json \
+              --meta-out dependabot-admission-proof-meta.json
+            SUMMARY="$(cat dependabot-admission-proof-summary.json)"
+            SUMMARY_SHA256="$(jq -r .summarySha256 dependabot-admission-proof-meta.json)"
+            [[ "$SUMMARY_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            EXTERNAL_ID="dependabot-delegated-admission:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${SUMMARY_SHA256}:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
             CHECK_NAME="trusted-capability-admission-proof"
-            SUMMARY="Trusted default-branch delegated admission accepted the exact reconciled native Dependabot CodeQL Action candidate."
           elif [ "$SPOTLIGHT" = "true" ]; then
             test "$SPOTLIGHT_MODE" = "delegated" || test "$SPOTLIGHT_MODE" = "scheduled"
             [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]

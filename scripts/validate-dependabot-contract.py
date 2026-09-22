@@ -14,6 +14,7 @@ import sys
 from dependabot_admission import self_test as admission_self_test
 from dependabot_capability_admission import self_test as capability_admission_self_test
 from dependabot_controller import self_test as controller_self_test
+from dependabot_admission_proof import self_test as admission_proof_self_test
 from dependabot_pin_diff import self_test as pin_diff_self_test
 from dependabot_pr_identity import self_test as pr_identity_self_test
 from dependabot_reconciliation import self_test as reconciliation_self_test
@@ -230,6 +231,7 @@ def self_test() -> None:
     reconciliation_self_test()
     release_self_test()
     controller_self_test()
+    admission_proof_self_test()
     capability_admission_self_test()
     good_sha = "a" * 40
     observed = validate_uses_text(

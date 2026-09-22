@@ -160,9 +160,9 @@ def policy_loop_identity(item: dict[str, Any]) -> tuple[Any, ...]:
 def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) -> None:
     declared = policy.get("boundedObservation")
     require(isinstance(declared, list), "retry policy boundedObservation must be an array")
-    require(len(declared) == 13, "retry policy must classify exactly the current 13 bounded seq loops")
+    require(len(declared) == 14, "retry policy must classify exactly the current 14 bounded seq loops")
     ids = [item.get("id") for item in declared if isinstance(item, dict)]
-    require(len(ids) == len(set(ids)) == 13 and all(isinstance(value, str) and value for value in ids),
+    require(len(ids) == len(set(ids)) == 14 and all(isinstance(value, str) and value for value in ids),
             "retry policy bounded observation IDs must be unique nonempty strings")
 
     observed = observed_bounded_loops(texts)
@@ -327,6 +327,6 @@ if __name__ == "__main__":
     validate_repository()
     print(
         "Automation retry taxonomy validation passed: no automatic operation retries are authorized; "
-        "unclassified generator/ruleset failures are terminal; all 13 bounded seq loops are declared "
+        "unclassified generator/ruleset failures are terminal; all 14 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )

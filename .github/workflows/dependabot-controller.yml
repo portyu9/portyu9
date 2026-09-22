@@ -392,6 +392,38 @@ jobs:
             printf '%s\n' "$runs"
           }
 
+          delegated_admission_attempt_ready() {
+            local proof_checks proof_count proof_run_id proof_run_attempt
+            proof_checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")" || return 1
+            if ! jq -e --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.total_count == 1) and
+              (.check_runs | type == "array" and length == 1) and
+              (.check_runs[0] | type == "object" and .head_sha == $head)
+            ' <<<"$proof_checks" >/dev/null; then
+              return 1
+            fi
+            jq '.check_runs[0]' <<<"$proof_checks" > dependabot-admission-proof-check.json
+            if ! python3 scripts/dependabot_admission_proof.py verify-check \
+              --check dependabot-admission-proof-check.json \
+              --pr-number "$PR_NUMBER" \
+              --base-sha "$BASE_SHA" \
+              --head-sha "$HEAD_SHA" \
+              --out dependabot-admission-proof-meta.json; then
+              return 1
+            fi
+            proof_run_id="$(jq -r .runId dependabot-admission-proof-meta.json)"
+            proof_run_attempt="$(jq -r .runAttempt dependabot-admission-proof-meta.json)"
+            [[ "$proof_run_id" =~ ^[1-9][0-9]*$ ]] || return 1
+            [[ "$proof_run_attempt" =~ ^[1-9][0-9]*$ ]] || return 1
+            gh api "repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}" \
+              > dependabot-admission-proof-current-run.json || return 1
+            python3 scripts/dependabot_admission_proof.py verify-current \
+              --current-run dependabot-admission-proof-current-run.json \
+              --proof dependabot-admission-proof-meta.json \
+              --out dependabot-admission-proof-current-verified.json >/dev/null
+          }
+
           checks_ready() {
             local ready=true
             local count observed_count active
@@ -434,6 +466,10 @@ jobs:
             if ! active="$(workflow_dispatch_runs)"; then
               ready=false
             elif jq -e '[.workflow_runs[] | select(.status != "completed")] | length > 0' <<<"$active" >/dev/null; then
+              ready=false
+            fi
+
+            if ! delegated_admission_attempt_ready; then
               ready=false
             fi
 
@@ -840,23 +876,25 @@ jobs:
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
-          EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
 
           for ATTEMPT in $(seq 1 30); do
             test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
             test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
             CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"
-            if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ] && jq -e --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
-              .check_runs[0] |
-              .name == "trusted-capability-admission-proof" and
-              .head_sha == $head and
-              .app.id == 15368 and
-              .status == "completed" and
-              .conclusion == "success" and
-              .external_id == $external
-            ' <<<"$CHECKS" >/dev/null; then
-              echo "Consumed exact trusted-main delegated admission proof on bounded attempt ${ATTEMPT}."
-              exit 0
+            if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then
+              jq '.check_runs[0]' <<<"$CHECKS" > dependabot-admission-check.json
+              EXTERNAL_ID="$(jq -r '.external_id // ""' dependabot-admission-check.json)"
+              if [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then
+                if python3 scripts/dependabot_admission_proof.py verify-check \
+                  --check dependabot-admission-check.json \
+                  --pr-number "$PR_NUMBER" \
+                  --base-sha "$BASE_SHA" \
+                  --head-sha "$HEAD_SHA" \
+                  --out dependabot-admission-proof-verified.json; then
+                  echo "Consumed exact trusted-main delegated admission digest-bound retry-history proof on bounded attempt ${ATTEMPT}."
+                  exit 0
+                fi
+              fi
             fi
             sleep 5
           done

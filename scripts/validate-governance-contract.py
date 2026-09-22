@@ -78,6 +78,26 @@ def validate_quality_native_gate(text: str) -> None:
         require(forbidden not in validate and forbidden not in integration,
                 f"Profile Quality witness consumers acquired forbidden write authority: {forbidden}")
 
+    dependabot_admission = core.job_block(legacy_quality, "dependabot_admission", None)
+    require(
+        "permissions:\n      checks: read\n      contents: read\n      pull-requests: read" in dependabot_admission,
+        "PR-native Dependabot admission gate must retain exact checks/contents/pull-requests read authority",
+    )
+    require("actions: read" not in dependabot_admission,
+            "PR-native Dependabot admission gate must not acquire Actions authority")
+    for forbidden in ("actions: write", "checks: write", "contents: write", "pull-requests: write",
+                      "id-token: write", "attestations: write"):
+        require(forbidden not in dependabot_admission,
+                f"PR-native Dependabot admission gate acquired forbidden write authority: {forbidden}")
+    for fragment in (
+        "dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64})",
+        ".retryHistory | type == \"array\"",
+        ".workflowRun ==",
+        "SUMMARY_SHA256",
+    ):
+        require(fragment in dependabot_admission,
+                f"PR-native Dependabot retry-history proof contract is missing: {fragment}")
+
     projected_quality = legacy_quality.replace(
         witness_permissions,
         "permissions:\n      contents: read",
@@ -86,6 +106,11 @@ def validate_quality_native_gate(text: str) -> None:
     projected_quality = projected_quality.replace(
         witness_permissions,
         "permissions:\n      contents: read",
+        1,
+    )
+    projected_quality = projected_quality.replace(
+        'if [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then',
+        'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         1,
     )
     ORIGINAL_VALIDATE_QUALITY(projected_quality)
