@@ -209,7 +209,7 @@
     {
       "id": "codeql-autofix-controller-reentry",
       "workflow": ".github/workflows/codeql-autofix.yml",
-      "semantics": "A later trusted wake re-discovers exact-main alerts/current remediation state; unsupported-alert queue continuation is monotone state progression, not repetition of a failed mutation."
+      "semantics": "A later trusted wake re-discovers exact-main alerts/current remediation state; unsupported-alert queue continuation is monotone state progression and does not carry retry state or repeat a failed mutation from the prior run."
     },
     {
       "id": "bot-pr-user-approval-reentry",
