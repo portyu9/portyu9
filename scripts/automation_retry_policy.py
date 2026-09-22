@@ -192,7 +192,7 @@ def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) 
                     f"guarded observation mutation surface changed: {rule.get('id')}")
             block = loop["block"]
             for fragment in (
-                "APPROVAL_REQUESTED_RUN_IDS",
+                'APPROVAL_REQUESTED_RUN_IDS=""',
                 'case " $APPROVAL_REQUESTED_RUN_IDS " in',
                 'APPROVAL_REQUESTED_RUN_IDS="',
             ):
