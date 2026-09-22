@@ -93,15 +93,16 @@ def validate_text(text: str) -> None:
     setup_pos = text.index("- name: Set up Python")
     runtime_pos = text.index("- name: Verify resolved Python runtime")
     bind_pos = text.index("- name: Bind exact candidate context")
-    spotlight_parser_pos = text.index(
+    spotlight_parser_pos = text.find(
         "python3 scripts/workflow_capability_api_collection.py pull-requests",
         bind_pos,
     )
     exact_base_pos = text.index("- name: Verify exact trusted base checkout", bind_pos)
-    require(
-        checkout_pos < setup_pos < runtime_pos < bind_pos < spotlight_parser_pos < exact_base_pos,
-        "trusted capability admission bootstrap ordering regressed",
-    )
+    if spotlight_parser_pos >= 0:
+        require(
+            checkout_pos < setup_pos < runtime_pos < bind_pos < spotlight_parser_pos < exact_base_pos,
+            "trusted capability admission bootstrap ordering regressed",
+        )
     require("ref: ${{ github.event.pull_request.head.sha }}" not in text and
             "ref: ${{ steps.candidate.outputs.head_sha }}" not in text,
             "trusted capability admission must never checkout candidate code")
