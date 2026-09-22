@@ -4,7 +4,7 @@
   "title": "Profile Generator Compatibility Witness v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion","kind","repository","repositoryId","source","validity","predicateSchema","generator","invocation","compatibilityEpoch","signalField","authority","claim"],
+  "required": ["schemaVersion","kind","repository","repositoryId","source","retryHistory","validity","predicateSchema","generator","invocation","compatibilityEpoch","signalField","authority","claim"],
   "properties": {
     "schemaVersion": {"const": 1},
     "kind": {"const": "profile-generator-compatibility-witness"},
@@ -21,6 +21,23 @@
         "runId": {"type":"integer","minimum":1},
         "runAttempt": {"type":"integer","minimum":1},
         "runUrl": {"type":"string","pattern":"^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
+      }
+    },
+    "retryHistory": {
+      "type":"array",
+      "maxItems":19,
+      "items":{
+        "type":"object",
+        "additionalProperties":false,
+        "required":["attempt","checkSuiteId","status","conclusion","actor","triggeringActor"],
+        "properties":{
+          "attempt":{"type":"integer","minimum":1,"maximum":19},
+          "checkSuiteId":{"type":"integer","minimum":1},
+          "status":{"const":"completed"},
+          "conclusion":{"enum":["action_required","cancelled","failure","neutral","skipped","stale","startup_failure","success","timed_out"]},
+          "actor":{"type":"string","minLength":1},
+          "triggeringActor":{"type":"string","minLength":1}
+        }
       }
     },
     "validity": {
