@@ -63,6 +63,7 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA64 = re.compile(r"^[0-9a-f]{64}$")
 POSITIVE = re.compile(r"^[1-9][0-9]*$")
 BRANCH = re.compile(r"^automation/spotlight-links/[0-9a-f]{64}$")
+MAX_RECORDED_ATTEMPTS = 20
 
 
 def require(condition: bool, message: str) -> None:
@@ -227,6 +228,60 @@ def validate_workflow_runs(value: Any, env: dict[str, str]) -> list[dict[str, An
     return runs
 
 
+def validate_retry_history(
+    value: Any,
+    runs: list[dict[str, Any]],
+    trusted_admission: dict[str, Any],
+) -> list[dict[str, Any]]:
+    require(isinstance(value, list) and len(value) == 4,
+            "merge authorization must contain exactly four retry-history entries")
+    require(all(isinstance(item, dict) for item in value),
+            "merge authorization retryHistory entries must be objects")
+    history = sorted(value, key=lambda item: item.get("name", ""))
+    expected_names = ("Capability admission", "CodeQL", "Dependency review", "Profile quality")
+    require(tuple(item.get("name") for item in history) == expected_names,
+            "merge authorization retry-history workflow identities changed")
+    current = {run["name"]: run for run in runs}
+    current["Capability admission"] = trusted_admission["workflowRun"]
+    for item in history:
+        require(set(item) == {"name", "runId", "attempts"},
+                "merge authorization retry-history entry shape changed")
+        name = item["name"]
+        selected = current[name]
+        positive_int(item["runId"], f"{name} retry-history runId")
+        require(item["runId"] == selected["runId"],
+                f"merge authorization {name} retry-history run ID changed")
+        attempts = item["attempts"]
+        require(
+            isinstance(attempts, list)
+            and len(attempts) == selected["runAttempt"]
+            and 1 <= len(attempts) <= MAX_RECORDED_ATTEMPTS,
+            f"merge authorization {name} retry-history length changed",
+        )
+        for index, attempt in enumerate(attempts, start=1):
+            require(isinstance(attempt, dict) and set(attempt) == {
+                "attempt", "checkSuiteId", "status", "conclusion", "actor", "triggeringActor",
+            }, f"merge authorization {name} retry-history attempt shape changed")
+            require(attempt["attempt"] == index,
+                    f"merge authorization {name} retry-history attempts are not contiguous")
+            positive_int(attempt["checkSuiteId"], f"{name} retry-history checkSuiteId")
+            require(attempt["status"] == "completed",
+                    f"merge authorization {name} retry-history contains a nonterminal attempt")
+            require(isinstance(attempt["conclusion"], str) and bool(attempt["conclusion"]),
+                    f"merge authorization {name} retry-history conclusion is missing")
+            require(isinstance(attempt["actor"], str) and bool(attempt["actor"])
+                    and isinstance(attempt["triggeringActor"], str) and bool(attempt["triggeringActor"]),
+                    f"merge authorization {name} retry-history actor identity is missing")
+        final = attempts[-1]
+        require(
+            final["checkSuiteId"] == selected["checkSuiteId"]
+            and final["status"] == selected["status"]
+            and final["conclusion"] == selected["conclusion"],
+            f"merge authorization {name} retry-history final attempt differs from selected current run",
+        )
+    return history
+
+
 def validate_check_runs(value: Any, env: dict[str, str], runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     require(isinstance(value, list) and len(value) == 5,
             "merge authorization must contain exactly five check runs")
@@ -305,7 +360,7 @@ def build(state: dict[str, Any], env: dict[str, str]) -> tuple[dict[str, Any], d
     require(source_sha == env_value(env, "BASE_SHA", SHA40),
             "merge authorization workflow source SHA differs from transaction base")
     require(server == "https://github.com", "merge authorization GitHub server identity changed")
-    require(set(state) == {"pullRequest", "candidate", "workflowRuns", "checkRuns", "trustedAdmission"},
+    require(set(state) == {"pullRequest", "candidate", "workflowRuns", "checkRuns", "trustedAdmission", "retryHistory"},
             "merge authorization live-state keys changed")
 
     pull_request = validate_pull_request(state["pullRequest"], env)
@@ -313,6 +368,7 @@ def build(state: dict[str, Any], env: dict[str, str]) -> tuple[dict[str, Any], d
     runs = validate_workflow_runs(state["workflowRuns"], env)
     checks = validate_check_runs(state["checkRuns"], env, runs)
     trusted_admission = validate_trusted_admission(state["trustedAdmission"], env)
+    retry_history = validate_retry_history(state["retryHistory"], runs, trusted_admission)
     transaction = expected_transaction(env)
     branch = env_value(env, "CANDIDATE_BRANCH", BRANCH)
     require(branch == BOT_BRANCH_PREFIX + transaction["candidateId"],
@@ -336,6 +392,7 @@ def build(state: dict[str, Any], env: dict[str, str]) -> tuple[dict[str, Any], d
         "workflowRuns": runs,
         "checkRuns": checks,
         "trustedAdmission": trusted_admission,
+        "retryHistory": retry_history,
         "claim": CLAIM,
     }
     certificate_sha = hashlib.sha256(canonical_bytes(certificate)).hexdigest()
@@ -410,6 +467,26 @@ def fixture() -> tuple[dict[str, Any], dict[str, str]]:
                      "externalId": f"spotlight-admission:2004:1:123:{base}:{head}",
                      "detailsUrl": f"https://github.com/{REPOSITORY}/runs/4004"},
     }
+    retry_history = [
+        {"name": "Capability admission", "runId": 2004, "attempts": [
+            {"attempt": 1, "checkSuiteId": 3004, "status": "completed", "conclusion": "success",
+             "actor": BOT_NAME, "triggeringActor": BOT_NAME},
+        ]},
+        {"name": "CodeQL", "runId": 2001, "attempts": [
+            {"attempt": 1, "checkSuiteId": 3001, "status": "completed", "conclusion": "success",
+             "actor": "portyu9", "triggeringActor": "portyu9"},
+        ]},
+        {"name": "Dependency review", "runId": 2002, "attempts": [
+            {"attempt": 1, "checkSuiteId": 3002, "status": "completed", "conclusion": "success",
+             "actor": "portyu9", "triggeringActor": "portyu9"},
+        ]},
+        {"name": "Profile quality", "runId": 2003, "attempts": [
+            {"attempt": 1, "checkSuiteId": 2993, "status": "completed", "conclusion": "cancelled",
+             "actor": "portyu9", "triggeringActor": "portyu9"},
+            {"attempt": 2, "checkSuiteId": 3003, "status": "completed", "conclusion": "success",
+             "actor": "portyu9", "triggeringActor": "portyu9"},
+        ]},
+    ]
     state = {
         "pullRequest": {"number": 123, "title": PR_TITLE, "body": PR_BODY, "baseRef": "main",
                         "headRef": branch, "headSha": head, "headRepository": REPOSITORY,
@@ -420,6 +497,7 @@ def fixture() -> tuple[dict[str, Any], dict[str, str]]:
         "workflowRuns": runs,
         "checkRuns": checks,
         "trustedAdmission": trusted,
+        "retryHistory": retry_history,
     }
     return state, env
 
@@ -470,6 +548,18 @@ def self_test() -> None:
     failed_run = copy.deepcopy(state)
     failed_run["workflowRuns"][0]["conclusion"] = "failure"
     expect_failure(failed_run, dict(env), "not a successful completed run")
+
+    retry_gap = copy.deepcopy(state)
+    retry_gap["retryHistory"][3]["attempts"][1]["attempt"] = 3
+    expect_failure(retry_gap, dict(env), "not contiguous")
+
+    retry_final_mismatch = copy.deepcopy(state)
+    retry_final_mismatch["retryHistory"][3]["attempts"][1]["checkSuiteId"] = 9999
+    expect_failure(retry_final_mismatch, dict(env), "final attempt differs")
+
+    retry_missing = copy.deepcopy(state)
+    retry_missing["retryHistory"] = retry_missing["retryHistory"][:-1]
+    expect_failure(retry_missing, dict(env), "exactly four retry-history entries")
 
     stale_base = dict(env)
     stale_base["GITHUB_SHA"] = "9" * 40

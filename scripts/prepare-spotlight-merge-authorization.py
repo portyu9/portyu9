@@ -54,6 +54,7 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA64 = re.compile(r"^[0-9a-f]{64}$")
 POSITIVE = re.compile(r"^[1-9][0-9]*$")
 BRANCH = re.compile(r"^automation/spotlight-links/[0-9a-f]{64}$")
+MAX_RECORDED_ATTEMPTS = 20
 
 
 def require(condition: bool, message: str) -> None:
@@ -87,6 +88,81 @@ def gh_json(endpoint: str) -> Any:
 def positive(value: Any, label: str) -> int:
     require(type(value) is int and value > 0, f"{label} must be one positive integer")
     return value
+
+
+def attempt_history(
+    run: dict[str, Any],
+    *,
+    name: str,
+    workflow_id: int,
+    event: str,
+    head_branch: str,
+    head_sha: str,
+    path: str,
+) -> dict[str, Any]:
+    run_id = positive(run.get("id"), f"{name} run ID")
+    current_attempt = positive(run.get("run_attempt"), f"{name} run attempt")
+    require(
+        current_attempt <= MAX_RECORDED_ATTEMPTS,
+        f"{name} run attempt exceeds bounded retry-history limit",
+    )
+    attempts: list[dict[str, Any]] = []
+    for attempt_number in range(1, current_attempt + 1):
+        observed = gh_json(
+            f"repos/{REPOSITORY}/actions/runs/{run_id}/attempts/{attempt_number}"
+        )
+        require(
+            observed.get("id") == run_id
+            and observed.get("name") == name
+            and observed.get("workflow_id") == workflow_id
+            and observed.get("run_attempt") == attempt_number,
+            f"{name} retry-history run identity changed at attempt {attempt_number}",
+        )
+        require(
+            observed.get("event") == event
+            and observed.get("head_branch") == head_branch
+            and observed.get("head_sha") == head_sha
+            and observed.get("path") == path,
+            f"{name} retry-history source identity changed at attempt {attempt_number}",
+        )
+        require(
+            observed.get("repository", {}).get("full_name") == REPOSITORY
+            and observed.get("head_repository", {}).get("full_name") == REPOSITORY,
+            f"{name} retry-history repository identity changed at attempt {attempt_number}",
+        )
+        status = observed.get("status")
+        conclusion = observed.get("conclusion")
+        actor = observed.get("actor", {}).get("login")
+        triggering_actor = observed.get("triggering_actor", {}).get("login")
+        require(status == "completed", f"{name} retry-history attempt is not terminal: {attempt_number}")
+        require(
+            isinstance(conclusion, str) and bool(conclusion),
+            f"{name} retry-history conclusion is missing at attempt {attempt_number}",
+        )
+        require(
+            isinstance(actor, str) and bool(actor)
+            and isinstance(triggering_actor, str) and bool(triggering_actor),
+            f"{name} retry-history actor identity is missing at attempt {attempt_number}",
+        )
+        attempts.append({
+            "attempt": attempt_number,
+            "checkSuiteId": positive(
+                observed.get("check_suite_id"),
+                f"{name} attempt {attempt_number} check suite ID",
+            ),
+            "status": status,
+            "conclusion": conclusion,
+            "actor": actor,
+            "triggeringActor": triggering_actor,
+        })
+    final = attempts[-1]
+    require(
+        final["checkSuiteId"] == positive(run.get("check_suite_id"), f"{name} current check suite ID")
+        and final["status"] == run.get("status")
+        and final["conclusion"] == run.get("conclusion"),
+        f"{name} retry-history final attempt differs from selected current run",
+    )
+    return {"name": name, "runId": run_id, "attempts": attempts}
 
 
 def prepare_state() -> dict[str, Any]:
@@ -202,6 +278,7 @@ def prepare_state() -> dict[str, Any]:
         for name, (run_env, suite_env) in RUN_ENV.items()
     }
     workflow_runs: list[dict[str, Any]] = []
+    retry_history: list[dict[str, Any]] = []
     for name in sorted(WORKFLOWS):
         matches = [run for run in runs if run.get("name") == name and run.get("workflow_id") == workflow_ids[name]]
         require(len(matches) == 1, f"Spotlight authorization canonical workflow run changed: {name}")
@@ -230,6 +307,15 @@ def prepare_state() -> dict[str, Any]:
                 and item["status"] == "completed" and item["conclusion"] == "success",
                 f"Spotlight authorization {name} run provenance changed")
         workflow_runs.append(item)
+        retry_history.append(attempt_history(
+            run,
+            name=name,
+            workflow_id=workflow_ids[name],
+            event="pull_request",
+            head_branch=branch,
+            head_sha=head,
+            path=f".github/workflows/{WORKFLOWS[name]}",
+        ))
 
     trusted_external_pattern = re.compile(
         rf"spotlight-admission:([1-9][0-9]*):([1-9][0-9]*):{pr_number}:{re.escape(base)}:{re.escape(head)}"
@@ -344,6 +430,16 @@ def prepare_state() -> dict[str, Any]:
         "conclusion": trusted_run.get("conclusion"),
     }
 
+    retry_history.append(attempt_history(
+        trusted_run,
+        name=TRUSTED_WORKFLOW_NAME,
+        workflow_id=trusted_workflow_id,
+        event="workflow_dispatch",
+        head_branch="main",
+        head_sha=base,
+        path=".github/workflows/capability-admission.yml",
+    ))
+
     actions_checks = [check for check in checks if check.get("app", {}).get("id") == 15368]
     suite_by_workflow = {item["name"]: item["checkSuiteId"] for item in workflow_runs}
     check_runs: list[dict[str, Any]] = []
@@ -394,6 +490,7 @@ def prepare_state() -> dict[str, Any]:
             "workflowRun": trusted_run_item,
             "checkRun": trusted_check_item,
         },
+        "retryHistory": sorted(retry_history, key=lambda item: item["name"]),
     }
 
 

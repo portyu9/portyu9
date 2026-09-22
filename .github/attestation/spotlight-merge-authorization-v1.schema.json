@@ -18,6 +18,7 @@
     "workflowRuns",
     "checkRuns",
     "trustedAdmission",
+    "retryHistory",
     "claim"
   ],
   "properties": {
@@ -107,6 +108,12 @@
       "items": {"$ref": "#/$defs/checkRun"}
     },
     "trustedAdmission": {"$ref": "#/$defs/trustedAdmission"},
+    "retryHistory": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/retryHistory"}
+    },
     "claim": {"const": "This certificate authorizes only the exact Spotlight README candidate, PR, workflow-run provenance, successful pull-request checks, and trusted capability-admission proof recorded here. It is not a freshness proof and cannot authorize merge without independent terminal live revalidation, server-side required-check enforcement, and an unexpired matching mutation lease."}
   },
   "$defs": {
@@ -140,6 +147,34 @@
         "status": {"const": "completed"},
         "conclusion": {"const": "success"},
         "headSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "runAttemptEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt", "checkSuiteId", "status", "conclusion", "actor", "triggeringActor"],
+      "properties": {
+        "attempt": {"type": "integer", "minimum": 1, "maximum": 20},
+        "checkSuiteId": {"type": "integer", "minimum": 1},
+        "status": {"const": "completed"},
+        "conclusion": {"type": "string", "minLength": 1},
+        "actor": {"type": "string", "minLength": 1},
+        "triggeringActor": {"type": "string", "minLength": 1}
+      }
+    },
+    "retryHistory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "runId", "attempts"],
+      "properties": {
+        "name": {"enum": ["Capability admission", "CodeQL", "Dependency review", "Profile quality"]},
+        "runId": {"type": "integer", "minimum": 1},
+        "attempts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {"$ref": "#/$defs/runAttemptEvidence"}
+        }
       }
     },
     "trustedAdmission": {
