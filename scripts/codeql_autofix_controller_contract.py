@@ -21,6 +21,18 @@ CODEQL_WORKFLOW_NAME = "CodeQL"
 DISPATCH_TYPE = "codeql-autofix"
 FALLBACK_CRON = "37 * * * *"
 ALLOWED_EVENTS = {"workflow_run", "schedule", "repository_dispatch"}
+MAX_RECORDED_ATTEMPTS = 20
+PRIOR_ATTEMPT_CONCLUSIONS = {
+    "action_required",
+    "cancelled",
+    "failure",
+    "neutral",
+    "skipped",
+    "stale",
+    "startup_failure",
+    "success",
+    "timed_out",
+}
 EXPECTED_PERMISSIONS = {
     "actions": "write",
     "checks": "read",
@@ -130,7 +142,7 @@ def validate_receipt(receipt: Any, *, workflow_run: Any, artifact: Any) -> dict[
     """Verify provenance using trusted Actions run/artifact API data, never PR metadata."""
     require(isinstance(receipt, Mapping), "Autofix provenance receipt must be an object")
     expected_keys = {
-        "controllerId", "flowId", "repository", "workflowPath", "runId", "runAttempt", "event",
+        "controllerId", "flowId", "repository", "workflowPath", "runId", "runAttempt", "retryHistory", "event",
         "baseSha", "alertNumber", "ruleId", "targetBranch", "autofixCommitSha", "prNumber",
     }
     require(set(receipt) == expected_keys, "Autofix provenance receipt keys changed")
@@ -144,7 +156,28 @@ def validate_receipt(receipt: Any, *, workflow_run: Any, artifact: Any) -> dict[
     alert = receipt.get("alertNumber")
     pr_number = receipt.get("prNumber")
     require(type(run_id) is int and run_id > 0, "Autofix receipt runId is invalid")
-    require(type(attempt) is int and attempt > 0, "Autofix receipt runAttempt is invalid")
+    require(type(attempt) is int and 1 <= attempt <= MAX_RECORDED_ATTEMPTS,
+            "Autofix receipt runAttempt is invalid or exceeds the reviewed bound")
+    history = receipt.get("retryHistory")
+    require(isinstance(history, list), "Autofix receipt retryHistory must be an array")
+    require(len(history) == attempt - 1,
+            "Autofix receipt retryHistory must contain every prior attempt exactly once")
+    for expected_attempt, item in enumerate(history, start=1):
+        require(isinstance(item, Mapping), "Autofix receipt retryHistory contains a non-object")
+        require(set(item) == {
+            "attempt", "checkSuiteId", "status", "conclusion", "actor", "triggeringActor",
+        }, "Autofix receipt retryHistory attempt shape changed")
+        require(item.get("attempt") == expected_attempt,
+                "Autofix receipt retryHistory attempts are not contiguous")
+        require(type(item.get("checkSuiteId")) is int and item["checkSuiteId"] > 0,
+                "Autofix receipt retryHistory checkSuiteId is invalid")
+        require(item.get("status") == "completed",
+                "Autofix receipt retryHistory contains a nonterminal prior attempt")
+        require(item.get("conclusion") in PRIOR_ATTEMPT_CONCLUSIONS,
+                "Autofix receipt retryHistory conclusion is invalid")
+        require(isinstance(item.get("actor"), str) and bool(item["actor"])
+                and isinstance(item.get("triggeringActor"), str) and bool(item["triggeringActor"]),
+                "Autofix receipt retryHistory actor identity is missing")
     require(type(alert) is int and alert > 0, "Autofix receipt alertNumber is invalid")
     require(type(pr_number) is int and pr_number > 0, "Autofix receipt prNumber is invalid")
     event = receipt.get("event")
@@ -216,6 +249,7 @@ def fixture() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         "workflowPath": WORKFLOW_PATH,
         "runId": run_id,
         "runAttempt": 1,
+        "retryHistory": [],
         "event": "workflow_run",
         "baseSha": base,
         "alertNumber": alert,
@@ -281,6 +315,21 @@ def self_test() -> None:
     branch_spoof = dict(receipt)
     branch_spoof["targetBranch"] = "codeql-autofix/alert-4/run-99999"
     expect_failure(lambda: validate_receipt(branch_spoof, workflow_run=workflow_run, artifact=artifact), "target branch")
+
+    history_gap = copy.deepcopy(receipt)
+    history_gap["runAttempt"] = 2
+    history_gap["retryHistory"] = []
+    expect_failure(lambda: validate_receipt(history_gap, workflow_run=workflow_run, artifact=artifact),
+                   "every prior attempt")
+
+    history_nonterminal = copy.deepcopy(receipt)
+    history_nonterminal["runAttempt"] = 2
+    history_nonterminal["retryHistory"] = [{
+        "attempt": 1, "checkSuiteId": 77, "status": "in_progress", "conclusion": "cancelled",
+        "actor": "portyu9", "triggeringActor": "portyu9",
+    }]
+    expect_failure(lambda: validate_receipt(history_nonterminal, workflow_run=workflow_run, artifact=artifact),
+                   "nonterminal prior attempt")
 
     stale_run = dict(workflow_run)
     stale_run["head_sha"] = "c" * 40
