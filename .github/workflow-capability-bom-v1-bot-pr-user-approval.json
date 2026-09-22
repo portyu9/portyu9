@@ -90,13 +90,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve only exact green governed bot PRs as portyu9"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
@@ -105,20 +98,6 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve only exact green governed bot PRs as portyu9"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve only exact green governed bot PRs as portyu9"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
               "method": "GET",
               "mutating": false,
               "step": "Approve only exact green governed bot PRs as portyu9"
@@ -128,6 +107,27 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews",
               "method": "POST",
               "mutating": true,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
+              "method": "GET",
+              "mutating": false,
               "step": "Approve only exact green governed bot PRs as portyu9"
             },
             {
