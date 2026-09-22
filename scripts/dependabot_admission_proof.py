@@ -216,9 +216,8 @@ def validate_summary(value: Any, *, run_id: int, run_attempt: int, base_sha: str
     return dict(value)
 
 
-def verify(
+def verify_check(
     check: Any,
-    current_run: Any,
     *,
     pr_number: int,
     base_sha: str,
@@ -228,6 +227,7 @@ def verify(
     base_sha = sha40(base_sha, "expected base SHA")
     head_sha = sha40(head_sha, "expected head SHA")
     require(isinstance(check, Mapping), "delegated admission check must be an object")
+    positive(check.get("id"), "delegated admission check id")
     require(check.get("name") == CHECK_NAME, "delegated admission check name changed")
     require(check.get("head_sha") == head_sha, "delegated admission check head SHA changed")
     app = check.get("app")
@@ -263,11 +263,37 @@ def verify(
     require(len(matching_pulls) == 1, "delegated admission check lost exact PR association")
     output = check.get("output")
     require(isinstance(output, Mapping), "delegated admission check output is missing")
+    require(output.get("title") == "Trusted capability admission passed",
+            "delegated admission proof title changed")
     summary_text = output.get("summary")
     require(isinstance(summary_text, str) and bool(summary_text), "delegated admission proof summary is missing")
     summary = strict_json_text(summary_text, "delegated admission proof summary")
     validate_summary(summary, run_id=run_id, run_attempt=run_attempt, base_sha=base_sha)
     require(digest(summary) == match.group("digest"), "delegated admission proof summary digest changed")
+    return {
+        "runId": run_id,
+        "runAttempt": run_attempt,
+        "summarySha256": match.group("digest"),
+        "priorAttempts": run_attempt - 1,
+        "prNumber": pr_number,
+        "baseSha": base_sha,
+        "headSha": head_sha,
+    }
+
+
+def verify_current_run(current_run: Any, proof: Any) -> dict[str, Any]:
+    require(isinstance(proof, Mapping), "verified delegated admission proof must be an object")
+    expected_keys = {"runId", "runAttempt", "summarySha256", "priorAttempts", "prNumber", "baseSha", "headSha"}
+    require(set(proof) == expected_keys, "verified delegated admission proof shape changed")
+    run_id = positive(proof.get("runId"), "verified admission run id")
+    run_attempt = positive(proof.get("runAttempt"), "verified admission run attempt")
+    require(run_attempt <= MAX_RECORDED_ATTEMPTS, "verified admission run attempt exceeds reviewed bound")
+    base_sha = sha40(proof.get("baseSha"), "verified admission base SHA")
+    require(isinstance(proof.get("summarySha256"), str) and SHA64.fullmatch(proof["summarySha256"]) is not None,
+            "verified admission summary digest is invalid")
+    require(proof.get("priorAttempts") == run_attempt - 1, "verified admission prior-attempt count changed")
+    positive(proof.get("prNumber"), "verified admission PR number")
+    sha40(proof.get("headSha"), "verified admission head SHA")
 
     require(isinstance(current_run, Mapping), "current Capability Admission attempt must be an object")
     require(positive(current_run.get("id"), "current admission run id") == run_id, "current admission run id changed")
@@ -296,16 +322,7 @@ def verify(
         current_run.get("status") == "completed" and current_run.get("conclusion") == "success",
         "current admission attempt is not completed success",
     )
-    return {
-        "runId": run_id,
-        "runAttempt": run_attempt,
-        "summarySha256": match.group("digest"),
-        "priorAttempts": run_attempt - 1,
-        "prNumber": pr_number,
-        "baseSha": base_sha,
-        "headSha": head_sha,
-    }
-
+    return dict(proof)
 
 def self_test() -> None:
     base = "a" * 40
@@ -345,8 +362,9 @@ def self_test() -> None:
         "status": "completed",
         "conclusion": "success",
     }
-    observed = verify(check, current, pr_number=77, base_sha=base, head_sha=head)
+    observed = verify_check(check, pr_number=77, base_sha=base, head_sha=head)
     require(observed["runAttempt"] == 2 and observed["priorAttempts"] == 1, "positive proof fixture changed")
+    require(verify_current_run(current, observed) == observed, "current-run positive fixture changed")
 
     mutations = (
         ({**prior, "run_attempt": 2}, "not contiguous"),
@@ -364,7 +382,7 @@ def self_test() -> None:
     bad_check = dict(check)
     bad_check["external_id"] = check["external_id"].replace(summary_digest, "c" * 64)
     try:
-        verify(bad_check, current, pr_number=77, base_sha=base, head_sha=head)
+        verify_check(bad_check, pr_number=77, base_sha=base, head_sha=head)
     except ProofError as exc:
         require("summary digest changed" in str(exc), f"digest self-test failed for wrong reason: {exc}")
     else:
@@ -373,7 +391,7 @@ def self_test() -> None:
     bad_current = dict(current)
     bad_current["conclusion"] = "failure"
     try:
-        verify(check, bad_current, pr_number=77, base_sha=base, head_sha=head)
+        verify_current_run(bad_current, observed)
     except ProofError as exc:
         require("not completed success" in str(exc), f"current-attempt self-test failed for wrong reason: {exc}")
     else:
@@ -392,13 +410,17 @@ def main() -> int:
     build.add_argument("--summary-out", type=Path, required=True)
     build.add_argument("--meta-out", type=Path, required=True)
 
-    verify_parser = sub.add_parser("verify")
-    verify_parser.add_argument("--check", type=Path, required=True)
-    verify_parser.add_argument("--current-run", type=Path, required=True)
-    verify_parser.add_argument("--pr-number", type=int, required=True)
-    verify_parser.add_argument("--base-sha", required=True)
-    verify_parser.add_argument("--head-sha", required=True)
-    verify_parser.add_argument("--out", type=Path, required=True)
+    verify_check_parser = sub.add_parser("verify-check")
+    verify_check_parser.add_argument("--check", type=Path, required=True)
+    verify_check_parser.add_argument("--pr-number", type=int, required=True)
+    verify_check_parser.add_argument("--base-sha", required=True)
+    verify_check_parser.add_argument("--head-sha", required=True)
+    verify_check_parser.add_argument("--out", type=Path, required=True)
+
+    verify_current_parser = sub.add_parser("verify-current")
+    verify_current_parser.add_argument("--current-run", type=Path, required=True)
+    verify_current_parser.add_argument("--proof", type=Path, required=True)
+    verify_current_parser.add_argument("--out", type=Path, required=True)
 
     sub.add_parser("self-test")
 
@@ -426,13 +448,18 @@ def main() -> int:
         )
         return 0
 
-    observed = verify(
-        load(args.check, "delegated admission check"),
-        load(args.current_run, "current Capability Admission attempt"),
-        pr_number=args.pr_number,
-        base_sha=args.base_sha,
-        head_sha=args.head_sha,
-    )
+    if args.command == "verify-check":
+        observed = verify_check(
+            load(args.check, "delegated admission check"),
+            pr_number=args.pr_number,
+            base_sha=args.base_sha,
+            head_sha=args.head_sha,
+        )
+    else:
+        observed = verify_current_run(
+            load(args.current_run, "current Capability Admission attempt"),
+            load(args.proof, "verified delegated admission proof"),
+        )
     args.out.write_text(canonical(observed) + "\n", encoding="utf-8")
     return 0
 
