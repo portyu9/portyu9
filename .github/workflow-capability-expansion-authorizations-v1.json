@@ -186,6 +186,13 @@
       "rationale": "Authorize #655's exact fail-closed CodeQL Autofix branch-absence proof. Replace one suppressed exact-ref GET, where any read failure could be mistaken for absence before ref creation, with a successful matching-refs GET plus strict schema/cardinality validation. Only a validated empty inventory permits the existing ref POST; existing, non-exact, duplicate, malformed, or failed reads are terminal. Permissions, write endpoints, protected checks, provenance, and merge authority are unchanged."
     },
     {
+      "id": "cap-codeql-autofix-retry-history-v1",
+      "baseBomSha256": "ea9eb3e6b10ae247e6d6fedbecb641daf9277f668a515726fb1150d9fb951c7a",
+      "candidateBomSha256": "fd49fcf997b2764dfe88171951dca73e4bc3356e9e32595e7fea391d621aee43",
+      "expansionSha256": "eb429bac595b8de618a36ebd71cf3a50f53ad383668babfe166de7db00bc5b71",
+      "rationale": "Authorize #811's exact CodeQL Autofix retry-history expansion: trusted controller may read up to 19 prior run-attempt objects before mutation, validate contiguous terminal history, and preserve attempt/check-suite/actor evidence in the immutable receipt while current runAttempt remains the only authorizing attempt. The loop is read-only with operationRetry=false. No new permission, trigger, mutation, merge authority, required-check change, ruleset change, direct-main write, or bypass."
+    },
+    {
       "id": "cap-codeql-autofix-tcb-registration",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
