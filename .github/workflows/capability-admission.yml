@@ -36,6 +36,21 @@ jobs:
       pull-requests: read
 
     steps:
+      - name: Checkout static trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+
       - name: Bind exact candidate context
         id: candidate
         env:
@@ -278,29 +293,11 @@ jobs:
           printf 'head_repository=%s\n' "$HEAD_REPOSITORY" >> "$GITHUB_OUTPUT"
           printf 'head_sha=%s\n' "$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout static trusted main
-        if: steps.candidate.outputs.has_candidate == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: main
-          persist-credentials: false
-          fetch-depth: 1
-
       - name: Verify exact trusted base checkout
         if: steps.candidate.outputs.has_candidate == 'true'
         env:
           BASE_SHA: ${{ steps.candidate.outputs.base_sha }}
         run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
-
-      - name: Set up Python
-        if: steps.candidate.outputs.has_candidate == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Verify resolved Python runtime
-        if: steps.candidate.outputs.has_candidate == 'true'
-        run: python3 scripts/verify-python-runtime.py
 
       - name: Verify immutable Autofix controller provenance
         if: steps.candidate.outputs.dispatch == 'true'
