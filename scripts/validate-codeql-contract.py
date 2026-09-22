@@ -13,6 +13,7 @@ from codeql_autofix_queue import self_test as autofix_queue_self_test
 
 ROOT = Path(__file__).resolve().parents[1]
 CODEQL = ROOT / ".github/workflows/codeql.yml"
+AUTOFIX = ROOT / ".github/workflows/codeql-autofix.yml"
 QUALITY = ROOT / ".github/workflows/profile-quality.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 
@@ -182,6 +183,63 @@ def validate_codeql(text: str) -> None:
             "CodeQL results must retain a stable per-language SARIF category")
 
 
+def validate_autofix_continuation(text: str) -> None:
+    require(
+        text.count('repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100') == 1,
+        "CodeQL Autofix post-merge run discovery endpoint changed",
+    )
+    require(
+        text.count('python3 scripts/codeql_autofix_controller.py followup-select') == 2,
+        "CodeQL Autofix must bind the post-merge CodeQL dispatch before and after creation",
+    )
+    require(
+        text.count('python3 scripts/codeql_autofix_controller.py followup-run') == 1,
+        "CodeQL Autofix must verify exactly one bound post-merge CodeQL run",
+    )
+    require(
+        text.count('repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}') == 1,
+        "CodeQL Autofix exact post-merge run endpoint changed",
+    )
+    require(
+        'for attempt in $(seq 1 60); do' in text and 'for attempt in $(seq 1 120); do' in text,
+        "CodeQL Autofix post-merge discovery/completion polling bounds changed",
+    )
+    require(
+        text.count('test "$POST_MERGE_CODEQL_CONCLUSION" = "success"') == 1,
+        "CodeQL Autofix must require successful completion of the exact post-merge CodeQL run",
+    )
+    merge_pos = text.index('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge')
+    snapshot_pos = text.index(
+        'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100',
+        merge_pos,
+    )
+    scan_dispatch_pos = text.index(
+        'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
+        snapshot_pos,
+    )
+    exact_run_pos = text.index(
+        'repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}',
+        scan_dispatch_pos,
+    )
+    success_pos = text.index(
+        'test "$POST_MERGE_CODEQL_CONCLUSION" = "success"',
+        exact_run_pos,
+    )
+    continuation_pos = text.index(
+        '-f event_type=codeql-autofix >/dev/null',
+        success_pos,
+    )
+    require(
+        merge_pos < snapshot_pos < scan_dispatch_pos < exact_run_pos < success_pos < continuation_pos,
+        "CodeQL Autofix post-merge causal continuation ordering changed",
+    )
+    require(
+        text.count('assert_main_is_merge_sha() {') == 1
+        and text.count('assert_main_is_merge_sha') >= 4,
+        "CodeQL Autofix must repeatedly fail closed if main moves during post-merge continuation",
+    )
+
+
 def validate_quality(text: str) -> None:
     require("python3 scripts/validate-codeql-contract.py" in text,
             "Profile Quality must execute the CodeQL governance validator")
@@ -254,11 +312,12 @@ def self_test(good: str) -> None:
 
 def main() -> int:
     try:
-        for path in (CODEQL, QUALITY, GOVERNANCE):
+        for path in (CODEQL, AUTOFIX, QUALITY, GOVERNANCE):
             require(path.is_file(), f"CodeQL governance input is missing: {path.relative_to(ROOT)}")
 
         codeql = CODEQL.read_text(encoding="utf-8")
         self_test(codeql)
+        validate_autofix_continuation(AUTOFIX.read_text(encoding="utf-8"))
         validate_quality(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
@@ -266,7 +325,7 @@ def main() -> int:
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
-            "controller trust/provenance, and unsupported-alert queue fixtures."
+            "controller trust/provenance, unsupported-alert queue fixtures, and exact post-merge CodeQL continuation."
         )
         return 0
     except (OSError, ValueError) as exc:
