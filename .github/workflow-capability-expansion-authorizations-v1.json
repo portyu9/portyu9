@@ -386,7 +386,7 @@
       "baseBomSha256": "d78302730fd243e92efc1a00e165d8214bf84ba4385992fe3b4582e6ad12fa30",
       "candidateBomSha256": "ea9eb3e6b10ae247e6d6fedbecb641daf9277f668a515726fb1150d9fb951c7a",
       "expansionSha256": "76150b2f94ee9000f269dd2a62fd9c9bc138c9a8b5795509518e96755cda98ad",
-      "rationale": "Authorize #806's exact protected-source transition that removes unclassified duplicate profile-generator retries from Profile Quality and Dependabot, makes those failures terminal, and deduplicates CodeQL Autofix workflow-run approval POSTs to at most once per exact run ID within a controller pass. The new executable retry policy classifies bounded state observation and trusted re-entry separately from operation retries; no automatic operation retries are authorized today. No new permission, trigger, endpoint, mutation class, candidate execution, merge authority, required-check reduction, ruleset change or bypass is added."
+      "rationale": "Authorize #806's exact transition removing unclassified duplicate profile-generator retries from Profile Quality and Dependabot, making those failures terminal, and deduplicating CodeQL Autofix workflow-run approval POSTs to once per exact run ID per controller pass. No automatic operation retries are authorized and no permission, trigger, endpoint, mutation class, merge authority, required-check change, ruleset change, direct-main mutation, or bypass is added."
     },
     {
       "id": "cap-event-driven-ruleset-reconciliation",
