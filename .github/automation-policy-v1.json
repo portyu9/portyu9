@@ -145,7 +145,6 @@
           "name": "trusted-capability-admission",
           "needs": [],
           "permissions": {
-            "actions": "read",
             "checks": "read",
             "contents": "read",
             "pull-requests": "read"
@@ -244,7 +243,6 @@
           "name": "${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/') && 'trusted-capability-admission' || 'dependabot-admission-not-applicable' }}",
           "needs": [],
           "permissions": {
-            "actions": "read",
             "checks": "read",
             "contents": "read",
             "pull-requests": "read"
