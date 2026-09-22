@@ -256,6 +256,13 @@
       "rationale": "Authorize #548's exact source-only Dependabot admission persistence fix. The trusted workflow already binds the full PR before checkout; this stores that same JSON under RUNNER_TEMP so checkout cannot delete it before release-provenance and delegated-admission evaluation. Semantic BOM, permissions, triggers, API/mutation surfaces, candidate-data boundary, check publisher, and merge authority are unchanged."
     },
     {
+      "id": "cap-dependabot-admission-retry-history-v1",
+      "baseBomSha256": "fd49fcf997b2764dfe88171951dca73e4bc3356e9e32595e7fea391d621aee43",
+      "candidateBomSha256": "41af601f83d22181d72cbcc54f35034d8d79f4af3d7bf326fe307b41c116eb5b",
+      "expansionSha256": "7327276ce6ea8bb7e2898054728867f9d8ab5e74369236d4b2b22f91f35a6e55",
+      "rationale": "Authorize #817's exact frozen Dependabot delegated-admission retry-history evidence: Capability Admission records bounded prior attempts under its already accepted actions:read authority; the existing trusted Dependabot controller independently re-proves the exact current admission attempt under its already accepted Actions authority; PR-native proof consumers retain their accepted read-only token permissions. The proof binds exact runId/runAttempt, contiguous prior terminal attempts, actors/check-suite IDs, candidate PR/base/head identity, and a canonical summary digest. No new write permission, trigger, secret, OIDC scope, mutation endpoint/class, candidate execution, merge authority, ruleset change, required-check reduction, direct-main write, or bypass is added."
+    },
+    {
       "id": "cap-dependabot-auto-approve-pr-workflows",
       "baseBomSha256": "14fae0e37c39df7314307f0fb35fd2df61bfa9a91d3c39f4b0f2765e320c60ba",
       "candidateBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
