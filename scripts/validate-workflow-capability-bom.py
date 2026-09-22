@@ -88,7 +88,7 @@ def trusted_diagnostic() -> None:
     if os.environ.get("GITHUB_ACTIONS") != "true":
         return
     base_sha = "07d9bcae3aaf165da83e67de382d590497ddcf95"
-    source_sha = "0c9ab43604edfca4f70c878181a1d53b9dece30c"
+    source_sha = "a2e5afc4aa34fb409929e9145d756f85e19dbc92"
     subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base_sha, source_sha], check=True)
     with tempfile.TemporaryDirectory(prefix="trusted-admission-") as temporary:
         temporary_root = Path(temporary)
