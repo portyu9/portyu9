@@ -129,6 +129,31 @@ def validate_all_workflow_pins() -> None:
     )
 
 
+def validate_controller_wake_contract(text: str) -> None:
+    required = """  workflow_run:
+    workflows:
+      - Profile quality
+      - CodeQL
+    types:
+      - completed
+    branches:
+      - main
+      - "dependabot/github_actions/**"
+"""
+    require(
+        required in text,
+        "Dependabot controller workflow_run wake branches must be exactly main plus native GitHub-Actions Dependabot branches",
+    )
+    require(
+        text.count('dependabot/github_actions/**') == 1,
+        "Dependabot controller native branch trigger grammar changed",
+    )
+    require(
+        "branches-ignore:" not in text,
+        "Dependabot controller must use an explicit allowlist rather than branch exclusions",
+    )
+
+
 def validate_controller_collection_contract(text: str) -> None:
     require(
         text.count('python3 scripts/workflow_capability_api_collection.py pull-requests') == 1,
@@ -237,7 +262,9 @@ def main() -> int:
         self_test()
         validate_dependabot(DEPENDABOT.read_text(encoding="utf-8"))
         validate_all_workflow_pins()
-        validate_controller_collection_contract(CONTROLLER.read_text(encoding="utf-8"))
+        controller_text = CONTROLLER.read_text(encoding="utf-8")
+        validate_controller_wake_contract(controller_text)
+        validate_controller_collection_contract(controller_text)
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
