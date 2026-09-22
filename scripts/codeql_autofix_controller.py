@@ -88,6 +88,99 @@ def flatten_pages(value: Any) -> list[Any]:
     return list(value)
 
 
+CODEQL_WORKFLOW_PATH = ".github/workflows/codeql.yml"
+CODEQL_RUN_STATUSES = {"queued", "in_progress", "completed", "waiting", "requested", "pending"}
+
+
+def normalize_codeql_dispatch_run_pages(value: Any) -> list[dict[str, Any]]:
+    require(isinstance(value, list), "CodeQL workflow-run pages must be a slurped page array")
+    require(1 <= len(value) <= 30, "CodeQL workflow-run page count must be between 1 and 30")
+    total_count: int | None = None
+    runs: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for page_index, page in enumerate(value):
+        require(isinstance(page, Mapping), f"CodeQL workflow-run page {page_index + 1} must be an object")
+        page_total = page.get("total_count")
+        require(type(page_total) is int and page_total >= 0,
+                f"CodeQL workflow-run page {page_index + 1} total_count must be a nonnegative integer")
+        if total_count is None:
+            total_count = page_total
+        else:
+            require(page_total == total_count, "CodeQL workflow-run total_count changed across pages")
+        entries = page.get("workflow_runs")
+        require(isinstance(entries, list), f"CodeQL workflow-run page {page_index + 1} workflow_runs must be an array")
+        require(len(entries) <= 100, f"CodeQL workflow-run page {page_index + 1} exceeds per_page=100")
+        if page_index + 1 < len(value):
+            require(len(entries) == 100, "non-final CodeQL workflow-run page must contain exactly 100 entries")
+        for raw in entries:
+            require(isinstance(raw, Mapping), "CodeQL workflow-run collection contains a non-object")
+            run_id = positive_int(raw.get("id"), "CodeQL workflow run id")
+            require(run_id not in seen, f"duplicate CodeQL workflow run id: {run_id}")
+            seen.add(run_id)
+            require(raw.get("name") == contract.CODEQL_WORKFLOW_NAME, "CodeQL workflow run name changed")
+            require(raw.get("path") == CODEQL_WORKFLOW_PATH, "CodeQL workflow run path changed")
+            require(raw.get("event") == "workflow_dispatch", "CodeQL follow-up run was not workflow_dispatch")
+            require(raw.get("head_branch") == DEFAULT_BRANCH, "CodeQL follow-up run did not target main")
+            head_sha = sha(raw.get("head_sha"), "CodeQL workflow run head SHA")
+            repository = raw.get("repository")
+            require(isinstance(repository, Mapping) and repository.get("full_name") == REPOSITORY,
+                    "CodeQL workflow run repository identity mismatch")
+            status = raw.get("status")
+            require(isinstance(status, str) and status in CODEQL_RUN_STATUSES,
+                    "CodeQL workflow run status is invalid")
+            conclusion = raw.get("conclusion")
+            require(conclusion is None or isinstance(conclusion, str), "CodeQL workflow run conclusion is invalid")
+            runs.append({
+                "id": run_id,
+                "headSha": head_sha,
+                "status": status,
+                "conclusion": conclusion,
+            })
+    require(total_count == len(runs), "CodeQL workflow-run pagination is incomplete")
+    return runs
+
+
+def select_new_codeql_dispatch_run(before_pages: Any, after_pages: Any, expected_sha: str) -> dict[str, Any]:
+    expected_sha = sha(expected_sha, "expected post-merge CodeQL SHA")
+    before = normalize_codeql_dispatch_run_pages(before_pages)
+    after = normalize_codeql_dispatch_run_pages(after_pages)
+    before_ids = {run["id"] for run in before}
+    candidates = [run for run in after if run["id"] not in before_ids and run["headSha"] == expected_sha]
+    if not candidates:
+        return {"state": "pending", "runId": None, "headSha": expected_sha}
+    require(len(candidates) == 1, "post-merge CodeQL workflow dispatch is ambiguous")
+    run = candidates[0]
+    return {
+        "state": "bound",
+        "runId": run["id"],
+        "headSha": run["headSha"],
+        "status": run["status"],
+        "conclusion": run["conclusion"],
+    }
+
+
+def validate_bound_codeql_run(value: Any, expected_run_id: int, expected_sha: str) -> dict[str, Any]:
+    expected_run_id = positive_int(expected_run_id, "expected CodeQL workflow run id")
+    expected_sha = sha(expected_sha, "expected post-merge CodeQL SHA")
+    require(isinstance(value, Mapping), "bound CodeQL workflow run must be an object")
+    require(positive_int(value.get("id"), "bound CodeQL workflow run id") == expected_run_id,
+            "bound CodeQL workflow run id changed")
+    require(value.get("name") == contract.CODEQL_WORKFLOW_NAME, "bound CodeQL workflow run name changed")
+    require(value.get("path") == CODEQL_WORKFLOW_PATH, "bound CodeQL workflow run path changed")
+    require(value.get("event") == "workflow_dispatch", "bound CodeQL workflow run event changed")
+    require(value.get("head_branch") == DEFAULT_BRANCH, "bound CodeQL workflow run did not target main")
+    require(sha(value.get("head_sha"), "bound CodeQL workflow run head SHA") == expected_sha,
+            "bound CodeQL workflow run head SHA changed")
+    repository = value.get("repository")
+    require(isinstance(repository, Mapping) and repository.get("full_name") == REPOSITORY,
+            "bound CodeQL workflow run repository identity mismatch")
+    status = value.get("status")
+    require(isinstance(status, str) and status in CODEQL_RUN_STATUSES, "bound CodeQL workflow run status is invalid")
+    conclusion = value.get("conclusion")
+    require(conclusion is None or isinstance(conclusion, str), "bound CodeQL workflow run conclusion is invalid")
+    return {"runId": expected_run_id, "headSha": expected_sha, "status": status, "conclusion": conclusion}
+
+
 def discover_target(alert_pages: Any, base_sha: str) -> dict[str, Any]:
     alerts = flatten_pages(alert_pages)
     record = discovery.discover(alerts, base_sha=base_sha, pagination_complete=True)
@@ -401,6 +494,52 @@ def self_test() -> None:
     event = {"workflow_run": {"name": "CodeQL", "conclusion": "success", "head_branch": "main", "head_sha": base}}
     require(validate_trigger("workflow_run", event, base)["trustedSha"] == base, "trigger positive fixture changed")
     current_main({"object": {"sha": base}}, base)
+
+    def codeql_run(run_id: int, head_sha: str = base, *, status: str = "queued", conclusion: Any = None) -> dict[str, Any]:
+        return {
+            "id": run_id,
+            "name": contract.CODEQL_WORKFLOW_NAME,
+            "path": CODEQL_WORKFLOW_PATH,
+            "event": "workflow_dispatch",
+            "head_branch": DEFAULT_BRANCH,
+            "head_sha": head_sha,
+            "status": status,
+            "conclusion": conclusion,
+            "repository": {"full_name": REPOSITORY},
+        }
+
+    before_runs = [{"total_count": 1, "workflow_runs": [codeql_run(101, "c" * 40, status="completed", conclusion="success")]}]
+    pending = select_new_codeql_dispatch_run(before_runs, before_runs, base)
+    require(pending == {"state": "pending", "runId": None, "headSha": base},
+            "post-merge CodeQL pending fixture changed")
+    after_runs = [{"total_count": 2, "workflow_runs": [
+        codeql_run(102, base),
+        codeql_run(101, "c" * 40, status="completed", conclusion="success"),
+    ]}]
+    bound = select_new_codeql_dispatch_run(before_runs, after_runs, base)
+    require(bound["state"] == "bound" and bound["runId"] == 102,
+            "post-merge CodeQL exact-run binding fixture changed")
+    verified = validate_bound_codeql_run(codeql_run(102, base, status="completed", conclusion="success"), 102, base)
+    require(verified["status"] == "completed" and verified["conclusion"] == "success",
+            "post-merge CodeQL completion fixture changed")
+    ambiguous_runs = [{"total_count": 3, "workflow_runs": [
+        codeql_run(103, base),
+        codeql_run(102, base),
+        codeql_run(101, "c" * 40, status="completed", conclusion="success"),
+    ]}]
+    try:
+        select_new_codeql_dispatch_run(before_runs, ambiguous_runs, base)
+    except ControllerError as exc:
+        require("ambiguous" in str(exc), f"post-merge CodeQL ambiguity failed for wrong reason: {exc}")
+    else:
+        require(False, "post-merge CodeQL binding accepted multiple newly dispatched exact-SHA runs")
+    try:
+        validate_bound_codeql_run(codeql_run(102, "d" * 40), 102, base)
+    except ControllerError as exc:
+        require("head SHA changed" in str(exc), f"post-merge CodeQL stale-run fixture failed for wrong reason: {exc}")
+    else:
+        require(False, "post-merge CodeQL validation accepted a stale run")
+
     pages = [[{"number": 1, "state": "open", "base": {"ref": "main", "sha": base},
                "head": {"ref": "codeql-autofix/alert-4/run-123", "sha": head}, "draft": False, "node_id": "PR_x"}]]
     located = locate_existing(pages, 4)
@@ -602,6 +741,18 @@ def main() -> int:
     p.add_argument("--head-sha", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("followup-select")
+    p.add_argument("--before-file", required=True)
+    p.add_argument("--after-file", required=True)
+    p.add_argument("--expected-sha", required=True)
+    p.add_argument("--out", required=True)
+
+    p = sub.add_parser("followup-run")
+    p.add_argument("--run-file", required=True)
+    p.add_argument("--run-id", type=int, required=True)
+    p.add_argument("--expected-sha", required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("receipt")
     p.add_argument("--run-id", type=int, required=True)
     p.add_argument("--run-attempt", type=int, required=True)
@@ -642,6 +793,10 @@ def main() -> int:
         dump(args.out, validate_commit_response(load(args.response_file), args.branch))
     elif args.command == "compare":
         dump(args.out, validate_compare(load(args.compare_file), args.base_sha, args.head_sha))
+    elif args.command == "followup-select":
+        dump(args.out, select_new_codeql_dispatch_run(load(args.before_file), load(args.after_file), args.expected_sha))
+    elif args.command == "followup-run":
+        dump(args.out, validate_bound_codeql_run(load(args.run_file), args.run_id, args.expected_sha))
     elif args.command == "receipt":
         target = load(args.target_file)
         require(isinstance(target, Mapping), "target file must be an object")
