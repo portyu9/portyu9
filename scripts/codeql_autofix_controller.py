@@ -181,6 +181,102 @@ def validate_bound_codeql_run(value: Any, expected_run_id: int, expected_sha: st
     return {"runId": expected_run_id, "headSha": expected_sha, "status": status, "conclusion": conclusion}
 
 
+def unsupported_evidence_marker(*, alert_number: int, base_sha: str, rule_id: str) -> str:
+    alert_number = positive_int(alert_number, "unsupported alert number")
+    base_sha = sha(base_sha, "unsupported evidence base SHA")
+    require(isinstance(rule_id, str) and contract.RULE_ID.fullmatch(rule_id) is not None,
+            "unsupported evidence rule id is invalid")
+    return (
+        "<!-- codeql-autofix-unsupported:v1 "
+        f"base={base_sha} alert={alert_number} rule={rule_id} -->"
+    )
+
+
+def normalize_commit_comment_pages(value: Any, expected_sha: str) -> list[dict[str, Any]]:
+    expected_sha = sha(expected_sha, "unsupported evidence base SHA")
+    require(isinstance(value, list), "commit-comment pages must be a slurped page array")
+    require(1 <= len(value) <= 30, "commit-comment page count must be between 1 and 30")
+    comments: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for page_index, page in enumerate(value):
+        require(isinstance(page, list), f"commit-comment page {page_index + 1} must be an array")
+        require(len(page) <= 100, f"commit-comment page {page_index + 1} exceeds per_page=100")
+        if page_index + 1 < len(value):
+            require(len(page) == 100, "non-final commit-comment page must contain exactly 100 entries")
+        for raw in page:
+            require(isinstance(raw, Mapping), "commit-comment collection contains a non-object")
+            comment_id = positive_int(raw.get("id"), "commit comment id")
+            require(comment_id not in seen, f"duplicate commit comment id: {comment_id}")
+            seen.add(comment_id)
+            require(sha(raw.get("commit_id"), "commit comment commit SHA") == expected_sha,
+                    "commit comment is bound to another commit")
+            body = raw.get("body")
+            require(isinstance(body, str), "commit comment body must be a string")
+            user = raw.get("user")
+            require(isinstance(user, Mapping), "commit comment user must be an object")
+            login = user.get("login")
+            require(isinstance(login, str) and login != "", "commit comment user.login must be non-empty")
+            comments.append({"id": comment_id, "body": body, "login": login})
+    return comments
+
+
+def unsupported_evidence_decision(target: Any, comment_pages: Any, expected_sha: str) -> dict[str, Any]:
+    expected_sha = sha(expected_sha, "unsupported evidence base SHA")
+    require(isinstance(target, Mapping), "unsupported evidence target must be an object")
+    alert_number = positive_int(target.get("number"), "unsupported alert number")
+    require(sha(target.get("baseSha"), "unsupported alert base SHA") == expected_sha,
+            "unsupported alert is stale relative to exact main")
+    rule_id = target.get("ruleId")
+    require(isinstance(rule_id, str) and contract.RULE_ID.fullmatch(rule_id) is not None,
+            "unsupported evidence rule id is invalid")
+    severity = target.get("securitySeverity")
+    require(severity is None or isinstance(severity, str), "unsupported evidence severity is invalid")
+    location = target.get("location")
+    require(isinstance(location, Mapping), "unsupported evidence location must be an object")
+    path = location.get("path")
+    start_line = location.get("startLine")
+    end_line = location.get("endLine")
+    require(isinstance(path, str) and path != "", "unsupported evidence path is invalid")
+    start_line = positive_int(start_line, "unsupported evidence start line")
+    require(type(end_line) is int and end_line >= start_line, "unsupported evidence end line is invalid")
+
+    marker = unsupported_evidence_marker(alert_number=alert_number, base_sha=expected_sha, rule_id=rule_id)
+    comments = normalize_commit_comment_pages(comment_pages, expected_sha)
+    matches = [comment for comment in comments
+               if comment["login"] == "github-actions[bot]" and marker in comment["body"]]
+    require(len(matches) <= 1, "duplicate trusted unsupported-Autofix evidence comments exist")
+    severity_text = severity if severity is not None else "unknown"
+    body = (
+        f"{marker}\n"
+        "CodeQL Autofix could not generate a fix for an exact-main alert.\n\n"
+        f"- alert: #{alert_number}\n"
+        f"- rule: {rule_id}\n"
+        f"- security severity: {severity_text}\n"
+        f"- exact main: {expected_sha}\n"
+        f"- location: {path}:{start_line}-{end_line}\n"
+        "- classification: github-autofix-unsupported (exact reviewed HTTP 422 response)\n"
+        "- action: alert left open; bounded trusted discovery continues to later alerts.\n"
+    )
+    return {"exists": len(matches) == 1, "marker": marker, "body": body, "alertNumber": alert_number}
+
+
+def validate_created_unsupported_evidence(value: Any, expected_sha: str, marker: str) -> dict[str, Any]:
+    expected_sha = sha(expected_sha, "created unsupported evidence base SHA")
+    require(isinstance(marker, str) and marker.startswith("<!-- codeql-autofix-unsupported:v1 "),
+            "created unsupported evidence marker is invalid")
+    require(isinstance(value, Mapping), "created commit comment response must be an object")
+    comment_id = positive_int(value.get("id"), "created commit comment id")
+    require(sha(value.get("commit_id"), "created commit comment SHA") == expected_sha,
+            "created unsupported evidence comment is bound to another commit")
+    body = value.get("body")
+    require(isinstance(body, str) and marker in body,
+            "created unsupported evidence comment does not contain exact marker")
+    user = value.get("user")
+    require(isinstance(user, Mapping) and user.get("login") == "github-actions[bot]",
+            "created unsupported evidence comment actor mismatch")
+    return {"id": comment_id, "commitSha": expected_sha, "marker": marker}
+
+
 def discover_target(alert_pages: Any, base_sha: str) -> dict[str, Any]:
     alerts = flatten_pages(alert_pages)
     record = discovery.discover(alerts, base_sha=base_sha, pagination_complete=True)
@@ -540,6 +636,45 @@ def self_test() -> None:
     else:
         require(False, "post-merge CodeQL validation accepted a stale run")
 
+    evidence_target = {
+        "number": 10,
+        "ruleId": "py/unsupported",
+        "securitySeverity": "high",
+        "baseSha": base,
+        "location": {"path": "scripts/example.py", "startLine": 7, "endLine": 9},
+    }
+    evidence = unsupported_evidence_decision(evidence_target, [[]], base)
+    require(evidence["exists"] is False and "alert=10" in evidence["marker"],
+            "unsupported evidence absence fixture changed")
+    existing_comment = {
+        "id": 44,
+        "commit_id": base,
+        "body": evidence["body"],
+        "user": {"login": "github-actions[bot]"},
+    }
+    existing = unsupported_evidence_decision(evidence_target, [[existing_comment]], base)
+    require(existing["exists"] is True, "unsupported evidence deduplication fixture changed")
+    created = validate_created_unsupported_evidence(existing_comment, base, evidence["marker"])
+    require(created["id"] == 44, "unsupported evidence creation fixture changed")
+    spoofed_comment = {**existing_comment, "id": 45, "user": {"login": "human"}}
+    require(
+        unsupported_evidence_decision(evidence_target, [[spoofed_comment]], base)["exists"] is False,
+        "human marker must not suppress trusted unsupported evidence",
+    )
+    duplicate = {**existing_comment, "id": 46}
+    try:
+        unsupported_evidence_decision(evidence_target, [[existing_comment, duplicate]], base)
+    except ControllerError as exc:
+        require("duplicate trusted" in str(exc), f"unsupported evidence duplicate fixture failed for wrong reason: {exc}")
+    else:
+        require(False, "unsupported evidence accepted duplicate trusted markers")
+    try:
+        unsupported_evidence_decision({**evidence_target, "baseSha": "c" * 40}, [[]], base)
+    except ControllerError as exc:
+        require("stale" in str(exc), f"unsupported evidence stale-base fixture failed for wrong reason: {exc}")
+    else:
+        require(False, "unsupported evidence accepted stale alert identity")
+
     pages = [[{"number": 1, "state": "open", "base": {"ref": "main", "sha": base},
                "head": {"ref": "codeql-autofix/alert-4/run-123", "sha": head}, "draft": False, "node_id": "PR_x"}]]
     located = locate_existing(pages, 4)
@@ -725,6 +860,18 @@ def main() -> int:
     p.add_argument("--status-file", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("unsupported-evidence")
+    p.add_argument("--target-file", required=True)
+    p.add_argument("--comments-file", required=True)
+    p.add_argument("--expected-sha", required=True)
+    p.add_argument("--out", required=True)
+
+    p = sub.add_parser("unsupported-evidence-created")
+    p.add_argument("--comment-file", required=True)
+    p.add_argument("--expected-sha", required=True)
+    p.add_argument("--marker", required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("ref-state")
     p.add_argument("--refs-file", required=True)
     p.add_argument("--branch", required=True)
@@ -787,6 +934,14 @@ def main() -> int:
         target = load(args.target_file)
         require(isinstance(target, Mapping), "target file must be an object")
         dump(args.out, normalize_status(target, load(args.status_file)))
+    elif args.command == "unsupported-evidence":
+        dump(args.out, unsupported_evidence_decision(
+            load(args.target_file), load(args.comments_file), args.expected_sha
+        ))
+    elif args.command == "unsupported-evidence-created":
+        dump(args.out, validate_created_unsupported_evidence(
+            load(args.comment_file), args.expected_sha, args.marker
+        ))
     elif args.command == "ref-state":
         dump(args.out, classify_branch_ref_inventory(load(args.refs_file), args.branch))
     elif args.command == "commit":
