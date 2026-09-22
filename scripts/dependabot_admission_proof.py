@@ -345,6 +345,7 @@ def self_test() -> None:
     }
     summary, summary_digest = build_summary([prior], run_id=123, run_attempt=2, base_sha=base)
     check = {
+        "id": 901,
         "name": CHECK_NAME,
         "head_sha": head,
         "app": {"id": CHECK_APP_ID},
@@ -353,7 +354,7 @@ def self_test() -> None:
         "external_id": f"dependabot-delegated-admission:123:2:{summary_digest}:77:{base}:{head}",
         "details_url": f"https://github.com/{REPOSITORY}/actions/runs/123",
         "pull_requests": [{"number": 77, "head": {"sha": head}, "base": {"sha": base}}],
-        "output": {"summary": canonical(summary)},
+        "output": {"title": "Trusted capability admission passed", "summary": canonical(summary)},
     }
     current = {
         **prior,
