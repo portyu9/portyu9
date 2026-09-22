@@ -13,18 +13,13 @@
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sha","ref","workflowRef","runId","runAttempt","retryHistory","runUrl"],
+      "required": ["sha","ref","workflowRef","runId","runAttempt","runUrl"],
       "properties": {
         "sha": {"type":"string","pattern":"^[0-9a-f]{40}$"},
         "ref": {"const":"refs/heads/main"},
         "workflowRef": {"const":"portyu9/portyu9/.github/workflows/action-provenance-witness.yml@refs/heads/main"},
         "runId": {"type":"integer","minimum":1},
         "runAttempt": {"type":"integer","minimum":1,"maximum":20},
-        "retryHistory": {
-          "type":"array",
-          "maxItems":19,
-          "items":{"$ref":"#/$defs/retryAttempt"}
-        },
         "runUrl": {"type":"string","pattern":"^https://github\\.com/portyu9/portyu9/actions/runs/[1-9][0-9]*$"}
       }
     },
@@ -126,19 +121,6 @@
     "claim":{"const":"This witness proves that the exact action-lock v2 release set matched public upstream repository/release/tag-ref/commit identity during its bounded validity interval. It does not authorize a different lock or provenance-policy epoch and does not replace local workflow/lock closure, branch protection, or trusted capability admission."}
   },
   "$defs":{
-    "retryAttempt":{
-      "type":"object",
-      "additionalProperties":false,
-      "required":["attempt","checkSuiteId","status","conclusion","actor","triggeringActor"],
-      "properties":{
-        "attempt":{"type":"integer","minimum":1,"maximum":19},
-        "checkSuiteId":{"type":"integer","minimum":1},
-        "status":{"const":"completed"},
-        "conclusion":{"enum":["action_required","cancelled","failure","neutral","skipped","stale","startup_failure","success","timed_out"]},
-        "actor":{"type":"string","minLength":1},
-        "triggeringActor":{"type":"string","minLength":1}
-      }
-    },
     "releaseIdentity":{
       "type":"object",
       "additionalProperties":false,
