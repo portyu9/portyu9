@@ -24,7 +24,7 @@
       "id": "ruleset-successor-mutation",
       "workflow": ".github/workflows/ruleset-reconciler.yml",
       "job": "reconcile",
-      "step": "Apply exact reviewed Protect Main successor",
+      "step": "Apply only exact reviewed predecessor to successor",
       "failureClassifier": "none",
       "disposition": "terminal",
       "rationale": "A ruleset mutation that fails exact successor readback is policy-terminal; the workflow explicitly forbids automatic retry."
@@ -42,7 +42,8 @@
       "sleepSeconds": 5,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for exact-head governed Spotlight readiness; no mutation is repeated."
+      "purpose": "Wait for exact-head governed Spotlight readiness; no mutation is repeated.",
+      "mutationMode": "none"
     },
     {
       "id": "autofix-check-run-discovery",
@@ -55,7 +56,8 @@
       "sleepSeconds": 10,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for the exact protected check-run set to materialize before approval decisions."
+      "purpose": "Wait for the exact protected check-run set to materialize before approval decisions.",
+      "mutationMode": "guarded-once-per-run-id"
     },
     {
       "id": "autofix-check-convergence",
@@ -68,7 +70,8 @@
       "sleepSeconds": 10,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for approved exact-head checks to converge; the mutation is not repeated by the loop."
+      "purpose": "Wait for approved exact-head checks to converge; the mutation is not repeated by the loop.",
+      "mutationMode": "none"
     },
     {
       "id": "autofix-post-merge-run-bind",
@@ -81,7 +84,8 @@
       "sleepSeconds": 2,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Bind the one newly dispatched exact-SHA CodeQL run."
+      "purpose": "Bind the one newly dispatched exact-SHA CodeQL run.",
+      "mutationMode": "none"
     },
     {
       "id": "autofix-post-merge-run-completion",
@@ -94,7 +98,8 @@
       "sleepSeconds": 5,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for the already bound post-merge CodeQL run to complete."
+      "purpose": "Wait for the already bound post-merge CodeQL run to complete.",
+      "mutationMode": "none"
     },
     {
       "id": "dependabot-workflow-run-readiness",
@@ -107,7 +112,8 @@
       "sleepSeconds": 5,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for canonical exact-head workflow-run identities to materialize."
+      "purpose": "Wait for canonical exact-head workflow-run identities to materialize.",
+      "mutationMode": "state-conditioned-single-pass"
     },
     {
       "id": "dependabot-protected-check-convergence",
@@ -120,7 +126,8 @@
       "sleepSeconds": 15,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for all exact-head protected checks to converge."
+      "purpose": "Wait for all exact-head protected checks to converge.",
+      "mutationMode": "none"
     },
     {
       "id": "dependabot-mergeability-convergence",
@@ -133,7 +140,8 @@
       "sleepSeconds": 5,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait only on GitHub transient/unknown mergeability state after all policy gates are green."
+      "purpose": "Wait only on GitHub transient/unknown mergeability state after all policy gates are green.",
+      "mutationMode": "none"
     },
     {
       "id": "dependabot-delegated-admission-proof",
@@ -146,7 +154,8 @@
       "sleepSeconds": 5,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for the exact trusted-main delegated admission proof."
+      "purpose": "Wait for the exact trusted-main delegated admission proof.",
+      "mutationMode": "none"
     },
     {
       "id": "profile-quality-dependabot-admission-proof",
@@ -159,7 +168,8 @@
       "sleepSeconds": 5,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for the exact trusted-main Dependabot admission proof."
+      "purpose": "Wait for the exact trusted-main Dependabot admission proof.",
+      "mutationMode": "none"
     },
     {
       "id": "spotlight-protected-workflow-convergence",
@@ -172,7 +182,8 @@
       "sleepSeconds": 10,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for exact protected workflow/check state and approved-run convergence."
+      "purpose": "Wait for exact protected workflow/check state and approved-run convergence.",
+      "mutationMode": "guarded-once-per-run-id"
     },
     {
       "id": "spotlight-review-convergence",
@@ -185,7 +196,8 @@
       "sleepSeconds": 5,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for one exact marker-bound portyu9 review after review-independent gates are green."
+      "purpose": "Wait for one exact marker-bound portyu9 review after review-independent gates are green.",
+      "mutationMode": "none"
     }
   ],
   "trustedReentry": [
