@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "automaticRetries": [],
+  "terminalOperations": [
+    {
+      "id": "profile-quality-live-generator-fallback",
+      "workflow": ".github/workflows/profile-quality.yml",
+      "job": "integration",
+      "step": "Generate actual pinned upstream Signal Field",
+      "failureClassifier": "none",
+      "disposition": "terminal",
+      "rationale": "The pinned third-party Action exposes an undifferentiated failure outcome; without a trusted transport/platform classifier, the same run must not repeat the operation."
+    },
+    {
+      "id": "dependabot-live-generator-validation",
+      "workflow": ".github/workflows/dependabot-controller.yml",
+      "job": "integration",
+      "step": "Generate actual pinned upstream Signal Field",
+      "failureClassifier": "none",
+      "disposition": "terminal",
+      "rationale": "Dependabot candidate validation uses the same pinned third-party Action and must fail closed rather than repeat an unclassified failure."
+    },
+    {
+      "id": "ruleset-successor-mutation",
+      "workflow": ".github/workflows/ruleset-reconciler.yml",
+      "job": "reconcile",
+      "step": "Apply only exact reviewed predecessor to successor",
+      "failureClassifier": "none",
+      "disposition": "terminal",
+      "rationale": "A ruleset mutation that fails exact successor readback is policy-terminal; the workflow explicitly forbids automatic retry."
+    }
+  ],
+  "boundedObservation": [
+    {
+      "id": "approval-spotlight-readiness",
+      "workflow": ".github/workflows/bot-pr-user-approval.yml",
+      "job": "approve",
+      "step": "Approve only exact green governed bot PRs as portyu9",
+      "ordinal": 1,
+      "variable": "attempt",
+      "maxIterations": 48,
+      "sleepSeconds": 5,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for exact-head governed Spotlight readiness; no mutation is repeated.",
+      "mutationMode": "none"
+    },
+    {
+      "id": "autofix-check-run-discovery",
+      "workflow": ".github/workflows/codeql-autofix.yml",
+      "job": "controller",
+      "step": "Approve exact protected checks and queue admission retry",
+      "ordinal": 1,
+      "variable": "ATTEMPT",
+      "maxIterations": 60,
+      "sleepSeconds": 10,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for the exact protected check-run set to materialize before approval decisions.",
+      "mutationMode": "guarded-once-per-run-id"
+    },
+    {
+      "id": "autofix-check-convergence",
+      "workflow": ".github/workflows/codeql-autofix.yml",
+      "job": "controller",
+      "step": "Approve exact protected checks and queue admission retry",
+      "ordinal": 2,
+      "variable": "ATTEMPT",
+      "maxIterations": 60,
+      "sleepSeconds": 10,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for approved exact-head checks to converge; the mutation is not repeated by the loop.",
+      "mutationMode": "none"
+    },
+    {
+      "id": "autofix-post-merge-run-bind",
+      "workflow": ".github/workflows/codeql-autofix.yml",
+      "job": "controller",
+      "step": "Verify an existing Autofix PR and perform protected merge",
+      "ordinal": 1,
+      "variable": "attempt",
+      "maxIterations": 60,
+      "sleepSeconds": 2,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Bind the one newly dispatched exact-SHA CodeQL run.",
+      "mutationMode": "none"
+    },
+    {
+      "id": "autofix-post-merge-run-completion",
+      "workflow": ".github/workflows/codeql-autofix.yml",
+      "job": "controller",
+      "step": "Verify an existing Autofix PR and perform protected merge",
+      "ordinal": 2,
+      "variable": "attempt",
+      "maxIterations": 120,
+      "sleepSeconds": 5,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for the already bound post-merge CodeQL run to complete.",
+      "mutationMode": "none"
+    },
+    {
+      "id": "dependabot-workflow-run-readiness",
+      "workflow": ".github/workflows/dependabot-controller.yml",
+      "job": "controller",
+      "step": "Validate reconciled candidate and inspect protected checks",
+      "ordinal": 1,
+      "variable": "attempt",
+      "maxIterations": 12,
+      "sleepSeconds": 5,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for canonical exact-head workflow-run identities to materialize.",
+      "mutationMode": "state-conditioned-single-pass"
+    },
+    {
+      "id": "dependabot-protected-check-convergence",
+      "workflow": ".github/workflows/dependabot-controller.yml",
+      "job": "controller",
+      "step": "Validate reconciled candidate and inspect protected checks",
+      "ordinal": 2,
+      "variable": "ATTEMPT",
+      "maxIterations": 24,
+      "sleepSeconds": 15,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for all exact-head protected checks to converge.",
+      "mutationMode": "none"
+    },
+    {
+      "id": "dependabot-mergeability-convergence",
+      "workflow": ".github/workflows/dependabot-controller.yml",
+      "job": "controller",
+      "step": "Perform exact-head protected Dependabot merge",
+      "ordinal": 1,
+      "variable": "ATTEMPT",
+      "maxIterations": 12,
+      "sleepSeconds": 5,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait only on GitHub transient/unknown mergeability state after all policy gates are green.",
+      "mutationMode": "none"
+    },
+    {
+      "id": "dependabot-delegated-admission-proof",
+      "workflow": ".github/workflows/dependabot-controller.yml",
+      "job": "validation_bind",
+      "step": "Verify exact delegated admission proof",
+      "ordinal": 1,
+      "variable": "ATTEMPT",
+      "maxIterations": 30,
+      "sleepSeconds": 5,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for the exact trusted-main delegated admission proof.",
+      "mutationMode": "none"
+    },
+    {
+      "id": "profile-quality-dependabot-admission-proof",
+      "workflow": ".github/workflows/profile-quality.yml",
+      "job": "dependabot_admission",
+      "step": "Consume exact trusted-main Dependabot admission proof",
+      "ordinal": 1,
+      "variable": "ATTEMPT",
+      "maxIterations": 36,
+      "sleepSeconds": 5,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for the exact trusted-main Dependabot admission proof.",
+      "mutationMode": "none"
+    },
+    {
+      "id": "spotlight-protected-workflow-convergence",
+      "workflow": ".github/workflows/spotlight-link-sync.yml",
+      "job": "approve",
+      "step": "Approve and wait for only the exact README-only automation checks",
+      "ordinal": 1,
+      "variable": "attempt",
+      "maxIterations": 60,
+      "sleepSeconds": 10,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for exact protected workflow/check state and approved-run convergence.",
+      "mutationMode": "guarded-once-per-run-id"
+    },
+    {
+      "id": "spotlight-review-convergence",
+      "workflow": ".github/workflows/spotlight-link-sync.yml",
+      "job": "approve",
+      "step": "Approve and wait for only the exact README-only automation checks",
+      "ordinal": 2,
+      "variable": "REVIEW_ATTEMPT",
+      "maxIterations": 24,
+      "sleepSeconds": 5,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for one exact marker-bound portyu9 review after review-independent gates are green.",
+      "mutationMode": "none"
+    }
+  ],
+  "trustedReentry": [
+    {
+      "id": "dependabot-controller-reentry",
+      "workflow": ".github/workflows/dependabot-controller.yml",
+      "semantics": "A later trusted workflow_run/schedule/manual wake re-evaluates current repository state from scratch; it does not resume or repeat a failed mutation in the prior run."
+    },
+    {
+      "id": "codeql-autofix-controller-reentry",
+      "workflow": ".github/workflows/codeql-autofix.yml",
+      "semantics": "A later trusted wake re-discovers exact-main alerts/current remediation state; unsupported-alert queue continuation is monotone state progression and does not carry retry state or repeat a failed mutation from the prior run."
+    },
+    {
+      "id": "bot-pr-user-approval-reentry",
+      "workflow": ".github/workflows/bot-pr-user-approval.yml",
+      "semantics": "A later trusted wake re-evaluates current candidate readiness and review state; it does not carry mutable retry state across runs."
+    }
+  ]
+}

@@ -356,6 +356,7 @@ jobs:
           test "$(printf '%s\n' "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" | LC_ALL=C sort -u | wc -l)" = "3"
 
           COMPLETE=false
+          APPROVAL_REQUESTED_RUN_IDS=""
           for ATTEMPT in $(seq 1 60); do
             RUNS="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
             RUN_COUNT="$(jq -r .total_count <<<"$RUNS")"
@@ -377,7 +378,13 @@ jobs:
                 completed:success)
                   ;;
                 completed:action_required|completed:waiting)
-                  gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve" >/dev/null
+                  case " $APPROVAL_REQUESTED_RUN_IDS " in
+                    *" $CHECK_RUN_ID "*) : ;;
+                    *)
+                      gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve" >/dev/null
+                      APPROVAL_REQUESTED_RUN_IDS="${APPROVAL_REQUESTED_RUN_IDS} ${CHECK_RUN_ID}"
+                      ;;
+                  esac
                   COMPLETE=false
                   ;;
                 queued:null|in_progress:null|waiting:null|pending:null)

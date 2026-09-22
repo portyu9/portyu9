@@ -564,13 +564,6 @@
             {
               "kind": "remote",
               "path": "",
-              "ref": "49b5f7091182a45f3ef93923505b660c6da5f835",
-              "repository": "shinpr/github-profile-stats",
-              "step": "Retry exact pinned upstream Signal Field once"
-            },
-            {
-              "kind": "remote",
-              "path": "",
               "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
               "repository": "actions/setup-python",
               "step": "Set up Python"

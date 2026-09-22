@@ -397,20 +397,6 @@ jobs:
       - name: Generate actual pinned upstream Signal Field
         id: stats_primary
         if: steps.profile_generator_witness_verify.outcome != 'success'
-        continue-on-error: true
-        uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
-        with:
-          username: portyu9
-          token: ${{ github.token }}
-          profile: signal-field
-
-      - name: Back off before one exact pinned upstream retry
-        if: steps.profile_generator_witness_verify.outcome != 'success' && steps.stats_primary.outcome == 'failure'
-        run: sleep 60
-
-      - name: Retry exact pinned upstream Signal Field once
-        id: stats_retry
-        if: steps.profile_generator_witness_verify.outcome != 'success' && steps.stats_primary.outcome == 'failure'
         uses: shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0
         with:
           username: portyu9
@@ -424,21 +410,15 @@ jobs:
           WITNESS_READY_DIR: ${{ steps.profile_generator_witness_verify.outputs.ready-dir }}
           PRIMARY_OUTCOME: ${{ steps.stats_primary.outcome }}
           PRIMARY_READY_DIR: ${{ steps.stats_primary.outputs.ready-dir }}
-          RETRY_OUTCOME: ${{ steps.stats_retry.outcome }}
-          RETRY_READY_DIR: ${{ steps.stats_retry.outputs.ready-dir }}
         run: |
           set -euo pipefail
           if [ "$WITNESS_OUTCOME" = "success" ]; then
             test -n "$WITNESS_READY_DIR"
             READY_DIR="$WITNESS_READY_DIR"
-          elif [ "$PRIMARY_OUTCOME" = "success" ]; then
+          else
+            test "$PRIMARY_OUTCOME" = "success"
             test -n "$PRIMARY_READY_DIR"
             READY_DIR="$PRIMARY_READY_DIR"
-          else
-            test "$PRIMARY_OUTCOME" = "failure"
-            test "$RETRY_OUTCOME" = "success"
-            test -n "$RETRY_READY_DIR"
-            READY_DIR="$RETRY_READY_DIR"
           fi
           echo "ready-dir=$READY_DIR" >> "$GITHUB_OUTPUT"
 
