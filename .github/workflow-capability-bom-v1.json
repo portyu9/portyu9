@@ -143,13 +143,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${PROOF_RUN_ID}/attempts/${PROOF_RUN_ATTEMPT}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Consume exact trusted-main Dependabot admission proof"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100",
               "method": "GET",
               "mutating": false,
@@ -184,7 +177,6 @@
           "needs": [],
           "oidc": false,
           "permissions": {
-            "actions": "read",
             "checks": "read",
             "contents": "read",
             "pull-requests": "read"
