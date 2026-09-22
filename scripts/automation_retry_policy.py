@@ -327,6 +327,6 @@ if __name__ == "__main__":
     validate_repository()
     print(
         "Automation retry taxonomy validation passed: no automatic operation retries are authorized; "
-        "unclassified generator/ruleset failures are terminal; all 14 bounded seq loops are declared 
+        "unclassified generator/ruleset failures are terminal; all 14 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )
