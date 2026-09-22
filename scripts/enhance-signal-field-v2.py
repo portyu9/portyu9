@@ -102,6 +102,17 @@ def replace_text(element: str, value: str) -> str:
     return changed
 
 
+def fully_active_window(text: str) -> bool:
+    root = SVG_OPEN.search(text)
+    if not root:
+        return False
+    attrs = attrs_of(root.group(0))
+    return (
+        attrs.get("data-activity-window-days") == "30"
+        and attrs.get("data-active-days") == "30"
+    )
+
+
 def add_root_evidence(text: str) -> str:
     match = SVG_OPEN.search(text)
     if not match:
@@ -151,7 +162,9 @@ def brighten_dark_level_zero(text: str, scheme: str) -> str:
 
     zero_tiles = ZERO_TILE.findall(text)
     if not zero_tiles:
-        raise ValueError("expected at least one level-0 date tile in the live 30-day fixture")
+        if not fully_active_window(text):
+            raise ValueError("expected at least one level-0 date tile unless all 30 days are active")
+        return text
     for original in zero_tiles:
         enhanced = set_attr(original, "fill", DARK_LEVEL_ZERO)
         enhanced = set_attr(enhanced, "stroke", DARK_LEVEL_ZERO_STROKE)
@@ -293,11 +306,13 @@ def validate(text: str, layout: str, scheme: str) -> None:
             raise ValueError("dark level-0 legend swatch is not visibly gray")
         zero_tiles = ZERO_TILE.findall(text)
         if not zero_tiles:
-            raise ValueError("dark activity field lost level-0 tiles")
-        for tile in zero_tiles:
-            tile_attrs = attrs_of(tile)
-            if tile_attrs.get("fill") != DARK_LEVEL_ZERO:
-                raise ValueError("dark level-0 date tile does not match the legend")
+            if not fully_active_window(text):
+                raise ValueError("dark activity field lost level-0 tiles before a fully active window")
+        else:
+            for tile in zero_tiles:
+                tile_attrs = attrs_of(tile)
+                if tile_attrs.get("fill") != DARK_LEVEL_ZERO:
+                    raise ValueError("dark level-0 date tile does not match the legend")
 
 
 def enhance_svg(text: str, layout: str, scheme: str) -> str:
@@ -375,6 +390,22 @@ def self_test() -> None:
 
         six_week = enhance_svg(fixture("compact", scheme, compact_y="512"), "compact", scheme)
         assert 'y="512"' in six_week
+
+    fully_active_dark = fixture("wide", "dark").replace(
+        'data-active-days="23"', 'data-active-days="30"', 1
+    )
+    fully_active_dark = ZERO_TILE.sub("", fully_active_dark)
+    enhanced_fully_active_dark = enhance_svg(fully_active_dark, "wide", "dark")
+    assert DARK_LEVEL_ZERO in enhanced_fully_active_dark
+    assert not ZERO_TILE.findall(enhanced_fully_active_dark)
+
+    inconsistent_dark = ZERO_TILE.sub("", fixture("wide", "dark"))
+    try:
+        enhance_svg(inconsistent_dark, "wide", "dark")
+    except ValueError as exc:
+        assert "expected at least one level-0 date tile unless all 30 days are active" in str(exc)
+    else:
+        raise AssertionError("non-fully-active dark fixture without a level-0 tile must fail")
 
     print(f"Signal Field evidence self-test passed: {ENHANCEMENT_ID}")
 
