@@ -249,14 +249,14 @@
               "path": "",
               "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
               "repository": "actions/download-artifact",
-              "step": "Download Signal Field review artifacts"
+              "step": "Download exact fresh signed Profile Generator Compatibility Witness"
             },
             {
               "kind": "remote",
               "path": "",
               "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
               "repository": "actions/download-artifact",
-              "step": "Download exact fresh signed Profile Generator Compatibility Witness"
+              "step": "Download Signal Field review artifacts"
             },
             {
               "kind": "remote",
@@ -1339,16 +1339,16 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve",
-              "method": "POST",
-              "mutating": true,
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
+              "method": "GET",
+              "mutating": false,
               "step": "Approve and wait for only the exact README-only automation checks"
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
-              "method": "GET",
-              "mutating": false,
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve",
+              "method": "POST",
+              "mutating": true,
               "step": "Approve and wait for only the exact README-only automation checks"
             },
             {
@@ -1430,6 +1430,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments",
               "method": "POST",
               "mutating": true,
@@ -1437,7 +1444,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10",
               "method": "GET",
               "mutating": false,
               "step": "Approve and wait for only the exact README-only automation checks"
@@ -1459,13 +1466,6 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve and wait for only the exact README-only automation checks"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10",
               "method": "GET",
               "mutating": false,
               "step": "Approve and wait for only the exact README-only automation checks"
@@ -2209,6 +2209,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls",
               "method": "POST",
               "mutating": true,
@@ -2226,13 +2233,6 @@
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers",
               "method": "POST",
               "mutating": true,
-              "step": "Create or reuse immutable README-only candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10",
-              "method": "GET",
-              "mutating": false,
               "step": "Create or reuse immutable README-only candidate"
             }
           ],
@@ -2381,6 +2381,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
@@ -2391,13 +2398,6 @@
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "PATCH",
               "mutating": true,
-              "step": "Remove only stale validated automation candidates"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2",
-              "method": "GET",
-              "mutating": false,
               "step": "Remove only stale validated automation candidates"
             }
           ],
