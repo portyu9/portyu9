@@ -130,6 +130,13 @@
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #445 that canonicalizes GitHub CodeQL Autofix explanatory description whitespace, including line breaks and tabs, to single spaces while preserving NUL rejection, the maximum-length guard, strict started_at scalar validation, the known-status readiness gate, semantic workflow capabilities, provenance checks, required checks, GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
+      "id": "cap-codeql-autofix-post-merge-causal-continuation",
+      "baseBomSha256": "9609fca59000d71da2464eae25f6856e1c566a0417ac7e35c9501ae75c416413",
+      "candidateBomSha256": "66cf98310c4a60413891357bc1eb9707dd20fb888587ec77b54708bfa15ed99b",
+      "expansionSha256": "fad312359c90693746110cf8dbe17f44d5e7d914eb9cd67c054aa3e53169bc6b",
+      "rationale": "Authorize #796's exact post-merge continuation: trusted main snapshots CodeQL workflow-dispatch runs, dispatches CodeQL on the merged main SHA, binds exactly one new exact-SHA run, waits for that run to succeed while main stays fixed, then emits one existing codeql-autofix repository dispatch. No new permissions, triggers, candidate execution, direct-main mutation, merge authority, ruleset bypass, secrets, or OIDC."
+    },
+    {
       "id": "cap-codeql-autofix-production-controller",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
