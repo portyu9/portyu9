@@ -32,6 +32,7 @@ ALLOWED_MUTATIONS = {
     "POST /repos/{repository}/git/refs",
     "POST /repos/{repository}/code-scanning/alerts/{alert}/autofix",
     "POST /repos/{repository}/code-scanning/alerts/{alert}/autofix/commits",
+    "POST /repos/{repository}/commits/{sha}/comments",
     "POST /repos/{repository}/pulls",
     "POST /repos/{repository}/actions/runs/{run}/approve",
     "POST /repos/{repository}/dispatches",

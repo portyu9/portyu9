@@ -154,6 +154,20 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments",
+              "method": "POST",
+              "mutating": true,
+              "step": "Request and inspect GitHub CodeQL Autofix"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Request and inspect GitHub CodeQL Autofix"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100",
               "method": "GET",
               "mutating": false,
@@ -249,6 +263,13 @@
               "method": "GET",
               "mutating": false,
               "step": "Bind trusted trigger and current main"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Request and inspect GitHub CodeQL Autofix"
             },
             {
               "client": "gh-api",
@@ -411,6 +432,12 @@
               "method": "POST",
               "step": "Request and inspect GitHub CodeQL Autofix",
               "target": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Request and inspect GitHub CodeQL Autofix",
+              "target": "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments"
             },
             {
               "class": "github-api-post",

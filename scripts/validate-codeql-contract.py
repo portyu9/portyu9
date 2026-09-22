@@ -240,6 +240,59 @@ def validate_autofix_continuation(text: str) -> None:
     )
 
 
+def validate_unsupported_evidence(text: str) -> None:
+    get_endpoint = 'repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments?per_page=100'
+    post_endpoint = 'repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments'
+    require(text.count(get_endpoint) == 1,
+            "CodeQL Autofix unsupported evidence comment-read endpoint changed")
+    require(text.count(post_endpoint) == 2,
+            "CodeQL Autofix unsupported evidence comment endpoint inventory changed")
+    require(
+        text.count('python3 scripts/codeql_autofix_controller.py unsupported-evidence') == 2,
+        "CodeQL Autofix unsupported evidence validators changed",
+    )
+    require(
+        text.count('test "$EVIDENCE_EXISTS" = "true" -o "$EVIDENCE_EXISTS" = "false"') == 1,
+        "CodeQL Autofix unsupported evidence deduplication proof changed",
+    )
+    unsupported_pos = text.index('test "$ERROR_TEXT" = "gh: Alert is not supported by autofix. (HTTP 422)"')
+    main_before_pos = text.index(
+        'test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+        unsupported_pos,
+    )
+    read_pos = text.index(get_endpoint, main_before_pos)
+    decide_pos = text.index(
+        'python3 scripts/codeql_autofix_controller.py unsupported-evidence',
+        read_pos,
+    )
+    create_pos = text.index(post_endpoint, decide_pos)
+    created_verify_pos = text.index(
+        'python3 scripts/codeql_autofix_controller.py unsupported-evidence-created',
+        create_pos,
+    )
+    main_after_pos = text.index(
+        'test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+        created_verify_pos,
+    )
+    continuation_pos = text.index(
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json',
+        main_after_pos,
+    )
+    require(
+        unsupported_pos < main_before_pos < read_pos < decide_pos < create_pos < created_verify_pos
+        < main_after_pos < continuation_pos,
+        "CodeQL Autofix unsupported evidence ordering changed",
+    )
+    require(
+        'if [ "$EVIDENCE_EXISTS" = "false" ]; then' in text,
+        "CodeQL Autofix unsupported evidence must be deduplicated before mutation",
+    )
+    require(
+        "code-scanning/alerts/${ALERT_NUMBER}/dismiss" not in text,
+        "CodeQL Autofix must never dismiss unsupported alerts",
+    )
+
+
 def validate_quality(text: str) -> None:
     require("python3 scripts/validate-codeql-contract.py" in text,
             "Profile Quality must execute the CodeQL governance validator")
@@ -317,7 +370,9 @@ def main() -> int:
 
         codeql = CODEQL.read_text(encoding="utf-8")
         self_test(codeql)
-        validate_autofix_continuation(AUTOFIX.read_text(encoding="utf-8"))
+        autofix = AUTOFIX.read_text(encoding="utf-8")
+        validate_autofix_continuation(autofix)
+        validate_unsupported_evidence(autofix)
         validate_quality(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
@@ -325,7 +380,8 @@ def main() -> int:
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
-            "controller trust/provenance, unsupported-alert queue fixtures, and exact post-merge CodeQL continuation."
+            "controller trust/provenance, unsupported-alert queue fixtures, durable deduplicated unsupported evidence, "
+            "and exact post-merge CodeQL continuation."
         )
         return 0
     except (OSError, ValueError) as exc:
