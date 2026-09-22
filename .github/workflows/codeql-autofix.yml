@@ -239,6 +239,19 @@ jobs:
           test "$ALERT_NUMBER" -gt 0
           test "$RUN_ID" -gt 0
           test "$RUN_ATTEMPT" -gt 0
+          test "$RUN_ATTEMPT" -le 20
+
+          : > prior-attempts.ndjson
+          for ATTEMPT_NUMBER in $(seq 1 20); do
+            if [ "$ATTEMPT_NUMBER" -ge "$RUN_ATTEMPT" ]; then
+              break
+            fi
+            gh api "repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}" \
+              | jq -c '.' >> prior-attempts.ndjson
+            sleep 1
+          done
+          jq -s '.' prior-attempts.ndjson > prior-attempts.json
+
           BRANCH="codeql-autofix/alert-${ALERT_NUMBER}/run-${RUN_ID}"
           TARGET_REF="refs/heads/${BRANCH}"
 
@@ -289,18 +302,6 @@ jobs:
             -f body="$PR_BODY" \
             -F draft=false \
             > created-pr.json
-          test "$RUN_ATTEMPT" -le 20
-          : > prior-attempts.ndjson
-          for ATTEMPT_NUMBER in $(seq 1 20); do
-            if [ "$ATTEMPT_NUMBER" -ge "$RUN_ATTEMPT" ]; then
-              break
-            fi
-            gh api "repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}" \
-              | jq -c '.' >> prior-attempts.ndjson
-            sleep 1
-          done
-          jq -s '.' prior-attempts.ndjson > prior-attempts.json
-
           python3 scripts/codeql_autofix_controller.py receipt \
             --run-id "$RUN_ID" \
             --run-attempt "$RUN_ATTEMPT" \
