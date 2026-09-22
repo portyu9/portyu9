@@ -510,6 +510,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
+      actions: read
       checks: read
       contents: read
       pull-requests: read
@@ -536,7 +537,6 @@ jobs:
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
-          EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
 
           for ATTEMPT in $(seq 1 36); do
             PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
@@ -552,22 +552,75 @@ jobs:
             test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
 
             CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"
-            if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ] && jq -e \
-              --arg head "$HEAD_SHA" \
-              --arg base "$BASE_SHA" \
-              --arg external "$EXTERNAL_ID" \
-              --argjson pr "$PR_NUMBER" '
-                .check_runs[0] |
-                .name == "trusted-capability-admission-proof" and
-                .head_sha == $head and
-                .app.id == 15368 and
-                .status == "completed" and
-                .conclusion == "success" and
-                .external_id == $external and
-                ([.pull_requests[]? | select(.number == $pr and .head.sha == $head and .base.sha == $base)] | length == 1)
-              ' <<<"$CHECKS" >/dev/null; then
-              echo "Consumed exact trusted-main Dependabot admission proof on bounded attempt ${ATTEMPT}."
-              exit 0
+            if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then
+              CHECK="$(jq -c '.check_runs[0]' <<<"$CHECKS")"
+              EXTERNAL_ID="$(jq -r '.external_id // ""' <<<"$CHECK")"
+              if [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then
+                PROOF_RUN_ID="${BASH_REMATCH[1]}"
+                PROOF_RUN_ATTEMPT="${BASH_REMATCH[2]}"
+                SUMMARY_SHA256="${BASH_REMATCH[3]}"
+                test "$PROOF_RUN_ATTEMPT" -le 20
+                SUMMARY="$(jq -r '.output.summary // ""' <<<"$CHECK")"
+                test -n "$SUMMARY"
+                test "$(printf '%s' "$SUMMARY" | jq -cS . | sha256sum | cut -d' ' -f1)" = "$SUMMARY_SHA256"
+                jq -e \
+                  --argjson run "$PROOF_RUN_ID" \
+                  --argjson attempt "$PROOF_RUN_ATTEMPT" \
+                  --arg base "$BASE_SHA" '
+                    .schemaVersion == 1 and
+                    .kind == "dependabot-delegated-admission-proof" and
+                    .workflowRun == {
+                      runId: $run,
+                      runAttempt: $attempt,
+                      name: "Capability admission",
+                      path: ".github/workflows/capability-admission.yml",
+                      event: "repository_dispatch",
+                      headBranch: "main",
+                      headSha: $base
+                    } and
+                    (.retryHistory | type == "array" and length == ($attempt - 1)) and
+                    ([.retryHistory[].attempt] == (if $attempt == 1 then [] else [range(1; $attempt)] end)) and
+                    all(.retryHistory[];
+                      (.checkSuiteId | type == "number" and . > 0 and floor == .) and
+                      .status == "completed" and
+                      (.conclusion | type == "string" and length > 0) and
+                      (.actor | type == "string" and length > 0) and
+                      (.triggeringActor | type == "string" and length > 0)
+                    )
+                  ' <<<"$SUMMARY" >/dev/null
+                CURRENT_RUN="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${PROOF_RUN_ID}/attempts/${PROOF_RUN_ATTEMPT}")"
+                jq -e \
+                  --argjson run "$PROOF_RUN_ID" \
+                  --argjson attempt "$PROOF_RUN_ATTEMPT" \
+                  --arg base "$BASE_SHA" \
+                  --arg repo "$TARGET_REPOSITORY" '
+                    .id == $run and
+                    .run_attempt == $attempt and
+                    .name == "Capability admission" and
+                    .path == ".github/workflows/capability-admission.yml" and
+                    .event == "repository_dispatch" and
+                    .head_branch == "main" and
+                    .head_sha == $base and
+                    .repository.full_name == $repo and
+                    .head_repository.full_name == $repo and
+                    (.check_suite_id | type == "number" and . > 0 and floor == .) and
+                    .status == "completed" and
+                    .conclusion == "success"
+                  ' <<<"$CURRENT_RUN" >/dev/null
+                jq -e \
+                  --arg head "$HEAD_SHA" \
+                  --arg base "$BASE_SHA" \
+                  --argjson pr "$PR_NUMBER" '
+                    .name == "trusted-capability-admission-proof" and
+                    .head_sha == $head and
+                    .app.id == 15368 and
+                    .status == "completed" and
+                    .conclusion == "success" and
+                    ([.pull_requests[]? | select(.number == $pr and .head.sha == $head and .base.sha == $base)] | length == 1)
+                  ' <<<"$CHECK" >/dev/null
+                echo "Consumed exact trusted-main Dependabot admission run/attempt + retry-history proof on bounded attempt ${ATTEMPT}."
+                exit 0
+              fi
             fi
             sleep 5
           done
