@@ -276,6 +276,13 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
+              "step": "Request and inspect GitHub CodeQL Autofix"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
               "step": "Verify an existing Autofix PR and perform protected merge"
             },
             {
