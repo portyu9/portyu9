@@ -262,7 +262,7 @@ def self_test(text: str) -> None:
     )
     expect_failure(
         text.replace(f"        if: {FALLBACK_IF}\n", "        if: always()\n", 1),
-        "primary fallback condition changed",
+        "terminal fallback condition changed",
     )
     injected_pipeline = text.replace(
         '          echo "ready-dir=$ISOLATED_DIR" >> "$GITHUB_OUTPUT"\n',
