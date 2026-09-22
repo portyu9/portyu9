@@ -284,6 +284,13 @@
       "rationale": "Authorize #543's main-completion wake hardening for the trusted Dependabot controller. Profile Quality or CodeQL completion on main may only wake default-branch code; every pass re-proves live main, native Dependabot PR identity, exact base/head, release provenance, and file closure before any update. No semantic BOM capability changes; this binds only the reviewed protected-source TCB digest. Exact-head merge gates remain unchanged."
     },
     {
+      "id": "cap-dependabot-controller-wake-branch-narrowing",
+      "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
+      "candidateBomSha256": "9609fca59000d71da2464eae25f6856e1c566a0417ac7e35c9501ae75c416413",
+      "expansionSha256": "a04b3ca890996277019a71eff785f36b623f9a52dff7be01599888a474014d41",
+      "rationale": "Authorize #793's exact protected Dependabot-controller source transition that narrows completed Profile Quality/CodeQL workflow_run wakes to only main and native dependabot/github_actions/** branches. Existing runtime provenance checks, schedule/manual recovery, permissions, endpoints, mutations, candidate-data boundary, delegated admission, exact checks, review requirement and terminal merge authority remain unchanged; no bypass or new authority is added."
+    },
+    {
       "id": "cap-dependabot-controller-workflow-run-liveness-tcb",
       "baseBomSha256": "381e1f75486804a8f58cfc4a95541ed7c1af0d45b61325ff3d4e49cfef18dc93",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
