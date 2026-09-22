@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Fail closed on Profile Quality's witness-first bounded pinned-upstream retry boundary."""
+"""Fail closed on Profile Quality's witness-first terminal pinned-upstream fallback boundary."""
 from __future__ import annotations
 
 from pathlib import Path
 import re
 import sys
 
+from automation_retry_policy import validate_repository as validate_retry_policy
 from profile_generator_compatibility_witness import self_test as compatibility_witness_self_test
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +16,6 @@ UPSTREAM_USES = f"shinpr/github-profile-stats@{UPSTREAM_SHA} # v0.2.0"
 DOWNLOAD_USES = "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1"
 PREDICATE_TYPE = "https://github.com/portyu9/portyu9/attestations/profile-generator-compatibility/v1"
 FALLBACK_IF = "steps.profile_generator_witness_verify.outcome != 'success'"
-RETRY_IF = FALLBACK_IF + " && steps.stats_primary.outcome == 'failure'"
 
 
 def fail(message: str) -> None:
@@ -50,26 +50,19 @@ def step_block(job: str, name: str, next_name: str | None) -> str:
     return job[start:end]
 
 
-def require_action(block: str, *, primary: bool) -> None:
-    label = "primary" if primary else "retry"
-    expected_id = "stats_primary" if primary else "stats_retry"
-    expected_if = FALLBACK_IF if primary else RETRY_IF
-    require(f"        id: {expected_id}\n" in block,
-            f"Pinned upstream {label} step id changed")
-    require(f"        if: {expected_if}\n" in block,
-            f"Pinned upstream {label} fallback condition changed")
+def require_action(block: str) -> None:
+    require("        id: stats_primary\n" in block,
+            "Pinned upstream terminal fallback step id changed")
+    require(f"        if: {FALLBACK_IF}\n" in block,
+            "Pinned upstream terminal fallback condition changed")
     require(f"        uses: {UPSTREAM_USES}\n" in block,
-            f"Pinned upstream {label} Action identity changed")
+            "Pinned upstream terminal fallback Action identity changed")
     require(block.count("username: portyu9") == 1 and
             block.count('token: ${{ github.token }}') == 1 and
             block.count("profile: signal-field") == 1,
-            f"Pinned upstream {label} input surface changed")
-    if primary:
-        require("        continue-on-error: true\n" in block,
-                "Primary pinned upstream attempt must expose failure to the one reviewed retry path")
-    else:
-        require("continue-on-error:" not in block,
-                "Retry pinned upstream Action must fail the integration job if it fails")
+            "Pinned upstream terminal fallback input surface changed")
+    require("continue-on-error:" not in block,
+            "Unclassified pinned upstream failure must remain terminal")
 
 
 def validate(text: str) -> None:
@@ -90,16 +83,14 @@ def validate(text: str) -> None:
     ):
         require(forbidden not in integration,
                 f"Pinned upstream witness consumer acquired forbidden write authority: {forbidden}")
-    require(integration.count(f"uses: {UPSTREAM_USES}") == 2,
-            "Integration must retain exactly two possible live attempts of one immutable upstream Action identity")
+    require(integration.count(f"uses: {UPSTREAM_USES}") == 1,
+            "Integration must retain exactly one live fallback invocation of the immutable upstream Action")
 
     names = (
         "Discover exact fresh signed Profile Generator Compatibility Witness",
         "Download exact fresh signed Profile Generator Compatibility Witness",
         "Verify and consume exact fresh signed Profile Generator Compatibility Witness",
         "Generate actual pinned upstream Signal Field",
-        "Back off before one exact pinned upstream retry",
-        "Retry exact pinned upstream Signal Field once",
         "Select successful exact pinned upstream output",
         "Exercise canonical profile evidence generation pipeline",
     )
@@ -107,9 +98,7 @@ def validate(text: str) -> None:
     download = step_block(integration, names[1], names[2])
     verify = step_block(integration, names[2], names[3])
     primary = step_block(integration, names[3], names[4])
-    backoff = step_block(integration, names[4], names[5])
-    retry = step_block(integration, names[5], names[6])
-    selector = step_block(integration, names[6], names[7])
+    selector = step_block(integration, names[4], names[5])
 
     for fragment in (
         "        id: profile_generator_witness_discovery",
@@ -193,14 +182,15 @@ def validate(text: str) -> None:
             verify.count('cmp -- "$RAW_DIR/$name" "$ISOLATED_DIR/$name"') == 1,
             "Verified witness isolation must copy and byte-compare each exact raw Signal Field file once")
 
-    require_action(primary, primary=True)
-    require(f"        if: {RETRY_IF}\n" in backoff,
-            "Pinned upstream retry backoff fallback condition changed")
-    require(backoff.count("        run: sleep 60\n") == 1,
-            "Pinned upstream retry must use exactly one 60-second backoff")
-    require("gh api" not in backoff and "curl " not in backoff and "wget " not in backoff,
-            "Pinned upstream retry backoff must remain passive and must not poll")
-    require_action(retry, primary=False)
+    require_action(primary)
+    for forbidden in (
+        "Back off before one exact pinned upstream retry",
+        "Retry exact pinned upstream Signal Field once",
+        "stats_retry",
+        "run: sleep 60",
+    ):
+        require(forbidden not in integration,
+                f"Unclassified pinned upstream automatic retry returned: {forbidden}")
 
     require("        id: stats\n" in selector,
             "Pinned upstream selector must retain the canonical downstream step id")
@@ -209,12 +199,9 @@ def validate(text: str) -> None:
         'WITNESS_READY_DIR: ${{ steps.profile_generator_witness_verify.outputs.ready-dir }}',
         'PRIMARY_OUTCOME: ${{ steps.stats_primary.outcome }}',
         'PRIMARY_READY_DIR: ${{ steps.stats_primary.outputs.ready-dir }}',
-        'RETRY_OUTCOME: ${{ steps.stats_retry.outcome }}',
-        'RETRY_READY_DIR: ${{ steps.stats_retry.outputs.ready-dir }}',
         'if [ "$WITNESS_OUTCOME" = "success" ]; then',
-        'elif [ "$PRIMARY_OUTCOME" = "success" ]; then',
-        'test "$PRIMARY_OUTCOME" = "failure"',
-        'test "$RETRY_OUTCOME" = "success"',
+        'else',
+        'test "$PRIMARY_OUTCOME" = "success"',
         'echo "ready-dir=$READY_DIR" >> "$GITHUB_OUTPUT"',
     ):
         require(fragment in selector, f"Pinned upstream successful-output selector changed: {fragment}")
@@ -227,8 +214,8 @@ def validate(text: str) -> None:
         require(forbidden not in integration,
                 f"Pinned upstream witness/fallback path acquired mutation API surface: {forbidden}")
 
-    tail = integration[integration.index(f"      - name: {names[7]}\n"):]
-    require("steps.stats_primary" not in tail and "steps.stats_retry" not in tail
+    tail = integration[integration.index(f"      - name: {names[5]}\n"):]
+    require("steps.stats_primary" not in tail
             and "steps.profile_generator_witness_verify" not in tail,
             "Downstream integration must consume only the canonical successful-output selector")
     require("steps.stats.outputs.ready-dir" in tail,
@@ -247,7 +234,7 @@ def expect_failure(text: str, expected: str) -> None:
 def self_test(text: str) -> None:
     expect_failure(
         text.replace(UPSTREAM_SHA, "0" * 40, 1),
-        "exactly two possible live attempts",
+        "exactly one live fallback invocation",
     )
     integration_permissions = (
         "  integration:\n"
@@ -274,16 +261,8 @@ def self_test(text: str) -> None:
         "cryptographic/local validation changed",
     )
     expect_failure(
-        text.replace("        run: sleep 60\n", "        run: sleep 1\n", 1),
-        "60-second backoff",
-    )
-    expect_failure(
         text.replace(f"        if: {FALLBACK_IF}\n", "        if: always()\n", 1),
         "primary fallback condition changed",
-    )
-    expect_failure(
-        text.replace("        id: stats_retry\n", "        id: stats_retry\n        continue-on-error: true\n", 1),
-        "must fail the integration job",
     )
     injected_pipeline = text.replace(
         '          echo "ready-dir=$ISOLATED_DIR" >> "$GITHUB_OUTPUT"\n',
@@ -337,11 +316,12 @@ def main() -> int:
         validate(text)
         self_test(text)
         compatibility_witness_self_test()
+        validate_retry_policy()
         print(
-            "Pinned upstream witness/retry validation passed: one cryptographically verified current-epoch "
+            "Pinned upstream fallback validation passed: one cryptographically verified current-epoch "
             "raw Signal Field witness may satisfy the canonical ready-dir boundary; otherwise the immutable "
-            "upstream Action retains exactly one primary attempt, one passive 60-second backoff, and one "
-            "terminal retry, with no Search polling, write authority, or downstream bypass."
+            "upstream Action is invoked exactly once and any unclassified failure is terminal. The repository-wide "
+            "deterministic retry taxonomy also passed."
         )
         return 0
     except (OSError, ValueError) as exc:
