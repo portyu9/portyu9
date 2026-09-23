@@ -316,7 +316,7 @@
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "9bf26673bbdd102775d77abc6cafe650c7a262b678a72ab07961f6bbdd2bf7df",
-      "rationale": "Authorize #833's exact trusted Dependabot-controller source reduction that skips workflow_run wakes where the completed Profile Quality/CodeQL run is a pull_request with head_branch=main, as produced by reverse ancestry-sync PRs. The accepted #792/#793 main + dependabot/github_actions/** trigger allowlist, normal main push/manual wakes, native Dependabot PR wakes, runtime provenance checks, permissions, endpoints, mutation classes, candidate admission, review requirements and terminal merge authority remain unchanged. Base and candidate semantic BOMs are identical; no bypass or new authority is added."
+      "rationale": "Authorize #833's exact Dependabot-controller source reduction that no-ops completed Profile Quality/CodeQL workflow_run wakes with event=pull_request and head_branch=main, the reverse ancestry-sync topology. #792/#793 main + dependabot/** trigger allowlist, normal main push/manual and native Dependabot PR wakes, permissions, endpoints, mutations, admission/review/merge guards and bypass posture remain unchanged. Base/candidate BOMs are identical."
     },
     {
       "id": "cap-dependabot-controller-main-wake-tcb",
