@@ -516,11 +516,11 @@ jobs:
             ((.artifacts | length) == .total_count) and
             (all(.artifacts[];
               (type == "object") and
-              (.id | type == "number" and . == floor and . > 0) and
+              (.id | (type == "number") and (. == floor) and (. > 0)) and
               (.name | type == "string" and . == $name) and
               (.expired | type == "boolean" and . == false) and
               (.workflow_run | type == "object" and
-                (.id | type == "number" and . == floor and . > 0) and
+                (.id | (type == "number") and (. > 0) and (. == floor)) and
                 (.repository_id | type == "number" and . == floor and . == $repo) and
                 (.head_repository_id | type == "number" and . == floor and . == $repo) and
                 (.head_branch | type == "string" and . == "main") and
