@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v67"
+VERSION = "governed-workflow-byte-identity-v68"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "21dabf69daf149235bed7a89c128b22d445b3db5",
+    ".github/workflows/spotlight-link-sync.yml": "a8c559e327798740951bbe4c6b61a2d082f81803",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -577,6 +577,39 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     ):
         require(fragment in legacy, f"Spotlight current immutable-candidate proof is missing: {fragment}")
     propose = job_block(legacy, "propose", "approve")
+
+    proposal_refs_call_marker = (
+        'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    proposal_refs_schema_marker = 'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}"'
+    proposal_refs_consume_marker = (
+        'EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+        '\'[.[] | select(.ref == $ref)] | length\' <<<"$MATCHING_REFS")"'
+    )
+    for marker in (
+        proposal_refs_call_marker, proposal_refs_schema_marker, proposal_refs_consume_marker,
+    ):
+        require(propose.count(marker) == 1,
+                f"Spotlight proposer candidate-ref collection contract anchor is missing or ambiguous: {marker}")
+    proposal_refs_call = propose.index(proposal_refs_call_marker)
+    proposal_refs_schema = propose.index(proposal_refs_schema_marker)
+    proposal_refs_consume = propose.index(proposal_refs_consume_marker)
+    proposal_refs_block = propose[proposal_refs_call:proposal_refs_consume]
+    for fragment in (
+        '(type == "array") and',
+        '(length <= 1) and',
+        '(.ref | type == "string" and . == $ref) and',
+        '(.object | type == "object" and',
+        '(.type | type == "string" and . == "commit") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
+    ):
+        require(fragment in proposal_refs_block,
+                f"Spotlight proposer candidate-ref collection contract is missing: {fragment}")
+    require(
+        proposal_refs_call < proposal_refs_schema < proposal_refs_consume,
+        "Spotlight proposer candidate-ref collection validation must precede reuse/create cardinality consumption",
+    )
+
     blob_call = propose.index('BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"')
     blob_schema = propose.index('(.url | type == "string" and length > 0)', blob_call)
     blob_consume = propose.index('README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"', blob_schema)
@@ -600,6 +633,68 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         < tree_call < tree_schema < tree_consume < commit_call < commit_schema < commit_consume
         < ref_call < ref_schema < ref_consume < pr_call < pr_schema < pr_consume,
         "Spotlight proposal mutation response validation must precede each downstream field consumption",
+    )
+
+    merge = job_block(legacy, "merge", None)
+    terminal_refs_call_marker = (
+        'CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    terminal_refs_schema_marker = (
+        'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA"'
+    )
+    terminal_refs_consume_marker = (
+        'EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+        '\'[.[] | select(.ref == $ref)] | length\' <<<"$CANDIDATE_REFS")"'
+    )
+    terminal_delete_marker = (
+        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null'
+    )
+    terminal_after_call_marker = (
+        'AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    terminal_after_schema_marker = (
+        'jq -e \'(type == "array") and (length == 0)\' <<<"$AFTER_REFS" >/dev/null'
+    )
+    terminal_after_consume_marker = (
+        'AFTER_EXACT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+        '\'[.[] | select(.ref == $ref)] | length\' <<<"$AFTER_REFS")"'
+    )
+    terminal_output_marker = 'echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"'
+    cleanup_verified_marker = 'echo "Spotlight terminal stage: cleanup-verified" >&2'
+    for marker in (
+        terminal_refs_call_marker, terminal_refs_schema_marker, terminal_refs_consume_marker,
+        terminal_delete_marker, terminal_after_call_marker, terminal_after_schema_marker,
+        terminal_after_consume_marker, terminal_output_marker, cleanup_verified_marker,
+    ):
+        require(merge.count(marker) == 1,
+                f"Spotlight terminal candidate-ref collection contract anchor is missing or ambiguous: {marker}")
+
+    terminal_refs_call = merge.index(terminal_refs_call_marker)
+    terminal_refs_schema = merge.index(terminal_refs_schema_marker)
+    terminal_refs_consume = merge.index(terminal_refs_consume_marker)
+    terminal_delete = merge.index(terminal_delete_marker)
+    terminal_after_call = merge.index(terminal_after_call_marker)
+    terminal_after_schema = merge.index(terminal_after_schema_marker)
+    terminal_after_consume = merge.index(terminal_after_consume_marker)
+    terminal_output = merge.index(terminal_output_marker)
+    cleanup_verified = merge.index(cleanup_verified_marker)
+
+    terminal_refs_block = merge[terminal_refs_call:terminal_refs_consume]
+    for fragment in (
+        '(type == "array") and',
+        '(length <= 1) and',
+        '(.ref | type == "string" and . == $ref) and',
+        '(.object | type == "object" and',
+        '(.type | type == "string" and . == "commit") and',
+        '(.sha | type == "string" and . == $head)',
+    ):
+        require(fragment in terminal_refs_block,
+                f"Spotlight terminal candidate-ref collection contract is missing: {fragment}")
+    require(
+        terminal_refs_call < terminal_refs_schema < terminal_refs_consume < terminal_delete
+        < terminal_after_call < terminal_after_schema < terminal_after_consume
+        < terminal_output < cleanup_verified,
+        "Spotlight terminal candidate-ref cleanup validation must precede delete/output/cleanup-complete evidence",
     )
 
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
