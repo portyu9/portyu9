@@ -2,6 +2,8 @@
 """Project item-11 ADR/current-observation overlays around frozen Spotlight MAC proofs."""
 from __future__ import annotations
 
+import re
+
 import spotlight_ui_merge_authorization_item10_core as core
 
 
@@ -33,6 +35,24 @@ LEGACY_MAIN_PROOF = (
 )
 CURRENT_MAIN_OUTPUT = '      current_main_sha: ${{ steps.merge.outputs.current_main_sha }}\n'
 CURRENT_MAIN_ECHO = '          echo "current_main_sha=$CURRENT_MAIN_SHA" >> "$GITHUB_OUTPUT"\n'
+MERGE_SUCCESS_FILTER = (
+    'if type != "object" then error("Spotlight merge response must be an object") '
+    'elif (.merged | type) != "boolean" or .merged != true then error("Spotlight merge response must contain literal merged=true") '
+    'elif (.sha | type) != "string" or (.sha | test("^[0-9a-f]{40}$") | not) then error("Spotlight merge response sha must be lowercase SHA-40") '
+    'elif (.message | type) != "string" or (.message | length) == 0 then error("Spotlight merge response message must be nonempty") '
+    'else {merged:true,sha:.sha,message:.message} end'
+)
+MERGE_SUCCESS_BLOCK = (
+    "          MERGE_SUCCESS_FILTER='" + MERGE_SUCCESS_FILTER + "'\n"
+    '          VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"\n'
+    '          MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"\n'
+)
+LEGACY_MERGE_SUCCESS_BLOCK = (
+    '          test "$(jq -r .merged <<<"$RESULT")" = "true"\n'
+    '          MERGE_SHA="$(jq -r .sha <<<"$RESULT")"\n'
+    '          test "$MERGE_SHA" != "null"\n'
+)
+
 LEGACY_PROFILE_DISPATCH = '''  dispatch:
     name: dispatch-spotlight-link-sync
     needs: [receipt_attest, lease, attest]
@@ -95,6 +115,98 @@ ORIGINAL_VALIDATE_BUILDER_SCRIPT = core.validate_builder_script
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+def validate_merge_success_fixture(payload: object) -> dict[str, object]:
+    """Reference model for the terminal merge response's fixed jq success boundary."""
+    require(isinstance(payload, dict), "Spotlight merge response must be an object")
+    require(type(payload.get("merged")) is bool and payload["merged"] is True,
+            "Spotlight merge response must contain literal merged=true")
+    sha = payload.get("sha")
+    require(isinstance(sha, str) and re.fullmatch(r"[0-9a-f]{40}", sha) is not None,
+            "Spotlight merge response sha must be lowercase SHA-40")
+    message = payload.get("message")
+    require(isinstance(message, str) and len(message) > 0,
+            "Spotlight merge response message must be nonempty")
+    return {"merged": True, "sha": sha, "message": message}
+
+
+def project_merge_success_response_to_legacy(sync: str) -> str:
+    require(sync.count(MERGE_SUCCESS_BLOCK) == 1,
+            "Spotlight merge-success response projection cannot isolate the exact validated block")
+    require(LEGACY_MERGE_SUCCESS_BLOCK not in sync,
+            "Spotlight merge-success response projection found both hardened and legacy consumers")
+    return sync.replace(MERGE_SUCCESS_BLOCK, LEGACY_MERGE_SUCCESS_BLOCK, 1)
+
+
+def validate_merge_success_response_overlay(sync: str) -> None:
+    merge = core.job_block(sync, "merge", None)
+    require(merge.count(MERGE_SUCCESS_BLOCK) == 1,
+            "Spotlight terminal merge-success response schema block changed")
+    require(merge.count('<<<"$RESULT"') == 1,
+            "Spotlight terminal merge may consume the raw merge response only through the canonical validator")
+    require('test "$(jq -r .merged <<<"$RESULT")" = "true"' not in merge and
+            'MERGE_SHA="$(jq -r .sha <<<"$RESULT")"' not in merge,
+            "Spotlight terminal merge retained a direct unvalidated merge-response consumer")
+
+    mutation = merge.index('RESULT="$(gh api --method PUT ')
+    validation = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"')
+    normalized_sha = merge.index('MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"')
+    merged_pr = merge.index('MERGED_PR="$(gh api ')
+    current_main = merge.index('CURRENT_MAIN_SHA="$(gh api ')
+    cleanup = merge.index('CANDIDATE_REFS="$(gh api ')
+    require(mutation < validation < normalized_sha < merged_pr < current_main < cleanup,
+            "Spotlight merge-success validation must precede post-merge proof, current-main acceptance, and cleanup")
+    require('test "$CURRENT_MAIN_SHA" = "$MERGE_SHA"' in merge and
+            'echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"' in merge,
+            "Spotlight must consume only the validated merge SHA for current-main proof and downstream evidence")
+
+
+def expect_merge_success_fixture_failure(payload: object, expected: str) -> None:
+    try:
+        validate_merge_success_fixture(payload)
+    except ValueError as exc:
+        require(expected in str(exc), f"Spotlight merge-success fixture failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"Spotlight merge-success fixture unexpectedly passed: {expected}")
+
+
+def self_test_merge_success_response_overlay(sync: str) -> None:
+    validate_merge_success_response_overlay(sync)
+    canonical = {
+        "merged": True,
+        "sha": "a" * 40,
+        "message": "Pull Request successfully merged",
+        "futureField": {"ignored": True},
+    }
+    require(
+        validate_merge_success_fixture(canonical)
+        == {"merged": True, "sha": "a" * 40, "message": "Pull Request successfully merged"},
+        "Spotlight merge-success normalization must discard unreviewed response members",
+    )
+    for payload, expected in (
+        ([], "must be an object"),
+        ({"merged": 1, "sha": "a" * 40, "message": "ok"}, "literal merged=true"),
+        ({"merged": False, "sha": "a" * 40, "message": "ok"}, "literal merged=true"),
+        ({"merged": True, "sha": "A" * 40, "message": "ok"}, "lowercase SHA-40"),
+        ({"merged": True, "sha": "a" * 39, "message": "ok"}, "lowercase SHA-40"),
+        ({"merged": True, "sha": "a" * 40, "message": ""}, "message must be nonempty"),
+        ({"merged": True, "sha": "a" * 40, "message": None}, "message must be nonempty"),
+    ):
+        expect_merge_success_fixture_failure(payload, expected)
+
+    weakened = sync.replace(
+        'MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"',
+        'MERGE_SHA="$(jq -r .sha <<<"$RESULT")"',
+        1,
+    )
+    try:
+        validate_merge_success_response_overlay(weakened)
+    except ValueError as exc:
+        require("schema block changed" in str(exc) or "unvalidated" in str(exc),
+                f"Spotlight raw-response self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Spotlight merge-success self-test accepted raw RESULT consumption")
 
 
 def strip_adr_tail(workflow: str, label: str) -> str:
@@ -220,6 +332,7 @@ def project_strict_pull_review_schema_to_legacy(sync: str) -> str:
 
 
 def project_item9(sync: str) -> str:
+    sync = project_merge_success_response_to_legacy(sync)
     sync = project_strict_pull_review_schema_to_legacy(sync)
     sync = project_native_review_gate_to_item10_order(sync)
     legacy = ORIGINAL_PROJECT_ITEM9(sync)
@@ -393,12 +506,15 @@ def main() -> int:
         core.validate_mac(sync)
         validate_native_governed_bot_review_overlay(sync)
         self_test_native_governed_bot_review_overlay(sync)
+        validate_merge_success_response_overlay(sync)
+        self_test_merge_success_response_overlay(sync)
         core.self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
             "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state plus the separate trusted capability-admission proof, "
             "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance, "
-            "the exact post-review trusted-governed-bot-review context, and the CLI's direct verified statement before expected-head mutation."
+            "the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
+            "response before current-main acceptance, candidate cleanup, or decision-receipt evidence."
         )
         return 0
     except (OSError, ValueError) as exc:
