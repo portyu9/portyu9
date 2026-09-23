@@ -8,16 +8,16 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v73"
+VERSION = "governed-workflow-byte-identity-v74"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
-    ".github/workflows/profile-quality.yml": "79db5edce3977c104aaff105bdf8e12105bbaba2",
+    ".github/workflows/profile-quality.yml": "e5f7f01f1f709515dae282606345fdfb01a7fc70",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "6c486d2c3e58eb44441644797382e74c8afb108b",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
-ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
+ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
 SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB = "be08b177e329343ff547b66c742e221d9cf9afed"
 
 OLD_MERGE_IF = (
@@ -895,7 +895,7 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         "- name: Run exact accepted-base governed bot review gate",
         "GH_TOKEN: ${{ github.token }}",
         "GITHUB_TOKEN: ${{ github.token }}",
-        "EXPECTED_GATE_BLOB: 844026bd8a752433dd8b01477e7e1b56b587d0b1",
+        "EXPECTED_GATE_BLOB: e42c1a8c3204d9a83ac837bbd04743fe3907b41c",
         'gh api -H "Accept: application/vnd.github.raw+json" "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}" > "$TRUSTED_GATE"',
         'GATE_BLOB="$( { printf \'blob %s\\0\' "$GATE_SIZE"; cat "$TRUSTED_GATE"; } | sha1sum | cut -d\' \' -f1 )"',
         'test "$GATE_BLOB" = "$EXPECTED_GATE_BLOB"',
