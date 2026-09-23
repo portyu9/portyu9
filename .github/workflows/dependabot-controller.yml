@@ -716,7 +716,10 @@ jobs:
             echo "::error::Dependabot merge API rejected exact-head merge: ${MERGE_MESSAGE}"
             exit 1
           fi
-          MERGE_SHA="$(jq -r .sha <<<"$MERGE")"
+          python3 scripts/dependabot_controller.py merge-success-response \
+            --response "$MERGE_BODY" \
+            --out "$RUNNER_TEMP/dependabot-merge-success-normalized.json"
+          MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"
           gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main >/dev/null
