@@ -620,6 +620,13 @@
       "rationale": "Authorize #637's hardened exact ruleset reconciler after runtime audit: serialized admin writes, corrected GitHub App JWT construction, explicit read-only redaction handling, exact selected-repository App/install token authority proofs, canonical capability attribution, expanded negative transition tests, and locked transaction guards. No reviewer-token reuse, bypass, direct-main content write, candidate execution, generic settings writer, or required-check reduction is introduced."
     },
     {
+      "id": "cap-ruleset-reconciler-superseded-workflow-run-noop-v1",
+      "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "expansionSha256": "58510043e101496b172070de1b738e47542436b1c9c50801276fab542f6bb6d3",
+      "rationale": "Authorize #859's Ruleset stale workflow-run no-op. Push/manual stays exact-current-main strict. Only a fully validated reviewed controller wake may exit not-applicable when this reconciler's trusted SHA was superseded while queued. Existing ruleset reads, admin identity, transition mutation, receipt signing and #650 parent-SHA semantics stay unchanged. No new trigger, permission, endpoint, mutation, secret, OIDC/admin authority, direct-main write or bypass."
+    },
+    {
       "id": "cap-ruleset-recovery-yaml-guard",
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
