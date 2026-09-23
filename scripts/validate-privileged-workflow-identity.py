@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v64"
+VERSION = "governed-workflow-byte-identity-v65"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "a288d1c1b46a8426a140b8e1545cab23325856f6",
+    ".github/workflows/spotlight-link-sync.yml": "670471f522fedcd6816e8e49ca9db9044e7d6206",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -327,6 +327,86 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         "Spotlight stale reconciliation must use list results only for bounded PR discovery and re-fetch the exact full PR object",
     )
     reconcile = job_block(legacy, "reconcile", "budget")
+    refs_call_marker = (
+        'REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}")"'
+    )
+    refs_schema_marker = '(all(.[]; (type == "object") and'
+    refs_consume_marker = 'REF_COUNT="$(jq \'length\' <<<"$REFS")"'
+    commit_call_marker = 'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    commit_schema_marker = 'jq -e --arg head "$HEAD_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL"'
+    commit_consume_marker = 'PARENT_SHA="$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")"'
+    compare_call_marker = 'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"'
+    compare_schema_marker = 'jq -e --arg parent "$PARENT_SHA" --arg head "$HEAD_SHA"'
+    compare_consume_marker = 'test "$(jq -r .status <<<"$COMPARE")" = "ahead"'
+
+    for marker in (
+        refs_call_marker, refs_schema_marker, refs_consume_marker,
+        commit_call_marker, commit_schema_marker, commit_consume_marker,
+        compare_call_marker, compare_schema_marker, compare_consume_marker,
+    ):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight stale-topology evidence contract anchor is missing or ambiguous: {marker}")
+
+    refs_call = reconcile.index(refs_call_marker)
+    refs_schema = reconcile.index(refs_schema_marker, refs_call)
+    refs_consume = reconcile.index(refs_consume_marker, refs_schema)
+    commit_call = reconcile.index(commit_call_marker, refs_consume)
+    commit_schema = reconcile.index(commit_schema_marker, commit_call)
+    commit_consume = reconcile.index(commit_consume_marker, commit_schema)
+    compare_call = reconcile.index(compare_call_marker, commit_consume)
+    compare_schema = reconcile.index(compare_schema_marker, compare_call)
+    compare_consume = reconcile.index(compare_consume_marker, compare_schema)
+
+    refs_block = reconcile[refs_call:refs_consume]
+    for fragment in (
+        '(type == "array") and',
+        '(length <= 20) and',
+        '(.ref | type == "string" and test("^refs/heads/automation/spotlight-links/[0-9a-f]{64}$")) and',
+        '(.object | type == "object" and',
+        '(.type | type == "string" and . == "commit") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
+    ):
+        require(fragment in refs_block,
+                f"Spotlight stale-topology refs contract is missing: {fragment}")
+
+    commit_block = reconcile[commit_call:commit_consume]
+    for fragment in (
+        '(.sha | type == "string" and . == $head) and',
+        '(.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and',
+        '(.parents | type == "array" and length == 1 and',
+        '(.author | type == "object" and .name == $name and .email == $email) and',
+        '(.committer | type == "object" and .name == $name and .email == $email and',
+        '(.date | type == "string" and length > 0)) and',
+        '(.message == "chore: sync rotating Spotlight links")',
+    ):
+        require(fragment in commit_block,
+                f"Spotlight stale-topology commit contract is missing: {fragment}")
+
+    compare_block = reconcile[compare_call:compare_consume]
+    for fragment in (
+        '(.status == "ahead") and',
+        '(.base_commit | type == "object" and .sha == $parent) and',
+        '(.merge_base_commit | type == "object" and .sha == $parent) and',
+        '(.ahead_by | type == "number" and . == floor and . == 1) and',
+        '(.behind_by | type == "number" and . == floor and . == 0) and',
+        '(.total_commits | type == "number" and . == floor and . == 1) and',
+        '(.commits | type == "array" and length == 1 and',
+        '(.filename | type == "string" and . == "README.md") and',
+        '(.status | type == "string" and . == "modified") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.additions | type == "number" and . == floor and . >= 0) and',
+        '(.deletions | type == "number" and . == floor and . >= 0) and',
+        '(.changes | type == "number" and . == floor and . >= 0)',
+    ):
+        require(fragment in compare_block,
+                f"Spotlight stale-topology compare contract is missing: {fragment}")
+
+    require(
+        refs_call < refs_schema < refs_consume < commit_call < commit_schema < commit_consume
+        < compare_call < compare_schema < compare_consume,
+        "Spotlight stale-topology evidence validation must precede downstream consumption",
+    )
+
     close_call_marker = (
         'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
     )
