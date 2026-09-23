@@ -217,7 +217,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     for fragment in (
         '(type == "object") and',
         '(.number | type == "number" and . == floor and . == $pr) and',
-        '(.state | type == "string" and (. == "open" or . == "closed")) and',
+        '(.state as $state | ($state | type) == "string" and ($state == "open" or $state == "closed")) and',
         '(.draft | type == "boolean") and',
         '(.merged | type == "boolean") and',
         '(.maintainer_can_modify | type == "boolean") and',
