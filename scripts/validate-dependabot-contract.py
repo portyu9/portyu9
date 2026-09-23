@@ -280,7 +280,7 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         "Dependabot controller must validate exactly one terminal merge success response",
     )
     for fragment in (
-        'if [ "$(jq -r '.merged // false' <<<"$MERGE")" != "true" ]; then',
+        "if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then",
         'Dependabot merge API rejected exact-head merge:',
         'python3 scripts/dependabot_controller.py merge-success-response',
         '--response "$MERGE_BODY"',
@@ -297,7 +297,7 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
     )
 
     ordered = (
-        'if [ "$(jq -r '.merged // false' <<<"$MERGE")" != "true" ]; then',
+        "if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then",
         'python3 scripts/dependabot_controller.py merge-success-response',
         'MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"',
         'test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"',
