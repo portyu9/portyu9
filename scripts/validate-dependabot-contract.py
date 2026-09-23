@@ -274,6 +274,43 @@ def validate_controller_git_mutation_response_contract(text: str) -> None:
         cursor = position
 
 
+def validate_controller_merge_success_response_contract(text: str) -> None:
+    require(
+        text.count("python3 scripts/dependabot_controller.py merge-success-response") == 1,
+        "Dependabot controller must validate exactly one terminal merge success response",
+    )
+    for fragment in (
+        'if [ "$(jq -r '.merged // false' <<<"$MERGE")" != "true" ]; then',
+        'Dependabot merge API rejected exact-head merge:',
+        'python3 scripts/dependabot_controller.py merge-success-response',
+        '--response "$MERGE_BODY"',
+        '--out "$RUNNER_TEMP/dependabot-merge-success-normalized.json"',
+        'MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"',
+        'test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"',
+        'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
+    ):
+        require(fragment in text, f"Dependabot terminal merge response contract is missing: {fragment}")
+
+    require(
+        'MERGE_SHA="$(jq -r .sha <<<"$MERGE")"' not in text,
+        "Dependabot controller must not consume terminal merge SHA before typed success validation",
+    )
+
+    ordered = (
+        'if [ "$(jq -r '.merged // false' <<<"$MERGE")" != "true" ]; then',
+        'python3 scripts/dependabot_controller.py merge-success-response',
+        'MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"',
+        'test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$MERGE_SHA"',
+        'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
+    )
+    cursor = -1
+    for fragment in ordered:
+        position = text.find(fragment, cursor + 1)
+        require(position > cursor,
+                f"Dependabot terminal merge success validation moved out of reviewed order: {fragment}")
+        cursor = position
+
+
 def validate_quality_contract(text: str) -> None:
     require(
         '- ".github/dependabot.yml"' in text,
@@ -360,13 +397,14 @@ def main() -> int:
         validate_controller_wake_contract(controller_text)
         validate_controller_collection_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
+        validate_controller_merge_success_response_contract(controller_text)
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
