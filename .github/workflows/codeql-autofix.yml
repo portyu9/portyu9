@@ -431,25 +431,55 @@ jobs:
           TRUSTED_READY=false
           GHAS_READY=false
           for ATTEMPT in $(seq 1 60); do
-            TRUSTED="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100")"
-            TRUSTED_COUNT="$(jq -r .total_count <<<"$TRUSTED")"
-            [[ "$TRUSTED_COUNT" =~ ^[0-9]+$ ]]
-            if [ "$TRUSTED_COUNT" = "1" ]; then
-              if jq -e --arg head "$HEAD_SHA" '.check_runs[0] | .name == "trusted-capability-admission" and .head_sha == $head and .app.id == 15368 and .status == "completed" and .conclusion == "success"' <<<"$TRUSTED" >/dev/null; then
+            gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100" \
+              > trusted-readiness-response.json
+            python3 scripts/codeql_autofix_controller.py readiness-check \
+              --response-file trusted-readiness-response.json \
+              --head-sha "$HEAD_SHA" \
+              --name trusted-capability-admission \
+              --app-id 15368 \
+              --out trusted-readiness.json
+            TRUSTED_STATE="$(jq -r .state trusted-readiness.json)"
+            case "$TRUSTED_STATE" in
+              success)
                 TRUSTED_READY=true
-              elif jq -e '.check_runs[0] | .status == "completed" and .conclusion != "success"' <<<"$TRUSTED" >/dev/null; then
+                ;;
+              failure)
                 echo "ERROR: trusted capability-admission check rejected the exact Autofix head" >&2
                 exit 1
-              fi
-            elif [ "$TRUSTED_COUNT" -gt 1 ]; then
-              echo "ERROR: exact Autofix trusted capability-admission check is ambiguous" >&2
-              exit 1
-            fi
+                ;;
+              ambiguous)
+                echo "ERROR: exact Autofix trusted capability-admission check is ambiguous" >&2
+                exit 1
+                ;;
+              missing|pending)
+                ;;
+              *)
+                echo "ERROR: trusted capability-admission readiness state is invalid: $TRUSTED_STATE" >&2
+                exit 1
+                ;;
+            esac
 
-            GHAS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100")"
-            if [ "$(jq -r .total_count <<<"$GHAS")" = "1" ] && jq -e --arg head "$HEAD_SHA" '.check_runs[0] | .head_sha == $head and .status == "completed" and .conclusion == "success"' <<<"$GHAS" >/dev/null; then
-              GHAS_READY=true
-            fi
+            gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \
+              > ghas-readiness-response.json
+            python3 scripts/codeql_autofix_controller.py readiness-check \
+              --response-file ghas-readiness-response.json \
+              --head-sha "$HEAD_SHA" \
+              --name CodeQL \
+              --app-id 57789 \
+              --out ghas-readiness.json
+            GHAS_STATE="$(jq -r .state ghas-readiness.json)"
+            case "$GHAS_STATE" in
+              success)
+                GHAS_READY=true
+                ;;
+              missing|pending|failure|ambiguous)
+                ;;
+              *)
+                echo "ERROR: GHAS CodeQL readiness state is invalid: $GHAS_STATE" >&2
+                exit 1
+                ;;
+            esac
             if [ "$TRUSTED_READY" = "true" ] && [ "$GHAS_READY" = "true" ]; then
               break
             fi
