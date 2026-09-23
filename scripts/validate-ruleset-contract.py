@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / ".github" / "rulesets" / "repository-rulesets-v1.json"
 DOC = ROOT / ".github" / "RULESETS.md"
 QUALITY = ROOT / ".github" / "workflows" / "profile-quality.yml"
+RECONCILER = ROOT / ".github" / "workflows" / "ruleset-reconciler.yml"
 REPOSITORY = "portyu9/portyu9"
 API_ORIGIN = "https://api.github.com"
 API_PATH = f"/repos/{REPOSITORY}/rulesets"
@@ -225,6 +226,87 @@ def validate_source(payload: dict[str, Any]) -> None:
         "run: python3 scripts/validate-ruleset-contract.py\n" not in quality,
         "Profile Quality must not regress to source-only ruleset validation",
     )
+
+
+
+def validate_reconciler_wake_contract(text: str) -> None:
+    require(text.count("  plan:\n") == 1 and text.count("  reconcile:\n") == 1,
+            "Ruleset reconciler plan/reconcile job boundary changed")
+    plan_start = text.index("  plan:\n")
+    reconcile_start = text.index("  reconcile:\n", plan_start)
+    plan = text[plan_start:reconcile_start]
+
+    live_capture = 'LIVE_MAIN_SHA="$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)"'
+    live_shape = '[[ "$LIVE_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]'
+    strict_current = 'test "$LIVE_MAIN_SHA" = "$TRUSTED_MAIN_SHA"'
+    event_case = 'case "$GITHUB_EVENT_NAME" in'
+    workflow_run = 'workflow_run)'
+    allowlist = (
+        '"CodeQL Autofix controller:.github/workflows/codeql-autofix.yml"|'
+        '"Dependabot controller:.github/workflows/dependabot-controller.yml"|'
+        '"Sync Spotlight profile links:.github/workflows/spotlight-link-sync.yml")'
+    )
+    stale_guard = 'if [ "$LIVE_MAIN_SHA" != "$TRUSTED_MAIN_SHA" ]; then'
+    stale_message = (
+        'Ignoring superseded Ruleset reconciler workflow_run wake: '
+        'trusted=${TRUSTED_MAIN_SHA} live=${LIVE_MAIN_SHA}.'
+    )
+    parent_current = 'if [ "$WAKE_HEAD_SHA" = "$TRUSTED_MAIN_SHA" ]; then'
+    transition_validate = 'python3 scripts/ruleset_transition_contract.py validate --transition-digest "$TRANSITION_DIGEST"'
+
+    for fragment in (
+        live_capture,
+        live_shape,
+        'push|workflow_dispatch)',
+        strict_current,
+        workflow_run,
+        'test "$WAKE_STATUS" = "completed"',
+        'test "$WAKE_HEAD_BRANCH" = "main"',
+        '[[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        'test "$WAKE_REPOSITORY" = "$TARGET_REPOSITORY"',
+        'test "$WAKE_HEAD_REPOSITORY" = "$TARGET_REPOSITORY"',
+        allowlist,
+        stale_guard,
+        stale_message,
+        'echo "live_state=not-applicable" >> "$GITHUB_OUTPUT"',
+        parent_current,
+        transition_validate,
+    ):
+        require(fragment in plan, f"Ruleset reconciler wake-freshness contract is missing: {fragment}")
+
+    require(plan.count(live_capture) == 1 and plan.count(live_shape) == 1,
+            "Ruleset reconciler must observe live main exactly once before event classification")
+    require(plan.count(strict_current) == 1,
+            "Ruleset reconciler push/manual freshness must remain one exact-main equality gate")
+    require(plan.count(stale_guard) == 1 and plan.count(stale_message) == 1,
+            "Ruleset reconciler superseded workflow_run no-op must remain singular and explicit")
+
+    old_unconditional = (
+        'test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" '
+        '= "$TRUSTED_MAIN_SHA"'
+    )
+    require(old_unconditional not in plan,
+            "Ruleset reconciler plan must not reject a validated queued workflow_run before stale-wake classification")
+
+    checkout_proof = 'test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"'
+    positions = (
+        plan.index(checkout_proof),
+        plan.index(live_capture),
+        plan.index(event_case),
+        plan.index(workflow_run, plan.index(event_case)),
+        plan.index(allowlist),
+        plan.index(stale_guard),
+        plan.index(parent_current),
+        plan.index(transition_validate),
+    )
+    require(list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+            "Ruleset reconciler stale-wake validation moved out of reviewed order")
+
+    push_pos = plan.index('push|workflow_dispatch)')
+    strict_pos = plan.index(strict_current)
+    workflow_pos = plan.index(workflow_run)
+    require(push_pos < strict_pos < workflow_pos,
+            "Ruleset reconciler must keep push/manual exact-main freshness before workflow_run handling")
 
 
 def validate_api_url(url: str) -> str:
@@ -688,10 +770,11 @@ def main() -> int:
     parser.add_argument("--live", action="store_true", help="also compare checked-in target with GitHub control-plane fields observable to this identity")
     args = parser.parse_args()
     try:
-        for path in (CONTRACT, DOC, QUALITY):
+        for path in (CONTRACT, DOC, QUALITY, RECONCILER):
             require(path.is_file(), f"ruleset contract input is missing: {path.relative_to(ROOT)}")
         payload = load_contract()
         validate_source(payload)
+        validate_reconciler_wake_contract(RECONCILER.read_text(encoding="utf-8"))
         self_test(payload)
         unobservable: tuple[str, ...] = ()
         if args.live:
@@ -699,7 +782,8 @@ def main() -> int:
         suffix = " + live observable GitHub control-plane state" if args.live else ""
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
-            f"seven required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity and observable drift fail closed."
+            f"seven required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity, "
+            f"superseded trusted workflow-run wakes reduce to read-only no-ops, and observable drift fails closed."
         )
         if unobservable:
             print(
