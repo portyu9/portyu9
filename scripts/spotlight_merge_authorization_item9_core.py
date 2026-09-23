@@ -104,6 +104,38 @@ def validate_reconciliation(reconcile: str) -> None:
         require(normalized in reconcile,
                 f"Spotlight reconciler lost a stale-only/topology proof: {normalized}")
 
+    close_call = reconcile.index(
+        'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
+    )
+    close_schema = reconcile.index(
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
+        close_call,
+    )
+    close_consume = reconcile.index('test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"', close_schema)
+    delete_ref = reconcile.index(
+        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null',
+        close_consume,
+    )
+    close_block = reconcile[close_call:close_consume]
+    for fragment in (
+        '((type) == "object") and',
+        '(.number | type == "number" and . == floor and . == $pr) and',
+        '(.user | type == "object" and .login == "github-actions[bot]") and',
+        '(.state == "closed") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.merged | type == "boolean" and . == false) and',
+        '(.maintainer_can_modify | type == "boolean" and . == false) and',
+        '(.title == $title) and',
+        '(.body == $body) and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.head | type == "object" and .ref == $branch and .sha == $head and',
+        'has("merge_commit_sha")',
+    ):
+        require(fragment in close_block,
+                f"Spotlight reconciler stale-close response schema is missing: {fragment}")
+    require(close_call < close_schema < close_consume < delete_ref,
+            "Spotlight reconciler stale-close response schema must validate before field consumption and ref deletion")
+
     require(reconcile.count('gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"') == 1,
             "Spotlight reconciler must expose exactly one PR-closing PATCH mutation")
     require(reconcile.count('gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}"') == 1,
@@ -506,6 +538,32 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         ),
         stats, policy, "reconciler lost a stale-only/topology proof",
     )
+    reconcile_start = sync.index("  reconcile:\n")
+    reconcile_end = sync.index("  budget:\n", reconcile_start)
+    reconcile = sync[reconcile_start:reconcile_end]
+    for old, new in (
+        ('                ((type) == "object") and',
+         '                ((type) == "array") and'),
+        ('                (.number | type == "number" and . == floor and . == $pr) and',
+         '                (.number | type == "string") and'),
+        ('                (.user | type == "object" and .login == "github-actions[bot]") and',
+         '                (.user | type == "object") and'),
+        ('                (.state == "closed") and',
+         '                (.state == "open") and'),
+        ('                (.merged | type == "boolean" and . == false) and',
+         '                (.merged | type == "boolean") and'),
+        ('                (.maintainer_can_modify | type == "boolean" and . == false) and',
+         '                (.maintainer_can_modify | type == "boolean") and'),
+        ('                (has("merge_commit_sha") and',
+         '                (true and'),
+        ('              jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\',
+         '              jq -n --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\'),
+    ):
+        require(reconcile.count(old) == 1,
+                f"Spotlight stale-close response self-test anchor is missing or ambiguous: {old}")
+        mutated_reconcile = reconcile.replace(old, new, 1)
+        mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
+        expect_failure(mutated, stats, policy, "stale-close response schema")
     expect_failure(
         sync.replace(
             'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
