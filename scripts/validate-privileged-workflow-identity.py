@@ -18,6 +18,7 @@ EXPECTED = {
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
 ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
+SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB = "be08b177e329343ff547b66c742e221d9cf9afed"
 
 OLD_MERGE_IF = (
     "    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && "
@@ -1539,6 +1540,12 @@ def main() -> int:
                     f"{relative}: governed workflow bytes changed; expected Git blob {expected}, got {actual}")
             observed[relative] = actual
         require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
+        runtime_test_blob = v21.git_blob_sha(ROOT / "scripts/spotlight_budget_jq_schema_runtime_test.py")
+        require(
+            runtime_test_blob == SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB,
+            "Spotlight mutation-budget jq runtime-test bytes changed; "
+            f"expected Git blob {SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB}, got {runtime_test_blob}",
+        )
 
         profile_quality = (ROOT / ".github/workflows/profile-quality.yml").read_text(encoding="utf-8")
         governed_bot_review_gate = (ROOT / "scripts/governed_bot_review_gate.py").read_text(encoding="utf-8")
@@ -1568,7 +1575,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step byte-locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:
