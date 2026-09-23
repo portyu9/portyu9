@@ -22,7 +22,7 @@ env:
 
 jobs:
   controller:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_run' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != 'main' || github.event.workflow_run.event != 'pull_request')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     name: trusted-dependabot-codeql-controller
     runs-on: ubuntu-24.04
     timeout-minutes: 12
@@ -85,6 +85,11 @@ jobs:
               test "$(jq -r .head_repository.full_name <<<"$WAKE")" = "$TARGET_REPOSITORY"
               [[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
               if [ "$WAKE_HEAD_BRANCH" = "main" ]; then
+                if [ "$WAKE_EVENT" = "pull_request" ]; then
+                  printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
+                  echo "Ignoring main-headed pull_request workflow_run wake; reverse ancestry-sync PRs are not Dependabot candidates."
+                  exit 0
+                fi
                 test "$WAKE_EVENT" = "push" || test "$WAKE_EVENT" = "workflow_dispatch"
               else
                 test "$WAKE_EVENT" = "pull_request" || test "$WAKE_EVENT" = "workflow_dispatch"
