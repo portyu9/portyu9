@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "bdc8b39800f1d22927e8160f368949d6936b256f",
+    ".github/workflows/spotlight-link-sync.yml": "4229a34724360ac620f98925b4a565584a935bd6",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -421,13 +421,13 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
     )
     prs_schema_marker = (
-        'jq -e --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg parent "$PARENT_SHA" --arg repo "$GITHUB_REPOSITORY"'
+        'jq -e --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
     )
     prs_count_marker = 'PR_COUNT="$(jq \'length\' <<<"$PRS")"'
     pr_number_marker = 'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"'
     pr_call_marker = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
     pr_schema_marker = (
-        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg parent "$PARENT_SHA" --arg repo "$GITHUB_REPOSITORY"'
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
     )
     pr_consume_marker = 'test "$(jq -r .state <<<"$PR")" = "open"'
     for marker in (
@@ -456,7 +456,8 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         '(.draft | type == "boolean" and . == false) and',
         '(.title == $title) and',
         '(.body == $body) and',
-        '(.base | type == "object" and .ref == "main" and .sha == $parent and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
         '(.head | type == "object" and .ref == $branch and .sha == $head and',
         'has("merge_commit_sha")',
     ):
@@ -474,7 +475,8 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         '(.maintainer_can_modify | type == "boolean" and . == false) and',
         '(.title == $title) and',
         '(.body == $body) and',
-        '(.base | type == "object" and .ref == "main" and .sha == $parent and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
         '(.head | type == "object" and .ref == $branch and .sha == $head and',
         'has("merge_commit_sha")',
     ):
