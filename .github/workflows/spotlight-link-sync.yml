@@ -1151,7 +1151,7 @@ jobs:
 
           PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           validate_terminal_pr_object "$PR"
-          test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"
+          test "$(jq -r '.user.login' <<<"$PR")" = "github-actions[bot]"
           test "$(jq -r .state <<<"$PR")" = "open"
           test "$(jq -r .draft <<<"$PR")" = "false"
           test "$(jq -r .merged <<<"$PR")" = "false"
