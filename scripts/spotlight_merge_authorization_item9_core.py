@@ -778,6 +778,11 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
         expect_failure(mutated, stats, policy, "stale-PR")
 
+    close_call_pos = reconcile.index(
+        'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
+    )
+    close_consume_pos = reconcile.index('test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"', close_call_pos)
+    close_block = reconcile[close_call_pos:close_consume_pos]
     for old, new in (
         ('                ((type) == "object") and',
          '                ((type) == "array") and'),
@@ -796,9 +801,10 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         ('              jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\',
          '              jq -n --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\'),
     ):
-        require(reconcile.count(old) == 1,
-                f"Spotlight stale-close response self-test anchor is missing or ambiguous: {old}")
-        mutated_reconcile = reconcile.replace(old, new, 1)
+        require(close_block.count(old) == 1,
+                f"Spotlight stale-close response self-test anchor is missing or ambiguous inside close-response block: {old}")
+        mutated_close = close_block.replace(old, new, 1)
+        mutated_reconcile = reconcile[:close_call_pos] + mutated_close + reconcile[close_consume_pos:]
         mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
         expect_failure(mutated, stats, policy, "stale-close response schema")
     expect_failure(
