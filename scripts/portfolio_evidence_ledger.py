@@ -33,11 +33,17 @@ RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 JOB_PAGE_SIZE = 100
 WORKFLOW_RUN_PAGE_SIZE = 100
 MAX_WORKFLOW_RUN_PAGES = 20
+WORKFLOW_RUN_SNAPSHOT_ATTEMPTS = 6
+WORKFLOW_RUN_SNAPSHOT_BACKOFF_SECONDS = (1.0, 2.0, 4.0, 8.0, 15.0)
 
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise ValueError(message)
+
+
+class WorkflowRunSnapshotDrift(ValueError):
+    """The exact-head Actions collection changed while one bounded snapshot was being paged."""
 
 
 def canonical_digest(payload: dict[str, Any]) -> str:
@@ -212,81 +218,94 @@ def workflow_runs_for_subject(
     token: str | None,
     *,
     fetcher: Callable[[str, str | None], dict[str, Any]] | None = None,
+    sleeper: Callable[[float], None] = time.sleep,
 ) -> list[dict[str, Any]]:
-    """Fetch the complete bounded repository run collection for one exact head SHA."""
+    """Fetch one complete exact-head run snapshot, retrying only positive concurrent cardinality drift."""
     require(
         len(subject) == 40 and all(ch in "0123456789abcdef" for ch in subject),
         f"{repo}: workflow-run subject SHA is malformed",
     )
     fetch_page = fetcher or fetch_json
     base = f"https://api.github.com/repos/{OWNER}/{repo}/actions/runs"
-    first = fetch_page(
-        f"{base}?head_sha={subject}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page=1",
-        token,
-    )
-    total = first.get("total_count")
-    require(
-        isinstance(total, int) and not isinstance(total, bool) and total >= 0,
-        f"{repo}: exact-subject workflow-run total_count is malformed",
-    )
-    expected_pages = max(1, (total + WORKFLOW_RUN_PAGE_SIZE - 1) // WORKFLOW_RUN_PAGE_SIZE)
-    require(
-        expected_pages <= MAX_WORKFLOW_RUN_PAGES,
-        f"{repo}: exact-subject workflow-run collection exceeds bounded pagination",
-    )
 
-    collected: list[dict[str, Any]] = []
-    seen_ids: set[int] = set()
-    for page in range(1, expected_pages + 1):
-        payload = first if page == 1 else fetch_page(
-            f"{base}?head_sha={subject}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page={page}",
-            token,
-        )
-        page_total = payload.get("total_count")
-        require(
-            isinstance(page_total, int)
-            and not isinstance(page_total, bool)
-            and page_total == total,
-            f"{repo}: exact-subject workflow-run total_count changed while paging",
-        )
-        page_runs = payload.get("workflow_runs")
-        require(
-            isinstance(page_runs, list),
-            f"{repo}: exact-subject workflow-run page {page} is malformed",
-        )
-        expected_size = (
-            0
-            if total == 0
-            else WORKFLOW_RUN_PAGE_SIZE
-            if page < expected_pages
-            else total - WORKFLOW_RUN_PAGE_SIZE * (expected_pages - 1)
-        )
-        require(
-            len(page_runs) == expected_size,
-            f"{repo}: exact-subject workflow-run page {page} is incomplete: "
-            f"expected {expected_size}, observed {len(page_runs)}",
-        )
-        for run in page_runs:
-            require(isinstance(run, dict), f"{repo}: exact-subject workflow-run entry is malformed")
-            run_id = run.get("id")
-            require(
-                isinstance(run_id, int) and not isinstance(run_id, bool) and run_id > 0,
-                f"{repo}: exact-subject workflow-run id is malformed",
+    for snapshot_attempt in range(WORKFLOW_RUN_SNAPSHOT_ATTEMPTS):
+        try:
+            first = fetch_page(
+                f"{base}?head_sha={subject}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page=1",
+                token,
             )
-            require(run_id not in seen_ids, f"{repo}: duplicate exact-subject workflow-run id {run_id}")
-            seen_ids.add(run_id)
+            total = first.get("total_count")
             require(
-                run.get("head_sha") == subject,
-                f"{repo}: head_sha-filtered workflow-run collection returned a different subject",
+                isinstance(total, int) and not isinstance(total, bool) and total >= 0,
+                f"{repo}: exact-subject workflow-run total_count is malformed",
             )
-            collected.append(run)
+            expected_pages = max(1, (total + WORKFLOW_RUN_PAGE_SIZE - 1) // WORKFLOW_RUN_PAGE_SIZE)
+            require(
+                expected_pages <= MAX_WORKFLOW_RUN_PAGES,
+                f"{repo}: exact-subject workflow-run collection exceeds bounded pagination",
+            )
 
-    require(
-        len(collected) == total,
-        f"{repo}: exact-subject workflow-run pagination did not close: "
-        f"expected {total}, observed {len(collected)}",
-    )
-    return collected
+            collected: list[dict[str, Any]] = []
+            seen_ids: set[int] = set()
+            for page in range(1, expected_pages + 1):
+                payload = first if page == 1 else fetch_page(
+                    f"{base}?head_sha={subject}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page={page}",
+                    token,
+                )
+                page_total = payload.get("total_count")
+                require(
+                    isinstance(page_total, int) and not isinstance(page_total, bool) and page_total >= 0,
+                    f"{repo}: exact-subject workflow-run total_count is malformed",
+                )
+                if page_total != total:
+                    raise WorkflowRunSnapshotDrift(
+                        f"{repo}: exact-subject workflow-run total_count changed while paging: "
+                        f"snapshot={total} page={page_total}"
+                    )
+                page_runs = payload.get("workflow_runs")
+                require(
+                    isinstance(page_runs, list),
+                    f"{repo}: exact-subject workflow-run page {page} is malformed",
+                )
+                expected_size = (
+                    0
+                    if total == 0
+                    else WORKFLOW_RUN_PAGE_SIZE
+                    if page < expected_pages
+                    else total - WORKFLOW_RUN_PAGE_SIZE * (expected_pages - 1)
+                )
+                require(
+                    len(page_runs) == expected_size,
+                    f"{repo}: exact-subject workflow-run page {page} is incomplete: "
+                    f"expected {expected_size}, observed {len(page_runs)}",
+                )
+                for run in page_runs:
+                    require(isinstance(run, dict), f"{repo}: exact-subject workflow-run entry is malformed")
+                    run_id = run.get("id")
+                    require(
+                        isinstance(run_id, int) and not isinstance(run_id, bool) and run_id > 0,
+                        f"{repo}: exact-subject workflow-run id is malformed",
+                    )
+                    require(run_id not in seen_ids, f"{repo}: duplicate exact-subject workflow-run id {run_id}")
+                    seen_ids.add(run_id)
+                    require(
+                        run.get("head_sha") == subject,
+                        f"{repo}: head_sha-filtered workflow-run collection returned a different subject",
+                    )
+                    collected.append(run)
+
+            require(
+                len(collected) == total,
+                f"{repo}: exact-subject workflow-run pagination did not close: "
+                f"expected {total}, observed {len(collected)}",
+            )
+            return collected
+        except WorkflowRunSnapshotDrift:
+            if snapshot_attempt + 1 >= WORKFLOW_RUN_SNAPSHOT_ATTEMPTS:
+                raise
+            sleeper(WORKFLOW_RUN_SNAPSHOT_BACKOFF_SECONDS[snapshot_attempt])
+
+    raise RuntimeError("unreachable exact-subject workflow-run snapshot retry state")
 
 
 def latest_workflow_run(repo: str, workflow: str, subject: str, token: str | None) -> dict[str, Any]:
@@ -405,7 +424,7 @@ def workflow_run_primitive_self_test() -> None:
 
 
 def workflow_runs_for_subject_self_test() -> None:
-    """Prove exact-subject run discovery closes pagination before workflow selection."""
+    """Prove exact-subject pagination retries only concurrent cardinality drift and otherwise fails closed."""
     subject = "1" * 40
     first_page = [
         {
@@ -439,13 +458,87 @@ def workflow_runs_for_subject_self_test() -> None:
         requested.append(page)
         return pages[page]
 
-    runs = workflow_runs_for_subject("fixture-repo", subject, None, fetcher=fixture_fetch)
+    runs = workflow_runs_for_subject(
+        "fixture-repo", subject, None, fetcher=fixture_fetch, sleeper=lambda _: None
+    )
     require(requested == [1, 2], "exact-subject workflow-run fixture did not fetch every page")
     require(len(runs) == WORKFLOW_RUN_PAGE_SIZE + 1,
             "exact-subject workflow-run fixture lost a page")
     require(
         select_exact_workflow_run(runs, subject, "ci.yml") == exact_ci,
         "exact-subject workflow-run discovery lost the required workflow on page two",
+    )
+
+    drift_requested: list[int] = []
+    drift_sleeps: list[float] = []
+    drift_attempt = 0
+
+    def drift_then_stable_fetch(url: str, token: str | None) -> dict[str, Any]:
+        nonlocal drift_attempt
+        require(token is None, "snapshot-drift fixture unexpectedly received a token")
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        page = int((query.get("page") or ["0"])[0])
+        drift_requested.append(page)
+        if page == 1:
+            drift_attempt += 1
+            return pages[1]
+        if drift_attempt == 1:
+            return {"total_count": WORKFLOW_RUN_PAGE_SIZE + 2, "workflow_runs": [exact_ci]}
+        return pages[2]
+
+    recovered = workflow_runs_for_subject(
+        "fixture-repo",
+        subject,
+        None,
+        fetcher=drift_then_stable_fetch,
+        sleeper=drift_sleeps.append,
+    )
+    require(
+        drift_requested == [1, 2, 1, 2],
+        "exact-subject snapshot drift did not restart from page one",
+    )
+    require(
+        drift_sleeps == [WORKFLOW_RUN_SNAPSHOT_BACKOFF_SECONDS[0]],
+        "exact-subject snapshot drift retry delay changed",
+    )
+    require(
+        select_exact_workflow_run(recovered, subject, "ci.yml") == exact_ci,
+        "stable retry lost the exact workflow after concurrent snapshot drift",
+    )
+
+    persistent_requested: list[int] = []
+    persistent_sleeps: list[float] = []
+
+    def persistent_drift_fetch(url: str, token: str | None) -> dict[str, Any]:
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        page = int((query.get("page") or ["0"])[0])
+        persistent_requested.append(page)
+        if page == 1:
+            return pages[1]
+        return {"total_count": WORKFLOW_RUN_PAGE_SIZE + 2, "workflow_runs": [exact_ci]}
+
+    try:
+        workflow_runs_for_subject(
+            "fixture-repo",
+            subject,
+            None,
+            fetcher=persistent_drift_fetch,
+            sleeper=persistent_sleeps.append,
+        )
+    except WorkflowRunSnapshotDrift as exc:
+        require(
+            "total_count changed while paging" in str(exc),
+            f"persistent exact-subject drift failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("persistent exact-subject snapshot drift did not fail closed")
+    require(
+        persistent_requested == [1, 2] * WORKFLOW_RUN_SNAPSHOT_ATTEMPTS,
+        "persistent exact-subject drift did not exhaust the bounded whole-snapshot retry budget",
+    )
+    require(
+        persistent_sleeps == list(WORKFLOW_RUN_SNAPSHOT_BACKOFF_SECONDS),
+        "persistent exact-subject drift retry backoff changed",
     )
 
     failure_cases = (
@@ -455,13 +548,6 @@ def workflow_runs_for_subject_self_test() -> None:
                 2: pages[2],
             },
             "incomplete",
-        ),
-        (
-            {
-                1: pages[1],
-                2: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 2, "workflow_runs": [exact_ci]},
-            },
-            "total_count changed",
         ),
         (
             {
@@ -483,8 +569,17 @@ def workflow_runs_for_subject_self_test() -> None:
             },
             "returned a different subject",
         ),
+        (
+            {
+                1: {"total_count": True, "workflow_runs": []},
+            },
+            "total_count is malformed",
+        ),
     )
     for fixture_pages, expected in failure_cases:
+        failure_requested: list[int] = []
+        failure_sleeps: list[float] = []
+
         def failing_fetch(
             url: str,
             token: str | None,
@@ -492,16 +587,32 @@ def workflow_runs_for_subject_self_test() -> None:
             data: dict[int, dict[str, Any]] = fixture_pages,
         ) -> dict[str, Any]:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
-            return data[int((query.get("page") or ["0"])[0])]
+            page = int((query.get("page") or ["0"])[0])
+            failure_requested.append(page)
+            return data[page]
 
         try:
-            workflow_runs_for_subject("fixture-repo", subject, None, fetcher=failing_fetch)
+            workflow_runs_for_subject(
+                "fixture-repo",
+                subject,
+                None,
+                fetcher=failing_fetch,
+                sleeper=failure_sleeps.append,
+            )
         except ValueError as exc:
             require(expected in str(exc), f"exact-subject workflow-run self-test failed for wrong reason: {exc}")
         else:
             raise ValueError(
                 f"exact-subject workflow-run self-test accepted malformed pagination: {expected}"
             )
+        require(
+            failure_sleeps == [],
+            f"non-drift exact-subject failure was incorrectly retried: {expected}",
+        )
+        require(
+            len(failure_requested) == len(set(failure_requested)),
+            f"non-drift exact-subject failure restarted the snapshot: {expected}",
+        )
 
 
 def workflow_jobs(
