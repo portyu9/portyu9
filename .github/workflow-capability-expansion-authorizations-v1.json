@@ -130,6 +130,13 @@
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #436 that canonicalizes GitHub CodeQL Autofix's observed empty description metadata to null while preserving the known-status gate, semantic workflow capabilities, provenance validation, required-check/GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
+      "id": "cap-codeql-autofix-merge-success-response-schema-hardening",
+      "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "expansionSha256": "e74a5f08b76f296469ed97a660b93ed8fbc20e8b5fb683ebfab1275bad2b9836",
+      "rationale": "Authorize #850's fail-closed CodeQL Autofix terminal merge-success response validation. Existing merge authority, exact-head request, review/manual-veto proof, live-main reproof, CodeQL run binding and continuation remain unchanged. Success must be a typed object with merged=true, lowercase SHA-40 and nonempty message before normalized SHA use. No new trigger, permission, endpoint, mutation, retry, OIDC, candidate execution, required-check reduction, direct-main write or bypass."
+    },
+    {
       "id": "cap-codeql-autofix-multiline-description-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
