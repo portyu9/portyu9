@@ -130,6 +130,13 @@
       "rationale": "Authorize the exact one-file trusted-control-source compatibility change in PR #452 that binds the expected GitHub CodeQL Autofix compare head to the sole commit in the real Compare API commits array while retaining exact base/merge-base ancestry, one-commit, changed-file, provenance, required-check, GHAS/review-thread, and protected auto-merge gates; fail-closed fixtures reject missing, duplicate, or wrong commit identities and semantic workflow capabilities remain unchanged."
     },
     {
+      "id": "cap-codeql-autofix-constructive-response-schemas-v1",
+      "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "expansionSha256": "917ea1beb98bfdc61f8bf52c0e92f306e48253a7aeabe7e1809b5e8b97dc7519",
+      "rationale": "Authorize frozen #917's exact protected-TCB validation hardening for the existing CodeQL Autofix ref-create and reviewer-request write responses. Existing endpoints, methods, permissions, triggers, secrets, mutation targets/classes, merge authority, required checks, rulesets and bypass surfaces are unchanged; exact created-ref and PR/base/head/repository/reviewer identities must now validate before normalized consumption. The composite Workflow Capability BOM is unchanged."
+    },
+    {
       "id": "cap-codeql-autofix-empty-description-compat",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
@@ -667,13 +674,6 @@
       "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
       "expansionSha256": "c4f3ff97243c9218135de630ca092df22ee504afb102f9fc54e2e441aa2dbb27",
       "rationale": "Authorize frozen #913 to add one read-only Spotlight reconcile GET comparing a validated candidate parent to exact current main, solely to prove an old bot candidate base is an accepted ancestor before bypassing the 30-minute uncertainty floor. Existing typed candidate/README/PR/close/delete proofs remain mandatory; divergent, malformed, or unproven young candidates remain preserved. No permission, trigger, secret, mutation, merge/ruleset authority, required-check reduction, or bypass is added."
-    },
-    {
-      "id": "cap-codeql-autofix-constructive-response-schemas-v1",
-      "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
-      "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
-      "expansionSha256": "917ea1beb98bfdc61f8bf52c0e92f306e48253a7aeabe7e1809b5e8b97dc7519",
-      "rationale": "Authorize frozen #917's exact protected-TCB validation hardening for the existing CodeQL Autofix ref-create and reviewer-request write responses. Existing endpoints, methods, permissions, triggers, secrets, mutation targets/classes, merge authority, required checks, rulesets and bypass surfaces are unchanged; exact created-ref and PR/base/head/repository/reviewer identities must now validate before normalized consumption. The composite Workflow Capability BOM is unchanged."
     },
     {
       "id": "cap-spotlight-main-push-reconciliation",
