@@ -1054,7 +1054,7 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         expect_failure(mutated, stats, policy, "candidate-ref collection")
 
     merge_start = sync.index("  merge:\n")
-    merge_end = sync.index("  decision_receipt:\n", merge_start)
+    merge_end = len(sync)
     merge_block = sync[merge_start:merge_end]
     terminal_refs_call_pos = merge_block.index(
         'CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
