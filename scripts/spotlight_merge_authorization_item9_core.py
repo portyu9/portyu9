@@ -104,18 +104,23 @@ def validate_reconciliation(reconcile: str) -> None:
         require(normalized in reconcile,
                 f"Spotlight reconciler lost a stale-only/topology proof: {normalized}")
 
-    close_call = reconcile.index(
+    close_call_marker = (
         'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
     )
-    close_schema = reconcile.index(
-        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
-        close_call,
+    close_schema_marker = (
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
     )
-    close_consume = reconcile.index('test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"', close_schema)
-    delete_ref = reconcile.index(
-        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null',
-        close_consume,
+    close_consume_marker = 'test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"'
+    delete_ref_marker = (
+        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
     )
+    for marker in (close_call_marker, close_schema_marker, close_consume_marker, delete_ref_marker):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight reconciler stale-close response schema anchor is missing or ambiguous: {marker}")
+    close_call = reconcile.index(close_call_marker)
+    close_schema = reconcile.index(close_schema_marker, close_call)
+    close_consume = reconcile.index(close_consume_marker, close_schema)
+    delete_ref = reconcile.index(delete_ref_marker, close_consume)
     close_block = reconcile[close_call:close_consume]
     for fragment in (
         '((type) == "object") and',
