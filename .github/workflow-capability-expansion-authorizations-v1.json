@@ -351,7 +351,7 @@
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "ae010db92c138b37b0d66b0e62fb70b05ba6567d60c69ea9cea2bb39b7a0fec8",
-      "rationale": "Authorize #839's exact Dependabot Git-data mutation-response schema hardening. Existing Git blob/tree/commit/ref mutation endpoints, token permissions, reconciliation targets, admission dispatches, protected checks, review/merge authority, and semantic Workflow Capability remain unchanged. Mutation responses must now prove typed SHA identity plus exact commit tree/parent topology and ref/object binding before later privileged writes. No trigger, secret, mutation class, retry, OIDC authority, candidate execution, required-check reduction, direct-main write, ruleset change, or bypass is added."
+      "rationale": "Authorize #839's exact Dependabot Git-data mutation-response schema hardening. Existing blob/tree/commit/ref endpoints, permissions, reconciliation targets, protected checks, review/merge authority, and semantic Workflow Capability stay unchanged. Responses now prove typed SHA identity plus exact commit tree/parent and ref/object binding before later writes. No trigger, secret, mutation class, retry, OIDC, candidate execution, check reduction, direct-main write, ruleset change, or bypass."
     },
     {
       "id": "cap-dependabot-immutable-workflow-run-wake-binding",
