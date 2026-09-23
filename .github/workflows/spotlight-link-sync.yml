@@ -346,12 +346,54 @@ jobs:
             CLEANUP_PR_NUMBER_JSON=null
             PR_CLOSED=false
             PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"
+            jq -e --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg parent "$PARENT_SHA" --arg repo "$GITHUB_REPOSITORY" \
+              --arg title "chore: sync rotating Spotlight links" \
+              --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
+              (type == "array") and
+              (length <= 1) and
+              (all(.[];
+                (type == "object") and
+                (.number | type == "number" and . == floor and . > 0) and
+                (.user | type == "object" and .login == "github-actions[bot]") and
+                (.state == "open") and
+                (.draft | type == "boolean" and . == false) and
+                (.title == $title) and
+                (.body == $body) and
+                (.base | type == "object" and .ref == "main" and .sha == $parent and
+                  (.repo | type == "object" and .full_name == $repo)) and
+                (.head | type == "object" and .ref == $branch and .sha == $head and
+                  (.repo | type == "object" and .full_name == $repo)) and
+                (has("merge_commit_sha") and
+                  ((.merge_commit_sha == null) or
+                   ((.merge_commit_sha | type) == "string" and (.merge_commit_sha | test("^[0-9a-f]{40}$")))))
+              ))
+            ' <<<"$PRS" >/dev/null
             PR_COUNT="$(jq 'length' <<<"$PRS")"
             test "$PR_COUNT" = "0" || test "$PR_COUNT" = "1"
             if [ "$PR_COUNT" = "1" ]; then
               PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
               [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
               PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+              jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg parent "$PARENT_SHA" --arg repo "$GITHUB_REPOSITORY" \
+                --arg title "chore: sync rotating Spotlight links" \
+                --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
+                (type == "object") and
+                (.number | type == "number" and . == floor and . == $pr) and
+                (.user | type == "object" and .login == "github-actions[bot]") and
+                (.state == "open") and
+                (.draft | type == "boolean" and . == false) and
+                (.merged | type == "boolean" and . == false) and
+                (.maintainer_can_modify | type == "boolean" and . == false) and
+                (.title == $title) and
+                (.body == $body) and
+                (.base | type == "object" and .ref == "main" and .sha == $parent and
+                  (.repo | type == "object" and .full_name == $repo)) and
+                (.head | type == "object" and .ref == $branch and .sha == $head and
+                  (.repo | type == "object" and .full_name == $repo)) and
+                (has("merge_commit_sha") and
+                  ((.merge_commit_sha == null) or
+                   ((.merge_commit_sha | type) == "string" and (.merge_commit_sha | test("^[0-9a-f]{40}$")))))
+              ' <<<"$PR" >/dev/null
               test "$(jq -r .state <<<"$PR")" = "open"
               test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"
               test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"
