@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "d9f6bbbf0f58fa04dbd8afcee436ffb304f54948",
+    ".github/workflows/spotlight-link-sync.yml": "a3ab40a97d87cf064be2a11f215be63db81e52cf",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -100,8 +100,9 @@ def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
         '(.artifacts | type == "array") and',
         '((.artifacts | length) == .total_count) and',
         '(all(.artifacts[];',
-        '(.id | type == "number" and . == floor and . > 0) and',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
         '(.name | type == "string" and . == $name) and',
+        '(.id | (type == "number") and (. > 0) and (. == floor)) and',
         '(.expired | type == "boolean" and . == false) and',
         '(.workflow_run | type == "object" and',
         '(.repository_id | type == "number" and . == floor and . == $repo) and',
