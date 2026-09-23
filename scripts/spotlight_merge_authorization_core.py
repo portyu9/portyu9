@@ -122,11 +122,41 @@ def validate_mutation_budget(sync: str) -> None:
                 f"Spotlight mutation budget acquired forbidden authority/code surface: {forbidden}")
     require(budget.count("gh api ") == 1,
             "Spotlight mutation budget must contain exactly one reviewed GitHub API read")
-    require('ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"' in budget,
+    artifact_call = 'ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    require(artifact_call in budget,
             "Spotlight mutation budget artifact-history API identity changed")
+    schema_marker = 'jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
+    schema_end = '\' <<<"$ARTIFACTS" >/dev/null || {'
+    total_marker = 'TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"'
+    count_marker = 'COUNT="$(jq \'.artifacts | length\' <<<"$ARTIFACTS")"'
+    invalid_marker = 'INVALID="$(jq \\'
+    current_marker = 'CURRENT="$(jq --argjson run_id "$GITHUB_RUN_ID"'
+    decision_marker = 'if [ "$TOTAL" -le "$MAX_ATTEMPTS" ]; then'
+    output_marker = 'echo "allowed=$ALLOWED" >> "$GITHUB_OUTPUT"'
+    for marker in (
+        schema_marker, schema_end, total_marker, count_marker, invalid_marker,
+        current_marker, decision_marker, output_marker,
+    ):
+        require(budget.count(marker) == 1,
+                f"Spotlight mutation-budget artifact-history ordering anchor is missing or ambiguous: {marker}")
     for fragment in (
         'ARTIFACT_NAME="spotlight-link-plan-${BASE_SHA}-${GENERATED_SHA}"',
         "MAX_ATTEMPTS=2",
+        '(type == "object") and',
+        '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '(.artifacts | type == "array") and',
+        '((.artifacts | length) == .total_count) and',
+        '(all(.artifacts[];',
+        '(.id | type == "number" and . == floor and . > 0) and',
+        '(.name | type == "string" and . == $name) and',
+        '(.expired | type == "boolean" and . == false) and',
+        '(.workflow_run | type == "object" and',
+        '(.repository_id | type == "number" and . == floor and . == $repo) and',
+        '(.head_repository_id | type == "number" and . == floor and . == $repo) and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)',
+        '(([.artifacts[].id] | length) == ([.artifacts[].id] | unique | length))',
+        'Spotlight mutation-budget artifact-history envelope is malformed or untrusted.',
         BUDGET_COMPLETENESS_GATE,
         'test "$TOTAL" -le 100 || {',
         '.workflow_run.repository_id != $repo',
@@ -139,6 +169,21 @@ def validate_mutation_budget(sync: str) -> None:
     ):
         require(fragment in budget,
                 f"Spotlight mutation-budget fail-closed contract is missing: {fragment}")
+    artifact_call_pos = budget.index(artifact_call)
+    schema_pos = budget.index(schema_marker)
+    schema_end_pos = budget.index(schema_end, schema_pos)
+    total_pos = budget.index(total_marker)
+    count_pos = budget.index(count_marker)
+    completeness_pos = budget.index(BUDGET_COMPLETENESS_GATE)
+    invalid_pos = budget.index(invalid_marker)
+    current_pos = budget.index(current_marker)
+    decision_pos = budget.index(decision_marker)
+    output_pos = budget.index(output_marker)
+    require(
+        artifact_call_pos < schema_pos < schema_end_pos < total_pos < count_pos
+        < completeness_pos < invalid_pos < current_pos < decision_pos < output_pos,
+        "Spotlight mutation-budget artifact-history must validate before admission classification/output",
+    )
     require("spotlight-link-plan-${{ steps.render.outputs.base_sha }}-${{ steps.render.outputs.generated_sha }}" in plan,
             "Spotlight changed-plan attempt token must be content-addressed by main/generated source epoch")
 
