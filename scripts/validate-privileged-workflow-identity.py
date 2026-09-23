@@ -1514,7 +1514,7 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
 
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
     reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
-    convergence_start = '          COMPLETE=false\n          for ATTEMPT in $(seq 1 60); do'
+    convergence_start = '          COMPLETE=false\n          for attempt in $(seq 1 60); do'
     require(spotlight.count(reviewer_dispatch) == 1,
             "Spotlight must dispatch exactly one trusted reviewer pass per approve run")
     require(
