@@ -581,6 +581,25 @@ jobs:
             -f external_id="$EXTERNAL_ID" \
             -f 'output[title]=Trusted capability admission passed' \
             -f "output[summary]=$SUMMARY")"
+          jq -e --arg name "$CHECK_NAME" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" --arg summary "$SUMMARY" '
+            (type == "object") and
+            (.id | type == "number" and . == floor and . > 0) and
+            (.name | type == "string" and . == $name) and
+            (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+            (.status | type == "string" and . == "completed") and
+            (.conclusion | type == "string" and . == "success") and
+            (.external_id | type == "string" and length > 0 and . == $external) and
+            (.details_url | type == "string" and test("^https://github\\.com/portyu9/portyu9/runs/[1-9][0-9]*$")) and
+            (.output | type == "object" and
+              (.title | type == "string" and . == "Trusted capability admission passed") and
+              (.summary | type == "string" and . == $summary)) and
+            (.app | type == "object" and
+              (.id | type == "number" and . == floor and . == 15368) and
+              (.slug | type == "string" and . == "github-actions"))
+          ' <<<"$CHECK" >/dev/null || {
+            echo "ERROR: malformed or mismatched trusted capability-admission check-run creation response." >&2
+            exit 1
+          }
           [[ "$(jq -r .id <<<"$CHECK")" =~ ^[1-9][0-9]*$ ]]
           test "$(jq -r .name <<<"$CHECK")" = "$CHECK_NAME"
           test "$(jq -r .head_sha <<<"$CHECK")" = "$HEAD_SHA"
