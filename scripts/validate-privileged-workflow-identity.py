@@ -435,6 +435,14 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     commit_schema_start = legacy.index(commit_schema_start_marker)
     commit_schema_end = legacy.index(commit_schema_end_marker, commit_schema_start) + len(commit_schema_end_marker)
     v21_reconciliation = legacy[:commit_schema_start] + legacy[commit_schema_end:]
+    current_age_guard = (
+        'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && '
+        '[ "$SAME_BASE_SUPERSEDED" != "true" ]; then'
+    )
+    legacy_age_guard = 'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ]; then'
+    require(v21_reconciliation.count(current_age_guard) == 1,
+            "Spotlight v21 reconciliation projection cannot isolate same-base supersession age guard")
+    v21_reconciliation = v21_reconciliation.replace(current_age_guard, legacy_age_guard, 1)
     v21.validate_spotlight_reconciliation(v21_reconciliation)
     require(
         'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"' in legacy and
