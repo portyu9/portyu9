@@ -976,6 +976,12 @@ jobs:
             -f ref=main >/dev/null
           echo "Dispatched event-driven Spotlight admission proof from trusted main; Capability Admission independently binds the unique current-main candidate."
 
+          # Break the native-review cycle deterministically from the trusted parent:
+          # launch exactly one reviewer pass before waiting for whole Profile Quality success.
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
+            -f ref=main >/dev/null
+          echo "Dispatched exact pre-convergence portyu9 review evaluation from trusted main."
+
           CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"
           DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"
           PROFILE_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"
@@ -1066,10 +1072,6 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
             jq -e --arg body "$APPROVAL_BODY" '.body == $body' approval-comment.json >/dev/null
           fi
-
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
-            -f ref=main >/dev/null
-          echo "Dispatched exact post-check portyu9 review evaluation from trusted main."
 
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
           PORTYU9_APPROVAL_COUNT=0
