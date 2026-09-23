@@ -389,6 +389,39 @@ def validate_candidate_publication(sync: str) -> None:
         require(fragment in propose,
                 f"Spotlight retry must reuse only one exact immutable candidate ref: {fragment}")
 
+    proposal_refs_call_marker = (
+        'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    proposal_refs_schema_marker = '\' <<<"$MATCHING_REFS" >/dev/null'
+    proposal_refs_consume_marker = (
+        'EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+        '\'[.[] | select(.ref == $ref)] | length\' <<<"$MATCHING_REFS")"'
+    )
+    for marker in (
+        proposal_refs_call_marker, proposal_refs_schema_marker, proposal_refs_consume_marker,
+    ):
+        require(propose.count(marker) == 1,
+                f"Spotlight proposer candidate-ref collection anchor is missing or ambiguous: {marker}")
+    proposal_refs_call = propose.index(proposal_refs_call_marker)
+    proposal_refs_schema = propose.index(proposal_refs_schema_marker)
+    proposal_refs_consume = propose.index(proposal_refs_consume_marker)
+    proposal_refs_block = propose[proposal_refs_call:proposal_refs_consume]
+    for fragment in (
+        'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}"',
+        '(type == "array") and',
+        '(length <= 1) and',
+        '(.ref | type == "string" and . == $ref) and',
+        '(.object | type == "object" and',
+        '(.type | type == "string" and . == "commit") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
+    ):
+        require(fragment in proposal_refs_block,
+                f"Spotlight proposer candidate-ref collection schema is missing: {fragment}")
+    require(
+        proposal_refs_call < proposal_refs_schema < proposal_refs_consume,
+        "Spotlight proposer candidate-ref collection must validate before reuse/create cardinality consumption",
+    )
+
     ordered = (
         'BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"',
         'TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"',
@@ -527,13 +560,72 @@ def validate_candidate_publication(sync: str) -> None:
             "Spotlight terminal merge must re-prove candidate head immutability")
     require('test "$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")" = "$BASE_SHA"' in merge,
             "Spotlight terminal merge must re-prove the candidate single-parent source binding")
-    require('CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"' in merge and
-            'test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"' in merge,
-            "Spotlight terminal cleanup must classify exact candidate-ref cardinality without a failing GET")
-    require('gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null' in merge,
-            "Spotlight cleanup must delete only the exact consumed immutable candidate ref")
+    terminal_refs_call_marker = (
+        'CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    terminal_refs_schema_marker = (
+        'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA"'
+    )
+    terminal_refs_consume_marker = (
+        'EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+        '\'[.[] | select(.ref == $ref)] | length\' <<<"$CANDIDATE_REFS")"'
+    )
+    terminal_delete_marker = (
+        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null'
+    )
+    terminal_after_call_marker = (
+        'AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    terminal_after_schema_marker = (
+        'jq -e \'(type == "array") and (length == 0)\' <<<"$AFTER_REFS" >/dev/null'
+    )
+    terminal_after_consume_marker = (
+        'AFTER_EXACT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+        '\'[.[] | select(.ref == $ref)] | length\' <<<"$AFTER_REFS")"'
+    )
+    terminal_output_marker = 'echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"'
+    for marker in (
+        terminal_refs_call_marker, terminal_refs_schema_marker, terminal_refs_consume_marker,
+        terminal_delete_marker,
+    ):
+        require(merge.count(marker) == 1,
+                f"Spotlight terminal candidate-ref collection anchor is missing or ambiguous: {marker}")
+    for marker in (
+        terminal_after_call_marker, terminal_after_schema_marker,
+        terminal_after_consume_marker, terminal_output_marker,
+    ):
+        require(merge.count(marker) == 1,
+                f"Spotlight terminal candidate-ref cleanup evidence anchor is missing or ambiguous: {marker}")
+
+    terminal_refs_call = merge.index(terminal_refs_call_marker)
+    terminal_refs_schema = merge.index(terminal_refs_schema_marker)
+    terminal_refs_consume = merge.index(terminal_refs_consume_marker)
+    terminal_delete = merge.index(terminal_delete_marker)
+    terminal_after_call = merge.index(terminal_after_call_marker)
+    terminal_after_schema = merge.index(terminal_after_schema_marker)
+    terminal_after_consume = merge.index(terminal_after_consume_marker)
+    terminal_output = merge.index(terminal_output_marker)
+
+    terminal_refs_block = merge[terminal_refs_call:terminal_refs_consume]
+    for fragment in (
+        '(type == "array") and',
+        '(length <= 1) and',
+        '(.ref | type == "string" and . == $ref) and',
+        '(.object | type == "object" and',
+        '(.type | type == "string" and . == "commit") and',
+        '(.sha | type == "string" and . == $head)',
+    ):
+        require(fragment in terminal_refs_block,
+                f"Spotlight terminal candidate-ref collection schema is missing: {fragment}")
+    require(
+        terminal_refs_call < terminal_refs_schema < terminal_refs_consume < terminal_delete
+        < terminal_after_call < terminal_after_schema < terminal_after_consume < terminal_output,
+        "Spotlight terminal candidate-ref cleanup evidence must validate before cleanup mutation/output evidence",
+    )
+    require('test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"' in merge,
+            "Spotlight terminal cleanup must retain the redundant exact candidate-ref cardinality assertion")
     require('test "$AFTER_EXACT" = "0"' in merge,
-            "Spotlight terminal cleanup must prove the exact consumed ref is absent after deletion")
+            "Spotlight terminal cleanup must prove the exact consumed ref is absent after deletion (redundant assertion)")
     require("CANDIDATE_REF=\"$(gh api " not in merge and "2>/dev/null" not in merge,
             "Spotlight terminal cleanup must not classify missing refs through suppressed single-ref GET failures")
 
@@ -908,11 +1000,6 @@ def self_test(sync: str, stats: str, policy: str) -> None:
             "commit-create response schema",
         ),
         (
-            '                (.type | type == "string" and . == "commit") and',
-            '                (.type | type == "string") and',
-            "ref-create response schema",
-        ),
-        (
             '              (.number | type == "number" and . == floor and . > 0) and',
             '              (.number | type == "string") and',
             "pull-create response schema",
@@ -923,6 +1010,107 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         mutated_propose = propose.replace(old, new, 1)
         mutated = sync[:propose_start] + mutated_propose + sync[propose_end:]
         expect_failure(mutated, stats, policy, expected)
+
+    created_ref_call_pos = propose.index(
+        'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"'
+    )
+    created_ref_consume_pos = propose.index(
+        'test "$(jq -r .ref <<<"$CREATED_REF")" = "refs/heads/${CANDIDATE_BRANCH}"',
+        created_ref_call_pos,
+    )
+    created_ref_block = propose[created_ref_call_pos:created_ref_consume_pos]
+    ref_type_old = '                (.type | type == "string" and . == "commit") and'
+    ref_type_new = '                (.type | type == "string") and'
+    require(created_ref_block.count(ref_type_old) == 1,
+            "Spotlight ref-create response self-test anchor is missing or ambiguous inside CREATED_REF block")
+    mutated_ref_block = created_ref_block.replace(ref_type_old, ref_type_new, 1)
+    mutated_propose = (
+        propose[:created_ref_call_pos] + mutated_ref_block + propose[created_ref_consume_pos:]
+    )
+    mutated = sync[:propose_start] + mutated_propose + sync[propose_end:]
+    expect_failure(mutated, stats, policy, "ref-create response schema")
+
+    proposal_refs_call_pos = propose.index(
+        'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    proposal_refs_consume_pos = propose.index(
+        'EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+        '\'[.[] | select(.ref == $ref)] | length\' <<<"$MATCHING_REFS")"',
+        proposal_refs_call_pos,
+    )
+    proposal_refs_block = propose[proposal_refs_call_pos:proposal_refs_consume_pos]
+    for old, new in (
+        ('            (type == "array") and', '            (type == "object") and'),
+        ('            (length <= 1) and', '            (length <= 2) and'),
+        ('              (.ref | type == "string" and . == $ref) and',
+         '              (.ref | type == "string") and'),
+        ('                (.type | type == "string" and . == "commit") and',
+         '                (.type | type == "string") and'),
+        ('                (.sha | type == "string" and test("^[0-9a-f]{40}$")))))',
+         '                (.sha | type == "string"))))'),
+    ):
+        require(proposal_refs_block.count(old) == 1,
+                f"Spotlight proposer candidate-ref collection self-test anchor is missing or ambiguous: {old}")
+        mutated_refs = proposal_refs_block.replace(old, new, 1)
+        mutated_propose = (
+            propose[:proposal_refs_call_pos] + mutated_refs + propose[proposal_refs_consume_pos:]
+        )
+        mutated = sync[:propose_start] + mutated_propose + sync[propose_end:]
+        expect_failure(mutated, stats, policy, "candidate-ref collection")
+
+    merge_start = sync.index("  merge:\n")
+    merge_end = len(sync)
+    merge_block = sync[merge_start:merge_end]
+    terminal_refs_call_pos = merge_block.index(
+        'CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    terminal_refs_consume_pos = merge_block.index(
+        'EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+        '\'[.[] | select(.ref == $ref)] | length\' <<<"$CANDIDATE_REFS")"',
+        terminal_refs_call_pos,
+    )
+    terminal_refs_block = merge_block[terminal_refs_call_pos:terminal_refs_consume_pos]
+    for old, new in (
+        ('          (type == "array") and', '          (type == "object") and'),
+        ('          (length <= 1) and', '          (length <= 2) and'),
+        ('            (.ref | type == "string" and . == $ref) and',
+         '            (.ref | type == "string") and'),
+        ('              (.type | type == "string" and . == "commit") and',
+         '              (.type | type == "string") and'),
+        ('              (.sha | type == "string" and . == $head))))',
+         '              (.sha | type == "string"))))'),
+    ):
+        require(terminal_refs_block.count(old) == 1,
+                f"Spotlight terminal candidate-ref collection self-test anchor is missing or ambiguous: {old}")
+        mutated_refs = terminal_refs_block.replace(old, new, 1)
+        mutated_merge = (
+            merge_block[:terminal_refs_call_pos] + mutated_refs + merge_block[terminal_refs_consume_pos:]
+        )
+        mutated = sync[:merge_start] + mutated_merge + sync[merge_end:]
+        expect_failure(mutated, stats, policy, "candidate-ref collection")
+
+    after_call_pos = merge_block.index(
+        'AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    after_consume_pos = merge_block.index(
+        'AFTER_EXACT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+        '\'[.[] | select(.ref == $ref)] | length\' <<<"$AFTER_REFS")"',
+        after_call_pos,
+    )
+    after_block = merge_block[after_call_pos:after_consume_pos]
+    for old, new in (
+        ('jq -e \'(type == "array") and (length == 0)\' <<<"$AFTER_REFS" >/dev/null',
+         'jq -e \'(type == "object") and (length == 0)\' <<<"$AFTER_REFS" >/dev/null'),
+        ('jq -e \'(type == "array") and (length == 0)\' <<<"$AFTER_REFS" >/dev/null',
+         'jq -e \'(type == "array") and (length >= 0)\' <<<"$AFTER_REFS" >/dev/null'),
+    ):
+        require(after_block.count(old) == 1,
+                f"Spotlight terminal post-delete readback self-test anchor is missing or ambiguous: {old}")
+        mutated_after = after_block.replace(old, new, 1)
+        mutated_merge = merge_block[:after_call_pos] + mutated_after + merge_block[after_consume_pos:]
+        mutated = sync[:merge_start] + mutated_merge + sync[merge_end:]
+        expect_failure(mutated, stats, policy, "candidate-ref cleanup evidence")
+
     expect_failure(
         sync.replace(
             'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"',

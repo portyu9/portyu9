@@ -659,6 +659,15 @@ jobs:
           test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
 
           MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
+          jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+            (type == "array") and
+            (length <= 1) and
+            (all(.[]; (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")))))
+          ' <<<"$MATCHING_REFS" >/dev/null
           EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$MATCHING_REFS")"
           test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"
           if [ "$EXACT_REF_COUNT" = "1" ]; then
@@ -1500,12 +1509,22 @@ jobs:
           CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
           test "$CURRENT_MAIN_SHA" = "$MERGE_SHA"
           CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
+          jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA" '
+            (type == "array") and
+            (length <= 1) and
+            (all(.[]; (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and . == $head))))
+          ' <<<"$CANDIDATE_REFS" >/dev/null
           EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$CANDIDATE_REFS")"
           test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"
           if [ "$EXACT_REF_COUNT" = "1" ]; then
             test "$(jq -r --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)][0].object.sha' <<<"$CANDIDATE_REFS")" = "$HEAD_SHA"
             gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null
             AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
+            jq -e '(type == "array") and (length == 0)' <<<"$AFTER_REFS" >/dev/null
             AFTER_EXACT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$AFTER_REFS")"
             test "$AFTER_EXACT" = "0"
           fi
