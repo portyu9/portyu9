@@ -10,7 +10,7 @@
     "scripts/json_object_contract.py": "0eed47074ba6f0bd470dff9e814577d1f78eede6",
     "scripts/portfolio-systems-v1.json": "fe8b4c12061b3e6c8b803e78e97a08fe43f98ad2",
     "scripts/portfolio_evidence_helpers.py": "74fedec29539f8a262c48780be26856f5daac8b1",
-    "scripts/portfolio_evidence_ledger.py": "9623a1db1faaac6ca7163937d3a6cff2ef21eb21",
+    "scripts/portfolio_evidence_ledger.py": "c6ce005464c8175debded7570cc609e1d98b78c6",
     "scripts/portfolio_system_registry.py": "a29d8b743d3c115550a15683f50948193f6ab483",
     "scripts/validate-engineering-spotlight.py": "388991c414a74569da749867929a97705ad67f9e",
     "scripts/validate-portfolio-evidence-ledger.py": "0e6f51f0da8da540b8ee31a2c23e79316032a3b7",
