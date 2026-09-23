@@ -852,7 +852,7 @@ jobs:
               (all(.[][];
                 type == "object" and
                 (.id | type == "number" and . == floor and . > 0) and
-                (.user | type == "object" and (.login | type == "string" and length > 0)) and
+                (.user as $user | ($user | type) == "object" and ($user.login | type == "string" and length > 0)) and
                 (.state | type == "string" and
                   (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
                 has("commit_id") and
@@ -1137,7 +1137,7 @@ jobs:
               (type == "object") and
               (.number | type == "number" and . == floor and . == $pr) and
               (.user | type == "object" and (.login | type == "string" and length > 0)) and
-              (.state | type == "string" and (. == "open" or . == "closed")) and
+              (.state as $state | ($state | type) == "string" and ($state == "open" or $state == "closed")) and
               (.draft | type == "boolean") and
               (.merged | type == "boolean") and
               (.maintainer_can_modify | type == "boolean") and
