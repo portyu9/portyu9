@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v60"
+VERSION = "governed-workflow-byte-identity-v61"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "f80c921b328f120c00a32479e8c2b1b53e335beb",
+    ".github/workflows/spotlight-link-sync.yml": "8b49e51504ea3a36abbd3c50afd962294960d2f5",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -157,6 +157,12 @@ def validate_item10_mac(spotlight: str) -> None:
         'contains($marker)',
         'echo "Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified" >&2',
         'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
+        'MERGE_SUCCESS_FILTER=\'if type != "object" then error("Spotlight merge response must be an object")',
+        'elif (.merged | type) != "boolean" or .merged != true',
+        '(.sha | test("^[0-9a-f]{40}$") | not)',
+        '(.message | type) != "string" or (.message | length) == 0',
+        'VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"',
+        'MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"',
     ):
         require(fragment in merge, f"Spotlight terminal MAC verification contract is missing: {fragment}")
     require("jq -c '.workflowRuns | sort_by(.name)'" not in merge and
@@ -168,8 +174,13 @@ def validate_item10_mac(spotlight: str) -> None:
     verify_pos = merge.index('gh attestation verify "$SUBJECT"')
     statement_pos = merge.index('.verificationResult.statement')
     merge_pos = merge.index('RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"')
-    require(provenance_pos < verify_pos < statement_pos < merge_pos,
-            "Spotlight terminal merge mutation moved before canonical provenance and verified-statement MAC binding")
+    response_pos = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"')
+    current_main_pos = merge.index('CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"')
+    cleanup_pos = merge.index('CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"')
+    require(provenance_pos < verify_pos < statement_pos < merge_pos < response_pos < current_main_pos < cleanup_pos,
+            "Spotlight terminal merge mutation/typed-response/current-main/cleanup ordering changed")
+    require('MERGE_SHA="$(jq -r .sha <<<"$RESULT")"' not in merge,
+            "Spotlight terminal merge must not consume the raw merge response SHA")
     for forbidden in ("for attempt in ", "sleep 10", "actions/checkout@", "actions/setup-python@", "python3 "):
         require(forbidden not in merge, f"Spotlight terminal merge acquired polling/authored execution surface: {forbidden}")
 
