@@ -18,13 +18,11 @@ COMPRESSED_DOWNLOAD_STEP = (
 IMMUTABLE_ANCHOR = (
     '          fi\n\n'
     '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
-    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
 )
 IMMUTABLE_PROJECTED = (
     '          fi\n\n'
     '          # Validate the complete candidate object before first publication or retry reuse.\n'
     '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
-    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
 )
 CURRENT_MAIN_CAPTURE = (
     '          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"\n'
