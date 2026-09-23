@@ -320,13 +320,23 @@ def validate_leases(profile: str, spotlight: str) -> None:
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
     legacy = spotlight[:spotlight.index("  decision_receipt:\n")]
-    v21.validate_spotlight_reconciliation(legacy)
+    reconcile = job_block(legacy, "reconcile", "budget")
+    commit_schema_start_marker = (
+        '            jq -e --arg head "$HEAD_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \'\n'
+    )
+    commit_schema_end_marker = '            \' <<<"$CANDIDATE_COMMIT" >/dev/null\n'
+    require(reconcile.count(commit_schema_start_marker) == 1
+            and reconcile.count(commit_schema_end_marker) == 1,
+            "Spotlight v21 reconciliation projection cannot isolate the independently validated stale commit schema")
+    commit_schema_start = legacy.index(commit_schema_start_marker)
+    commit_schema_end = legacy.index(commit_schema_end_marker, commit_schema_start) + len(commit_schema_end_marker)
+    v21_reconciliation = legacy[:commit_schema_start] + legacy[commit_schema_end:]
+    v21.validate_spotlight_reconciliation(v21_reconciliation)
     require(
         'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"' in legacy and
         'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"' in legacy,
         "Spotlight stale reconciliation must use list results only for bounded PR discovery and re-fetch the exact full PR object",
     )
-    reconcile = job_block(legacy, "reconcile", "budget")
     refs_call_marker = (
         'REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}")"'
     )
