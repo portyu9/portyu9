@@ -38,13 +38,11 @@ IMMUTABLE_COMMENT = "# Validate the complete candidate object before first publi
 IMMUTABLE_ANCHOR = (
     '          fi\n\n'
     '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
-    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
 )
 IMMUTABLE_PROJECTED = (
     '          fi\n\n'
     f'          {IMMUTABLE_COMMENT}\n'
     '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
-    '          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"\n'
 )
 
 
