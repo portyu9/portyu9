@@ -346,7 +346,7 @@ jobs:
             CLEANUP_PR_NUMBER_JSON=null
             PR_CLOSED=false
             PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"
-            jq -e --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg parent "$PARENT_SHA" --arg repo "$GITHUB_REPOSITORY" \
+            jq -e --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \
               --arg title "chore: sync rotating Spotlight links" \
               --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
               (type == "array") and
@@ -359,7 +359,8 @@ jobs:
                 (.draft | type == "boolean" and . == false) and
                 (.title == $title) and
                 (.body == $body) and
-                (.base | type == "object" and .ref == "main" and .sha == $parent and
+                (.base | type == "object" and .ref == "main" and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
                   (.repo | type == "object" and .full_name == $repo)) and
                 (.head | type == "object" and .ref == $branch and .sha == $head and
                   (.repo | type == "object" and .full_name == $repo)) and
@@ -374,7 +375,7 @@ jobs:
               PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
               [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
               PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
-              jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg parent "$PARENT_SHA" --arg repo "$GITHUB_REPOSITORY" \
+              jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \
                 --arg title "chore: sync rotating Spotlight links" \
                 --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
                 (type == "object") and
@@ -386,7 +387,8 @@ jobs:
                 (.maintainer_can_modify | type == "boolean" and . == false) and
                 (.title == $title) and
                 (.body == $body) and
-                (.base | type == "object" and .ref == "main" and .sha == $parent and
+                (.base | type == "object" and .ref == "main" and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
                   (.repo | type == "object" and .full_name == $repo)) and
                 (.head | type == "object" and .ref == $branch and .sha == $head and
                   (.repo | type == "object" and .full_name == $repo)) and
