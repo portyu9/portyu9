@@ -271,8 +271,13 @@ jobs:
             -f ref="$TARGET_REF" \
             -f sha="$BASE_SHA" \
             > created-ref.json
-          test "$(jq -r .ref created-ref.json)" = "$TARGET_REF"
-          test "$(jq -r .object.sha created-ref.json)" = "$BASE_SHA"
+          python3 scripts/codeql_autofix_controller.py created-ref-response \
+            --response-file created-ref.json \
+            --branch "$BRANCH" \
+            --expected-sha "$BASE_SHA" \
+            --out created-ref-normalized.json
+          test "$(jq -r .ref created-ref-normalized.json)" = "$TARGET_REF"
+          test "$(jq -r .sha created-ref-normalized.json)" = "$BASE_SHA"
 
           gh api -X POST \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits" \
@@ -317,7 +322,17 @@ jobs:
           PR_NUMBER="$(jq -r .prNumber codeql-autofix-receipt.json)"
           gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
             -f 'reviewers[]=portyu9' > requested-reviewer.json
-          test "$(jq '[.requested_reviewers[]? | select(.login == "portyu9")] | length' requested-reviewer.json)" = "1"
+          python3 scripts/codeql_autofix_controller.py reviewer-request-response \
+            --response-file requested-reviewer.json \
+            --pr-number "$PR_NUMBER" \
+            --repository "$TARGET_REPOSITORY" \
+            --base-sha "$BASE_SHA" \
+            --branch "$BRANCH" \
+            --head-sha "$HEAD_SHA" \
+            --out requested-reviewer-normalized.json
+          test "$(jq -r .prNumber requested-reviewer-normalized.json)" = "$PR_NUMBER"
+          test "$(jq -r .reviewer requested-reviewer-normalized.json)" = "portyu9"
+          test "$(jq -r .headSha requested-reviewer-normalized.json)" = "$HEAD_SHA"
           RECEIPT_NAME="codeql-autofix-receipt-run-${RUN_ID}-alert-${ALERT_NUMBER}"
           printf 'created=true\n' >> "$GITHUB_OUTPUT"
           printf 'pr_number=%s\n' "$PR_NUMBER" >> "$GITHUB_OUTPUT"
