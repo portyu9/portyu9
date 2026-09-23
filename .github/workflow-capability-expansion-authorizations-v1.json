@@ -695,6 +695,13 @@
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "3db685a54ec049e30c30399f16a481384af84972015b704f179723698aab5ac5",
       "rationale": "Authorize the exact trusted compiler hardening in PR #426 that makes gh api graphql fail closed, classifies GraphQL mutations explicitly, and exposes enablePullRequestAutoMerge to the semantic mutation inventory; the current six-workflow BOM remains byte-for-byte unchanged."
+    },
+    {
+      "id": "cap-governed-review-liveness-transient-read-v1",
+      "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "expansionSha256": "f7c4b2d408c729ef2cad41d9f7539b0b1231402095512d3a5a1c129a3128a107",
+      "rationale": "Authorize frozen #897's exact governed-review liveness hardening. Semantic Workflow Capability is unchanged. The trusted Spotlight parent moves its existing bot-pr-user-approval workflow dispatch earlier, after trusted admission dispatch and before whole-workflow convergence, using the same existing Actions-write endpoint exactly once per pass. The native governed-review evaluator adds only a bounded classified retry for fresh read-only GitHub GET observations: three attempts with deterministic 1s/2s backoff for transport failures, HTTP 408/429/selected 5xx, or rate-limit-evidenced 403; ordinary authorization/not-found, malformed JSON, schema/policy/manual-veto failures remain terminal and no mutation is ever replayed. No permission, trigger, secret, API endpoint/method class, review-mutation authority, merge/ruleset/direct-main authority, required-check reduction, or bypass is added."
     }
   ]
 }
