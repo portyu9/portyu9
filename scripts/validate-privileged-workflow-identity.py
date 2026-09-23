@@ -543,11 +543,11 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         require(reconcile.count(marker) == 1,
                 f"Spotlight stale-delete readback contract anchor is missing or ambiguous: {marker}")
 
-    readback_call = reconcile.index(readback_call_marker, close_delete)
-    readback_schema = reconcile.index(readback_schema_marker, readback_call)
-    readback_consume = reconcile.index(readback_consume_marker, readback_schema)
-    cleanup_journal = reconcile.index(cleanup_journal_marker, readback_consume)
-    cleanup_effect = reconcile.index(cleanup_effect_marker, cleanup_journal)
+    readback_call = reconcile.index(readback_call_marker)
+    readback_schema = reconcile.index(readback_schema_marker)
+    readback_consume = reconcile.index(readback_consume_marker)
+    cleanup_journal = reconcile.index(cleanup_journal_marker)
+    cleanup_effect = reconcile.index(cleanup_effect_marker)
     require(
         close_delete < readback_call < readback_schema < readback_consume < cleanup_journal < cleanup_effect,
         "Spotlight stale-delete readback validation must precede cleanup journal/output evidence",
