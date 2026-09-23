@@ -453,6 +453,16 @@ def project_strict_pull_review_schema_to_legacy(sync: str) -> str:
 
 
 def project_item9(sync: str) -> str:
+    current_age_guard = (
+        'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && '
+        '[ "$SAME_BASE_SUPERSEDED" != "true" ]; then'
+    )
+    legacy_age_guard = 'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ]; then'
+    require(sync.count(current_age_guard) == 1,
+            "Spotlight item-9 projection cannot isolate same-base supersession age guard")
+    require(legacy_age_guard not in sync,
+            "Spotlight item-9 projection found both same-base and legacy age guards")
+    sync = sync.replace(current_age_guard, legacy_age_guard, 1)
     sync = project_merge_success_response_to_legacy(sync)
     sync = project_strict_pull_review_schema_to_legacy(sync)
     sync = project_native_review_gate_to_item10_order(sync)

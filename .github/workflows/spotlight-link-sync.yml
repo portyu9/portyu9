@@ -288,6 +288,7 @@ jobs:
           CLEANED=0
           PRESERVED_CURRENT=0
           PRESERVED_YOUNG=0
+          SUPERSEDED_CURRENT_BASE=0
           while IFS=$'\t' read -r REF HEAD_SHA; do
             test -n "$REF" || continue
             BRANCH="${REF#refs/heads/}"
@@ -320,12 +321,17 @@ jobs:
             test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
             test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
 
+            SAME_BASE_SUPERSEDED=false
+            if [ "$PARENT_SHA" = "$BASE_SHA" ]; then
+              SAME_BASE_SUPERSEDED=true
+            fi
+
             COMMITTER_DATE="$(jq -r .committer.date <<<"$CANDIDATE_COMMIT")"
             COMMIT_EPOCH="$(date -u -d "$COMMITTER_DATE" +%s)"
             [[ "$COMMIT_EPOCH" =~ ^[1-9][0-9]*$ ]]
             AGE_SECONDS=$((NOW_EPOCH - COMMIT_EPOCH))
             test "$AGE_SECONDS" -ge 0
-            if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ]; then
+            if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && [ "$SAME_BASE_SUPERSEDED" != "true" ]; then
               PRESERVED_YOUNG=$((PRESERVED_YOUNG + 1))
               continue
             fi
@@ -458,6 +464,9 @@ jobs:
             REMAINING_EXACT="$(jq --arg ref "refs/heads/${BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$REMAINING_REFS")"
             test "$REMAINING_EXACT" = "0"
             CLEANED=$((CLEANED + 1))
+            if [ "$SAME_BASE_SUPERSEDED" = "true" ]; then
+              SUPERSEDED_CURRENT_BASE=$((SUPERSEDED_CURRENT_BASE + 1))
+            fi
             CLEANUP_ENTRY="$(jq -cn \
               --arg branch "$BRANCH" \
               --arg head "$HEAD_SHA" \
@@ -473,8 +482,9 @@ jobs:
             echo "### Spotlight interrupted-transaction reconciliation"
             echo "- candidate refs observed: **$REF_COUNT**"
             echo "- stale candidates cleaned: **$CLEANED**"
+            echo "- current-base superseded candidates cleaned immediately: **$SUPERSEDED_CURRENT_BASE**"
             echo "- current deterministic candidate preserved: **$PRESERVED_CURRENT**"
-            echo "- candidates below 30-minute stale floor preserved: **$PRESERVED_YOUNG**"
+            echo "- different-base candidates below 30-minute stale floor preserved: **$PRESERVED_YOUNG**"
           } >> "$GITHUB_STEP_SUMMARY"
 
   budget:
