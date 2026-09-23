@@ -585,6 +585,68 @@ def required_check_evidence(check_pages: Any, head_sha: str) -> list[dict[str, A
     return selected
 
 
+def validate_check_run_readiness(
+    value: Any, head_sha: str, check_name: str, app_id: int
+) -> dict[str, Any]:
+    """Validate one bounded exact-head check-run collection before readiness decisions."""
+    head_sha = sha(head_sha, "readiness check head SHA")
+    require(isinstance(check_name, str) and bool(check_name),
+            "readiness check name must be a non-empty string")
+    app_id = positive_int(app_id, "readiness check app id")
+    require(isinstance(value, Mapping), "readiness check-runs response must be an object")
+    total = value.get("total_count")
+    require(type(total) is int and 0 <= total <= 100,
+            "readiness check-runs total_count must be an integer in [0,100]")
+    runs = value.get("check_runs")
+    require(isinstance(runs, list) and len(runs) <= 100,
+            "readiness check_runs must be an array bounded to 100 items")
+    require(total == len(runs),
+            "readiness check-runs total_count does not match returned array length")
+
+    seen_ids: set[int] = set()
+    normalized: list[dict[str, Any]] = []
+    for raw in runs:
+        require(isinstance(raw, Mapping), "readiness check-runs response contains a non-object")
+        check_id = positive_int(raw.get("id"), "readiness check-run id")
+        require(check_id not in seen_ids, "readiness check-run ids must be unique")
+        seen_ids.add(check_id)
+        require(raw.get("name") == check_name,
+                "readiness check-run name differs from the exact queried check")
+        require(sha(raw.get("head_sha"), "readiness check-run head SHA") == head_sha,
+                "readiness check-run head SHA differs from the exact candidate")
+        app = raw.get("app")
+        require(isinstance(app, Mapping), "readiness check-run lacks app identity")
+        observed_app_id = app.get("id")
+        require(type(observed_app_id) is int and observed_app_id == app_id,
+                "readiness check-run app identity mismatch")
+        status = raw.get("status")
+        require(isinstance(status, str) and status in CODEQL_RUN_STATUSES,
+                "readiness check-run status is outside the reviewed status set")
+        conclusion = raw.get("conclusion")
+        if status == "completed":
+            require(isinstance(conclusion, str) and bool(conclusion),
+                    "completed readiness check-run conclusion must be a non-empty string")
+        else:
+            require(conclusion is None,
+                    "nonterminal readiness check-run conclusion must be null")
+        normalized.append({
+            "id": check_id,
+            "status": status,
+            "conclusion": conclusion,
+        })
+
+    if total == 0:
+        return {"state": "missing", "count": 0}
+    if total > 1:
+        return {"state": "ambiguous", "count": total}
+    check = normalized[0]
+    if check["status"] != "completed":
+        return {"state": "pending", "count": 1, **check}
+    if check["conclusion"] == "success":
+        return {"state": "success", "count": 1, **check}
+    return {"state": "failure", "count": 1, **check}
+
+
 def security_evidence(ghas_response: Any, pr_alert_pages: Any, alert_number: int, head_sha: str) -> dict[str, Any]:
     alert_number = positive_int(alert_number, "security alert number")
     head_sha = sha(head_sha, "security head SHA")
@@ -925,6 +987,95 @@ def self_test() -> None:
         else:
             require(False, f"review-thread self-test accepted forbidden mutation expected to trigger: {expected}")
 
+    readiness_name = "trusted-capability-admission"
+    readiness_app = 15368
+
+    def readiness_fixture(
+        *, check_id: Any = 11, name: Any = readiness_name, observed_head: Any = head,
+        observed_app: Any = readiness_app, status: Any = "completed",
+        conclusion: Any = "success",
+    ) -> dict[str, Any]:
+        return {
+            "total_count": 1,
+            "check_runs": [{
+                "id": check_id,
+                "name": name,
+                "head_sha": observed_head,
+                "app": {"id": observed_app},
+                "status": status,
+                "conclusion": conclusion,
+            }],
+        }
+
+    require(
+        validate_check_run_readiness(readiness_fixture(), head, readiness_name, readiness_app)["state"] == "success",
+        "readiness check-run success fixture changed",
+    )
+    require(
+        validate_check_run_readiness(
+            readiness_fixture(status="queued", conclusion=None), head, readiness_name, readiness_app
+        )["state"] == "pending",
+        "readiness check-run pending fixture changed",
+    )
+    require(
+        validate_check_run_readiness(
+            readiness_fixture(conclusion="failure"), head, readiness_name, readiness_app
+        )["state"] == "failure",
+        "readiness check-run failure fixture changed",
+    )
+    require(
+        validate_check_run_readiness(
+            {"total_count": 0, "check_runs": []}, head, readiness_name, readiness_app
+        ) == {"state": "missing", "count": 0},
+        "readiness check-run missing fixture changed",
+    )
+    ambiguous = {
+        "total_count": 2,
+        "check_runs": [
+            readiness_fixture(check_id=11)["check_runs"][0],
+            readiness_fixture(check_id=12)["check_runs"][0],
+        ],
+    }
+    require(
+        validate_check_run_readiness(ambiguous, head, readiness_name, readiness_app)
+        == {"state": "ambiguous", "count": 2},
+        "readiness check-run ambiguity fixture changed",
+    )
+    readiness_mutations = (
+        ([], "must be an object"),
+        ({"total_count": True, "check_runs": []}, "integer in [0,100]"),
+        ({"total_count": 101, "check_runs": []}, "integer in [0,100]"),
+        ({"total_count": 1, "check_runs": []}, "does not match returned array length"),
+        ({"total_count": 1, "check_runs": [None]}, "contains a non-object"),
+        (readiness_fixture(check_id=True), "must be a positive integer"),
+        (readiness_fixture(check_id=0), "must be a positive integer"),
+        ({
+            "total_count": 2,
+            "check_runs": [
+                readiness_fixture(check_id=11)["check_runs"][0],
+                readiness_fixture(check_id=11)["check_runs"][0],
+            ],
+        }, "ids must be unique"),
+        (readiness_fixture(name="wrong"), "name differs"),
+        (readiness_fixture(observed_head="BAD"), "lowercase SHA-40"),
+        (readiness_fixture(observed_head="c" * 40), "differs from the exact candidate"),
+        (readiness_fixture(observed_app="15368"), "app identity mismatch"),
+        (readiness_fixture(observed_app=57789), "app identity mismatch"),
+        (readiness_fixture(status="unknown", conclusion=None), "outside the reviewed status set"),
+        (readiness_fixture(status="queued", conclusion="success"), "must be null"),
+        (readiness_fixture(status="completed", conclusion=None), "must be a non-empty string"),
+        (readiness_fixture(status="completed", conclusion=""), "must be a non-empty string"),
+    )
+    for mutated, expected in readiness_mutations:
+        try:
+            validate_check_run_readiness(mutated, head, readiness_name, readiness_app)
+        except ControllerError as exc:
+            require(expected in str(exc),
+                    f"readiness check-run self-test failed for the wrong reason: {exc}")
+        else:
+            require(False,
+                    f"readiness check-run self-test accepted forbidden mutation expected to trigger: {expected}")
+
     ref_branch = "codeql-autofix/alert-4/run-123"
     expected_ref = f"refs/heads/{ref_branch}"
     require(
@@ -1065,6 +1216,13 @@ def main() -> int:
     p.add_argument("--head-sha", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("readiness-check")
+    p.add_argument("--response-file", required=True)
+    p.add_argument("--head-sha", required=True)
+    p.add_argument("--name", required=True)
+    p.add_argument("--app-id", type=int, required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("merge-success-response")
     p.add_argument("--response-file", required=True)
     p.add_argument("--out", required=True)
@@ -1130,6 +1288,10 @@ def main() -> int:
         dump(args.out, validate_commit_response(load(args.response_file), args.branch))
     elif args.command == "compare":
         dump(args.out, validate_compare(load(args.compare_file), args.base_sha, args.head_sha))
+    elif args.command == "readiness-check":
+        dump(args.out, validate_check_run_readiness(
+            load(args.response_file), args.head_sha, args.name, args.app_id
+        ))
     elif args.command == "merge-success-response":
         dump(args.out, validate_merge_success_response(load(args.response_file)))
     elif args.command == "followup-select":

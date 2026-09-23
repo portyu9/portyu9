@@ -270,6 +270,78 @@ def validate_autofix_continuation(text: str) -> None:
     )
 
 
+def validate_autofix_readiness_evidence(text: str) -> None:
+    start_marker = "          TRUSTED_READY=false\n"
+    end_marker = "      - name: Verify an existing Autofix PR and perform protected merge\n"
+    require(text.count(start_marker) == 1 and text.count(end_marker) == 1,
+            "CodeQL Autofix readiness block anchors changed")
+    start = text.index(start_marker)
+    end = text.index(end_marker, start)
+    readiness = text[start:end]
+
+    trusted_fetch = (
+        'repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?'
+        'app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100'
+    )
+    ghas_fetch = (
+        'repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?'
+        'app_id=57789&check_name=CodeQL&filter=latest&per_page=100'
+    )
+    require(readiness.count(trusted_fetch) == 1 and readiness.count(ghas_fetch) == 1,
+            "CodeQL Autofix readiness check-run endpoints changed")
+    require(
+        readiness.count("python3 scripts/codeql_autofix_controller.py readiness-check") == 2,
+        "CodeQL Autofix must validate both readiness check-run responses before consumption",
+    )
+    for fragment in (
+        "--response-file trusted-readiness-response.json",
+        '--head-sha "$HEAD_SHA"',
+        "--name trusted-capability-admission",
+        "--app-id 15368",
+        "--out trusted-readiness.json",
+        'TRUSTED_STATE="$(jq -r .state trusted-readiness.json)"',
+        "--response-file ghas-readiness-response.json",
+        "--name CodeQL",
+        "--app-id 57789",
+        "--out ghas-readiness.json",
+        'GHAS_STATE="$(jq -r .state ghas-readiness.json)"',
+        'case "$TRUSTED_STATE" in',
+        'case "$GHAS_STATE" in',
+        'test "$TRUSTED_READY" = "true"',
+        'test "$GHAS_READY" = "true"',
+    ):
+        require(fragment in readiness, f"CodeQL Autofix readiness evidence contract is missing: {fragment}")
+
+    for forbidden in (
+        'TRUSTED_COUNT="$(jq -r .total_count <<<"$TRUSTED")"',
+        '.check_runs[0] | .name == "trusted-capability-admission"',
+        '"$(jq -r .total_count <<<"$GHAS")" = "1"',
+        ".check_runs[0] | .head_sha == $head",
+    ):
+        require(forbidden not in readiness,
+                f"CodeQL Autofix regressed to raw readiness response consumption: {forbidden}")
+
+    trusted_fetch_pos = readiness.index(trusted_fetch)
+    trusted_validate_pos = readiness.index(
+        "python3 scripts/codeql_autofix_controller.py readiness-check", trusted_fetch_pos
+    )
+    trusted_consume_pos = readiness.index(
+        'TRUSTED_STATE="$(jq -r .state trusted-readiness.json)"', trusted_validate_pos
+    )
+    ghas_fetch_pos = readiness.index(ghas_fetch, trusted_consume_pos)
+    ghas_validate_pos = readiness.index(
+        "python3 scripts/codeql_autofix_controller.py readiness-check", ghas_fetch_pos
+    )
+    ghas_consume_pos = readiness.index(
+        'GHAS_STATE="$(jq -r .state ghas-readiness.json)"', ghas_validate_pos
+    )
+    require(
+        trusted_fetch_pos < trusted_validate_pos < trusted_consume_pos
+        < ghas_fetch_pos < ghas_validate_pos < ghas_consume_pos,
+        "CodeQL Autofix readiness responses must be validated before state consumption",
+    )
+
+
 def validate_unsupported_evidence(text: str) -> None:
     get_endpoint = 'repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments?per_page=100'
     post_endpoint = 'repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments'
@@ -402,6 +474,7 @@ def main() -> int:
         self_test(codeql)
         autofix = AUTOFIX.read_text(encoding="utf-8")
         validate_autofix_continuation(autofix)
+        validate_autofix_readiness_evidence(autofix)
         validate_unsupported_evidence(autofix)
         validate_quality(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
@@ -410,8 +483,8 @@ def main() -> int:
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
-            "controller trust/provenance, unsupported-alert queue fixtures, durable deduplicated unsupported evidence, "
-            "and exact post-merge CodeQL continuation."
+            "controller trust/provenance, typed exact-head Autofix readiness check evidence, unsupported-alert queue fixtures, "
+            "durable deduplicated unsupported evidence, and exact post-merge CodeQL continuation."
         )
         return 0
     except (OSError, ValueError) as exc:
