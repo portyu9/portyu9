@@ -435,6 +435,83 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     commit_schema_start = legacy.index(commit_schema_start_marker)
     commit_schema_end = legacy.index(commit_schema_end_marker, commit_schema_start) + len(commit_schema_end_marker)
     v21_reconciliation = legacy[:commit_schema_start] + legacy[commit_schema_end:]
+
+    ancestry_counter = '          ANCESTRY_PROVEN_STALE=0\n'
+    require(v21_reconciliation.count(ancestry_counter) == 1,
+            "Spotlight v21 projection cannot isolate ancestry stale counter")
+    v21_reconciliation = v21_reconciliation.replace(ancestry_counter, "", 1)
+
+    ancestry_classify_start = '            SAME_BASE_SUPERSEDED=false\n'
+    ancestry_classify_end = '            COMMITTER_DATE="$(jq -r .committer.date <<<"$CANDIDATE_COMMIT")"\n'
+    require(v21_reconciliation.count(ancestry_classify_start) == 1
+            and v21_reconciliation.count(ancestry_classify_end) == 1,
+            "Spotlight v21 projection cannot isolate ancestry classification block")
+    ancestry_start = v21_reconciliation.index(ancestry_classify_start)
+    ancestry_end = v21_reconciliation.index(ancestry_classify_end, ancestry_start)
+    ancestry_block = v21_reconciliation[ancestry_start:ancestry_end]
+    for fragment in (
+        '            ANCESTRY_PROVEN_SUPERSEDED=false\n',
+        '              ANCESTRY_COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}")"\n',
+        '                ANCESTRY_PROVEN_SUPERSEDED=true\n',
+    ):
+        require(fragment in ancestry_block,
+                f"Spotlight v21 projection lost ancestry overlay fragment: {fragment}")
+    same_base_block = (
+        '            SAME_BASE_SUPERSEDED=false\n'
+        '            if [ "$PARENT_SHA" = "$BASE_SHA" ]; then\n'
+        '              SAME_BASE_SUPERSEDED=true\n'
+        '            fi\n\n'
+    )
+    v21_reconciliation = (
+        v21_reconciliation[:ancestry_start]
+        + same_base_block
+        + v21_reconciliation[ancestry_end:]
+    )
+
+    ancestry_age_guard = (
+        'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] &&\n'
+        '               [ "$SAME_BASE_SUPERSEDED" != "true" ] &&\n'
+        '               [ "$ANCESTRY_PROVEN_SUPERSEDED" != "true" ]; then'
+    )
+    same_base_age_guard = (
+        'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && '
+        '[ "$SAME_BASE_SUPERSEDED" != "true" ]; then'
+    )
+    require(v21_reconciliation.count(ancestry_age_guard) == 1,
+            "Spotlight v21 projection cannot isolate ancestry-aware age guard")
+    v21_reconciliation = v21_reconciliation.replace(
+        ancestry_age_guard, same_base_age_guard, 1
+    )
+
+    ancestry_cleanup_counter = (
+        '            if [ "$ANCESTRY_PROVEN_SUPERSEDED" = "true" ]; then\n'
+        '              ANCESTRY_PROVEN_STALE=$((ANCESTRY_PROVEN_STALE + 1))\n'
+        '            fi\n'
+    )
+    require(v21_reconciliation.count(ancestry_cleanup_counter) == 1,
+            "Spotlight v21 projection cannot isolate ancestry cleanup counter")
+    v21_reconciliation = v21_reconciliation.replace(ancestry_cleanup_counter, "", 1)
+
+    ancestry_summary = (
+        '            echo "- ancestry-proven old-base candidates cleaned immediately: '
+        '**$ANCESTRY_PROVEN_STALE**"\n'
+    )
+    ancestry_young_summary = (
+        '            echo "- unproven/divergent candidates below 30-minute stale floor preserved: '
+        '**$PRESERVED_YOUNG**"\n'
+    )
+    same_base_young_summary = (
+        '            echo "- different-base candidates below 30-minute stale floor preserved: '
+        '**$PRESERVED_YOUNG**"\n'
+    )
+    require(v21_reconciliation.count(ancestry_summary) == 1
+            and v21_reconciliation.count(ancestry_young_summary) == 1,
+            "Spotlight v21 projection cannot isolate ancestry summary overlay")
+    v21_reconciliation = v21_reconciliation.replace(ancestry_summary, "", 1)
+    v21_reconciliation = v21_reconciliation.replace(
+        ancestry_young_summary, same_base_young_summary, 1
+    )
+
     current_age_guard = (
         'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && '
         '[ "$SAME_BASE_SUPERSEDED" != "true" ]; then'
