@@ -52,6 +52,62 @@ def require(condition: bool, message: str) -> None:
         fail(message)
 
 
+def validate_lease_run_evidence(sync: str) -> None:
+    lease = core.job_block(sync, "lease", "reconcile")
+    require("name: mint-mutation-lease-read-only" in lease,
+            "Spotlight mutation-lease mint identity changed")
+    require("permissions:\n      actions: read" in lease,
+            "Spotlight mutation-lease mint must retain read-only Actions authority")
+
+    run_call_marker = 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
+    run_schema_marker = (
+        'jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
+    )
+    run_schema_end_marker = '\' <<<"$RUN" >/dev/null'
+    run_consume_marker = 'test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"'
+    issued_marker = 'ISSUED_AT="$(date -u +%s)"'
+    lease_id_marker = 'LEASE_ID="$(printf'
+    output_marker = 'echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"'
+
+    for marker in (
+        run_call_marker, run_schema_marker, run_schema_end_marker, run_consume_marker,
+        issued_marker, lease_id_marker, output_marker,
+    ):
+        require(lease.count(marker) == 1,
+                f"Spotlight mutation-lease run evidence anchor is missing or ambiguous: {marker}")
+
+    run_call = lease.index(run_call_marker)
+    run_schema = lease.index(run_schema_marker)
+    run_schema_end = lease.index(run_schema_end_marker, run_schema) + len(run_schema_end_marker)
+    run_consume = lease.index(run_consume_marker)
+    issued = lease.index(issued_marker)
+    lease_id = lease.index(lease_id_marker)
+    output = lease.index(output_marker)
+    require(
+        run_call < run_schema < run_schema_end < run_consume < issued < lease_id < output,
+        "Spotlight mutation-lease run evidence must validate before scalar consumption and lease issuance",
+    )
+
+    schema = lease[run_schema:run_schema_end]
+    for fragment in (
+        '(type == "object") and',
+        '(.id | type == "number" and . == floor and . == $run) and',
+        '(.run_attempt | type == "number" and . == floor and . == $attempt) and',
+        '(.workflow_id | type == "number" and . == floor and . > 0) and',
+        '(.run_number | type == "number" and . == floor and . > 0) and',
+        '(.event | type == "string" and . == $event) and',
+        '(.status | type == "string" and . == "in_progress") and',
+        '(.conclusion == null) and',
+        '(.head_sha | type == "string" and . == $head) and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.repository | type == "object" and .id == $repo_id and .full_name == $repo) and',
+        '(.head_repository | type == "object" and .id == $repo_id and .full_name == $repo)',
+    ):
+        require(fragment in schema,
+                f"Spotlight mutation-lease run evidence schema is missing: {fragment}")
+
+
 def validate_reconciliation(reconcile: str) -> None:
     require("name: reconcile-stale-candidates-write" in reconcile and "needs: [plan, lease]" in reconcile,
             "Spotlight reconciler identity/lease dependency changed")
@@ -790,6 +846,8 @@ def validate(sync: str, stats: str, policy: str) -> None:
     require("merge_ui_after_checks" not in sync and "merge_ui_after_checks" not in stats,
             "Spotlight standing authorization must not depend on a manual merge input")
 
+    validate_lease_run_evidence(sync)
+
     # Keep the pre-reconciliation/pre-lease mutation-budget validator byte-for-byte independent.
     # Project only the separately validated lease + maintenance dependency edges out without
     # changing any runtime predicates or API bytes.
@@ -870,6 +928,56 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         sync.replace("          MAX_ATTEMPTS=2\n", "          MAX_ATTEMPTS=3\n", 1),
         stats, policy, "mutation-budget fail-closed contract is missing",
     )
+    lease_start = sync.index("  lease:\n")
+    lease_end = sync.index("  reconcile:\n", lease_start)
+    lease = sync[lease_start:lease_end]
+    for old, new in (
+        ('            (type == "object") and', '            (type == "array") and'),
+        ('            (.id | type == "number" and . == floor and . == $run) and',
+         '            (.id | type == "string") and'),
+        ('            (.run_attempt | type == "number" and . == floor and . == $attempt) and',
+         '            (.run_attempt | type == "number") and'),
+        ('            (.workflow_id | type == "number" and . == floor and . > 0) and',
+         '            (.workflow_id | type == "number") and'),
+        ('            (.run_number | type == "number" and . == floor and . > 0) and',
+         '            (.run_number | type == "number") and'),
+        ('            (.event | type == "string" and . == $event) and',
+         '            (.event | type == "string") and'),
+        ('            (.status | type == "string" and . == "in_progress") and',
+         '            (.status | type == "string") and'),
+        ('            (.conclusion == null) and',
+         '            (has("conclusion")) and'),
+        ('            (.head_sha | type == "string" and . == $head) and',
+         '            (.head_sha | type == "string") and'),
+        ('            (.head_branch | type == "string" and . == "main") and',
+         '            (.head_branch | type == "string") and'),
+        ('            (.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+         '            (.path | type == "string") and'),
+        ('            (.repository | type == "object" and .id == $repo_id and .full_name == $repo) and',
+         '            (.repository | type == "object") and'),
+        ('            (.head_repository | type == "object" and .id == $repo_id and .full_name == $repo)',
+         '            (.head_repository | type == "object")'),
+    ):
+        require(lease.count(old) == 1,
+                f"Spotlight mutation-lease run evidence self-test anchor is missing or ambiguous: {old}")
+        mutated_lease = lease.replace(old, new, 1)
+        mutated = sync[:lease_start] + mutated_lease + sync[lease_end:]
+        expect_failure(mutated, stats, policy, "mutation-lease run evidence")
+
+    schema_line_start = lease.index(
+        '          jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
+    )
+    schema_line_end = lease.index('          \' <<<"$RUN" >/dev/null\n', schema_line_start) + len(
+        '          \' <<<"$RUN" >/dev/null\n'
+    )
+    schema_block = lease[schema_line_start:schema_line_end]
+    lease_without_schema = lease[:schema_line_start] + lease[schema_line_end:]
+    output_pos = lease_without_schema.index('          echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"\n')
+    output_end = output_pos + len('          echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"\n')
+    reordered_lease = lease_without_schema[:output_end] + schema_block + lease_without_schema[output_end:]
+    mutated = sync[:lease_start] + reordered_lease + sync[lease_end:]
+    expect_failure(mutated, stats, policy, "mutation-lease run evidence")
+
     expect_failure(
         sync.replace(
             'STALE_AFTER_SECONDS=1800',

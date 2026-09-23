@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v69"
+VERSION = "governed-workflow-byte-identity-v70"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "0a2080e456ee9ed651698871c94b4b25dbdfd0df",
+    ".github/workflows/spotlight-link-sync.yml": "a2b3675b96ca6f23e8fb2fccdda90ea043f77b48",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -301,6 +301,55 @@ def validate_leases(profile: str, spotlight: str) -> None:
 
     v21.validate_ordered_presence(spotlight, v21.MUTATION_LEASE_SEQUENCE,
                                   "Spotlight mutation-lease contract")
+
+    lease = job_block(spotlight, "lease", "reconcile")
+    run_call_marker = 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
+    run_schema_marker = (
+        'jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
+    )
+    run_schema_end_marker = '\' <<<"$RUN" >/dev/null'
+    run_consume_marker = 'test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"'
+    issued_marker = 'ISSUED_AT="$(date -u +%s)"'
+    lease_id_marker = 'LEASE_ID="$(printf'
+    output_marker = 'echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"'
+    for marker in (
+        run_call_marker, run_schema_marker, run_schema_end_marker, run_consume_marker,
+        issued_marker, lease_id_marker, output_marker,
+    ):
+        require(lease.count(marker) == 1,
+                f"Spotlight mutation-lease run evidence contract anchor is missing or ambiguous: {marker}")
+
+    run_call = lease.index(run_call_marker)
+    run_schema = lease.index(run_schema_marker)
+    run_schema_end = lease.index(run_schema_end_marker, run_schema) + len(run_schema_end_marker)
+    run_consume = lease.index(run_consume_marker)
+    issued = lease.index(issued_marker)
+    lease_id = lease.index(lease_id_marker)
+    output = lease.index(output_marker)
+    require(
+        run_call < run_schema < run_schema_end < run_consume < issued < lease_id < output,
+        "Spotlight mutation-lease run evidence validation must precede scalar consumption and lease issuance",
+    )
+
+    schema = lease[run_schema:run_schema_end]
+    for fragment in (
+        '(type == "object") and',
+        '(.id | type == "number" and . == floor and . == $run) and',
+        '(.run_attempt | type == "number" and . == floor and . == $attempt) and',
+        '(.workflow_id | type == "number" and . == floor and . > 0) and',
+        '(.run_number | type == "number" and . == floor and . > 0) and',
+        '(.event | type == "string" and . == $event) and',
+        '(.status | type == "string" and . == "in_progress") and',
+        '(.conclusion == null) and',
+        '(.head_sha | type == "string" and . == $head) and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.repository | type == "object" and .id == $repo_id and .full_name == $repo) and',
+        '(.head_repository | type == "object" and .id == $repo_id and .full_name == $repo)',
+    ):
+        require(fragment in schema,
+                f"Spotlight mutation-lease run evidence contract is missing: {fragment}")
+
     require(spotlight.count("# Verify exact short-lived mutation lease.") == 4,
             "Spotlight legacy mutation jobs must retain their inline exact-lease proof")
     require(spotlight.count("- name: Verify exact short-lived mutation lease") == 2,
