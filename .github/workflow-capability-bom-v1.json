@@ -2324,6 +2324,13 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}",
               "method": "GET",
               "mutating": false,

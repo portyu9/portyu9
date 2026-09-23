@@ -452,7 +452,82 @@ def project_strict_pull_review_schema_to_legacy(sync: str) -> str:
     return projected[:schema_start] + merge_legacy + projected[schema_end:]
 
 
+
+def project_ancestry_supersession_to_same_base(sync: str) -> str:
+    """Project the item-912 ancestry overlay back to the accepted #910 same-base contract."""
+    counter = '          ANCESTRY_PROVEN_STALE=0\n'
+    require(sync.count(counter) == 1,
+            "Spotlight item-9 projection cannot isolate ancestry stale counter")
+    sync = sync.replace(counter, "", 1)
+
+    classify_start = '            SAME_BASE_SUPERSEDED=false\n'
+    classify_end = '            COMMITTER_DATE="$(jq -r .committer.date <<<"$CANDIDATE_COMMIT")"\n'
+    require(sync.count(classify_start) == 1 and sync.count(classify_end) == 1,
+            "Spotlight item-9 projection cannot isolate ancestry classification block")
+    start = sync.index(classify_start)
+    end = sync.index(classify_end, start)
+    current = sync[start:end]
+    for fragment in (
+        '            ANCESTRY_PROVEN_SUPERSEDED=false\n',
+        '              ANCESTRY_COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}")"\n',
+        '              jq -e --arg parent "$PARENT_SHA" --arg base "$BASE_SHA" \'\n',
+        '                ANCESTRY_PROVEN_SUPERSEDED=true\n',
+    ):
+        require(fragment in current,
+                f"Spotlight item-9 ancestry projection lost reviewed runtime fragment: {fragment}")
+    projected = (
+        '            SAME_BASE_SUPERSEDED=false\n'
+        '            if [ "$PARENT_SHA" = "$BASE_SHA" ]; then\n'
+        '              SAME_BASE_SUPERSEDED=true\n'
+        '            fi\n\n'
+    )
+    sync = sync[:start] + projected + sync[end:]
+
+    current_guard = (
+        'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] &&\n'
+        '               [ "$SAME_BASE_SUPERSEDED" != "true" ] &&\n'
+        '               [ "$ANCESTRY_PROVEN_SUPERSEDED" != "true" ]; then'
+    )
+    same_base_guard = (
+        'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && '
+        '[ "$SAME_BASE_SUPERSEDED" != "true" ]; then'
+    )
+    require(sync.count(current_guard) == 1,
+            "Spotlight item-9 projection cannot isolate ancestry-aware age guard")
+    require(same_base_guard not in sync,
+            "Spotlight item-9 projection found both ancestry-aware and same-base age guards")
+    sync = sync.replace(current_guard, same_base_guard, 1)
+
+    ancestry_cleanup = (
+        '            if [ "$ANCESTRY_PROVEN_SUPERSEDED" = "true" ]; then\n'
+        '              ANCESTRY_PROVEN_STALE=$((ANCESTRY_PROVEN_STALE + 1))\n'
+        '            fi\n'
+    )
+    require(sync.count(ancestry_cleanup) == 1,
+            "Spotlight item-9 projection cannot isolate ancestry cleanup counter")
+    sync = sync.replace(ancestry_cleanup, "", 1)
+
+    ancestry_summary = (
+        '            echo "- ancestry-proven old-base candidates cleaned immediately: '
+        '**$ANCESTRY_PROVEN_STALE**"\n'
+    )
+    current_young_summary = (
+        '            echo "- unproven/divergent candidates below 30-minute stale floor preserved: '
+        '**$PRESERVED_YOUNG**"\n'
+    )
+    same_base_young_summary = (
+        '            echo "- different-base candidates below 30-minute stale floor preserved: '
+        '**$PRESERVED_YOUNG**"\n'
+    )
+    require(sync.count(ancestry_summary) == 1 and sync.count(current_young_summary) == 1,
+            "Spotlight item-9 projection cannot isolate ancestry summary evidence")
+    sync = sync.replace(ancestry_summary, "", 1)
+    sync = sync.replace(current_young_summary, same_base_young_summary, 1)
+    return sync
+
+
 def project_item9(sync: str) -> str:
+    sync = project_ancestry_supersession_to_same_base(sync)
     current_age_guard = (
         'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && '
         '[ "$SAME_BASE_SUPERSEDED" != "true" ]; then'
