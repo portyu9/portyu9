@@ -183,6 +183,117 @@ def validate_codeql(text: str) -> None:
             "CodeQL results must retain a stable per-language SARIF category")
 
 
+def validate_autofix_constructive_response_schemas(text: str) -> None:
+    created_ref_validator = "python3 scripts/codeql_autofix_controller.py created-ref-response"
+    reviewer_validator = "python3 scripts/codeql_autofix_controller.py reviewer-request-response"
+    require(text.count(created_ref_validator) == 1,
+            "CodeQL Autofix must validate exactly one created-ref mutation response")
+    require(text.count(reviewer_validator) == 1,
+            "CodeQL Autofix must validate exactly one reviewer-request mutation response")
+
+    for fragment in (
+        "--response-file created-ref.json",
+        '--branch "$BRANCH"',
+        '--expected-sha "$BASE_SHA"',
+        "--out created-ref-normalized.json",
+        'test "$(jq -r .ref created-ref-normalized.json)" = "$TARGET_REF"',
+        'test "$(jq -r .sha created-ref-normalized.json)" = "$BASE_SHA"',
+        "--response-file requested-reviewer.json",
+        '--pr-number "$PR_NUMBER"',
+        '--repository "$TARGET_REPOSITORY"',
+        '--base-sha "$BASE_SHA"',
+        '--head-sha "$HEAD_SHA"',
+        "--out requested-reviewer-normalized.json",
+        'test "$(jq -r .prNumber requested-reviewer-normalized.json)" = "$PR_NUMBER"',
+        'test "$(jq -r .reviewer requested-reviewer-normalized.json)" = "portyu9"',
+        'test "$(jq -r .headSha requested-reviewer-normalized.json)" = "$HEAD_SHA"',
+    ):
+        require(fragment in text,
+                f"CodeQL Autofix constructive mutation-response contract is missing: {fragment}")
+
+    for forbidden in (
+        'jq -r .ref created-ref.json',
+        'jq -r .object.sha created-ref.json',
+        '.requested_reviewers[]? | select(.login == "portyu9")',
+    ):
+        require(forbidden not in text,
+                f"CodeQL Autofix must not consume an untyped constructive mutation response: {forbidden}")
+
+    ref_post = text.index('gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs"')
+    ref_validate = text.index(created_ref_validator, ref_post)
+    ref_consume = text.index('test "$(jq -r .ref created-ref-normalized.json)" = "$TARGET_REF"', ref_validate)
+    autofix_commit = text.index(
+        '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"',
+        ref_consume,
+    )
+    pr_create = text.index('gh api -X POST "repos/${TARGET_REPOSITORY}/pulls"', autofix_commit)
+    receipt = text.index("python3 scripts/codeql_autofix_controller.py receipt", pr_create)
+    reviewer_post = text.index(
+        'repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers',
+        receipt,
+    )
+    reviewer_validate = text.index(reviewer_validator, reviewer_post)
+    reviewer_consume = text.index(
+        'test "$(jq -r .headSha requested-reviewer-normalized.json)" = "$HEAD_SHA"',
+        reviewer_validate,
+    )
+    receipt_upload = text.index("- name: Upload immutable controller provenance receipt", reviewer_consume)
+    require(
+        ref_post < ref_validate < ref_consume < autofix_commit < pr_create < receipt
+        < reviewer_post < reviewer_validate < reviewer_consume < receipt_upload,
+        "CodeQL Autofix constructive mutation responses must be typed before downstream consumption",
+    )
+
+
+def self_test_autofix_constructive_response_schemas(good: str) -> None:
+    validate_autofix_constructive_response_schemas(good)
+    mutations = (
+        (
+            good.replace(
+                "python3 scripts/codeql_autofix_controller.py created-ref-response",
+                "python3 scripts/codeql_autofix_controller.py commit",
+                1,
+            ),
+            "exactly one created-ref mutation response",
+        ),
+        (
+            good.replace(
+                "python3 scripts/codeql_autofix_controller.py reviewer-request-response",
+                "python3 scripts/codeql_autofix_controller.py commit",
+                1,
+            ),
+            "exactly one reviewer-request mutation response",
+        ),
+        (
+            good.replace(
+                "          python3 scripts/codeql_autofix_controller.py created-ref-response",
+                '          test "$(jq -r .ref created-ref.json)" = "$TARGET_REF"\n'
+                "          python3 scripts/codeql_autofix_controller.py created-ref-response",
+                1,
+            ),
+            "must not consume an untyped constructive mutation response",
+        ),
+        (
+            good.replace(
+                "          python3 scripts/codeql_autofix_controller.py reviewer-request-response",
+                '          test "$(jq \'[.requested_reviewers[]? | select(.login == "portyu9")] | length\' '
+                'requested-reviewer.json)" = "1"\n'
+                "          python3 scripts/codeql_autofix_controller.py reviewer-request-response",
+                1,
+            ),
+            "must not consume an untyped constructive mutation response",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_autofix_constructive_response_schemas(mutated)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"Autofix constructive-response self-test failed for the wrong reason: {exc}")
+        else:
+            fail(f"Autofix constructive-response self-test accepted forbidden mutation: {expected}")
+
+
 def validate_autofix_continuation(text: str) -> None:
     require(
         text.count('repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100') == 1,
@@ -473,6 +584,7 @@ def main() -> int:
         codeql = CODEQL.read_text(encoding="utf-8")
         self_test(codeql)
         autofix = AUTOFIX.read_text(encoding="utf-8")
+        self_test_autofix_constructive_response_schemas(autofix)
         validate_autofix_continuation(autofix)
         validate_autofix_readiness_evidence(autofix)
         validate_unsupported_evidence(autofix)
@@ -483,7 +595,7 @@ def main() -> int:
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
-            "controller trust/provenance, typed exact-head Autofix readiness check evidence, unsupported-alert queue fixtures, "
+            "controller trust/provenance, typed constructive mutation responses, typed exact-head Autofix readiness check evidence, unsupported-alert queue fixtures, "
             "durable deduplicated unsupported evidence, and exact post-merge CodeQL continuation."
         )
         return 0
