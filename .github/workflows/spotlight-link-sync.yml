@@ -655,7 +655,7 @@ jobs:
               '{title:$title,head:$head,base:$base,body:$body,maintainer_can_modify:false}' > pr.json
             gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json
             jq -e --arg title "chore: sync rotating Spotlight links" --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." --arg base "$SOURCE_SHA" --arg branch "$CANDIDATE_BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" '
-              (type == "object") and
+              ((type) == "object") and
               (.number | type == "number" and . == floor and . > 0) and
               (.user | type == "object" and .login == "github-actions[bot]") and
               (.state == "open") and
