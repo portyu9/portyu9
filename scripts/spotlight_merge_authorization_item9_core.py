@@ -293,6 +293,34 @@ def validate_reconciliation(reconcile: str) -> None:
         "Spotlight reconciler stale PR evidence and close response must validate before close/ref deletion effects",
     )
 
+    readback_call_marker = (
+        'REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"'
+    )
+    readback_schema_marker = (
+        'jq -e \'(type == "array") and (length == 0)\' <<<"$REMAINING_REFS" >/dev/null'
+    )
+    readback_consume_marker = (
+        'REMAINING_EXACT="$(jq --arg ref "refs/heads/${BRANCH}" \'[.[] | select(.ref == $ref)] | length\' <<<"$REMAINING_REFS")"'
+    )
+    cleanup_journal_marker = 'CLEANUP_ENTRY="$(jq -cn \\'
+    cleanup_effect_marker = 'echo "stale_cleanup_effect_present=true" >> "$GITHUB_OUTPUT"'
+    for marker in (
+        readback_call_marker, readback_schema_marker, readback_consume_marker,
+        cleanup_journal_marker, cleanup_effect_marker,
+    ):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight reconciler stale-delete readback schema anchor is missing or ambiguous: {marker}")
+
+    readback_call = reconcile.index(readback_call_marker, delete_ref)
+    readback_schema = reconcile.index(readback_schema_marker, readback_call)
+    readback_consume = reconcile.index(readback_consume_marker, readback_schema)
+    cleanup_journal = reconcile.index(cleanup_journal_marker, readback_consume)
+    cleanup_effect = reconcile.index(cleanup_effect_marker, cleanup_journal)
+    require(
+        delete_ref < readback_call < readback_schema < readback_consume < cleanup_journal < cleanup_effect,
+        "Spotlight stale-delete readback must validate an empty collection before cleanup journal/output evidence",
+    )
+
     require(reconcile.count('gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"') == 1,
             "Spotlight reconciler must expose exactly one PR-closing PATCH mutation")
     require(reconcile.count('gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}"') == 1,
@@ -807,6 +835,42 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         mutated_reconcile = reconcile[:close_call_pos] + mutated_close + reconcile[close_consume_pos:]
         mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
         expect_failure(mutated, stats, policy, "stale-close response schema")
+
+    readback_call_pos = reconcile.index(
+        'REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"'
+    )
+    readback_consume_pos = reconcile.index(
+        'REMAINING_EXACT="$(jq --arg ref "refs/heads/${BRANCH}" \'[.[] | select(.ref == $ref)] | length\' <<<"$REMAINING_REFS")"',
+        readback_call_pos,
+    )
+    readback_block = reconcile[readback_call_pos:readback_consume_pos]
+    for old, new in (
+        ('jq -e \'(type == "array") and (length == 0)\' <<<"$REMAINING_REFS" >/dev/null',
+         'jq -e \'(type == "object") and (length == 0)\' <<<"$REMAINING_REFS" >/dev/null'),
+        ('jq -e \'(type == "array") and (length == 0)\' <<<"$REMAINING_REFS" >/dev/null',
+         'jq -e \'(type == "array") and (length >= 0)\' <<<"$REMAINING_REFS" >/dev/null'),
+        ('jq -e \'(type == "array") and (length == 0)\' <<<"$REMAINING_REFS" >/dev/null',
+         'jq -e \'true\' <<<"$REMAINING_REFS" >/dev/null'),
+    ):
+        require(readback_block.count(old) == 1,
+                f"Spotlight stale-delete readback self-test anchor is missing or ambiguous: {old}")
+        mutated_readback = readback_block.replace(old, new, 1)
+        mutated_reconcile = reconcile[:readback_call_pos] + mutated_readback + reconcile[readback_consume_pos:]
+        mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
+        expect_failure(mutated, stats, policy, "stale-delete readback")
+
+    readback_schema_line = '            jq -e \'(type == "array") and (length == 0)\' <<<"$REMAINING_REFS" >/dev/null\n'
+    cleanup_entry_pos = reconcile.index('            CLEANUP_ENTRY="$(jq -cn \\', readback_consume_pos)
+    require(reconcile.count(readback_schema_line) == 1,
+            "Spotlight stale-delete readback reorder self-test schema anchor is missing or ambiguous")
+    reordered_reconcile = reconcile.replace(readback_schema_line, "", 1)
+    insert_pos = reordered_reconcile.index('            STALE_CLEANUPS_JSON=', cleanup_entry_pos - len(readback_schema_line))
+    reordered_reconcile = (
+        reordered_reconcile[:insert_pos] + readback_schema_line + reordered_reconcile[insert_pos:]
+    )
+    mutated = sync[:reconcile_start] + reordered_reconcile + sync[reconcile_end:]
+    expect_failure(mutated, stats, policy, "stale-delete readback")
+
     expect_failure(
         sync.replace(
             'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
