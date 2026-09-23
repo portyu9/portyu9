@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v65"
+VERSION = "governed-workflow-byte-identity-v66"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "670471f522fedcd6816e8e49ca9db9044e7d6206",
+    ".github/workflows/spotlight-link-sync.yml": "4229a34724360ac620f98925b4a565584a935bd6",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -417,12 +417,80 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         "Spotlight stale-topology evidence validation must precede downstream consumption",
     )
 
+    prs_call_marker = (
+        'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
+    )
+    prs_schema_marker = (
+        'jq -e --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
+    )
+    prs_count_marker = 'PR_COUNT="$(jq \'length\' <<<"$PRS")"'
+    pr_number_marker = 'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"'
+    pr_call_marker = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    pr_schema_marker = '<<<"$PR" >/dev/null'
+    pr_consume_marker = 'test "$(jq -r .state <<<"$PR")" = "open"'
+    for marker in (
+        prs_call_marker, prs_schema_marker, prs_count_marker, pr_number_marker,
+        pr_call_marker, pr_schema_marker, pr_consume_marker,
+    ):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight stale-PR evidence contract anchor is missing or ambiguous: {marker}")
+
+    prs_call = reconcile.index(prs_call_marker)
+    prs_schema = reconcile.index(prs_schema_marker, prs_call)
+    prs_count = reconcile.index(prs_count_marker, prs_schema)
+    pr_number = reconcile.index(pr_number_marker, prs_count)
+    pr_call = reconcile.index(pr_call_marker, pr_number)
+    pr_schema = reconcile.index(pr_schema_marker, pr_call)
+    pr_consume = reconcile.index(pr_consume_marker, pr_schema)
+
+    prs_block = reconcile[prs_call:prs_count]
+    for fragment in (
+        '(type == "array") and',
+        '(length <= 1) and',
+        '(all(.[];',
+        '(.number | type == "number" and . == floor and . > 0) and',
+        '(.user | type == "object" and .login == "github-actions[bot]") and',
+        '(.state == "open") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.title == $title) and',
+        '(.body == $body) and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.head | type == "object" and .ref == $branch and .sha == $head and',
+        'has("merge_commit_sha")',
+    ):
+        require(fragment in prs_block,
+                f"Spotlight stale-PR discovery contract is missing: {fragment}")
+
+    pr_block = reconcile[pr_call:pr_consume]
+    for fragment in (
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
+        '(type == "object") and',
+        '(.number | type == "number" and . == floor and . == $pr) and',
+        '(.user | type == "object" and .login == "github-actions[bot]") and',
+        '(.state == "open") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.merged | type == "boolean" and . == false) and',
+        '(.maintainer_can_modify | type == "boolean" and . == false) and',
+        '(.title == $title) and',
+        '(.body == $body) and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.head | type == "object" and .ref == $branch and .sha == $head and',
+        'has("merge_commit_sha")',
+    ):
+        require(fragment in pr_block,
+                f"Spotlight stale-PR hydrated contract is missing: {fragment}")
+
+    require(
+        compare_consume < prs_call < prs_schema < prs_count < pr_number < pr_call < pr_schema < pr_consume,
+        "Spotlight stale-PR discovery/hydration validation must precede field consumption",
+    )
+
     close_call_marker = (
         'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
     )
-    close_schema_marker = (
-        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
-    )
+    close_schema_marker = '<<<"$CLOSED_PR" >/dev/null'
     close_consume_marker = 'test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"'
     close_delete_marker = (
         'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
@@ -436,6 +504,7 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     close_delete = reconcile.index(close_delete_marker, close_consume)
     close_block = reconcile[close_call:close_consume]
     for fragment in (
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
         '((type) == "object") and',
         '(.number | type == "number" and . == floor and . == $pr) and',
         '(.user | type == "object" and .login == "github-actions[bot]") and',
@@ -451,8 +520,10 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     ):
         require(fragment in close_block,
                 f"Spotlight stale-close response contract is missing: {fragment}")
-    require(close_call < close_schema < close_consume < close_delete,
-            "Spotlight stale-close response validation must precede field consumption and candidate-ref deletion")
+    require(
+        pr_consume < close_call < close_schema < close_consume < close_delete,
+        "Spotlight stale PR evidence and close response validation must precede close/ref deletion effects",
+    )
     for fragment in (
         'CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$SOURCE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d\' \' -f1)"',
         'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',

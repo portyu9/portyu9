@@ -184,12 +184,81 @@ def validate_reconciliation(reconcile: str) -> None:
         "Spotlight reconciler stale-topology evidence schema must validate before downstream consumption",
     )
 
+    prs_call_marker = (
+        'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
+    )
+    prs_schema_marker = (
+        'jq -e --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
+    )
+    prs_count_marker = 'PR_COUNT="$(jq \'length\' <<<"$PRS")"'
+    pr_number_marker = 'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"'
+    pr_call_marker = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    pr_schema_marker = '<<<"$PR" >/dev/null'
+    pr_consume_marker = 'test "$(jq -r .state <<<"$PR")" = "open"'
+
+    for marker in (
+        prs_call_marker, prs_schema_marker, prs_count_marker, pr_number_marker,
+        pr_call_marker, pr_schema_marker, pr_consume_marker,
+    ):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight reconciler stale-PR evidence schema anchor is missing or ambiguous: {marker}")
+
+    prs_call = reconcile.index(prs_call_marker)
+    prs_schema = reconcile.index(prs_schema_marker, prs_call)
+    prs_count = reconcile.index(prs_count_marker, prs_schema)
+    pr_number = reconcile.index(pr_number_marker, prs_count)
+    pr_call = reconcile.index(pr_call_marker, pr_number)
+    pr_schema = reconcile.index(pr_schema_marker, pr_call)
+    pr_consume = reconcile.index(pr_consume_marker, pr_schema)
+
+    prs_block = reconcile[prs_call:prs_count]
+    for fragment in (
+        '(type == "array") and',
+        '(length <= 1) and',
+        '(all(.[];',
+        '(.number | type == "number" and . == floor and . > 0) and',
+        '(.user | type == "object" and .login == "github-actions[bot]") and',
+        '(.state == "open") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.title == $title) and',
+        '(.body == $body) and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.head | type == "object" and .ref == $branch and .sha == $head and',
+        'has("merge_commit_sha")',
+    ):
+        require(fragment in prs_block,
+                f"Spotlight reconciler stale-PR discovery schema is missing: {fragment}")
+
+    pr_block = reconcile[pr_call:pr_consume]
+    for fragment in (
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
+        '(type == "object") and',
+        '(.number | type == "number" and . == floor and . == $pr) and',
+        '(.user | type == "object" and .login == "github-actions[bot]") and',
+        '(.state == "open") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.merged | type == "boolean" and . == false) and',
+        '(.maintainer_can_modify | type == "boolean" and . == false) and',
+        '(.title == $title) and',
+        '(.body == $body) and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.head | type == "object" and .ref == $branch and .sha == $head and',
+        'has("merge_commit_sha")',
+    ):
+        require(fragment in pr_block,
+                f"Spotlight reconciler stale-PR hydrated schema is missing: {fragment}")
+
+    require(
+        compare_consume < prs_call < prs_schema < prs_count < pr_number < pr_call < pr_schema < pr_consume,
+        "Spotlight reconciler stale-PR evidence schema must validate before cardinality/identity consumption",
+    )
+
     close_call_marker = (
         'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
     )
-    close_schema_marker = (
-        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
-    )
+    close_schema_marker = '<<<"$CLOSED_PR" >/dev/null'
     close_consume_marker = 'test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"'
     delete_ref_marker = (
         'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
@@ -203,6 +272,7 @@ def validate_reconciliation(reconcile: str) -> None:
     delete_ref = reconcile.index(delete_ref_marker, close_consume)
     close_block = reconcile[close_call:close_consume]
     for fragment in (
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
         '((type) == "object") and',
         '(.number | type == "number" and . == floor and . == $pr) and',
         '(.user | type == "object" and .login == "github-actions[bot]") and',
@@ -218,8 +288,10 @@ def validate_reconciliation(reconcile: str) -> None:
     ):
         require(fragment in close_block,
                 f"Spotlight reconciler stale-close response schema is missing: {fragment}")
-    require(close_call < close_schema < close_consume < delete_ref,
-            "Spotlight reconciler stale-close response schema must validate before field consumption and ref deletion")
+    require(
+        pr_consume < close_call < close_schema < close_consume < delete_ref,
+        "Spotlight reconciler stale PR evidence and close response must validate before close/ref deletion effects",
+    )
 
     require(reconcile.count('gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}"') == 1,
             "Spotlight reconciler must expose exactly one PR-closing PATCH mutation")
@@ -650,6 +722,67 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
         expect_failure(mutated, stats, policy, "stale-topology")
 
+    prs_call_pos = reconcile.index(
+        'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
+    )
+    prs_count_pos = reconcile.index('PR_COUNT="$(jq \'length\' <<<"$PRS")"', prs_call_pos)
+    prs_block = reconcile[prs_call_pos:prs_count_pos]
+    for old, new in (
+        ('              (type == "array") and', '              (type == "object") and'),
+        ('              (length <= 1) and', '              (length <= 2) and'),
+        ('                (.number | type == "number" and . == floor and . > 0) and',
+         '                (.number | type == "string") and'),
+        ('                (.user | type == "object" and .login == "github-actions[bot]") and',
+         '                (.user | type == "object") and'),
+        ('                (.state == "open") and', '                (.state == "closed") and'),
+        ('                (.draft | type == "boolean" and . == false) and',
+         '                (.draft | type == "boolean") and'),
+        ('                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+         '                  (.sha | type == "number") and'),
+        ('                (.head | type == "object" and .ref == $branch and .sha == $head and',
+         '                (.head | type == "object" and .ref == $branch and'),
+    ):
+        require(prs_block.count(old) == 1,
+                f"Spotlight stale-PR discovery self-test anchor is missing or ambiguous: {old}")
+        mutated_prs = prs_block.replace(old, new, 1)
+        mutated_reconcile = reconcile[:prs_call_pos] + mutated_prs + reconcile[prs_count_pos:]
+        mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
+        expect_failure(mutated, stats, policy, "stale-PR")
+
+    pr_call_pos = reconcile.index('PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"', prs_count_pos)
+    pr_consume_pos = reconcile.index('test "$(jq -r .state <<<"$PR")" = "open"', pr_call_pos)
+    pr_block = reconcile[pr_call_pos:pr_consume_pos]
+    for old, new in (
+        ('                (type == "object") and', '                (type == "array") and'),
+        ('                (.number | type == "number" and . == floor and . == $pr) and',
+         '                (.number | type == "number" and . > 0) and'),
+        ('                (.user | type == "object" and .login == "github-actions[bot]") and',
+         '                (.user | type == "object") and'),
+        ('                (.state == "open") and', '                (.state == "closed") and'),
+        ('                (.draft | type == "boolean" and . == false) and',
+         '                (.draft | type == "boolean") and'),
+        ('                (.merged | type == "boolean" and . == false) and',
+         '                (.merged | type == "boolean") and'),
+        ('                (.maintainer_can_modify | type == "boolean" and . == false) and',
+         '                (.maintainer_can_modify | type == "boolean") and'),
+        ('                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+         '                  (.sha | type == "number") and'),
+        ('                (.head | type == "object" and .ref == $branch and .sha == $head and',
+         '                (.head | type == "object" and .ref == $branch and'),
+        ('                (has("merge_commit_sha") and', '                (true and'),
+    ):
+        require(pr_block.count(old) == 1,
+                f"Spotlight stale-PR hydrated self-test anchor is missing or ambiguous: {old}")
+        mutated_pr = pr_block.replace(old, new, 1)
+        mutated_reconcile = reconcile[:pr_call_pos] + mutated_pr + reconcile[pr_consume_pos:]
+        mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
+        expect_failure(mutated, stats, policy, "stale-PR")
+
+    close_call_pos = reconcile.index(
+        'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
+    )
+    close_consume_pos = reconcile.index('test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"', close_call_pos)
+    close_block = reconcile[close_call_pos:close_consume_pos]
     for old, new in (
         ('                ((type) == "object") and',
          '                ((type) == "array") and'),
@@ -668,9 +801,10 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         ('              jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\',
          '              jq -n --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\'),
     ):
-        require(reconcile.count(old) == 1,
-                f"Spotlight stale-close response self-test anchor is missing or ambiguous: {old}")
-        mutated_reconcile = reconcile.replace(old, new, 1)
+        require(close_block.count(old) == 1,
+                f"Spotlight stale-close response self-test anchor is missing or ambiguous inside close-response block: {old}")
+        mutated_close = close_block.replace(old, new, 1)
+        mutated_reconcile = reconcile[:close_call_pos] + mutated_close + reconcile[close_consume_pos:]
         mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
         expect_failure(mutated, stats, policy, "stale-close response schema")
     expect_failure(
