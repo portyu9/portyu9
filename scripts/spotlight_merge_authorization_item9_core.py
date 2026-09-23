@@ -685,6 +685,9 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         sync.replace(CANDIDATE_FORMULA_PROPOSE, 'CANDIDATE_ID="$README_SHA256_AFTER"', 1),
         stats, policy, "lost exact main/generated/README content addressing",
     )
+    propose_start = sync.index("  propose:\n")
+    propose_end = sync.index("  approve:\n", propose_start)
+    propose = sync[propose_start:propose_end]
     for old, new, expected in (
         (
             '              (.url | type == "string" and length > 0)\n            \' <<<"$BLOB" >/dev/null',
@@ -717,8 +720,11 @@ def self_test(sync: str, stats: str, policy: str) -> None:
             "pull-create response schema",
         ),
     ):
-        require(old in sync, f"Spotlight proposal response-schema self-test anchor changed: {old}")
-        expect_failure(sync.replace(old, new, 1), stats, policy, expected)
+        require(propose.count(old) == 1,
+                f"Spotlight proposal response-schema self-test anchor is missing or ambiguous inside propose job: {old}")
+        mutated_propose = propose.replace(old, new, 1)
+        mutated = sync[:propose_start] + mutated_propose + sync[propose_end:]
+        expect_failure(mutated, stats, policy, expected)
     expect_failure(
         sync.replace(
             'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"',
