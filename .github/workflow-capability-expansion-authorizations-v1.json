@@ -67,6 +67,13 @@
       "rationale": "Authorize #787's exact Capability Admission bootstrap-order repair: the existing pinned trusted-main checkout and exact Python setup/runtime verification move before candidate binding so the already-reviewed collection parser exists when delegated/scheduled Spotlight admission executes. Triggers, permissions, endpoints, evaluator, check publisher, mutations and semantic Workflow Capability remain unchanged; no required-check reduction, direct-main write, ruleset change or bypass is added."
     },
     {
+      "id": "cap-capability-admission-check-run-response-schema-hardening",
+      "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "expansionSha256": "50cc0e99bc711ace656eb59a57962bd3f66714295b413dafd137327df9ad8864",
+      "rationale": "Authorize #886's exact Capability Admission check-run creation-response schema hardening. Existing POST /check-runs authority, triggers, permissions, check names, external-id formats and downstream consumers remain unchanged. The returned check object must be typed and identity-bound before scalar consumption. No new endpoint, mutation, secret, OIDC, merge authority, required-check reduction, direct-main write, ruleset change or bypass is added."
+    },
+    {
       "id": "cap-capability-admission-pr-object-schema-hardening",
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
