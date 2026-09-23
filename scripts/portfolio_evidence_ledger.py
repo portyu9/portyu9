@@ -212,60 +212,63 @@ def select_exact_workflow_run(runs: Any, subject: str, workflow: str) -> dict[st
     return trusted[0] if trusted else {}
 
 
-def workflow_runs_for_subject(
+def workflow_runs_for_subject_event(
     repo: str,
     subject: str,
+    event: str,
     token: str | None,
     *,
     fetcher: Callable[[str, str | None], dict[str, Any]] | None = None,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> list[dict[str, Any]]:
-    """Fetch one complete exact-head run snapshot, retrying only positive concurrent cardinality drift."""
+    """Fetch one complete exact-head snapshot for one already-trusted Actions event."""
     require(
         len(subject) == 40 and all(ch in "0123456789abcdef" for ch in subject),
         f"{repo}: workflow-run subject SHA is malformed",
     )
+    require(event in TRUSTED_WORKFLOW_EVENTS, f"{repo}: workflow-run event is not trusted: {event}")
     fetch_page = fetcher or fetch_json
     base = f"https://api.github.com/repos/{OWNER}/{repo}/actions/runs"
+    encoded_event = urllib.parse.quote(event, safe="")
 
     for snapshot_attempt in range(WORKFLOW_RUN_SNAPSHOT_ATTEMPTS):
         try:
             first = fetch_page(
-                f"{base}?head_sha={subject}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page=1",
+                f"{base}?head_sha={subject}&event={encoded_event}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page=1",
                 token,
             )
             total = first.get("total_count")
             require(
                 isinstance(total, int) and not isinstance(total, bool) and total >= 0,
-                f"{repo}: exact-subject workflow-run total_count is malformed",
+                f"{repo}: exact-subject/{event} workflow-run total_count is malformed",
             )
             expected_pages = max(1, (total + WORKFLOW_RUN_PAGE_SIZE - 1) // WORKFLOW_RUN_PAGE_SIZE)
             require(
                 expected_pages <= MAX_WORKFLOW_RUN_PAGES,
-                f"{repo}: exact-subject workflow-run collection exceeds bounded pagination",
+                f"{repo}: exact-subject/{event} workflow-run collection exceeds bounded pagination",
             )
 
             collected: list[dict[str, Any]] = []
             seen_ids: set[int] = set()
             for page in range(1, expected_pages + 1):
                 payload = first if page == 1 else fetch_page(
-                    f"{base}?head_sha={subject}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page={page}",
+                    f"{base}?head_sha={subject}&event={encoded_event}&per_page={WORKFLOW_RUN_PAGE_SIZE}&page={page}",
                     token,
                 )
                 page_total = payload.get("total_count")
                 require(
                     isinstance(page_total, int) and not isinstance(page_total, bool) and page_total >= 0,
-                    f"{repo}: exact-subject workflow-run total_count is malformed",
+                    f"{repo}: exact-subject/{event} workflow-run total_count is malformed",
                 )
                 if page_total != total:
                     raise WorkflowRunSnapshotDrift(
-                        f"{repo}: exact-subject workflow-run total_count changed while paging: "
+                        f"{repo}: exact-subject/{event} workflow-run total_count changed while paging: "
                         f"snapshot={total} page={page_total}"
                     )
                 page_runs = payload.get("workflow_runs")
                 require(
                     isinstance(page_runs, list),
-                    f"{repo}: exact-subject workflow-run page {page} is malformed",
+                    f"{repo}: exact-subject/{event} workflow-run page {page} is malformed",
                 )
                 expected_size = (
                     0
@@ -276,27 +279,34 @@ def workflow_runs_for_subject(
                 )
                 require(
                     len(page_runs) == expected_size,
-                    f"{repo}: exact-subject workflow-run page {page} is incomplete: "
+                    f"{repo}: exact-subject/{event} workflow-run page {page} is incomplete: "
                     f"expected {expected_size}, observed {len(page_runs)}",
                 )
                 for run in page_runs:
-                    require(isinstance(run, dict), f"{repo}: exact-subject workflow-run entry is malformed")
+                    require(isinstance(run, dict), f"{repo}: exact-subject/{event} workflow-run entry is malformed")
                     run_id = run.get("id")
                     require(
                         isinstance(run_id, int) and not isinstance(run_id, bool) and run_id > 0,
-                        f"{repo}: exact-subject workflow-run id is malformed",
+                        f"{repo}: exact-subject/{event} workflow-run id is malformed",
                     )
-                    require(run_id not in seen_ids, f"{repo}: duplicate exact-subject workflow-run id {run_id}")
+                    require(
+                        run_id not in seen_ids,
+                        f"{repo}: duplicate exact-subject/{event} workflow-run id {run_id}",
+                    )
                     seen_ids.add(run_id)
                     require(
                         run.get("head_sha") == subject,
                         f"{repo}: head_sha-filtered workflow-run collection returned a different subject",
                     )
+                    require(
+                        run.get("event") == event,
+                        f"{repo}: event-filtered workflow-run collection returned a different event",
+                    )
                     collected.append(run)
 
             require(
                 len(collected) == total,
-                f"{repo}: exact-subject workflow-run pagination did not close: "
+                f"{repo}: exact-subject/{event} workflow-run pagination did not close: "
                 f"expected {total}, observed {len(collected)}",
             )
             return collected
@@ -305,8 +315,42 @@ def workflow_runs_for_subject(
                 raise
             sleeper(WORKFLOW_RUN_SNAPSHOT_BACKOFF_SECONDS[snapshot_attempt])
 
-    raise RuntimeError("unreachable exact-subject workflow-run snapshot retry state")
+    raise RuntimeError("unreachable exact-subject trusted-event workflow-run snapshot retry state")
 
+
+def workflow_runs_for_subject(
+    repo: str,
+    subject: str,
+    token: str | None,
+    *,
+    fetcher: Callable[[str, str | None], dict[str, Any]] | None = None,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> list[dict[str, Any]]:
+    """Merge independently complete exact-head snapshots for only trusted Actions events."""
+    collected: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
+    for event in sorted(TRUSTED_WORKFLOW_EVENTS):
+        event_runs = workflow_runs_for_subject_event(
+            repo,
+            subject,
+            event,
+            token,
+            fetcher=fetcher,
+            sleeper=sleeper,
+        )
+        for run in event_runs:
+            run_id = run.get("id")
+            require(
+                isinstance(run_id, int) and not isinstance(run_id, bool) and run_id > 0,
+                f"{repo}: merged trusted-event workflow-run id is malformed",
+            )
+            require(
+                run_id not in seen_ids,
+                f"{repo}: duplicate workflow-run id across trusted-event snapshots: {run_id}",
+            )
+            seen_ids.add(run_id)
+            collected.append(run)
+    return collected
 
 def latest_workflow_run(repo: str, workflow: str, subject: str, token: str | None) -> dict[str, Any]:
     encoded = urllib.parse.quote(workflow, safe="")
@@ -424,8 +468,81 @@ def workflow_run_primitive_self_test() -> None:
 
 
 def workflow_runs_for_subject_self_test() -> None:
-    """Prove exact-subject pagination retries only concurrent cardinality drift and otherwise fails closed."""
+    """Prove trusted-event partitioning preserves exact evidence and fail-closed pagination."""
     subject = "1" * 40
+    exact_ci = {
+        "id": 101,
+        "path": ".github/workflows/ci.yml",
+        "event": "push",
+        "head_sha": subject,
+        "created_at": "2026-09-08T00:01:00Z",
+    }
+    requested: list[tuple[str, int]] = []
+
+    def partition_fetch(url: str, token: str | None) -> dict[str, Any]:
+        require(token is None, "trusted-event partition fixture unexpectedly received a token")
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        require((query.get("head_sha") or [""])[0] == subject,
+                "trusted-event partition fixture lost exact head_sha filtering")
+        event = (query.get("event") or [""])[0]
+        page = int((query.get("page") or ["0"])[0])
+        requested.append((event, page))
+        require(event in TRUSTED_WORKFLOW_EVENTS,
+                "trusted-event partition fixture observed an unfiltered/untrusted event query")
+        if event == "push":
+            return {"total_count": 1, "workflow_runs": [exact_ci]}
+        return {"total_count": 0, "workflow_runs": []}
+
+    runs = workflow_runs_for_subject(
+        "fixture-repo", subject, None, fetcher=partition_fetch, sleeper=lambda _: None
+    )
+    require(
+        requested == [(event, 1) for event in sorted(TRUSTED_WORKFLOW_EVENTS)],
+        "exact-subject collection must query each trusted event exactly once in the one-page fixture",
+    )
+    require(runs == [exact_ci], "trusted-event partition fixture lost exact CI evidence")
+    require(
+        select_exact_workflow_run(runs, subject, "ci.yml") == exact_ci,
+        "trusted-event partition fixture failed exact workflow selection",
+    )
+
+    # A repository can have >1000 irrelevant workflow_run/schedule records on one unchanged
+    # subject. The collector must never request that untrusted all-event collection.
+    noisy_requests: list[str] = []
+
+    def noisy_fetch(url: str, token: str | None) -> dict[str, Any]:
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        event = (query.get("event") or [""])[0]
+        noisy_requests.append(event)
+        require(event in TRUSTED_WORKFLOW_EVENTS,
+                "irrelevant untrusted-event rows were allowed to consume the pagination budget")
+        if event == "push":
+            return {"total_count": 1, "workflow_runs": [exact_ci]}
+        return {"total_count": 0, "workflow_runs": []}
+
+    noisy = workflow_runs_for_subject(
+        "fixture-repo", subject, None, fetcher=noisy_fetch, sleeper=lambda _: None
+    )
+    require(noisy == [exact_ci], ">1000 irrelevant-event regression fixture lost exact trusted evidence")
+    require(noisy_requests == sorted(TRUSTED_WORKFLOW_EVENTS),
+            "trusted-event partition regression queried an unexpected event surface")
+
+    wrong_event = {**exact_ci, "event": "workflow_dispatch"}
+    try:
+        workflow_runs_for_subject_event(
+            "fixture-repo",
+            subject,
+            "push",
+            None,
+            fetcher=lambda url, token: {"total_count": 1, "workflow_runs": [wrong_event]},
+            sleeper=lambda _: None,
+        )
+    except ValueError as exc:
+        require("returned a different event" in str(exc),
+                f"wrong-event exact-head fixture failed for wrong reason: {exc}")
+    else:
+        raise ValueError("event-filtered exact-subject collection accepted a wrong-event row")
+
     first_page = [
         {
             "id": index,
@@ -436,117 +553,102 @@ def workflow_runs_for_subject_self_test() -> None:
         }
         for index in range(1, WORKFLOW_RUN_PAGE_SIZE + 1)
     ]
-    exact_ci = {
-        "id": WORKFLOW_RUN_PAGE_SIZE + 1,
-        "path": ".github/workflows/ci.yml",
-        "event": "push",
-        "head_sha": subject,
-        "created_at": "2026-09-08T00:01:00Z",
-    }
+    page_two_ci = {**exact_ci, "id": WORKFLOW_RUN_PAGE_SIZE + 1}
     pages = {
         1: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 1, "workflow_runs": first_page},
-        2: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 1, "workflow_runs": [exact_ci]},
+        2: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 1, "workflow_runs": [page_two_ci]},
     }
-    requested: list[int] = []
+    page_requests: list[int] = []
 
-    def fixture_fetch(url: str, token: str | None) -> dict[str, Any]:
-        require(token is None, "workflow-run fixture unexpectedly received a token")
+    def paged_push_fetch(url: str, token: str | None) -> dict[str, Any]:
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
-        require((query.get("head_sha") or [""])[0] == subject,
-                "workflow-run fixture lost exact head_sha filtering")
+        require((query.get("event") or [""])[0] == "push",
+                "paged trusted-event fixture lost event filtering")
         page = int((query.get("page") or ["0"])[0])
-        requested.append(page)
+        page_requests.append(page)
         return pages[page]
 
-    runs = workflow_runs_for_subject(
-        "fixture-repo", subject, None, fetcher=fixture_fetch, sleeper=lambda _: None
+    paged = workflow_runs_for_subject_event(
+        "fixture-repo", subject, "push", None, fetcher=paged_push_fetch, sleeper=lambda _: None
     )
-    require(requested == [1, 2], "exact-subject workflow-run fixture did not fetch every page")
-    require(len(runs) == WORKFLOW_RUN_PAGE_SIZE + 1,
-            "exact-subject workflow-run fixture lost a page")
+    require(page_requests == [1, 2], "trusted-event exact-subject fixture did not fetch every page")
     require(
-        select_exact_workflow_run(runs, subject, "ci.yml") == exact_ci,
-        "exact-subject workflow-run discovery lost the required workflow on page two",
+        select_exact_workflow_run(paged, subject, "ci.yml") == page_two_ci,
+        "trusted-event exact-subject pagination lost required workflow on page two",
     )
 
-    drift_requested: list[int] = []
+    drift_requests: list[int] = []
     drift_sleeps: list[float] = []
     drift_attempt = 0
 
     def drift_then_stable_fetch(url: str, token: str | None) -> dict[str, Any]:
         nonlocal drift_attempt
-        require(token is None, "snapshot-drift fixture unexpectedly received a token")
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        require((query.get("event") or [""])[0] == "push",
+                "snapshot-drift fixture lost event filtering")
         page = int((query.get("page") or ["0"])[0])
-        drift_requested.append(page)
+        drift_requests.append(page)
         if page == 1:
             drift_attempt += 1
             return pages[1]
         if drift_attempt == 1:
-            return {"total_count": WORKFLOW_RUN_PAGE_SIZE + 2, "workflow_runs": [exact_ci]}
+            return {"total_count": WORKFLOW_RUN_PAGE_SIZE + 2, "workflow_runs": [page_two_ci]}
         return pages[2]
 
-    recovered = workflow_runs_for_subject(
+    recovered = workflow_runs_for_subject_event(
         "fixture-repo",
         subject,
+        "push",
         None,
         fetcher=drift_then_stable_fetch,
         sleeper=drift_sleeps.append,
     )
-    require(
-        drift_requested == [1, 2, 1, 2],
-        "exact-subject snapshot drift did not restart from page one",
-    )
-    require(
-        drift_sleeps == [WORKFLOW_RUN_SNAPSHOT_BACKOFF_SECONDS[0]],
-        "exact-subject snapshot drift retry delay changed",
-    )
-    require(
-        select_exact_workflow_run(recovered, subject, "ci.yml") == exact_ci,
-        "stable retry lost the exact workflow after concurrent snapshot drift",
-    )
+    require(drift_requests == [1, 2, 1, 2],
+            "trusted-event snapshot drift did not restart from page one")
+    require(drift_sleeps == [WORKFLOW_RUN_SNAPSHOT_BACKOFF_SECONDS[0]],
+            "trusted-event snapshot drift retry delay changed")
+    require(select_exact_workflow_run(recovered, subject, "ci.yml") == page_two_ci,
+            "stable trusted-event retry lost exact workflow")
 
-    persistent_requested: list[int] = []
+    persistent_requests: list[int] = []
     persistent_sleeps: list[float] = []
 
     def persistent_drift_fetch(url: str, token: str | None) -> dict[str, Any]:
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        require((query.get("event") or [""])[0] == "push",
+                "persistent-drift fixture lost event filtering")
         page = int((query.get("page") or ["0"])[0])
-        persistent_requested.append(page)
+        persistent_requests.append(page)
         if page == 1:
             return pages[1]
-        return {"total_count": WORKFLOW_RUN_PAGE_SIZE + 2, "workflow_runs": [exact_ci]}
+        return {"total_count": WORKFLOW_RUN_PAGE_SIZE + 2, "workflow_runs": [page_two_ci]}
 
     try:
-        workflow_runs_for_subject(
+        workflow_runs_for_subject_event(
             "fixture-repo",
             subject,
+            "push",
             None,
             fetcher=persistent_drift_fetch,
             sleeper=persistent_sleeps.append,
         )
     except WorkflowRunSnapshotDrift as exc:
-        require(
-            "total_count changed while paging" in str(exc),
-            f"persistent exact-subject drift failed for wrong reason: {exc}",
-        )
+        require("total_count changed while paging" in str(exc),
+                f"persistent trusted-event drift failed for wrong reason: {exc}")
     else:
-        raise ValueError("persistent exact-subject snapshot drift did not fail closed")
+        raise ValueError("persistent trusted-event snapshot drift did not fail closed")
     require(
-        persistent_requested == [1, 2] * WORKFLOW_RUN_SNAPSHOT_ATTEMPTS,
-        "persistent exact-subject drift did not exhaust the bounded whole-snapshot retry budget",
+        persistent_requests == [1, 2] * WORKFLOW_RUN_SNAPSHOT_ATTEMPTS,
+        "persistent trusted-event drift did not exhaust the bounded retry budget",
     )
     require(
         persistent_sleeps == list(WORKFLOW_RUN_SNAPSHOT_BACKOFF_SECONDS),
-        "persistent exact-subject drift retry backoff changed",
+        "persistent trusted-event drift backoff changed",
     )
 
     failure_cases = (
         (
-            {
-                1: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 1, "workflow_runs": first_page[:-1]},
-                2: pages[2],
-            },
+            {1: {"total_count": WORKFLOW_RUN_PAGE_SIZE + 1, "workflow_runs": first_page[:-1]}},
             "incomplete",
         ),
         (
@@ -554,30 +656,25 @@ def workflow_runs_for_subject_self_test() -> None:
                 1: pages[1],
                 2: {
                     "total_count": WORKFLOW_RUN_PAGE_SIZE + 1,
-                    "workflow_runs": [{**exact_ci, "id": 1}],
+                    "workflow_runs": [{**page_two_ci, "id": 1}],
                 },
             },
-            "duplicate exact-subject workflow-run id",
+            "duplicate exact-subject/push workflow-run id",
         ),
         (
             {
                 1: pages[1],
                 2: {
                     "total_count": WORKFLOW_RUN_PAGE_SIZE + 1,
-                    "workflow_runs": [{**exact_ci, "head_sha": "2" * 40}],
+                    "workflow_runs": [{**page_two_ci, "head_sha": "2" * 40}],
                 },
             },
             "returned a different subject",
         ),
-        (
-            {
-                1: {"total_count": True, "workflow_runs": []},
-            },
-            "total_count is malformed",
-        ),
+        ({1: {"total_count": True, "workflow_runs": []}}, "total_count is malformed"),
     )
     for fixture_pages, expected in failure_cases:
-        failure_requested: list[int] = []
+        failure_requests: list[int] = []
         failure_sleeps: list[float] = []
 
         def failing_fetch(
@@ -587,33 +684,49 @@ def workflow_runs_for_subject_self_test() -> None:
             data: dict[int, dict[str, Any]] = fixture_pages,
         ) -> dict[str, Any]:
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+            require((query.get("event") or [""])[0] == "push",
+                    "failure fixture lost event filtering")
             page = int((query.get("page") or ["0"])[0])
-            failure_requested.append(page)
+            failure_requests.append(page)
             return data[page]
 
         try:
-            workflow_runs_for_subject(
+            workflow_runs_for_subject_event(
                 "fixture-repo",
                 subject,
+                "push",
                 None,
                 fetcher=failing_fetch,
                 sleeper=failure_sleeps.append,
             )
         except ValueError as exc:
-            require(expected in str(exc), f"exact-subject workflow-run self-test failed for wrong reason: {exc}")
+            require(expected in str(exc),
+                    f"trusted-event exact-subject self-test failed for wrong reason: {exc}")
         else:
-            raise ValueError(
-                f"exact-subject workflow-run self-test accepted malformed pagination: {expected}"
-            )
-        require(
-            failure_sleeps == [],
-            f"non-drift exact-subject failure was incorrectly retried: {expected}",
-        )
-        require(
-            len(failure_requested) == len(set(failure_requested)),
-            f"non-drift exact-subject failure restarted the snapshot: {expected}",
-        )
+            raise ValueError(f"trusted-event exact-subject self-test accepted malformed evidence: {expected}")
+        require(failure_sleeps == [],
+                f"non-drift trusted-event failure was incorrectly retried: {expected}")
+        require(len(failure_requests) == len(set(failure_requests)),
+                f"non-drift trusted-event failure restarted the snapshot: {expected}")
 
+    duplicate = {**exact_ci, "id": 777}
+    duplicate_calls: list[str] = []
+
+    def duplicate_partition_fetch(url: str, token: str | None) -> dict[str, Any]:
+        query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        event = (query.get("event") or [""])[0]
+        duplicate_calls.append(event)
+        return {"total_count": 1, "workflow_runs": [{**duplicate, "event": event}]}
+
+    try:
+        workflow_runs_for_subject(
+            "fixture-repo", subject, None, fetcher=duplicate_partition_fetch, sleeper=lambda _: None
+        )
+    except ValueError as exc:
+        require("duplicate workflow-run id across trusted-event snapshots" in str(exc),
+                f"cross-event duplicate fixture failed for wrong reason: {exc}")
+    else:
+        raise ValueError("merged trusted-event snapshots accepted a duplicate run id")
 
 def workflow_jobs(
     repo: str,
