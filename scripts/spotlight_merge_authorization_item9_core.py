@@ -392,7 +392,7 @@ def validate_candidate_publication(sync: str) -> None:
     proposal_refs_call_marker = (
         'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
     )
-    proposal_refs_schema_marker = 'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}"'
+    proposal_refs_schema_marker = '\' <<<"$MATCHING_REFS" >/dev/null'
     proposal_refs_consume_marker = (
         'EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
         '\'[.[] | select(.ref == $ref)] | length\' <<<"$MATCHING_REFS")"'
@@ -407,6 +407,7 @@ def validate_candidate_publication(sync: str) -> None:
     proposal_refs_consume = propose.index(proposal_refs_consume_marker)
     proposal_refs_block = propose[proposal_refs_call:proposal_refs_consume]
     for fragment in (
+        'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}"',
         '(type == "array") and',
         '(length <= 1) and',
         '(.ref | type == "string" and . == $ref) and',
