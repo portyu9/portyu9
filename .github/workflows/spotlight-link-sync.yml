@@ -1144,7 +1144,7 @@ jobs:
               (.base | type == "object" and (.ref | type == "string" and length > 0) and (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
               (.head | type == "object" and (.ref | type == "string" and length > 0) and (.sha | type == "string" and test("^[0-9a-f]{40}$")) and (.repo | type == "object" and (.full_name | type == "string" and . == $repo))) and
               (.title | type == "string" and length > 0) and
-              (has("body") and ((.body == null) or ((.body | type) == "string"))) and
+              (.body | type == "string" and length > 0) and
               (has("merge_commit_sha") and ((.merge_commit_sha == null) or ((.merge_commit_sha | type) == "string" and (.merge_commit_sha | test("^[0-9a-f]{40}$")))))
             ' <<<"$payload" >/dev/null
           }
