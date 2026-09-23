@@ -1108,7 +1108,7 @@ jobs:
             fi
           done
           test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
-            echo "ERROR: exact-base/head portyu9 review did not materialize after the post-check dispatch." >&2
+            echo "ERROR: exact-base/head portyu9 review did not materialize after the pre-convergence dispatch." >&2
             exit 1
           }
           test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
