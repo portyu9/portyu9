@@ -1349,7 +1349,10 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
 
     ref_post = autofix.index('gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs"')
     ref_validate = autofix.index(created_ref, ref_post)
-    ref_consume = autofix.index('created-ref-normalized.json', ref_validate)
+    ref_consume = autofix.index(
+        'test "$(jq -r .ref created-ref-normalized.json)" = "$TARGET_REF"',
+        ref_validate,
+    )
     autofix_commit = autofix.index(
         '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"',
         ref_consume,
@@ -1361,7 +1364,10 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
         receipt,
     )
     reviewer_validate = autofix.index(reviewer, reviewer_post)
-    reviewer_consume = autofix.index('requested-reviewer-normalized.json', reviewer_validate)
+    reviewer_consume = autofix.index(
+        'test "$(jq -r .headSha requested-reviewer-normalized.json)" = "$HEAD_SHA"',
+        reviewer_validate,
+    )
     require(
         ref_post < ref_validate < ref_consume < autofix_commit < pr_create < receipt
         < reviewer_post < reviewer_validate < reviewer_consume,
