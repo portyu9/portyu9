@@ -722,6 +722,17 @@ jobs:
           fi
 
           CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          jq -e --arg head "$HEAD_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" '
+            (type == "object") and
+            (.sha | type == "string" and . == $head) and
+            (.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
+            (.parents | type == "array" and length == 1 and
+              (.[0] | type == "object" and .sha == $parent)) and
+            (.author | type == "object" and .name == $name and .email == $email) and
+            (.committer | type == "object" and .name == $name and .email == $email and
+              (.date | type == "string" and length > 0)) and
+            (.message == "chore: sync rotating Spotlight links")
+          ' <<<"$CANDIDATE_COMMIT" >/dev/null
           test "$(jq '.parents | length' <<<"$CANDIDATE_COMMIT")" = "1"
           test "$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")" = "$SOURCE_SHA"
           test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
@@ -730,6 +741,25 @@ jobs:
           test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
           test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
           COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"
+          jq -e --arg source "$SOURCE_SHA" --arg head "$HEAD_SHA" '
+            (type == "object") and
+            (.status == "ahead") and
+            (.base_commit | type == "object" and .sha == $source) and
+            (.merge_base_commit | type == "object" and .sha == $source) and
+            (.ahead_by | type == "number" and . == floor and . == 1) and
+            (.behind_by | type == "number" and . == floor and . == 0) and
+            (.total_commits | type == "number" and . == floor and . == 1) and
+            (.commits | type == "array" and length == 1 and
+              (.[0] | type == "object" and .sha == $head)) and
+            (.files | type == "array" and length == 1 and
+              (.[0] | type == "object" and
+                (.filename | type == "string" and . == "README.md") and
+                (.status | type == "string" and . == "modified") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.additions | type == "number" and . == floor and . >= 0) and
+                (.deletions | type == "number" and . == floor and . >= 0) and
+                (.changes | type == "number" and . == floor and . >= 0)))
+          ' <<<"$COMPARE" >/dev/null
           test "$(jq -r .status <<<"$COMPARE")" = "ahead"
           test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$SOURCE_SHA"
           test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$SOURCE_SHA"
