@@ -312,6 +312,17 @@ def validate_git_ref_response(
     return {"kind": "ref", "ref": expected_ref, "sha": expected_sha}
 
 
+def validate_merge_success_response(value: Any) -> dict[str, Any]:
+    require(isinstance(value, Mapping), "Dependabot merge success response must be an object")
+    require(type(value.get("merged")) is bool, "Dependabot merge success response merged must be boolean")
+    require(value.get("merged") is True, "Dependabot merge success response must report merged=true")
+    merge_sha = _response_sha(value.get("sha"), "Dependabot merge success response sha")
+    message = value.get("message")
+    require(isinstance(message, str) and bool(message.strip()),
+            "Dependabot merge success response message must be a nonempty string")
+    return {"kind": "merge", "merged": True, "sha": merge_sha, "message": message}
+
+
 def self_test() -> None:
     base = ROOT
     lock = load_action_lock(base / ACTION_LOCK)
@@ -382,6 +393,20 @@ def self_test() -> None:
     )
     require(ref == {"kind": "ref", "ref": ref_name, "sha": commit_sha},
             "Dependabot Git ref response positive fixture changed")
+    merge = validate_merge_success_response({
+        "sha": commit_sha,
+        "merged": True,
+        "message": "Pull Request successfully merged",
+    })
+    require(
+        merge == {
+            "kind": "merge",
+            "merged": True,
+            "sha": commit_sha,
+            "message": "Pull Request successfully merged",
+        },
+        "Dependabot merge success response positive fixture changed",
+    )
 
     negative_response_fixtures = (
         ("blob non-object", lambda: validate_git_blob_response([]), "must be an object"),
@@ -441,6 +466,50 @@ def self_test() -> None:
             ),
             "object sha changed",
         ),
+        ("merge non-object", lambda: validate_merge_success_response([]), "must be an object"),
+        (
+            "merge string status",
+            lambda: validate_merge_success_response(
+                {"sha": commit_sha, "merged": "true", "message": "Pull Request successfully merged"}
+            ),
+            "merged must be boolean",
+        ),
+        (
+            "merge numeric status",
+            lambda: validate_merge_success_response(
+                {"sha": commit_sha, "merged": 1, "message": "Pull Request successfully merged"}
+            ),
+            "merged must be boolean",
+        ),
+        (
+            "merge false",
+            lambda: validate_merge_success_response(
+                {"sha": commit_sha, "merged": False, "message": "Merge rejected"}
+            ),
+            "merged=true",
+        ),
+        (
+            "merge bad sha",
+            lambda: validate_merge_success_response(
+                {"sha": "abc", "merged": True, "message": "Pull Request successfully merged"}
+            ),
+            "lowercase SHA-40",
+        ),
+        (
+            "merge missing message",
+            lambda: validate_merge_success_response({"sha": commit_sha, "merged": True}),
+            "message must be a nonempty string",
+        ),
+        (
+            "merge non-string message",
+            lambda: validate_merge_success_response({"sha": commit_sha, "merged": True, "message": 7}),
+            "message must be a nonempty string",
+        ),
+        (
+            "merge empty message",
+            lambda: validate_merge_success_response({"sha": commit_sha, "merged": True, "message": "   "}),
+            "message must be a nonempty string",
+        ),
     )
     for label, operation, expected in negative_response_fixtures:
         try:
@@ -474,7 +543,7 @@ def parser() -> argparse.ArgumentParser:
     validate.add_argument("--candidate-root", type=Path, required=True)
     validate.add_argument("--changed-paths", type=Path, required=True)
     validate.add_argument("--out", type=Path, required=True)
-    for name in ("git-blob-response", "git-tree-response"):
+    for name in ("git-blob-response", "git-tree-response", "merge-success-response"):
         command = sub.add_parser(name)
         command.add_argument("--response", type=Path, required=True)
         command.add_argument("--out", type=Path, required=True)
@@ -499,7 +568,13 @@ def main() -> int:
             self_test()
             print("Dependabot zero-touch controller self-test passed.")
             return 0
-        if args.command in {"git-blob-response", "git-tree-response", "git-commit-response", "git-ref-response"}:
+        if args.command in {
+            "git-blob-response",
+            "git-tree-response",
+            "git-commit-response",
+            "git-ref-response",
+            "merge-success-response",
+        }:
             response = load_json(args.response)
             if args.command == "git-blob-response":
                 result = validate_git_blob_response(response)
@@ -511,12 +586,14 @@ def main() -> int:
                     expected_tree_sha=args.expected_tree,
                     expected_parent_sha=args.expected_parent,
                 )
-            else:
+            elif args.command == "git-ref-response":
                 result = validate_git_ref_response(
                     response,
                     expected_ref=args.expected_ref,
                     expected_sha=args.expected_sha,
                 )
+            else:
+                result = validate_merge_success_response(response)
             args.out.write_text(canonical_json(result), encoding="utf-8")
             return 0
         if args.command in {"probe", "admit"}:
