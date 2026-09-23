@@ -193,9 +193,7 @@ def validate_reconciliation(reconcile: str) -> None:
     prs_count_marker = 'PR_COUNT="$(jq \'length\' <<<"$PRS")"'
     pr_number_marker = 'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"'
     pr_call_marker = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
-    pr_schema_marker = (
-        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
-    )
+    pr_schema_marker = '<<<"$PR" >/dev/null'
     pr_consume_marker = 'test "$(jq -r .state <<<"$PR")" = "open"'
 
     for marker in (
@@ -234,6 +232,7 @@ def validate_reconciliation(reconcile: str) -> None:
 
     pr_block = reconcile[pr_call:pr_consume]
     for fragment in (
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
         '(type == "object") and',
         '(.number | type == "number" and . == floor and . == $pr) and',
         '(.user | type == "object" and .login == "github-actions[bot]") and',
@@ -259,9 +258,7 @@ def validate_reconciliation(reconcile: str) -> None:
     close_call_marker = (
         'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
     )
-    close_schema_marker = (
-        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
-    )
+    close_schema_marker = '<<<"$CLOSED_PR" >/dev/null'
     close_consume_marker = 'test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"'
     delete_ref_marker = (
         'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
@@ -275,6 +272,7 @@ def validate_reconciliation(reconcile: str) -> None:
     delete_ref = reconcile.index(delete_ref_marker, close_consume)
     close_block = reconcile[close_call:close_consume]
     for fragment in (
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
         '((type) == "object") and',
         '(.number | type == "number" and . == floor and . == $pr) and',
         '(.user | type == "object" and .login == "github-actions[bot]") and',
