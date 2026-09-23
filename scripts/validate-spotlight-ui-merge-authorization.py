@@ -233,7 +233,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     require(pre_pr < pre_validate < pre_consume,
             "Spotlight terminal pre-merge PR fields are consumed before schema validation")
     for fragment in (
-        'test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"',
+        'test "$(jq -r \'.user.login\' <<<"$PR")" = "github-actions[bot]"',
         'test "$(jq -r .draft <<<"$PR")" = "false"',
         'test "$(jq -r .merged <<<"$PR")" = "false"',
         'test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"',
