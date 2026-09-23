@@ -306,6 +306,64 @@ jobs:
             return 2
           }
 
+          prepare_review_retry_history() {
+            local attempt_run expected_prior
+            [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+            [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+            [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            test "$GITHUB_RUN_ATTEMPT" -le 20
+            : > "$RUNNER_TEMP/bot-review-prior-attempts.ndjson"
+            for HISTORY_ATTEMPT in $(seq 1 20); do
+              if [ "$HISTORY_ATTEMPT" -ge "$GITHUB_RUN_ATTEMPT" ]; then
+                break
+              fi
+              attempt_run="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}")"
+              jq -e \
+                --arg repo "$TARGET_REPOSITORY" \
+                --arg source "$GITHUB_SHA" \
+                --argjson run "$GITHUB_RUN_ID" \
+                --argjson attempt "$HISTORY_ATTEMPT" '
+                  .id == $run and
+                  .run_attempt == $attempt and
+                  .name == "Bot PR user approval" and
+                  .path == ".github/workflows/bot-pr-user-approval.yml" and
+                  .event == "workflow_run" and
+                  .head_branch == "main" and
+                  .head_sha == $source and
+                  .repository.full_name == $repo and
+                  .head_repository.full_name == $repo and
+                  (.check_suite_id | type == "number" and . == floor and . > 0) and
+                  .status == "completed" and
+                  (.conclusion == "action_required" or
+                   .conclusion == "cancelled" or
+                   .conclusion == "failure" or
+                   .conclusion == "neutral" or
+                   .conclusion == "skipped" or
+                   .conclusion == "stale" or
+                   .conclusion == "startup_failure" or
+                   .conclusion == "success" or
+                   .conclusion == "timed_out") and
+                  (.actor.login | type == "string" and length > 0) and
+                  (.triggering_actor.login | type == "string" and length > 0)
+                ' <<<"$attempt_run" >/dev/null
+              jq -c '{
+                attempt:.run_attempt,
+                checkSuiteId:.check_suite_id,
+                status:.status,
+                conclusion:.conclusion,
+                actor:.actor.login,
+                triggeringActor:.triggering_actor.login
+              }' <<<"$attempt_run" >> "$RUNNER_TEMP/bot-review-prior-attempts.ndjson"
+              sleep 1
+            done
+            jq -s -c 'sort_by(.attempt)' "$RUNNER_TEMP/bot-review-prior-attempts.ndjson" > "$RUNNER_TEMP/bot-review-prior-attempts.json"
+            expected_prior=$((GITHUB_RUN_ATTEMPT - 1))
+            test "$(jq 'length' "$RUNNER_TEMP/bot-review-prior-attempts.json")" = "$expected_prior"
+            jq -e --argjson current "$GITHUB_RUN_ATTEMPT" '
+              [.[].attempt] == (if $current == 1 then [] else [range(1; $current)] end)
+            ' "$RUNNER_TEMP/bot-review-prior-attempts.json" >/dev/null
+          }
+
           wake_governed_lane_after_review() {
             local lane="$1" head_ref="$2"
             case "$lane" in
@@ -324,6 +382,8 @@ jobs:
                 ;;
             esac
           }
+
+          prepare_review_retry_history
 
           while IFS= read -r CANDIDATE; do
             [ -n "$CANDIDATE" ] || continue
@@ -561,7 +621,48 @@ jobs:
               continue
             fi
 
-            printf -v BODY '%s\n%s' "$REVIEW_MARKER" "Automated exact-base/head approval by portyu9 after all lane-required protected gates completed successfully for base \`${MAIN_SHA}\` and head \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
+            REVIEW_PROVENANCE="$(jq -cS -n \
+              --arg repository "$TARGET_REPOSITORY" \
+              --arg workflowName "Bot PR user approval" \
+              --arg workflowPath ".github/workflows/bot-pr-user-approval.yml" \
+              --arg event "workflow_run" \
+              --arg sourceSha "$GITHUB_SHA" \
+              --argjson runId "$GITHUB_RUN_ID" \
+              --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
+              --arg baseSha "$MAIN_SHA" \
+              --arg headSha "$HEAD_SHA" \
+              --arg lane "$LANE" \
+              --argjson prNumber "$PR_NUMBER" \
+              --slurpfile retryHistory "$RUNNER_TEMP/bot-review-prior-attempts.json" '
+                {
+                  schemaVersion:1,
+                  kind:"portyu9-bot-review-provenance",
+                  repository:$repository,
+                  workflow:{
+                    name:$workflowName,
+                    path:$workflowPath,
+                    event:$event,
+                    sourceSha:$sourceSha,
+                    runId:$runId,
+                    runAttempt:$runAttempt
+                  },
+                  retryHistory:$retryHistory[0],
+                  authorization:{
+                    prNumber:$prNumber,
+                    lane:$lane,
+                    baseSha:$baseSha,
+                    headSha:$headSha
+                  }
+                }
+              ')"
+            REVIEW_PROVENANCE_SHA256="$(printf '%s' "$REVIEW_PROVENANCE" | sha256sum | cut -d' ' -f1)"
+            [[ "$REVIEW_PROVENANCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            REVIEW_PROVENANCE_MARKER="<!-- portyu9-bot-review-provenance:v1 sha256=${REVIEW_PROVENANCE_SHA256} -->"
+            printf -v BODY '%s\n%s\n%s\n%s' \
+              "$REVIEW_MARKER" \
+              "$REVIEW_PROVENANCE_MARKER" \
+              "$REVIEW_PROVENANCE" \
+              "Automated exact-base/head approval by portyu9 after all lane-required protected gates completed successfully for base \`${MAIN_SHA}\` and head \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
             jq -n --arg body "$BODY" --arg commit "$HEAD_SHA"               '{event:"APPROVE",body:$body,commit_id:$commit}' > review-request.json
             REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
             jq -e --arg head "$HEAD_SHA" --arg body "$BODY" '

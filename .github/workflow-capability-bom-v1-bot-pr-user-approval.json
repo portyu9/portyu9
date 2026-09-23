@@ -20,6 +20,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve only exact green governed bot PRs as portyu9"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100",
               "method": "GET",
               "mutating": false,

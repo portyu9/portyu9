@@ -254,6 +254,20 @@
       "operationRetry": false,
       "purpose": "Collect exact prior compatibility witness producer attempts as signed evidence; no mutation is repeated.",
       "mutationMode": "none"
+    },
+    {
+      "id": "bot-pr-user-approval-prior-attempt-history",
+      "workflow": ".github/workflows/bot-pr-user-approval.yml",
+      "job": "approve",
+      "step": "Approve only exact green governed bot PRs as portyu9",
+      "ordinal": 2,
+      "variable": "HISTORY_ATTEMPT",
+      "maxIterations": 20,
+      "sleepSeconds": 1,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Collect exact prior Bot PR user approval attempts as durable review provenance; the review POST remains outside the loop.",
+      "mutationMode": "none"
     }
   ],
   "trustedReentry": [
