@@ -347,6 +347,13 @@
       "rationale": "Authorize #556's exact trusted-controller source change for duplicate required-check convergence. The semantic capability BOM is unchanged. The controller now accepts one or more exact-head GitHub Actions runs for each required context only when every returned latest run is from app 15368, bound to the exact candidate head, completed, and successful. Any missing, pending, failed, mismatched, or foreign duplicate still blocks convergence and merge."
     },
     {
+      "id": "cap-dependabot-git-mutation-response-schema-hardening",
+      "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "expansionSha256": "ae010db92c138b37b0d66b0e62fb70b05ba6567d60c69ea9cea2bb39b7a0fec8",
+      "rationale": "Authorize #839's exact Dependabot Git-data mutation-response schema hardening. Existing blob/tree/commit/ref endpoints, permissions, reconciliation targets, protected checks, review/merge authority, and semantic Workflow Capability stay unchanged. Responses now prove typed SHA identity plus exact commit tree/parent and ref/object binding before later writes. No trigger, secret, mutation class, retry, OIDC, candidate execution, check reduction, direct-main write, ruleset change, or bypass."
+    },
+    {
       "id": "cap-dependabot-immutable-workflow-run-wake-binding",
       "baseBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "candidateBomSha256": "82945c362cc9c5aaf4df583b9a932d01fbf385671cca113919c98166bcef71b0",
