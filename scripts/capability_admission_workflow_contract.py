@@ -275,7 +275,7 @@ def validate_text(text: str) -> None:
     publisher_pos = text.index(publisher)
     schema_pos = text.index(schema_marker, publisher_pos)
     schema_end_pos = text.index(schema_end_marker, schema_pos) + len(schema_end_marker)
-    consume_pos = text.index(consume_marker, schema_end_pos)
+    consume_pos = text.index(consume_marker, publisher_pos)
     require(
         publisher_pos < schema_pos < schema_end_pos < consume_pos,
         "trusted capability admission check-run response schema must precede scalar consumption",
