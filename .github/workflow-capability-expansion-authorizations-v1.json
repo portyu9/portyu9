@@ -669,6 +669,13 @@
       "rationale": "Authorize frozen #913 to add one read-only Spotlight reconcile GET comparing a validated candidate parent to exact current main, solely to prove an old bot candidate base is an accepted ancestor before bypassing the 30-minute uncertainty floor. Existing typed candidate/README/PR/close/delete proofs remain mandatory; divergent, malformed, or unproven young candidates remain preserved. No permission, trigger, secret, mutation, merge/ruleset authority, required-check reduction, or bypass is added."
     },
     {
+      "id": "cap-codeql-autofix-constructive-response-schemas-v1",
+      "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "expansionSha256": "917ea1beb98bfdc61f8bf52c0e92f306e48253a7aeabe7e1809b5e8b97dc7519",
+      "rationale": "Authorize frozen #917's exact protected-TCB validation hardening for the existing CodeQL Autofix ref-create and reviewer-request write responses. Existing endpoints, methods, permissions, triggers, secrets, mutation targets/classes, merge authority, required checks, rulesets and bypass surfaces are unchanged; exact created-ref and PR/base/head/repository/reviewer identities must now validate before normalized consumption. The composite Workflow Capability BOM is unchanged."
+    },
+    {
       "id": "cap-spotlight-main-push-reconciliation",
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
