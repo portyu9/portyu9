@@ -45,10 +45,12 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           [[ "$TRUSTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
-          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+          LIVE_MAIN_SHA="$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)"
+          [[ "$LIVE_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
 
           case "$GITHUB_EVENT_NAME" in
             push|workflow_dispatch)
+              test "$LIVE_MAIN_SHA" = "$TRUSTED_MAIN_SHA"
               ;;
             workflow_run)
               WAKE_NAME="$(jq -r '.workflow_run.name' "$GITHUB_EVENT_PATH")"
@@ -71,6 +73,11 @@ jobs:
                   exit 1
                   ;;
               esac
+              if [ "$LIVE_MAIN_SHA" != "$TRUSTED_MAIN_SHA" ]; then
+                echo "Ignoring superseded Ruleset reconciler workflow_run wake: trusted=${TRUSTED_MAIN_SHA} live=${LIVE_MAIN_SHA}." >&2
+                echo "live_state=not-applicable" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
               if [ "$WAKE_HEAD_SHA" = "$TRUSTED_MAIN_SHA" ]; then
                 echo "live_state=not-applicable" >> "$GITHUB_OUTPUT"
                 exit 0
