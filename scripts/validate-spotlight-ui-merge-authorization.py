@@ -229,7 +229,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
         require(fragment in fn, f"Spotlight terminal PR schema is missing: {fragment}")
 
     pre_validate = merge.index('          validate_terminal_pr_object "$PR"', pre_pr)
-    pre_consume = merge.index('          test "$(jq -r .user.login <<<"$PR")"', pre_pr)
+    pre_consume = merge.index('          test "$(jq -r \'.user.login\' <<<"$PR")"', pre_pr)
     require(pre_pr < pre_validate < pre_consume,
             "Spotlight terminal pre-merge PR fields are consumed before schema validation")
     for fragment in (
