@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "e09c33f408ff7a70572185e5cfd126b9b2f0168b"
+EXPECTED_GIT_BLOB = "d96cc0f7fbaf69e218290739e2a01bbd8993bbbf"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -263,8 +263,48 @@ def validate_text(text: str) -> None:
                 f"trusted capability admission Spotlight proof changed: {spotlight_binding}")
 
     publisher = 'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
+    schema_marker = "jq -e --arg name \"$CHECK_NAME\" --arg head \"$HEAD_SHA\" --arg external \"$EXTERNAL_ID\" --arg summary \"$SUMMARY\" '"
+    schema_end_marker = "' <<<\"$CHECK\" >/dev/null || {"
+    consume_marker = '[[ "$(jq -r .id <<<"$CHECK")" =~ ^[1-9][0-9]*$ ]]'
     require(text.count(publisher) == 1,
             "trusted capability admission exact candidate-check publisher surface changed")
+    require(text.count(schema_marker) == 1 and text.count(schema_end_marker) == 1,
+            "trusted capability admission check-run response schema anchor changed")
+    require(text.count(consume_marker) == 1,
+            "trusted capability admission check-run response scalar-consumption anchor changed")
+    publisher_pos = text.index(publisher)
+    schema_pos = text.index(schema_marker, publisher_pos)
+    schema_end_pos = text.index(schema_end_marker, schema_pos) + len(schema_end_marker)
+    consume_pos = text.index(consume_marker, schema_end_pos)
+    require(
+        publisher_pos < schema_pos < schema_end_pos < consume_pos,
+        "trusted capability admission check-run response schema must precede scalar consumption",
+    )
+    schema = text[schema_pos:schema_end_pos]
+    for schema_fragment in (
+        '(type == "object") and',
+        '(.id | type == "number" and . == floor and . > 0) and',
+        '(.name | type == "string" and . == $name) and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.status | type == "string" and . == "completed") and',
+        '(.conclusion | type == "string" and . == "success") and',
+        '(.external_id | type == "string" and length > 0 and . == $external) and',
+        '(.details_url | type == "string" and test("^https://github\\\\.com/portyu9/portyu9/runs/[1-9][0-9]*$")) and',
+        '(.output | type == "object" and',
+        '(.title | type == "string" and . == "Trusted capability admission passed") and',
+        '(.summary | type == "string" and . == $summary)) and',
+        '(.app | type == "object" and',
+        '(.id | type == "number" and . == floor and . == 15368) and',
+        '(.slug | type == "string" and . == "github-actions"))',
+    ):
+        require(
+            schema_fragment in schema,
+            f"trusted capability admission check-run response schema changed: {schema_fragment}",
+        )
+    require(
+        "malformed or mismatched trusted capability-admission check-run creation response." in text,
+        "trusted capability admission check-run response schema must fail visibly",
+    )
     for publisher_binding in (
         '-f name="$CHECK_NAME"',
         '-f head_sha="$HEAD_SHA"',
@@ -308,6 +348,44 @@ def expect_failure(text: str, old: str, new: str, expected: str, *, count: int =
         raise ValueError(f"trusted capability admission contract accepted forbidden mutation: {expected}")
 
 
+def expect_check_schema_failure(text: str, old: str, new: str) -> None:
+    schema_marker = "jq -e --arg name \"$CHECK_NAME\" --arg head \"$HEAD_SHA\" --arg external \"$EXTERNAL_ID\" --arg summary \"$SUMMARY\" '"
+    consume_marker = '[[ "$(jq -r .id <<<"$CHECK")" =~ ^[1-9][0-9]*$ ]]'
+    schema_start = text.index(schema_marker)
+    schema_end = text.index(consume_marker, schema_start)
+    schema = text[schema_start:schema_end]
+    require(schema.count(old) == 1,
+            f"capability admission check-schema self-test anchor count changed: {old!r}")
+    mutated_schema = schema.replace(old, new, 1)
+    mutated = text[:schema_start] + mutated_schema + text[schema_end:]
+    try:
+        validate_text(mutated)
+    except ValueError as exc:
+        require("check-run response schema" in str(exc),
+                f"trusted capability admission check-schema self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("trusted capability admission contract accepted malformed check-run response schema")
+
+
+def expect_check_schema_reorder_failure(text: str) -> None:
+    schema_marker = "jq -e --arg name \"$CHECK_NAME\" --arg head \"$HEAD_SHA\" --arg external \"$EXTERNAL_ID\" --arg summary \"$SUMMARY\" '"
+    consume_marker = '[[ "$(jq -r .id <<<"$CHECK")" =~ ^[1-9][0-9]*$ ]]'
+    schema_start = text.index(schema_marker)
+    consume_start = text.index(consume_marker, schema_start)
+    schema_block = text[schema_start:consume_start]
+    without_schema = text[:schema_start] + text[consume_start:]
+    relocated_consume = without_schema.index(consume_marker)
+    consume_end = without_schema.index("\n", relocated_consume) + 1
+    mutated = without_schema[:consume_end] + schema_block + without_schema[consume_end:]
+    try:
+        validate_text(mutated)
+    except ValueError as exc:
+        require("must precede scalar consumption" in str(exc),
+                f"trusted capability admission schema-reordering self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("trusted capability admission contract accepted schema-after-consumption reordering")
+
+
 def self_test() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     validate_text(text)
@@ -330,6 +408,48 @@ def self_test() -> None:
         'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         "candidate-check publisher",
     )
+    expect_check_schema_failure(text, '(type == "object") and', '(type != "null") and')
+    expect_check_schema_failure(
+        text,
+        '(.id | type == "number" and . == floor and . > 0) and',
+        '(.id | . > 0) and',
+    )
+    expect_check_schema_failure(
+        text,
+        '(.name | type == "string" and . == $name) and',
+        '(.name == $name) and',
+    )
+    expect_check_schema_failure(
+        text,
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.head_sha == $head) and',
+    )
+    expect_check_schema_failure(
+        text,
+        '(.status | type == "string" and . == "completed") and',
+        '(.status == "completed") and',
+    )
+    expect_check_schema_failure(
+        text,
+        '(.conclusion | type == "string" and . == "success") and',
+        '(.conclusion == "success") and',
+    )
+    expect_check_schema_failure(
+        text,
+        '(.external_id | type == "string" and length > 0 and . == $external) and',
+        '(.external_id == $external) and',
+    )
+    expect_check_schema_failure(
+        text,
+        '(.app | type == "object" and',
+        '(.app != null and',
+    )
+    expect_check_schema_failure(
+        text,
+        '(.id | type == "number" and . == floor and . == 15368) and',
+        '(.id == 15368) and',
+    )
+    expect_check_schema_reorder_failure(text)
     expect_failure(
         text,
         "ref: main",
@@ -386,5 +506,5 @@ if __name__ == "__main__":
     print(
         "Trusted capability admission workflow contract passed: exact bytes; base-only execution; distinct exact ordinary and "
         "delegated evaluator tree bindings; immutable Autofix provenance; deterministic Spotlight recovery; exact native "
-        "Dependabot release/delegation reproof; data-only candidate TCB evaluation; and one bounded exact-head check publisher."
+        "Dependabot release/delegation reproof; data-only candidate TCB evaluation; and one bounded exact-head check publisher with a typed pre-consumption creation-response boundary."
     )
