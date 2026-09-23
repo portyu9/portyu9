@@ -95,11 +95,13 @@ def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
     schema_end = budget.index(schema_end_marker, schema_start) + len(schema_end_marker)
     schema = budget[schema_start:schema_end]
     for fragment in (
-        '(type == "object") and',
-        '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '            (type == "object") and\n'
+        '            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
         '(.artifacts | type == "array") and',
         '((.artifacts | length) == .total_count) and',
-        '(all(.artifacts[];',
+        '            (all(.artifacts[];\n'
+        '              (type == "object") and\n'
+        '              (.id | (type == "number") and (. == floor) and (. > 0)) and',
         '(.id | (type == "number") and (. == floor) and (. > 0)) and',
         '(.name | type == "string" and . == $name) and',
         '(.id | (type == "number") and (. > 0) and (. == floor)) and',
