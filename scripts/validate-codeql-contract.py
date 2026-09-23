@@ -8,6 +8,7 @@ import sys
 
 from codeql_autofix_admission import self_test as autofix_admission_self_test
 from codeql_autofix_controller_contract import self_test as autofix_controller_self_test
+from codeql_autofix_controller import self_test as autofix_runtime_controller_self_test
 from codeql_autofix_discovery import self_test as autofix_discovery_self_test
 from codeql_autofix_queue import self_test as autofix_queue_self_test
 
@@ -533,6 +534,7 @@ def validate_governance(text: str) -> None:
 def self_test(good: str) -> None:
     autofix_admission_self_test()
     autofix_controller_self_test()
+    autofix_runtime_controller_self_test()
     autofix_discovery_self_test()
     autofix_queue_self_test()
     validate_codeql(good)
