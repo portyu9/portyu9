@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v63"
+VERSION = "governed-workflow-byte-identity-v64"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "7c47cb9005233d1c75e64f5f7c494996aec264d0",
+    ".github/workflows/spotlight-link-sync.yml": "a288d1c1b46a8426a140b8e1545cab23325856f6",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -326,6 +326,38 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"' in legacy,
         "Spotlight stale reconciliation must use list results only for bounded PR discovery and re-fetch the exact full PR object",
     )
+    reconcile = job_block(legacy, "reconcile", "budget")
+    close_call = reconcile.index(
+        'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
+    )
+    close_schema = reconcile.index(
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
+        close_call,
+    )
+    close_consume = reconcile.index('test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"', close_schema)
+    close_delete = reconcile.index(
+        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null',
+        close_consume,
+    )
+    close_block = reconcile[close_call:close_consume]
+    for fragment in (
+        '((type) == "object") and',
+        '(.number | type == "number" and . == floor and . == $pr) and',
+        '(.user | type == "object" and .login == "github-actions[bot]") and',
+        '(.state == "closed") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.merged | type == "boolean" and . == false) and',
+        '(.maintainer_can_modify | type == "boolean" and . == false) and',
+        '(.title == $title) and',
+        '(.body == $body) and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.head | type == "object" and .ref == $branch and .sha == $head and',
+        'has("merge_commit_sha")',
+    ):
+        require(fragment in close_block,
+                f"Spotlight stale-close response contract is missing: {fragment}")
+    require(close_call < close_schema < close_consume < close_delete,
+            "Spotlight stale-close response validation must precede field consumption and candidate-ref deletion")
     for fragment in (
         'CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$SOURCE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d\' \' -f1)"',
         'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',
