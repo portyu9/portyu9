@@ -208,7 +208,32 @@ def validate_autofix_continuation(text: str) -> None:
         text.count('test "$POST_MERGE_CODEQL_CONCLUSION" = "success"') == 1,
         "CodeQL Autofix must require successful completion of the exact post-merge CodeQL run",
     )
+    require(
+        text.count('python3 scripts/codeql_autofix_controller.py merge-success-response') == 1,
+        "CodeQL Autofix must validate exactly one terminal merge success response",
+    )
+    for fragment in (
+        '--response-file merge.json',
+        '--out merge-success-normalized.json',
+        'MERGE_SHA="$(jq -r .sha merge-success-normalized.json)"',
+    ):
+        require(fragment in text, f"CodeQL Autofix merge-success response contract is missing: {fragment}")
+    require(
+        'MERGE_SHA="$(jq -r .sha merge.json)"' not in text
+        and 'test "$(jq -r .merged merge.json)" = "true"' not in text,
+        "CodeQL Autofix must not consume the terminal merge response before typed success validation",
+    )
+
     merge_pos = text.index('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge')
+    merge_validate_pos = text.index(
+        'python3 scripts/codeql_autofix_controller.py merge-success-response',
+        merge_pos,
+    )
+    normalized_sha_pos = text.index(
+        'MERGE_SHA="$(jq -r .sha merge-success-normalized.json)"',
+        merge_validate_pos,
+    )
+    main_reproof_pos = text.index('assert_main_is_merge_sha', normalized_sha_pos)
     snapshot_pos = text.index(
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100',
         merge_pos,
@@ -230,8 +255,9 @@ def validate_autofix_continuation(text: str) -> None:
         success_pos,
     )
     require(
-        merge_pos < snapshot_pos < scan_dispatch_pos < exact_run_pos < success_pos < continuation_pos,
-        "CodeQL Autofix post-merge causal continuation ordering changed",
+        merge_pos < merge_validate_pos < normalized_sha_pos < main_reproof_pos
+        < snapshot_pos < scan_dispatch_pos < exact_run_pos < success_pos < continuation_pos,
+        "CodeQL Autofix typed merge-success validation / post-merge causal continuation ordering changed",
     )
     require(
         text.count('assert_main_is_merge_sha() {') == 1
