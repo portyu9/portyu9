@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v75"
+VERSION = "governed-workflow-byte-identity-v76"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "e5f7f01f1f709515dae282606345fdfb01a7fc70",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "62b8717e93938f88be6c9311691c44c107bd2e10",
+    ".github/workflows/spotlight-link-sync.yml": "398013d1a406dbb18b7e88821c638a9bcf35e433",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -1538,6 +1538,7 @@ def classify_spotlight_reconciliation_candidate(
     *,
     expected_current: bool,
     parent_matches_current_base: bool,
+    ancestry_proven_superseded: bool,
     age_seconds: int,
     stale_after_seconds: int = 1800,
 ) -> str:
@@ -1545,6 +1546,8 @@ def classify_spotlight_reconciliation_candidate(
     require(type(expected_current) is bool, "Spotlight expected-current flag must be boolean")
     require(type(parent_matches_current_base) is bool,
             "Spotlight parent/base flag must be boolean")
+    require(type(ancestry_proven_superseded) is bool,
+            "Spotlight ancestry-proven flag must be boolean")
     require(type(age_seconds) is int and age_seconds >= 0,
             "Spotlight candidate age must be a nonnegative integer")
     require(type(stale_after_seconds) is int and stale_after_seconds > 0,
@@ -1553,8 +1556,10 @@ def classify_spotlight_reconciliation_candidate(
         return "preserve-current"
     if parent_matches_current_base:
         return "cleanup-same-base-superseded"
+    if ancestry_proven_superseded:
+        return "cleanup-ancestry-proven-stale"
     if age_seconds < stale_after_seconds:
-        return "preserve-young-different-base"
+        return "preserve-young-unproven"
     return "cleanup-aged-stale"
 
 
@@ -1562,52 +1567,152 @@ def validate_spotlight_same_base_supersession(spotlight: str) -> None:
     reconcile = job_block(spotlight, "reconcile", "budget")
     expected_marker = ('            if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && '
                        '[ "$BRANCH" = "$EXPECTED_CANDIDATE_BRANCH" ]; then')
-    parent_marker = '            PARENT_SHA="$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")"'
-    classify_marker = '            SAME_BASE_SUPERSEDED=false\n            if [ "$PARENT_SHA" = "$BASE_SHA" ]; then\n              SAME_BASE_SUPERSEDED=true\n            fi'
+    parent_marker = '            PARENT_SHA="$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")"'
+    same_base_marker = (
+        '            SAME_BASE_SUPERSEDED=false\n'
+        '            ANCESTRY_PROVEN_SUPERSEDED=false\n'
+        '            if [ "$PARENT_SHA" = "$BASE_SHA" ]; then\n'
+        '              SAME_BASE_SUPERSEDED=true\n'
+        '            else'
+    )
+    ancestry_call = (
+        '              ANCESTRY_COMPARE="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}")"'
+    )
+    ancestry_schema = '              jq -e --arg parent "$PARENT_SHA" --arg base "$BASE_SHA" \''
+    ancestry_consume = '              test "$(jq -r .base_commit.sha <<<"$ANCESTRY_COMPARE")" = "$PARENT_SHA"'
+    ancestry_classify = (
+        '              if [ "$(jq -r .status <<<"$ANCESTRY_COMPARE")" = "ahead" ] &&\n'
+        '                 [ "$(jq -r .merge_base_commit.sha <<<"$ANCESTRY_COMPARE")" = "$PARENT_SHA" ] &&\n'
+        '                 [ "$(jq -r .behind_by <<<"$ANCESTRY_COMPARE")" = "0" ] &&\n'
+        '                 [ "$(jq -r .ahead_by <<<"$ANCESTRY_COMPARE")" -gt 0 ]; then\n'
+        '                ANCESTRY_PROVEN_SUPERSEDED=true'
+    )
     age_marker = '            AGE_SECONDS=$((NOW_EPOCH - COMMIT_EPOCH))'
-    age_guard = ('            if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && '
-                 '[ "$SAME_BASE_SUPERSEDED" != "true" ]; then')
-    compare_marker = '            COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"'
-    prs_marker = '            PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
-    close_marker = '              CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
-    delete_marker = '            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
-    markers = (expected_marker, parent_marker, classify_marker, age_marker, age_guard,
-               compare_marker, prs_marker, close_marker, delete_marker)
-    for marker in markers:
+    age_guard = (
+        '            if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] &&\n'
+        '               [ "$SAME_BASE_SUPERSEDED" != "true" ] &&\n'
+        '               [ "$ANCESTRY_PROVEN_SUPERSEDED" != "true" ]; then'
+    )
+    topology_compare = (
+        '            COMPARE="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"'
+    )
+    prs_marker = (
+        '            PRS="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
+    )
+    close_marker = (
+        '              CLOSED_PR="$(gh api --method PATCH '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
+    )
+    delete_marker = (
+        '            gh api --method DELETE '
+        '"repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
+    )
+
+    for marker in (
+        expected_marker, parent_marker, same_base_marker, ancestry_call, ancestry_schema,
+        ancestry_consume, ancestry_classify, age_marker, age_guard, topology_compare,
+        prs_marker, close_marker, delete_marker,
+    ):
         require(reconcile.count(marker) == 1,
-                f"Spotlight same-base supersession contract anchor changed: {marker}")
-    require('            if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ]; then' not in reconcile,
-            "Spotlight reconciliation regressed to age-only same-base preservation")
-    positions = [reconcile.index(marker) for marker in markers]
+                f"Spotlight ancestry supersession contract anchor changed: {marker}")
+
+    ancestry_start = reconcile.index(ancestry_schema)
+    ancestry_end = reconcile.index('              \' <<<"$ANCESTRY_COMPARE" >/dev/null', ancestry_start)
+    ancestry_block = reconcile[ancestry_start:ancestry_end]
+    for fragment in (
+        '(type == "object") and',
+        '(.status | type == "string" and',
+        '(. == "ahead" or . == "behind" or . == "diverged" or . == "identical")) and',
+        '(.base_commit | type == "object" and .sha == $parent) and',
+        '(.merge_base_commit | type == "object" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))) and',
+        '(.ahead_by | type == "number" and . == floor and . >= 0) and',
+        '(.behind_by | type == "number" and . == floor and . >= 0) and',
+        '(.total_commits | type == "number" and . == floor and . >= 0)',
+    ):
+        require(fragment in ancestry_block,
+                f"Spotlight ancestry compare schema is missing: {fragment}")
+
+    positions = [
+        reconcile.index(expected_marker),
+        reconcile.index(parent_marker),
+        reconcile.index(same_base_marker),
+        reconcile.index(ancestry_call),
+        reconcile.index(ancestry_schema),
+        reconcile.index(ancestry_consume),
+        reconcile.index(ancestry_classify),
+        reconcile.index(age_marker),
+        reconcile.index(age_guard),
+        reconcile.index(topology_compare),
+        reconcile.index(prs_marker),
+        reconcile.index(close_marker),
+        reconcile.index(delete_marker),
+    ]
     require(positions == sorted(positions),
-            "Spotlight same-base supersession evidence/effect ordering changed")
-    require('- current-base superseded candidates cleaned immediately: **$SUPERSEDED_CURRENT_BASE**' in reconcile,
-            "Spotlight summary lost current-base supersession evidence")
-    require('- different-base candidates below 30-minute stale floor preserved: **$PRESERVED_YOUNG**' in reconcile,
-            "Spotlight summary lost different-base young-candidate preservation")
+            "Spotlight ancestry supersession evidence/effect ordering changed")
+    require(
+        '- ancestry-proven old-base candidates cleaned immediately: **$ANCESTRY_PROVEN_STALE**'
+        in reconcile,
+        "Spotlight summary lost ancestry-proven stale cleanup evidence",
+    )
+    require(
+        '- unproven/divergent candidates below 30-minute stale floor preserved: **$PRESERVED_YOUNG**'
+        in reconcile,
+        "Spotlight summary lost young unproven/divergent preservation evidence",
+    )
 
 
 def self_test_spotlight_same_base_supersession() -> None:
     cases = (
-        (dict(expected_current=True, parent_matches_current_base=True, age_seconds=1), "preserve-current"),
-        (dict(expected_current=False, parent_matches_current_base=True, age_seconds=1), "cleanup-same-base-superseded"),
-        (dict(expected_current=False, parent_matches_current_base=False, age_seconds=1799), "preserve-young-different-base"),
-        (dict(expected_current=False, parent_matches_current_base=False, age_seconds=1800), "cleanup-aged-stale"),
+        (
+            dict(expected_current=True, parent_matches_current_base=True,
+                 ancestry_proven_superseded=False, age_seconds=1),
+            "preserve-current",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=True,
+                 ancestry_proven_superseded=False, age_seconds=1),
+            "cleanup-same-base-superseded",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=True, age_seconds=1),
+            "cleanup-ancestry-proven-stale",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=False, age_seconds=1799),
+            "preserve-young-unproven",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=False, age_seconds=1800),
+            "cleanup-aged-stale",
+        ),
     )
     for kwargs, expected in cases:
         observed = classify_spotlight_reconciliation_candidate(**kwargs)
         require(observed == expected,
-                f"Spotlight same-base supersession classifier mismatch: {kwargs} -> {observed}")
+                f"Spotlight ancestry supersession classifier mismatch: {kwargs} -> {observed}")
+
     for kwargs in (
-        dict(expected_current=False, parent_matches_current_base=False, age_seconds=-1),
-        dict(expected_current=False, parent_matches_current_base=False, age_seconds=0, stale_after_seconds=0),
+        dict(expected_current=False, parent_matches_current_base=False,
+             ancestry_proven_superseded=False, age_seconds=-1),
+        dict(expected_current=False, parent_matches_current_base=False,
+             ancestry_proven_superseded=False, age_seconds=0, stale_after_seconds=0),
     ):
         try:
             classify_spotlight_reconciliation_candidate(**kwargs)
         except ValueError:
             pass
         else:
-            raise ValueError(f"Spotlight same-base classifier accepted malformed input: {kwargs}")
+            raise ValueError(
+                f"Spotlight ancestry supersession classifier accepted malformed input: {kwargs}"
+            )
+
 
 def self_test() -> None:
     v21.self_test()
