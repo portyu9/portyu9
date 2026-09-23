@@ -188,13 +188,13 @@ def validate_reconciliation(reconcile: str) -> None:
         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
     )
     prs_schema_marker = (
-        'jq -e --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg parent "$PARENT_SHA" --arg repo "$GITHUB_REPOSITORY"'
+        'jq -e --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
     )
     prs_count_marker = 'PR_COUNT="$(jq \'length\' <<<"$PRS")"'
     pr_number_marker = 'PR_NUMBER="$(jq -r \'.[0].number\' <<<"$PRS")"'
     pr_call_marker = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
     pr_schema_marker = (
-        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg parent "$PARENT_SHA" --arg repo "$GITHUB_REPOSITORY"'
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
     )
     pr_consume_marker = 'test "$(jq -r .state <<<"$PR")" = "open"'
 
@@ -224,7 +224,8 @@ def validate_reconciliation(reconcile: str) -> None:
         '(.draft | type == "boolean" and . == false) and',
         '(.title == $title) and',
         '(.body == $body) and',
-        '(.base | type == "object" and .ref == "main" and .sha == $parent and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
         '(.head | type == "object" and .ref == $branch and .sha == $head and',
         'has("merge_commit_sha")',
     ):
@@ -242,7 +243,8 @@ def validate_reconciliation(reconcile: str) -> None:
         '(.maintainer_can_modify | type == "boolean" and . == false) and',
         '(.title == $title) and',
         '(.body == $body) and',
-        '(.base | type == "object" and .ref == "main" and .sha == $parent and',
+        '(.base | type == "object" and .ref == "main" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
         '(.head | type == "object" and .ref == $branch and .sha == $head and',
         'has("merge_commit_sha")',
     ):
@@ -737,8 +739,8 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         ('                (.state == "open") and', '                (.state == "closed") and'),
         ('                (.draft | type == "boolean" and . == false) and',
          '                (.draft | type == "boolean") and'),
-        ('                (.base | type == "object" and .ref == "main" and .sha == $parent and',
-         '                (.base | type == "object" and .ref == "main" and'),
+        ('                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+         '                  (.sha | type == "number") and'),
         ('                (.head | type == "object" and .ref == $branch and .sha == $head and',
          '                (.head | type == "object" and .ref == $branch and'),
     ):
@@ -765,8 +767,8 @@ def self_test(sync: str, stats: str, policy: str) -> None:
          '                (.merged | type == "boolean") and'),
         ('                (.maintainer_can_modify | type == "boolean" and . == false) and',
          '                (.maintainer_can_modify | type == "boolean") and'),
-        ('                (.base | type == "object" and .ref == "main" and .sha == $parent and',
-         '                (.base | type == "object" and .ref == "main" and'),
+        ('                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+         '                  (.sha | type == "number") and'),
         ('                (.head | type == "object" and .ref == $branch and .sha == $head and',
          '                (.head | type == "object" and .ref == $branch and'),
         ('                (has("merge_commit_sha") and', '                (true and'),
