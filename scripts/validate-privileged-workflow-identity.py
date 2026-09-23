@@ -79,7 +79,7 @@ def validate_spotlight_budget_artifact_history_runtime(spotlight: str) -> None:
     base = "a" * 40
     generated = "b" * 40
     artifact_name = f"spotlight-link-plan-{base}-{generated}"
-    repo_id = 35150859
+    repo_id = 424242
     valid = {
         "total_count": 2,
         "artifacts": [
@@ -1661,7 +1661,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema, executable jq fixtures, and pre-admission ordering locked."
         )
         return 0
     except (OSError, ValueError) as exc:
