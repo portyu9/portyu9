@@ -341,6 +341,88 @@ def normalize_status(target: Mapping[str, Any], status_response: Any) -> dict[st
     return discovery.normalize_autofix_status(target, status_response)
 
 
+def validate_created_ref_response(value: Any, branch: str, expected_sha: str) -> dict[str, Any]:
+    require(isinstance(branch, str) and BRANCH_RE.fullmatch(branch) is not None,
+            "Autofix created-ref branch identity is malformed")
+    expected_ref = f"refs/heads/{branch}"
+    expected_sha = sha(expected_sha, "Autofix created-ref expected SHA")
+    require(isinstance(value, Mapping), "Autofix created-ref response must be an object")
+    observed_ref = value.get("ref")
+    require(type(observed_ref) is str, "Autofix created-ref response ref must be a string")
+    require(observed_ref == expected_ref, "Autofix created-ref response ref mismatch")
+    obj = value.get("object")
+    require(isinstance(obj, Mapping), "Autofix created-ref response object must be an object")
+    require(obj.get("type") == "commit", "Autofix created-ref response object type changed")
+    observed_sha = sha(obj.get("sha"), "Autofix created-ref response SHA")
+    require(observed_sha == expected_sha, "Autofix created-ref response SHA mismatch")
+    return {"ref": expected_ref, "sha": observed_sha}
+
+
+def validate_reviewer_request_response(
+    value: Any,
+    *,
+    pr_number: int,
+    repository: str,
+    base_sha: str,
+    branch: str,
+    head_sha: str,
+) -> dict[str, Any]:
+    pr_number = positive_int(pr_number, "Autofix reviewer-request PR number")
+    require(isinstance(repository, str) and repository == "portyu9/portyu9",
+            "Autofix reviewer-request repository identity changed")
+    require(isinstance(branch, str) and BRANCH_RE.fullmatch(branch) is not None,
+            "Autofix reviewer-request branch identity is malformed")
+    base_sha = sha(base_sha, "Autofix reviewer-request base SHA")
+    head_sha = sha(head_sha, "Autofix reviewer-request head SHA")
+    require(isinstance(value, Mapping), "Autofix reviewer-request response must be an object")
+    require(positive_int(value.get("number"), "Autofix reviewer-request response PR number") == pr_number,
+            "Autofix reviewer-request response PR number mismatch")
+    require(value.get("state") == "open", "Autofix reviewer-request response state changed")
+    require(type(value.get("draft")) is bool and value.get("draft") is False,
+            "Autofix reviewer-request response draft state changed")
+
+    base = value.get("base")
+    head = value.get("head")
+    require(isinstance(base, Mapping), "Autofix reviewer-request response base must be an object")
+    require(isinstance(head, Mapping), "Autofix reviewer-request response head must be an object")
+    require(base.get("ref") == "main", "Autofix reviewer-request response base ref changed")
+    require(sha(base.get("sha"), "Autofix reviewer-request response base SHA") == base_sha,
+            "Autofix reviewer-request response base SHA mismatch")
+    require(head.get("ref") == branch, "Autofix reviewer-request response head ref mismatch")
+    require(sha(head.get("sha"), "Autofix reviewer-request response head SHA") == head_sha,
+            "Autofix reviewer-request response head SHA mismatch")
+    for label, side in (("base", base), ("head", head)):
+        side_repo = side.get("repo")
+        require(isinstance(side_repo, Mapping),
+                f"Autofix reviewer-request response {label} repository must be an object")
+        require(side_repo.get("full_name") == repository,
+                f"Autofix reviewer-request response {label} repository mismatch")
+
+    reviewers = value.get("requested_reviewers")
+    require(isinstance(reviewers, list),
+            "Autofix reviewer-request response requested_reviewers must be an array")
+    require(len(reviewers) <= 100,
+            "Autofix reviewer-request response requested_reviewers exceeds bound")
+    logins: list[str] = []
+    ids: set[int] = set()
+    for raw in reviewers:
+        require(isinstance(raw, Mapping),
+                "Autofix reviewer-request response contains a non-object reviewer")
+        login = raw.get("login")
+        require(isinstance(login, str) and bool(login.strip()),
+                "Autofix reviewer-request response reviewer login must be a non-empty string")
+        reviewer_id = positive_int(raw.get("id"), "Autofix reviewer-request response reviewer id")
+        require(reviewer_id not in ids,
+                "Autofix reviewer-request response contains duplicate reviewer ids")
+        require(login not in logins,
+                "Autofix reviewer-request response contains duplicate reviewer logins")
+        ids.add(reviewer_id)
+        logins.append(login)
+    require(logins.count("portyu9") == 1,
+            "Autofix reviewer-request response must contain exactly one portyu9 reviewer")
+    return {"prNumber": pr_number, "reviewer": "portyu9", "headSha": head_sha}
+
+
 def validate_commit_response(value: Any, branch: str) -> dict[str, Any]:
     require(isinstance(value, Mapping), "Autofix commit response must be an object")
     expected_ref = f"refs/heads/{branch}"
@@ -1108,6 +1190,74 @@ def self_test() -> None:
         else:
             require(False, f"matching-ref self-test accepted forbidden mutation expected to trigger: {expected}")
 
+    created_ref = {"ref": expected_ref, "object": {"type": "commit", "sha": base}}
+    require(
+        validate_created_ref_response(created_ref, ref_branch, base)
+        == {"ref": expected_ref, "sha": base},
+        "Autofix created-ref response positive fixture changed",
+    )
+    created_ref_mutations = (
+        ([], "must be an object"),
+        ({"ref": 7, "object": {"type": "commit", "sha": base}}, "ref must be a string"),
+        ({"ref": "refs/heads/wrong", "object": {"type": "commit", "sha": base}}, "ref mismatch"),
+        ({"ref": expected_ref, "object": None}, "object must be an object"),
+        ({"ref": expected_ref, "object": {"type": "tag", "sha": base}}, "object type changed"),
+        ({"ref": expected_ref, "object": {"type": "commit", "sha": 7}}, "lowercase SHA-40"),
+        ({"ref": expected_ref, "object": {"type": "commit", "sha": head}}, "SHA mismatch"),
+    )
+    for mutated, expected in created_ref_mutations:
+        try:
+            validate_created_ref_response(mutated, ref_branch, base)
+        except ControllerError as exc:
+            require(expected in str(exc), f"created-ref response self-test failed for the wrong reason: {exc}")
+        else:
+            require(False, f"created-ref response self-test accepted forbidden mutation expected to trigger: {expected}")
+
+    reviewer_response = {
+        "number": 17,
+        "state": "open",
+        "draft": False,
+        "base": {"ref": "main", "sha": base, "repo": {"full_name": "portyu9/portyu9"}},
+        "head": {"ref": ref_branch, "sha": head, "repo": {"full_name": "portyu9/portyu9"}},
+        "requested_reviewers": [{"login": "portyu9", "id": 35150859}],
+    }
+    reviewer_args = {
+        "pr_number": 17,
+        "repository": "portyu9/portyu9",
+        "base_sha": base,
+        "branch": ref_branch,
+        "head_sha": head,
+    }
+    require(
+        validate_reviewer_request_response(reviewer_response, **reviewer_args)
+        == {"prNumber": 17, "reviewer": "portyu9", "headSha": head},
+        "Autofix reviewer-request response positive fixture changed",
+    )
+    reviewer_mutations = (
+        ([], "must be an object"),
+        ({**reviewer_response, "number": 18}, "PR number mismatch"),
+        ({**reviewer_response, "state": "closed"}, "state changed"),
+        ({**reviewer_response, "draft": "false"}, "draft state changed"),
+        ({**reviewer_response, "base": {**reviewer_response["base"], "sha": "c" * 40}}, "base SHA mismatch"),
+        ({**reviewer_response, "head": {**reviewer_response["head"], "ref": "wrong"}}, "head ref mismatch"),
+        ({**reviewer_response, "head": {**reviewer_response["head"], "repo": {"full_name": "other/repo"}}},
+         "head repository mismatch"),
+        ({**reviewer_response, "requested_reviewers": None}, "must be an array"),
+        ({**reviewer_response, "requested_reviewers": [None]}, "non-object reviewer"),
+        ({**reviewer_response, "requested_reviewers": [{"login": "", "id": 1}]}, "login must be a non-empty string"),
+        ({**reviewer_response, "requested_reviewers": [{"login": "portyu9", "id": 1}, {"login": "portyu9", "id": 2}]},
+         "duplicate reviewer logins"),
+        ({**reviewer_response, "requested_reviewers": [{"login": "other", "id": 1}]},
+         "exactly one portyu9 reviewer"),
+    )
+    for mutated, expected in reviewer_mutations:
+        try:
+            validate_reviewer_request_response(mutated, **reviewer_args)
+        except ControllerError as exc:
+            require(expected in str(exc), f"reviewer-request response self-test failed for the wrong reason: {exc}")
+        else:
+            require(False, f"reviewer-request response self-test accepted forbidden mutation expected to trigger: {expected}")
+
     merge_success = {"merged": True, "sha": head, "message": "Pull Request successfully merged"}
     require(
         validate_merge_success_response(merge_success)
@@ -1205,6 +1355,21 @@ def main() -> int:
     p.add_argument("--branch", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("created-ref-response")
+    p.add_argument("--response-file", required=True)
+    p.add_argument("--branch", required=True)
+    p.add_argument("--expected-sha", required=True)
+    p.add_argument("--out", required=True)
+
+    p = sub.add_parser("reviewer-request-response")
+    p.add_argument("--response-file", required=True)
+    p.add_argument("--pr-number", type=int, required=True)
+    p.add_argument("--repository", required=True)
+    p.add_argument("--base-sha", required=True)
+    p.add_argument("--branch", required=True)
+    p.add_argument("--head-sha", required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("commit")
     p.add_argument("--response-file", required=True)
     p.add_argument("--branch", required=True)
@@ -1284,6 +1449,17 @@ def main() -> int:
         ))
     elif args.command == "ref-state":
         dump(args.out, classify_branch_ref_inventory(load(args.refs_file), args.branch))
+    elif args.command == "created-ref-response":
+        dump(args.out, validate_created_ref_response(load(args.response_file), args.branch, args.expected_sha))
+    elif args.command == "reviewer-request-response":
+        dump(args.out, validate_reviewer_request_response(
+            load(args.response_file),
+            pr_number=args.pr_number,
+            repository=args.repository,
+            base_sha=args.base_sha,
+            branch=args.branch,
+            head_sha=args.head_sha,
+        ))
     elif args.command == "commit":
         dump(args.out, validate_commit_response(load(args.response_file), args.branch))
     elif args.command == "compare":
