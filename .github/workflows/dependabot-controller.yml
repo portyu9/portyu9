@@ -302,8 +302,11 @@ jobs:
             FILE="$RUNNER_TEMP/derived/$PATH_VALUE"
             test -s "$FILE"
             CONTENT="$(base64 -w0 < "$FILE")"
-            BLOB="$(gh api --method POST "repos/${TARGET_REPOSITORY}/git/blobs" -f content="$CONTENT" -f encoding=base64)"
-            BLOB_SHA="$(jq -r .sha <<<"$BLOB")"
+            gh api --method POST "repos/${TARGET_REPOSITORY}/git/blobs" -f content="$CONTENT" -f encoding=base64 > git-blob-response.json
+            python3 scripts/dependabot_controller.py git-blob-response \
+              --response git-blob-response.json \
+              --out git-blob-response-normalized.json
+            BLOB_SHA="$(jq -r .sha git-blob-response-normalized.json)"
             [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
             jq --arg path "$PATH_VALUE" --arg sha "$BLOB_SHA" '. + [{path:$path,mode:"100644",type:"blob",sha:$sha}]' \
               tree-entries.json > tree-entries.next.json
@@ -311,20 +314,33 @@ jobs:
           done
           jq -n --arg base_tree "$TREE_SHA" --slurpfile tree tree-entries.json \
             '{base_tree:$base_tree,tree:$tree[0]}' > tree-request.json
-          NEW_TREE="$(gh api --method POST "repos/${TARGET_REPOSITORY}/git/trees" --input tree-request.json)"
-          NEW_TREE_SHA="$(jq -r .sha <<<"$NEW_TREE")"
+          gh api --method POST "repos/${TARGET_REPOSITORY}/git/trees" --input tree-request.json > git-tree-response.json
+          python3 scripts/dependabot_controller.py git-tree-response \
+            --response git-tree-response.json \
+            --out git-tree-response-normalized.json
+          NEW_TREE_SHA="$(jq -r .sha git-tree-response-normalized.json)"
           [[ "$NEW_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
           jq -n --arg message 'Reconcile Dependabot CodeQL governance' --arg tree "$NEW_TREE_SHA" --arg parent "$HEAD_SHA" \
             '{message:$message,tree:$tree,parents:[$parent]}' > commit-request.json
-          NEW_COMMIT="$(gh api --method POST "repos/${TARGET_REPOSITORY}/git/commits" --input commit-request.json)"
-          NEW_HEAD_SHA="$(jq -r .sha <<<"$NEW_COMMIT")"
+          gh api --method POST "repos/${TARGET_REPOSITORY}/git/commits" --input commit-request.json > git-commit-response.json
+          python3 scripts/dependabot_controller.py git-commit-response \
+            --response git-commit-response.json \
+            --expected-tree "$NEW_TREE_SHA" \
+            --expected-parent "$HEAD_SHA" \
+            --out git-commit-response-normalized.json
+          NEW_HEAD_SHA="$(jq -r .sha git-commit-response-normalized.json)"
           [[ "$NEW_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$NEW_HEAD_SHA" != "$HEAD_SHA"
 
           gh api --method PATCH "repos/${TARGET_REPOSITORY}/git/refs/heads/${HEAD_REF}" \
             -f sha="$NEW_HEAD_SHA" -F force=false > updated-ref.json
-          test "$(jq -r .object.sha updated-ref.json)" = "$NEW_HEAD_SHA"
+          python3 scripts/dependabot_controller.py git-ref-response \
+            --response updated-ref.json \
+            --expected-ref "refs/heads/${HEAD_REF}" \
+            --expected-sha "$NEW_HEAD_SHA" \
+            --out updated-ref-normalized.json
+          test "$(jq -r .sha updated-ref-normalized.json)" = "$NEW_HEAD_SHA"
           test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
 
           jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$NEW_HEAD_SHA" \

@@ -245,6 +245,73 @@ def load_json(path: Path) -> Any:
     return strict_json(path, str(path))
 
 
+def _response_sha(value: Any, label: str) -> str:
+    require(isinstance(value, str) and SHA40.fullmatch(value) is not None,
+            f"{label} must be an exact lowercase SHA-40")
+    return value
+
+
+def validate_git_blob_response(value: Any) -> dict[str, str]:
+    require(isinstance(value, Mapping), "Dependabot Git blob response must be an object")
+    observed = _response_sha(value.get("sha"), "Dependabot Git blob response sha")
+    return {"kind": "blob", "sha": observed}
+
+
+def validate_git_tree_response(value: Any) -> dict[str, str]:
+    require(isinstance(value, Mapping), "Dependabot Git tree response must be an object")
+    observed = _response_sha(value.get("sha"), "Dependabot Git tree response sha")
+    return {"kind": "tree", "sha": observed}
+
+
+def validate_git_commit_response(
+    value: Any,
+    *,
+    expected_tree_sha: str,
+    expected_parent_sha: str,
+) -> dict[str, str]:
+    expected_tree_sha = _response_sha(expected_tree_sha, "expected Dependabot Git tree sha")
+    expected_parent_sha = _response_sha(expected_parent_sha, "expected Dependabot Git parent sha")
+    require(isinstance(value, Mapping), "Dependabot Git commit response must be an object")
+    commit_sha = _response_sha(value.get("sha"), "Dependabot Git commit response sha")
+    tree = value.get("tree")
+    require(isinstance(tree, Mapping), "Dependabot Git commit response tree must be an object")
+    require(_response_sha(tree.get("sha"), "Dependabot Git commit response tree sha") == expected_tree_sha,
+            "Dependabot Git commit response tree sha changed")
+    parents = value.get("parents")
+    require(isinstance(parents, list) and len(parents) == 1,
+            "Dependabot Git commit response must contain exactly one parent")
+    require(isinstance(parents[0], Mapping),
+            "Dependabot Git commit response parent must be an object")
+    require(_response_sha(parents[0].get("sha"), "Dependabot Git commit response parent sha") == expected_parent_sha,
+            "Dependabot Git commit response parent sha changed")
+    return {
+        "kind": "commit",
+        "sha": commit_sha,
+        "treeSha": expected_tree_sha,
+        "parentSha": expected_parent_sha,
+    }
+
+
+def validate_git_ref_response(
+    value: Any,
+    *,
+    expected_ref: str,
+    expected_sha: str,
+) -> dict[str, str]:
+    require(isinstance(expected_ref, str) and expected_ref.startswith("refs/heads/")
+            and expected_ref != "refs/heads/",
+            "expected Dependabot Git ref must be a concrete heads ref")
+    expected_sha = _response_sha(expected_sha, "expected Dependabot Git ref sha")
+    require(isinstance(value, Mapping), "Dependabot Git ref response must be an object")
+    require(value.get("ref") == expected_ref, "Dependabot Git ref response identity changed")
+    obj = value.get("object")
+    require(isinstance(obj, Mapping), "Dependabot Git ref response object must be an object")
+    require(obj.get("type") == "commit", "Dependabot Git ref response object type must be commit")
+    observed = _response_sha(obj.get("sha"), "Dependabot Git ref response object sha")
+    require(observed == expected_sha, "Dependabot Git ref response object sha changed")
+    return {"kind": "ref", "ref": expected_ref, "sha": expected_sha}
+
+
 def self_test() -> None:
     base = ROOT
     lock = load_action_lock(base / ACTION_LOCK)
@@ -292,6 +359,97 @@ def self_test() -> None:
         require(reconciled["classification"] == "dependabot-codeql-reconciled",
                 "Dependabot controller self-test failed reconciliation")
 
+    blob_sha = "1" * 40
+    tree_sha = "2" * 40
+    parent_sha = "3" * 40
+    commit_sha = "4" * 40
+    ref_name = "refs/heads/dependabot/github_actions/github/codeql-action"
+    require(validate_git_blob_response({"sha": blob_sha}) == {"kind": "blob", "sha": blob_sha},
+            "Dependabot Git blob response positive fixture changed")
+    require(validate_git_tree_response({"sha": tree_sha}) == {"kind": "tree", "sha": tree_sha},
+            "Dependabot Git tree response positive fixture changed")
+    commit = validate_git_commit_response(
+        {"sha": commit_sha, "tree": {"sha": tree_sha}, "parents": [{"sha": parent_sha}]},
+        expected_tree_sha=tree_sha,
+        expected_parent_sha=parent_sha,
+    )
+    require(commit["sha"] == commit_sha and commit["treeSha"] == tree_sha and commit["parentSha"] == parent_sha,
+            "Dependabot Git commit response positive fixture changed")
+    ref = validate_git_ref_response(
+        {"ref": ref_name, "object": {"type": "commit", "sha": commit_sha}},
+        expected_ref=ref_name,
+        expected_sha=commit_sha,
+    )
+    require(ref == {"kind": "ref", "ref": ref_name, "sha": commit_sha},
+            "Dependabot Git ref response positive fixture changed")
+
+    negative_response_fixtures = (
+        ("blob non-object", lambda: validate_git_blob_response([]), "must be an object"),
+        ("blob bad sha", lambda: validate_git_blob_response({"sha": "abc"}), "lowercase SHA-40"),
+        ("tree bad sha", lambda: validate_git_tree_response({"sha": "A" * 40}), "lowercase SHA-40"),
+        (
+            "commit wrong tree",
+            lambda: validate_git_commit_response(
+                {"sha": commit_sha, "tree": {"sha": "5" * 40}, "parents": [{"sha": parent_sha}]},
+                expected_tree_sha=tree_sha,
+                expected_parent_sha=parent_sha,
+            ),
+            "tree sha changed",
+        ),
+        (
+            "commit parent cardinality",
+            lambda: validate_git_commit_response(
+                {"sha": commit_sha, "tree": {"sha": tree_sha}, "parents": []},
+                expected_tree_sha=tree_sha,
+                expected_parent_sha=parent_sha,
+            ),
+            "exactly one parent",
+        ),
+        (
+            "commit wrong parent",
+            lambda: validate_git_commit_response(
+                {"sha": commit_sha, "tree": {"sha": tree_sha}, "parents": [{"sha": "6" * 40}]},
+                expected_tree_sha=tree_sha,
+                expected_parent_sha=parent_sha,
+            ),
+            "parent sha changed",
+        ),
+        (
+            "ref wrong identity",
+            lambda: validate_git_ref_response(
+                {"ref": "refs/heads/other", "object": {"type": "commit", "sha": commit_sha}},
+                expected_ref=ref_name,
+                expected_sha=commit_sha,
+            ),
+            "identity changed",
+        ),
+        (
+            "ref wrong type",
+            lambda: validate_git_ref_response(
+                {"ref": ref_name, "object": {"type": "tag", "sha": commit_sha}},
+                expected_ref=ref_name,
+                expected_sha=commit_sha,
+            ),
+            "type must be commit",
+        ),
+        (
+            "ref wrong sha",
+            lambda: validate_git_ref_response(
+                {"ref": ref_name, "object": {"type": "commit", "sha": "7" * 40}},
+                expected_ref=ref_name,
+                expected_sha=commit_sha,
+            ),
+            "object sha changed",
+        ),
+    )
+    for label, operation, expected in negative_response_fixtures:
+        try:
+            operation()
+        except ValueError as exc:
+            require(expected in str(exc), f"{label} fixture failed for the wrong reason: {exc}")
+        else:
+            raise ValueError(f"Dependabot Git response self-test accepted forbidden fixture: {label}")
+
 
 def parser() -> argparse.ArgumentParser:
     value = argparse.ArgumentParser(description=__doc__)
@@ -316,6 +474,20 @@ def parser() -> argparse.ArgumentParser:
     validate.add_argument("--candidate-root", type=Path, required=True)
     validate.add_argument("--changed-paths", type=Path, required=True)
     validate.add_argument("--out", type=Path, required=True)
+    for name in ("git-blob-response", "git-tree-response"):
+        command = sub.add_parser(name)
+        command.add_argument("--response", type=Path, required=True)
+        command.add_argument("--out", type=Path, required=True)
+    commit_response = sub.add_parser("git-commit-response")
+    commit_response.add_argument("--response", type=Path, required=True)
+    commit_response.add_argument("--expected-tree", required=True)
+    commit_response.add_argument("--expected-parent", required=True)
+    commit_response.add_argument("--out", type=Path, required=True)
+    ref_response = sub.add_parser("git-ref-response")
+    ref_response.add_argument("--response", type=Path, required=True)
+    ref_response.add_argument("--expected-ref", required=True)
+    ref_response.add_argument("--expected-sha", required=True)
+    ref_response.add_argument("--out", type=Path, required=True)
     sub.add_parser("self-test")
     return value
 
@@ -326,6 +498,26 @@ def main() -> int:
         if args.command == "self-test":
             self_test()
             print("Dependabot zero-touch controller self-test passed.")
+            return 0
+        if args.command in {"git-blob-response", "git-tree-response", "git-commit-response", "git-ref-response"}:
+            response = load_json(args.response)
+            if args.command == "git-blob-response":
+                result = validate_git_blob_response(response)
+            elif args.command == "git-tree-response":
+                result = validate_git_tree_response(response)
+            elif args.command == "git-commit-response":
+                result = validate_git_commit_response(
+                    response,
+                    expected_tree_sha=args.expected_tree,
+                    expected_parent_sha=args.expected_parent,
+                )
+            else:
+                result = validate_git_ref_response(
+                    response,
+                    expected_ref=args.expected_ref,
+                    expected_sha=args.expected_sha,
+                )
+            args.out.write_text(canonical_json(result), encoding="utf-8")
             return 0
         if args.command in {"probe", "admit"}:
             pr = load_json(args.pr)
