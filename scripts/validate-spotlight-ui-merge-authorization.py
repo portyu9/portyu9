@@ -222,7 +222,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
         '(.merged | type == "boolean") and',
         '(.maintainer_can_modify | type == "boolean") and',
         '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
-        'has("body")',
+        '(.body | type == "string" and length > 0) and',
         'has("merge_commit_sha")',
     ):
         require(fragment in fn, f"Spotlight terminal PR schema is missing: {fragment}")
@@ -275,12 +275,25 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
 
     merged_fetch = merge.index('          MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"')
     merged_validate = merge.index('          validate_terminal_pr_object "$MERGED_PR"', merged_fetch)
-    merged_consume = merge.index('          test "$(jq -r .user.login <<<"$MERGED_PR")"', merged_fetch)
-    merge_sha_bind = merge.index('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"', merged_fetch)
+    merged_identity = merge.index('          jq -e --argjson pr "$PR_NUMBER" --arg merge "$MERGE_SHA"', merged_validate)
+    merged_consume = merge.index('          test "$(jq -r .user.login <<<"$MERGED_PR")"', merged_identity)
+    merge_sha_bind = merge.index('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"', merged_consume)
     current_main = merge.index('          CURRENT_MAIN_SHA="$(gh api ', merged_fetch)
     cleanup = merge.index('          CANDIDATE_REFS="$(gh api ', current_main)
-    require(merged_fetch < merged_validate < merged_consume < merge_sha_bind < current_main < cleanup,
-            "Spotlight post-merge PR schema/SHA binding must precede current-main acceptance and cleanup")
+    identity_block = merge[merged_identity:merged_consume]
+    for fragment in (
+        '(.number == $pr) and',
+        '(.user.login == "github-actions[bot]") and',
+        '(.merged == true) and',
+        '(.state == "closed") and',
+        '(.merge_commit_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $merge) and',
+        '(.base.ref == "main" and .base.sha == $base) and',
+        '(.head.ref == $branch and .head.sha == $head and .head.repo.full_name == $repo)',
+    ):
+        require(fragment in identity_block,
+                f"Spotlight post-merge canonical PR identity is missing: {fragment}")
+    require(merged_fetch < merged_validate < merged_identity < merged_consume < merge_sha_bind < current_main < cleanup,
+            "Spotlight post-merge PR schema/identity/SHA binding must precede current-main acceptance and cleanup")
     require(merge.count('validate_terminal_pr_object "$PR"') == 1
             and merge.count('validate_terminal_pr_object "$MERGED_PR"') == 1,
             "Spotlight terminal PR schema must validate exactly the pre/post merge snapshots")
@@ -292,12 +305,16 @@ def self_test_terminal_object_schema_overlay(sync: str) -> None:
         ('              (type == "object") and\n              (.number | type == "number"',
          '              (type == "array") and\n              (.number | type == "number"'),
         ('              (.draft | type == "boolean") and', '              (.draft | type == "number") and'),
+        ('              (.body | type == "string" and length > 0) and',
+         '              (.body | type == "number") and'),
         ('            (type == "array") and\n            (length == 1) and',
          '            (type == "object") and\n            (length == 1) and'),
         ('              (.status | type == "string" and . == "modified")',
          '              (.status | type == "string" and . == "added")'),
         ('(.parents | type == "array" and length == 1', '(.parents | type == "array" and length == 2'),
         ('          validate_terminal_pr_object "$MERGED_PR"\n', ''),
+        ('            (.merge_commit_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $merge) and',
+         '            (.merge_commit_sha | type == "number") and'),
         ('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"\n', ''),
     )
     for old, new in mutations:
