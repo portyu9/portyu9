@@ -1329,6 +1329,15 @@ jobs:
           echo "Spotlight terminal stage: expected-head-merge-succeeded" >&2
           MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           validate_terminal_pr_object "$MERGED_PR"
+          jq -e --argjson pr "$PR_NUMBER" --arg merge "$MERGE_SHA" --arg base "$BASE_SHA" --arg branch "$CANDIDATE_BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            (.number == $pr) and
+            (.user.login == "github-actions[bot]") and
+            (.merged == true) and
+            (.state == "closed") and
+            (.merge_commit_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $merge) and
+            (.base.ref == "main" and .base.sha == $base) and
+            (.head.ref == $branch and .head.sha == $head and .head.repo.full_name == $repo)
+          ' <<<"$MERGED_PR" >/dev/null
           test "$(jq -r .user.login <<<"$MERGED_PR")" = "github-actions[bot]"
           test "$(jq -r .merged <<<"$MERGED_PR")" = "true"
           test "$(jq -r .state <<<"$MERGED_PR")" = "closed"
