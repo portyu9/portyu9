@@ -2324,6 +2324,13 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}",
               "method": "GET",
               "mutating": false,
@@ -2373,6 +2380,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2",
+              "method": "GET",
+              "mutating": false,
+              "step": "Remove only stale validated automation candidates"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
@@ -2383,13 +2397,6 @@
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "PATCH",
               "mutating": true,
-              "step": "Remove only stale validated automation candidates"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2",
-              "method": "GET",
-              "mutating": false,
               "step": "Remove only stale validated automation candidates"
             }
           ],
