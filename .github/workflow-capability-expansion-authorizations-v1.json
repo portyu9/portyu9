@@ -386,7 +386,7 @@
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "442d4dabc26e156adcc66bf4c0408e66eb46773d72d3f0141097252033a59aab",
-      "rationale": "Authorize #844's exact fail-closed terminal Dependabot merge-success response hardening. Existing merge request, endpoint/method, permissions, rejection diagnostics, expected-head binding, live-main reproof and post-merge CodeQL dispatch remain unchanged; only a nominal successful response must be a typed object with literal merged=true, lowercase SHA-40 and nonempty message before its normalized SHA is consumed. No new trigger, secret, mutation class, retry, OIDC authority, candidate execution, required-check reduction, direct-main write, ruleset change or bypass is added."
+      "rationale": "Authorize #844's fail-closed terminal Dependabot merge-success response validation. Existing merge endpoint/method, permissions, rejection diagnostics, expected-head binding, live-main reproof and post-merge CodeQL dispatch are unchanged. A nominal success must be a typed object with merged=true, lowercase SHA-40 and nonempty message before normalized SHA consumption. No new trigger, secret, mutation, retry, OIDC, candidate execution, required-check reduction, direct-main write or bypass."
     },
     {
       "id": "cap-dependabot-native-author-association-tcb",
