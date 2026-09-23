@@ -209,6 +209,107 @@ def self_test_merge_success_response_overlay(sync: str) -> None:
         raise ValueError("Spotlight merge-success self-test accepted raw RESULT consumption")
 
 
+def validate_terminal_object_schema_overlay(sync: str) -> None:
+    merge = core.job_block(sync, "merge", None)
+    fn_start = merge.index("          validate_terminal_pr_object() {\n")
+    pre_pr = merge.index('          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"')
+    fn = merge[fn_start:pre_pr]
+    for fragment in (
+        '(type == "object") and',
+        '(.number | type == "number" and . == floor and . == $pr) and',
+        '(.state | type == "string" and (. == "open" or . == "closed")) and',
+        '(.draft | type == "boolean") and',
+        '(.merged | type == "boolean") and',
+        '(.maintainer_can_modify | type == "boolean") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
+        'has("body")',
+        'has("merge_commit_sha")',
+    ):
+        require(fragment in fn, f"Spotlight terminal PR schema is missing: {fragment}")
+
+    pre_validate = merge.index('          validate_terminal_pr_object "$PR"', pre_pr)
+    pre_consume = merge.index('          test "$(jq -r .user.login <<<"$PR")"', pre_pr)
+    require(pre_pr < pre_validate < pre_consume,
+            "Spotlight terminal pre-merge PR fields are consumed before schema validation")
+    for fragment in (
+        'test "$(jq -r .user.login <<<"$PR")" = "github-actions[bot]"',
+        'test "$(jq -r .draft <<<"$PR")" = "false"',
+        'test "$(jq -r .merged <<<"$PR")" = "false"',
+        'test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"',
+        'test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"',
+    ):
+        require(fragment in merge, f"Spotlight terminal exact pre-merge PR identity is missing: {fragment}")
+
+    files_fetch = merge.index('          FILES="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100")"')
+    files_schema = merge.index('            (type == "array") and', files_fetch)
+    files_consume = merge.index('          test "$(jq \'length\' <<<"$FILES")" = "1"', files_schema)
+    files_block = merge[files_fetch:files_consume]
+    for fragment in (
+        '(length == 1) and',
+        '(.filename | type == "string" and . == "README.md")',
+        '(.status | type == "string" and . == "modified")',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
+        '(.additions | type == "number" and . == floor and . >= 0)',
+        '(.deletions | type == "number" and . == floor and . >= 0)',
+        '(.changes | type == "number" and . == floor and . >= 0)',
+    ):
+        require(fragment in files_block, f"Spotlight terminal changed-file schema is missing: {fragment}")
+    require(files_fetch < files_schema < files_consume,
+            "Spotlight terminal file evidence is consumed before schema validation")
+
+    commit_fetch = merge.index('          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"')
+    commit_schema = merge.index('          jq -e --arg head "$HEAD_SHA" \'', commit_fetch)
+    commit_consume = merge.index('          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"', commit_schema)
+    commit_block = merge[commit_fetch:commit_consume]
+    for fragment in (
+        '(type == "object") and',
+        '(.sha | type == "string" and . == $head) and',
+        '(.parents | type == "array" and length == 1',
+        '(.author | type == "object"',
+        '(.committer | type == "object"',
+        '(.message | type == "string" and length > 0)',
+    ):
+        require(fragment in commit_block, f"Spotlight terminal candidate-commit schema is missing: {fragment}")
+    require(commit_fetch < commit_schema < commit_consume,
+            "Spotlight terminal commit evidence is consumed before schema validation")
+
+    merged_fetch = merge.index('          MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"')
+    merged_validate = merge.index('          validate_terminal_pr_object "$MERGED_PR"', merged_fetch)
+    merged_consume = merge.index('          test "$(jq -r .user.login <<<"$MERGED_PR")"', merged_fetch)
+    merge_sha_bind = merge.index('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"', merged_fetch)
+    current_main = merge.index('          CURRENT_MAIN_SHA="$(gh api ', merged_fetch)
+    cleanup = merge.index('          CANDIDATE_REFS="$(gh api ', current_main)
+    require(merged_fetch < merged_validate < merged_consume < merge_sha_bind < current_main < cleanup,
+            "Spotlight post-merge PR schema/SHA binding must precede current-main acceptance and cleanup")
+    require(merge.count('validate_terminal_pr_object "$PR"') == 1
+            and merge.count('validate_terminal_pr_object "$MERGED_PR"') == 1,
+            "Spotlight terminal PR schema must validate exactly the pre/post merge snapshots")
+
+
+def self_test_terminal_object_schema_overlay(sync: str) -> None:
+    validate_terminal_object_schema_overlay(sync)
+    mutations = (
+        ('              (type == "object") and\n              (.number | type == "number"',
+         '              (type == "array") and\n              (.number | type == "number"'),
+        ('              (.draft | type == "boolean") and', '              (.draft | type == "number") and'),
+        ('            (type == "array") and\n            (length == 1) and',
+         '            (type == "object") and\n            (length == 1) and'),
+        ('              (.status | type == "string" and . == "modified")',
+         '              (.status | type == "string" and . == "added")'),
+        ('(.parents | type == "array" and length == 1', '(.parents | type == "array" and length == 2'),
+        ('          validate_terminal_pr_object "$MERGED_PR"\n', ''),
+        ('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"\n', ''),
+    )
+    for old, new in mutations:
+        require(old in sync, f"Spotlight terminal schema self-test anchor changed: {old}")
+        mutated = sync.replace(old, new, 1)
+        try:
+            validate_terminal_object_schema_overlay(mutated)
+        except (ValueError, IndexError):
+            pass
+        else:
+            raise ValueError(f"Spotlight terminal schema self-test accepted weakened evidence boundary: {old}")
+
 def strip_adr_tail(workflow: str, label: str) -> str:
     marker = "  decision_receipt:\n"
     require(workflow.count(marker) == 1,
@@ -508,13 +609,15 @@ def main() -> int:
         self_test_native_governed_bot_review_overlay(sync)
         validate_merge_success_response_overlay(sync)
         self_test_merge_success_response_overlay(sync)
+        validate_terminal_object_schema_overlay(sync)
+        self_test_terminal_object_schema_overlay(sync)
         core.self_test(sync, stats, policy)
         print(
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
             "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state plus the separate trusted capability-admission proof, "
             "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance, "
             "the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
-            "response before current-main acceptance, candidate cleanup, or decision-receipt evidence."
+            "response plus typed terminal PR/file/commit evidence before current-main acceptance, candidate cleanup, or decision-receipt evidence."
         )
         return 0
     except (OSError, ValueError) as exc:
