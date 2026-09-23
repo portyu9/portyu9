@@ -234,9 +234,13 @@ def validate_autofix_continuation(text: str) -> None:
         merge_validate_pos,
     )
     main_reproof_pos = text.index('\n          assert_main_is_merge_sha\n', normalized_sha_pos)
-    snapshot_pos = text.index(
+    discovery_endpoint_pos = text.index(
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100',
         merge_pos,
+    )
+    snapshot_pos = text.index(
+        'fetch_codeql_dispatch_runs > codeql-dispatch-runs-before.json',
+        main_reproof_pos,
     )
     scan_dispatch_pos = text.index(
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
@@ -255,8 +259,8 @@ def validate_autofix_continuation(text: str) -> None:
         success_pos,
     )
     require(
-        merge_pos < merge_validate_pos < normalized_sha_pos < main_reproof_pos
-        < snapshot_pos < scan_dispatch_pos < exact_run_pos < success_pos < continuation_pos,
+        merge_pos < merge_validate_pos < normalized_sha_pos < discovery_endpoint_pos
+        < main_reproof_pos < snapshot_pos < scan_dispatch_pos < exact_run_pos < success_pos < continuation_pos,
         "CodeQL Autofix typed merge-success validation / post-merge causal continuation ordering changed",
     )
     require(
