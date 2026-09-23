@@ -193,6 +193,13 @@
       "rationale": "Authorize #476's exact corrected two-file protected direct-merge candidate. The workflow is unchanged from the reviewed direct-merge design; the protected BOM is now the trusted compiler's exact canonical output, including exact-main CodeQL alert discovery, protected exact-SHA PR merge, and post-merge CodeQL dispatch. Immutable receipt provenance, six required contexts, GHAS/review-thread proof, final race checks, and Protect Main remain fail-closed."
     },
     {
+      "id": "cap-codeql-autofix-readiness-check-schema-hardening",
+      "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "expansionSha256": "05512ad36d522448730f573b0f286445927d56ae85c1cd999b1855a534493f3f",
+      "rationale": "Authorize #890's exact CodeQL Autofix readiness evidence hardening. Existing check-run GETs, triggers, permissions, dispatches and merge authority remain unchanged; trusted-admission and GHAS responses must pass a typed bounded collection/item schema before readiness state is consumed. No new endpoint, mutation, secret, OIDC, candidate execution, retry budget, direct-main write, required-check reduction, ruleset change or bypass."
+    },
+    {
       "id": "cap-codeql-autofix-receipt-attempt-binding",
       "baseBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
       "candidateBomSha256": "dc9249bc85f73d5774cc80660b06767975467828034e2ab2123bf01c19d75162",
