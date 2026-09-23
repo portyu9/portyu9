@@ -327,18 +327,23 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         "Spotlight stale reconciliation must use list results only for bounded PR discovery and re-fetch the exact full PR object",
     )
     reconcile = job_block(legacy, "reconcile", "budget")
-    close_call = reconcile.index(
+    close_call_marker = (
         'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
     )
-    close_schema = reconcile.index(
-        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"',
-        close_call,
+    close_schema_marker = (
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY"'
     )
-    close_consume = reconcile.index('test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"', close_schema)
-    close_delete = reconcile.index(
-        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null',
-        close_consume,
+    close_consume_marker = 'test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"'
+    close_delete_marker = (
+        'gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
     )
+    for marker in (close_call_marker, close_schema_marker, close_consume_marker, close_delete_marker):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight stale-close response contract anchor is missing or ambiguous: {marker}")
+    close_call = reconcile.index(close_call_marker)
+    close_schema = reconcile.index(close_schema_marker, close_call)
+    close_consume = reconcile.index(close_consume_marker, close_schema)
+    close_delete = reconcile.index(close_delete_marker, close_consume)
     close_block = reconcile[close_call:close_consume]
     for fragment in (
         '((type) == "object") and',
