@@ -508,6 +508,29 @@ jobs:
           ARTIFACT_NAME="spotlight-link-plan-${BASE_SHA}-${GENERATED_SHA}"
           MAX_ATTEMPTS=2
           ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"
+          jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID" \
+            '
+            (type == "object") and
+            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+            (.artifacts | type == "array") and
+            ((.artifacts | length) == .total_count) and
+            (all(.artifacts[];
+              (type == "object") and
+              (.id | (type == "number") and (. == floor) and (. > 0)) and
+              (.name | type == "string" and . == $name) and
+              (.expired | type == "boolean" and . == false) and
+              (.workflow_run | type == "object" and
+                (.id | (type == "number") and (. > 0) and (. == floor)) and
+                (.repository_id | type == "number" and . == floor and . == $repo) and
+                (.head_repository_id | type == "number" and . == floor and . == $repo) and
+                (.head_branch | type == "string" and . == "main") and
+                (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)))
+            )) and
+            (([.artifacts[].id] | length) == ([.artifacts[].id] | unique | length))
+          ' <<<"$ARTIFACTS" >/dev/null || {
+            echo "Spotlight mutation-budget artifact-history envelope is malformed or untrusted." >&2
+            exit 1
+          }
           TOTAL="$(jq -r '.total_count // empty' <<<"$ARTIFACTS")"
           COUNT="$(jq '.artifacts | length' <<<"$ARTIFACTS")"
           [[ "$TOTAL" =~ ^[0-9]+$ ]]

@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v70"
+VERSION = "governed-workflow-byte-identity-v71"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "a2b3675b96ca6f23e8fb2fccdda90ea043f77b48",
+    ".github/workflows/spotlight-link-sync.yml": "a3ab40a97d87cf064be2a11f215be63db81e52cf",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -61,6 +61,62 @@ def job_block(text: str, job: str, next_job: str | None) -> str:
     require(text.count(end_marker) == 1, f"governed workflow must contain exactly one {next_job} job")
     end = text.index(end_marker, start)
     return text[start:end]
+
+
+def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
+    budget = job_block(spotlight, "budget", "quarantine")
+    artifact_call = 'ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    schema_marker = 'jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
+    schema_end_marker = '\' <<<"$ARTIFACTS" >/dev/null || {'
+    total_marker = 'TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"'
+    count_marker = 'COUNT="$(jq \'.artifacts | length\' <<<"$ARTIFACTS")"'
+    completeness_marker = 'test "$TOTAL" = "$COUNT" || {'
+    invalid_marker = 'INVALID="$(jq \\'
+    current_marker = 'CURRENT="$(jq --argjson run_id "$GITHUB_RUN_ID"'
+    decision_marker = 'if [ "$TOTAL" -le "$MAX_ATTEMPTS" ]; then'
+    allowed_output = 'echo "allowed=$ALLOWED" >> "$GITHUB_OUTPUT"'
+    attempt_output = 'echo "attempt_count=$TOTAL" >> "$GITHUB_OUTPUT"'
+    markers = (
+        artifact_call, schema_marker, schema_end_marker, total_marker, count_marker,
+        completeness_marker, invalid_marker, current_marker, decision_marker,
+        allowed_output, attempt_output,
+    )
+    for marker in markers:
+        require(
+            budget.count(marker) == 1,
+            f"Spotlight governed mutation-budget artifact-history anchor changed: {marker}",
+        )
+    positions = [budget.index(marker) for marker in markers]
+    require(
+        positions == sorted(positions),
+        "Spotlight governed mutation-budget artifact-history ordering changed",
+    )
+    schema_start = budget.index(schema_marker)
+    schema_end = budget.index(schema_end_marker, schema_start) + len(schema_end_marker)
+    schema = budget[schema_start:schema_end]
+    for fragment in (
+        '            (type == "object") and\n'
+        '            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '(.artifacts | type == "array") and',
+        '((.artifacts | length) == .total_count) and',
+        '            (all(.artifacts[];\n'
+        '              (type == "object") and\n'
+        '              (.id | (type == "number") and (. == floor) and (. > 0)) and',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
+        '(.name | type == "string" and . == $name) and',
+        '(.id | (type == "number") and (. > 0) and (. == floor)) and',
+        '(.expired | type == "boolean" and . == false) and',
+        '(.workflow_run | type == "object" and',
+        '(.repository_id | type == "number" and . == floor and . == $repo) and',
+        '(.head_repository_id | type == "number" and . == floor and . == $repo) and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)',
+        '(([.artifacts[].id] | length) == ([.artifacts[].id] | unique | length))',
+    ):
+        require(
+            fragment in schema,
+            f"Spotlight governed mutation-budget artifact-history schema changed: {fragment}",
+        )
 
 
 def validate_item10_mac(spotlight: str) -> None:
@@ -1449,6 +1505,28 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
 
 def self_test() -> None:
     v21.self_test()
+    spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+    validate_spotlight_budget_artifact_history(spotlight)
+    budget_start = spotlight.index("  budget:\n")
+    budget_end = spotlight.index("  quarantine:\n", budget_start)
+    budget = spotlight[budget_start:budget_end]
+    schema_start = budget.index(
+        '          jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
+    )
+    total_pos = budget.index('          TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"', schema_start)
+    schema_block = budget[schema_start:total_pos]
+    without_schema = budget[:schema_start] + budget[total_pos:]
+    output = '          echo "attempt_count=$TOTAL" >> "$GITHUB_OUTPUT"\n'
+    output_pos = without_schema.index(output) + len(output)
+    reordered_budget = without_schema[:output_pos] + schema_block + without_schema[output_pos:]
+    reordered = spotlight[:budget_start] + reordered_budget + spotlight[budget_end:]
+    try:
+        validate_spotlight_budget_artifact_history(reordered)
+    except ValueError as exc:
+        require("artifact-history" in str(exc),
+                f"governed artifact-history self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("governed artifact-history self-test accepted schema-after-output reordering")
 
 
 def main() -> int:
@@ -1474,6 +1552,8 @@ def main() -> int:
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
         validate_spotlight_event_admission(spotlight, capability)
 
+        validate_spotlight_budget_artifact_history(spotlight)
+
         profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         v21.validate_profile_stats_freshness(profile)
         v21.validate_profile_stats_lease_binding(profile)
@@ -1488,7 +1568,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked."
         )
         return 0
     except (OSError, ValueError) as exc:

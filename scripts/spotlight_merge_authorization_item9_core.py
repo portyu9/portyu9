@@ -108,6 +108,74 @@ def validate_lease_run_evidence(sync: str) -> None:
                 f"Spotlight mutation-lease run evidence schema is missing: {fragment}")
 
 
+def validate_budget_artifact_history_schema(sync: str) -> None:
+    budget = core.job_block(sync, "budget", "quarantine")
+    artifact_call = 'ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    schema_marker = 'jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
+    schema_end_marker = '\' <<<"$ARTIFACTS" >/dev/null || {'
+    total_marker = 'TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"'
+    count_marker = 'COUNT="$(jq \'.artifacts | length\' <<<"$ARTIFACTS")"'
+    invalid_marker = 'INVALID="$(jq \\'
+    current_marker = 'CURRENT="$(jq --argjson run_id "$GITHUB_RUN_ID"'
+    decision_marker = 'if [ "$TOTAL" -le "$MAX_ATTEMPTS" ]; then'
+    allowed_output_marker = 'echo "allowed=$ALLOWED" >> "$GITHUB_OUTPUT"'
+    attempt_output_marker = 'echo "attempt_count=$TOTAL" >> "$GITHUB_OUTPUT"'
+
+    for marker in (
+        artifact_call, schema_marker, schema_end_marker, total_marker, count_marker,
+        invalid_marker, current_marker, decision_marker, allowed_output_marker,
+        attempt_output_marker,
+    ):
+        require(budget.count(marker) == 1,
+                f"Spotlight mutation-budget artifact-history anchor is missing or ambiguous: {marker}")
+
+    artifact_call_pos = budget.index(artifact_call)
+    schema_pos = budget.index(schema_marker)
+    schema_end_pos = budget.index(schema_end_marker, schema_pos) + len(schema_end_marker)
+    total_pos = budget.index(total_marker)
+    count_pos = budget.index(count_marker)
+    completeness_pos = budget.index(core.BUDGET_COMPLETENESS_GATE)
+    invalid_pos = budget.index(invalid_marker)
+    current_pos = budget.index(current_marker)
+    decision_pos = budget.index(decision_marker)
+    allowed_output_pos = budget.index(allowed_output_marker)
+    attempt_output_pos = budget.index(attempt_output_marker)
+
+    require(
+        artifact_call_pos < schema_pos < schema_end_pos < total_pos < count_pos
+        < completeness_pos < invalid_pos < current_pos < decision_pos
+        < allowed_output_pos < attempt_output_pos,
+        "Spotlight mutation-budget artifact-history must validate before admission classification/output",
+    )
+
+    schema = budget[schema_pos:schema_end_pos]
+    for fragment in (
+        '            (type == "object") and\n'
+        '            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '(.artifacts | type == "array") and',
+        '((.artifacts | length) == .total_count) and',
+        '            (all(.artifacts[];\n'
+        '              (type == "object") and\n'
+        '              (.id | (type == "number") and (. == floor) and (. > 0)) and',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
+        '(.name | type == "string" and . == $name) and',
+        '(.id | (type == "number") and (. > 0) and (. == floor)) and',
+        '(.expired | type == "boolean" and . == false) and',
+        '(.workflow_run | type == "object" and',
+        '(.repository_id | type == "number" and . == floor and . == $repo) and',
+        '(.head_repository_id | type == "number" and . == floor and . == $repo) and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)',
+        '(([.artifacts[].id] | length) == ([.artifacts[].id] | unique | length))',
+    ):
+        require(fragment in schema,
+                f"Spotlight mutation-budget artifact-history schema is missing: {fragment}")
+    require(
+        "Spotlight mutation-budget artifact-history envelope is malformed or untrusted." in budget,
+        "Spotlight mutation-budget artifact-history schema must fail visibly",
+    )
+
+
 def validate_reconciliation(reconcile: str) -> None:
     require("name: reconcile-stale-candidates-write" in reconcile and "needs: [plan, lease]" in reconcile,
             "Spotlight reconciler identity/lease dependency changed")
@@ -848,6 +916,8 @@ def validate(sync: str, stats: str, policy: str) -> None:
 
     validate_lease_run_evidence(sync)
 
+    validate_budget_artifact_history_schema(sync)
+
     # Keep the pre-reconciliation/pre-lease mutation-budget validator byte-for-byte independent.
     # Project only the separately validated lease + maintenance dependency edges out without
     # changing any runtime predicates or API bytes.
@@ -928,6 +998,67 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         sync.replace("          MAX_ATTEMPTS=2\n", "          MAX_ATTEMPTS=3\n", 1),
         stats, policy, "mutation-budget fail-closed contract is missing",
     )
+
+    budget_start = sync.index("  budget:\n")
+    budget_end = sync.index("  quarantine:\n", budget_start)
+    budget = sync[budget_start:budget_end]
+    for old, new in (
+        ('            (type == "object") and\n'
+         '            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+         '            (type == "array") and\n'
+         '            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and'),
+        ('            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+         '            (.total_count | type == "string") and'),
+        ('            (.artifacts | type == "array") and',
+         '            (.artifacts | type == "object") and'),
+        ('            ((.artifacts | length) == .total_count) and',
+         '            ((.artifacts | length) <= .total_count) and'),
+        ('              (type == "object") and\n'
+         '              (.id | (type == "number") and (. == floor) and (. > 0)) and',
+         '              (type == "array") and\n'
+         '              (.id | (type == "number") and (. == floor) and (. > 0)) and'),
+        ('              (.id | (type == "number") and (. == floor) and (. > 0)) and',
+         '              (.id | type == "number") and'),
+        ('              (.name | type == "string" and . == $name) and',
+         '              (.name | type == "string") and'),
+        ('              (.expired | type == "boolean" and . == false) and',
+         '              (.expired | type == "boolean") and'),
+        ('              (.workflow_run | type == "object" and',
+         '              (.workflow_run != null and'),
+        ('                (.id | (type == "number") and (. > 0) and (. == floor)) and',
+         '                (.id | type == "number") and'),
+        ('                (.repository_id | type == "number" and . == floor and . == $repo) and',
+         '                (.repository_id | type == "number") and'),
+        ('                (.head_repository_id | type == "number" and . == floor and . == $repo) and',
+         '                (.head_repository_id | type == "number") and'),
+        ('                (.head_branch | type == "string" and . == "main") and',
+         '                (.head_branch | type == "string") and'),
+        ('                (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)))',
+         '                (.head_sha | type == "string")))'),
+        ('            (([.artifacts[].id] | length) == ([.artifacts[].id] | unique | length))',
+         '            ([.artifacts[].id] | length) >= 0'),
+    ):
+        require(budget.count(old) == 1,
+                f"Spotlight mutation-budget artifact-history self-test anchor is missing or ambiguous: {old}")
+        mutated_budget = budget.replace(old, new, 1)
+        mutated = sync[:budget_start] + mutated_budget + sync[budget_end:]
+        expect_failure(mutated, stats, policy, "mutation-budget artifact-history")
+
+    budget_schema_start = budget.index(
+        '          jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
+    )
+    budget_total_pos = budget.index('          TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"', budget_schema_start)
+    budget_schema_block = budget[budget_schema_start:budget_total_pos]
+    budget_without_schema = budget[:budget_schema_start] + budget[budget_total_pos:]
+    budget_output = '          echo "attempt_count=$TOTAL" >> "$GITHUB_OUTPUT"\n'
+    budget_output_pos = budget_without_schema.index(budget_output) + len(budget_output)
+    reordered_budget = (
+        budget_without_schema[:budget_output_pos]
+        + budget_schema_block
+        + budget_without_schema[budget_output_pos:]
+    )
+    mutated = sync[:budget_start] + reordered_budget + sync[budget_end:]
+    expect_failure(mutated, stats, policy, "mutation-budget artifact-history")
     lease_start = sync.index("  lease:\n")
     lease_end = sync.index("  reconcile:\n", lease_start)
     lease = sync[lease_start:lease_end]
