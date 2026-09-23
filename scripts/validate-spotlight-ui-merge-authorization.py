@@ -302,6 +302,9 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
 
 def self_test_terminal_object_schema_overlay(sync: str) -> None:
     validate_terminal_object_schema_overlay(sync)
+    merge_start = sync.index("  merge:\n")
+    prefix = sync[:merge_start]
+    merge = sync[merge_start:]
     mutations = (
         ('              (type == "object") and\n              (.number | type == "number"',
          '              (type == "array") and\n              (.number | type == "number"'),
@@ -319,8 +322,9 @@ def self_test_terminal_object_schema_overlay(sync: str) -> None:
         ('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"\n', ''),
     )
     for old, new in mutations:
-        require(old in sync, f"Spotlight terminal schema self-test anchor changed: {old}")
-        mutated = sync.replace(old, new, 1)
+        require(merge.count(old) == 1,
+                f"Spotlight terminal schema self-test anchor is missing or ambiguous inside merge job: {old}")
+        mutated = prefix + merge.replace(old, new, 1)
         try:
             validate_terminal_object_schema_overlay(mutated)
         except (ValueError, IndexError):
