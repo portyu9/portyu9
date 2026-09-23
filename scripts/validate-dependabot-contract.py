@@ -203,6 +203,77 @@ def validate_controller_collection_contract(text: str) -> None:
     )
 
 
+def validate_controller_git_mutation_response_contract(text: str) -> None:
+    commands = {
+        "git-blob-response": 1,
+        "git-tree-response": 1,
+        "git-commit-response": 1,
+        "git-ref-response": 1,
+    }
+    for command, expected_count in commands.items():
+        require(
+            text.count(f"python3 scripts/dependabot_controller.py {command}") == expected_count,
+            f"Dependabot controller must validate {command} exactly {expected_count} time(s)",
+        )
+
+    required_fragments = (
+        '> git-blob-response.json',
+        '--response git-blob-response.json',
+        '--out git-blob-response-normalized.json',
+        'BLOB_SHA="$(jq -r .sha git-blob-response-normalized.json)"',
+        '> git-tree-response.json',
+        '--response git-tree-response.json',
+        '--out git-tree-response-normalized.json',
+        'NEW_TREE_SHA="$(jq -r .sha git-tree-response-normalized.json)"',
+        '> git-commit-response.json',
+        '--response git-commit-response.json',
+        '--expected-tree "$NEW_TREE_SHA"',
+        '--expected-parent "$HEAD_SHA"',
+        '--out git-commit-response-normalized.json',
+        'NEW_HEAD_SHA="$(jq -r .sha git-commit-response-normalized.json)"',
+        '> updated-ref.json',
+        '--response updated-ref.json',
+        '--expected-ref "refs/heads/${HEAD_REF}"',
+        '--expected-sha "$NEW_HEAD_SHA"',
+        '--out updated-ref-normalized.json',
+        'test "$(jq -r .sha updated-ref-normalized.json)" = "$NEW_HEAD_SHA"',
+    )
+    for fragment in required_fragments:
+        require(fragment in text, f"Dependabot Git mutation response contract is missing: {fragment}")
+
+    forbidden_fragments = (
+        'BLOB="$(gh api --method POST "repos/${TARGET_REPOSITORY}/git/blobs"',
+        'NEW_TREE="$(gh api --method POST "repos/${TARGET_REPOSITORY}/git/trees"',
+        'NEW_COMMIT="$(gh api --method POST "repos/${TARGET_REPOSITORY}/git/commits"',
+        'test "$(jq -r .object.sha updated-ref.json)" = "$NEW_HEAD_SHA"',
+    )
+    for fragment in forbidden_fragments:
+        require(fragment not in text,
+                f"Dependabot controller regained direct consumption of unvalidated Git mutation evidence: {fragment}")
+
+    ordered = (
+        '> git-blob-response.json',
+        'python3 scripts/dependabot_controller.py git-blob-response',
+        'BLOB_SHA="$(jq -r .sha git-blob-response-normalized.json)"',
+        '> git-tree-response.json',
+        'python3 scripts/dependabot_controller.py git-tree-response',
+        'NEW_TREE_SHA="$(jq -r .sha git-tree-response-normalized.json)"',
+        '> git-commit-response.json',
+        'python3 scripts/dependabot_controller.py git-commit-response',
+        'NEW_HEAD_SHA="$(jq -r .sha git-commit-response-normalized.json)"',
+        '> updated-ref.json',
+        'python3 scripts/dependabot_controller.py git-ref-response',
+        'test "$(jq -r .sha updated-ref-normalized.json)" = "$NEW_HEAD_SHA"',
+        'repos/${TARGET_REPOSITORY}/dispatches',
+    )
+    cursor = -1
+    for fragment in ordered:
+        position = text.find(fragment, cursor + 1)
+        require(position > cursor,
+                f"Dependabot Git mutation response validation moved out of reviewed order: {fragment}")
+        cursor = position
+
+
 def validate_quality_contract(text: str) -> None:
     require(
         '- ".github/dependabot.yml"' in text,
@@ -288,13 +359,14 @@ def main() -> int:
         controller_text = CONTROLLER.read_text(encoding="utf-8")
         validate_controller_wake_contract(controller_text)
         validate_controller_collection_contract(controller_text)
+        validate_controller_git_mutation_response_contract(controller_text)
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed paginated PR/file collection evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
