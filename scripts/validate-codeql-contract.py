@@ -233,7 +233,7 @@ def validate_autofix_continuation(text: str) -> None:
         'MERGE_SHA="$(jq -r .sha merge-success-normalized.json)"',
         merge_validate_pos,
     )
-    main_reproof_pos = text.index('assert_main_is_merge_sha', normalized_sha_pos)
+    main_reproof_pos = text.index('\n          assert_main_is_merge_sha\n', normalized_sha_pos)
     snapshot_pos = text.index(
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100',
         merge_pos,
