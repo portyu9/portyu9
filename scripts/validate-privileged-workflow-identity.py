@@ -1567,7 +1567,7 @@ def validate_spotlight_same_base_supersession(spotlight: str) -> None:
     reconcile = job_block(spotlight, "reconcile", "budget")
     expected_marker = ('            if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && '
                        '[ "$BRANCH" = "$EXPECTED_CANDIDATE_BRANCH" ]; then')
-    parent_marker = '            PARENT_SHA="$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")"'
+    parent_marker = "            PARENT_SHA=\"$(jq -r '.parents[0].sha' <<<\"$CANDIDATE_COMMIT\")\""
     same_base_marker = (
         '            SAME_BASE_SUPERSEDED=false\n'
         '            ANCESTRY_PROVEN_SUPERSEDED=false\n'
