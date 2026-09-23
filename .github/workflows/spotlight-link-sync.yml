@@ -324,6 +324,27 @@ jobs:
               test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
               jq -n '{state:"closed"}' > close-pr.json
               CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"
+              jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \
+                --arg title "chore: sync rotating Spotlight links" \
+                --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
+                ((type) == "object") and
+                (.number | type == "number" and . == floor and . == $pr) and
+                (.user | type == "object" and .login == "github-actions[bot]") and
+                (.state == "closed") and
+                (.draft | type == "boolean" and . == false) and
+                (.merged | type == "boolean" and . == false) and
+                (.maintainer_can_modify | type == "boolean" and . == false) and
+                (.title == $title) and
+                (.body == $body) and
+                (.base | type == "object" and .ref == "main" and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                  (.repo | type == "object" and .full_name == $repo)) and
+                (.head | type == "object" and .ref == $branch and .sha == $head and
+                  (.repo | type == "object" and .full_name == $repo)) and
+                (has("merge_commit_sha") and
+                  ((.merge_commit_sha == null) or
+                   ((.merge_commit_sha | type) == "string" and (.merge_commit_sha | test("^[0-9a-f]{40}$")))))
+              ' <<<"$CLOSED_PR" >/dev/null
               test "$(jq -r .state <<<"$CLOSED_PR")" = "closed"
               test "$(jq -r .head.ref <<<"$CLOSED_PR")" = "$BRANCH"
               test "$(jq -r .head.sha <<<"$CLOSED_PR")" = "$HEAD_SHA"
