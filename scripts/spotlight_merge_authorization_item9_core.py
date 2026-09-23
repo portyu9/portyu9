@@ -586,11 +586,16 @@ def validate_candidate_publication(sync: str) -> None:
     terminal_output_marker = 'echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"'
     for marker in (
         terminal_refs_call_marker, terminal_refs_schema_marker, terminal_refs_consume_marker,
-        terminal_delete_marker, terminal_after_call_marker, terminal_after_schema_marker,
-        terminal_after_consume_marker, terminal_output_marker,
+        terminal_delete_marker,
     ):
         require(merge.count(marker) == 1,
                 f"Spotlight terminal candidate-ref collection anchor is missing or ambiguous: {marker}")
+    for marker in (
+        terminal_after_call_marker, terminal_after_schema_marker,
+        terminal_after_consume_marker, terminal_output_marker,
+    ):
+        require(merge.count(marker) == 1,
+                f"Spotlight terminal candidate-ref cleanup evidence anchor is missing or ambiguous: {marker}")
 
     terminal_refs_call = merge.index(terminal_refs_call_marker)
     terminal_refs_schema = merge.index(terminal_refs_schema_marker)
