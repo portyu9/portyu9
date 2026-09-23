@@ -516,6 +516,85 @@ def validate_candidate_publication(sync: str) -> None:
             require(fragment in boundary,
                     f"Spotlight proposal {label} response schema must validate before field consumption: {fragment}")
 
+    topology_commit_call_marker = (
+        'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    )
+    topology_commit_schema_marker = (
+        'jq -e --arg head "$HEAD_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL"'
+    )
+    topology_commit_consume_marker = 'test "$(jq \' .parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"'.replace("' .parents", "'.parents")
+    topology_compare_call_marker = (
+        'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"'
+    )
+    topology_compare_schema_marker = 'jq -e --arg source "$SOURCE_SHA" --arg head "$HEAD_SHA"'
+    topology_compare_consume_marker = 'test "$(jq -r .status <<<"$COMPARE")" = "ahead"'
+    candidate_content_marker = (
+        'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content'
+    )
+    topology_ref_publish_marker = (
+        'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"'
+    )
+    for marker in (
+        topology_commit_call_marker, topology_commit_schema_marker, topology_commit_consume_marker,
+        topology_compare_call_marker, topology_compare_schema_marker, topology_compare_consume_marker,
+        candidate_content_marker, topology_ref_publish_marker,
+    ):
+        require(propose.count(marker) == 1,
+                f"Spotlight proposer candidate-topology evidence anchor is missing or ambiguous: {marker}")
+
+    topology_commit_call = propose.index(topology_commit_call_marker)
+    topology_commit_schema = propose.index(topology_commit_schema_marker)
+    topology_commit_consume = propose.index(topology_commit_consume_marker)
+    topology_compare_call = propose.index(topology_compare_call_marker)
+    topology_compare_schema = propose.index(topology_compare_schema_marker)
+    topology_compare_consume = propose.index(topology_compare_consume_marker)
+    candidate_content = propose.index(candidate_content_marker)
+    topology_ref_publish = propose.index(topology_ref_publish_marker)
+
+    require(
+        topology_commit_call < topology_commit_schema < topology_commit_consume
+        < topology_compare_call < topology_compare_schema < topology_compare_consume
+        < candidate_content < topology_ref_publish,
+        "Spotlight proposer candidate-topology evidence must validate before content proof/ref publication",
+    )
+
+    topology_commit_block = propose[topology_commit_call:topology_commit_consume]
+    for fragment in (
+        '(type == "object") and',
+        '(.sha | type == "string" and . == $head) and',
+        '(.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and',
+        '(.parents | type == "array" and length == 1 and',
+        '(.[0] | type == "object" and .sha == $parent)) and',
+        '(.author | type == "object" and .name == $name and .email == $email) and',
+        '(.committer | type == "object" and .name == $name and .email == $email and',
+        '(.date | type == "string" and length > 0)) and',
+        '(.message == "chore: sync rotating Spotlight links")',
+    ):
+        require(fragment in topology_commit_block,
+                f"Spotlight proposer candidate-commit readback schema is missing: {fragment}")
+
+    topology_compare_block = propose[topology_compare_call:topology_compare_consume]
+    for fragment in (
+        '(type == "object") and',
+        '(.status == "ahead") and',
+        '(.base_commit | type == "object" and .sha == $source) and',
+        '(.merge_base_commit | type == "object" and .sha == $source) and',
+        '(.ahead_by | type == "number" and . == floor and . == 1) and',
+        '(.behind_by | type == "number" and . == floor and . == 0) and',
+        '(.total_commits | type == "number" and . == floor and . == 1) and',
+        '(.commits | type == "array" and length == 1 and',
+        '(.[0] | type == "object" and .sha == $head)) and',
+        '(.files | type == "array" and length == 1 and',
+        '(.filename | type == "string" and . == "README.md") and',
+        '(.status | type == "string" and . == "modified") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.additions | type == "number" and . == floor and . >= 0) and',
+        '(.deletions | type == "number" and . == floor and . >= 0) and',
+        '(.changes | type == "number" and . == floor and . >= 0)',
+    ):
+        require(fragment in topology_compare_block,
+                f"Spotlight proposer candidate-compare readback schema is missing: {fragment}")
+
     for fragment in (
         'test "$(jq \' .parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"',
         'test "$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")" = "$SOURCE_SHA"',
@@ -1057,6 +1136,92 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         )
         mutated = sync[:propose_start] + mutated_propose + sync[propose_end:]
         expect_failure(mutated, stats, policy, "candidate-ref collection")
+
+    topology_commit_call_pos = propose.index(
+        'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    )
+    topology_commit_consume_pos = propose.index(
+        'test "$(jq \' .parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"'.replace("' .parents", "'.parents"),
+        topology_commit_call_pos,
+    )
+    topology_commit_block = propose[topology_commit_call_pos:topology_commit_consume_pos]
+    for old, new in (
+        ('            (type == "object") and', '            (type == "array") and'),
+        ('            (.sha | type == "string" and . == $head) and',
+         '            (.sha | type == "string") and'),
+        ('            (.parents | type == "array" and length == 1 and',
+         '            (.parents | type == "array" and length >= 1 and'),
+        ('            (.author | type == "object" and .name == $name and .email == $email) and',
+         '            (.author | type == "object") and'),
+        ('              (.date | type == "string" and length > 0)) and',
+         '              (.date | type == "number")) and'),
+        ('            (.message == "chore: sync rotating Spotlight links")',
+         '            (.message | type == "string")'),
+    ):
+        require(topology_commit_block.count(old) == 1,
+                f"Spotlight proposer candidate-commit self-test anchor is missing or ambiguous: {old}")
+        mutated_block = topology_commit_block.replace(old, new, 1)
+        mutated_propose = (
+            propose[:topology_commit_call_pos] + mutated_block + propose[topology_commit_consume_pos:]
+        )
+        mutated = sync[:propose_start] + mutated_propose + sync[propose_end:]
+        expect_failure(mutated, stats, policy, "candidate-commit readback schema")
+
+    topology_compare_call_pos = propose.index(
+        'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"'
+    )
+    topology_compare_consume_pos = propose.index(
+        'test "$(jq -r .status <<<"$COMPARE")" = "ahead"',
+        topology_compare_call_pos,
+    )
+    topology_compare_block = propose[topology_compare_call_pos:topology_compare_consume_pos]
+    for old, new in (
+        ('            (type == "object") and', '            (type == "array") and'),
+        ('            (.status == "ahead") and', '            (.status == "behind") and'),
+        ('            (.base_commit | type == "object" and .sha == $source) and',
+         '            (.base_commit | type == "object") and'),
+        ('            (.ahead_by | type == "number" and . == floor and . == 1) and',
+         '            (.ahead_by | type == "number" and . == floor and . >= 0) and'),
+        ('            (.commits | type == "array" and length == 1 and',
+         '            (.commits | type == "array" and length >= 1 and'),
+        ('                (.status | type == "string" and . == "modified") and',
+         '                (.status | type == "string") and'),
+    ):
+        require(topology_compare_block.count(old) == 1,
+                f"Spotlight proposer candidate-compare self-test anchor is missing or ambiguous: {old}")
+        mutated_block = topology_compare_block.replace(old, new, 1)
+        mutated_propose = (
+            propose[:topology_compare_call_pos] + mutated_block + propose[topology_compare_consume_pos:]
+        )
+        mutated = sync[:propose_start] + mutated_propose + sync[propose_end:]
+        expect_failure(mutated, stats, policy, "candidate-compare readback schema")
+
+    commit_schema_start_marker = (
+        '          jq -e --arg head "$HEAD_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \'\n'
+    )
+    commit_schema_end_marker = '          \' <<<"$CANDIDATE_COMMIT" >/dev/null\n'
+    require(topology_commit_block.count(commit_schema_start_marker) == 1
+            and topology_commit_block.count(commit_schema_end_marker) == 1,
+            "Spotlight proposer topology reorder self-test cannot isolate candidate-commit schema")
+    commit_schema_local_start = topology_commit_block.index(commit_schema_start_marker)
+    commit_schema_local_end = (
+        topology_commit_block.index(commit_schema_end_marker, commit_schema_local_start)
+        + len(commit_schema_end_marker)
+    )
+    commit_schema_start = topology_commit_call_pos + commit_schema_local_start
+    commit_schema_end = topology_commit_call_pos + commit_schema_local_end
+    commit_schema_text = propose[commit_schema_start:commit_schema_end]
+    reordered_propose = propose[:commit_schema_start] + propose[commit_schema_end:]
+    ref_publish_pos = reordered_propose.index(
+        '            CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
+        topology_commit_call_pos,
+    )
+    ref_publish_end = reordered_propose.index("\n", ref_publish_pos) + 1
+    reordered_propose = (
+        reordered_propose[:ref_publish_end] + commit_schema_text + reordered_propose[ref_publish_end:]
+    )
+    mutated = sync[:propose_start] + reordered_propose + sync[propose_end:]
+    expect_failure(mutated, stats, policy, "candidate-topology evidence")
 
     merge_start = sync.index("  merge:\n")
     merge_end = len(sync)
