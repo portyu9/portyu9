@@ -525,7 +525,7 @@ jobs:
                 (.head_repository_id | type == "number" and . == floor and . == $repo) and
                 (.head_branch | type == "string" and . == "main") and
                 (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)))
-            )) and
+            ) and
             (([.artifacts[].id] | length) == ([.artifacts[].id] | unique | length))
           ' <<<"$ARTIFACTS" >/dev/null || {
             echo "Spotlight mutation-budget artifact-history envelope is malformed or untrusted." >&2
