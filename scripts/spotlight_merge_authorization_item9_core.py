@@ -311,11 +311,11 @@ def validate_reconciliation(reconcile: str) -> None:
         require(reconcile.count(marker) == 1,
                 f"Spotlight reconciler stale-delete readback schema anchor is missing or ambiguous: {marker}")
 
-    readback_call = reconcile.index(readback_call_marker, delete_ref)
-    readback_schema = reconcile.index(readback_schema_marker, readback_call)
-    readback_consume = reconcile.index(readback_consume_marker, readback_schema)
-    cleanup_journal = reconcile.index(cleanup_journal_marker, readback_consume)
-    cleanup_effect = reconcile.index(cleanup_effect_marker, cleanup_journal)
+    readback_call = reconcile.index(readback_call_marker)
+    readback_schema = reconcile.index(readback_schema_marker)
+    readback_consume = reconcile.index(readback_consume_marker)
+    cleanup_journal = reconcile.index(cleanup_journal_marker)
+    cleanup_effect = reconcile.index(cleanup_effect_marker)
     require(
         delete_ref < readback_call < readback_schema < readback_consume < cleanup_journal < cleanup_effect,
         "Spotlight stale-delete readback must validate an empty collection before cleanup journal/output evidence",
