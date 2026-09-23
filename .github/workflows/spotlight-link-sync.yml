@@ -852,7 +852,7 @@ jobs:
               (all(.[][];
                 type == "object" and
                 (.id | type == "number" and . == floor and . > 0) and
-                (.user as $user | ($user | type) == "object" and ($user.login | type == "string" and length > 0)) and
+                (.user | type == "object" and (.login | type == "string" and length > 0)) and
                 (.state | type == "string" and
                   (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
                 has("commit_id") and
