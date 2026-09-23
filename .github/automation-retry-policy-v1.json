@@ -1,6 +1,31 @@
 {
   "schemaVersion": 1,
-  "automaticRetries": [],
+  "automaticRetries": [
+    {
+      "id": "governed-bot-review-read-transient",
+      "source": "scripts/governed_bot_review_gate.py",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "rationale": "Retry only fresh read-only GitHub observations after classified transport/platform transients; authorization, not-found, malformed JSON, schema, policy, veto, and mutation failures remain terminal."
+    }
+  ],
   "terminalOperations": [
     {
       "id": "profile-quality-live-generator-fallback",
