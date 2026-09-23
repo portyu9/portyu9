@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v66"
+VERSION = "governed-workflow-byte-identity-v67"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "4229a34724360ac620f98925b4a565584a935bd6",
+    ".github/workflows/spotlight-link-sync.yml": "21dabf69daf149235bed7a89c128b22d445b3db5",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -523,6 +523,34 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     require(
         pr_consume < close_call < close_schema < close_consume < close_delete,
         "Spotlight stale PR evidence and close response validation must precede close/ref deletion effects",
+    )
+
+    readback_call_marker = (
+        'REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"'
+    )
+    readback_schema_marker = (
+        'jq -e \'(type == "array") and (length == 0)\' <<<"$REMAINING_REFS" >/dev/null'
+    )
+    readback_consume_marker = (
+        'REMAINING_EXACT="$(jq --arg ref "refs/heads/${BRANCH}" \'[.[] | select(.ref == $ref)] | length\' <<<"$REMAINING_REFS")"'
+    )
+    cleanup_journal_marker = 'CLEANUP_ENTRY="$(jq -cn \\'
+    cleanup_effect_marker = 'echo "stale_cleanup_effect_present=true" >> "$GITHUB_OUTPUT"'
+    for marker in (
+        readback_call_marker, readback_schema_marker, readback_consume_marker,
+        cleanup_journal_marker, cleanup_effect_marker,
+    ):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight stale-delete readback contract anchor is missing or ambiguous: {marker}")
+
+    readback_call = reconcile.index(readback_call_marker)
+    readback_schema = reconcile.index(readback_schema_marker)
+    readback_consume = reconcile.index(readback_consume_marker)
+    cleanup_journal = reconcile.index(cleanup_journal_marker)
+    cleanup_effect = reconcile.index(cleanup_effect_marker)
+    require(
+        close_delete < readback_call < readback_schema < readback_consume < cleanup_journal < cleanup_effect,
+        "Spotlight stale-delete readback validation must precede cleanup journal/output evidence",
     )
     for fragment in (
         'CANDIDATE_ID="$(printf \'%s\\n%s\\n%s\\n\' "$SOURCE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d\' \' -f1)"',
