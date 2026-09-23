@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import json
-import subprocess
 import sys
 
 import privileged_workflow_identity_v21_core as v21
@@ -13,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v72"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
-    ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
+    ".github/workflows/profile-quality.yml": "d75beabaeb83e6bf78c467c2936f824fcc765f40",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "4f3333733312135d2254a19b830a4840ab9e852f",
 }
@@ -63,96 +61,6 @@ def job_block(text: str, job: str, next_job: str | None) -> str:
     require(text.count(end_marker) == 1, f"governed workflow must contain exactly one {next_job} job")
     end = text.index(end_marker, start)
     return text[start:end]
-
-
-def validate_spotlight_budget_artifact_history_runtime(spotlight: str) -> None:
-    """Execute the exact embedded jq schema against valid and adversarial fixtures."""
-    budget = job_block(spotlight, "budget", "quarantine")
-    schema_marker = 'jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
-    program_open = "\n            '\n"
-    program_close = "\n          ' <<<\"$ARTIFACTS\" >/dev/null || {"
-    schema_start = budget.index(schema_marker)
-    program_start = budget.index(program_open, schema_start) + len(program_open)
-    program_end = budget.index(program_close, program_start)
-    jq_program = budget[program_start:program_end]
-
-    base = "a" * 40
-    generated = "b" * 40
-    artifact_name = f"spotlight-link-plan-{base}-{generated}"
-    repo_id = 424242
-    valid = {
-        "total_count": 2,
-        "artifacts": [
-            {
-                "id": 101,
-                "name": artifact_name,
-                "expired": False,
-                "workflow_run": {
-                    "id": 1001,
-                    "repository_id": repo_id,
-                    "head_repository_id": repo_id,
-                    "head_branch": "main",
-                    "head_sha": base,
-                },
-            },
-            {
-                "id": 102,
-                "name": artifact_name,
-                "expired": False,
-                "workflow_run": {
-                    "id": 1002,
-                    "repository_id": repo_id,
-                    "head_repository_id": repo_id,
-                    "head_branch": "main",
-                    "head_sha": base,
-                },
-            },
-        ],
-    }
-
-    def execute(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [
-                "jq", "-e",
-                "--arg", "name", artifact_name,
-                "--arg", "base", base,
-                "--argjson", "repo", str(repo_id),
-                jq_program,
-            ],
-            input=json.dumps(payload, separators=(",", ":")),
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-
-    accepted = execute(valid)
-    require(
-        accepted.returncode == 0 and accepted.stdout.strip() == "true",
-        "Spotlight mutation-budget jq schema must compile and accept the exact valid fixture; "
-        f"rc={accepted.returncode}, stderr={accepted.stderr.strip()!r}",
-    )
-
-    invalid_fixtures: list[tuple[str, dict[str, object]]] = []
-
-    mismatched_count = json.loads(json.dumps(valid))
-    mismatched_count["total_count"] = 1
-    invalid_fixtures.append(("mismatched total_count", mismatched_count))
-
-    duplicate_id = json.loads(json.dumps(valid))
-    duplicate_id["artifacts"][1]["id"] = duplicate_id["artifacts"][0]["id"]
-    invalid_fixtures.append(("duplicate artifact id", duplicate_id))
-
-    wrong_head = json.loads(json.dumps(valid))
-    wrong_head["artifacts"][0]["workflow_run"]["head_sha"] = "c" * 40
-    invalid_fixtures.append(("wrong nested head sha", wrong_head))
-
-    for label, payload in invalid_fixtures:
-        rejected = execute(payload)
-        require(
-            rejected.returncode == 1,
-            f"Spotlight mutation-budget jq schema must reject {label} with jq predicate failure; "
-            f"rc={rejected.returncode}, stdout={rejected.stdout.strip()!r}, stderr={rejected.stderr.strip()!r}",
-        )
 
 
 def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
@@ -1599,7 +1507,6 @@ def self_test() -> None:
     v21.self_test()
     spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
     validate_spotlight_budget_artifact_history(spotlight)
-    validate_spotlight_budget_artifact_history_runtime(spotlight)
     budget_start = spotlight.index("  budget:\n")
     budget_end = spotlight.index("  quarantine:\n", budget_start)
     budget = spotlight[budget_start:budget_end]
@@ -1661,7 +1568,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema, executable jq fixtures, and pre-admission ordering locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step byte-locked."
         )
         return 0
     except (OSError, ValueError) as exc:
