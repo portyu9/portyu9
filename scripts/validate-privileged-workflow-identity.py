@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v76"
+VERSION = "governed-workflow-byte-identity-v77"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "e5f7f01f1f709515dae282606345fdfb01a7fc70",
@@ -1314,6 +1314,61 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
     )
 
 
+def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
+    created_ref = "python3 scripts/codeql_autofix_controller.py created-ref-response"
+    reviewer = "python3 scripts/codeql_autofix_controller.py reviewer-request-response"
+    require(autofix.count(created_ref) == 1,
+            "CodeQL Autofix created-ref response validator identity changed")
+    require(autofix.count(reviewer) == 1,
+            "CodeQL Autofix reviewer-request response validator identity changed")
+    for fragment in (
+        "--response-file created-ref.json",
+        '--expected-sha "$BASE_SHA"',
+        "--out created-ref-normalized.json",
+        'test "$(jq -r .ref created-ref-normalized.json)" = "$TARGET_REF"',
+        'test "$(jq -r .sha created-ref-normalized.json)" = "$BASE_SHA"',
+        "--response-file requested-reviewer.json",
+        '--pr-number "$PR_NUMBER"',
+        '--repository "$TARGET_REPOSITORY"',
+        '--base-sha "$BASE_SHA"',
+        '--branch "$BRANCH"',
+        '--head-sha "$HEAD_SHA"',
+        "--out requested-reviewer-normalized.json",
+        'test "$(jq -r .reviewer requested-reviewer-normalized.json)" = "portyu9"',
+        'test "$(jq -r .headSha requested-reviewer-normalized.json)" = "$HEAD_SHA"',
+    ):
+        require(fragment in autofix,
+                f"CodeQL Autofix constructive response identity is missing: {fragment}")
+    for forbidden in (
+        'jq -r .ref created-ref.json',
+        'jq -r .object.sha created-ref.json',
+        '.requested_reviewers[]? | select(.login == "portyu9")',
+    ):
+        require(forbidden not in autofix,
+                f"CodeQL Autofix constructive path consumes untyped mutation response: {forbidden}")
+
+    ref_post = autofix.index('gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs"')
+    ref_validate = autofix.index(created_ref, ref_post)
+    ref_consume = autofix.index('created-ref-normalized.json', ref_validate)
+    autofix_commit = autofix.index(
+        '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"',
+        ref_consume,
+    )
+    pr_create = autofix.index('gh api -X POST "repos/${TARGET_REPOSITORY}/pulls"', autofix_commit)
+    receipt = autofix.index("python3 scripts/codeql_autofix_controller.py receipt", pr_create)
+    reviewer_post = autofix.index(
+        'repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers',
+        receipt,
+    )
+    reviewer_validate = autofix.index(reviewer, reviewer_post)
+    reviewer_consume = autofix.index('requested-reviewer-normalized.json', reviewer_validate)
+    require(
+        ref_post < ref_validate < ref_consume < autofix_commit < pr_create < receipt
+        < reviewer_post < reviewer_validate < reviewer_consume,
+        "CodeQL Autofix constructive response schema ordering changed",
+    )
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_run_check_evidence_schema(bot_review)
@@ -1845,6 +1900,7 @@ def main() -> int:
         autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
+        validate_codeql_autofix_constructive_response_schemas(autofix)
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
         validate_spotlight_event_admission(spotlight, capability)
         validate_spotlight_same_base_supersession(spotlight)
@@ -1864,7 +1920,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
