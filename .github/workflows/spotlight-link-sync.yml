@@ -1278,9 +1278,9 @@ jobs:
 
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
           RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"
-          test "$(jq -r .merged <<<"$RESULT")" = "true"
-          MERGE_SHA="$(jq -r .sha <<<"$RESULT")"
-          test "$MERGE_SHA" != "null"
+          MERGE_SUCCESS_FILTER='if type != "object" then error("Spotlight merge response must be an object") elif (.merged | type) != "boolean" or .merged != true then error("Spotlight merge response must contain literal merged=true") elif (.sha | type) != "string" or (.sha | test("^[0-9a-f]{40}$") | not) then error("Spotlight merge response sha must be lowercase SHA-40") elif (.message | type) != "string" or (.message | length) == 0 then error("Spotlight merge response message must be nonempty") else {merged:true,sha:.sha,message:.message} end'
+          VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"
+          MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"
           echo "Spotlight terminal stage: expected-head-merge-succeeded" >&2
           MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .merged <<<"$MERGED_PR")" = "true"
