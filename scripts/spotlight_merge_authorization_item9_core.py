@@ -104,6 +104,86 @@ def validate_reconciliation(reconcile: str) -> None:
         require(normalized in reconcile,
                 f"Spotlight reconciler lost a stale-only/topology proof: {normalized}")
 
+    refs_call_marker = (
+        'REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}")"'
+    )
+    refs_schema_marker = '(all(.[]; (type == "object") and'
+    refs_consume_marker = 'REF_COUNT="$(jq \'length\' <<<"$REFS")"'
+    commit_call_marker = 'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    commit_schema_marker = 'jq -e --arg head "$HEAD_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL"'
+    commit_consume_marker = 'PARENT_SHA="$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")"'
+    compare_call_marker = 'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"'
+    compare_schema_marker = 'jq -e --arg parent "$PARENT_SHA" --arg head "$HEAD_SHA"'
+    compare_consume_marker = 'test "$(jq -r .status <<<"$COMPARE")" = "ahead"'
+
+    for marker in (
+        refs_call_marker, refs_schema_marker, refs_consume_marker,
+        commit_call_marker, commit_schema_marker, commit_consume_marker,
+        compare_call_marker, compare_schema_marker, compare_consume_marker,
+    ):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight reconciler stale-topology evidence schema anchor is missing or ambiguous: {marker}")
+
+    refs_call = reconcile.index(refs_call_marker)
+    refs_schema = reconcile.index(refs_schema_marker, refs_call)
+    refs_consume = reconcile.index(refs_consume_marker, refs_schema)
+    commit_call = reconcile.index(commit_call_marker, refs_consume)
+    commit_schema = reconcile.index(commit_schema_marker, commit_call)
+    commit_consume = reconcile.index(commit_consume_marker, commit_schema)
+    compare_call = reconcile.index(compare_call_marker, commit_consume)
+    compare_schema = reconcile.index(compare_schema_marker, compare_call)
+    compare_consume = reconcile.index(compare_consume_marker, compare_schema)
+
+    refs_block = reconcile[refs_call:refs_consume]
+    for fragment in (
+        '(type == "array") and',
+        '(length <= 20) and',
+        '(.ref | type == "string" and test("^refs/heads/automation/spotlight-links/[0-9a-f]{64}$")) and',
+        '(.object | type == "object" and',
+        '(.type | type == "string" and . == "commit") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
+    ):
+        require(fragment in refs_block,
+                f"Spotlight reconciler stale-topology refs schema is missing: {fragment}")
+
+    commit_block = reconcile[commit_call:commit_consume]
+    for fragment in (
+        '(.sha | type == "string" and . == $head) and',
+        '(.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and',
+        '(.parents | type == "array" and length == 1 and',
+        '(.author | type == "object" and .name == $name and .email == $email) and',
+        '(.committer | type == "object" and .name == $name and .email == $email and',
+        '(.date | type == "string" and length > 0)) and',
+        '(.message == "chore: sync rotating Spotlight links")',
+    ):
+        require(fragment in commit_block,
+                f"Spotlight reconciler stale-topology commit schema is missing: {fragment}")
+
+    compare_block = reconcile[compare_call:compare_consume]
+    for fragment in (
+        '(.status == "ahead") and',
+        '(.base_commit | type == "object" and .sha == $parent) and',
+        '(.merge_base_commit | type == "object" and .sha == $parent) and',
+        '(.ahead_by | type == "number" and . == floor and . == 1) and',
+        '(.behind_by | type == "number" and . == floor and . == 0) and',
+        '(.total_commits | type == "number" and . == floor and . == 1) and',
+        '(.commits | type == "array" and length == 1 and',
+        '(.filename | type == "string" and . == "README.md") and',
+        '(.status | type == "string" and . == "modified") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.additions | type == "number" and . == floor and . >= 0) and',
+        '(.deletions | type == "number" and . == floor and . >= 0) and',
+        '(.changes | type == "number" and . == floor and . >= 0)',
+    ):
+        require(fragment in compare_block,
+                f"Spotlight reconciler stale-topology compare schema is missing: {fragment}")
+
+    require(
+        refs_call < refs_schema < refs_consume < commit_call < commit_schema < commit_consume
+        < compare_call < compare_schema < compare_consume,
+        "Spotlight reconciler stale-topology evidence schema must validate before downstream consumption",
+    )
+
     close_call_marker = (
         'CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
     )
@@ -547,6 +627,30 @@ def self_test(sync: str, stats: str, policy: str) -> None:
     reconcile_end = sync.index("  budget:\n", reconcile_start)
     reconcile = sync[reconcile_start:reconcile_end]
     for old, new in (
+        ('            (type == "array") and\n            (length <= 20) and',
+         '            (type == "object") and\n            (length <= 20) and'),
+        ('              (.ref | type == "string" and test("^refs/heads/automation/spotlight-links/[0-9a-f]{64}$")) and',
+         '              (.ref | type == "string") and'),
+        ('            jq -e --arg head "$HEAD_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \'',
+         '            jq -n --arg head "$HEAD_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \''),
+        ('              (.parents | type == "array" and length == 1 and',
+         '              (.parents | type == "array" and length >= 1 and'),
+        ('                (.date | type == "string" and length > 0)) and',
+         '                (.date | type == "number")) and'),
+        ('            jq -e --arg parent "$PARENT_SHA" --arg head "$HEAD_SHA" \'',
+         '            jq -n --arg parent "$PARENT_SHA" --arg head "$HEAD_SHA" \''),
+        ('              (.commits | type == "array" and length == 1 and',
+         '              (.commits | type == "array" and length >= 1 and'),
+        ('                  (.status | type == "string" and . == "modified") and',
+         '                  (.status | type == "string") and'),
+    ):
+        require(reconcile.count(old) == 1,
+                f"Spotlight stale-topology evidence self-test anchor is missing or ambiguous: {old}")
+        mutated_reconcile = reconcile.replace(old, new, 1)
+        mutated = sync[:reconcile_start] + mutated_reconcile + sync[reconcile_end:]
+        expect_failure(mutated, stats, policy, "stale-topology")
+
+    for old, new in (
         ('                ((type) == "object") and',
          '                ((type) == "array") and'),
         ('                (.number | type == "number" and . == floor and . == $pr) and',
@@ -581,6 +685,9 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         sync.replace(CANDIDATE_FORMULA_PROPOSE, 'CANDIDATE_ID="$README_SHA256_AFTER"', 1),
         stats, policy, "lost exact main/generated/README content addressing",
     )
+    propose_start = sync.index("  propose:\n")
+    propose_end = sync.index("  approve:\n", propose_start)
+    propose = sync[propose_start:propose_end]
     for old, new, expected in (
         (
             '              (.url | type == "string" and length > 0)\n            \' <<<"$BLOB" >/dev/null',
@@ -613,8 +720,11 @@ def self_test(sync: str, stats: str, policy: str) -> None:
             "pull-create response schema",
         ),
     ):
-        require(old in sync, f"Spotlight proposal response-schema self-test anchor changed: {old}")
-        expect_failure(sync.replace(old, new, 1), stats, policy, expected)
+        require(propose.count(old) == 1,
+                f"Spotlight proposal response-schema self-test anchor is missing or ambiguous inside propose job: {old}")
+        mutated_propose = propose.replace(old, new, 1)
+        mutated = sync[:propose_start] + mutated_propose + sync[propose_end:]
+        expect_failure(mutated, stats, policy, expected)
     expect_failure(
         sync.replace(
             'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"',
