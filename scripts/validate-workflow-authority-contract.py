@@ -256,6 +256,80 @@ def project_native_review_gate_to_legacy_order(sync: str) -> str:
     return projected
 
 
+
+def project_ancestry_reconcile_to_same_base(sync: str) -> str:
+    """Validate the ancestry-read overlay, then project it to accepted #910 authority."""
+    counter = '          ANCESTRY_PROVEN_STALE=0\n'
+    core.require(sync.count(counter) == 1,
+                 "Spotlight authority projection cannot isolate ancestry stale counter")
+    sync = sync.replace(counter, "", 1)
+
+    start_marker = '            SAME_BASE_SUPERSEDED=false\n'
+    end_marker = '            COMMITTER_DATE="$(jq -r .committer.date <<<"$CANDIDATE_COMMIT")"\n'
+    core.require(sync.count(start_marker) == 1 and sync.count(end_marker) == 1,
+                 "Spotlight authority projection cannot isolate ancestry classification")
+    start = sync.index(start_marker)
+    end = sync.index(end_marker, start)
+    block = sync[start:end]
+    for fragment in (
+        '            ANCESTRY_PROVEN_SUPERSEDED=false\n',
+        '              ANCESTRY_COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}")"\n',
+        '              jq -e --arg parent "$PARENT_SHA" --arg base "$BASE_SHA" \'\n',
+        '                ANCESTRY_PROVEN_SUPERSEDED=true\n',
+    ):
+        core.require(fragment in block,
+                     f"Spotlight authority ancestry overlay lost reviewed fragment: {fragment}")
+    core.require(block.count('gh api ') == 1 and '--method ' not in block,
+                 "Spotlight ancestry overlay must add exactly one read-only gh api surface")
+    accepted = (
+        '            SAME_BASE_SUPERSEDED=false\n'
+        '            if [ "$PARENT_SHA" = "$BASE_SHA" ]; then\n'
+        '              SAME_BASE_SUPERSEDED=true\n'
+        '            fi\n\n'
+    )
+    sync = sync[:start] + accepted + sync[end:]
+
+    current_guard = (
+        'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] &&\n'
+        '               [ "$SAME_BASE_SUPERSEDED" != "true" ] &&\n'
+        '               [ "$ANCESTRY_PROVEN_SUPERSEDED" != "true" ]; then'
+    )
+    accepted_guard = (
+        'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && '
+        '[ "$SAME_BASE_SUPERSEDED" != "true" ]; then'
+    )
+    core.require(sync.count(current_guard) == 1,
+                 "Spotlight authority projection cannot isolate ancestry age guard")
+    sync = sync.replace(current_guard, accepted_guard, 1)
+
+    cleanup = (
+        '            if [ "$ANCESTRY_PROVEN_SUPERSEDED" = "true" ]; then\n'
+        '              ANCESTRY_PROVEN_STALE=$((ANCESTRY_PROVEN_STALE + 1))\n'
+        '            fi\n'
+    )
+    core.require(sync.count(cleanup) == 1,
+                 "Spotlight authority projection cannot isolate ancestry cleanup counter")
+    sync = sync.replace(cleanup, "", 1)
+
+    summary = (
+        '            echo "- ancestry-proven old-base candidates cleaned immediately: '
+        '**$ANCESTRY_PROVEN_STALE**"\n'
+    )
+    young = (
+        '            echo "- unproven/divergent candidates below 30-minute stale floor preserved: '
+        '**$PRESERVED_YOUNG**"\n'
+    )
+    accepted_young = (
+        '            echo "- different-base candidates below 30-minute stale floor preserved: '
+        '**$PRESERVED_YOUNG**"\n'
+    )
+    core.require(sync.count(summary) == 1 and sync.count(young) == 1,
+                 "Spotlight authority projection cannot isolate ancestry summary")
+    sync = sync.replace(summary, "", 1)
+    sync = sync.replace(young, accepted_young, 1)
+    return sync
+
+
 def project_item9_sync_with_marker(sync: str) -> str:
     reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
     reviewer_marker = 'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.'
@@ -270,6 +344,7 @@ def project_item9_sync_with_marker(sync: str) -> str:
         "Spotlight reviewer wake must stay after trusted admission dispatch and before whole-workflow convergence",
     )
 
+    sync = project_ancestry_reconcile_to_same_base(sync)
     sync = project_native_review_gate_to_legacy_order(sync)
     projected = ORIGINAL_PROJECT_ITEM9_SYNC(sync)
     if projected.count(SPOTLIGHT_REVIEWER_STEWARDSHIP) != 1:
