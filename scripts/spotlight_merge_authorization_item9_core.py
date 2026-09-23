@@ -551,6 +551,13 @@ def validate_candidate_publication(sync: str) -> None:
     candidate_content = propose.index(candidate_content_marker)
     topology_ref_publish = propose.index(topology_ref_publish_marker)
 
+    require(
+        topology_commit_call < topology_commit_schema < topology_commit_consume
+        < topology_compare_call < topology_compare_schema < topology_compare_consume
+        < candidate_content < topology_ref_publish,
+        "Spotlight proposer candidate-topology evidence must validate before content proof/ref publication",
+    )
+
     topology_commit_block = propose[topology_commit_call:topology_commit_consume]
     for fragment in (
         '(type == "object") and',
@@ -587,13 +594,6 @@ def validate_candidate_publication(sync: str) -> None:
     ):
         require(fragment in topology_compare_block,
                 f"Spotlight proposer candidate-compare readback schema is missing: {fragment}")
-
-    require(
-        topology_commit_call < topology_commit_schema < topology_commit_consume
-        < topology_compare_call < topology_compare_schema < topology_compare_consume
-        < candidate_content < topology_ref_publish,
-        "Spotlight proposer candidate-topology evidence must validate before content proof/ref publication",
-    )
 
     for fragment in (
         'test "$(jq \' .parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"',
