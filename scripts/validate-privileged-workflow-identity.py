@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v68"
+VERSION = "governed-workflow-byte-identity-v69"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "a8c559e327798740951bbe4c6b61a2d082f81803",
+    ".github/workflows/spotlight-link-sync.yml": "0a2080e456ee9ed651698871c94b4b25dbdfd0df",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -623,7 +623,76 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     commit_call = propose.index('CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"', tree_consume)
     commit_schema = propose.index('jq -e --arg tree "$CANDIDATE_TREE_SHA"', commit_call)
     commit_consume = propose.index('HEAD_SHA="$(jq -r .sha <<<"$CANDIDATE_COMMIT")"', commit_schema)
-    ref_call = propose.index('CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"', commit_consume)
+
+    topology_commit_call_marker = (
+        'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    )
+    topology_commit_schema_marker = (
+        'jq -e --arg head "$HEAD_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL"'
+    )
+    topology_commit_consume_marker = 'test "$(jq \' .parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"'.replace("' .parents", "'.parents")
+    topology_compare_call_marker = (
+        'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"'
+    )
+    topology_compare_schema_marker = 'jq -e --arg source "$SOURCE_SHA" --arg head "$HEAD_SHA"'
+    topology_compare_consume_marker = 'test "$(jq -r .status <<<"$COMPARE")" = "ahead"'
+    candidate_content_marker = (
+        'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content'
+    )
+    for marker in (
+        topology_commit_call_marker, topology_commit_schema_marker, topology_commit_consume_marker,
+        topology_compare_call_marker, topology_compare_schema_marker, topology_compare_consume_marker,
+        candidate_content_marker,
+    ):
+        require(propose.count(marker) == 1,
+                f"Spotlight proposer candidate-topology contract anchor is missing or ambiguous: {marker}")
+
+    topology_commit_call = propose.index(topology_commit_call_marker)
+    topology_commit_schema = propose.index(topology_commit_schema_marker)
+    topology_commit_consume = propose.index(topology_commit_consume_marker)
+    topology_compare_call = propose.index(topology_compare_call_marker)
+    topology_compare_schema = propose.index(topology_compare_schema_marker)
+    topology_compare_consume = propose.index(topology_compare_consume_marker)
+    candidate_content = propose.index(candidate_content_marker)
+
+    topology_commit_block = propose[topology_commit_call:topology_commit_consume]
+    for fragment in (
+        '(type == "object") and',
+        '(.sha | type == "string" and . == $head) and',
+        '(.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and',
+        '(.parents | type == "array" and length == 1 and',
+        '(.[0] | type == "object" and .sha == $parent)) and',
+        '(.author | type == "object" and .name == $name and .email == $email) and',
+        '(.committer | type == "object" and .name == $name and .email == $email and',
+        '(.date | type == "string" and length > 0)) and',
+        '(.message == "chore: sync rotating Spotlight links")',
+    ):
+        require(fragment in topology_commit_block,
+                f"Spotlight proposer candidate-commit readback contract is missing: {fragment}")
+
+    topology_compare_block = propose[topology_compare_call:topology_compare_consume]
+    for fragment in (
+        '(type == "object") and',
+        '(.status == "ahead") and',
+        '(.base_commit | type == "object" and .sha == $source) and',
+        '(.merge_base_commit | type == "object" and .sha == $source) and',
+        '(.ahead_by | type == "number" and . == floor and . == 1) and',
+        '(.behind_by | type == "number" and . == floor and . == 0) and',
+        '(.total_commits | type == "number" and . == floor and . == 1) and',
+        '(.commits | type == "array" and length == 1 and',
+        '(.[0] | type == "object" and .sha == $head)) and',
+        '(.files | type == "array" and length == 1 and',
+        '(.filename | type == "string" and . == "README.md") and',
+        '(.status | type == "string" and . == "modified") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.additions | type == "number" and . == floor and . >= 0) and',
+        '(.deletions | type == "number" and . == floor and . >= 0) and',
+        '(.changes | type == "number" and . == floor and . >= 0)',
+    ):
+        require(fragment in topology_compare_block,
+                f"Spotlight proposer candidate-compare readback contract is missing: {fragment}")
+
+    ref_call = propose.index('CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"', candidate_content)
     ref_schema = propose.index('jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA"', ref_call)
     ref_consume = propose.index('test "$(jq -r .ref <<<"$CREATED_REF")"', ref_schema)
     pr_call = propose.index('gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json', ref_consume)
@@ -632,8 +701,10 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     require(
         blob_call < blob_schema < blob_consume < base_call < base_schema < base_consume
         < tree_call < tree_schema < tree_consume < commit_call < commit_schema < commit_consume
-        < ref_call < ref_schema < ref_consume < pr_call < pr_schema < pr_consume,
-        "Spotlight proposal mutation response validation must precede each downstream field consumption",
+        < topology_commit_call < topology_commit_schema < topology_commit_consume
+        < topology_compare_call < topology_compare_schema < topology_compare_consume
+        < candidate_content < ref_call < ref_schema < ref_consume < pr_call < pr_schema < pr_consume,
+        "Spotlight proposal mutation/readback validation must precede each downstream publication field consumption",
     )
 
     merge = job_block(legacy, "merge", None)
