@@ -247,6 +247,7 @@ def validate_candidate_publication(sync: str) -> None:
             'PR_NUMBER="$(jq -r .number pr-response.json)"',
             (
                 'jq -e --arg title "chore: sync rotating Spotlight links"',
+                '((type) == "object") and',
                 '(.number | type == "number" and . == floor and . > 0) and',
                 '(.user | type == "object" and .login == "github-actions[bot]") and',
                 '(.draft | type == "boolean" and . == false) and',
