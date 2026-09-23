@@ -348,6 +348,17 @@ def validate_commit_response(value: Any, branch: str) -> dict[str, Any]:
     return {"targetRef": expected_ref, "headSha": sha(value.get("sha"), "Autofix commit SHA")}
 
 
+def validate_merge_success_response(value: Any) -> dict[str, Any]:
+    require(isinstance(value, Mapping), "Autofix merge success response must be an object")
+    require(type(value.get("merged")) is bool, "Autofix merge success response merged must be a boolean")
+    require(value.get("merged") is True, "Autofix merge success response did not report merged=true")
+    merge_sha = sha(value.get("sha"), "Autofix merge success response sha")
+    message = value.get("message")
+    require(isinstance(message, str) and bool(message.strip()),
+            "Autofix merge success response message must be a non-empty string")
+    return {"merged": True, "sha": merge_sha, "message": message}
+
+
 def validate_compare(value: Any, base_sha: str, head_sha: str) -> dict[str, Any]:
     base_sha = sha(base_sha, "compare base SHA")
     head_sha = sha(head_sha, "compare head SHA")
@@ -946,6 +957,31 @@ def self_test() -> None:
         else:
             require(False, f"matching-ref self-test accepted forbidden mutation expected to trigger: {expected}")
 
+    merge_success = {"merged": True, "sha": head, "message": "Pull Request successfully merged"}
+    require(
+        validate_merge_success_response(merge_success)
+        == {"merged": True, "sha": head, "message": "Pull Request successfully merged"},
+        "Autofix merge-success response positive fixture changed",
+    )
+    merge_success_mutations = (
+        ([], "must be an object"),
+        ({"merged": "true", "sha": head, "message": "merged"}, "merged must be a boolean"),
+        ({"merged": 1, "sha": head, "message": "merged"}, "merged must be a boolean"),
+        ({"merged": False, "sha": head, "message": "not merged"}, "did not report merged=true"),
+        ({"merged": True, "sha": "BAD", "message": "merged"}, "lowercase SHA-40"),
+        ({"merged": True, "message": "merged"}, "lowercase SHA-40"),
+        ({"merged": True, "sha": head}, "message must be a non-empty string"),
+        ({"merged": True, "sha": head, "message": 7}, "message must be a non-empty string"),
+        ({"merged": True, "sha": head, "message": "   "}, "message must be a non-empty string"),
+    )
+    for mutated, expected in merge_success_mutations:
+        try:
+            validate_merge_success_response(mutated)
+        except ControllerError as exc:
+            require(expected in str(exc), f"merge-success response self-test failed for the wrong reason: {exc}")
+        else:
+            require(False, f"merge-success response self-test accepted forbidden mutation expected to trigger: {expected}")
+
     compare = {
         "base_commit": {"sha": base},
         "merge_base_commit": {"sha": base},
@@ -1029,6 +1065,10 @@ def main() -> int:
     p.add_argument("--head-sha", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("merge-success-response")
+    p.add_argument("--response-file", required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("followup-select")
     p.add_argument("--before-file", required=True)
     p.add_argument("--after-file", required=True)
@@ -1090,6 +1130,8 @@ def main() -> int:
         dump(args.out, validate_commit_response(load(args.response_file), args.branch))
     elif args.command == "compare":
         dump(args.out, validate_compare(load(args.compare_file), args.base_sha, args.head_sha))
+    elif args.command == "merge-success-response":
+        dump(args.out, validate_merge_success_response(load(args.response_file)))
     elif args.command == "followup-select":
         dump(args.out, select_new_codeql_dispatch_run(load(args.before_file), load(args.after_file), args.expected_sha))
     elif args.command == "followup-run":

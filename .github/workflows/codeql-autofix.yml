@@ -602,8 +602,10 @@ jobs:
             -f commit_title="CodeQL Autofix alert #${ALERT_NUMBER}" \
             -f commit_message="Trusted CodeQL Autofix merged after exact-head admission and Protect Main enforcement." \
             > merge.json
-          test "$(jq -r .merged merge.json)" = "true"
-          MERGE_SHA="$(jq -r .sha merge.json)"
+          python3 scripts/codeql_autofix_controller.py merge-success-response \
+            --response-file merge.json \
+            --out merge-success-normalized.json
+          MERGE_SHA="$(jq -r .sha merge-success-normalized.json)"
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
           assert_main_is_merge_sha() {
