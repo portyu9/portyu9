@@ -508,6 +508,13 @@
       "rationale": "Authorize #565's GitHub-native real-user bot PR approval workflow. The workflow is event-driven, read-only with GITHUB_TOKEN, executes no candidate code, independently binds recognized bot identity/current main/exact head/required checks/quiescence/unresolved threads, and uses the isolated portyu9-review-identity credential only for the final exact-head APPROVE review. Missing credential fails closed by no-op."
     },
     {
+      "id": "cap-governed-review-liveness-transient-read-v1",
+      "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "expansionSha256": "f7c4b2d408c729ef2cad41d9f7539b0b1231402095512d3a5a1c129a3128a107",
+      "rationale": "Authorize frozen #897 governed-review liveness hardening. Workflow Capability is unchanged. Spotlight moves the existing reviewer dispatch after trusted admission and before whole-workflow convergence, once per pass. The native evaluator adds only bounded read-only GitHub GET retries for classified transient failures. Auth, malformed, schema, policy, veto, and all mutation failures remain terminal. No new permission, trigger, endpoint class, merge/ruleset authority, check reduction, or bypass."
+    },
+    {
       "id": "cap-native-governed-bot-review-check",
       "baseBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
       "candidateBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
