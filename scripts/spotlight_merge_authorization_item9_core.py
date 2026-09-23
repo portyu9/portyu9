@@ -1001,7 +1001,10 @@ def self_test(sync: str, stats: str, policy: str) -> None:
     budget_end = sync.index("  quarantine:\n", budget_start)
     budget = sync[budget_start:budget_end]
     for old, new in (
-        ('            (type == "object") and', '            (type == "array") and'),
+        ('            (type == "object") and\n'
+         '            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+         '            (type == "array") and\n'
+         '            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and'),
         ('            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
          '            (.total_count | type == "string") and'),
         ('            (.artifacts | type == "array") and',
