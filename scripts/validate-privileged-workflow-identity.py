@@ -8,15 +8,15 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v72"
+VERSION = "governed-workflow-byte-identity-v73"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "79db5edce3977c104aaff105bdf8e12105bbaba2",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "4f3333733312135d2254a19b830a4840ab9e852f",
+    ".github/workflows/spotlight-link-sync.yml": "6c486d2c3e58eb44441644797382e74c8afb108b",
 }
 
-TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
+TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
 ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
 SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB = "be08b177e329343ff547b66c742e221d9cf9afed"
 
@@ -956,6 +956,17 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         'non-final review page is incomplete',
         'mode.add_argument("--validate-review-pages", action="store_true")',
         'reviews = validate_review_entries(reviews)',
+        'READ_ATTEMPTS = 3',
+        'READ_TIMEOUT_SECONDS = 20',
+        'READ_BACKOFF_SECONDS = (1.0, 2.0)',
+        'READ_MAX_RETRY_AFTER_SECONDS = 5.0',
+        'READ_RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})',
+        'def retryable_read_http_error(exc: urllib.error.HTTPError) -> bool:',
+        'headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After"))',
+        'for attempt in range(READ_ATTEMPTS):',
+        'attempt + 1 >= READ_ATTEMPTS or not retryable_read_http_error(exc)',
+        'except (urllib.error.URLError, TimeoutError, ConnectionResetError) as exc:',
+        'raise GateError("GitHub API GET returned malformed JSON")',
     ):
         require(fragment in evaluator, f"trusted governed-bot review evaluator contract is missing: {fragment}")
     for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"', "subprocess"):
@@ -1491,15 +1502,25 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'CERTIFIED_TRUSTED_DETAILS_URL="$(jq -r \'.trustedAdmission.checkRun.detailsUrl\' "$CERTIFICATE")"',
         'test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"',
         'actions/workflows/bot-pr-user-approval.yml/dispatches',
-        'Dispatched exact post-check portyu9 review evaluation from trusted main.',
+        'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.',
         'for REVIEW_ATTEMPT in $(seq 1 24); do',
-        'exact-base/head portyu9 review did not materialize after the post-check dispatch.',
+        'exact-base/head portyu9 review did not materialize after the pre-convergence dispatch.',
         'Observed exact-base/head marker-bound portyu9 approval before merge authorization.',
         'Spotlight terminal stage: trusted-admission-live-reproof-verified',
         'jq -e --arg body "$APPROVAL_BODY" \'.body == $body\' approval-comment.json >/dev/null',
     )
     for fragment in spotlight_fragments:
         require(fragment in spotlight, f"Spotlight event-driven admission proof contract is missing: {fragment}")
+
+    capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
+    reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
+    convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do'
+    require(spotlight.count(reviewer_dispatch) == 1,
+            "Spotlight must dispatch exactly one trusted reviewer pass per approve run")
+    require(
+        spotlight.index(capability_dispatch) < spotlight.index(reviewer_dispatch) < spotlight.index(convergence_start),
+        "Spotlight trusted reviewer dispatch must occur after admission dispatch and before whole-workflow convergence",
+    )
     require('grep -Fxc "$APPROVAL_BODY"' not in spotlight,
             "Spotlight approval comment verification must compare the complete multiline body atomically")
 
@@ -1574,7 +1595,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch/proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0

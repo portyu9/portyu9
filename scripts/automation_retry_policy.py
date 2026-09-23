@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / ".github/automation-retry-policy-v1.json"
 WORKFLOWS = ROOT / ".github/workflows"
 PINNED_GENERATOR = "shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0"
+GOVERNED_REVIEW_GATE = ROOT / "scripts/governed_bot_review_gate.py"
 
 SEQ_LOOP = re.compile(
     r"^\s*for\s+(?P<variable>[A-Za-z_][A-Za-z0-9_]*)\s+in\s+\$\(seq\s+1\s+(?P<maximum>[1-9][0-9]*)\);\s*do\s*$"
@@ -25,6 +26,7 @@ MUTATION = re.compile(
     r"--method\s+(?:POST|PUT|PATCH|DELETE)\b|\bgh\s+pr\s+(?:merge|review)\b|\bgit\s+push\b"
 )
 
+EXPECTED_AUTOMATIC_RETRY_IDS = {"governed-bot-review-read-transient"}
 EXPECTED_TERMINAL_IDS = {
     "profile-quality-live-generator-fallback",
     "dependabot-live-generator-validation",
@@ -267,13 +269,62 @@ def validate_reentry(policy: dict[str, Any], texts: dict[str, str]) -> None:
                 f"trusted re-entry semantics must explicitly deny retry carry-over: {item.get('id')}")
 
 
+def validate_automatic_retries(policy: dict[str, Any]) -> None:
+    entries = policy.get("automaticRetries")
+    require(isinstance(entries, list), "retry policy automaticRetries must be an array")
+    require(
+        {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
+        "automatic retry identities changed",
+    )
+    require(len(entries) == 1 and isinstance(entries[0], dict),
+            "retry policy must authorize exactly one classified automatic retry")
+    item = entries[0]
+    require(item.get("source") == "scripts/governed_bot_review_gate.py",
+            "automatic retry source changed")
+    require(item.get("operation") == "read-only-github-api-get",
+            "automatic retry operation must remain read-only GitHub GET")
+    require(item.get("failureClassifier") == "transport-or-github-transient-v1",
+            "automatic retry transient classifier changed")
+    require(item.get("maxAttempts") == 3 and item.get("timeoutSeconds") == 20,
+            "automatic retry attempt/timeout budget changed")
+    require(item.get("backoffSeconds") == [1.0, 2.0],
+            "automatic retry deterministic backoff changed")
+    require(item.get("retryableHttpStatus") == [408, 429, 500, 502, 503, 504],
+            "automatic retry HTTP status allowlist changed")
+    require(item.get("rateLimited403") is True and item.get("retryAfterCapSeconds") == 5.0,
+            "automatic retry GitHub rate-limit classifier changed")
+    require(item.get("mutationRetry") is False,
+            "automatic retry must never authorize mutation replay")
+    require(isinstance(item.get("rationale"), str) and "read-only" in item["rationale"],
+            "automatic retry rationale must preserve read-only scope")
+
+    gate = GOVERNED_REVIEW_GATE.read_text(encoding="utf-8")
+    for fragment in (
+        "READ_ATTEMPTS = 3",
+        "READ_TIMEOUT_SECONDS = 20",
+        "READ_BACKOFF_SECONDS = (1.0, 2.0)",
+        "READ_MAX_RETRY_AFTER_SECONDS = 5.0",
+        "READ_RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})",
+        "def retryable_read_http_error(exc: urllib.error.HTTPError) -> bool:",
+        'headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After"))',
+        "for attempt in range(READ_ATTEMPTS):",
+        'method="GET"',
+        "attempt + 1 >= READ_ATTEMPTS or not retryable_read_http_error(exc)",
+        "except (urllib.error.URLError, TimeoutError, ConnectionResetError) as exc:",
+        "except (json.JSONDecodeError, UnicodeDecodeError) as exc:",
+    ):
+        require(fragment in gate, f"classified review-gate read retry contract is missing: {fragment}")
+    for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
+        require(forbidden not in gate,
+                f"review-gate automatic retry source acquired mutation method: {forbidden}")
+
+
 def validate(policy: dict[str, Any], texts: dict[str, str]) -> None:
     require(isinstance(policy, dict) and set(policy) == {
         "schemaVersion", "automaticRetries", "terminalOperations", "boundedObservation", "trustedReentry"
     }, "retry policy top-level shape changed")
     require(policy.get("schemaVersion") == 1, "retry policy schemaVersion changed")
-    require(policy.get("automaticRetries") == [],
-            "automatic operation retries require a future reviewed transient classifier; none are authorized today")
+    validate_automatic_retries(policy)
     validate_terminal_operations(policy, texts)
     validate_bounded_observation(policy, texts)
     validate_reentry(policy, texts)
@@ -290,8 +341,12 @@ def expect_failure(policy: dict[str, Any], texts: dict[str, str], expected: str)
 
 def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     unauthorized = copy.deepcopy(policy)
-    unauthorized["automaticRetries"] = [{"id": "unreviewed"}]
-    expect_failure(unauthorized, dict(texts), "none are authorized today")
+    unauthorized["automaticRetries"].append({"id": "unreviewed"})
+    expect_failure(unauthorized, dict(texts), "automatic retry identities changed")
+
+    retry_budget_drift = copy.deepcopy(policy)
+    retry_budget_drift["automaticRetries"][0]["maxAttempts"] = 4
+    expect_failure(retry_budget_drift, dict(texts), "attempt/timeout budget changed")
 
     profile_drift = dict(texts)
     profile_drift[".github/workflows/profile-quality.yml"] = profile_drift[
@@ -326,7 +381,7 @@ def validate_repository(root: Path = ROOT) -> None:
 if __name__ == "__main__":
     validate_repository()
     print(
-        "Automation retry taxonomy validation passed: no automatic operation retries are authorized; "
-        "unclassified generator/ruleset failures are terminal; all 17 bounded seq loops are declared "
+        "Automation retry taxonomy validation passed: exactly one classified read-only GitHub retry is authorized; "
+        "unclassified generator/ruleset and mutation failures remain terminal; all 17 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )

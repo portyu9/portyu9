@@ -15,7 +15,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any
+from typing import Any, Callable
 
 REPOSITORY = "portyu9/portyu9"
 REVIEW_LOGIN = "portyu9"
@@ -26,6 +26,11 @@ MAX_REVIEW_PAGES = 20
 REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"})
 POLL_ATTEMPTS = 216
 POLL_SECONDS = 5
+READ_ATTEMPTS = 3
+READ_TIMEOUT_SECONDS = 20
+READ_BACKOFF_SECONDS = (1.0, 2.0)
+READ_MAX_RETRY_AFTER_SECONDS = 5.0
+READ_RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DEPENDABOT_REF_RE = re.compile(r"^dependabot/github_actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$")
@@ -154,31 +159,68 @@ def review_decision(reviews: list[Any], base_sha: str, head_sha: str) -> str:
     return "approved"
 
 
+def retryable_read_http_error(exc: urllib.error.HTTPError) -> bool:
+    if exc.code in READ_RETRYABLE_HTTP_STATUS:
+        return True
+    if exc.code != 403:
+        return False
+    headers = exc.headers or {}
+    return headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After"))
+
+
+def read_retry_delay_seconds(exc: BaseException, failure_index: int) -> float:
+    default = READ_BACKOFF_SECONDS[min(failure_index, len(READ_BACKOFF_SECONDS) - 1)]
+    if not isinstance(exc, urllib.error.HTTPError) or not exc.headers:
+        return default
+    raw = str(exc.headers.get("Retry-After") or "").strip()
+    try:
+        requested = float(raw)
+    except ValueError:
+        return default
+    return max(0.0, min(requested, READ_MAX_RETRY_AFTER_SECONDS))
+
+
 class GitHubApi:
-    def __init__(self, token: str) -> None:
+    def __init__(
+        self,
+        token: str,
+        *,
+        opener: Callable[..., Any] = urllib.request.urlopen,
+        sleeper: Callable[[float], None] = time.sleep,
+    ) -> None:
         require(bool(token), "GITHUB_TOKEN is required")
         self._token = token
+        self._opener = opener
+        self._sleeper = sleeper
 
     def _open(self, path: str) -> tuple[Any, Any]:
         require(path.startswith("/repos/portyu9/portyu9/"), "unexpected GitHub API path")
-        request = urllib.request.Request(
-            API_ORIGIN + path,
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {self._token}",
-                "X-GitHub-Api-Version": API_VERSION,
-                "User-Agent": "portyu9-governed-bot-review-gate",
-            },
-            method="GET",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=20) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-                return payload, response.headers
-        except urllib.error.HTTPError as exc:
-            raise GateError(f"GitHub API GET failed with HTTP {exc.code}") from exc
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise GateError("GitHub API GET failed or returned malformed JSON") from exc
+        for attempt in range(READ_ATTEMPTS):
+            request = urllib.request.Request(
+                API_ORIGIN + path,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "Authorization": f"Bearer {self._token}",
+                    "X-GitHub-Api-Version": API_VERSION,
+                    "User-Agent": "portyu9-governed-bot-review-gate",
+                },
+                method="GET",
+            )
+            try:
+                with self._opener(request, timeout=READ_TIMEOUT_SECONDS) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                    return payload, response.headers
+            except urllib.error.HTTPError as exc:
+                if attempt + 1 >= READ_ATTEMPTS or not retryable_read_http_error(exc):
+                    raise GateError(f"GitHub API GET failed with HTTP {exc.code}") from exc
+                self._sleeper(read_retry_delay_seconds(exc, attempt))
+            except (urllib.error.URLError, TimeoutError, ConnectionResetError) as exc:
+                if attempt + 1 >= READ_ATTEMPTS:
+                    raise GateError("GitHub API GET exhausted transient transport retry budget") from exc
+                self._sleeper(read_retry_delay_seconds(exc, attempt))
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise GateError("GitHub API GET returned malformed JSON") from exc
+        raise GateError("unreachable GitHub API GET retry state")
 
     def get(self, path: str) -> Any:
         payload, _ = self._open(path)
@@ -196,7 +238,6 @@ class GitHubApi:
             if len(payload) < PER_PAGE:
                 return validate_review_entries(reviews)
         raise GateError("review pagination exceeded the bounded completeness limit")
-
 
 def nested_string(payload: Any, *path: str) -> str:
     current = payload
@@ -424,6 +465,103 @@ def self_test() -> None:
 
     require(flatten_review_pages([[approved, veto, lift]]) == [approved, veto, lift],
             "valid slurped review-page fixture changed")
+
+    class FakeResponse:
+        def __init__(self, raw: bytes) -> None:
+            self._raw = raw
+            self.headers: dict[str, str] = {}
+
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return self._raw
+
+    def http_error(code: int, headers: dict[str, str] | None = None) -> urllib.error.HTTPError:
+        return urllib.error.HTTPError(API_ORIGIN + "/fixture", code, "fixture", headers or {}, None)
+
+    def opener_from(outcomes: list[Any], calls: list[int]) -> Callable[..., Any]:
+        queue = list(outcomes)
+
+        def opener(request: Any, *, timeout: int) -> Any:
+            require(timeout == READ_TIMEOUT_SECONDS, "read retry timeout fixture changed")
+            calls.append(timeout)
+            require(bool(queue), "read retry fixture exhausted outcomes")
+            outcome = queue.pop(0)
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return FakeResponse(json.dumps(outcome).encode("utf-8") if not isinstance(outcome, bytes) else outcome)
+
+        return opener
+
+    retry_calls: list[int] = []
+    retry_sleeps: list[float] = []
+    recovered = GitHubApi(
+        "fixture-token",
+        opener=opener_from([http_error(500), {"ok": True}], retry_calls),
+        sleeper=retry_sleeps.append,
+    ).get(f"/repos/{REPOSITORY}/git/ref/heads/main")
+    require(recovered == {"ok": True}, "transient HTTP 500 read did not recover")
+    require(retry_calls == [READ_TIMEOUT_SECONDS, READ_TIMEOUT_SECONDS], "transient read attempt count changed")
+    require(retry_sleeps == [1.0], "transient read backoff changed")
+
+    rate_calls: list[int] = []
+    rate_sleeps: list[float] = []
+    recovered_rate = GitHubApi(
+        "fixture-token",
+        opener=opener_from(
+            [http_error(403, {"X-RateLimit-Remaining": "0", "Retry-After": "1"}), {"ok": "rate"}],
+            rate_calls,
+        ),
+        sleeper=rate_sleeps.append,
+    ).get(f"/repos/{REPOSITORY}/git/ref/heads/main")
+    require(recovered_rate == {"ok": "rate"} and rate_sleeps == [1.0], "rate-limited read retry changed")
+
+    forbidden_calls: list[int] = []
+    forbidden_sleeps: list[float] = []
+    try:
+        GitHubApi(
+            "fixture-token",
+            opener=opener_from([http_error(403)], forbidden_calls),
+            sleeper=forbidden_sleeps.append,
+        ).get(f"/repos/{REPOSITORY}/git/ref/heads/main")
+    except GateError as exc:
+        require("HTTP 403" in str(exc), "ordinary 403 failed for the wrong reason")
+    else:
+        raise GateError("ordinary 403 was incorrectly retried or accepted")
+    require(forbidden_calls == [READ_TIMEOUT_SECONDS] and forbidden_sleeps == [], "ordinary 403 must be terminal")
+
+    malformed_calls: list[int] = []
+    malformed_sleeps: list[float] = []
+    try:
+        GitHubApi(
+            "fixture-token",
+            opener=opener_from([b"{"], malformed_calls),
+            sleeper=malformed_sleeps.append,
+        ).get(f"/repos/{REPOSITORY}/git/ref/heads/main")
+    except GateError as exc:
+        require("malformed JSON" in str(exc), "malformed JSON failed for the wrong reason")
+    else:
+        raise GateError("malformed JSON was incorrectly retried or accepted")
+    require(malformed_calls == [READ_TIMEOUT_SECONDS] and malformed_sleeps == [], "malformed JSON must be terminal")
+
+    exhausted_calls: list[int] = []
+    exhausted_sleeps: list[float] = []
+    try:
+        GitHubApi(
+            "fixture-token",
+            opener=opener_from([http_error(503), http_error(503), http_error(503)], exhausted_calls),
+            sleeper=exhausted_sleeps.append,
+        ).get(f"/repos/{REPOSITORY}/git/ref/heads/main")
+    except GateError as exc:
+        require("HTTP 503" in str(exc), "exhausted transient read failed for the wrong reason")
+    else:
+        raise GateError("exhausted transient read retry budget did not fail closed")
+    require(exhausted_calls == [READ_TIMEOUT_SECONDS] * READ_ATTEMPTS, "read retry budget changed")
+    require(exhausted_sleeps == [1.0, 2.0], "read retry exhaustion backoff changed")
     malformed_fixtures = (
         ([], "empty slurped page array"),
         ([{}], "non-array page"),
