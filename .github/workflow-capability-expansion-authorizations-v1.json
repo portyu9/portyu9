@@ -382,6 +382,13 @@
       "rationale": "Authorize #581's rebased source-only Dependabot terminal merge diagnostics measured against accepted main 41e57df753855c158a4f7c68daef01b739850495 and target tree 376d2b7eb8583e5589be5ee79eccc9de2923dc62. The semantic BOM is unchanged. No endpoint, permission, merge method, bypass, required check, review proof, quiescence, or TOCTOU guard changes; only existing merge API response body/stderr is preserved so GitHub's exact rejection is surfaced fail-closed."
     },
     {
+      "id": "cap-dependabot-merge-success-response-schema-hardening",
+      "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "expansionSha256": "442d4dabc26e156adcc66bf4c0408e66eb46773d72d3f0141097252033a59aab",
+      "rationale": "Authorize #844's exact fail-closed terminal Dependabot merge-success response hardening. Existing merge request, endpoint/method, permissions, rejection diagnostics, expected-head binding, live-main reproof and post-merge CodeQL dispatch remain unchanged; only a nominal successful response must be a typed object with literal merged=true, lowercase SHA-40 and nonempty message before its normalized SHA is consumed. No new trigger, secret, mutation class, retry, OIDC authority, candidate execution, required-check reduction, direct-main write, ruleset change or bypass is added."
+    },
+    {
       "id": "cap-dependabot-native-author-association-tcb",
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
