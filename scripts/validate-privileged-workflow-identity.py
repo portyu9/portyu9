@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v62"
+VERSION = "governed-workflow-byte-identity-v63"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
     ".github/workflows/profile-quality.yml": "c4a48f9ccaaf79ee2e7a82e057e9788a216e6049",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "009cca9b9cf337408ccae79f15497eb78913d215",
+    ".github/workflows/spotlight-link-sync.yml": "7c47cb9005233d1c75e64f5f7c494996aec264d0",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "844026bd8a752433dd8b01477e7e1b56b587d0b1"
@@ -335,8 +335,47 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
         'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
         'test "$(jq -r \'.files[0].filename\' <<<"$COMPARE")" = "README.md"',
         'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
+        'BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"',
+        '(.url | type == "string" and length > 0)',
+        'BASE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}")"',
+        'jq -e --arg source "$SOURCE_SHA"',
+        'TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"',
+        '(.truncated | type == "boolean")',
+        'CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"',
+        'jq -e --arg tree "$CANDIDATE_TREE_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL"',
+        'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA"',
+        '(.type | type == "string" and . == "commit")',
+        'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json',
+        'jq -e --arg title "chore: sync rotating Spotlight links"',
+        '(.number | type == "number" and . == floor and . > 0) and',
     ):
         require(fragment in legacy, f"Spotlight current immutable-candidate proof is missing: {fragment}")
+    propose = job_block(legacy, "propose", "approve")
+    blob_call = propose.index('BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"')
+    blob_schema = propose.index('(.url | type == "string" and length > 0)', blob_call)
+    blob_consume = propose.index('README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"', blob_schema)
+    base_call = propose.index('BASE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}")"', blob_consume)
+    base_schema = propose.index('jq -e --arg source "$SOURCE_SHA"', base_call)
+    base_consume = propose.index('BASE_TREE_SHA="$(jq -r .tree.sha <<<"$BASE_COMMIT")"', base_schema)
+    tree_call = propose.index('TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"', base_consume)
+    tree_schema = propose.index('(.truncated | type == "boolean")', tree_call)
+    tree_consume = propose.index('CANDIDATE_TREE_SHA="$(jq -r .sha <<<"$TREE")"', tree_schema)
+    commit_call = propose.index('CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"', tree_consume)
+    commit_schema = propose.index('jq -e --arg tree "$CANDIDATE_TREE_SHA"', commit_call)
+    commit_consume = propose.index('HEAD_SHA="$(jq -r .sha <<<"$CANDIDATE_COMMIT")"', commit_schema)
+    ref_call = propose.index('CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"', commit_consume)
+    ref_schema = propose.index('jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA"', ref_call)
+    ref_consume = propose.index('test "$(jq -r .ref <<<"$CREATED_REF")"', ref_schema)
+    pr_call = propose.index('gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json', ref_consume)
+    pr_schema = propose.index('jq -e --arg title "chore: sync rotating Spotlight links"', pr_call)
+    pr_consume = propose.index('PR_NUMBER="$(jq -r .number pr-response.json)"', pr_schema)
+    require(
+        blob_call < blob_schema < blob_consume < base_call < base_schema < base_consume
+        < tree_call < tree_schema < tree_consume < commit_call < commit_schema < commit_consume
+        < ref_call < ref_schema < ref_consume < pr_call < pr_schema < pr_consume,
+        "Spotlight proposal mutation response validation must precede each downstream field consumption",
+    )
+
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
             "Spotlight v21 immutable-candidate projection anchor changed")
     projected_immutable = legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)

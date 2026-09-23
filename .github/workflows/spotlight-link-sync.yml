@@ -562,14 +562,31 @@ jobs:
             CONTENT="$(base64 -w0 "$PROPOSED")"
             jq -n --arg content "$CONTENT" '{content:$content,encoding:"base64"}' > blob.json
             BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"
+            jq -e '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.url | type == "string" and length > 0)
+            ' <<<"$BLOB" >/dev/null
             README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"
             [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
             BASE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}")"
+            jq -e --arg source "$SOURCE_SHA" '
+              (type == "object") and
+              (.sha | type == "string" and . == $source) and
+              (.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$")))
+            ' <<<"$BASE_COMMIT" >/dev/null
             BASE_TREE_SHA="$(jq -r .tree.sha <<<"$BASE_COMMIT")"
             [[ "$BASE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
             jq -n --arg base_tree "$BASE_TREE_SHA" --arg blob "$README_BLOB_SHA" \
               '{base_tree:$base_tree,tree:[{path:"README.md",mode:"100644",type:"blob",sha:$blob}]}' > tree.json
             TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"
+            jq -e '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.url | type == "string" and length > 0) and
+              (.tree | type == "array") and
+              (.truncated | type == "boolean")
+            ' <<<"$TREE" >/dev/null
             CANDIDATE_TREE_SHA="$(jq -r .sha <<<"$TREE")"
             [[ "$CANDIDATE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
             test "$CANDIDATE_TREE_SHA" != "$BASE_TREE_SHA"
@@ -577,6 +594,15 @@ jobs:
               --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \
               '{message:$message,tree:$tree,parents:[$parent],author:{name:$name,email:$email},committer:{name:$name,email:$email}}' > commit.json
             CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"
+            jq -e --arg tree "$CANDIDATE_TREE_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.tree | type == "object" and .sha == $tree) and
+              (.parents | type == "array" and length == 1 and (.[0] | type == "object" and .sha == $parent)) and
+              (.author | type == "object" and .name == $name and .email == $email) and
+              (.committer | type == "object" and .name == $name and .email == $email) and
+              (.message == "chore: sync rotating Spotlight links")
+            ' <<<"$CANDIDATE_COMMIT" >/dev/null
             HEAD_SHA="$(jq -r .sha <<<"$CANDIDATE_COMMIT")"
             [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           fi
@@ -606,6 +632,14 @@ jobs:
           if [ "$EXACT_REF_COUNT" = "0" ]; then
             jq -n --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg sha "$HEAD_SHA" '{ref:$ref,sha:$sha}' > ref.json
             CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"
+            jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and . == $head) and
+                (.url | type == "string" and length > 0))
+            ' <<<"$CREATED_REF" >/dev/null
             test "$(jq -r .ref <<<"$CREATED_REF")" = "refs/heads/${CANDIDATE_BRANCH}"
             test "$(jq -r .object.sha <<<"$CREATED_REF")" = "$HEAD_SHA"
             REF_CREATED=true
@@ -620,6 +654,18 @@ jobs:
               --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." \
               '{title:$title,head:$head,base:$base,body:$body,maintainer_can_modify:false}' > pr.json
             gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json
+            jq -e --arg title "chore: sync rotating Spotlight links" --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." --arg base "$SOURCE_SHA" --arg branch "$CANDIDATE_BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" '
+              ((type) == "object") and
+              (.number | type == "number" and . == floor and . > 0) and
+              (.user | type == "object" and .login == "github-actions[bot]") and
+              (.state == "open") and
+              (.draft | type == "boolean" and . == false) and
+              (.maintainer_can_modify | type == "boolean" and . == false) and
+              (.title == $title) and
+              (.body == $body) and
+              (.base | type == "object" and .ref == "main" and .sha == $base) and
+              (.head | type == "object" and .ref == $branch and .sha == $head and (.repo | type == "object" and .full_name == $repo))
+            ' pr-response.json >/dev/null
             PR_NUMBER="$(jq -r .number pr-response.json)"
             PR_CREATED=true
             echo "pr_created=true" >> "$GITHUB_OUTPUT"

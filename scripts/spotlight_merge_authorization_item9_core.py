@@ -188,6 +188,84 @@ def validate_candidate_publication(sync: str) -> None:
                 f"Spotlight candidate publication boundary was reordered: {fragment}")
         cursor = position
 
+    response_boundaries = (
+        (
+            'BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"',
+            'README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"',
+            (
+                '(type == "object") and',
+                '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+                '(.url | type == "string" and length > 0)',
+            ),
+            "blob-create",
+        ),
+        (
+            'BASE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}")"',
+            'BASE_TREE_SHA="$(jq -r .tree.sha <<<"$BASE_COMMIT")"',
+            (
+                'jq -e --arg source "$SOURCE_SHA"',
+                '(.sha | type == "string" and . == $source) and',
+                '(.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$")))',
+            ),
+            "base-commit-read",
+        ),
+        (
+            'TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"',
+            'CANDIDATE_TREE_SHA="$(jq -r .sha <<<"$TREE")"',
+            (
+                '(.tree | type == "array") and',
+                '(.truncated | type == "boolean")',
+            ),
+            "tree-create",
+        ),
+        (
+            'CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"',
+            'HEAD_SHA="$(jq -r .sha <<<"$CANDIDATE_COMMIT")"',
+            (
+                'jq -e --arg tree "$CANDIDATE_TREE_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL"',
+                '(.tree | type == "object" and .sha == $tree) and',
+                '(.parents | type == "array" and length == 1 and (.[0] | type == "object" and .sha == $parent)) and',
+                '(.author | type == "object" and .name == $name and .email == $email) and',
+                '(.committer | type == "object" and .name == $name and .email == $email) and',
+                '(.message == "chore: sync rotating Spotlight links")',
+            ),
+            "commit-create",
+        ),
+        (
+            'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
+            'test "$(jq -r .ref <<<"$CREATED_REF")" = "refs/heads/${CANDIDATE_BRANCH}"',
+            (
+                'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA"',
+                '(.ref | type == "string" and . == $ref) and',
+                '(.type | type == "string" and . == "commit") and',
+                '(.sha | type == "string" and . == $head) and',
+            ),
+            "ref-create",
+        ),
+        (
+            'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json',
+            'PR_NUMBER="$(jq -r .number pr-response.json)"',
+            (
+                'jq -e --arg title "chore: sync rotating Spotlight links"',
+                '((type) == "object") and',
+                '(.number | type == "number" and . == floor and . > 0) and',
+                '(.user | type == "object" and .login == "github-actions[bot]") and',
+                '(.draft | type == "boolean" and . == false) and',
+                '(.maintainer_can_modify | type == "boolean" and . == false) and',
+                '(.base | type == "object" and .ref == "main" and .sha == $base) and',
+                '(.head | type == "object" and .ref == $branch and .sha == $head and (.repo | type == "object" and .full_name == $repo))',
+            ),
+            "pull-create",
+        ),
+    )
+    for start_fragment, consume_fragment, schema_fragments, label in response_boundaries:
+        start = propose.index(start_fragment)
+        consume = propose.index(consume_fragment, start)
+        boundary = propose[start:consume]
+        for fragment in schema_fragments:
+            require(fragment in boundary,
+                    f"Spotlight proposal {label} response schema must validate before field consumption: {fragment}")
+
     for fragment in (
         'test "$(jq \' .parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"',
         'test "$(jq -r \'.parents[0].sha\' <<<"$CANDIDATE_COMMIT")" = "$SOURCE_SHA"',
@@ -440,6 +518,40 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         sync.replace(CANDIDATE_FORMULA_PROPOSE, 'CANDIDATE_ID="$README_SHA256_AFTER"', 1),
         stats, policy, "lost exact main/generated/README content addressing",
     )
+    for old, new, expected in (
+        (
+            '              (.url | type == "string" and length > 0)\n            \' <<<"$BLOB" >/dev/null',
+            '              (.url | type == "number")\n            \' <<<"$BLOB" >/dev/null',
+            "blob-create response schema",
+        ),
+        (
+            '              (.sha | type == "string" and . == $source) and',
+            '              (.sha | type == "string") and',
+            "base-commit-read response schema",
+        ),
+        (
+            '              (.truncated | type == "boolean")',
+            '              (.truncated | type == "number")',
+            "tree-create response schema",
+        ),
+        (
+            '              (.parents | type == "array" and length == 1 and (.[0] | type == "object" and .sha == $parent)) and',
+            '              (.parents | type == "array" and length >= 1) and',
+            "commit-create response schema",
+        ),
+        (
+            '                (.type | type == "string" and . == "commit") and',
+            '                (.type | type == "string") and',
+            "ref-create response schema",
+        ),
+        (
+            '              (.number | type == "number" and . == floor and . > 0) and',
+            '              (.number | type == "string") and',
+            "pull-create response schema",
+        ),
+    ):
+        require(old in sync, f"Spotlight proposal response-schema self-test anchor changed: {old}")
+        expect_failure(sync.replace(old, new, 1), stats, policy, expected)
     expect_failure(
         sync.replace(
             'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"',
