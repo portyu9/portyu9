@@ -662,6 +662,13 @@
       "rationale": "Authorize #824's exact signed witness retry-history evidence: two existing actions:read producers collect bounded prior attempt GETs and bind contiguous terminal history into already-signed Action provenance and Profile Generator Compatibility predicates. Current runAttempt remains sole authorizing attempt; signer authority, consumers, triggers, writes, OIDC boundaries, required checks, rulesets and bypass surfaces do not expand."
     },
     {
+      "id": "cap-spotlight-ancestry-stale-cleanup-v1",
+      "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
+      "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "expansionSha256": "c4f3ff97243c9218135de630ca092df22ee504afb102f9fc54e2e441aa2dbb27",
+      "rationale": "Authorize frozen #913 to add one read-only Spotlight reconcile GET comparing a validated candidate parent to exact current main, solely to prove an old bot candidate base is an accepted ancestor before bypassing the 30-minute uncertainty floor. Existing typed candidate/README/PR/close/delete proofs remain mandatory; divergent, malformed, or unproven young candidates remain preserved. No permission, trigger, secret, mutation, merge/ruleset authority, required-check reduction, or bypass is added."
+    },
+    {
       "id": "cap-spotlight-main-push-reconciliation",
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
