@@ -1200,15 +1200,21 @@ def self_test(sync: str, stats: str, policy: str) -> None:
         '          jq -e --arg head "$HEAD_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \'\n'
     )
     commit_schema_end_marker = '          \' <<<"$CANDIDATE_COMMIT" >/dev/null\n'
-    require(propose.count(commit_schema_start_marker) == 1
-            and propose.count(commit_schema_end_marker) == 1,
+    require(topology_commit_block.count(commit_schema_start_marker) == 1
+            and topology_commit_block.count(commit_schema_end_marker) == 1,
             "Spotlight proposer topology reorder self-test cannot isolate candidate-commit schema")
-    commit_schema_start = propose.index(commit_schema_start_marker)
-    commit_schema_end = propose.index(commit_schema_end_marker, commit_schema_start) + len(commit_schema_end_marker)
+    commit_schema_local_start = topology_commit_block.index(commit_schema_start_marker)
+    commit_schema_local_end = (
+        topology_commit_block.index(commit_schema_end_marker, commit_schema_local_start)
+        + len(commit_schema_end_marker)
+    )
+    commit_schema_start = topology_commit_call_pos + commit_schema_local_start
+    commit_schema_end = topology_commit_call_pos + commit_schema_local_end
     commit_schema_text = propose[commit_schema_start:commit_schema_end]
     reordered_propose = propose[:commit_schema_start] + propose[commit_schema_end:]
     ref_publish_pos = reordered_propose.index(
-        '            CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"'
+        '            CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
+        topology_commit_call_pos,
     )
     ref_publish_end = reordered_propose.index("\n", ref_publish_pos) + 1
     reordered_propose = (
