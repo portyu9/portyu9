@@ -625,7 +625,7 @@ def validate_candidate_publication(sync: str) -> None:
     require('test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"' in merge,
             "Spotlight terminal cleanup must retain the redundant exact candidate-ref cardinality assertion")
     require('test "$AFTER_EXACT" = "0"' in merge,
-            "Spotlight terminal cleanup must retain the redundant exact consumed-ref absence assertion")
+            "Spotlight terminal cleanup must prove the exact consumed ref is absent after deletion (redundant assertion)")
     require("CANDIDATE_REF=\"$(gh api " not in merge and "2>/dev/null" not in merge,
             "Spotlight terminal cleanup must not classify missing refs through suppressed single-ref GET failures")
 
