@@ -138,9 +138,11 @@ def project_protected_workflow_evidence_to_legacy(sync: str) -> str:
         '          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:'
         '${CANDIDATE_BRANCH}&base=main&per_page=10")"\n'
     )
-    require(sync.count(start_marker) == 1 and sync.count(end_marker) == 1,
-            "Spotlight protected workflow evidence projection anchors changed")
+    require(sync.count(start_marker) == 1,
+            "Spotlight protected workflow evidence projection start anchor changed")
     start = sync.index(start_marker)
+    require(sync[start:].count(end_marker) == 1,
+            "Spotlight protected workflow evidence projection end anchor changed")
     end = sync.index(end_marker, start)
     current = sync[start:end]
     require(
