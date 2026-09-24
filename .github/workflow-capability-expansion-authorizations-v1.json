@@ -571,6 +571,13 @@
       "rationale": "Authorize #565's GitHub-native real-user bot PR approval workflow. The workflow is event-driven, read-only with GITHUB_TOKEN, executes no candidate code, independently binds recognized bot identity/current main/exact head/required checks/quiescence/unresolved threads, and uses the isolated portyu9-review-identity credential only for the final exact-head APPROVE review. Missing credential fails closed by no-op."
     },
     {
+      "id": "cap-governed-approval-comment-evidence-exit-only-v2",
+      "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "expansionSha256": "587980c08c5c08e13e11a09d5319eafc779da85b4f9134d2478fefcb7d6d61bf",
+      "rationale": "Authorize frozen #966 final CodeQL-safe trusted-source hardening: Dependabot validates paginated approval comments with an exit-only pure boundary (0 trusted marker, 3 valid absence, 1 malformed), while Spotlight preserves its jq-only privileged firewall. Both bind exact PR/comment identity and github-actions[bot] before dedupe/creation. Semantic BOM, endpoints/counts, permissions, review/merge authority, checks, rulesets and bypass behavior are unchanged."
+    },
+    {
       "id": "cap-governed-approval-comment-evidence-schema-hardening-v1",
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
