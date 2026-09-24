@@ -652,7 +652,7 @@
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "expansionSha256": "cc3ed97e8469fdb96632323d2977bd04ae5ee5c0759f80b1fea2a0ed7d88f7fa",
-      "rationale": "Authorize frozen #1000's exact protected-TCB Profile Stats dispatch ADR liveness repair. The signed receipt keeps the immutable leased base and exact high-water/bot/workflow/repository bindings, while accepting only an actual downstream main head proven identical to or strictly ahead of that base by typed Git compare evidence with exact merge base and behind_by=0. Composite Workflow Capability is unchanged; no trigger, permission, secret, mutation, merge/ruleset authority, required-check reduction or bypass is added."
+      "rationale": "Authorize frozen #1000's protected-TCB ADR liveness repair: preserve the leased base and exact high-water/bot/workflow/repository bindings; accept a later downstream main head only when typed Git compare evidence proves identical/ahead ancestry with exact merge base and behind_by=0. Composite Workflow Capability is unchanged; no trigger, permission, secret, mutation, merge/ruleset authority, required-check reduction, direct-main write, or bypass is added."
     },
     {
       "id": "cap-pull-review-evidence-schema-hardening",
