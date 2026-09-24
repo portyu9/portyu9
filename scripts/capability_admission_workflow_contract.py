@@ -286,11 +286,11 @@ def validate_text(text: str) -> None:
     candidate_call_pos = text.index(candidate_call)
     candidate_schema_pos = text.index(candidate_schema_marker, candidate_call_pos)
     candidate_schema_end_pos = text.index(candidate_schema_end_marker, candidate_schema_pos) + len(candidate_schema_end_marker)
-    candidate_consume_pos = text.index(candidate_consume_marker, candidate_schema_end_pos)
-    compare_call_pos = text.index(compare_call, candidate_consume_pos)
+    candidate_consume_pos = text.index(candidate_consume_marker, candidate_call_pos)
+    compare_call_pos = text.index(compare_call, candidate_call_pos)
     compare_schema_pos = text.index(compare_schema_marker, compare_call_pos)
     compare_schema_end_pos = text.index(compare_schema_end_marker, compare_schema_pos) + len(compare_schema_end_marker)
-    compare_consume_pos = text.index(compare_consume_marker, compare_schema_end_pos)
+    compare_consume_pos = text.index(compare_consume_marker, compare_call_pos)
     require(
         candidate_call_pos < candidate_schema_pos < candidate_schema_end_pos < candidate_consume_pos
         < compare_call_pos < compare_schema_pos < compare_schema_end_pos < compare_consume_pos,
