@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v87"
+VERSION = "governed-workflow-byte-identity-v88"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "1f441a8fe20522040f76056a7e45e31ae63d4f15",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "19fa81bc09189cc3e3f72e00a2ffd63124c6db91",
+    ".github/workflows/spotlight-link-sync.yml": "f467d359a583ac38fc623e9a8d569a6eeb48a322",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -410,7 +410,8 @@ def validate_leases(profile: str, spotlight: str) -> None:
         '(.workflow_id | type == "number" and . == floor and . > 0) and',
         '(.run_number | type == "number" and . == floor and . > 0) and',
         '(.event | type == "string" and . == $event) and',
-        '(.status | type == "string" and . == "in_progress") and',
+        '((.status | type) == "string") and',
+        '((.status == "queued") or (.status == "in_progress")) and',
         '(.conclusion == null) and',
         '(.head_sha | type == "string" and . == $head) and',
         '(.head_branch | type == "string" and . == "main") and',
@@ -2839,6 +2840,45 @@ def self_test() -> None:
         raise ValueError("bot-review identity-schema self-test accepted type-coercing login evidence")
 
     spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+    profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+    validate_leases(profile, spotlight)
+    for current, replacement, label in (
+        (
+            '            ((.status == "queued") or (.status == "in_progress")) and',
+            '            (.status == "in_progress") and',
+            "queued liveness state",
+        ),
+        (
+            '            ((.status == "queued") or (.status == "in_progress")) and',
+            '            ((.status == "queued") or (.status == "in_progress") or (.status == "completed")) and',
+            "terminal status expansion",
+        ),
+        (
+            '            (.conclusion == null) and',
+            '            (has("conclusion")) and',
+            "null-conclusion binding",
+        ),
+    ):
+        lease_start = spotlight.index("  lease:\n")
+        lease_end = spotlight.index("  reconcile:\n", lease_start)
+        lease = spotlight[lease_start:lease_end]
+        require(
+            lease.count(current) == 1,
+            f"Spotlight lease liveness self-test anchor changed: {label}",
+        )
+        mutated_lease = lease.replace(current, replacement, 1)
+        mutated = spotlight[:lease_start] + mutated_lease + spotlight[lease_end:]
+        try:
+            validate_leases(profile, mutated)
+        except ValueError as exc:
+            require(
+                "mutation-lease run evidence contract is missing" in str(exc),
+                f"Spotlight lease liveness self-test failed for wrong reason ({label}): {exc}",
+            )
+        else:
+            raise ValueError(
+                f"Spotlight lease liveness self-test accepted forbidden mutation: {label}"
+            )
     validate_spotlight_same_base_supersession(spotlight)
     validate_spotlight_budget_artifact_history(spotlight)
     budget_start = spotlight.index("  budget:\n")
@@ -3099,7 +3139,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:
