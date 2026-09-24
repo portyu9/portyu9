@@ -1107,12 +1107,48 @@ jobs:
           gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
             > "$RUNNER_TEMP/spotlight-approval-comment-pages.json"
-          python3 scripts/automation_approval_comment.py evidence \
-            --comments-file "$RUNNER_TEMP/spotlight-approval-comment-pages.json" \
-            --repository "$GITHUB_REPOSITORY" \
-            --pr-number "$PR_NUMBER" \
-            --marker "$APPROVAL_MARKER" \
-            --out "$RUNNER_TEMP/spotlight-approval-comment-evidence.json"
+          jq -ce \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --argjson pr "$PR_NUMBER" \
+            --arg marker "$APPROVAL_MARKER" '
+              if type != "array" or length < 1 or length > 20 then
+                error("Spotlight automation-approval comment pages must be a bounded slurped page array")
+              elif any(.[]; type != "array" or length > 100) then
+                error("Spotlight automation-approval comment page shape changed")
+              elif (length > 1 and any(.[0:-1][]; length != 100)) then
+                error("Spotlight automation-approval comment pagination is incomplete")
+              elif any(.[][];
+                (type != "object") or
+                ((.id | type == "number" and . == floor and . > 0) | not) or
+                (.issue_url != ("https://api.github.com/repos/" + $repo + "/issues/" + ($pr | tostring))) or
+                (.url != ("https://api.github.com/repos/" + $repo + "/issues/comments/" + (.id | tostring))) or
+                ((.body | type) != "string") or
+                ((.user | type) != "object") or
+                ((.user.login | type) != "string") or
+                ((.user.login | length) == 0) or
+                ((.html_url | type) != "string") or
+                ((.html_url | length) == 0)
+              ) then
+                error("Spotlight automation-approval comment item schema changed")
+              elif ([.[][] | .id] | length) != ([.[][] | .id] | unique | length) then
+                error("Spotlight automation-approval comment ids are not unique")
+              else
+                [.[][] | {id,login:.user.login,body}] as $comments
+                | [$comments[] | select(.login == "github-actions[bot]" and (.body | contains($marker)))] as $matches
+                | if ($matches | length) > 1 then
+                    error("duplicate trusted Spotlight automation-approval comments exist")
+                  else
+                    {
+                      exists:(($matches | length) == 1),
+                      commentId:(if ($matches | length) == 1 then $matches[0].id else null end),
+                      prNumber:$pr,
+                      repository:$repo,
+                      marker:$marker
+                    }
+                  end
+              end
+            ' "$RUNNER_TEMP/spotlight-approval-comment-pages.json" \
+            > "$RUNNER_TEMP/spotlight-approval-comment-evidence.json"
           APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/spotlight-approval-comment-evidence.json")"
           test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"
           if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then
@@ -1120,12 +1156,29 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
               -f body="$APPROVAL_BODY" \
               > "$RUNNER_TEMP/spotlight-approval-comment-created.json"
-            python3 scripts/automation_approval_comment.py created \
-              --comment-file "$RUNNER_TEMP/spotlight-approval-comment-created.json" \
-              --repository "$GITHUB_REPOSITORY" \
-              --pr-number "$PR_NUMBER" \
-              --expected-body "$APPROVAL_BODY" \
-              --out "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json"
+            jq -ce \
+              --arg repo "$GITHUB_REPOSITORY" \
+              --argjson pr "$PR_NUMBER" \
+              --arg body "$APPROVAL_BODY" '
+                if type != "object" then
+                  error("created Spotlight automation-approval comment must be an object")
+                elif ((.id | type == "number" and . == floor and . > 0) | not) then
+                  error("created Spotlight automation-approval comment id is invalid")
+                elif .issue_url != ("https://api.github.com/repos/" + $repo + "/issues/" + ($pr | tostring)) then
+                  error("created Spotlight automation-approval comment issue URL mismatch")
+                elif .url != ("https://api.github.com/repos/" + $repo + "/issues/comments/" + (.id | tostring)) then
+                  error("created Spotlight automation-approval comment URL mismatch")
+                elif .body != $body then
+                  error("created Spotlight automation-approval comment body mismatch")
+                elif ((.user | type) != "object") or .user.login != "github-actions[bot]" then
+                  error("created Spotlight automation-approval comment actor mismatch")
+                elif ((.html_url | type) != "string") or ((.html_url | length) == 0) then
+                  error("created Spotlight automation-approval comment html_url is invalid")
+                else
+                  {id:.id,prNumber:$pr,repository:$repo,actor:.user.login}
+                end
+              ' "$RUNNER_TEMP/spotlight-approval-comment-created.json" \
+              > "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json"
             test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"
             test "$(jq -r .prNumber "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "$PR_NUMBER"
           fi
