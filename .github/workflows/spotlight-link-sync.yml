@@ -1020,24 +1020,150 @@ jobs:
             -f ref=main >/dev/null
           echo "Dispatched exact pre-convergence portyu9 review evaluation from trusted main."
 
-          CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"
-          DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"
-          PROFILE_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \
+            > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"
+          CODEQL_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/codeql.yml" --arg name "CodeQL" '
+            if type != "object" then
+              error("Spotlight protected workflow definition must be an object")
+            elif ((.id | type) != "number") or ((.id | floor) != .id) or (.id <= 0) then
+              error("Spotlight protected workflow definition id is invalid")
+            elif .path != $path or .name != $name or .state != "active" then
+              error("Spotlight protected workflow definition identity changed")
+            elif ((.url | type) != "string") or ((.url | length) == 0) or
+                 ((.html_url | type) != "string") or ((.html_url | length) == 0) then
+              error("Spotlight protected workflow definition URLs are invalid")
+            else
+              .id
+            end
+          ' "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json")"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" \
+            > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"
+          DEPENDENCY_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/dependency-review.yml" --arg name "Dependency review" '
+            if type != "object" then
+              error("Spotlight protected workflow definition must be an object")
+            elif ((.id | type) != "number") or ((.id | floor) != .id) or (.id <= 0) then
+              error("Spotlight protected workflow definition id is invalid")
+            elif .path != $path or .name != $name or .state != "active" then
+              error("Spotlight protected workflow definition identity changed")
+            elif ((.url | type) != "string") or ((.url | length) == 0) or
+                 ((.html_url | type) != "string") or ((.html_url | length) == 0) then
+              error("Spotlight protected workflow definition URLs are invalid")
+            else
+              .id
+            end
+          ' "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json")"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" \
+            > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"
+          PROFILE_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/profile-quality.yml" --arg name "Profile quality" '
+            if type != "object" then
+              error("Spotlight protected workflow definition must be an object")
+            elif ((.id | type) != "number") or ((.id | floor) != .id) or (.id <= 0) then
+              error("Spotlight protected workflow definition id is invalid")
+            elif .path != $path or .name != $name or .state != "active" then
+              error("Spotlight protected workflow definition identity changed")
+            elif ((.url | type) != "string") or ((.url | length) == 0) or
+                 ((.html_url | type) != "string") or ((.html_url | length) == 0) then
+              error("Spotlight protected workflow definition URLs are invalid")
+            else
+              .id
+            end
+          ' "$RUNNER_TEMP/spotlight-profile-workflow-definition.json")"
+
           EXPECTED_IDENTITIES="$(jq -cn --argjson codeql "$CODEQL_WORKFLOW_ID" --argjson dependency "$DEPENDENCY_WORKFLOW_ID" --argjson profile "$PROFILE_WORKFLOW_ID" \
             '[{"name":"CodeQL","workflow_id":$codeql},{"name":"Dependency review","workflow_id":$dependency},{"name":"Profile quality","workflow_id":$profile}] | sort_by(.name)')"
 
           APPROVAL_REQUESTED_RUN_IDS=""
           for attempt in $(seq 1 60); do
-            RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
-            RUNS_TOTAL="$(jq -r '.total_count // empty' <<<"$RUNS")"
-            RUNS_COUNT="$(jq '.[("workflow" + "_runs")] | length' <<<"$RUNS")"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
+              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"
+            jq -ce \
+              --arg head "$HEAD_SHA" \
+              --arg branch "$CANDIDATE_BRANCH" \
+              --arg repo "$GITHUB_REPOSITORY" \
+              --argjson codeql "$CODEQL_WORKFLOW_ID" \
+              --argjson dependency "$DEPENDENCY_WORKFLOW_ID" \
+              --argjson profile "$PROFILE_WORKFLOW_ID" '
+                def positive_int: type == "number" and . == floor and . > 0;
+                def allowed_status:
+                  . == "queued" or . == "in_progress" or . == "requested" or
+                  . == "waiting" or . == "pending" or . == "completed";
+                def allowed_conclusion:
+                  . == "success" or . == "failure" or . == "neutral" or
+                  . == "cancelled" or . == "skipped" or . == "timed_out" or
+                  . == "action_required" or . == "stale" or
+                  . == "startup_failure" or . == "waiting";
+                if type != "object" then
+                  error("Spotlight protected workflow-run response must be an object")
+                elif ((.total_count | type) != "number") or
+                     ((.total_count | floor) != .total_count) or
+                     (.total_count < 0) or (.total_count > 100) then
+                  error("Spotlight protected workflow-run total_count is invalid")
+                elif ((.workflow_runs | type) != "array") or ((.workflow_runs | length) > 100) then
+                  error("Spotlight protected workflow_runs shape changed")
+                elif .total_count != (.workflow_runs | length) then
+                  error("Spotlight protected workflow-run response is incomplete")
+                elif .total_count > 3 then
+                  error("Spotlight protected workflow-run set is ambiguous")
+                elif any(.workflow_runs[];
+                  (type != "object") or
+                  ((.id | positive_int) | not) or
+                  ((.workflow_id | positive_int) | not) or
+                  ((.check_suite_id | positive_int) | not) or
+                  ((.run_attempt | positive_int) | not) or
+                  ((.workflow_id != $codeql) and (.workflow_id != $dependency) and (.workflow_id != $profile)) or
+                  ((.workflow_id == $codeql) and
+                    ((.path != ".github/workflows/codeql.yml") or (.name != "CodeQL"))) or
+                  ((.workflow_id == $dependency) and
+                    ((.path != ".github/workflows/dependency-review.yml") or (.name != "Dependency review"))) or
+                  ((.workflow_id == $profile) and
+                    ((.path != ".github/workflows/profile-quality.yml") or (.name != "Profile quality"))) or
+                  (.event != "pull_request") or
+                  (.head_sha != $head) or
+                  (.head_branch != $branch) or
+                  ((.repository | type) != "object") or
+                  (.repository.full_name != $repo) or
+                  ((.head_repository | type) != "object") or
+                  (.head_repository.full_name != $repo) or
+                  ((.status | allowed_status) | not) or
+                  (if .status == "completed" then
+                    ((.conclusion | type) != "string") or
+                    ((.conclusion | length) == 0) or
+                    ((.conclusion | allowed_conclusion) | not)
+                   else
+                    .conclusion != null
+                   end)
+                ) then
+                  error("Spotlight protected workflow-run item schema changed")
+                elif (([.workflow_runs[].id] | length) != ([.workflow_runs[].id] | unique | length)) then
+                  error("Spotlight protected workflow run ids are not unique")
+                elif (([.workflow_runs[].workflow_id] | length) != ([.workflow_runs[].workflow_id] | unique | length)) then
+                  error("Spotlight protected workflow ids are not unique")
+                elif (([.workflow_runs[].check_suite_id] | length) != ([.workflow_runs[].check_suite_id] | unique | length)) then
+                  error("Spotlight protected workflow check-suite ids are not unique")
+                else
+                  {
+                    totalCount:.total_count,
+                    runs:([.workflow_runs[] | {
+                      id,
+                      name,
+                      workflowId:.workflow_id,
+                      checkSuiteId:.check_suite_id,
+                      runAttempt:.run_attempt,
+                      status,
+                      conclusion
+                    }] | sort_by(.name))
+                  }
+                end
+              ' "$RUNNER_TEMP/spotlight-protected-workflow-runs.json" \
+              > "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json"
+            RUNS_TOTAL="$(jq -r .totalCount "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json")"
             [[ "$RUNS_TOTAL" =~ ^[0-9]+$ ]]
-            [[ "$RUNS_COUNT" =~ ^[0-9]+$ ]]
-            test "$RUNS_TOTAL" = "$RUNS_COUNT" || { echo "Canonical Spotlight-link workflow-run response is incomplete." >&2; exit 1; }
-            test "$RUNS_TOTAL" -le 3 || { echo "Canonical Spotlight-link workflow-run set is ambiguous." >&2; exit 1; }
             ALL_SUCCESS=false
             if [ "$RUNS_TOTAL" = "3" ]; then
-              OBSERVED_IDENTITIES="$(jq -c '[.[("workflow" + "_runs")][] | {name,workflow_id}] | sort_by(.name)' <<<"$RUNS")"
+              RUNS="$(jq -c .runs "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json")"
+              OBSERVED_IDENTITIES="$(jq -c '[.[] | {name,workflow_id:.workflowId}] | sort_by(.name)' <<<"$RUNS")"
               test "$OBSERVED_IDENTITIES" = "$EXPECTED_IDENTITIES" || { echo "Canonical Spotlight-link workflow-run identities changed." >&2; exit 1; }
               ALL_SUCCESS=true
               for NAME in "CodeQL" "Dependency review" "Profile quality"; do
@@ -1047,23 +1173,18 @@ jobs:
                   "Profile quality") EXPECTED_ID="$PROFILE_WORKFLOW_ID" ;;
                   *) exit 1 ;;
                 esac
-                RUN_COUNT="$(jq --arg name "$NAME" --argjson workflow_id "$EXPECTED_ID" '[.[("workflow" + "_runs")][] | select(.name == $name and .workflow_id == $workflow_id)] | length' <<<"$RUNS")"
+                RUN_COUNT="$(jq --arg name "$NAME" --argjson workflow_id "$EXPECTED_ID" '[.[] | select(.name == $name and .workflowId == $workflow_id)] | length' <<<"$RUNS")"
                 test "$RUN_COUNT" = "1"
-                RUN="$(jq -c --arg name "$NAME" --argjson workflow_id "$EXPECTED_ID" '[.[("workflow" + "_runs")][] | select(.name == $name and .workflow_id == $workflow_id)][0]' <<<"$RUNS")"
+                RUN="$(jq -c --arg name "$NAME" --argjson workflow_id "$EXPECTED_ID" '[.[] | select(.name == $name and .workflowId == $workflow_id)][0]' <<<"$RUNS")"
                 RUN_ID="$(jq -r .id <<<"$RUN")"
-                CHECK_SUITE_ID="$(jq -r .check_suite_id <<<"$RUN")"
-                RUN_ATTEMPT="$(jq -r .run_attempt <<<"$RUN")"
+                CHECK_SUITE_ID="$(jq -r .checkSuiteId <<<"$RUN")"
+                RUN_ATTEMPT="$(jq -r .runAttempt <<<"$RUN")"
                 STATUS="$(jq -r .status <<<"$RUN")"
                 CONCLUSION="$(jq -r '.conclusion // ""' <<<"$RUN")"
                 [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]
                 [[ "$CHECK_SUITE_ID" =~ ^[1-9][0-9]*$ ]]
                 [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
-                test "$(jq -r .head_sha <<<"$RUN")" = "$HEAD_SHA"
-                test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"
-                test "$(jq -r .event <<<"$RUN")" = "pull_request"
-                test "$(jq -r .workflow_id <<<"$RUN")" = "$EXPECTED_ID"
-                test "$(jq -r .repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"
-                test "$(jq -r .head_repository.full_name <<<"$RUN")" = "$GITHUB_REPOSITORY"
+                test "$(jq -r .workflowId <<<"$RUN")" = "$EXPECTED_ID"
                 case "$NAME" in
                   "CodeQL") CODEQL_RUN_ID="$RUN_ID"; CODEQL_CHECK_SUITE_ID="$CHECK_SUITE_ID" ;;
                   "Dependency review") DEPENDENCY_RUN_ID="$RUN_ID"; DEPENDENCY_CHECK_SUITE_ID="$CHECK_SUITE_ID" ;;
