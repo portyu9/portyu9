@@ -1087,13 +1087,13 @@ jobs:
               --argjson profile "$PROFILE_WORKFLOW_ID" '
                 def positive_int: type == "number" and . == floor and . > 0;
                 def allowed_status:
-                  . == "queued" or . == "in_progress" or . == "requested" or
-                  . == "waiting" or . == "pending" or . == "completed";
+                  (. == "queued") or (. == "in_progress") or (. == "requested") or
+                  (. == "waiting") or (. == "pending") or (. == "completed");
                 def allowed_conclusion:
-                  . == "success" or . == "failure" or . == "neutral" or
-                  . == "cancelled" or . == "skipped" or . == "timed_out" or
-                  . == "action_required" or . == "stale" or
-                  . == "startup_failure" or . == "waiting";
+                  (. == "success") or (. == "failure") or (. == "neutral") or
+                  (. == "cancelled") or (. == "skipped") or (. == "timed_out") or
+                  (. == "action_required") or (. == "stale") or
+                  (. == "startup_failure") or (. == "waiting");
                 if type != "object" then
                   error("Spotlight protected workflow-run response must be an object")
                 elif ((.total_count | type) != "number") or
