@@ -470,13 +470,11 @@ jobs:
           SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: |
           set -euo pipefail
-          python3 scripts/validate-portfolio-evidence-ledger.py integration-portfolio-evidence
-          python3 scripts/validate-engineering-spotlight.py integration-engineering-spotlight \
-            --ledger integration-portfolio-evidence/portfolio-evidence-ledger.json
-          python3 scripts/validate-profile-evidence-subjects.py \
+          python3 scripts/validate-profile-evidence-boundary.py \
             --signal-field-dir "$SIGNAL_FIELD_DIR" \
             --spotlight-dir integration-engineering-spotlight \
-            --portfolio-ledger-dir integration-portfolio-evidence
+            --portfolio-ledger-dir integration-portfolio-evidence \
+            --offline
 
       - name: Exercise exact local publication subject staging
         env:
