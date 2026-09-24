@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v83"
+VERSION = "governed-workflow-byte-identity-v84"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "e5f7f01f1f709515dae282606345fdfb01a7fc70",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "db6afb3275db9660760643cd771fb0b0e2990448",
+    ".github/workflows/spotlight-link-sync.yml": "37dcfc628bf5c00ad1d43e8a85c1a866911dd1ee",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -260,12 +260,23 @@ def validate_item10_mac(spotlight: str) -> None:
     merged_pr_schema_pos = merge.index('validate_terminal_pr_object "$MERGED_PR"', merged_pr_pos)
     merged_pr_identity_pos = merge.index('jq -e --argjson pr "$PR_NUMBER" --arg merge "$MERGE_SHA"', merged_pr_schema_pos)
     merge_sha_bind_pos = merge.index('test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"', merged_pr_identity_pos)
-    current_main_pos = merge.index('CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"')
+    current_main_ref_pos = merge.index(
+        'CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'
+    )
+    current_main_validate_pos = merge.index(
+        'validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"',
+        current_main_ref_pos,
+    )
+    current_main_pos = merge.index(
+        'CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
+        current_main_validate_pos,
+    )
     cleanup_pos = merge.index('CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"')
     require(
         pre_pr_pos < pre_pr_schema_pos < files_pos < files_schema_pos < commit_pos < commit_schema_pos
         < provenance_pos < verify_pos < statement_pos < merge_pos < response_pos < merged_pr_pos
-        < merged_pr_schema_pos < merged_pr_identity_pos < merge_sha_bind_pos < current_main_pos < cleanup_pos,
+        < merged_pr_schema_pos < merged_pr_identity_pos < merge_sha_bind_pos
+        < current_main_ref_pos < current_main_validate_pos < current_main_pos < cleanup_pos,
         "Spotlight terminal typed candidate/MAC/merge/post-merge/current-main/cleanup ordering changed",
     )
     require('MERGE_SHA="$(jq -r .sha <<<"$RESULT")"' not in merge,
@@ -425,8 +436,82 @@ def validate_leases(profile: str, spotlight: str) -> None:
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
 
 
+def project_spotlight_privileged_refs_to_legacy(spotlight: str) -> str:
+    helper = '''          validate_git_ref_object() {
+            local payload="$1" expected_ref="$2" expected_sha="$3"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (((.ref | type) == "string") and (.ref == $ref)) and
+              (((.object | type) == "object") and
+                (((.object.type | type) == "string") and (.object.type == "commit")) and
+                (((.object.sha | type) == "string") and
+                  (.object.sha | test("^[0-9a-f]{40}$")) and
+                  (.object.sha == $sha)) and
+                (((.object.url | type) == "string") and ((.object.url | length) > 0)))
+            ' <<<"$payload" >/dev/null
+          }
+
+'''
+    require(
+        spotlight.count(helper) == 4,
+        "Spotlight v21 projection cannot isolate four privileged Git-ref validators",
+    )
+    projected = spotlight.replace(helper, "")
+    overlays = (
+        (
+            '''          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n',
+            5,
+        ),
+        (
+            '''          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
+          test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"\n',
+            4,
+        ),
+        (
+            '''          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"\n',
+            5,
+        ),
+        (
+            '''          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"\n',
+            1,
+        ),
+        (
+            '''          CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"
+          CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"
+''',
+            '          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"\n',
+            1,
+        ),
+    )
+    for hardened, legacy, expected_count in overlays:
+        require(
+            projected.count(hardened) == expected_count,
+            f"Spotlight v21 Git-ref projection topology changed for: {legacy.strip()}",
+        )
+        projected = projected.replace(hardened, legacy)
+    return projected
+
+
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
-    legacy = spotlight[:spotlight.index("  decision_receipt:\n")]
+    legacy = project_spotlight_privileged_refs_to_legacy(
+        spotlight[:spotlight.index("  decision_receipt:\n")]
+    )
     reconcile = job_block(legacy, "reconcile", "budget")
     commit_schema_start_marker = (
         '            jq -e --arg head "$HEAD_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \'\n'
@@ -1521,6 +1606,129 @@ def validate_dependabot_protected_workflow_evidence_schema(dependabot: str) -> N
     )
 
 
+def validate_spotlight_privileged_ref_evidence_schema(spotlight: str) -> None:
+    helper_marker = "          validate_git_ref_object() {\n"
+    helper_schema = (
+        'local payload="$1" expected_ref="$2" expected_sha="$3"',
+        '(type == "object") and',
+        '(((.ref | type) == "string") and (.ref == $ref)) and',
+        '(((.object | type) == "object") and',
+        '(((.object.type | type) == "string") and (.object.type == "commit")) and',
+        '((.object.sha | type) == "string") and',
+        '(.object.sha | test("^[0-9a-f]{40}$")) and',
+        '(.object.sha == $sha)) and',
+        '(((.object.url | type) == "string") and ((.object.url | length) > 0))',
+    )
+    jobs = {
+        "reconcile": "budget",
+        "propose": "approve",
+        "approve": "authorize",
+        "merge": "decision_receipt",
+    }
+    blocks: dict[str, str] = {}
+    for job, next_job in jobs.items():
+        block = job_block(spotlight, job, next_job)
+        blocks[job] = block
+        require(
+            block.count(helper_marker) == 1,
+            f"Spotlight {job} must define exactly one privileged Git-ref validator",
+        )
+        helper_start = block.index(helper_marker)
+        helper_end = block.index("          }\n\n", helper_start) + len("          }\n")
+        helper = block[helper_start:helper_end]
+        for fragment in helper_schema:
+            require(fragment in helper, f"Spotlight {job} Git-ref schema changed: {fragment}")
+        for forbidden in (
+            'git/ref/heads/main" --jq .object.sha',
+            'git/ref/heads/generated" --jq .object.sha',
+            'git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha',
+        ):
+            require(
+                forbidden not in block,
+                f"Spotlight {job} regained raw singleton Git-ref scalar consumption: {forbidden}",
+            )
+
+    contracts = {
+        "reconcile": (
+            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+             'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+             'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
+            ('GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+             'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
+             'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"'),
+        ),
+        "propose": (
+            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+             'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"',
+             'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"'),
+            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+             'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+             'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
+        ),
+        "approve": (
+            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+             'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+             'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
+            ('GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+             'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
+             'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"'),
+            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+             'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+             'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
+            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+             'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+             'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
+            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+             'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+             'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
+        ),
+        "merge": (
+            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+             'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+             'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
+            ('GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+             'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
+             'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"'),
+            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+             'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+             'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
+            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+             'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+             'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
+            ('GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+             'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
+             'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"'),
+            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+             'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+             'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
+            ('CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+             'validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"',
+             'CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"'),
+        ),
+    }
+    for job, specs in contracts.items():
+        block = blocks[job]
+        cursor = -1
+        for fetch, validate, consume in specs:
+            fetch_pos = block.find(fetch, cursor + 1)
+            require(fetch_pos > cursor, f"Spotlight {job} Git-ref fetch disappeared: {fetch}")
+            validate_pos = block.find(validate, fetch_pos)
+            consume_pos = block.find(consume, validate_pos)
+            require(
+                fetch_pos < validate_pos < consume_pos,
+                f"Spotlight {job} Git-ref evidence must validate before SHA consumption",
+            )
+            cursor = consume_pos
+    require(
+        spotlight.count(helper_marker) == 4
+        and spotlight.count('validate_git_ref_object "$MAIN_REF_RESPONSE"') == 6
+        and spotlight.count('validate_git_ref_object "$GENERATED_REF_RESPONSE"') == 4
+        and spotlight.count('validate_git_ref_object "$CANDIDATE_REF_RESPONSE"') == 5
+        and spotlight.count('validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE"') == 1,
+        "Spotlight privileged Git-ref validation topology changed",
+    )
+
+
 def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
     created_ref = "python3 scripts/codeql_autofix_controller.py created-ref-response"
     reviewer = "python3 scripts/codeql_autofix_controller.py reviewer-request-response"
@@ -2472,6 +2680,7 @@ def main() -> int:
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
         validate_spotlight_event_admission(spotlight, capability)
         validate_spotlight_same_base_supersession(spotlight)
+        validate_spotlight_privileged_ref_evidence_schema(spotlight)
 
         validate_spotlight_budget_artifact_history(spotlight)
 

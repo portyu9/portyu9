@@ -175,10 +175,24 @@ def validate_merge_success_response_overlay(sync: str) -> None:
     validation = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"')
     normalized_sha = merge.index('MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"')
     merged_pr = merge.index('MERGED_PR="$(gh api ')
-    current_main = merge.index('CURRENT_MAIN_SHA="$(gh api ')
-    cleanup = merge.index('CANDIDATE_REFS="$(gh api ')
-    require(mutation < validation < normalized_sha < merged_pr < current_main < cleanup,
-            "Spotlight merge-success validation must precede post-merge proof, current-main acceptance, and cleanup")
+    current_main_ref = merge.index(
+        'CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+        merged_pr,
+    )
+    current_main_schema = merge.index(
+        'validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"',
+        current_main_ref,
+    )
+    current_main = merge.index(
+        'CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
+        current_main_schema,
+    )
+    cleanup = merge.index('CANDIDATE_REFS="$(gh api ', current_main)
+    require(
+        mutation < validation < normalized_sha < merged_pr
+        < current_main_ref < current_main_schema < current_main < cleanup,
+        "Spotlight merge-success validation must precede post-merge proof, typed current-main acceptance, and cleanup",
+    )
     require('test "$CURRENT_MAIN_SHA" = "$MERGE_SHA"' in merge and
             'echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"' in merge,
             "Spotlight must consume only the validated merge SHA for current-main proof and downstream evidence")
@@ -301,7 +315,18 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     merged_identity = merge.index('          jq -e --argjson pr "$PR_NUMBER" --arg merge "$MERGE_SHA"', merged_validate)
     merged_consume = merge.index('          test "$(jq -r .user.login <<<"$MERGED_PR")"', merged_identity)
     merge_sha_bind = merge.index('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"', merged_consume)
-    current_main = merge.index('          CURRENT_MAIN_SHA="$(gh api ', merged_fetch)
+    current_main_ref = merge.index(
+        '          CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+        merge_sha_bind,
+    )
+    current_main_schema = merge.index(
+        '          validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"',
+        current_main_ref,
+    )
+    current_main = merge.index(
+        '          CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
+        current_main_schema,
+    )
     cleanup = merge.index('          CANDIDATE_REFS="$(gh api ', current_main)
     identity_block = merge[merged_identity:merged_consume]
     for fragment in (
@@ -315,8 +340,11 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     ):
         require(fragment in identity_block,
                 f"Spotlight post-merge canonical PR identity is missing: {fragment}")
-    require(merged_fetch < merged_validate < merged_identity < merged_consume < merge_sha_bind < current_main < cleanup,
-            "Spotlight post-merge PR schema/identity/SHA binding must precede current-main acceptance and cleanup")
+    require(
+        merged_fetch < merged_validate < merged_identity < merged_consume < merge_sha_bind
+        < current_main_ref < current_main_schema < current_main < cleanup,
+        "Spotlight post-merge PR schema/identity/SHA binding must precede typed current-main acceptance and cleanup",
+    )
     require(merge.count('validate_terminal_pr_object "$PR"') == 1
             and merge.count('validate_terminal_pr_object "$MERGED_PR"') == 1,
             "Spotlight terminal PR schema must validate exactly the pre/post merge snapshots")
@@ -550,7 +578,80 @@ def project_ancestry_supersession_to_same_base(sync: str) -> str:
     return sync
 
 
+def project_spotlight_privileged_refs_to_legacy(sync: str) -> str:
+    helper = '''          validate_git_ref_object() {
+            local payload="$1" expected_ref="$2" expected_sha="$3"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (((.ref | type) == "string") and (.ref == $ref)) and
+              (((.object | type) == "object") and
+                (((.object.type | type) == "string") and (.object.type == "commit")) and
+                (((.object.sha | type) == "string") and
+                  (.object.sha | test("^[0-9a-f]{40}$")) and
+                  (.object.sha == $sha)) and
+                (((.object.url | type) == "string") and ((.object.url | length) > 0)))
+            ' <<<"$payload" >/dev/null
+          }
+
+'''
+    require(
+        sync.count(helper) == 4,
+        "Spotlight item-9 projection cannot isolate four privileged Git-ref validators",
+    )
+    projected = sync.replace(helper, "")
+    overlays = (
+        (
+            '''          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n',
+            5,
+        ),
+        (
+            '''          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
+          test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"\n',
+            4,
+        ),
+        (
+            '''          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"\n',
+            5,
+        ),
+        (
+            '''          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"\n',
+            1,
+        ),
+        (
+            '''          CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"
+          CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"
+''',
+            '          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"\n',
+            1,
+        ),
+    )
+    for hardened, legacy, expected_count in overlays:
+        require(
+            projected.count(hardened) == expected_count,
+            f"Spotlight item-9 Git-ref projection topology changed for: {legacy.strip()}",
+        )
+        projected = projected.replace(hardened, legacy)
+    return projected
+
+
 def project_item9(sync: str) -> str:
+    sync = project_spotlight_privileged_refs_to_legacy(sync)
     sync = project_protected_workflow_evidence_to_legacy(sync)
     sync = project_ancestry_supersession_to_same_base(sync)
     current_age_guard = (
