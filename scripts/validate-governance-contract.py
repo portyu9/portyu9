@@ -35,6 +35,144 @@ def validate_action_identity_projection() -> None:
 
 
 
+def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
+    for fragment in (
+        "validate_dependabot_pr_object() {",
+        '(.number | type == "number" and . == floor and . > 0 and . == $number) and',
+        '(.state | type == "string" and . == "open") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.user | type == "object" and (.login | type == "string" and . == "dependabot[bot]")) and',
+        '(.base | type == "object" and',
+        '(.head | type == "object" and',
+        'validate_git_ref_object() {',
+        '(.ref | type == "string" and . == $ref) and',
+        '(.type | type == "string" and . == "commit") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $sha) and',
+        'validate_admission_check_collection() {',
+        '($root.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '($root.check_runs | type == "array" and length == $root.total_count) and',
+        '(.name | type == "string" and . == "trusted-capability-admission-proof") and',
+        '(.head_sha | type == "string" and . == $head) and',
+        '(.app | type == "object" and (.id | type == "number" and . == 15368)) and',
+        '(.status | type == "string" and allowed_status) and',
+        '(.external_id == null or (.external_id | type == "string")) and',
+        '(.output | type == "object" and',
+        '(.check_suite | type == "object" and (.id | positive_int)) and',
+        '(.pull_requests | type == "array" and length <= 100) and',
+        '(([$root.check_runs[].id] | length) ==',
+        'ERROR: malformed or mismatched PR-native Dependabot admission PR evidence.',
+        'ERROR: malformed or stale PR-native Dependabot admission main-ref evidence.',
+        'ERROR: malformed or stale PR-native Dependabot admission head-ref evidence.',
+        'ERROR: malformed or incomplete PR-native Dependabot admission check evidence.',
+    ):
+        require(
+            fragment in block,
+            f"Profile Quality Dependabot admission evidence schema is missing: {fragment}",
+        )
+
+    for forbidden in (
+        'git/ref/heads/main" --jq .object.sha',
+        'git/ref/heads/${HEAD_REF}" --jq .object.sha',
+    ):
+        require(
+            forbidden not in block,
+            f"Profile Quality Dependabot admission regressed to direct ref scalar consumption: {forbidden}",
+        )
+
+    require(
+        block.count('for ATTEMPT in $(seq 1 36); do') == 1 and block.count('sleep 5') == 1,
+        "Profile Quality Dependabot admission bounded retry window changed",
+    )
+    require(
+        block.count('PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"') == 1,
+        "Profile Quality Dependabot admission PR singleton fetch count changed",
+    )
+    require(
+        block.count('validate_dependabot_pr_object "$PR"') == 1,
+        "Profile Quality Dependabot admission PR schema count changed",
+    )
+    require(
+        block.count('validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"') == 1
+        and block.count(
+            'validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA"'
+        ) == 1,
+        "Profile Quality Dependabot admission must type exactly both Git-ref reads",
+    )
+    require(
+        block.count('validate_admission_check_collection "$CHECKS"') == 1,
+        "Profile Quality Dependabot admission check collection schema count changed",
+    )
+
+    boundaries = (
+        (
+            'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
+            'validate_dependabot_pr_object "$PR"',
+            'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+            "PR singleton",
+        ),
+        (
+            'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+            'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+            'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+            "main ref",
+        ),
+        (
+            'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+            'validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA"',
+            'CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"',
+            "head ref",
+        ),
+        (
+            'CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"',
+            'validate_admission_check_collection "$CHECKS"',
+            'if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then',
+            "check collection",
+        ),
+    )
+    for fetch, schema, consume, label in boundaries:
+        fetch_pos = block.index(fetch)
+        schema_pos = block.index(schema, fetch_pos)
+        consume_pos = block.index(consume, schema_pos)
+        require(
+            fetch_pos < schema_pos < consume_pos,
+            f"Profile Quality Dependabot admission must type {label} evidence before consumption",
+        )
+
+
+def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
+    mutations = (
+        (
+            '(.number | type == "number" and . == floor and . > 0 and . == $number) and',
+            '(.number | tostring == ($number | tostring)) and',
+            "evidence schema is missing",
+        ),
+        (
+            'validate_admission_check_collection "$CHECKS"',
+            'true # displaced admission check schema',
+            "check collection schema count changed",
+        ),
+        (
+            'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+            'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"',
+            "direct ref scalar consumption",
+        ),
+    )
+    for current, mutated_value, expected in mutations:
+        require(current in block, f"Profile Quality admission self-test fixture anchor changed: {current}")
+        mutated = block.replace(current, mutated_value, 1)
+        try:
+            validate_profile_quality_dependabot_admission_evidence(mutated)
+        except ValueError as exc:
+            require(
+                expected in str(exc),
+                f"Profile Quality admission self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                f"Profile Quality admission self-test accepted forbidden mutation: {expected}"
+            )
+
+
 def validate_quality_native_gate(text: str) -> None:
     marker = "  governed_bot_review:\n"
     require(text.count(marker) == 1,
@@ -79,6 +217,8 @@ def validate_quality_native_gate(text: str) -> None:
                 f"Profile Quality witness consumers acquired forbidden write authority: {forbidden}")
 
     dependabot_admission = core.job_block(legacy_quality, "dependabot_admission", None)
+    validate_profile_quality_dependabot_admission_evidence(dependabot_admission)
+    self_test_profile_quality_dependabot_admission_evidence(dependabot_admission)
     require(
         "permissions:\n      checks: read\n      contents: read\n      pull-requests: read" in dependabot_admission,
         "PR-native Dependabot admission gate must retain exact checks/contents/pull-requests read authority",
@@ -113,6 +253,34 @@ def validate_quality_native_gate(text: str) -> None:
         'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         1,
     )
+    # The frozen item-10 core asserts the original scalar predicates textually.
+    # Project only the hardened check schema back to those legacy spellings in-memory;
+    # production continues to consume the typed evidence above.
+    for hardened, legacy in (
+        (
+            '(.name | type == "string" and . == "trusted-capability-admission-proof") and',
+            '.name == "trusted-capability-admission-proof" and',
+        ),
+        (
+            '(.head_sha | type == "string" and . == $head) and',
+            '.head_sha == $head and',
+        ),
+        (
+            '(.app | type == "object" and (.id | type == "number" and . == 15368)) and',
+            '.app.id == 15368 and',
+        ),
+        (
+            '(.status | type == "string" and allowed_status) and',
+            '.status == "completed" and',
+        ),
+        (
+            '(.conclusion | type == "string" and allowed_conclusion)',
+            '.conclusion == "success"',
+        ),
+    ):
+        require(hardened in projected_quality,
+                f"Profile Quality frozen-core projection anchor changed: {hardened}")
+        projected_quality = projected_quality.replace(hardened, legacy, 1)
     ORIGINAL_VALIDATE_QUALITY(projected_quality)
 
 

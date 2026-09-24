@@ -540,20 +540,128 @@ jobs:
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
 
+          validate_dependabot_pr_object() {
+            local response="$1"
+            jq -e \
+              --argjson number "$PR_NUMBER" \
+              --arg repo "$TARGET_REPOSITORY" \
+              --arg base_ref "$BASE_REF" \
+              --arg base_sha "$BASE_SHA" \
+              --arg head_repo "$HEAD_REPOSITORY" \
+              --arg head_ref "$HEAD_REF" \
+              --arg head_sha "$HEAD_SHA" '
+                (type == "object") and
+                (.number | type == "number" and . == floor and . > 0 and . == $number) and
+                (.state | type == "string" and . == "open") and
+                (.draft | type == "boolean" and . == false) and
+                (.user | type == "object" and (.login | type == "string" and . == "dependabot[bot]")) and
+                (.base | type == "object" and
+                  (.ref | type == "string" and . == $base_ref) and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base_sha) and
+                  (.repo | type == "object" and (.full_name | type == "string" and . == $repo))) and
+                (.head | type == "object" and
+                  (.ref | type == "string" and . == $head_ref) and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head_sha) and
+                  (.repo | type == "object" and (.full_name | type == "string" and . == $head_repo))) and
+                (.url | type == "string" and
+                  . == ("https://api.github.com/repos/" + $repo + "/pulls/" + ($number | tostring))) and
+                (.html_url | type == "string" and length > 0)
+              ' <<<"$response" >/dev/null
+          }
+
+          validate_git_ref_object() {
+            local response="$1" expected_ref="$2" expected_sha="$3"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.node_id | type == "string" and length > 0) and
+              (.url | type == "string" and length > 0) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $sha) and
+                (.url | type == "string" and length > 0))
+            ' <<<"$response" >/dev/null
+          }
+
+          validate_admission_check_collection() {
+            local response="$1"
+            jq -e \
+              --arg head "$HEAD_SHA" \
+              --arg base "$BASE_SHA" \
+              --argjson pr "$PR_NUMBER" '
+                def positive_int: type == "number" and . == floor and . > 0;
+                def allowed_status:
+                  . == "queued" or . == "in_progress" or . == "requested" or
+                  . == "waiting" or . == "pending" or . == "completed";
+                def allowed_conclusion:
+                  . == "success" or . == "failure" or . == "neutral" or
+                  . == "cancelled" or . == "skipped" or . == "timed_out" or
+                  . == "action_required" or . == "stale" or . == "startup_failure";
+                . as $root
+                | (type == "object") and
+                  ($root.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+                  ($root.check_runs | type == "array" and length == $root.total_count) and
+                  (all($root.check_runs[];
+                    type == "object" and
+                    (.id | positive_int) and
+                    (.node_id | type == "string" and length > 0) and
+                    (.name | type == "string" and . == "trusted-capability-admission-proof") and
+                    (.head_sha | type == "string" and . == $head) and
+                    (.app | type == "object" and (.id | type == "number" and . == 15368)) and
+                    (.status | type == "string" and allowed_status) and
+                    (if .status == "completed" then
+                       (.conclusion | type == "string" and allowed_conclusion)
+                     else
+                       .conclusion == null
+                     end) and
+                    (.external_id == null or (.external_id | type == "string")) and
+                    (.output | type == "object" and
+                      (.summary == null or (.summary | type == "string"))) and
+                    (.check_suite | type == "object" and (.id | positive_int)) and
+                    (.pull_requests | type == "array" and length <= 100) and
+                    (all(.pull_requests[];
+                      type == "object" and
+                      (.number | positive_int) and
+                      (.head | type == "object" and
+                        (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
+                      (.base | type == "object" and
+                        (.sha | type == "string" and test("^[0-9a-f]{40}$")))
+                    ))
+                  )) and
+                  (([$root.check_runs[].id] | length) ==
+                   ([$root.check_runs[].id] | unique | length)) and
+                  (if $root.total_count == 1 then
+                    ([ $root.check_runs[0].pull_requests[]?
+                       | select(.number == $pr and .head.sha == $head and .base.sha == $base)
+                     ] | length) <= 1
+                   else
+                    true
+                   end)
+              ' <<<"$response" >/dev/null
+          }
+
           for ATTEMPT in $(seq 1 36); do
             PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-            test "$(jq -r .state <<<"$PR")" = "open"
-            test "$(jq -r .draft <<<"$PR")" = "false"
-            test "$(jq -r .user.login <<<"$PR")" = "dependabot[bot]"
-            test "$(jq -r .base.ref <<<"$PR")" = "$BASE_REF"
-            test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
-            test "$(jq -r .head.repo.full_name <<<"$PR")" = "$HEAD_REPOSITORY"
-            test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
-            test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
-            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+            validate_dependabot_pr_object "$PR" || {
+              echo "ERROR: malformed or mismatched PR-native Dependabot admission PR evidence." >&2
+              exit 1
+            }
+            MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+            validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA" || {
+              echo "ERROR: malformed or stale PR-native Dependabot admission main-ref evidence." >&2
+              exit 1
+            }
+            HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+            validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {
+              echo "ERROR: malformed or stale PR-native Dependabot admission head-ref evidence." >&2
+              exit 1
+            }
 
             CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"
+            validate_admission_check_collection "$CHECKS" || {
+              echo "ERROR: malformed or incomplete PR-native Dependabot admission check evidence." >&2
+              exit 1
+            }
             if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then
               CHECK="$(jq -c '.check_runs[0]' <<<"$CHECKS")"
               EXTERNAL_ID="$(jq -r '.external_id // ""' <<<"$CHECK")"
