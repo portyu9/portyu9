@@ -903,7 +903,7 @@ jobs:
                 . == "success" or . == "failure" or . == "neutral" or
                 . == "cancelled" or . == "skipped" or . == "timed_out" or
                 . == "action_required" or . == "stale" or . == "startup_failure";
-              . as $root
+              (. as $root
               | (type == "object") and
                 ($root.total_count | type == "number" and . == floor and . >= 0) and
                 ($root.workflow_runs | type == "array" and length <= 1) and
@@ -939,6 +939,7 @@ jobs:
                   (.url | type == "string" and length > 0) and
                   (.html_url | type == "string" and length > 0)
                 ))
+              )
             ' <<<"$RUNS" >/dev/null || {
               echo "ERROR: malformed or incomplete Profile Stats Spotlight run evidence." >&2
               exit 1
