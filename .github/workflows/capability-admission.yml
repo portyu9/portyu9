@@ -395,11 +395,40 @@ jobs:
           [[ "$RECEIPT_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
 
           gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json
+          RECEIPT_EVENT="$(jq -r .event verified-receipt.json)"
+          test -n "$RECEIPT_EVENT"
+          jq -e \
+            --argjson run "$ORIGIN_RUN_ID" \
+            --argjson attempt "$RECEIPT_ATTEMPT" \
+            --arg event "$RECEIPT_EVENT" \
+            --arg base "$BASE_SHA" \
+            --arg repo "$TARGET_REPOSITORY" '
+              (type == "object") and
+              (.id | type == "number" and . == floor and . > 0 and . == $run) and
+              (.run_attempt | type == "number" and . == floor and . > 0 and . == $attempt) and
+              (.workflow_id | type == "number" and . == floor and . > 0) and
+              (.run_number | type == "number" and . == floor and . > 0) and
+              (.check_suite_id | type == "number" and . == floor and . > 0) and
+              (.name | type == "string" and . == "CodeQL Autofix controller") and
+              (.path | type == "string" and . == ".github/workflows/codeql-autofix.yml") and
+              (.event | type == "string" and . == $event) and
+              (.head_branch | type == "string" and . == "main") and
+              (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and
+              (.status | type == "string" and . == "in_progress") and
+              (.conclusion == null) and
+              (.repository | type == "object" and
+                (.full_name | type == "string" and . == $repo)) and
+              (.head_repository | type == "object" and
+                (.full_name | type == "string" and . == $repo))
+            ' origin-run.json >/dev/null || {
+              echo "ERROR: malformed or mismatched Capability Admission CodeQL Autofix origin-run evidence." >&2
+              exit 1
+            }
           test "$(jq -r .id origin-run.json)" = "$ORIGIN_RUN_ID"
           test "$(jq -r .run_attempt origin-run.json)" = "$RECEIPT_ATTEMPT"
           test "$(jq -r .name origin-run.json)" = "CodeQL Autofix controller"
           test "$(jq -r .path origin-run.json)" = ".github/workflows/codeql-autofix.yml"
-          test "$(jq -r .event origin-run.json)" = "$(jq -r .event verified-receipt.json)"
+          test "$(jq -r .event origin-run.json)" = "$RECEIPT_EVENT"
           test "$(jq -r .head_branch origin-run.json)" = "main"
           test "$(jq -r .head_sha origin-run.json)" = "$BASE_SHA"
           test "$(jq -r .status origin-run.json)" = "in_progress"
@@ -424,16 +453,92 @@ jobs:
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
 
+          validate_candidate_commit_response() {
+            local commit="$1" head="$2"
+            jq -e --arg head "$head" '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.url | type == "string" and length > 0) and
+              (.tree | type == "object" and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.url | type == "string" and length > 0)) and
+              (.parents | type == "array" and
+                all(.[];
+                  (type == "object") and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                  (.url | type == "string" and length > 0))) and
+              (.author | type == "object" and
+                (.name | type == "string" and length > 0) and
+                (.email | type == "string" and length > 0) and
+                (.date | type == "string" and length > 0)) and
+              (.committer | type == "object" and
+                (.name | type == "string" and length > 0) and
+                (.email | type == "string" and length > 0) and
+                (.date | type == "string" and length > 0)) and
+              (.message | type == "string" and length > 0)
+            ' <<<"$commit" >/dev/null
+          }
+
+          validate_candidate_tree_response() {
+            local tree="$1" expected="$2"
+            jq -e --arg expected "$expected" '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $expected) and
+              (.url | type == "string" and length > 0) and
+              (.truncated | type == "boolean" and . == false) and
+              (.tree | type == "array" and length > 0 and length <= 100000 and
+                all(.[];
+                  (type == "object") and
+                  (.path | type == "string" and length > 0 and
+                    (startswith("/") | not) and
+                    (contains("//") | not) and
+                    (contains("\u0000") | not) and
+                    (test("(^|/)\\.\\.?(/|$)") | not)) and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                  (.url | type == "string" and length > 0) and
+                  (
+                    (.type == "tree" and .mode == "040000") or
+                    (.type == "blob" and
+                      (.mode == "100644" or .mode == "100755" or .mode == "120000")) or
+                    (.type == "commit" and .mode == "160000")
+                  ) and
+                  ((has("size") | not) or .size == null or
+                    (.size | type == "number" and . == floor and . >= 0))
+                )) and
+              (([.tree[].path] | length) == ([.tree[].path] | unique | length))
+            ' <<<"$tree" >/dev/null
+          }
+
+          validate_candidate_blob_response() {
+            local blob="$1" expected="$2"
+            jq -e --arg expected "$expected" '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $expected) and
+              (.url | type == "string" and length > 0) and
+              (.size | type == "number" and . == floor and . >= 0) and
+              (.encoding | type == "string" and . == "base64") and
+              (.content | type == "string" and length > 0)
+            ' <<<"$blob" >/dev/null
+          }
+
           rm -rf candidate-capability-source
           mkdir -p candidate-capability-source/.github/workflows candidate-capability-source/scripts
 
           COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          validate_candidate_commit_response "$COMMIT" "$HEAD_SHA" || {
+            echo "ERROR: malformed or mismatched Capability Admission candidate Git commit evidence." >&2
+            exit 1
+          }
           test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
           TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
           printf '%s\n' "$TREE_SHA" > candidate-capability-source/.candidate-tree-sha
 
           TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
+          validate_candidate_tree_response "$TREE" "$TREE_SHA" || {
+            echo "ERROR: malformed or ambiguous Capability Admission candidate Git tree evidence." >&2
+            exit 1
+          }
           test "$(jq -r .truncated <<<"$TREE")" = "false"
 
           mapfile -t PATHS < <(
@@ -469,6 +574,10 @@ jobs:
             [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
 
             BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {
+              echo "ERROR: malformed or mismatched Capability Admission candidate Git blob evidence." >&2
+              exit 1
+            }
             test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
             test "$(jq -r .encoding <<<"$BLOB")" = "base64"
             mkdir -p "candidate-capability-source/$(dirname "$PATH_VALUE")"
@@ -493,6 +602,11 @@ jobs:
               BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
               [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
               BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+              validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {
+                echo "ERROR: malformed or mismatched Capability Admission Dependabot supplemental Git blob evidence." >&2
+                exit 1
+              }
+              test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
               test "$(jq -r .encoding <<<"$BLOB")" = "base64"
               mkdir -p "candidate-capability-source/$(dirname "$PATH_VALUE")"
               jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "candidate-capability-source/$PATH_VALUE"
