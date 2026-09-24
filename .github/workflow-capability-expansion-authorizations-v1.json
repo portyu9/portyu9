@@ -480,6 +480,13 @@
       "rationale": "Authorize #578's exact source-only Dependabot post-review liveness change. After an exact-base/head v2 APPROVED review by portyu9, the already-authorized Dependabot workflow dispatch targets main so the trusted controller can re-prove the current candidate immediately. No workflow capability BOM, endpoint, token permission, required check, merge method, bypass, or candidate execution authority changes."
     },
     {
+      "id": "cap-dependabot-protected-workflow-evidence-schema-hardening-v1",
+      "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "expansionSha256": "b4b8cd085454719665ca7f6fbafeb682c0b7569492685cca981b46ce9c043284",
+      "rationale": "Authorize frozen #974's exact Dependabot protected-workflow evidence hardening. Existing workflow-definition and pull_request run GETs are typed before authority-relevant scalar use, binding exact three-workflow identities, candidate head/repository identity, unique positive run/check-suite ids, attempts, and reviewed status/conclusion classes. BOM capabilities, API surfaces/counts, permissions, approval/merge authority, required checks and bypass behavior are unchanged."
+    },
+    {
       "id": "cap-dependabot-readiness-run-check-schema-hardening",
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
