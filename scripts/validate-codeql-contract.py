@@ -652,7 +652,7 @@ def validate_unsupported_evidence(text: str) -> None:
     )
     unsupported_pos = text.index('test "$ERROR_TEXT" = "gh: Alert is not supported by autofix. (HTTP 422)"')
     main_before_pos = text.index(
-        'test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+        'assert_main_sha "$BASE_SHA"',
         unsupported_pos,
     )
     read_pos = text.index(get_endpoint, main_before_pos)
@@ -666,7 +666,7 @@ def validate_unsupported_evidence(text: str) -> None:
         create_pos,
     )
     main_after_pos = text.index(
-        'test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+        'assert_main_sha "$BASE_SHA"',
         created_verify_pos,
     )
     continuation_pos = text.index(
