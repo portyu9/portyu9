@@ -25,6 +25,7 @@ CONTRACT = ROOT / ".github" / "rulesets" / "repository-rulesets-v1.json"
 DOC = ROOT / ".github" / "RULESETS.md"
 QUALITY = ROOT / ".github" / "workflows" / "profile-quality.yml"
 RECONCILER = ROOT / ".github" / "workflows" / "ruleset-reconciler.yml"
+SENTINEL = ROOT / ".github" / "workflows" / "ruleset-drift-sentinel.yml"
 REPOSITORY = "portyu9/portyu9"
 API_ORIGIN = "https://api.github.com"
 API_PATH = f"/repos/{REPOSITORY}/rulesets"
@@ -632,6 +633,138 @@ def expect_collection_failure(collection: Any, expected: str) -> None:
         raise ValueError(f"ruleset collection self-test accepted ambiguous inventory: {expected}")
 
 
+
+def validate_sentinel_main_ref_evidence(text: str, *, run_self_test: bool = True) -> None:
+    capture = 'LIVE_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'
+    normalize = 'LIVE_MAIN_SHA="$(jq -er \''
+    consume = 'test "$LIVE_MAIN_SHA" = "$EXPECTED_MAIN_SHA"'
+    endpoint = 'gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main"'
+    legacy = 'gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq \' .object.sha\''
+
+    for marker in (capture, normalize, consume):
+        require(
+            text.count(marker) == 1,
+            f"Ruleset sentinel main-ref evidence anchor changed: {marker}",
+        )
+    require(
+        text.count(endpoint) == 1,
+        "Ruleset sentinel must retain exactly one reviewed main-ref GET",
+    )
+    require(
+        'gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq' not in text,
+        "Ruleset sentinel regressed to direct scalar main-ref consumption",
+    )
+    require(
+        "permissions:\n  contents: read" in text
+        and "permissions:\n      contents: read" in text,
+        "Ruleset sentinel must retain workflow/job contents-read-only authority",
+    )
+    require(
+        "run: python3 scripts/validate-ruleset-contract.py --live" in text,
+        "Ruleset sentinel must retain live fail-closed ruleset validation",
+    )
+
+    start = text.index(normalize)
+    normalize_end_marker = '\' <<<"$LIVE_MAIN_REF_RESPONSE")"'
+    normalize_end = text.index(normalize_end_marker, start) + len(normalize_end_marker)
+    schema = text[start:normalize_end]
+    for fragment in (
+        'error("Ruleset sentinel main ref response must be an object")',
+        '.ref != "refs/heads/main"',
+        'error("Ruleset sentinel main ref identity changed")',
+        '((.node_id | type) != "string") or ((.node_id | length) == 0)',
+        'error("Ruleset sentinel main ref node id is invalid")',
+        '((.url | type) != "string") or ((.url | length) == 0)',
+        'error("Ruleset sentinel main ref URL is invalid")',
+        '((.object | type) != "object") or (.object.type != "commit")',
+        'error("Ruleset sentinel main ref object identity changed")',
+        '((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not)',
+        'error("Ruleset sentinel main ref SHA is invalid")',
+        '((.object.url | type) != "string") or ((.object.url | length) == 0)',
+        'error("Ruleset sentinel main ref object URL is invalid")',
+        ".object.sha",
+    ):
+        require(
+            fragment in schema,
+            f"Ruleset sentinel main-ref schema changed: {fragment}",
+        )
+
+    schema_proof = text.index(
+        'error("Ruleset sentinel main ref response must be an object")',
+        start,
+    )
+    consume_pos = text.index(consume)
+    positions = (text.index(capture), start, schema_proof, normalize_end, consume_pos)
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Ruleset sentinel main-ref schema must precede trusted-main SHA consumption",
+    )
+
+    if run_self_test:
+        mutations = (
+            (
+                '.ref != "refs/heads/main"',
+                '(.ref | tostring) != "refs/heads/main"',
+                "main-ref schema changed",
+            ),
+            (
+                '((.node_id | type) != "string") or ((.node_id | length) == 0)',
+                '((.node_id | tostring | length) == 0)',
+                "main-ref schema changed",
+            ),
+            (
+                '((.object | type) != "object") or (.object.type != "commit")',
+                '(.object.type | tostring) != "commit"',
+                "main-ref schema changed",
+            ),
+            (
+                '((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not)',
+                '((.object.sha | tostring | test("^[0-9a-f]{40}$")) | not)',
+                "main-ref schema changed",
+            ),
+            (
+                '((.object.url | type) != "string") or ((.object.url | length) == 0)',
+                '((.object.url | tostring | length) == 0)',
+                "main-ref schema changed",
+            ),
+        )
+        for current, replacement, expected in mutations:
+            require(
+                current in schema,
+                f"Ruleset sentinel main-ref self-test fixture anchor changed: {current}",
+            )
+            mutated = text.replace(current, replacement, 1)
+            try:
+                validate_sentinel_main_ref_evidence(mutated, run_self_test=False)
+            except ValueError as exc:
+                require(
+                    expected in str(exc),
+                    f"Ruleset sentinel main-ref self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    "Ruleset sentinel main-ref self-test accepted weakened evidence: "
+                    f"{current}"
+                )
+
+        schema_block = text[start:normalize_end]
+        displaced = text[:start] + text[normalize_end:]
+        consume_pos = displaced.index(consume)
+        consume_end = displaced.index("\n", consume_pos) + 1
+        reordered = displaced[:consume_end] + schema_block + displaced[consume_end:]
+        try:
+            validate_sentinel_main_ref_evidence(reordered, run_self_test=False)
+        except ValueError as exc:
+            require(
+                "schema must precede trusted-main SHA consumption" in str(exc),
+                f"Ruleset sentinel main-ref order self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Ruleset sentinel main-ref self-test accepted schema-after-consumption ordering"
+            )
+
+
 def self_test(payload: dict[str, Any]) -> None:
     # The deliberate administration transition is pure source logic. Exercise its
     # exact predecessor/successor classifier here so runtime-only ordering or digest
@@ -885,13 +1018,15 @@ def main() -> int:
     parser.add_argument("--live", action="store_true", help="also compare checked-in target with GitHub control-plane fields observable to this identity")
     args = parser.parse_args()
     try:
-        for path in (CONTRACT, DOC, QUALITY, RECONCILER):
+        for path in (CONTRACT, DOC, QUALITY, RECONCILER, SENTINEL):
             require(path.is_file(), f"ruleset contract input is missing: {path.relative_to(ROOT)}")
         payload = load_contract()
         validate_source(payload)
         reconciler = RECONCILER.read_text(encoding="utf-8")
         validate_reconciler_wake_contract(reconciler)
         validate_reconciler_main_ref_evidence(reconciler)
+        sentinel = SENTINEL.read_text(encoding="utf-8")
+        validate_sentinel_main_ref_evidence(sentinel)
         self_test(payload)
         unobservable: tuple[str, ...] = ()
         if args.live:
@@ -900,7 +1035,7 @@ def main() -> int:
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
             f"seven required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity, "
-            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all five privileged main-ref singleton reads are typed before SHA consumption, and observable drift fails closed."
+            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all five privileged reconciler main-ref reads plus the read-only drift-sentinel main-ref read are typed before SHA consumption, and observable drift fails closed."
         )
         if unobservable:
             print(

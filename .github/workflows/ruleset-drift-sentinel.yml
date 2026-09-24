@@ -34,7 +34,26 @@ jobs:
           EXPECTED_MAIN_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          LIVE_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          LIVE_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          LIVE_MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset sentinel main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset sentinel main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset sentinel main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset sentinel main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset sentinel main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset sentinel main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset sentinel main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$LIVE_MAIN_REF_RESPONSE")"
           test "$LIVE_MAIN_SHA" = "$EXPECTED_MAIN_SHA"
 
       - name: Detect repository ruleset drift
