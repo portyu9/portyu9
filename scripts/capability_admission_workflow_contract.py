@@ -396,76 +396,6 @@ def validate_text(text: str) -> None:
                 f"trusted capability admission Spotlight proof changed: {spotlight_binding}")
 
     candidate_call = 'CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"'
-    expect_scoped_schema_failure(
-        text,
-        start_marker="          validate_git_ref_object() {",
-        end_marker="          validate_readme_contents_object() {",
-        old='(.ref | type == "string" and . == $ref) and',
-        new='(.ref == $ref) and',
-        expected="Git-ref response schema",
-    )
-    expect_scoped_schema_failure(
-        text,
-        start_marker="          validate_git_ref_object() {",
-        end_marker="          validate_readme_contents_object() {",
-        old='(.type | type == "string" and . == "commit") and',
-        new='(.type == "commit") and',
-        expected="Git-ref response schema",
-    )
-    expect_scoped_schema_failure(
-        text,
-        start_marker="          validate_git_ref_object() {",
-        end_marker="          validate_readme_contents_object() {",
-        old='($sha == "" or .object.sha == $sha)',
-        new='true',
-        expected="Git-ref response schema",
-    )
-    expect_scoped_schema_failure(
-        text,
-        start_marker="          validate_readme_contents_object() {",
-        end_marker='          case "$EVENT_NAME" in',
-        old='(.path | type == "string" and . == "README.md") and',
-        new='(.path == "README.md") and',
-        expected="README Contents response schema",
-    )
-    expect_scoped_schema_failure(
-        text,
-        start_marker="          validate_readme_contents_object() {",
-        end_marker='          case "$EVENT_NAME" in',
-        old='(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and',
-        new='(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
-        expected="README Contents response schema",
-    )
-    expect_scoped_schema_failure(
-        text,
-        start_marker="          validate_readme_contents_object() {",
-        end_marker='          case "$EVENT_NAME" in',
-        old='(.encoding | type == "string" and . == "base64") and',
-        new='(.encoding == "base64") and',
-        expected="README Contents response schema",
-    )
-    expect_scoped_schema_failure(
-        text,
-        start_marker="          validate_readme_contents_object() {",
-        end_marker='          case "$EVENT_NAME" in',
-        old='(.content | type == "string" and length > 0)',
-        new='(.content != null)',
-        expected="README Contents response schema",
-    )
-    expect_runtime_schema_reorder_failure(
-        text,
-        call_marker='HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
-        schema_marker='validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {',
-        consume_marker='test "$(jq -r .object.sha <<<"$HEAD_REF_RESPONSE")" = "$HEAD_SHA"',
-        expected="Git-ref schemas must precede scalar consumption",
-    )
-    expect_runtime_schema_reorder_failure(
-        text,
-        call_marker='README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
-        schema_marker='validate_readme_contents_object "$README_CONTENTS_RESPONSE" "$README_BLOB_SHA" || {',
-        consume_marker='test "$(jq -r .path <<<"$README_CONTENTS_RESPONSE")" = "README.md"',
-        expected="README Contents schema must precede scalar consumption",
-    )
     candidate_schema_marker = 'jq -e --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \\'
     candidate_schema_end_marker = "' <<<\"$CANDIDATE_COMMIT\" >/dev/null || {"
     candidate_consume_marker = 'test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"'
@@ -798,6 +728,76 @@ def self_test() -> None:
         'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
         'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         "candidate-check publisher",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_git_ref_object() {",
+        end_marker="          validate_readme_contents_object() {",
+        old='(.ref | type == "string" and . == $ref) and',
+        new='(.ref == $ref) and',
+        expected="Git-ref response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_git_ref_object() {",
+        end_marker="          validate_readme_contents_object() {",
+        old='(.type | type == "string" and . == "commit") and',
+        new='(.type == "commit") and',
+        expected="Git-ref response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_git_ref_object() {",
+        end_marker="          validate_readme_contents_object() {",
+        old='($sha == "" or .object.sha == $sha)',
+        new='true',
+        expected="Git-ref response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_readme_contents_object() {",
+        end_marker='          case "$EVENT_NAME" in',
+        old='(.path | type == "string" and . == "README.md") and',
+        new='(.path == "README.md") and',
+        expected="README Contents response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_readme_contents_object() {",
+        end_marker='          case "$EVENT_NAME" in',
+        old='(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and',
+        new='(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        expected="README Contents response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_readme_contents_object() {",
+        end_marker='          case "$EVENT_NAME" in',
+        old='(.encoding | type == "string" and . == "base64") and',
+        new='(.encoding == "base64") and',
+        expected="README Contents response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_readme_contents_object() {",
+        end_marker='          case "$EVENT_NAME" in',
+        old='(.content | type == "string" and length > 0)',
+        new='(.content != null)',
+        expected="README Contents response schema",
+    )
+    expect_runtime_schema_reorder_failure(
+        text,
+        call_marker='HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+        schema_marker='validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {',
+        consume_marker='test "$(jq -r .object.sha <<<"$HEAD_REF_RESPONSE")" = "$HEAD_SHA"',
+        expected="Git-ref schemas must precede scalar consumption",
+    )
+    expect_runtime_schema_reorder_failure(
+        text,
+        call_marker='README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
+        schema_marker='validate_readme_contents_object "$README_CONTENTS_RESPONSE" "$README_BLOB_SHA" || {',
+        consume_marker='test "$(jq -r .path <<<"$README_CONTENTS_RESPONSE")" = "README.md"',
+        expected="README Contents schema must precede scalar consumption",
     )
     candidate_schema_marker = 'jq -e --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \\'
     candidate_consume_marker = 'test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"'
