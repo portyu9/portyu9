@@ -425,26 +425,28 @@ def validate_controller_approval_comment_contract(text: str) -> None:
     )
     require(
         text.count("python3 scripts/automation_approval_comment.py evidence") == 1,
-        "Dependabot must type exactly one automation-approval comment collection",
+        "Dependabot must validate exactly one automation-approval comment collection",
     )
     require(
         text.count("python3 scripts/automation_approval_comment.py created") == 1,
-        "Dependabot must type exactly one created automation-approval comment response",
+        "Dependabot must validate exactly one created automation-approval comment response",
     )
     for fragment in (
+        "APPROVAL_COMMENT_EXISTS=false",
+        "if python3 scripts/automation_approval_comment.py evidence",
         '--comments-file "$RUNNER_TEMP/dependabot-approval-comment-pages.json"',
         '--repository "$TARGET_REPOSITORY"',
         '--pr-number "$PR_NUMBER"',
-        '--marker "$APPROVAL_MARKER"',
-        '> "$RUNNER_TEMP/dependabot-approval-comment-evidence.json"',
-        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/dependabot-approval-comment-evidence.json")"',
+        '--marker "$APPROVAL_MARKER"; then',
+        "APPROVAL_COMMENT_EXISTS=true",
+        'APPROVAL_EVIDENCE_STATUS="$?"',
+        'if [ "$APPROVAL_EVIDENCE_STATUS" != "3" ]; then',
+        'echo "ERROR: malformed Dependabot automation-approval comment evidence." >&2',
+        'exit "$APPROVAL_EVIDENCE_STATUS"',
         'test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"',
         'if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then',
         '--comment-file "$RUNNER_TEMP/dependabot-approval-comment-created.json"',
         '--expected-body "$APPROVAL_BODY"',
-        '> "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json"',
-        'test "$(jq -r .actor "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json")" = "github-actions[bot]"',
-        'test "$(jq -r .prNumber "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json")" = "$PR_NUMBER"',
     ):
         require(
             fragment in text,
@@ -455,52 +457,67 @@ def validate_controller_approval_comment_contract(text: str) -> None:
         'COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"',
         '[.[][] | select(.body | contains($marker))] | length > 0',
         'test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"',
+        'dependabot-approval-comment-evidence.json',
+        'dependabot-approval-comment-created-normalized.json',
+        'jq -r .actor',
+        'jq -r .prNumber',
     ):
         require(
             forbidden not in text,
-            f"Dependabot regressed to raw automation-approval comment evidence: {forbidden}",
+            f"Dependabot regressed to output-bearing/raw automation-approval comment evidence: {forbidden}",
         )
 
     fetch_pos = text.index(get_endpoint)
-    validate_pos = text.index("python3 scripts/automation_approval_comment.py evidence", fetch_pos)
-    consume_pos = text.index(
-        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/dependabot-approval-comment-evidence.json")"',
-        validate_pos,
+    validate_pos = text.index("if python3 scripts/automation_approval_comment.py evidence", fetch_pos)
+    present_pos = text.index("APPROVAL_COMMENT_EXISTS=true", validate_pos)
+    status_pos = text.index('APPROVAL_EVIDENCE_STATUS="$?"', present_pos)
+    absent_guard_pos = text.index(
+        'if [ "$APPROVAL_EVIDENCE_STATUS" != "3" ]; then',
+        status_pos,
     )
-    create_pos = text.index(post_endpoint, consume_pos)
+    decision_pos = text.index(
+        'test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"',
+        absent_guard_pos,
+    )
+    create_pos = text.index(post_endpoint, decision_pos)
     created_validate_pos = text.index(
         "python3 scripts/automation_approval_comment.py created",
         create_pos,
     )
-    created_consume_pos = text.index(
-        'test "$(jq -r .actor "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json")" = "github-actions[bot]"',
+    merge_pos = text.index(
+        'repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge',
         created_validate_pos,
     )
     require(
-        fetch_pos < validate_pos < consume_pos < create_pos < created_validate_pos < created_consume_pos,
-        "Dependabot automation-approval comment evidence moved out of typed reviewed order",
+        fetch_pos < validate_pos < present_pos < status_pos < absent_guard_pos
+        < decision_pos < create_pos < created_validate_pos < merge_pos,
+        "Dependabot automation-approval comment evidence moved out of fail-closed reviewed order",
     )
 
 
 def validate_approval_comment_helper_contract(text: str) -> None:
     for forbidden in (
         "def dump(",
+        "def emit(",
         "Path(path).write_text(",
+        "json.dumps(",
         'p.add_argument("--out"',
     ):
         require(
             forbidden not in text,
-            f"automation-approval helper must not retain a generic clear-text file sink: {forbidden}",
+            f"automation-approval helper must not retain a clear-text output sink: {forbidden}",
         )
     for required in (
-        "def emit(value: Any) -> None:",
-        'print(json.dumps(value, sort_keys=True, separators=(",", ":")))',
         "def load(path: str) -> Any:",
         'return json.loads(Path(path).read_text(encoding="utf-8"))',
+        'decision = evidence(',
+        'return 0 if decision["exists"] else 3',
+        'validate_created(',
+        'print("Governed automation-approval comment evidence self-test passed.")',
     ):
         require(
             required in text,
-            f"automation-approval helper stdout-only boundary changed: {required}",
+            f"automation-approval helper exit-only boundary changed: {required}",
         )
 
 
