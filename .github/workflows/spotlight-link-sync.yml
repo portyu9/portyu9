@@ -1770,12 +1770,112 @@ jobs:
           TRUSTED_RUN_ID="$(jq -r '.trustedAdmission.workflowRun.runId' "$CERTIFICATE")"
           TRUSTED_RUN_ATTEMPT="$(jq -r '.trustedAdmission.workflowRun.runAttempt' "$CERTIFICATE")"
           TRUSTED_CHECK_RUN_ID="$(jq -r '.trustedAdmission.checkRun.checkRunId' "$CERTIFICATE")"
-          TRUSTED_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"
           [[ "$TRUSTED_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$TRUSTED_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
           [[ "$TRUSTED_CHECK_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          TRUSTED_WORKFLOW_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml")"
+          TRUSTED_WORKFLOW_ID="$(jq -er '
+            def positive_int: type == "number" and . == floor and . > 0;
+            if type != "object" then
+              error("Spotlight trusted-admission workflow definition must be an object")
+            elif ((.id | positive_int) | not) then
+              error("Spotlight trusted-admission workflow id is invalid")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Spotlight trusted-admission workflow node identity is invalid")
+            elif .name != "Capability admission" or
+                 .path != ".github/workflows/capability-admission.yml" or
+                 .state != "active" then
+              error("Spotlight trusted-admission workflow identity changed")
+            elif ((.url | type) != "string") or ((.url | length) == 0) or
+                 ((.html_url | type) != "string") or ((.html_url | length) == 0) or
+                 ((.badge_url | type) != "string") or ((.badge_url | length) == 0) or
+                 ((.created_at | type) != "string") or ((.created_at | length) == 0) or
+                 ((.updated_at | type) != "string") or ((.updated_at | length) == 0) then
+              error("Spotlight trusted-admission workflow metadata is invalid")
+            else
+              .id
+            end
+          ' <<<"$TRUSTED_WORKFLOW_RAW")"
           [[ "$TRUSTED_WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
-          TRUSTED_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}")"
+
+          TRUSTED_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}")"
+          TRUSTED_RUN="$(jq -ce \
+            --argjson run "$TRUSTED_RUN_ID" \
+            --argjson workflow "$TRUSTED_WORKFLOW_ID" \
+            --argjson attempt "$TRUSTED_RUN_ATTEMPT" \
+            --arg base "$BASE_SHA" \
+            --arg repo "$GITHUB_REPOSITORY" '
+              def positive_int: type == "number" and . == floor and . > 0;
+              if type != "object" then
+                error("Spotlight trusted-admission run must be an object")
+              elif ((.id | positive_int) | not) or .id != $run or
+                   ((.node_id | type) != "string") or ((.node_id | length) == 0) or
+                   ((.workflow_id | positive_int) | not) or .workflow_id != $workflow or
+                   .name != "Capability admission" or
+                   .path != ".github/workflows/capability-admission.yml" then
+                error("Spotlight trusted-admission run identity changed")
+              elif .event != "workflow_dispatch" or .head_branch != "main" or
+                   ((.head_sha | type) != "string") or
+                   (.head_sha | test("^[0-9a-f]{40}$") | not) or .head_sha != $base then
+                error("Spotlight trusted-admission run source identity changed")
+              elif ((.run_number | positive_int) | not) or
+                   ((.run_attempt | positive_int) | not) or .run_attempt != $attempt or
+                   ((.check_suite_id | positive_int) | not) or
+                   ((.check_suite_node_id | type) != "string") or
+                   ((.check_suite_node_id | length) == 0) then
+                error("Spotlight trusted-admission run execution identity is invalid")
+              elif ((.repository | type) != "object") or
+                   ((.repository.id | positive_int) | not) or
+                   .repository.full_name != $repo or
+                   ((.head_repository | type) != "object") or
+                   ((.head_repository.id | positive_int) | not) or
+                   .head_repository.id != .repository.id or
+                   .head_repository.full_name != $repo then
+                error("Spotlight trusted-admission run repository identity changed")
+              elif ((.actor | type) != "object") or
+                   ((.actor.id | positive_int) | not) or
+                   .actor.login != "github-actions[bot]" or
+                   ((.triggering_actor | type) != "object") or
+                   ((.triggering_actor.id | positive_int) | not) or
+                   .triggering_actor.id != .actor.id or
+                   .triggering_actor.login != "github-actions[bot]" then
+                error("Spotlight trusted-admission run actor identity changed")
+              elif .status != "completed" or .conclusion != "success" then
+                error("Spotlight trusted-admission run is not successful")
+              elif ((.url | type) != "string") or ((.url | length) == 0) or
+                   ((.html_url | type) != "string") or ((.html_url | length) == 0) or
+                   ((.created_at | type) != "string") or ((.created_at | length) == 0) or
+                   ((.updated_at | type) != "string") or ((.updated_at | length) == 0) or
+                   ((.run_started_at | type) != "string") or ((.run_started_at | length) == 0) then
+                error("Spotlight trusted-admission run metadata is invalid")
+              else
+                {
+                  id,
+                  node_id,
+                  workflow_id,
+                  name,
+                  path,
+                  event,
+                  head_branch,
+                  head_sha,
+                  run_number,
+                  run_attempt,
+                  check_suite_id,
+                  check_suite_node_id,
+                  repository:{id:.repository.id,full_name:.repository.full_name},
+                  head_repository:{id:.head_repository.id,full_name:.head_repository.full_name},
+                  actor:{id:.actor.id,login:.actor.login},
+                  triggering_actor:{id:.triggering_actor.id,login:.triggering_actor.login},
+                  status,
+                  conclusion,
+                  url,
+                  html_url,
+                  created_at,
+                  updated_at,
+                  run_started_at
+                }
+              end
+            ' <<<"$TRUSTED_RUN_RAW")"
           test "$(jq -r .name <<<"$TRUSTED_RUN")" = "Capability admission"
           test "$(jq -r .workflow_id <<<"$TRUSTED_RUN")" = "$TRUSTED_WORKFLOW_ID"
           test "$(jq -r .run_attempt <<<"$TRUSTED_RUN")" = "$TRUSTED_RUN_ATTEMPT"
@@ -1788,10 +1888,70 @@ jobs:
           test "$(jq -r .triggering_actor.login <<<"$TRUSTED_RUN")" = "github-actions[bot]"
           test "$(jq -r .status <<<"$TRUSTED_RUN")" = "completed"
           test "$(jq -r .conclusion <<<"$TRUSTED_RUN")" = "success"
-          TRUSTED_CHECK="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}")"
+
           EXPECTED_TRUSTED_EXTERNAL_ID="spotlight-admission:${TRUSTED_RUN_ID}:${TRUSTED_RUN_ATTEMPT}:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
           CERTIFIED_TRUSTED_DETAILS_URL="$(jq -r '.trustedAdmission.checkRun.detailsUrl' "$CERTIFICATE")"
+          CERTIFIED_TRUSTED_CHECK_SUITE_ID="$(jq -r '.trustedAdmission.checkRun.checkSuiteId' "$CERTIFICATE")"
           test -n "$CERTIFIED_TRUSTED_DETAILS_URL"
+          [[ "$CERTIFIED_TRUSTED_CHECK_SUITE_ID" =~ ^[1-9][0-9]*$ ]]
+          TRUSTED_CHECK_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}")"
+          TRUSTED_CHECK="$(jq -ce \
+            --argjson check "$TRUSTED_CHECK_RUN_ID" \
+            --arg head "$HEAD_SHA" \
+            --arg external "$EXPECTED_TRUSTED_EXTERNAL_ID" \
+            --arg details "$CERTIFIED_TRUSTED_DETAILS_URL" \
+            --argjson suite "$CERTIFIED_TRUSTED_CHECK_SUITE_ID" '
+              def positive_int: type == "number" and . == floor and . > 0;
+              if type != "object" then
+                error("Spotlight trusted-admission check run must be an object")
+              elif ((.id | positive_int) | not) or .id != $check or
+                   ((.node_id | type) != "string") or ((.node_id | length) == 0) or
+                   .name != "trusted-capability-admission" or
+                   ((.head_sha | type) != "string") or
+                   (.head_sha | test("^[0-9a-f]{40}$") | not) or .head_sha != $head then
+                error("Spotlight trusted-admission check identity changed")
+              elif ((.app | type) != "object") or
+                   ((.app.id | positive_int) | not) or .app.id != 15368 then
+                error("Spotlight trusted-admission check app identity changed")
+              elif .status != "completed" or .conclusion != "success" then
+                error("Spotlight trusted-admission check is not successful")
+              elif ((.external_id | type) != "string") or .external_id != $external or
+                   ((.details_url | type) != "string") or .details_url != $details then
+                error("Spotlight trusted-admission check binding changed")
+              elif ((.check_suite | type) != "object") or
+                   ((.check_suite.id | positive_int) | not) or .check_suite.id != $suite then
+                error("Spotlight trusted-admission check-suite identity changed")
+              elif ((.url | type) != "string") or ((.url | length) == 0) or
+                   ((.html_url | type) != "string") or ((.html_url | length) == 0) or
+                   ((.started_at | type) != "string") or ((.started_at | length) == 0) or
+                   ((.completed_at | type) != "string") or ((.completed_at | length) == 0) or
+                   ((.output | type) != "object") or
+                   (.output.title != null and ((.output.title | type) != "string")) or
+                   (.output.summary != null and ((.output.summary | type) != "string")) or
+                   (.output.text != null and ((.output.text | type) != "string")) or
+                   ((.pull_requests | type) != "array") or ((.pull_requests | length) > 100) then
+                error("Spotlight trusted-admission check metadata is invalid")
+              else
+                {
+                  id,
+                  node_id,
+                  name,
+                  head_sha,
+                  app:{id:.app.id},
+                  status,
+                  conclusion,
+                  external_id,
+                  details_url,
+                  check_suite:{id:.check_suite.id},
+                  url,
+                  html_url,
+                  started_at,
+                  completed_at,
+                  output:{title:.output.title,summary:.output.summary,text:.output.text},
+                  pull_requests
+                }
+              end
+            ' <<<"$TRUSTED_CHECK_RAW")"
           test "$(jq -r .name <<<"$TRUSTED_CHECK")" = "trusted-capability-admission"
           test "$(jq -r .head_sha <<<"$TRUSTED_CHECK")" = "$HEAD_SHA"
           test "$(jq -r .app.id <<<"$TRUSTED_CHECK")" = "15368"
@@ -1799,7 +1959,7 @@ jobs:
           test "$(jq -r .conclusion <<<"$TRUSTED_CHECK")" = "success"
           test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"
           test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"
-          test "$(jq -r .check_suite.id <<<"$TRUSTED_CHECK")" = "$(jq -r '.trustedAdmission.checkRun.checkSuiteId' "$CERTIFICATE")"
+          test "$(jq -r .check_suite.id <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_CHECK_SUITE_ID"
           echo "Spotlight terminal stage: trusted-admission-live-reproof-verified" >&2
           echo "Spotlight terminal stage: attestation-verification-start" >&2
           gh attestation verify "$SUBJECT" --repo "$GITHUB_REPOSITORY" --predicate-type https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/spotlight-merge-authorization-v1.schema.json --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml" --signer-digest "$BASE_SHA" --source-digest "$BASE_SHA" --source-ref refs/heads/main --deny-self-hosted-runners --format json > verified-merge-authorization.json
