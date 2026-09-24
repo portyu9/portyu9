@@ -1472,6 +1472,7 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     read_validator = "python3 scripts/codeql_autofix_controller.py read-ref-response"
     workflow_validator = "python3 scripts/codeql_autofix_controller.py workflow-definition-response"
     pr_validator = "python3 scripts/codeql_autofix_controller.py pull-request-response"
+    run_validator = "python3 scripts/codeql_autofix_controller.py protected-workflow-runs-response"
     require(
         autofix.count(read_validator) == 4,
         "CodeQL Autofix read-ref response validator identity changed",
@@ -1483,6 +1484,10 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     require(
         autofix.count(pr_validator) == 4,
         "CodeQL Autofix pull-request singleton response validator identity changed",
+    )
+    require(
+        autofix.count(run_validator) == 1,
+        "CodeQL Autofix protected workflow-run collection validator identity changed",
     )
     require(
         autofix.count("assert_main_sha() {") == 3
@@ -1505,6 +1510,8 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
         'pulls/${PR_NUMBER}" --jq',
         'jq -r .head.sha pr.json',
         'jq -r .state final-pr.json',
+        'RUNS="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}',
+        'jq -r .total_count <<<"$RUNS"',
         "final-main-ref.json",
         "assert_main_is_merge_sha",
     ):
@@ -1630,6 +1637,38 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             "CodeQL Autofix pull-request singleton must be typed before scalar use",
         )
         cursor = consume_pos
+
+    run_fetch = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \\'
+        '\n              > "$RUNNER_TEMP/codeql-autofix-protected-runs.json"'
+    )
+    run_consume = (
+        'RUN_COUNT="$(jq -r .totalCount "$RUNNER_TEMP/codeql-autofix-protected-runs-normalized.json")"'
+    )
+    for fragment in (
+        run_fetch,
+        '--response-file "$RUNNER_TEMP/codeql-autofix-protected-runs.json"',
+        '--head-sha "$HEAD_SHA"',
+        '--branch "$BRANCH"',
+        '--codeql-workflow-id "$CODEQL_WORKFLOW_ID"',
+        '--dependency-workflow-id "$DEPENDENCY_WORKFLOW_ID"',
+        '--profile-workflow-id "$PROFILE_WORKFLOW_ID"',
+        '--out "$RUNNER_TEMP/codeql-autofix-protected-runs-normalized.json"',
+        run_consume,
+        'MATCHES="$(jq -c .runs "$RUNNER_TEMP/codeql-autofix-protected-runs-normalized.json")"',
+        'test "$(jq \'[.[].workflowId] | unique | length\' <<<"$MATCHES")" = "3"',
+    ):
+        require(
+            fragment in autofix,
+            f"CodeQL Autofix protected workflow-run collection identity changed: {fragment}",
+        )
+    run_fetch_pos = autofix.index(run_fetch)
+    run_validate_pos = autofix.index(run_validator, run_fetch_pos)
+    run_consume_pos = autofix.index(run_consume, run_validate_pos)
+    require(
+        run_fetch_pos < run_validate_pos < run_consume_pos,
+        "CodeQL Autofix protected workflow-run collection must be typed before scalar use",
+    )
 
 
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
