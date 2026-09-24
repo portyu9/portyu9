@@ -571,6 +571,13 @@
       "rationale": "Authorize #565's GitHub-native real-user bot PR approval workflow. The workflow is event-driven, read-only with GITHUB_TOKEN, executes no candidate code, independently binds recognized bot identity/current main/exact head/required checks/quiescence/unresolved threads, and uses the isolated portyu9-review-identity credential only for the final exact-head APPROVE review. Missing credential fails closed by no-op."
     },
     {
+      "id": "cap-governed-approval-comment-evidence-schema-hardening-v1",
+      "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "expansionSha256": "59892a9fea54ab1933ba63e7387528f63a131bcfa960ae592b5ba26a500fec11",
+      "rationale": "Authorize frozen #966 governed approval-comment evidence hardening across Dependabot and Spotlight: existing PR issue-comment reads are typed before marker dedupe; only github-actions[bot] can satisfy the marker, duplicate trusted markers fail closed, and created responses bind exact PR/comment URLs, body and actor. Semantic BOM and existing endpoints/counts, permissions, review/merge authority, required checks, rulesets and bypass behavior remain unchanged."
+    },
+    {
       "id": "cap-governed-review-liveness-transient-read-v1",
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
