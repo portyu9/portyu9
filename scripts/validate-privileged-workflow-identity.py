@@ -2768,7 +2768,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
             (
                 '(.state | type == "string" and . == "active") and',
                 '(.state | tostring == "active") and',
-                "workflow singleton schema changed",
+                "dispatch evidence anchor changed",
             ),
             (
                 '(.run_attempt | positive_int) and',
