@@ -154,7 +154,8 @@ jobs:
             (.workflow_id | type == "number" and . == floor and . > 0) and
             (.run_number | type == "number" and . == floor and . > 0) and
             (.event | type == "string" and . == $event) and
-            (.status | type == "string" and . == "in_progress") and
+            ((.status | type) == "string") and
+            ((.status == "queued") or (.status == "in_progress")) and
             (.conclusion == null) and
             (.head_sha | type == "string" and . == $head) and
             (.head_branch | type == "string" and . == "main") and
