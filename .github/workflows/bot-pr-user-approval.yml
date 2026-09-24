@@ -51,10 +51,35 @@ jobs:
             exit 1
           fi
 
-          REVIEW_LOGIN="$(GH_TOKEN="$REVIEW_TOKEN" gh api user --jq .login)"
+          validate_git_ref_object() {
+            local response="$1" expected_branch="$2"
+            jq -e --arg ref "refs/heads/${expected_branch}" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.url | type == "string" and length > 0))
+            ' <<<"$response" >/dev/null
+          }
+
+          REVIEW_IDENTITY_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api user)"
+          jq -e '
+            (type == "object") and
+            (.login | type == "string" and . == "portyu9")
+          ' <<<"$REVIEW_IDENTITY_RESPONSE" >/dev/null || {
+            echo "ERROR: malformed or mismatched portyu9 review-token identity response." >&2
+            exit 1
+          }
+          REVIEW_LOGIN="$(jq -r .login <<<"$REVIEW_IDENTITY_RESPONSE")"
           test "$REVIEW_LOGIN" = "portyu9"
 
-          MAIN_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "main" || {
+            echo "ERROR: malformed governed reviewer initial main-ref evidence." >&2
+            exit 1
+          }
+          MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"
           [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
 
           PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
@@ -430,11 +455,21 @@ jobs:
                 ;;
             esac
 
-            if [ "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" != "$MAIN_SHA" ]; then
+            CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+            validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "main" || {
+              echo "ERROR: malformed governed reviewer current-main ref evidence." >&2
+              exit 1
+            }
+            if [ "$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")" != "$MAIN_SHA" ]; then
               echo "Current main moved during bot-review evaluation; ending this pass without approval."
               exit 0
             fi
-            if [ "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" != "$HEAD_SHA" ]; then
+            CURRENT_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+            validate_git_ref_object "$CURRENT_HEAD_REF_RESPONSE" "$HEAD_REF" || {
+              echo "ERROR: malformed governed reviewer current-head ref evidence for #${PR_NUMBER}." >&2
+              exit 1
+            }
+            if [ "$(jq -r .object.sha <<<"$CURRENT_HEAD_REF_RESPONSE")" != "$HEAD_SHA" ]; then
               echo "Skipping governed bot PR #${PR_NUMBER}: head moved during review evaluation."
               continue
             fi
@@ -553,11 +588,21 @@ jobs:
               echo "Skipping governed bot PR #${PR_NUMBER}: exact PR identity changed before approval."
               continue
             fi
-            if [ "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" != "$MAIN_SHA" ]; then
+            FINAL_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+            validate_git_ref_object "$FINAL_MAIN_REF_RESPONSE" "main" || {
+              echo "ERROR: malformed governed reviewer final-main ref evidence." >&2
+              exit 1
+            }
+            if [ "$(jq -r .object.sha <<<"$FINAL_MAIN_REF_RESPONSE")" != "$MAIN_SHA" ]; then
               echo "Current main moved before final bot-review authorization; ending this pass without approval."
               exit 0
             fi
-            if [ "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" != "$HEAD_SHA" ]; then
+            FINAL_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+            validate_git_ref_object "$FINAL_HEAD_REF_RESPONSE" "$HEAD_REF" || {
+              echo "ERROR: malformed governed reviewer final-head ref evidence for #${PR_NUMBER}." >&2
+              exit 1
+            }
+            if [ "$(jq -r .object.sha <<<"$FINAL_HEAD_REF_RESPONSE")" != "$HEAD_SHA" ]; then
               echo "Skipping governed bot PR #${PR_NUMBER}: head ref changed before approval."
               continue
             fi
