@@ -80,6 +80,36 @@ jobs:
           [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
 
           RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"
+          jq -e \
+            --argjson run_id "$GITHUB_RUN_ID" \
+            --argjson run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --argjson repo_id "$GITHUB_REPOSITORY_ID" \
+            --arg workflow_name "Action provenance witness" \
+            --arg workflow_path ".github/workflows/action-provenance-witness.yml" '
+              (type == "object") and
+              (.id | type == "number" and . == floor and . > 0 and . == $run_id) and
+              (.run_attempt | type == "number" and . == floor and . > 0 and . == $run_attempt) and
+              (.name | type == "string" and . == $workflow_name) and
+              (.path | type == "string" and . == $workflow_path) and
+              (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $source_sha) and
+              (.head_branch | type == "string" and . == "main") and
+              (.event | type == "string" and
+                (. == "push" or . == "schedule" or . == "workflow_dispatch")) and
+              (.repository |
+                (type == "object") and
+                (.id | type == "number" and . == floor and . > 0 and . == $repo_id) and
+                (.full_name | type == "string" and . == $repo)) and
+              (.head_repository |
+                (type == "object") and
+                (.id | type == "number" and . == floor and . > 0 and . == $repo_id) and
+                (.full_name | type == "string" and . == $repo)) and
+              (.run_started_at | type == "string" and length > 0)
+            ' <<<"$RUN" >/dev/null || {
+              echo "ERROR: malformed or mismatched current Action provenance witness run evidence." >&2
+              exit 1
+            }
           test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"
           test "$(jq -r .run_attempt <<<"$RUN")" = "$GITHUB_RUN_ATTEMPT"
           test "$(jq -r .head_sha <<<"$RUN")" = "$SOURCE_SHA"
