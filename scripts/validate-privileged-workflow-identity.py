@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v89"
+VERSION = "governed-workflow-byte-identity-v90"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "1f441a8fe20522040f76056a7e45e31ae63d4f15",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "268d52bf5ae45b33261eeff2e25fc4819e1f6aab",
+    ".github/workflows/spotlight-link-sync.yml": "e9ba990a508c8cf6493ad91661294a8a2807beb3",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -761,7 +761,9 @@ def validate_spotlight_readme_contents_evidence(
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
     legacy = project_spotlight_privileged_refs_to_legacy(
         project_spotlight_readme_contents_to_legacy(
-            spotlight[:spotlight.index("  decision_receipt:\n")]
+            project_spotlight_terminal_protected_runs_to_legacy(
+                spotlight[:spotlight.index("  decision_receipt:\n")]
+            )
         )
     )
     reconcile = job_block(legacy, "reconcile", "budget")
@@ -2658,6 +2660,2348 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
     )
 
 
+
+
+
+def project_spotlight_terminal_protected_runs_to_legacy(spotlight: str) -> str:
+    start_marker = "          normalize_protected_certificate_run() {\n"
+    end_marker = "          EXPECTED_CERTIFICATE_RUNS="
+    require(
+        spotlight.count(start_marker) == 1 and spotlight.count(end_marker) == 1,
+        "Spotlight terminal protected-run projection anchors changed",
+    )
+    start = spotlight.index(start_marker)
+    end_start = spotlight.index(end_marker, start)
+    end = spotlight.index("\n", end_start) + 1
+    legacy = (
+        '          CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"\n'
+        '          DEPENDENCY_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"\n'
+        '          PROFILE_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"\n'
+        '          EXPECTED_CERTIFICATE_RUNS="$(jq -cn --argjson codeql "$CODEQL_RUN" --argjson dependency "$DEPENDENCY_RUN" --argjson profile "$PROFILE_RUN" \'[{name:"CodeQL",workflowId:$codeql.workflow_id,runId:$codeql.id,runAttempt:$codeql.run_attempt,checkSuiteId:$codeql.check_suite_id,event:$codeql.event,headBranch:$codeql.head_branch,headSha:$codeql.head_sha,repository:$codeql.repository.full_name,headRepository:$codeql.head_repository.full_name,status:$codeql.status,conclusion:$codeql.conclusion},{name:"Dependency review",workflowId:$dependency.workflow_id,runId:$dependency.id,runAttempt:$dependency.run_attempt,checkSuiteId:$dependency.check_suite_id,event:$dependency.event,headBranch:$dependency.head_branch,headSha:$dependency.head_sha,repository:$dependency.repository.full_name,headRepository:$dependency.head_repository.full_name,status:$dependency.status,conclusion:$dependency.conclusion},{name:"Profile quality",workflowId:$profile.workflow_id,runId:$profile.id,runAttempt:$profile.run_attempt,checkSuiteId:$profile.check_suite_id,event:$profile.event,headBranch:$profile.head_branch,headSha:$profile.head_sha,repository:$profile.repository.full_name,headRepository:$profile.head_repository.full_name,status:$profile.status,conclusion:$profile.conclusion}] | sort_by(.name)\')"\n'
+    )
+    return spotlight[:start] + legacy + spotlight[end:]
+
+
+def validate_spotlight_terminal_protected_run_evidence(
+    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    terminal = job_block(spotlight, "merge", "decision_receipt")
+    helper = "          normalize_protected_certificate_run() {\n"
+    consume = '          EXPECTED_CERTIFICATE_RUNS="$(jq -cn --argjson codeql "$CODEQL_RUN" --argjson dependency "$DEPENDENCY_RUN" --argjson profile "$PROFILE_RUN" \'[$codeql,$dependency,$profile] | sort_by(.name)\')"'
+    require(terminal.count(helper) == 1, "Spotlight terminal protected-run normalizer topology changed")
+    require(terminal.count(consume) == 1, "Spotlight terminal protected-run certificate consumption changed")
+    helper_start = terminal.index(helper)
+    helper_end = terminal.index("          }\n          CODEQL_RUN_RAW=", helper_start)
+    helper_block = terminal[helper_start:helper_end]
+    for fragment in (
+        'local payload="$1" expected_run="$2" expected_suite="$3" expected_name="$4" expected_path="$5"',
+        '--argjson run "$expected_run"',
+        '--argjson suite "$expected_suite"',
+        '--arg branch "$CANDIDATE_BRANCH"',
+        '--arg head "$HEAD_SHA"',
+        '--arg repo "$GITHUB_REPOSITORY"',
+        '--argjson repo_id "$GITHUB_REPOSITORY_ID"',
+        'if type != "object" then',
+        '((.id | positive_int) | not) or .id != $run or',
+        '((.node_id | type) != "string") or ((.node_id | length) == 0) or',
+        '((.workflow_id | positive_int) | not) or',
+        '.name != $name or .path != $path',
+        '.event != "pull_request" or .head_branch != $branch or',
+        '.head_sha != $head',
+        '((.run_attempt | positive_int) | not) or',
+        '((.check_suite_id | positive_int) | not) or .check_suite_id != $suite or',
+        '((.check_suite_node_id | type) != "string") or',
+        '.repository.id != $repo_id or',
+        '.repository.full_name != $repo or',
+        '.head_repository.id != $repo_id or',
+        '.head_repository.full_name != $repo',
+        '.status != "completed" or .conclusion != "success"',
+        '((.url | type) != "string") or ((.url | length) == 0) or',
+        '((.run_started_at | type) != "string") or ((.run_started_at | length) == 0)',
+        'workflowId:.workflow_id',
+        'runId:.id',
+        'checkSuiteId:.check_suite_id',
+        'headSha:.head_sha',
+    ):
+        require(fragment in helper_block, f"Spotlight terminal protected-run response schema changed: {fragment}")
+
+    specs = (
+        ("CODEQL", "CodeQL", ".github/workflows/codeql.yml"),
+        ("DEPENDENCY", "Dependency review", ".github/workflows/dependency-review.yml"),
+        ("PROFILE", "Profile quality", ".github/workflows/profile-quality.yml"),
+    )
+    consume_pos = terminal.index(consume)
+    previous = helper_end
+    for prefix, name, path in specs:
+        fetch = (
+            prefix + '_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/'
+            + "${" + prefix + '_RUN_ID}")"'
+        )
+        normalize = (
+            prefix + '_RUN="$(normalize_protected_certificate_run "    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    terminal = job_block(spotlight, "merge", "decision_receipt")
+    workflow_fetch = (
+        'TRUSTED_WORKFLOW_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'capability-admission.yml")"'
+    )
+    workflow_schema = 'error("Spotlight trusted-admission workflow definition must be an object")'
+    workflow_consume = "TRUSTED_WORKFLOW_ID=\"$(jq -er '"
+    run_fetch = (
+        'TRUSTED_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/'
+        '${TRUSTED_RUN_ID}")"'
+    )
+    run_schema = 'error("Spotlight trusted-admission run must be an object")'
+    run_normalized = "TRUSTED_RUN=\"$(jq -ce \\"
+    run_consume = 'test "$(jq -r .workflow_id <<<"$TRUSTED_RUN")" = "$TRUSTED_WORKFLOW_ID"'
+    check_fetch = (
+        'TRUSTED_CHECK_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/'
+        '${TRUSTED_CHECK_RUN_ID}")"'
+    )
+    check_schema = 'error("Spotlight trusted-admission check run must be an object")'
+    check_normalized = "TRUSTED_CHECK=\"$(jq -ce \\"
+    check_consume = 'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"'
+    terminal_stage = 'echo "Spotlight terminal stage: trusted-admission-live-reproof-verified" >&2'
+
+    for marker in (
+        workflow_fetch,
+        workflow_schema,
+        workflow_consume,
+        run_fetch,
+        run_schema,
+        run_normalized,
+        run_consume,
+        check_fetch,
+        check_schema,
+        check_normalized,
+        check_consume,
+        terminal_stage,
+    ):
+        require(
+            terminal.count(marker) == 1,
+            f"Spotlight terminal trusted-admission evidence anchor changed: {marker}",
+        )
+
+    positions = (
+        terminal.index(workflow_fetch),
+        terminal.index(workflow_consume),
+        terminal.index(workflow_schema),
+        terminal.index(run_fetch),
+        terminal.index(run_normalized),
+        terminal.index(run_schema),
+        terminal.index(run_consume),
+        terminal.index(check_fetch),
+        terminal.index(check_normalized),
+        terminal.index(check_schema),
+        terminal.index(check_consume),
+        terminal.index(terminal_stage),
+    )
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Spotlight terminal trusted-admission evidence must remain fetch-validate-normalize-consume ordered",
+    )
+
+    for fragment in (
+        '((.id | positive_int) | not)',
+        '((.node_id | type) != "string") or ((.node_id | length) == 0)',
+        '.name != "Capability admission" or',
+        '.path != ".github/workflows/capability-admission.yml" or',
+        '.state != "active"',
+        '((.badge_url | type) != "string") or ((.badge_url | length) == 0)',
+        '((.created_at | type) != "string") or ((.created_at | length) == 0)',
+        '((.updated_at | type) != "string") or ((.updated_at | length) == 0)',
+        'error("Spotlight trusted-admission workflow metadata is invalid")',
+    ):
+        require(
+            fragment in terminal[terminal.index(workflow_consume):terminal.index(run_fetch)],
+            f"Spotlight terminal trusted workflow schema changed: {fragment}",
+        )
+
+    run_block = terminal[terminal.index(run_normalized):terminal.index(run_consume)]
+    for fragment in (
+        '--argjson run "$TRUSTED_RUN_ID"',
+        '--argjson workflow "$TRUSTED_WORKFLOW_ID"',
+        '--argjson attempt "$TRUSTED_RUN_ATTEMPT"',
+        '--arg base "$BASE_SHA"',
+        '--arg repo "$GITHUB_REPOSITORY"',
+        '.id != $run or',
+        '.workflow_id != $workflow or',
+        '.name != "Capability admission" or',
+        '.path != ".github/workflows/capability-admission.yml"',
+        '.event != "workflow_dispatch" or .head_branch != "main" or',
+        '.head_sha != $base',
+        '.run_attempt != $attempt or',
+        '((.check_suite_id | positive_int) | not) or',
+        '((.check_suite_node_id | type) != "string") or',
+        '.repository.full_name != $repo or',
+        '.head_repository.id != .repository.id or',
+        '.head_repository.full_name != $repo',
+        '.actor.login != "github-actions[bot]" or',
+        '.triggering_actor.id != .actor.id or',
+        '.triggering_actor.login != "github-actions[bot]"',
+        '.status != "completed" or .conclusion != "success"',
+        'run_started_at',
+        'error("Spotlight trusted-admission run metadata is invalid")',
+    ):
+        require(
+            fragment in run_block,
+            f"Spotlight terminal trusted run schema changed: {fragment}",
+        )
+
+    check_block = terminal[terminal.index(check_normalized):terminal.index(check_consume)]
+    for fragment in (
+        '--argjson check "$TRUSTED_CHECK_RUN_ID"',
+        '--arg head "$HEAD_SHA"',
+        '--arg external "$EXPECTED_TRUSTED_EXTERNAL_ID"',
+        '--arg details "$CERTIFIED_TRUSTED_DETAILS_URL"',
+        '--argjson suite "$CERTIFIED_TRUSTED_CHECK_SUITE_ID"',
+        '.id != $check or',
+        '.name != "trusted-capability-admission" or',
+        '.head_sha != $head',
+        '.app.id != 15368',
+        '.status != "completed" or .conclusion != "success"',
+        '.external_id != $external or',
+        '.details_url != $details',
+        '.check_suite.id != $suite',
+        '((.started_at | type) != "string") or ((.started_at | length) == 0)',
+        '((.completed_at | type) != "string") or ((.completed_at | length) == 0)',
+        '((.output | type) != "object") or',
+        '((.pull_requests | type) != "array") or ((.pull_requests | length) > 100)',
+        'error("Spotlight trusted-admission check metadata is invalid")',
+    ):
+        require(
+            fragment in check_block,
+            f"Spotlight terminal trusted check schema changed: {fragment}",
+        )
+
+    require(
+        terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml"'
+        ) == 1
+        and terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}"'
+        ) == 1
+        and terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}"'
+        ) == 1,
+        "Spotlight terminal trusted-admission endpoint/call-count contract changed",
+    )
+    for forbidden in (
+        'TRUSTED_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"',
+        'TRUSTED_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}")"',
+        'TRUSTED_CHECK="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}")"',
+    ):
+        require(
+            forbidden not in terminal,
+            f"Spotlight terminal trusted-admission regressed to raw scalar/object consumption: {forbidden}",
+        )
+
+    if run_self_test:
+        mutations = (
+            (
+                '.path != ".github/workflows/capability-admission.yml" or',
+                '(.path | tostring) != ".github/workflows/capability-admission.yml" or',
+                "trusted workflow schema changed",
+            ),
+            (
+                '.head_repository.id != .repository.id or',
+                '(.head_repository.id | tostring) != (.repository.id | tostring) or',
+                "trusted run schema changed",
+            ),
+            (
+                '.triggering_actor.id != .actor.id or',
+                '(.triggering_actor.id | tostring) != (.actor.id | tostring) or',
+                "trusted run schema changed",
+            ),
+            (
+                '.external_id != $external or',
+                '(.external_id | tostring) != $external or',
+                "trusted check schema changed",
+            ),
+            (
+                '.check_suite.id != $suite',
+                '(.check_suite.id | tostring) != ($suite | tostring)',
+                "trusted check schema changed",
+            ),
+        )
+        for current, replacement, expected in mutations:
+            require(
+                current in spotlight,
+                f"Spotlight terminal trusted-admission self-test fixture anchor changed: {current}",
+            )
+            require(
+                current in terminal,
+                f"Spotlight terminal trusted-admission self-test target escaped terminal block: {current}",
+            )
+            mutated_terminal = terminal.replace(current, replacement, 1)
+            mutated = spotlight.replace(terminal, mutated_terminal, 1)
+            try:
+                validate_spotlight_terminal_trusted_admission_evidence(
+                    mutated, run_self_test=False
+                )
+            except ValueError as exc:
+                require(
+                    expected in str(exc),
+                    f"Spotlight terminal trusted-admission self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    "Spotlight terminal trusted-admission self-test accepted forbidden mutation: "
+                    f"{expected}"
+                )
+
+
+def classify_spotlight_reconciliation_candidate(
+    *,
+    expected_current: bool,
+    parent_matches_current_base: bool,
+    ancestry_proven_superseded: bool,
+    age_seconds: int,
+    stale_after_seconds: int = 1800,
+) -> str:
+    """Pure policy model for deterministic Spotlight stale-candidate reconciliation."""
+    require(type(expected_current) is bool, "Spotlight expected-current flag must be boolean")
+    require(type(parent_matches_current_base) is bool,
+            "Spotlight parent/base flag must be boolean")
+    require(type(ancestry_proven_superseded) is bool,
+            "Spotlight ancestry-proven flag must be boolean")
+    require(type(age_seconds) is int and age_seconds >= 0,
+            "Spotlight candidate age must be a nonnegative integer")
+    require(type(stale_after_seconds) is int and stale_after_seconds > 0,
+            "Spotlight stale floor must be a positive integer")
+    if expected_current:
+        return "preserve-current"
+    if parent_matches_current_base:
+        return "cleanup-same-base-superseded"
+    if ancestry_proven_superseded:
+        return "cleanup-ancestry-proven-stale"
+    if age_seconds < stale_after_seconds:
+        return "preserve-young-unproven"
+    return "cleanup-aged-stale"
+
+
+def validate_spotlight_same_base_supersession(spotlight: str) -> None:
+    reconcile = job_block(spotlight, "reconcile", "budget")
+    expected_marker = ('            if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && '
+                       '[ "$BRANCH" = "$EXPECTED_CANDIDATE_BRANCH" ]; then')
+    parent_marker = "            PARENT_SHA=\"$(jq -r '.parents[0].sha' <<<\"$CANDIDATE_COMMIT\")\""
+    same_base_marker = (
+        '            SAME_BASE_SUPERSEDED=false\n'
+        '            ANCESTRY_PROVEN_SUPERSEDED=false\n'
+        '            if [ "$PARENT_SHA" = "$BASE_SHA" ]; then\n'
+        '              SAME_BASE_SUPERSEDED=true\n'
+        '            else'
+    )
+    ancestry_call = (
+        '              ANCESTRY_COMPARE="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}")"'
+    )
+    ancestry_schema = '              jq -e --arg parent "$PARENT_SHA" --arg base "$BASE_SHA" \''
+    ancestry_consume = '              test "$(jq -r .base_commit.sha <<<"$ANCESTRY_COMPARE")" = "$PARENT_SHA"'
+    ancestry_classify = (
+        '              if [ "$(jq -r .status <<<"$ANCESTRY_COMPARE")" = "ahead" ] &&\n'
+        '                 [ "$(jq -r .merge_base_commit.sha <<<"$ANCESTRY_COMPARE")" = "$PARENT_SHA" ] &&\n'
+        '                 [ "$(jq -r .behind_by <<<"$ANCESTRY_COMPARE")" = "0" ] &&\n'
+        '                 [ "$(jq -r .ahead_by <<<"$ANCESTRY_COMPARE")" -gt 0 ]; then\n'
+        '                ANCESTRY_PROVEN_SUPERSEDED=true'
+    )
+    age_marker = '            AGE_SECONDS=$((NOW_EPOCH - COMMIT_EPOCH))'
+    age_guard = (
+        '            if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] &&\n'
+        '               [ "$SAME_BASE_SUPERSEDED" != "true" ] &&\n'
+        '               [ "$ANCESTRY_PROVEN_SUPERSEDED" != "true" ]; then'
+    )
+    topology_compare = (
+        '            COMPARE="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"'
+    )
+    prs_marker = (
+        '            PRS="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
+    )
+    close_marker = (
+        '              CLOSED_PR="$(gh api --method PATCH '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
+    )
+    delete_marker = (
+        '            gh api --method DELETE '
+        '"repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
+    )
+
+    for marker in (
+        expected_marker, parent_marker, same_base_marker, ancestry_call, ancestry_schema,
+        ancestry_consume, ancestry_classify, age_marker, age_guard, topology_compare,
+        prs_marker, close_marker, delete_marker,
+    ):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight ancestry supersession contract anchor changed: {marker}")
+
+    ancestry_start = reconcile.index(ancestry_schema)
+    ancestry_end = reconcile.index('              \' <<<"$ANCESTRY_COMPARE" >/dev/null', ancestry_start)
+    ancestry_block = reconcile[ancestry_start:ancestry_end]
+    for fragment in (
+        '(type == "object") and',
+        '(.status | type == "string" and',
+        '(. == "ahead" or . == "behind" or . == "diverged" or . == "identical")) and',
+        '(.base_commit | type == "object" and .sha == $parent) and',
+        '(.merge_base_commit | type == "object" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))) and',
+        '(.ahead_by | type == "number" and . == floor and . >= 0) and',
+        '(.behind_by | type == "number" and . == floor and . >= 0) and',
+        '(.total_commits | type == "number" and . == floor and . >= 0)',
+    ):
+        require(fragment in ancestry_block,
+                f"Spotlight ancestry compare schema is missing: {fragment}")
+
+    positions = [
+        reconcile.index(expected_marker),
+        reconcile.index(parent_marker),
+        reconcile.index(same_base_marker),
+        reconcile.index(ancestry_call),
+        reconcile.index(ancestry_schema),
+        reconcile.index(ancestry_consume),
+        reconcile.index(ancestry_classify),
+        reconcile.index(age_marker),
+        reconcile.index(age_guard),
+        reconcile.index(topology_compare),
+        reconcile.index(prs_marker),
+        reconcile.index(close_marker),
+        reconcile.index(delete_marker),
+    ]
+    require(positions == sorted(positions),
+            "Spotlight ancestry supersession evidence/effect ordering changed")
+    require(
+        '- ancestry-proven old-base candidates cleaned immediately: **$ANCESTRY_PROVEN_STALE**'
+        in reconcile,
+        "Spotlight summary lost ancestry-proven stale cleanup evidence",
+    )
+    require(
+        '- unproven/divergent candidates below 30-minute stale floor preserved: **$PRESERVED_YOUNG**'
+        in reconcile,
+        "Spotlight summary lost young unproven/divergent preservation evidence",
+    )
+
+
+def self_test_spotlight_same_base_supersession() -> None:
+    cases = (
+        (
+            dict(expected_current=True, parent_matches_current_base=True,
+                 ancestry_proven_superseded=False, age_seconds=1),
+            "preserve-current",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=True,
+                 ancestry_proven_superseded=False, age_seconds=1),
+            "cleanup-same-base-superseded",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=True, age_seconds=1),
+            "cleanup-ancestry-proven-stale",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=False, age_seconds=1799),
+            "preserve-young-unproven",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=False, age_seconds=1800),
+            "cleanup-aged-stale",
+        ),
+    )
+    for kwargs, expected in cases:
+        observed = classify_spotlight_reconciliation_candidate(**kwargs)
+        require(observed == expected,
+                f"Spotlight ancestry supersession classifier mismatch: {kwargs} -> {observed}")
+
+    for kwargs in (
+        dict(expected_current=False, parent_matches_current_base=False,
+             ancestry_proven_superseded=False, age_seconds=-1),
+        dict(expected_current=False, parent_matches_current_base=False,
+             ancestry_proven_superseded=False, age_seconds=0, stale_after_seconds=0),
+    ):
+        try:
+            classify_spotlight_reconciliation_candidate(**kwargs)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(
+                f"Spotlight ancestry supersession classifier accepted malformed input: {kwargs}"
+            )
+
+
+def self_test() -> None:
+    v21.self_test()
+    self_test_spotlight_same_base_supersession()
+
+    bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+    validate_bot_review_identity_ref_evidence_schema(bot_review)
+
+    initial_schema = 'validate_git_ref_object "$MAIN_REF_RESPONSE" "main"'
+    initial_consume = 'MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"'
+    reordered = bot_review.replace(initial_schema, "true # displaced initial main-ref schema", 1)
+    reordered = reordered.replace(
+        initial_consume,
+        initial_consume + "\n          " + initial_schema,
+        1,
+    )
+    try:
+        validate_bot_review_identity_ref_evidence_schema(reordered)
+    except ValueError as exc:
+        require("initial main-ref" in str(exc),
+                f"bot-review ref-order self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("bot-review ref-order self-test accepted schema-after-consumption reordering")
+
+    weakened_identity = bot_review.replace(
+        '(.login | type == "string" and . == "portyu9")',
+        '(.login | tostring == "portyu9")',
+        1,
+    )
+    try:
+        validate_bot_review_identity_ref_evidence_schema(weakened_identity)
+    except ValueError as exc:
+        require("identity/ref" in str(exc),
+                f"bot-review identity-schema self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("bot-review identity-schema self-test accepted type-coercing login evidence")
+
+    spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+    profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+    validate_leases(profile, spotlight)
+    for current, replacement, label in (
+        (
+            '            ((.status == "queued") or (.status == "in_progress")) and',
+            '            (.status == "in_progress") and',
+            "queued liveness state",
+        ),
+        (
+            '            ((.status == "queued") or (.status == "in_progress")) and',
+            '            ((.status == "queued") or (.status == "in_progress") or (.status == "completed")) and',
+            "terminal status expansion",
+        ),
+        (
+            '            (.conclusion == null) and',
+            '            (has("conclusion")) and',
+            "null-conclusion binding",
+        ),
+    ):
+        lease_start = spotlight.index("  lease:\n")
+        lease_end = spotlight.index("  reconcile:\n", lease_start)
+        lease = spotlight[lease_start:lease_end]
+        require(
+            lease.count(current) == 1,
+            f"Spotlight lease liveness self-test anchor changed: {label}",
+        )
+        mutated_lease = lease.replace(current, replacement, 1)
+        mutated = spotlight[:lease_start] + mutated_lease + spotlight[lease_end:]
+        try:
+            validate_leases(profile, mutated)
+        except ValueError as exc:
+            require(
+                "mutation-lease run evidence contract is missing" in str(exc),
+                f"Spotlight lease liveness self-test failed for wrong reason ({label}): {exc}",
+            )
+        else:
+            raise ValueError(
+                f"Spotlight lease liveness self-test accepted forbidden mutation: {label}"
+            )
+    validate_spotlight_same_base_supersession(spotlight)
+    validate_spotlight_budget_artifact_history(spotlight)
+    budget_start = spotlight.index("  budget:\n")
+    budget_end = spotlight.index("  quarantine:\n", budget_start)
+    budget = spotlight[budget_start:budget_end]
+    schema_start = budget.index(
+        '          jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
+    )
+    total_pos = budget.index('          TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"', schema_start)
+    schema_block = budget[schema_start:total_pos]
+    without_schema = budget[:schema_start] + budget[total_pos:]
+    output = '          echo "attempt_count=$TOTAL" >> "$GITHUB_OUTPUT"\n'
+    output_pos = without_schema.index(output) + len(output)
+    reordered_budget = without_schema[:output_pos] + schema_block + without_schema[output_pos:]
+    reordered = spotlight[:budget_start] + reordered_budget + spotlight[budget_end:]
+    try:
+        validate_spotlight_budget_artifact_history(reordered)
+    except ValueError as exc:
+        require("artifact-history" in str(exc),
+                f"governed artifact-history self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("governed artifact-history self-test accepted schema-after-output reordering")
+
+
+def validate_profile_stats_spotlight_dispatch_evidence(
+    profile: str, *, run_self_test: bool = True
+) -> None:
+    dispatch = job_block(profile, "dispatch", "decision_receipt")
+    workflow_fetch = (
+        'WORKFLOW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml")"'
+    )
+    workflow_schema = '(.state | type == "string" and . == "active") and'
+    workflow_schema_end = "' <<<\"$WORKFLOW\" >/dev/null || {"
+    workflow_consume = 'WORKFLOW_ID="$(jq -r .id <<<"$WORKFLOW")"'
+    runs_fetch = (
+        'RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1")"'
+    )
+    runs_schema = '--argjson workflow "$WORKFLOW_ID"'
+    runs_schema_end = "' <<<\"$RUNS\" >/dev/null || {"
+    runs_consume = 'TOTAL="$(jq -r .total_count <<<"$RUNS")"'
+    high_water = "PREVIOUS_RUN_HIGH_WATER=\"$(jq -r '.workflow_runs[0].id' <<<\"$RUNS\")\""
+    dispatch_post = (
+        'gh api --include --method POST \\\n'
+        '            "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml/dispatches"'
+    )
+
+    for marker in (
+        workflow_fetch, workflow_schema, workflow_schema_end, workflow_consume,
+        runs_fetch, runs_schema, runs_schema_end, runs_consume, high_water,
+        dispatch_post,
+    ):
+        require(
+            dispatch.count(marker) == 1,
+            f"Profile Stats Spotlight dispatch evidence anchor changed: {marker}",
+        )
+
+    positions = (
+        dispatch.index(workflow_fetch),
+        dispatch.index(workflow_schema),
+        dispatch.index(workflow_schema_end),
+        dispatch.index(workflow_consume),
+        dispatch.index(runs_fetch),
+        dispatch.index(runs_schema),
+        dispatch.index(runs_schema_end),
+        dispatch.index(runs_consume),
+        dispatch.index(dispatch_post),
+    )
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Profile Stats Spotlight dispatch evidence must be typed before scalar consumption/write",
+    )
+
+    workflow_block = dispatch[
+        dispatch.index(workflow_fetch):dispatch.index(workflow_schema_end)
+    ]
+    for fragment in (
+        '(.id | positive_int) and',
+        '(.node_id | type == "string" and length > 0) and',
+        '(.name | type == "string" and . == "Sync Spotlight profile links") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.state | type == "string" and . == "active") and',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0) and',
+        '(.badge_url | type == "string" and length > 0) and',
+        '(.created_at | type == "string" and length > 0) and',
+        '(.updated_at | type == "string" and length > 0)',
+    ):
+        require(
+            fragment in workflow_block,
+            f"Profile Stats Spotlight workflow singleton schema changed: {fragment}",
+        )
+
+    runs_block = dispatch[dispatch.index(runs_schema):dispatch.index(runs_schema_end)]
+    for fragment in (
+        '($root.total_count | type == "number" and . == floor and . >= 0) and',
+        '($root.workflow_runs | type == "array" and length <= 1) and',
+        'then ($root.workflow_runs | length) == 0',
+        'else ($root.workflow_runs | length) == 1',
+        '(.id | positive_int) and',
+        '(.node_id | type == "string" and length > 0) and',
+        '(.workflow_id | type == "number" and . == floor and . == $workflow) and',
+        '(.name | type == "string" and . == "Sync Spotlight profile links") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.event | type == "string" and . == "workflow_dispatch") and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.run_number | positive_int) and',
+        '(.run_attempt | positive_int) and',
+        '(.check_suite_id | positive_int) and',
+        '(.check_suite_node_id | type == "string" and length > 0) and',
+        '(.repository | type == "object" and',
+        '(.id | type == "number" and . == floor and . == $repo) and',
+        '(.full_name | type == "string" and . == $repo_name)) and',
+        '(.head_repository | type == "object" and',
+        '(.status | type == "string" and allowed_status) and',
+        'then (.conclusion | type == "string" and allowed_conclusion)',
+        'else .conclusion == null',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0)',
+    ):
+        require(
+            fragment in runs_block,
+            f"Profile Stats Spotlight run collection schema changed: {fragment}",
+        )
+
+    for fragment in (
+        '(. == "queued") or (. == "in_progress") or (. == "requested") or',
+        '(. == "waiting") or (. == "pending") or (. == "completed");',
+        '(. == "success") or (. == "failure") or (. == "neutral") or',
+        '(. == "cancelled") or (. == "skipped") or (. == "timed_out") or',
+        '(. == "action_required") or (. == "stale") or (. == "startup_failure");',
+    ):
+        require(
+            fragment in runs_block,
+            f"Profile Stats Spotlight run status/conclusion allowlist changed: {fragment}",
+        )
+    require(
+        runs_block.count('(.id | type == "number" and . == floor and . == $repo) and') == 2
+        and runs_block.count('(.full_name | type == "string" and . == $repo_name)) and') == 2,
+        "Profile Stats Spotlight run repository/head-repository identity binding changed",
+    )
+
+    require(
+        dispatch.count(
+            'actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1'
+        ) == 1
+        and dispatch.count(
+            'actions/workflows/spotlight-link-sync.yml/dispatches'
+        ) == 1,
+        "Profile Stats Spotlight dispatch endpoint/call-count contract changed",
+    )
+    require(
+        "STATUS_LINE=\"$(head -n 1 <<<\"$RESPONSE\" | tr -d '\\r')\"" in dispatch
+        and '[[ "$STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]]' in dispatch,
+        "Profile Stats Spotlight dispatch must retain exact HTTP 204 acceptance proof",
+    )
+
+    if run_self_test:
+        for current, replacement, expected in (
+            (
+                '(.state | type == "string" and . == "active") and',
+                '(.state | tostring == "active") and',
+                "dispatch evidence anchor changed",
+            ),
+            (
+                '(.run_attempt | positive_int) and',
+                '(.run_attempt | tostring | length > 0) and',
+                "run collection schema changed",
+            ),
+            (
+                '(.check_suite_node_id | type == "string" and length > 0) and',
+                '(.check_suite_node_id | tostring | length > 0) and',
+                "run collection schema changed",
+            ),
+            (
+                '(.full_name | type == "string" and . == $repo_name)) and',
+                '(.full_name | tostring == $repo_name)) and',
+                "repository/head-repository identity binding changed",
+            ),
+            (
+                '(. == "waiting") or (. == "pending") or (. == "completed");',
+                '(. == "waiting") or (. == "pending") or (. == "made_up");',
+                "status/conclusion allowlist changed",
+            ),
+        ):
+            require(
+                current in profile,
+                f"Profile Stats dispatch self-test fixture anchor changed: {current}",
+            )
+            mutated = profile.replace(current, replacement, 1)
+            try:
+                validate_profile_stats_spotlight_dispatch_evidence(
+                    mutated, run_self_test=False
+                )
+            except ValueError as exc:
+                require(
+                    expected in str(exc),
+                    f"Profile Stats dispatch self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Profile Stats dispatch self-test accepted forbidden mutation: {expected}"
+                )
+
+
+def main() -> int:
+    try:
+        self_test()
+        observed: dict[str, str] = {}
+        for relative, expected in EXPECTED.items():
+            actual = v21.git_blob_sha(ROOT / relative)
+            require(actual == expected,
+                    f"{relative}: governed workflow bytes changed; expected Git blob {expected}, got {actual}")
+            observed[relative] = actual
+        require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
+        runtime_test_blob = v21.git_blob_sha(ROOT / "scripts/spotlight_budget_jq_schema_runtime_test.py")
+        require(
+            runtime_test_blob == SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB,
+            "Spotlight mutation-budget jq runtime-test bytes changed; "
+            f"expected Git blob {SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB}, got {runtime_test_blob}",
+        )
+
+        profile_quality = (ROOT / ".github/workflows/profile-quality.yml").read_text(encoding="utf-8")
+        governed_bot_review_gate = (ROOT / "scripts/governed_bot_review_gate.py").read_text(encoding="utf-8")
+        validate_native_bot_review_gate(profile_quality, governed_bot_review_gate)
+
+        bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+        dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
+        autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
+        spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
+        validate_codeql_autofix_constructive_response_schemas(autofix)
+        validate_codeql_autofix_read_singleton_evidence(autofix)
+        validate_codeql_autofix_approval_comment_evidence(autofix)
+        validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
+        validate_spotlight_event_admission(spotlight, capability)
+        validate_spotlight_terminal_protected_run_evidence(spotlight)
+        validate_spotlight_terminal_trusted_admission_evidence(spotlight)
+        validate_spotlight_same_base_supersession(spotlight)
+        validate_spotlight_privileged_ref_evidence_schema(spotlight)
+        validate_spotlight_readme_contents_evidence(spotlight)
+
+        validate_spotlight_budget_artifact_history(spotlight)
+
+        profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+        v21.validate_profile_stats_freshness(profile)
+        v21.validate_profile_stats_lease_binding(profile)
+        v21.validate_profile_stats_receipt(profile)
+        validate_profile_stats_spotlight_dispatch_evidence(profile)
+
+        validate_v21_spotlight_invariants(spotlight)
+        validate_item10_mac(spotlight)
+        validate_item11_receipts(profile, spotlight)
+        validate_leases(profile, spotlight)
+
+        print(
+            f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
+            "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal protected workflow-run certificate provenance typed before MAC equality consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+        )
+        return 0
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+ + prefix + '_RUN_RAW" "    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    terminal = job_block(spotlight, "merge", "decision_receipt")
+    workflow_fetch = (
+        'TRUSTED_WORKFLOW_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'capability-admission.yml")"'
+    )
+    workflow_schema = 'error("Spotlight trusted-admission workflow definition must be an object")'
+    workflow_consume = "TRUSTED_WORKFLOW_ID=\"$(jq -er '"
+    run_fetch = (
+        'TRUSTED_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/'
+        '${TRUSTED_RUN_ID}")"'
+    )
+    run_schema = 'error("Spotlight trusted-admission run must be an object")'
+    run_normalized = "TRUSTED_RUN=\"$(jq -ce \\"
+    run_consume = 'test "$(jq -r .workflow_id <<<"$TRUSTED_RUN")" = "$TRUSTED_WORKFLOW_ID"'
+    check_fetch = (
+        'TRUSTED_CHECK_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/'
+        '${TRUSTED_CHECK_RUN_ID}")"'
+    )
+    check_schema = 'error("Spotlight trusted-admission check run must be an object")'
+    check_normalized = "TRUSTED_CHECK=\"$(jq -ce \\"
+    check_consume = 'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"'
+    terminal_stage = 'echo "Spotlight terminal stage: trusted-admission-live-reproof-verified" >&2'
+
+    for marker in (
+        workflow_fetch,
+        workflow_schema,
+        workflow_consume,
+        run_fetch,
+        run_schema,
+        run_normalized,
+        run_consume,
+        check_fetch,
+        check_schema,
+        check_normalized,
+        check_consume,
+        terminal_stage,
+    ):
+        require(
+            terminal.count(marker) == 1,
+            f"Spotlight terminal trusted-admission evidence anchor changed: {marker}",
+        )
+
+    positions = (
+        terminal.index(workflow_fetch),
+        terminal.index(workflow_consume),
+        terminal.index(workflow_schema),
+        terminal.index(run_fetch),
+        terminal.index(run_normalized),
+        terminal.index(run_schema),
+        terminal.index(run_consume),
+        terminal.index(check_fetch),
+        terminal.index(check_normalized),
+        terminal.index(check_schema),
+        terminal.index(check_consume),
+        terminal.index(terminal_stage),
+    )
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Spotlight terminal trusted-admission evidence must remain fetch-validate-normalize-consume ordered",
+    )
+
+    for fragment in (
+        '((.id | positive_int) | not)',
+        '((.node_id | type) != "string") or ((.node_id | length) == 0)',
+        '.name != "Capability admission" or',
+        '.path != ".github/workflows/capability-admission.yml" or',
+        '.state != "active"',
+        '((.badge_url | type) != "string") or ((.badge_url | length) == 0)',
+        '((.created_at | type) != "string") or ((.created_at | length) == 0)',
+        '((.updated_at | type) != "string") or ((.updated_at | length) == 0)',
+        'error("Spotlight trusted-admission workflow metadata is invalid")',
+    ):
+        require(
+            fragment in terminal[terminal.index(workflow_consume):terminal.index(run_fetch)],
+            f"Spotlight terminal trusted workflow schema changed: {fragment}",
+        )
+
+    run_block = terminal[terminal.index(run_normalized):terminal.index(run_consume)]
+    for fragment in (
+        '--argjson run "$TRUSTED_RUN_ID"',
+        '--argjson workflow "$TRUSTED_WORKFLOW_ID"',
+        '--argjson attempt "$TRUSTED_RUN_ATTEMPT"',
+        '--arg base "$BASE_SHA"',
+        '--arg repo "$GITHUB_REPOSITORY"',
+        '.id != $run or',
+        '.workflow_id != $workflow or',
+        '.name != "Capability admission" or',
+        '.path != ".github/workflows/capability-admission.yml"',
+        '.event != "workflow_dispatch" or .head_branch != "main" or',
+        '.head_sha != $base',
+        '.run_attempt != $attempt or',
+        '((.check_suite_id | positive_int) | not) or',
+        '((.check_suite_node_id | type) != "string") or',
+        '.repository.full_name != $repo or',
+        '.head_repository.id != .repository.id or',
+        '.head_repository.full_name != $repo',
+        '.actor.login != "github-actions[bot]" or',
+        '.triggering_actor.id != .actor.id or',
+        '.triggering_actor.login != "github-actions[bot]"',
+        '.status != "completed" or .conclusion != "success"',
+        'run_started_at',
+        'error("Spotlight trusted-admission run metadata is invalid")',
+    ):
+        require(
+            fragment in run_block,
+            f"Spotlight terminal trusted run schema changed: {fragment}",
+        )
+
+    check_block = terminal[terminal.index(check_normalized):terminal.index(check_consume)]
+    for fragment in (
+        '--argjson check "$TRUSTED_CHECK_RUN_ID"',
+        '--arg head "$HEAD_SHA"',
+        '--arg external "$EXPECTED_TRUSTED_EXTERNAL_ID"',
+        '--arg details "$CERTIFIED_TRUSTED_DETAILS_URL"',
+        '--argjson suite "$CERTIFIED_TRUSTED_CHECK_SUITE_ID"',
+        '.id != $check or',
+        '.name != "trusted-capability-admission" or',
+        '.head_sha != $head',
+        '.app.id != 15368',
+        '.status != "completed" or .conclusion != "success"',
+        '.external_id != $external or',
+        '.details_url != $details',
+        '.check_suite.id != $suite',
+        '((.started_at | type) != "string") or ((.started_at | length) == 0)',
+        '((.completed_at | type) != "string") or ((.completed_at | length) == 0)',
+        '((.output | type) != "object") or',
+        '((.pull_requests | type) != "array") or ((.pull_requests | length) > 100)',
+        'error("Spotlight trusted-admission check metadata is invalid")',
+    ):
+        require(
+            fragment in check_block,
+            f"Spotlight terminal trusted check schema changed: {fragment}",
+        )
+
+    require(
+        terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml"'
+        ) == 1
+        and terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}"'
+        ) == 1
+        and terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}"'
+        ) == 1,
+        "Spotlight terminal trusted-admission endpoint/call-count contract changed",
+    )
+    for forbidden in (
+        'TRUSTED_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"',
+        'TRUSTED_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}")"',
+        'TRUSTED_CHECK="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}")"',
+    ):
+        require(
+            forbidden not in terminal,
+            f"Spotlight terminal trusted-admission regressed to raw scalar/object consumption: {forbidden}",
+        )
+
+    if run_self_test:
+        mutations = (
+            (
+                '.path != ".github/workflows/capability-admission.yml" or',
+                '(.path | tostring) != ".github/workflows/capability-admission.yml" or',
+                "trusted workflow schema changed",
+            ),
+            (
+                '.head_repository.id != .repository.id or',
+                '(.head_repository.id | tostring) != (.repository.id | tostring) or',
+                "trusted run schema changed",
+            ),
+            (
+                '.triggering_actor.id != .actor.id or',
+                '(.triggering_actor.id | tostring) != (.actor.id | tostring) or',
+                "trusted run schema changed",
+            ),
+            (
+                '.external_id != $external or',
+                '(.external_id | tostring) != $external or',
+                "trusted check schema changed",
+            ),
+            (
+                '.check_suite.id != $suite',
+                '(.check_suite.id | tostring) != ($suite | tostring)',
+                "trusted check schema changed",
+            ),
+        )
+        for current, replacement, expected in mutations:
+            require(
+                current in spotlight,
+                f"Spotlight terminal trusted-admission self-test fixture anchor changed: {current}",
+            )
+            require(
+                current in terminal,
+                f"Spotlight terminal trusted-admission self-test target escaped terminal block: {current}",
+            )
+            mutated_terminal = terminal.replace(current, replacement, 1)
+            mutated = spotlight.replace(terminal, mutated_terminal, 1)
+            try:
+                validate_spotlight_terminal_trusted_admission_evidence(
+                    mutated, run_self_test=False
+                )
+            except ValueError as exc:
+                require(
+                    expected in str(exc),
+                    f"Spotlight terminal trusted-admission self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    "Spotlight terminal trusted-admission self-test accepted forbidden mutation: "
+                    f"{expected}"
+                )
+
+
+def classify_spotlight_reconciliation_candidate(
+    *,
+    expected_current: bool,
+    parent_matches_current_base: bool,
+    ancestry_proven_superseded: bool,
+    age_seconds: int,
+    stale_after_seconds: int = 1800,
+) -> str:
+    """Pure policy model for deterministic Spotlight stale-candidate reconciliation."""
+    require(type(expected_current) is bool, "Spotlight expected-current flag must be boolean")
+    require(type(parent_matches_current_base) is bool,
+            "Spotlight parent/base flag must be boolean")
+    require(type(ancestry_proven_superseded) is bool,
+            "Spotlight ancestry-proven flag must be boolean")
+    require(type(age_seconds) is int and age_seconds >= 0,
+            "Spotlight candidate age must be a nonnegative integer")
+    require(type(stale_after_seconds) is int and stale_after_seconds > 0,
+            "Spotlight stale floor must be a positive integer")
+    if expected_current:
+        return "preserve-current"
+    if parent_matches_current_base:
+        return "cleanup-same-base-superseded"
+    if ancestry_proven_superseded:
+        return "cleanup-ancestry-proven-stale"
+    if age_seconds < stale_after_seconds:
+        return "preserve-young-unproven"
+    return "cleanup-aged-stale"
+
+
+def validate_spotlight_same_base_supersession(spotlight: str) -> None:
+    reconcile = job_block(spotlight, "reconcile", "budget")
+    expected_marker = ('            if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && '
+                       '[ "$BRANCH" = "$EXPECTED_CANDIDATE_BRANCH" ]; then')
+    parent_marker = "            PARENT_SHA=\"$(jq -r '.parents[0].sha' <<<\"$CANDIDATE_COMMIT\")\""
+    same_base_marker = (
+        '            SAME_BASE_SUPERSEDED=false\n'
+        '            ANCESTRY_PROVEN_SUPERSEDED=false\n'
+        '            if [ "$PARENT_SHA" = "$BASE_SHA" ]; then\n'
+        '              SAME_BASE_SUPERSEDED=true\n'
+        '            else'
+    )
+    ancestry_call = (
+        '              ANCESTRY_COMPARE="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}")"'
+    )
+    ancestry_schema = '              jq -e --arg parent "$PARENT_SHA" --arg base "$BASE_SHA" \''
+    ancestry_consume = '              test "$(jq -r .base_commit.sha <<<"$ANCESTRY_COMPARE")" = "$PARENT_SHA"'
+    ancestry_classify = (
+        '              if [ "$(jq -r .status <<<"$ANCESTRY_COMPARE")" = "ahead" ] &&\n'
+        '                 [ "$(jq -r .merge_base_commit.sha <<<"$ANCESTRY_COMPARE")" = "$PARENT_SHA" ] &&\n'
+        '                 [ "$(jq -r .behind_by <<<"$ANCESTRY_COMPARE")" = "0" ] &&\n'
+        '                 [ "$(jq -r .ahead_by <<<"$ANCESTRY_COMPARE")" -gt 0 ]; then\n'
+        '                ANCESTRY_PROVEN_SUPERSEDED=true'
+    )
+    age_marker = '            AGE_SECONDS=$((NOW_EPOCH - COMMIT_EPOCH))'
+    age_guard = (
+        '            if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] &&\n'
+        '               [ "$SAME_BASE_SUPERSEDED" != "true" ] &&\n'
+        '               [ "$ANCESTRY_PROVEN_SUPERSEDED" != "true" ]; then'
+    )
+    topology_compare = (
+        '            COMPARE="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"'
+    )
+    prs_marker = (
+        '            PRS="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
+    )
+    close_marker = (
+        '              CLOSED_PR="$(gh api --method PATCH '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
+    )
+    delete_marker = (
+        '            gh api --method DELETE '
+        '"repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
+    )
+
+    for marker in (
+        expected_marker, parent_marker, same_base_marker, ancestry_call, ancestry_schema,
+        ancestry_consume, ancestry_classify, age_marker, age_guard, topology_compare,
+        prs_marker, close_marker, delete_marker,
+    ):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight ancestry supersession contract anchor changed: {marker}")
+
+    ancestry_start = reconcile.index(ancestry_schema)
+    ancestry_end = reconcile.index('              \' <<<"$ANCESTRY_COMPARE" >/dev/null', ancestry_start)
+    ancestry_block = reconcile[ancestry_start:ancestry_end]
+    for fragment in (
+        '(type == "object") and',
+        '(.status | type == "string" and',
+        '(. == "ahead" or . == "behind" or . == "diverged" or . == "identical")) and',
+        '(.base_commit | type == "object" and .sha == $parent) and',
+        '(.merge_base_commit | type == "object" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))) and',
+        '(.ahead_by | type == "number" and . == floor and . >= 0) and',
+        '(.behind_by | type == "number" and . == floor and . >= 0) and',
+        '(.total_commits | type == "number" and . == floor and . >= 0)',
+    ):
+        require(fragment in ancestry_block,
+                f"Spotlight ancestry compare schema is missing: {fragment}")
+
+    positions = [
+        reconcile.index(expected_marker),
+        reconcile.index(parent_marker),
+        reconcile.index(same_base_marker),
+        reconcile.index(ancestry_call),
+        reconcile.index(ancestry_schema),
+        reconcile.index(ancestry_consume),
+        reconcile.index(ancestry_classify),
+        reconcile.index(age_marker),
+        reconcile.index(age_guard),
+        reconcile.index(topology_compare),
+        reconcile.index(prs_marker),
+        reconcile.index(close_marker),
+        reconcile.index(delete_marker),
+    ]
+    require(positions == sorted(positions),
+            "Spotlight ancestry supersession evidence/effect ordering changed")
+    require(
+        '- ancestry-proven old-base candidates cleaned immediately: **$ANCESTRY_PROVEN_STALE**'
+        in reconcile,
+        "Spotlight summary lost ancestry-proven stale cleanup evidence",
+    )
+    require(
+        '- unproven/divergent candidates below 30-minute stale floor preserved: **$PRESERVED_YOUNG**'
+        in reconcile,
+        "Spotlight summary lost young unproven/divergent preservation evidence",
+    )
+
+
+def self_test_spotlight_same_base_supersession() -> None:
+    cases = (
+        (
+            dict(expected_current=True, parent_matches_current_base=True,
+                 ancestry_proven_superseded=False, age_seconds=1),
+            "preserve-current",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=True,
+                 ancestry_proven_superseded=False, age_seconds=1),
+            "cleanup-same-base-superseded",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=True, age_seconds=1),
+            "cleanup-ancestry-proven-stale",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=False, age_seconds=1799),
+            "preserve-young-unproven",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=False, age_seconds=1800),
+            "cleanup-aged-stale",
+        ),
+    )
+    for kwargs, expected in cases:
+        observed = classify_spotlight_reconciliation_candidate(**kwargs)
+        require(observed == expected,
+                f"Spotlight ancestry supersession classifier mismatch: {kwargs} -> {observed}")
+
+    for kwargs in (
+        dict(expected_current=False, parent_matches_current_base=False,
+             ancestry_proven_superseded=False, age_seconds=-1),
+        dict(expected_current=False, parent_matches_current_base=False,
+             ancestry_proven_superseded=False, age_seconds=0, stale_after_seconds=0),
+    ):
+        try:
+            classify_spotlight_reconciliation_candidate(**kwargs)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(
+                f"Spotlight ancestry supersession classifier accepted malformed input: {kwargs}"
+            )
+
+
+def self_test() -> None:
+    v21.self_test()
+    self_test_spotlight_same_base_supersession()
+
+    bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+    validate_bot_review_identity_ref_evidence_schema(bot_review)
+
+    initial_schema = 'validate_git_ref_object "$MAIN_REF_RESPONSE" "main"'
+    initial_consume = 'MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"'
+    reordered = bot_review.replace(initial_schema, "true # displaced initial main-ref schema", 1)
+    reordered = reordered.replace(
+        initial_consume,
+        initial_consume + "\n          " + initial_schema,
+        1,
+    )
+    try:
+        validate_bot_review_identity_ref_evidence_schema(reordered)
+    except ValueError as exc:
+        require("initial main-ref" in str(exc),
+                f"bot-review ref-order self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("bot-review ref-order self-test accepted schema-after-consumption reordering")
+
+    weakened_identity = bot_review.replace(
+        '(.login | type == "string" and . == "portyu9")',
+        '(.login | tostring == "portyu9")',
+        1,
+    )
+    try:
+        validate_bot_review_identity_ref_evidence_schema(weakened_identity)
+    except ValueError as exc:
+        require("identity/ref" in str(exc),
+                f"bot-review identity-schema self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("bot-review identity-schema self-test accepted type-coercing login evidence")
+
+    spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+    profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+    validate_leases(profile, spotlight)
+    for current, replacement, label in (
+        (
+            '            ((.status == "queued") or (.status == "in_progress")) and',
+            '            (.status == "in_progress") and',
+            "queued liveness state",
+        ),
+        (
+            '            ((.status == "queued") or (.status == "in_progress")) and',
+            '            ((.status == "queued") or (.status == "in_progress") or (.status == "completed")) and',
+            "terminal status expansion",
+        ),
+        (
+            '            (.conclusion == null) and',
+            '            (has("conclusion")) and',
+            "null-conclusion binding",
+        ),
+    ):
+        lease_start = spotlight.index("  lease:\n")
+        lease_end = spotlight.index("  reconcile:\n", lease_start)
+        lease = spotlight[lease_start:lease_end]
+        require(
+            lease.count(current) == 1,
+            f"Spotlight lease liveness self-test anchor changed: {label}",
+        )
+        mutated_lease = lease.replace(current, replacement, 1)
+        mutated = spotlight[:lease_start] + mutated_lease + spotlight[lease_end:]
+        try:
+            validate_leases(profile, mutated)
+        except ValueError as exc:
+            require(
+                "mutation-lease run evidence contract is missing" in str(exc),
+                f"Spotlight lease liveness self-test failed for wrong reason ({label}): {exc}",
+            )
+        else:
+            raise ValueError(
+                f"Spotlight lease liveness self-test accepted forbidden mutation: {label}"
+            )
+    validate_spotlight_same_base_supersession(spotlight)
+    validate_spotlight_budget_artifact_history(spotlight)
+    budget_start = spotlight.index("  budget:\n")
+    budget_end = spotlight.index("  quarantine:\n", budget_start)
+    budget = spotlight[budget_start:budget_end]
+    schema_start = budget.index(
+        '          jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
+    )
+    total_pos = budget.index('          TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"', schema_start)
+    schema_block = budget[schema_start:total_pos]
+    without_schema = budget[:schema_start] + budget[total_pos:]
+    output = '          echo "attempt_count=$TOTAL" >> "$GITHUB_OUTPUT"\n'
+    output_pos = without_schema.index(output) + len(output)
+    reordered_budget = without_schema[:output_pos] + schema_block + without_schema[output_pos:]
+    reordered = spotlight[:budget_start] + reordered_budget + spotlight[budget_end:]
+    try:
+        validate_spotlight_budget_artifact_history(reordered)
+    except ValueError as exc:
+        require("artifact-history" in str(exc),
+                f"governed artifact-history self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("governed artifact-history self-test accepted schema-after-output reordering")
+
+
+def validate_profile_stats_spotlight_dispatch_evidence(
+    profile: str, *, run_self_test: bool = True
+) -> None:
+    dispatch = job_block(profile, "dispatch", "decision_receipt")
+    workflow_fetch = (
+        'WORKFLOW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml")"'
+    )
+    workflow_schema = '(.state | type == "string" and . == "active") and'
+    workflow_schema_end = "' <<<\"$WORKFLOW\" >/dev/null || {"
+    workflow_consume = 'WORKFLOW_ID="$(jq -r .id <<<"$WORKFLOW")"'
+    runs_fetch = (
+        'RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1")"'
+    )
+    runs_schema = '--argjson workflow "$WORKFLOW_ID"'
+    runs_schema_end = "' <<<\"$RUNS\" >/dev/null || {"
+    runs_consume = 'TOTAL="$(jq -r .total_count <<<"$RUNS")"'
+    high_water = "PREVIOUS_RUN_HIGH_WATER=\"$(jq -r '.workflow_runs[0].id' <<<\"$RUNS\")\""
+    dispatch_post = (
+        'gh api --include --method POST \\\n'
+        '            "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml/dispatches"'
+    )
+
+    for marker in (
+        workflow_fetch, workflow_schema, workflow_schema_end, workflow_consume,
+        runs_fetch, runs_schema, runs_schema_end, runs_consume, high_water,
+        dispatch_post,
+    ):
+        require(
+            dispatch.count(marker) == 1,
+            f"Profile Stats Spotlight dispatch evidence anchor changed: {marker}",
+        )
+
+    positions = (
+        dispatch.index(workflow_fetch),
+        dispatch.index(workflow_schema),
+        dispatch.index(workflow_schema_end),
+        dispatch.index(workflow_consume),
+        dispatch.index(runs_fetch),
+        dispatch.index(runs_schema),
+        dispatch.index(runs_schema_end),
+        dispatch.index(runs_consume),
+        dispatch.index(dispatch_post),
+    )
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Profile Stats Spotlight dispatch evidence must be typed before scalar consumption/write",
+    )
+
+    workflow_block = dispatch[
+        dispatch.index(workflow_fetch):dispatch.index(workflow_schema_end)
+    ]
+    for fragment in (
+        '(.id | positive_int) and',
+        '(.node_id | type == "string" and length > 0) and',
+        '(.name | type == "string" and . == "Sync Spotlight profile links") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.state | type == "string" and . == "active") and',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0) and',
+        '(.badge_url | type == "string" and length > 0) and',
+        '(.created_at | type == "string" and length > 0) and',
+        '(.updated_at | type == "string" and length > 0)',
+    ):
+        require(
+            fragment in workflow_block,
+            f"Profile Stats Spotlight workflow singleton schema changed: {fragment}",
+        )
+
+    runs_block = dispatch[dispatch.index(runs_schema):dispatch.index(runs_schema_end)]
+    for fragment in (
+        '($root.total_count | type == "number" and . == floor and . >= 0) and',
+        '($root.workflow_runs | type == "array" and length <= 1) and',
+        'then ($root.workflow_runs | length) == 0',
+        'else ($root.workflow_runs | length) == 1',
+        '(.id | positive_int) and',
+        '(.node_id | type == "string" and length > 0) and',
+        '(.workflow_id | type == "number" and . == floor and . == $workflow) and',
+        '(.name | type == "string" and . == "Sync Spotlight profile links") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.event | type == "string" and . == "workflow_dispatch") and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.run_number | positive_int) and',
+        '(.run_attempt | positive_int) and',
+        '(.check_suite_id | positive_int) and',
+        '(.check_suite_node_id | type == "string" and length > 0) and',
+        '(.repository | type == "object" and',
+        '(.id | type == "number" and . == floor and . == $repo) and',
+        '(.full_name | type == "string" and . == $repo_name)) and',
+        '(.head_repository | type == "object" and',
+        '(.status | type == "string" and allowed_status) and',
+        'then (.conclusion | type == "string" and allowed_conclusion)',
+        'else .conclusion == null',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0)',
+    ):
+        require(
+            fragment in runs_block,
+            f"Profile Stats Spotlight run collection schema changed: {fragment}",
+        )
+
+    for fragment in (
+        '(. == "queued") or (. == "in_progress") or (. == "requested") or',
+        '(. == "waiting") or (. == "pending") or (. == "completed");',
+        '(. == "success") or (. == "failure") or (. == "neutral") or',
+        '(. == "cancelled") or (. == "skipped") or (. == "timed_out") or',
+        '(. == "action_required") or (. == "stale") or (. == "startup_failure");',
+    ):
+        require(
+            fragment in runs_block,
+            f"Profile Stats Spotlight run status/conclusion allowlist changed: {fragment}",
+        )
+    require(
+        runs_block.count('(.id | type == "number" and . == floor and . == $repo) and') == 2
+        and runs_block.count('(.full_name | type == "string" and . == $repo_name)) and') == 2,
+        "Profile Stats Spotlight run repository/head-repository identity binding changed",
+    )
+
+    require(
+        dispatch.count(
+            'actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1'
+        ) == 1
+        and dispatch.count(
+            'actions/workflows/spotlight-link-sync.yml/dispatches'
+        ) == 1,
+        "Profile Stats Spotlight dispatch endpoint/call-count contract changed",
+    )
+    require(
+        "STATUS_LINE=\"$(head -n 1 <<<\"$RESPONSE\" | tr -d '\\r')\"" in dispatch
+        and '[[ "$STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]]' in dispatch,
+        "Profile Stats Spotlight dispatch must retain exact HTTP 204 acceptance proof",
+    )
+
+    if run_self_test:
+        for current, replacement, expected in (
+            (
+                '(.state | type == "string" and . == "active") and',
+                '(.state | tostring == "active") and',
+                "dispatch evidence anchor changed",
+            ),
+            (
+                '(.run_attempt | positive_int) and',
+                '(.run_attempt | tostring | length > 0) and',
+                "run collection schema changed",
+            ),
+            (
+                '(.check_suite_node_id | type == "string" and length > 0) and',
+                '(.check_suite_node_id | tostring | length > 0) and',
+                "run collection schema changed",
+            ),
+            (
+                '(.full_name | type == "string" and . == $repo_name)) and',
+                '(.full_name | tostring == $repo_name)) and',
+                "repository/head-repository identity binding changed",
+            ),
+            (
+                '(. == "waiting") or (. == "pending") or (. == "completed");',
+                '(. == "waiting") or (. == "pending") or (. == "made_up");',
+                "status/conclusion allowlist changed",
+            ),
+        ):
+            require(
+                current in profile,
+                f"Profile Stats dispatch self-test fixture anchor changed: {current}",
+            )
+            mutated = profile.replace(current, replacement, 1)
+            try:
+                validate_profile_stats_spotlight_dispatch_evidence(
+                    mutated, run_self_test=False
+                )
+            except ValueError as exc:
+                require(
+                    expected in str(exc),
+                    f"Profile Stats dispatch self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Profile Stats dispatch self-test accepted forbidden mutation: {expected}"
+                )
+
+
+def main() -> int:
+    try:
+        self_test()
+        observed: dict[str, str] = {}
+        for relative, expected in EXPECTED.items():
+            actual = v21.git_blob_sha(ROOT / relative)
+            require(actual == expected,
+                    f"{relative}: governed workflow bytes changed; expected Git blob {expected}, got {actual}")
+            observed[relative] = actual
+        require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
+        runtime_test_blob = v21.git_blob_sha(ROOT / "scripts/spotlight_budget_jq_schema_runtime_test.py")
+        require(
+            runtime_test_blob == SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB,
+            "Spotlight mutation-budget jq runtime-test bytes changed; "
+            f"expected Git blob {SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB}, got {runtime_test_blob}",
+        )
+
+        profile_quality = (ROOT / ".github/workflows/profile-quality.yml").read_text(encoding="utf-8")
+        governed_bot_review_gate = (ROOT / "scripts/governed_bot_review_gate.py").read_text(encoding="utf-8")
+        validate_native_bot_review_gate(profile_quality, governed_bot_review_gate)
+
+        bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+        dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
+        autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
+        spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
+        validate_codeql_autofix_constructive_response_schemas(autofix)
+        validate_codeql_autofix_read_singleton_evidence(autofix)
+        validate_codeql_autofix_approval_comment_evidence(autofix)
+        validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
+        validate_spotlight_event_admission(spotlight, capability)
+        validate_spotlight_terminal_trusted_admission_evidence(spotlight)
+        validate_spotlight_same_base_supersession(spotlight)
+        validate_spotlight_privileged_ref_evidence_schema(spotlight)
+        validate_spotlight_readme_contents_evidence(spotlight)
+
+        validate_spotlight_budget_artifact_history(spotlight)
+
+        profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+        v21.validate_profile_stats_freshness(profile)
+        v21.validate_profile_stats_lease_binding(profile)
+        v21.validate_profile_stats_receipt(profile)
+        validate_profile_stats_spotlight_dispatch_evidence(profile)
+
+        validate_v21_spotlight_invariants(spotlight)
+        validate_item10_mac(spotlight)
+        validate_item11_receipts(profile, spotlight)
+        validate_leases(profile, spotlight)
+
+        print(
+            f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
+            "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+        )
+        return 0
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+            + prefix + '_RUN_ID" "    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    terminal = job_block(spotlight, "merge", "decision_receipt")
+    workflow_fetch = (
+        'TRUSTED_WORKFLOW_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'capability-admission.yml")"'
+    )
+    workflow_schema = 'error("Spotlight trusted-admission workflow definition must be an object")'
+    workflow_consume = "TRUSTED_WORKFLOW_ID=\"$(jq -er '"
+    run_fetch = (
+        'TRUSTED_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/'
+        '${TRUSTED_RUN_ID}")"'
+    )
+    run_schema = 'error("Spotlight trusted-admission run must be an object")'
+    run_normalized = "TRUSTED_RUN=\"$(jq -ce \\"
+    run_consume = 'test "$(jq -r .workflow_id <<<"$TRUSTED_RUN")" = "$TRUSTED_WORKFLOW_ID"'
+    check_fetch = (
+        'TRUSTED_CHECK_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/'
+        '${TRUSTED_CHECK_RUN_ID}")"'
+    )
+    check_schema = 'error("Spotlight trusted-admission check run must be an object")'
+    check_normalized = "TRUSTED_CHECK=\"$(jq -ce \\"
+    check_consume = 'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"'
+    terminal_stage = 'echo "Spotlight terminal stage: trusted-admission-live-reproof-verified" >&2'
+
+    for marker in (
+        workflow_fetch,
+        workflow_schema,
+        workflow_consume,
+        run_fetch,
+        run_schema,
+        run_normalized,
+        run_consume,
+        check_fetch,
+        check_schema,
+        check_normalized,
+        check_consume,
+        terminal_stage,
+    ):
+        require(
+            terminal.count(marker) == 1,
+            f"Spotlight terminal trusted-admission evidence anchor changed: {marker}",
+        )
+
+    positions = (
+        terminal.index(workflow_fetch),
+        terminal.index(workflow_consume),
+        terminal.index(workflow_schema),
+        terminal.index(run_fetch),
+        terminal.index(run_normalized),
+        terminal.index(run_schema),
+        terminal.index(run_consume),
+        terminal.index(check_fetch),
+        terminal.index(check_normalized),
+        terminal.index(check_schema),
+        terminal.index(check_consume),
+        terminal.index(terminal_stage),
+    )
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Spotlight terminal trusted-admission evidence must remain fetch-validate-normalize-consume ordered",
+    )
+
+    for fragment in (
+        '((.id | positive_int) | not)',
+        '((.node_id | type) != "string") or ((.node_id | length) == 0)',
+        '.name != "Capability admission" or',
+        '.path != ".github/workflows/capability-admission.yml" or',
+        '.state != "active"',
+        '((.badge_url | type) != "string") or ((.badge_url | length) == 0)',
+        '((.created_at | type) != "string") or ((.created_at | length) == 0)',
+        '((.updated_at | type) != "string") or ((.updated_at | length) == 0)',
+        'error("Spotlight trusted-admission workflow metadata is invalid")',
+    ):
+        require(
+            fragment in terminal[terminal.index(workflow_consume):terminal.index(run_fetch)],
+            f"Spotlight terminal trusted workflow schema changed: {fragment}",
+        )
+
+    run_block = terminal[terminal.index(run_normalized):terminal.index(run_consume)]
+    for fragment in (
+        '--argjson run "$TRUSTED_RUN_ID"',
+        '--argjson workflow "$TRUSTED_WORKFLOW_ID"',
+        '--argjson attempt "$TRUSTED_RUN_ATTEMPT"',
+        '--arg base "$BASE_SHA"',
+        '--arg repo "$GITHUB_REPOSITORY"',
+        '.id != $run or',
+        '.workflow_id != $workflow or',
+        '.name != "Capability admission" or',
+        '.path != ".github/workflows/capability-admission.yml"',
+        '.event != "workflow_dispatch" or .head_branch != "main" or',
+        '.head_sha != $base',
+        '.run_attempt != $attempt or',
+        '((.check_suite_id | positive_int) | not) or',
+        '((.check_suite_node_id | type) != "string") or',
+        '.repository.full_name != $repo or',
+        '.head_repository.id != .repository.id or',
+        '.head_repository.full_name != $repo',
+        '.actor.login != "github-actions[bot]" or',
+        '.triggering_actor.id != .actor.id or',
+        '.triggering_actor.login != "github-actions[bot]"',
+        '.status != "completed" or .conclusion != "success"',
+        'run_started_at',
+        'error("Spotlight trusted-admission run metadata is invalid")',
+    ):
+        require(
+            fragment in run_block,
+            f"Spotlight terminal trusted run schema changed: {fragment}",
+        )
+
+    check_block = terminal[terminal.index(check_normalized):terminal.index(check_consume)]
+    for fragment in (
+        '--argjson check "$TRUSTED_CHECK_RUN_ID"',
+        '--arg head "$HEAD_SHA"',
+        '--arg external "$EXPECTED_TRUSTED_EXTERNAL_ID"',
+        '--arg details "$CERTIFIED_TRUSTED_DETAILS_URL"',
+        '--argjson suite "$CERTIFIED_TRUSTED_CHECK_SUITE_ID"',
+        '.id != $check or',
+        '.name != "trusted-capability-admission" or',
+        '.head_sha != $head',
+        '.app.id != 15368',
+        '.status != "completed" or .conclusion != "success"',
+        '.external_id != $external or',
+        '.details_url != $details',
+        '.check_suite.id != $suite',
+        '((.started_at | type) != "string") or ((.started_at | length) == 0)',
+        '((.completed_at | type) != "string") or ((.completed_at | length) == 0)',
+        '((.output | type) != "object") or',
+        '((.pull_requests | type) != "array") or ((.pull_requests | length) > 100)',
+        'error("Spotlight trusted-admission check metadata is invalid")',
+    ):
+        require(
+            fragment in check_block,
+            f"Spotlight terminal trusted check schema changed: {fragment}",
+        )
+
+    require(
+        terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml"'
+        ) == 1
+        and terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}"'
+        ) == 1
+        and terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}"'
+        ) == 1,
+        "Spotlight terminal trusted-admission endpoint/call-count contract changed",
+    )
+    for forbidden in (
+        'TRUSTED_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"',
+        'TRUSTED_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}")"',
+        'TRUSTED_CHECK="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}")"',
+    ):
+        require(
+            forbidden not in terminal,
+            f"Spotlight terminal trusted-admission regressed to raw scalar/object consumption: {forbidden}",
+        )
+
+    if run_self_test:
+        mutations = (
+            (
+                '.path != ".github/workflows/capability-admission.yml" or',
+                '(.path | tostring) != ".github/workflows/capability-admission.yml" or',
+                "trusted workflow schema changed",
+            ),
+            (
+                '.head_repository.id != .repository.id or',
+                '(.head_repository.id | tostring) != (.repository.id | tostring) or',
+                "trusted run schema changed",
+            ),
+            (
+                '.triggering_actor.id != .actor.id or',
+                '(.triggering_actor.id | tostring) != (.actor.id | tostring) or',
+                "trusted run schema changed",
+            ),
+            (
+                '.external_id != $external or',
+                '(.external_id | tostring) != $external or',
+                "trusted check schema changed",
+            ),
+            (
+                '.check_suite.id != $suite',
+                '(.check_suite.id | tostring) != ($suite | tostring)',
+                "trusted check schema changed",
+            ),
+        )
+        for current, replacement, expected in mutations:
+            require(
+                current in spotlight,
+                f"Spotlight terminal trusted-admission self-test fixture anchor changed: {current}",
+            )
+            require(
+                current in terminal,
+                f"Spotlight terminal trusted-admission self-test target escaped terminal block: {current}",
+            )
+            mutated_terminal = terminal.replace(current, replacement, 1)
+            mutated = spotlight.replace(terminal, mutated_terminal, 1)
+            try:
+                validate_spotlight_terminal_trusted_admission_evidence(
+                    mutated, run_self_test=False
+                )
+            except ValueError as exc:
+                require(
+                    expected in str(exc),
+                    f"Spotlight terminal trusted-admission self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    "Spotlight terminal trusted-admission self-test accepted forbidden mutation: "
+                    f"{expected}"
+                )
+
+
+def classify_spotlight_reconciliation_candidate(
+    *,
+    expected_current: bool,
+    parent_matches_current_base: bool,
+    ancestry_proven_superseded: bool,
+    age_seconds: int,
+    stale_after_seconds: int = 1800,
+) -> str:
+    """Pure policy model for deterministic Spotlight stale-candidate reconciliation."""
+    require(type(expected_current) is bool, "Spotlight expected-current flag must be boolean")
+    require(type(parent_matches_current_base) is bool,
+            "Spotlight parent/base flag must be boolean")
+    require(type(ancestry_proven_superseded) is bool,
+            "Spotlight ancestry-proven flag must be boolean")
+    require(type(age_seconds) is int and age_seconds >= 0,
+            "Spotlight candidate age must be a nonnegative integer")
+    require(type(stale_after_seconds) is int and stale_after_seconds > 0,
+            "Spotlight stale floor must be a positive integer")
+    if expected_current:
+        return "preserve-current"
+    if parent_matches_current_base:
+        return "cleanup-same-base-superseded"
+    if ancestry_proven_superseded:
+        return "cleanup-ancestry-proven-stale"
+    if age_seconds < stale_after_seconds:
+        return "preserve-young-unproven"
+    return "cleanup-aged-stale"
+
+
+def validate_spotlight_same_base_supersession(spotlight: str) -> None:
+    reconcile = job_block(spotlight, "reconcile", "budget")
+    expected_marker = ('            if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && '
+                       '[ "$BRANCH" = "$EXPECTED_CANDIDATE_BRANCH" ]; then')
+    parent_marker = "            PARENT_SHA=\"$(jq -r '.parents[0].sha' <<<\"$CANDIDATE_COMMIT\")\""
+    same_base_marker = (
+        '            SAME_BASE_SUPERSEDED=false\n'
+        '            ANCESTRY_PROVEN_SUPERSEDED=false\n'
+        '            if [ "$PARENT_SHA" = "$BASE_SHA" ]; then\n'
+        '              SAME_BASE_SUPERSEDED=true\n'
+        '            else'
+    )
+    ancestry_call = (
+        '              ANCESTRY_COMPARE="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}")"'
+    )
+    ancestry_schema = '              jq -e --arg parent "$PARENT_SHA" --arg base "$BASE_SHA" \''
+    ancestry_consume = '              test "$(jq -r .base_commit.sha <<<"$ANCESTRY_COMPARE")" = "$PARENT_SHA"'
+    ancestry_classify = (
+        '              if [ "$(jq -r .status <<<"$ANCESTRY_COMPARE")" = "ahead" ] &&\n'
+        '                 [ "$(jq -r .merge_base_commit.sha <<<"$ANCESTRY_COMPARE")" = "$PARENT_SHA" ] &&\n'
+        '                 [ "$(jq -r .behind_by <<<"$ANCESTRY_COMPARE")" = "0" ] &&\n'
+        '                 [ "$(jq -r .ahead_by <<<"$ANCESTRY_COMPARE")" -gt 0 ]; then\n'
+        '                ANCESTRY_PROVEN_SUPERSEDED=true'
+    )
+    age_marker = '            AGE_SECONDS=$((NOW_EPOCH - COMMIT_EPOCH))'
+    age_guard = (
+        '            if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] &&\n'
+        '               [ "$SAME_BASE_SUPERSEDED" != "true" ] &&\n'
+        '               [ "$ANCESTRY_PROVEN_SUPERSEDED" != "true" ]; then'
+    )
+    topology_compare = (
+        '            COMPARE="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"'
+    )
+    prs_marker = (
+        '            PRS="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'
+    )
+    close_marker = (
+        '              CLOSED_PR="$(gh api --method PATCH '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"'
+    )
+    delete_marker = (
+        '            gh api --method DELETE '
+        '"repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null'
+    )
+
+    for marker in (
+        expected_marker, parent_marker, same_base_marker, ancestry_call, ancestry_schema,
+        ancestry_consume, ancestry_classify, age_marker, age_guard, topology_compare,
+        prs_marker, close_marker, delete_marker,
+    ):
+        require(reconcile.count(marker) == 1,
+                f"Spotlight ancestry supersession contract anchor changed: {marker}")
+
+    ancestry_start = reconcile.index(ancestry_schema)
+    ancestry_end = reconcile.index('              \' <<<"$ANCESTRY_COMPARE" >/dev/null', ancestry_start)
+    ancestry_block = reconcile[ancestry_start:ancestry_end]
+    for fragment in (
+        '(type == "object") and',
+        '(.status | type == "string" and',
+        '(. == "ahead" or . == "behind" or . == "diverged" or . == "identical")) and',
+        '(.base_commit | type == "object" and .sha == $parent) and',
+        '(.merge_base_commit | type == "object" and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))) and',
+        '(.ahead_by | type == "number" and . == floor and . >= 0) and',
+        '(.behind_by | type == "number" and . == floor and . >= 0) and',
+        '(.total_commits | type == "number" and . == floor and . >= 0)',
+    ):
+        require(fragment in ancestry_block,
+                f"Spotlight ancestry compare schema is missing: {fragment}")
+
+    positions = [
+        reconcile.index(expected_marker),
+        reconcile.index(parent_marker),
+        reconcile.index(same_base_marker),
+        reconcile.index(ancestry_call),
+        reconcile.index(ancestry_schema),
+        reconcile.index(ancestry_consume),
+        reconcile.index(ancestry_classify),
+        reconcile.index(age_marker),
+        reconcile.index(age_guard),
+        reconcile.index(topology_compare),
+        reconcile.index(prs_marker),
+        reconcile.index(close_marker),
+        reconcile.index(delete_marker),
+    ]
+    require(positions == sorted(positions),
+            "Spotlight ancestry supersession evidence/effect ordering changed")
+    require(
+        '- ancestry-proven old-base candidates cleaned immediately: **$ANCESTRY_PROVEN_STALE**'
+        in reconcile,
+        "Spotlight summary lost ancestry-proven stale cleanup evidence",
+    )
+    require(
+        '- unproven/divergent candidates below 30-minute stale floor preserved: **$PRESERVED_YOUNG**'
+        in reconcile,
+        "Spotlight summary lost young unproven/divergent preservation evidence",
+    )
+
+
+def self_test_spotlight_same_base_supersession() -> None:
+    cases = (
+        (
+            dict(expected_current=True, parent_matches_current_base=True,
+                 ancestry_proven_superseded=False, age_seconds=1),
+            "preserve-current",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=True,
+                 ancestry_proven_superseded=False, age_seconds=1),
+            "cleanup-same-base-superseded",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=True, age_seconds=1),
+            "cleanup-ancestry-proven-stale",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=False, age_seconds=1799),
+            "preserve-young-unproven",
+        ),
+        (
+            dict(expected_current=False, parent_matches_current_base=False,
+                 ancestry_proven_superseded=False, age_seconds=1800),
+            "cleanup-aged-stale",
+        ),
+    )
+    for kwargs, expected in cases:
+        observed = classify_spotlight_reconciliation_candidate(**kwargs)
+        require(observed == expected,
+                f"Spotlight ancestry supersession classifier mismatch: {kwargs} -> {observed}")
+
+    for kwargs in (
+        dict(expected_current=False, parent_matches_current_base=False,
+             ancestry_proven_superseded=False, age_seconds=-1),
+        dict(expected_current=False, parent_matches_current_base=False,
+             ancestry_proven_superseded=False, age_seconds=0, stale_after_seconds=0),
+    ):
+        try:
+            classify_spotlight_reconciliation_candidate(**kwargs)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(
+                f"Spotlight ancestry supersession classifier accepted malformed input: {kwargs}"
+            )
+
+
+def self_test() -> None:
+    v21.self_test()
+    self_test_spotlight_same_base_supersession()
+
+    bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+    validate_bot_review_identity_ref_evidence_schema(bot_review)
+
+    initial_schema = 'validate_git_ref_object "$MAIN_REF_RESPONSE" "main"'
+    initial_consume = 'MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"'
+    reordered = bot_review.replace(initial_schema, "true # displaced initial main-ref schema", 1)
+    reordered = reordered.replace(
+        initial_consume,
+        initial_consume + "\n          " + initial_schema,
+        1,
+    )
+    try:
+        validate_bot_review_identity_ref_evidence_schema(reordered)
+    except ValueError as exc:
+        require("initial main-ref" in str(exc),
+                f"bot-review ref-order self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("bot-review ref-order self-test accepted schema-after-consumption reordering")
+
+    weakened_identity = bot_review.replace(
+        '(.login | type == "string" and . == "portyu9")',
+        '(.login | tostring == "portyu9")',
+        1,
+    )
+    try:
+        validate_bot_review_identity_ref_evidence_schema(weakened_identity)
+    except ValueError as exc:
+        require("identity/ref" in str(exc),
+                f"bot-review identity-schema self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("bot-review identity-schema self-test accepted type-coercing login evidence")
+
+    spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+    profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+    validate_leases(profile, spotlight)
+    for current, replacement, label in (
+        (
+            '            ((.status == "queued") or (.status == "in_progress")) and',
+            '            (.status == "in_progress") and',
+            "queued liveness state",
+        ),
+        (
+            '            ((.status == "queued") or (.status == "in_progress")) and',
+            '            ((.status == "queued") or (.status == "in_progress") or (.status == "completed")) and',
+            "terminal status expansion",
+        ),
+        (
+            '            (.conclusion == null) and',
+            '            (has("conclusion")) and',
+            "null-conclusion binding",
+        ),
+    ):
+        lease_start = spotlight.index("  lease:\n")
+        lease_end = spotlight.index("  reconcile:\n", lease_start)
+        lease = spotlight[lease_start:lease_end]
+        require(
+            lease.count(current) == 1,
+            f"Spotlight lease liveness self-test anchor changed: {label}",
+        )
+        mutated_lease = lease.replace(current, replacement, 1)
+        mutated = spotlight[:lease_start] + mutated_lease + spotlight[lease_end:]
+        try:
+            validate_leases(profile, mutated)
+        except ValueError as exc:
+            require(
+                "mutation-lease run evidence contract is missing" in str(exc),
+                f"Spotlight lease liveness self-test failed for wrong reason ({label}): {exc}",
+            )
+        else:
+            raise ValueError(
+                f"Spotlight lease liveness self-test accepted forbidden mutation: {label}"
+            )
+    validate_spotlight_same_base_supersession(spotlight)
+    validate_spotlight_budget_artifact_history(spotlight)
+    budget_start = spotlight.index("  budget:\n")
+    budget_end = spotlight.index("  quarantine:\n", budget_start)
+    budget = spotlight[budget_start:budget_end]
+    schema_start = budget.index(
+        '          jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
+    )
+    total_pos = budget.index('          TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"', schema_start)
+    schema_block = budget[schema_start:total_pos]
+    without_schema = budget[:schema_start] + budget[total_pos:]
+    output = '          echo "attempt_count=$TOTAL" >> "$GITHUB_OUTPUT"\n'
+    output_pos = without_schema.index(output) + len(output)
+    reordered_budget = without_schema[:output_pos] + schema_block + without_schema[output_pos:]
+    reordered = spotlight[:budget_start] + reordered_budget + spotlight[budget_end:]
+    try:
+        validate_spotlight_budget_artifact_history(reordered)
+    except ValueError as exc:
+        require("artifact-history" in str(exc),
+                f"governed artifact-history self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("governed artifact-history self-test accepted schema-after-output reordering")
+
+
+def validate_profile_stats_spotlight_dispatch_evidence(
+    profile: str, *, run_self_test: bool = True
+) -> None:
+    dispatch = job_block(profile, "dispatch", "decision_receipt")
+    workflow_fetch = (
+        'WORKFLOW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml")"'
+    )
+    workflow_schema = '(.state | type == "string" and . == "active") and'
+    workflow_schema_end = "' <<<\"$WORKFLOW\" >/dev/null || {"
+    workflow_consume = 'WORKFLOW_ID="$(jq -r .id <<<"$WORKFLOW")"'
+    runs_fetch = (
+        'RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1")"'
+    )
+    runs_schema = '--argjson workflow "$WORKFLOW_ID"'
+    runs_schema_end = "' <<<\"$RUNS\" >/dev/null || {"
+    runs_consume = 'TOTAL="$(jq -r .total_count <<<"$RUNS")"'
+    high_water = "PREVIOUS_RUN_HIGH_WATER=\"$(jq -r '.workflow_runs[0].id' <<<\"$RUNS\")\""
+    dispatch_post = (
+        'gh api --include --method POST \\\n'
+        '            "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml/dispatches"'
+    )
+
+    for marker in (
+        workflow_fetch, workflow_schema, workflow_schema_end, workflow_consume,
+        runs_fetch, runs_schema, runs_schema_end, runs_consume, high_water,
+        dispatch_post,
+    ):
+        require(
+            dispatch.count(marker) == 1,
+            f"Profile Stats Spotlight dispatch evidence anchor changed: {marker}",
+        )
+
+    positions = (
+        dispatch.index(workflow_fetch),
+        dispatch.index(workflow_schema),
+        dispatch.index(workflow_schema_end),
+        dispatch.index(workflow_consume),
+        dispatch.index(runs_fetch),
+        dispatch.index(runs_schema),
+        dispatch.index(runs_schema_end),
+        dispatch.index(runs_consume),
+        dispatch.index(dispatch_post),
+    )
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Profile Stats Spotlight dispatch evidence must be typed before scalar consumption/write",
+    )
+
+    workflow_block = dispatch[
+        dispatch.index(workflow_fetch):dispatch.index(workflow_schema_end)
+    ]
+    for fragment in (
+        '(.id | positive_int) and',
+        '(.node_id | type == "string" and length > 0) and',
+        '(.name | type == "string" and . == "Sync Spotlight profile links") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.state | type == "string" and . == "active") and',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0) and',
+        '(.badge_url | type == "string" and length > 0) and',
+        '(.created_at | type == "string" and length > 0) and',
+        '(.updated_at | type == "string" and length > 0)',
+    ):
+        require(
+            fragment in workflow_block,
+            f"Profile Stats Spotlight workflow singleton schema changed: {fragment}",
+        )
+
+    runs_block = dispatch[dispatch.index(runs_schema):dispatch.index(runs_schema_end)]
+    for fragment in (
+        '($root.total_count | type == "number" and . == floor and . >= 0) and',
+        '($root.workflow_runs | type == "array" and length <= 1) and',
+        'then ($root.workflow_runs | length) == 0',
+        'else ($root.workflow_runs | length) == 1',
+        '(.id | positive_int) and',
+        '(.node_id | type == "string" and length > 0) and',
+        '(.workflow_id | type == "number" and . == floor and . == $workflow) and',
+        '(.name | type == "string" and . == "Sync Spotlight profile links") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.event | type == "string" and . == "workflow_dispatch") and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.run_number | positive_int) and',
+        '(.run_attempt | positive_int) and',
+        '(.check_suite_id | positive_int) and',
+        '(.check_suite_node_id | type == "string" and length > 0) and',
+        '(.repository | type == "object" and',
+        '(.id | type == "number" and . == floor and . == $repo) and',
+        '(.full_name | type == "string" and . == $repo_name)) and',
+        '(.head_repository | type == "object" and',
+        '(.status | type == "string" and allowed_status) and',
+        'then (.conclusion | type == "string" and allowed_conclusion)',
+        'else .conclusion == null',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0)',
+    ):
+        require(
+            fragment in runs_block,
+            f"Profile Stats Spotlight run collection schema changed: {fragment}",
+        )
+
+    for fragment in (
+        '(. == "queued") or (. == "in_progress") or (. == "requested") or',
+        '(. == "waiting") or (. == "pending") or (. == "completed");',
+        '(. == "success") or (. == "failure") or (. == "neutral") or',
+        '(. == "cancelled") or (. == "skipped") or (. == "timed_out") or',
+        '(. == "action_required") or (. == "stale") or (. == "startup_failure");',
+    ):
+        require(
+            fragment in runs_block,
+            f"Profile Stats Spotlight run status/conclusion allowlist changed: {fragment}",
+        )
+    require(
+        runs_block.count('(.id | type == "number" and . == floor and . == $repo) and') == 2
+        and runs_block.count('(.full_name | type == "string" and . == $repo_name)) and') == 2,
+        "Profile Stats Spotlight run repository/head-repository identity binding changed",
+    )
+
+    require(
+        dispatch.count(
+            'actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1'
+        ) == 1
+        and dispatch.count(
+            'actions/workflows/spotlight-link-sync.yml/dispatches'
+        ) == 1,
+        "Profile Stats Spotlight dispatch endpoint/call-count contract changed",
+    )
+    require(
+        "STATUS_LINE=\"$(head -n 1 <<<\"$RESPONSE\" | tr -d '\\r')\"" in dispatch
+        and '[[ "$STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]]' in dispatch,
+        "Profile Stats Spotlight dispatch must retain exact HTTP 204 acceptance proof",
+    )
+
+    if run_self_test:
+        for current, replacement, expected in (
+            (
+                '(.state | type == "string" and . == "active") and',
+                '(.state | tostring == "active") and',
+                "dispatch evidence anchor changed",
+            ),
+            (
+                '(.run_attempt | positive_int) and',
+                '(.run_attempt | tostring | length > 0) and',
+                "run collection schema changed",
+            ),
+            (
+                '(.check_suite_node_id | type == "string" and length > 0) and',
+                '(.check_suite_node_id | tostring | length > 0) and',
+                "run collection schema changed",
+            ),
+            (
+                '(.full_name | type == "string" and . == $repo_name)) and',
+                '(.full_name | tostring == $repo_name)) and',
+                "repository/head-repository identity binding changed",
+            ),
+            (
+                '(. == "waiting") or (. == "pending") or (. == "completed");',
+                '(. == "waiting") or (. == "pending") or (. == "made_up");',
+                "status/conclusion allowlist changed",
+            ),
+        ):
+            require(
+                current in profile,
+                f"Profile Stats dispatch self-test fixture anchor changed: {current}",
+            )
+            mutated = profile.replace(current, replacement, 1)
+            try:
+                validate_profile_stats_spotlight_dispatch_evidence(
+                    mutated, run_self_test=False
+                )
+            except ValueError as exc:
+                require(
+                    expected in str(exc),
+                    f"Profile Stats dispatch self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Profile Stats dispatch self-test accepted forbidden mutation: {expected}"
+                )
+
+
+def main() -> int:
+    try:
+        self_test()
+        observed: dict[str, str] = {}
+        for relative, expected in EXPECTED.items():
+            actual = v21.git_blob_sha(ROOT / relative)
+            require(actual == expected,
+                    f"{relative}: governed workflow bytes changed; expected Git blob {expected}, got {actual}")
+            observed[relative] = actual
+        require(set(observed) == set(EXPECTED), "governed workflow identity inventory changed")
+        runtime_test_blob = v21.git_blob_sha(ROOT / "scripts/spotlight_budget_jq_schema_runtime_test.py")
+        require(
+            runtime_test_blob == SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB,
+            "Spotlight mutation-budget jq runtime-test bytes changed; "
+            f"expected Git blob {SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB}, got {runtime_test_blob}",
+        )
+
+        profile_quality = (ROOT / ".github/workflows/profile-quality.yml").read_text(encoding="utf-8")
+        governed_bot_review_gate = (ROOT / "scripts/governed_bot_review_gate.py").read_text(encoding="utf-8")
+        validate_native_bot_review_gate(profile_quality, governed_bot_review_gate)
+
+        bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+        dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
+        autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
+        spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
+        validate_codeql_autofix_constructive_response_schemas(autofix)
+        validate_codeql_autofix_read_singleton_evidence(autofix)
+        validate_codeql_autofix_approval_comment_evidence(autofix)
+        validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
+        validate_spotlight_event_admission(spotlight, capability)
+        validate_spotlight_terminal_trusted_admission_evidence(spotlight)
+        validate_spotlight_same_base_supersession(spotlight)
+        validate_spotlight_privileged_ref_evidence_schema(spotlight)
+        validate_spotlight_readme_contents_evidence(spotlight)
+
+        validate_spotlight_budget_artifact_history(spotlight)
+
+        profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+        v21.validate_profile_stats_freshness(profile)
+        v21.validate_profile_stats_lease_binding(profile)
+        v21.validate_profile_stats_receipt(profile)
+        validate_profile_stats_spotlight_dispatch_evidence(profile)
+
+        validate_v21_spotlight_invariants(spotlight)
+        validate_item10_mac(spotlight)
+        validate_item11_receipts(profile, spotlight)
+        validate_leases(profile, spotlight)
+
+        print(
+            f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
+            "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+        )
+        return 0
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+ + prefix + '_CHECK_SUITE_ID" "' + name + '" "' + path + '")"'
+        )
+        require(terminal.count(fetch) == 1 and terminal.count(normalize) == 1,
+                f"Spotlight terminal {name} protected-run evidence topology changed")
+        fetch_pos = terminal.index(fetch)
+        normalize_pos = terminal.index(normalize, fetch_pos)
+        require(previous < fetch_pos < normalize_pos < consume_pos,
+                f"Spotlight terminal {name} run must fetch then normalize before certificate consumption")
+        previous = normalize_pos
+
+    require(
+        terminal.count('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}"') == 1
+        and terminal.count('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}"') == 1
+        and terminal.count('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}"') == 1,
+        "Spotlight terminal protected-run endpoint/call-count contract changed",
+    )
+    for forbidden in (
+        'CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"',
+        'DEPENDENCY_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"',
+        'PROFILE_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"',
+        '$codeql.workflow_id',
+        '$dependency.workflow_id',
+        '$profile.workflow_id',
+    ):
+        require(forbidden not in terminal,
+                f"Spotlight terminal protected-run evidence regressed to raw response consumption: {forbidden}")
+
+    if run_self_test:
+        current = '.name != $name or .path != $path'
+        require(current in helper_block, "Spotlight terminal protected-run self-test path anchor changed")
+        terminal_start = spotlight.index("  merge:\n")
+        terminal_end = spotlight.index("  decision_receipt:\n", terminal_start)
+        terminal_source = spotlight[terminal_start:terminal_end]
+        weakened_terminal = terminal_source.replace(current, '.name != $name', 1)
+        weakened = spotlight[:terminal_start] + weakened_terminal + spotlight[terminal_end:]
+        try:
+            validate_spotlight_terminal_protected_run_evidence(weakened, run_self_test=False)
+        except ValueError as exc:
+            require("response schema changed" in str(exc),
+                    f"Spotlight terminal protected-run self-test failed for wrong reason: {exc}")
+        else:
+            raise ValueError("Spotlight terminal protected-run self-test accepted unbound workflow path")
 
 
 def validate_spotlight_terminal_trusted_admission_evidence(
