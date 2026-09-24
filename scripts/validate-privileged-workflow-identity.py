@@ -1556,49 +1556,135 @@ def validate_spotlight_privileged_ref_evidence_schema(spotlight: str) -> None:
                 fragment in helper,
                 f"Spotlight {job} Git-ref schema changed: {fragment}",
             )
-        require(
-            'git/ref/heads/main" --jq .object.sha' not in block
-            and 'git/ref/heads/generated" --jq .object.sha' not in block
-            and 'git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha' not in block,
-            f"Spotlight {job} regained raw singleton Git-ref scalar consumption",
-        )
+        for forbidden in (
+            'git/ref/heads/main" --jq .object.sha',
+            'git/ref/heads/generated" --jq .object.sha',
+            'git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha',
+        ):
+            require(
+                forbidden not in block,
+                f"Spotlight {job} regained raw singleton Git-ref scalar consumption: {forbidden}",
+            )
 
     contracts = {
         "reconcile": (
-            ("MAIN_REF_RESPONSE", "main", "refs/heads/main", "BASE_SHA"),
-            ("GENERATED_REF_RESPONSE", "generated", "refs/heads/generated", "GENERATED_SHA"),
+            (
+                'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+                'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+                'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"',
+            ),
+            (
+                'GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+                'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
+                'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"',
+            ),
         ),
         "propose": (
-            ("MAIN_REF_RESPONSE", "main", "refs/heads/main", "SOURCE_SHA"),
-            ("CANDIDATE_REF_RESPONSE", "${CANDIDATE_BRANCH}", "refs/heads/${CANDIDATE_BRANCH}", "HEAD_SHA"),
+            (
+                'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+                'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"',
+                'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"',
+            ),
+            (
+                'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+                'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+                'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"',
+            ),
         ),
         "approve": (
-            ("MAIN_REF_RESPONSE", "main", "refs/heads/main", "BASE_SHA"),
-            ("GENERATED_REF_RESPONSE", "generated", "refs/heads/generated", "GENERATED_SHA"),
-            ("CANDIDATE_REF_RESPONSE", "${CANDIDATE_BRANCH}", "refs/heads/${CANDIDATE_BRANCH}", "HEAD_SHA"),
-            ("MAIN_REF_RESPONSE", "main", "refs/heads/main", "BASE_SHA"),
-            ("CANDIDATE_REF_RESPONSE", "${CANDIDATE_BRANCH}", "refs/heads/${CANDIDATE_BRANCH}", "HEAD_SHA"),
+            (
+                'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+                'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+                'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"',
+            ),
+            (
+                'GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+                'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
+                'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"',
+            ),
+            (
+                'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+                'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+                'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"',
+            ),
+            (
+                'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+                'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+                'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"',
+            ),
+            (
+                'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+                'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+                'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"',
+            ),
         ),
         "merge": (
-            ("MAIN_REF_RESPONSE", "main", "refs/heads/main", "BASE_SHA"),
-            ("GENERATED_REF_RESPONSE", "generated", "refs/heads/generated", "GENERATED_SHA"),
-            ("CANDIDATE_REF_RESPONSE", "${CANDIDATE_BRANCH}", "refs/heads/${CANDIDATE_BRANCH}", "HEAD_SHA"),
-            ("MAIN_REF_RESPONSE", "main", "refs/heads/main", "BASE_SHA"),
-            ("GENERATED_REF_RESPONSE", "generated", "refs/heads/generated", "GENERATED_SHA"),
-            ("CANDIDATE_REF_RESPONSE", "${CANDIDATE_BRANCH}", "refs/heads/${CANDIDATE_BRANCH}", "HEAD_SHA"),
-            ("CURRENT_MAIN_REF_RESPONSE", "main", "refs/heads/main", "MERGE_SHA"),
+            (
+                'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+                'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+                'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"',
+            ),
+            (
+                'GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+                'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
+                'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"',
+            ),
+            (
+                'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+                'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+                'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"',
+            ),
+            (
+                'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+                'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+                'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"',
+            ),
+            (
+                'GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+                'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
+                'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"',
+            ),
+            (
+                'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+                'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
+                'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"',
+            ),
+            (
+                'CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+                'validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"',
+                'CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
+            ),
         ),
     }
-
     for job, specs in contracts.items():
         block = blocks[job]
         cursor = -1
-        for variable, endpoint_ref, expected_ref, expected_sha in specs:
-            fetch = (
-                f'{variable}="$(gh api "repos/${{GITHUB_REPOSITORY}}/git/ref/heads/{endpoint_ref}")"'
+        for fetch, validate, consume in specs:
+            fetch_pos = block.find(fetch, cursor + 1)
+            require(fetch_pos > cursor, f"Spotlight {job} Git-ref fetch disappeared: {fetch}")
+            validate_pos = block.find(validate, fetch_pos)
+            consume_pos = block.find(consume, validate_pos)
+            require(
+                fetch_pos < validate_pos < consume_pos,
+                f"Spotlight {job} Git-ref evidence must validate before SHA consumption",
             )
-            validate = (
-                f'validate_git_ref_object "    created_ref = "python3 scripts/codeql_autofix_controller.py created-ref-response"
+            cursor = consume_pos
+
+    require(
+        spotlight.count(helper_marker) == 4,
+        "Spotlight privileged Git-ref validator topology changed",
+    )
+    require(
+        spotlight.count('validate_git_ref_object "$MAIN_REF_RESPONSE"') == 6
+        and spotlight.count('validate_git_ref_object "$GENERATED_REF_RESPONSE"') == 4
+        and spotlight.count('validate_git_ref_object "$CANDIDATE_REF_RESPONSE"') == 5
+        and spotlight.count('validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE"') == 1,
+        "Spotlight privileged Git-ref validation call topology changed",
+    )
+
+
+def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
+    created_ref = "python3 scripts/codeql_autofix_controller.py created-ref-response"
     reviewer = "python3 scripts/codeql_autofix_controller.py reviewer-request-response"
     require(autofix.count(created_ref) == 1,
             "CodeQL Autofix created-ref response validator identity changed")
