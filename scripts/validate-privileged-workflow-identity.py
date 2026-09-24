@@ -2700,7 +2700,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
     )
 
     workflow_block = dispatch[
-        dispatch.index(workflow_schema):dispatch.index(workflow_schema_end)
+        dispatch.index(workflow_fetch):dispatch.index(workflow_schema_end)
     ]
     for fragment in (
         '(.id | positive_int) and',
