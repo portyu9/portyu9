@@ -326,7 +326,7 @@ def validate_reconciler_main_ref_evidence(text: str) -> None:
         'error("Ruleset main ref SHA is invalid")',
         '((.object.url | type) != "string") or ((.object.url | length) == 0)',
         'error("Ruleset main ref object URL is invalid")',
-        '.object.sha',
+        '\n              .object.sha\n            end',
     )
     require(text.count(endpoint) == 5,
             "Ruleset reconciler must retain exactly five reviewed main-ref GET call sites")
@@ -353,7 +353,7 @@ def validate_reconciler_main_ref_evidence(text: str) -> None:
         next_fetch = fetch_positions[index + 1] if index + 1 < len(fetch_positions) else len(text)
         block = text[fetch_pos:next_fetch]
         schema_start = block.find('if type != "object" then')
-        schema_end = block.find('.object.sha', schema_start + 1)
+        schema_end = block.find('\n              .object.sha\n            end', schema_start + 1)
         require(
             schema_start >= 0 and schema_end > schema_start,
             f"Ruleset main-ref call {index + 1} must validate the complete object before SHA projection",
