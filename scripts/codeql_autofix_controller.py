@@ -408,6 +408,71 @@ def validate_created_ref_response(value: Any, branch: str, expected_sha: str) ->
     return {"ref": expected_ref, "sha": observed_sha}
 
 
+def validate_pull_request_response(
+    value: Any,
+    *,
+    pr_number: int,
+    repository: str,
+    base_sha: str,
+    branch: str,
+    head_sha: str,
+) -> dict[str, Any]:
+    pr_number = positive_int(pr_number, "Autofix pull-request PR number")
+    require(isinstance(repository, str) and repository == REPOSITORY,
+            "Autofix pull-request repository identity changed")
+    require(isinstance(branch, str) and BRANCH_RE.fullmatch(branch) is not None,
+            "Autofix pull-request branch identity is malformed")
+    base_sha = sha(base_sha, "Autofix pull-request base SHA")
+    head_sha = sha(head_sha, "Autofix pull-request head SHA")
+
+    require(isinstance(value, Mapping), "Autofix pull-request response must be an object")
+    require(
+        positive_int(value.get("number"), "Autofix pull-request response PR number") == pr_number,
+        "Autofix pull-request response PR number mismatch",
+    )
+    require(value.get("state") == "open", "Autofix pull-request response state changed")
+    require(
+        type(value.get("draft")) is bool and value.get("draft") is False,
+        "Autofix pull-request response draft state changed",
+    )
+
+    base = value.get("base")
+    head = value.get("head")
+    require(isinstance(base, Mapping), "Autofix pull-request response base must be an object")
+    require(isinstance(head, Mapping), "Autofix pull-request response head must be an object")
+    require(base.get("ref") == DEFAULT_BRANCH, "Autofix pull-request response base ref changed")
+    require(
+        sha(base.get("sha"), "Autofix pull-request response base SHA") == base_sha,
+        "Autofix pull-request response base SHA mismatch",
+    )
+    require(head.get("ref") == branch, "Autofix pull-request response head ref mismatch")
+    require(
+        sha(head.get("sha"), "Autofix pull-request response head SHA") == head_sha,
+        "Autofix pull-request response head SHA mismatch",
+    )
+    for label, side in (("base", base), ("head", head)):
+        side_repo = side.get("repo")
+        require(
+            isinstance(side_repo, Mapping),
+            f"Autofix pull-request response {label} repository must be an object",
+        )
+        require(
+            side_repo.get("full_name") == repository,
+            f"Autofix pull-request response {label} repository mismatch",
+        )
+
+    return {
+        "prNumber": pr_number,
+        "state": "open",
+        "draft": False,
+        "baseRef": DEFAULT_BRANCH,
+        "baseSha": base_sha,
+        "headRef": branch,
+        "headSha": head_sha,
+        "repository": repository,
+    }
+
+
 def validate_reviewer_request_response(
     value: Any,
     *,
@@ -1372,6 +1437,67 @@ def self_test() -> None:
         else:
             require(False, f"reviewer-request response self-test accepted forbidden mutation expected to trigger: {expected}")
 
+    pr_response = {
+        "number": 17,
+        "state": "open",
+        "draft": False,
+        "base": {"ref": "main", "sha": base, "repo": {"full_name": REPOSITORY}},
+        "head": {"ref": ref_branch, "sha": head, "repo": {"full_name": REPOSITORY}},
+    }
+    pr_args = {
+        "pr_number": 17,
+        "repository": REPOSITORY,
+        "base_sha": base,
+        "branch": ref_branch,
+        "head_sha": head,
+    }
+    require(
+        validate_pull_request_response(pr_response, **pr_args)
+        == {
+            "prNumber": 17,
+            "state": "open",
+            "draft": False,
+            "baseRef": "main",
+            "baseSha": base,
+            "headRef": ref_branch,
+            "headSha": head,
+            "repository": REPOSITORY,
+        },
+        "Autofix pull-request response positive fixture changed",
+    )
+    pr_mutations = (
+        ([], "must be an object"),
+        ({**pr_response, "number": True}, "must be a positive integer"),
+        ({**pr_response, "number": "17"}, "must be a positive integer"),
+        ({**pr_response, "number": 18}, "PR number mismatch"),
+        ({**pr_response, "state": "closed"}, "state changed"),
+        ({**pr_response, "draft": "false"}, "draft state changed"),
+        ({**pr_response, "draft": True}, "draft state changed"),
+        ({**pr_response, "base": None}, "base must be an object"),
+        ({**pr_response, "head": None}, "head must be an object"),
+        ({**pr_response, "base": {**pr_response["base"], "ref": "other"}}, "base ref changed"),
+        ({**pr_response, "base": {**pr_response["base"], "sha": "BAD"}}, "lowercase SHA-40"),
+        ({**pr_response, "base": {**pr_response["base"], "sha": "c" * 40}}, "base SHA mismatch"),
+        ({**pr_response, "head": {**pr_response["head"], "ref": "wrong"}}, "head ref mismatch"),
+        ({**pr_response, "head": {**pr_response["head"], "sha": "BAD"}}, "lowercase SHA-40"),
+        ({**pr_response, "head": {**pr_response["head"], "sha": "c" * 40}}, "head SHA mismatch"),
+        ({**pr_response, "base": {**pr_response["base"], "repo": None}}, "base repository must be an object"),
+        ({**pr_response, "head": {**pr_response["head"], "repo": None}}, "head repository must be an object"),
+        ({**pr_response, "base": {**pr_response["base"], "repo": {"full_name": "other/repo"}}},
+         "base repository mismatch"),
+        ({**pr_response, "head": {**pr_response["head"], "repo": {"full_name": "other/repo"}}},
+         "head repository mismatch"),
+    )
+    for mutated, expected in pr_mutations:
+        try:
+            validate_pull_request_response(mutated, **pr_args)
+        except ControllerError as exc:
+            require(expected in str(exc),
+                    f"pull-request response self-test failed for the wrong reason: {exc}")
+        else:
+            require(False,
+                    f"pull-request response self-test accepted forbidden mutation expected to trigger: {expected}")
+
     merge_success = {"merged": True, "sha": head, "message": "Pull Request successfully merged"}
     require(
         validate_merge_success_response(merge_success)
@@ -1495,6 +1621,15 @@ def main() -> int:
     p.add_argument("--head-sha", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("pull-request-response")
+    p.add_argument("--response-file", required=True)
+    p.add_argument("--pr-number", type=int, required=True)
+    p.add_argument("--repository", required=True)
+    p.add_argument("--base-sha", required=True)
+    p.add_argument("--branch", required=True)
+    p.add_argument("--head-sha", required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("commit")
     p.add_argument("--response-file", required=True)
     p.add_argument("--branch", required=True)
@@ -1586,6 +1721,15 @@ def main() -> int:
         dump(args.out, validate_created_ref_response(load(args.response_file), args.branch, args.expected_sha))
     elif args.command == "reviewer-request-response":
         dump(args.out, validate_reviewer_request_response(
+            load(args.response_file),
+            pr_number=args.pr_number,
+            repository=args.repository,
+            base_sha=args.base_sha,
+            branch=args.branch,
+            head_sha=args.head_sha,
+        ))
+    elif args.command == "pull-request-response":
+        dump(args.out, validate_pull_request_response(
             load(args.response_file),
             pr_number=args.pr_number,
             repository=args.repository,
