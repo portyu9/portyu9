@@ -552,10 +552,32 @@ jobs:
 
           approve_exact_pr_workflows() {
             local codeql_workflow_id dependency_workflow_id profile_workflow_id expected_id
-            local runs total count observed name run run_count run_id check_suite_id run_attempt status conclusion
-            codeql_workflow_id="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"
-            dependency_workflow_id="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"
-            profile_workflow_id="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"
+            local runs total observed name run run_count run_id check_suite_id run_attempt status conclusion
+
+            gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" \
+              > "$RUNNER_TEMP/dependabot-codeql-workflow-definition.json"
+            python3 scripts/dependabot_controller.py workflow-definition-response \
+              --response "$RUNNER_TEMP/dependabot-codeql-workflow-definition.json" \
+              --expected-path ".github/workflows/codeql.yml" \
+              --out "$RUNNER_TEMP/dependabot-codeql-workflow-definition-normalized.json"
+            codeql_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-codeql-workflow-definition-normalized.json")"
+
+            gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" \
+              > "$RUNNER_TEMP/dependabot-dependency-workflow-definition.json"
+            python3 scripts/dependabot_controller.py workflow-definition-response \
+              --response "$RUNNER_TEMP/dependabot-dependency-workflow-definition.json" \
+              --expected-path ".github/workflows/dependency-review.yml" \
+              --out "$RUNNER_TEMP/dependabot-dependency-workflow-definition-normalized.json"
+            dependency_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-dependency-workflow-definition-normalized.json")"
+
+            gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" \
+              > "$RUNNER_TEMP/dependabot-profile-workflow-definition.json"
+            python3 scripts/dependabot_controller.py workflow-definition-response \
+              --response "$RUNNER_TEMP/dependabot-profile-workflow-definition.json" \
+              --expected-path ".github/workflows/profile-quality.yml" \
+              --out "$RUNNER_TEMP/dependabot-profile-workflow-definition-normalized.json"
+            profile_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-profile-workflow-definition-normalized.json")"
+
             [[ "$codeql_workflow_id" =~ ^[1-9][0-9]*$ ]]
             [[ "$dependency_workflow_id" =~ ^[1-9][0-9]*$ ]]
             [[ "$profile_workflow_id" =~ ^[1-9][0-9]*$ ]]
@@ -564,15 +586,21 @@ jobs:
 
             for attempt in $(seq 1 12); do
               assert_transaction
-              runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
-              total="$(jq -r '.total_count // empty' <<<"$runs")"
-              count="$(jq '.[("workflow" + "_runs")] | length' <<<"$runs")"
+              gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
+                > "$RUNNER_TEMP/dependabot-protected-workflow-runs.json"
+              python3 scripts/dependabot_controller.py protected-workflow-runs-response \
+                --response "$RUNNER_TEMP/dependabot-protected-workflow-runs.json" \
+                --head-sha "$HEAD_SHA" \
+                --branch "$HEAD_REF" \
+                --codeql-workflow-id "$codeql_workflow_id" \
+                --dependency-workflow-id "$dependency_workflow_id" \
+                --profile-workflow-id "$profile_workflow_id" \
+                --out "$RUNNER_TEMP/dependabot-protected-workflow-runs-normalized.json"
+              total="$(jq -r .totalCount "$RUNNER_TEMP/dependabot-protected-workflow-runs-normalized.json")"
               [[ "$total" =~ ^[0-9]+$ ]]
-              [[ "$count" =~ ^[0-9]+$ ]]
-              test "$total" = "$count" || { echo "Canonical Dependabot PR workflow-run response is incomplete." >&2; exit 1; }
-              test "$total" -le 3 || { echo "Canonical Dependabot PR workflow-run set is ambiguous." >&2; exit 1; }
               if [ "$total" = "3" ]; then
-                observed="$(jq -c '[.[("workflow" + "_runs")][] | {name,workflow_id}] | sort_by(.name)' <<<"$runs")"
+                runs="$(jq -c .runs "$RUNNER_TEMP/dependabot-protected-workflow-runs-normalized.json")"
+                observed="$(jq -c '[.[] | {name,workflow_id:.workflowId}] | sort_by(.name)' <<<"$runs")"
                 test "$observed" = "$expected" || { echo "Canonical Dependabot PR workflow-run identities changed." >&2; exit 1; }
                 for name in "CodeQL" "Dependency review" "Profile quality"; do
                   case "$name" in
@@ -581,23 +609,18 @@ jobs:
                     "Profile quality") expected_id="$profile_workflow_id" ;;
                     *) exit 1 ;;
                   esac
-                  run_count="$(jq --arg name "$name" --argjson workflow_id "$expected_id" '[.[("workflow" + "_runs")][] | select(.name == $name and .workflow_id == $workflow_id)] | length' <<<"$runs")"
+                  run_count="$(jq --arg name "$name" --argjson workflow_id "$expected_id" '[.[] | select(.name == $name and .workflowId == $workflow_id)] | length' <<<"$runs")"
                   test "$run_count" = "1"
-                  run="$(jq -c --arg name "$name" --argjson workflow_id "$expected_id" '[.[("workflow" + "_runs")][] | select(.name == $name and .workflow_id == $workflow_id)][0]' <<<"$runs")"
+                  run="$(jq -c --arg name "$name" --argjson workflow_id "$expected_id" '[.[] | select(.name == $name and .workflowId == $workflow_id)][0]' <<<"$runs")"
                   run_id="$(jq -r .id <<<"$run")"
-                  check_suite_id="$(jq -r .check_suite_id <<<"$run")"
-                  run_attempt="$(jq -r .run_attempt <<<"$run")"
+                  check_suite_id="$(jq -r .checkSuiteId <<<"$run")"
+                  run_attempt="$(jq -r .runAttempt <<<"$run")"
                   status="$(jq -r .status <<<"$run")"
                   conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
                   [[ "$run_id" =~ ^[1-9][0-9]*$ ]]
                   [[ "$check_suite_id" =~ ^[1-9][0-9]*$ ]]
                   [[ "$run_attempt" =~ ^[1-9][0-9]*$ ]]
-                  test "$(jq -r .head_sha <<<"$run")" = "$HEAD_SHA"
-                  test "$(jq -r .head_branch <<<"$run")" = "$HEAD_REF"
-                  test "$(jq -r .event <<<"$run")" = "pull_request"
-                  test "$(jq -r .workflow_id <<<"$run")" = "$expected_id"
-                  test "$(jq -r .repository.full_name <<<"$run")" = "$TARGET_REPOSITORY"
-                  test "$(jq -r .head_repository.full_name <<<"$run")" = "$TARGET_REPOSITORY"
+                  test "$(jq -r .workflowId <<<"$run")" = "$expected_id"
                   if [ "$status" = "action_required" ] || [ "$status" = "waiting" ] || [ "$conclusion" = "action_required" ]; then
                     gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve" >/dev/null
                     echo "Approved exact canonical Dependabot PR workflow: ${name} run ${run_id}."

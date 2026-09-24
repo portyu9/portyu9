@@ -251,6 +251,165 @@ def _response_sha(value: Any, label: str) -> str:
     return value
 
 
+def _response_positive_int(value: Any, label: str) -> int:
+    require(type(value) is int and value > 0, f"{label} must be a positive integer")
+    return value
+
+
+PROTECTED_PR_RUN_STATUSES = {"queued", "in_progress", "requested", "waiting", "pending", "completed"}
+PROTECTED_PR_RUN_CONCLUSIONS = {
+    "success",
+    "failure",
+    "neutral",
+    "cancelled",
+    "skipped",
+    "timed_out",
+    "action_required",
+    "stale",
+    "startup_failure",
+    "waiting",
+}
+PROTECTED_WORKFLOW_IDENTITIES = {
+    ".github/workflows/codeql.yml": "CodeQL",
+    ".github/workflows/dependency-review.yml": "Dependency review",
+    ".github/workflows/profile-quality.yml": "Profile quality",
+}
+
+
+def validate_workflow_definition_response(value: Any, *, expected_path: str) -> dict[str, Any]:
+    expected_name = PROTECTED_WORKFLOW_IDENTITIES.get(expected_path)
+    require(expected_name is not None, "Dependabot protected workflow path is not reviewed")
+    require(isinstance(value, Mapping), "Dependabot workflow-definition response must be an object")
+    workflow_id = _response_positive_int(value.get("id"), "Dependabot workflow-definition id")
+    require(value.get("path") == expected_path, "Dependabot workflow-definition path mismatch")
+    require(value.get("name") == expected_name, "Dependabot workflow-definition name mismatch")
+    require(value.get("state") == "active", "Dependabot workflow-definition state changed")
+    for key in ("url", "html_url"):
+        observed = value.get(key)
+        require(
+            isinstance(observed, str) and bool(observed.strip()),
+            f"Dependabot workflow-definition {key} must be a nonempty string",
+        )
+    return {"id": workflow_id, "path": expected_path, "name": expected_name, "state": "active"}
+
+
+def validate_protected_pr_workflow_runs_response(
+    value: Any,
+    *,
+    expected_sha: str,
+    branch: str,
+    codeql_workflow_id: int,
+    dependency_workflow_id: int,
+    profile_workflow_id: int,
+) -> dict[str, Any]:
+    expected_sha = _response_sha(expected_sha, "Dependabot protected workflow-run head sha")
+    require(isinstance(branch, str) and bool(branch.strip()),
+            "Dependabot protected workflow-run branch must be nonempty")
+    expected_workflows = {
+        _response_positive_int(codeql_workflow_id, "Dependabot CodeQL workflow id"):
+            (".github/workflows/codeql.yml", "CodeQL"),
+        _response_positive_int(dependency_workflow_id, "Dependabot Dependency Review workflow id"):
+            (".github/workflows/dependency-review.yml", "Dependency review"),
+        _response_positive_int(profile_workflow_id, "Dependabot Profile Quality workflow id"):
+            (".github/workflows/profile-quality.yml", "Profile quality"),
+    }
+    require(len(expected_workflows) == 3,
+            "Dependabot protected workflow ids must be three distinct identities")
+
+    require(isinstance(value, Mapping), "Dependabot protected workflow-run response must be an object")
+    total_count = value.get("total_count")
+    require(type(total_count) is int and 0 <= total_count <= 100,
+            "Dependabot protected workflow-run total_count must be an integer in [0,100]")
+    raw_runs = value.get("workflow_runs")
+    require(isinstance(raw_runs, list) and len(raw_runs) <= 100,
+            "Dependabot protected workflow_runs must be an array with at most 100 entries")
+    require(total_count == len(raw_runs),
+            "Dependabot protected workflow-run total_count does not match returned array length")
+    require(total_count <= 3,
+            "Dependabot protected workflow-run set is ambiguous")
+
+    seen_run_ids: set[int] = set()
+    seen_workflow_ids: set[int] = set()
+    seen_check_suite_ids: set[int] = set()
+    normalized: list[dict[str, Any]] = []
+    for raw in raw_runs:
+        require(isinstance(raw, Mapping),
+                "Dependabot protected workflow-run collection contains a non-object")
+        run_id = _response_positive_int(raw.get("id"), "Dependabot protected workflow run id")
+        require(run_id not in seen_run_ids,
+                f"duplicate Dependabot protected workflow run id: {run_id}")
+        seen_run_ids.add(run_id)
+
+        workflow_id = _response_positive_int(
+            raw.get("workflow_id"), "Dependabot protected workflow id"
+        )
+        require(workflow_id in expected_workflows,
+                "Dependabot protected workflow run references an unexpected workflow id")
+        require(workflow_id not in seen_workflow_ids,
+                f"duplicate Dependabot protected workflow id: {workflow_id}")
+        seen_workflow_ids.add(workflow_id)
+
+        check_suite_id = _response_positive_int(
+            raw.get("check_suite_id"), "Dependabot protected workflow check-suite id"
+        )
+        require(check_suite_id not in seen_check_suite_ids,
+                f"duplicate Dependabot protected workflow check-suite id: {check_suite_id}")
+        seen_check_suite_ids.add(check_suite_id)
+        run_attempt = _response_positive_int(
+            raw.get("run_attempt"), "Dependabot protected workflow run attempt"
+        )
+
+        expected_path, expected_name = expected_workflows[workflow_id]
+        require(raw.get("path") == expected_path,
+                "Dependabot protected workflow run path mismatch")
+        require(raw.get("name") == expected_name,
+                "Dependabot protected workflow run name mismatch")
+        require(raw.get("event") == "pull_request",
+                "Dependabot protected workflow run event changed")
+        require(
+            _response_sha(raw.get("head_sha"), "Dependabot protected workflow run head sha")
+            == expected_sha,
+            "Dependabot protected workflow run head sha mismatch",
+        )
+        require(raw.get("head_branch") == branch,
+                "Dependabot protected workflow run head branch mismatch")
+        for key in ("repository", "head_repository"):
+            repository = raw.get(key)
+            require(isinstance(repository, Mapping),
+                    f"Dependabot protected workflow run {key} must be an object")
+            require(repository.get("full_name") == REPOSITORY,
+                    f"Dependabot protected workflow run {key} identity mismatch")
+
+        status = raw.get("status")
+        require(
+            isinstance(status, str) and status in PROTECTED_PR_RUN_STATUSES,
+            "Dependabot protected workflow run status is outside the reviewed status set",
+        )
+        conclusion = raw.get("conclusion")
+        if status == "completed":
+            require(
+                isinstance(conclusion, str)
+                and bool(conclusion)
+                and conclusion in PROTECTED_PR_RUN_CONCLUSIONS,
+                "Dependabot completed protected workflow run conclusion is outside the reviewed conclusion set",
+            )
+        else:
+            require(conclusion is None,
+                    "Dependabot non-completed protected workflow run conclusion must be null")
+
+        normalized.append({
+            "id": run_id,
+            "name": expected_name,
+            "workflowId": workflow_id,
+            "checkSuiteId": check_suite_id,
+            "runAttempt": run_attempt,
+            "status": status,
+            "conclusion": conclusion,
+        })
+    normalized.sort(key=lambda item: item["name"])
+    return {"totalCount": total_count, "runs": normalized}
+
+
 def validate_git_blob_response(value: Any) -> dict[str, str]:
     require(isinstance(value, Mapping), "Dependabot Git blob response must be an object")
     observed = _response_sha(value.get("sha"), "Dependabot Git blob response sha")
@@ -500,6 +659,161 @@ def self_test() -> None:
         },
         "Dependabot wake run response positive fixture changed",
     )
+    workflow_fixture = {
+        "id": 1001,
+        "path": ".github/workflows/codeql.yml",
+        "name": "CodeQL",
+        "state": "active",
+        "url": "https://api.github.com/repos/portyu9/portyu9/actions/workflows/1001",
+        "html_url": "https://github.com/portyu9/portyu9/actions/workflows/codeql.yml",
+    }
+    require(
+        validate_workflow_definition_response(
+            workflow_fixture, expected_path=".github/workflows/codeql.yml"
+        )["id"] == 1001,
+        "Dependabot workflow-definition positive fixture changed",
+    )
+    for mutated, expected in (
+        ([], "must be an object"),
+        ({**workflow_fixture, "id": True}, "positive integer"),
+        ({**workflow_fixture, "path": ".github/workflows/other.yml"}, "path mismatch"),
+        ({**workflow_fixture, "name": "Other"}, "name mismatch"),
+        ({**workflow_fixture, "state": "disabled_manually"}, "state changed"),
+        ({**workflow_fixture, "url": ""}, "url must be a nonempty string"),
+        ({**workflow_fixture, "html_url": None}, "html_url must be a nonempty string"),
+    ):
+        try:
+            validate_workflow_definition_response(
+                mutated, expected_path=".github/workflows/codeql.yml"
+            )
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"workflow-definition fixture failed for wrong reason: {exc}")
+        else:
+            raise ValueError(
+                f"Dependabot workflow-definition response accepted forbidden fixture: {expected}"
+            )
+
+    protected_branch = "dependabot/github_actions/github/codeql-action"
+    protected_ids = (1001, 1002, 1003)
+
+    def protected_run(
+        run_id: Any,
+        workflow_id: Any,
+        check_suite_id: Any,
+        *,
+        run_attempt: Any = 1,
+        path: Any | None = None,
+        name: Any | None = None,
+        event_name: Any = "pull_request",
+        observed_head: Any = commit_sha,
+        observed_branch: Any = protected_branch,
+        repository: Any = REPOSITORY,
+        head_repository: Any = REPOSITORY,
+        status: Any = "waiting",
+        conclusion: Any = None,
+    ) -> dict[str, Any]:
+        identities = {
+            1001: (".github/workflows/codeql.yml", "CodeQL"),
+            1002: (".github/workflows/dependency-review.yml", "Dependency review"),
+            1003: (".github/workflows/profile-quality.yml", "Profile quality"),
+        }
+        expected_path, expected_name = identities.get(
+            workflow_id, (".github/workflows/codeql.yml", "CodeQL")
+        )
+        return {
+            "id": run_id,
+            "workflow_id": workflow_id,
+            "check_suite_id": check_suite_id,
+            "run_attempt": run_attempt,
+            "path": expected_path if path is None else path,
+            "name": expected_name if name is None else name,
+            "event": event_name,
+            "head_sha": observed_head,
+            "head_branch": observed_branch,
+            "repository": {"full_name": repository} if isinstance(repository, str) else repository,
+            "head_repository": (
+                {"full_name": head_repository}
+                if isinstance(head_repository, str)
+                else head_repository
+            ),
+            "status": status,
+            "conclusion": conclusion,
+        }
+
+    protected_response = {
+        "total_count": 3,
+        "workflow_runs": [
+            protected_run(201, 1001, 301, status="completed", conclusion="success"),
+            protected_run(202, 1002, 302, status="waiting"),
+            protected_run(203, 1003, 303, status="completed", conclusion="action_required"),
+        ],
+    }
+    protected = validate_protected_pr_workflow_runs_response(
+        protected_response,
+        expected_sha=commit_sha,
+        branch=protected_branch,
+        codeql_workflow_id=protected_ids[0],
+        dependency_workflow_id=protected_ids[1],
+        profile_workflow_id=protected_ids[2],
+    )
+    require(
+        protected["totalCount"] == 3
+        and [item["name"] for item in protected["runs"]]
+        == ["CodeQL", "Dependency review", "Profile quality"],
+        "Dependabot protected workflow-run positive fixture changed",
+    )
+    protected_mutations = (
+        ([], "must be an object"),
+        ({"total_count": True, "workflow_runs": []}, "integer in [0,100]"),
+        ({"total_count": 1, "workflow_runs": []}, "does not match returned array length"),
+        ({"total_count": 4, "workflow_runs": [
+            protected_run(201, 1001, 301),
+            protected_run(202, 1002, 302),
+            protected_run(203, 1003, 303),
+            protected_run(204, 1001, 304),
+        ]}, "set is ambiguous"),
+        ({"total_count": 1, "workflow_runs": [None]}, "contains a non-object"),
+        ({"total_count": 1, "workflow_runs": [protected_run(True, 1001, 301)]}, "positive integer"),
+        ({"total_count": 2, "workflow_runs": [
+            protected_run(201, 1001, 301), protected_run(201, 1002, 302)
+        ]}, "duplicate Dependabot protected workflow run id"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 9999, 301)]}, "unexpected workflow id"),
+        ({"total_count": 2, "workflow_runs": [
+            protected_run(201, 1001, 301), protected_run(202, 1001, 302)
+        ]}, "duplicate Dependabot protected workflow id"),
+        ({"total_count": 2, "workflow_runs": [
+            protected_run(201, 1001, 301), protected_run(202, 1002, 301)
+        ]}, "duplicate Dependabot protected workflow check-suite id"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, run_attempt=0)]}, "positive integer"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, path=".github/workflows/other.yml")]}, "path mismatch"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, name="Other")]}, "name mismatch"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, event_name="push")]}, "event changed"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, observed_head="BAD")]}, "lowercase SHA-40"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, observed_branch="other")]}, "head branch mismatch"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, repository="other/repo")]}, "repository identity mismatch"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, status="mystery")]}, "reviewed status set"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, status="waiting", conclusion="success")]}, "must be null"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, status="completed", conclusion=None)]}, "reviewed conclusion set"),
+    )
+    for mutated, expected in protected_mutations:
+        try:
+            validate_protected_pr_workflow_runs_response(
+                mutated,
+                expected_sha=commit_sha,
+                branch=protected_branch,
+                codeql_workflow_id=protected_ids[0],
+                dependency_workflow_id=protected_ids[1],
+                profile_workflow_id=protected_ids[2],
+            )
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"protected workflow-run fixture failed for wrong reason: {exc}")
+        else:
+            raise ValueError(
+                f"Dependabot protected workflow-run response accepted forbidden fixture: {expected}"
+            )
+
     merge = validate_merge_success_response({
         "sha": commit_sha,
         "merged": True,
@@ -812,6 +1126,18 @@ def parser() -> argparse.ArgumentParser:
     wake_run_response.add_argument("--expected-run-id", type=int, required=True)
     wake_run_response.add_argument("--expected-repository", required=True)
     wake_run_response.add_argument("--out", type=Path, required=True)
+    workflow_definition_response = sub.add_parser("workflow-definition-response")
+    workflow_definition_response.add_argument("--response", type=Path, required=True)
+    workflow_definition_response.add_argument("--expected-path", required=True)
+    workflow_definition_response.add_argument("--out", type=Path, required=True)
+    protected_runs_response = sub.add_parser("protected-workflow-runs-response")
+    protected_runs_response.add_argument("--response", type=Path, required=True)
+    protected_runs_response.add_argument("--head-sha", required=True)
+    protected_runs_response.add_argument("--branch", required=True)
+    protected_runs_response.add_argument("--codeql-workflow-id", type=int, required=True)
+    protected_runs_response.add_argument("--dependency-workflow-id", type=int, required=True)
+    protected_runs_response.add_argument("--profile-workflow-id", type=int, required=True)
+    protected_runs_response.add_argument("--out", type=Path, required=True)
     sub.add_parser("self-test")
     return value
 
@@ -830,6 +1156,8 @@ def main() -> int:
             "git-ref-response",
             "git-ref-read-response",
             "wake-run-response",
+            "workflow-definition-response",
+            "protected-workflow-runs-response",
             "merge-success-response",
         }:
             response = load_json(args.response)
@@ -860,6 +1188,20 @@ def main() -> int:
                     response,
                     expected_run_id=args.expected_run_id,
                     expected_repository=args.expected_repository,
+                )
+            elif args.command == "workflow-definition-response":
+                result = validate_workflow_definition_response(
+                    response,
+                    expected_path=args.expected_path,
+                )
+            elif args.command == "protected-workflow-runs-response":
+                result = validate_protected_pr_workflow_runs_response(
+                    response,
+                    expected_sha=args.head_sha,
+                    branch=args.branch,
+                    codeql_workflow_id=args.codeql_workflow_id,
+                    dependency_workflow_id=args.dependency_workflow_id,
+                    profile_workflow_id=args.profile_workflow_id,
                 )
             else:
                 result = validate_merge_success_response(response)

@@ -1407,6 +1407,104 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
     )
 
 
+def validate_dependabot_protected_workflow_evidence_schema(dependabot: str) -> None:
+    start_marker = "          approve_exact_pr_workflows() {\n"
+    end_marker = "\n\n          assert_transaction\n          approve_exact_pr_workflows\n"
+    require(
+        dependabot.count(start_marker) == 1 and dependabot.count(end_marker) == 1,
+        "Dependabot protected workflow approval identity anchors changed",
+    )
+    start = dependabot.index(start_marker)
+    block = dependabot[start:dependabot.index(end_marker, start)]
+
+    workflow_validator = "python3 scripts/dependabot_controller.py workflow-definition-response"
+    run_validator = "python3 scripts/dependabot_controller.py protected-workflow-runs-response"
+    require(
+        block.count(workflow_validator) == 3 and block.count(run_validator) == 1,
+        "Dependabot protected workflow schema validator identity changed",
+    )
+    for forbidden in (
+        'actions/workflows/codeql.yml" --jq .id',
+        'actions/workflows/dependency-review.yml" --jq .id',
+        'actions/workflows/profile-quality.yml" --jq .id',
+        'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"',
+        "'.total_count // empty' <<<\"$runs\"",
+        'jq -r .head_sha <<<"$run"',
+        'jq -r .head_branch <<<"$run"',
+        'jq -r .repository.full_name <<<"$run"',
+        'jq -r .head_repository.full_name <<<"$run"',
+    ):
+        require(
+            forbidden not in block,
+            f"Dependabot protected workflow evidence regressed to raw consumption: {forbidden}",
+        )
+
+    workflow_contracts = (
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
+            '--expected-path ".github/workflows/codeql.yml"',
+            'codeql_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-codeql-workflow-definition-normalized.json")"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"',
+            '--expected-path ".github/workflows/dependency-review.yml"',
+            'dependency_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-dependency-workflow-definition-normalized.json")"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"',
+            '--expected-path ".github/workflows/profile-quality.yml"',
+            'profile_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-profile-workflow-definition-normalized.json")"',
+        ),
+    )
+    cursor = -1
+    for fetch, expected_path, consume in workflow_contracts:
+        fetch_pos = block.index(fetch, cursor + 1)
+        validate_pos = block.index(workflow_validator, fetch_pos)
+        consume_pos = block.index(consume, validate_pos)
+        require(
+            expected_path in block[validate_pos:consume_pos],
+            f"Dependabot protected workflow definition identity changed: {expected_path}",
+        )
+        require(
+            fetch_pos < validate_pos < consume_pos,
+            "Dependabot protected workflow definition must be typed before ID use",
+        )
+        cursor = consume_pos
+
+    run_fetch = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}'
+        '&event=pull_request&per_page=100"'
+    )
+    run_consume = (
+        'total="$(jq -r .totalCount "$RUNNER_TEMP/dependabot-protected-workflow-runs-normalized.json")"'
+    )
+    for fragment in (
+        '--response "$RUNNER_TEMP/dependabot-protected-workflow-runs.json"',
+        '--head-sha "$HEAD_SHA"',
+        '--branch "$HEAD_REF"',
+        '--codeql-workflow-id "$codeql_workflow_id"',
+        '--dependency-workflow-id "$dependency_workflow_id"',
+        '--profile-workflow-id "$profile_workflow_id"',
+        '--out "$RUNNER_TEMP/dependabot-protected-workflow-runs-normalized.json"',
+        run_consume,
+        'runs="$(jq -c .runs "$RUNNER_TEMP/dependabot-protected-workflow-runs-normalized.json")"',
+        '.workflowId == $workflow_id',
+        '.checkSuiteId',
+        '.runAttempt',
+    ):
+        require(
+            fragment in block,
+            f"Dependabot protected workflow-run identity changed: {fragment}",
+        )
+    fetch_pos = block.index(run_fetch)
+    validate_pos = block.index(run_validator, fetch_pos)
+    consume_pos = block.index(run_consume, validate_pos)
+    require(
+        fetch_pos < validate_pos < consume_pos,
+        "Dependabot protected workflow-run collection must be typed before scalar use",
+    )
+
+
 def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
     created_ref = "python3 scripts/codeql_autofix_controller.py created-ref-response"
     reviewer = "python3 scripts/codeql_autofix_controller.py reviewer-request-response"
@@ -1740,6 +1838,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     validate_bot_review_identity_ref_evidence_schema(bot_review)
     validate_bot_review_run_check_evidence_schema(bot_review)
     validate_dependabot_readiness_run_check_evidence_schema(dependabot)
+    validate_dependabot_protected_workflow_evidence_schema(dependabot)
     validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
     validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
