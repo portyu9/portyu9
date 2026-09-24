@@ -108,6 +108,7 @@ LEGACY_PROFILE_DISPATCH = '''  dispatch:
 '''
 ORIGINAL_PROJECT_ITEM9 = core.project_item9
 ORIGINAL_VALIDATE_BUILDER_SCRIPT = core.validate_builder_script
+LEGACY_PROTECTED_WORKFLOW_EVIDENCE = "          CODEQL_WORKFLOW_ID=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml\" --jq .id)\"\n          DEPENDENCY_WORKFLOW_ID=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml\" --jq .id)\"\n          PROFILE_WORKFLOW_ID=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml\" --jq .id)\"\n          EXPECTED_IDENTITIES=\"$(jq -cn --argjson codeql \"$CODEQL_WORKFLOW_ID\" --argjson dependency \"$DEPENDENCY_WORKFLOW_ID\" --argjson profile \"$PROFILE_WORKFLOW_ID\" \\\n            '[{\"name\":\"CodeQL\",\"workflow_id\":$codeql},{\"name\":\"Dependency review\",\"workflow_id\":$dependency},{\"name\":\"Profile quality\",\"workflow_id\":$profile}] | sort_by(.name)')\"\n\n          APPROVAL_REQUESTED_RUN_IDS=\"\"\n          for attempt in $(seq 1 60); do\n            RUNS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100\")\"\n            RUNS_TOTAL=\"$(jq -r '.total_count // empty' <<<\"$RUNS\")\"\n            RUNS_COUNT=\"$(jq '.[(\"workflow\" + \"_runs\")] | length' <<<\"$RUNS\")\"\n            [[ \"$RUNS_TOTAL\" =~ ^[0-9]+$ ]]\n            [[ \"$RUNS_COUNT\" =~ ^[0-9]+$ ]]\n            test \"$RUNS_TOTAL\" = \"$RUNS_COUNT\" || { echo \"Canonical Spotlight-link workflow-run response is incomplete.\" >&2; exit 1; }\n            test \"$RUNS_TOTAL\" -le 3 || { echo \"Canonical Spotlight-link workflow-run set is ambiguous.\" >&2; exit 1; }\n            ALL_SUCCESS=false\n            if [ \"$RUNS_TOTAL\" = \"3\" ]; then\n              OBSERVED_IDENTITIES=\"$(jq -c '[.[(\"workflow\" + \"_runs\")][] | {name,workflow_id}] | sort_by(.name)' <<<\"$RUNS\")\"\n              test \"$OBSERVED_IDENTITIES\" = \"$EXPECTED_IDENTITIES\" || { echo \"Canonical Spotlight-link workflow-run identities changed.\" >&2; exit 1; }\n              ALL_SUCCESS=true\n              for NAME in \"CodeQL\" \"Dependency review\" \"Profile quality\"; do\n                case \"$NAME\" in\n                  \"CodeQL\") EXPECTED_ID=\"$CODEQL_WORKFLOW_ID\" ;;\n                  \"Dependency review\") EXPECTED_ID=\"$DEPENDENCY_WORKFLOW_ID\" ;;\n                  \"Profile quality\") EXPECTED_ID=\"$PROFILE_WORKFLOW_ID\" ;;\n                  *) exit 1 ;;\n                esac\n                RUN_COUNT=\"$(jq --arg name \"$NAME\" --argjson workflow_id \"$EXPECTED_ID\" '[.[(\"workflow\" + \"_runs\")][] | select(.name == $name and .workflow_id == $workflow_id)] | length' <<<\"$RUNS\")\"\n                test \"$RUN_COUNT\" = \"1\"\n                RUN=\"$(jq -c --arg name \"$NAME\" --argjson workflow_id \"$EXPECTED_ID\" '[.[(\"workflow\" + \"_runs\")][] | select(.name == $name and .workflow_id == $workflow_id)][0]' <<<\"$RUNS\")\"\n                RUN_ID=\"$(jq -r .id <<<\"$RUN\")\"\n                CHECK_SUITE_ID=\"$(jq -r .check_suite_id <<<\"$RUN\")\"\n                RUN_ATTEMPT=\"$(jq -r .run_attempt <<<\"$RUN\")\"\n                STATUS=\"$(jq -r .status <<<\"$RUN\")\"\n                CONCLUSION=\"$(jq -r '.conclusion // \"\"' <<<\"$RUN\")\"\n                [[ \"$RUN_ID\" =~ ^[1-9][0-9]*$ ]]\n                [[ \"$CHECK_SUITE_ID\" =~ ^[1-9][0-9]*$ ]]\n                [[ \"$RUN_ATTEMPT\" =~ ^[1-9][0-9]*$ ]]\n                test \"$(jq -r .head_sha <<<\"$RUN\")\" = \"$HEAD_SHA\"\n                test \"$(jq -r .head_branch <<<\"$RUN\")\" = \"$CANDIDATE_BRANCH\"\n                test \"$(jq -r .event <<<\"$RUN\")\" = \"pull_request\"\n                test \"$(jq -r .workflow_id <<<\"$RUN\")\" = \"$EXPECTED_ID\"\n                test \"$(jq -r .repository.full_name <<<\"$RUN\")\" = \"$GITHUB_REPOSITORY\"\n                test \"$(jq -r .head_repository.full_name <<<\"$RUN\")\" = \"$GITHUB_REPOSITORY\"\n                case \"$NAME\" in\n                  \"CodeQL\") CODEQL_RUN_ID=\"$RUN_ID\"; CODEQL_CHECK_SUITE_ID=\"$CHECK_SUITE_ID\" ;;\n                  \"Dependency review\") DEPENDENCY_RUN_ID=\"$RUN_ID\"; DEPENDENCY_CHECK_SUITE_ID=\"$CHECK_SUITE_ID\" ;;\n                  \"Profile quality\") PROFILE_RUN_ID=\"$RUN_ID\"; PROFILE_CHECK_SUITE_ID=\"$CHECK_SUITE_ID\" ;;\n                  *) exit 1 ;;\n                esac\n                if [ \"$STATUS\" = \"action_required\" ] || [ \"$STATUS\" = \"waiting\" ] || [ \"$CONCLUSION\" = \"action_required\" ]; then\n                  case \" $APPROVAL_REQUESTED_RUN_IDS \" in\n                    *\" $RUN_ID \"*) : ;;\n                    *)\n                      gh api --method POST \"repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve\" >/dev/null\n                      APPROVAL_REQUESTED_RUN_IDS=\"${APPROVAL_REQUESTED_RUN_IDS} ${RUN_ID}\"\n                      APPROVAL_ENTRY=\"$(jq -cn --arg name \"$NAME\" --argjson workflow \"$EXPECTED_ID\" --argjson run \"$RUN_ID\" \\\n                        --argjson attempt \"$RUN_ATTEMPT\" --argjson suite \"$CHECK_SUITE_ID\" --arg head \"$HEAD_SHA\" \\\n                        '{workflowName:$name,workflowId:$workflow,runId:$run,runAttempt:$attempt,checkSuiteId:$suite,headSha:$head}')\"\n                      APPROVAL_REQUESTS_JSON=\"$(jq -c --argjson entry \"$APPROVAL_ENTRY\" '. + [$entry]' <<<\"$APPROVAL_REQUESTS_JSON\")\"\n                      echo \"approval_requests_json=$APPROVAL_REQUESTS_JSON\" >> \"$GITHUB_OUTPUT\"\n                      ;;\n                  esac\n                  ALL_SUCCESS=false\n                elif [ \"$STATUS\" = \"completed\" ] && [ \"$CONCLUSION\" = \"success\" ]; then\n                  :\n                elif [ \"$STATUS\" = \"completed\" ]; then\n                  echo \"Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION).\" >&2\n                  exit 1\n                else\n                  ALL_SUCCESS=false\n                fi\n              done\n            fi\n            if [ \"$ALL_SUCCESS\" = \"true\" ]; then break; fi\n            test \"$attempt\" -lt 60\n            sleep 10\n          done\n          test \"$ALL_SUCCESS\" = \"true\"\n\n"
 
 
 def require(condition: bool, message: str) -> None:
@@ -127,6 +128,27 @@ def validate_merge_success_fixture(payload: object) -> dict[str, object]:
     require(isinstance(message, str) and len(message) > 0,
             "Spotlight merge response message must be nonempty")
     return {"merged": True, "sha": sha, "message": message}
+
+
+def project_protected_workflow_evidence_to_legacy(sync: str) -> str:
+    start_marker = (
+        '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \\\n'
+    )
+    end_marker = (
+        '          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:'
+        '${CANDIDATE_BRANCH}&base=main&per_page=10")"\n'
+    )
+    require(sync.count(start_marker) == 1 and sync.count(end_marker) == 1,
+            "Spotlight protected workflow evidence projection anchors changed")
+    start = sync.index(start_marker)
+    end = sync.index(end_marker, start)
+    current = sync[start:end]
+    require(
+        'error("Spotlight protected workflow-run response must be an object")' in current
+        and '> "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json"' in current,
+        "Spotlight protected workflow evidence projection cannot identify hardened overlay",
+    )
+    return sync[:start] + LEGACY_PROTECTED_WORKFLOW_EVIDENCE + sync[end:]
 
 
 def project_merge_success_response_to_legacy(sync: str) -> str:
@@ -527,6 +549,7 @@ def project_ancestry_supersession_to_same_base(sync: str) -> str:
 
 
 def project_item9(sync: str) -> str:
+    sync = project_protected_workflow_evidence_to_legacy(sync)
     sync = project_ancestry_supersession_to_same_base(sync)
     current_age_guard = (
         'if [ "$AGE_SECONDS" -lt "$STALE_AFTER_SECONDS" ] && '
