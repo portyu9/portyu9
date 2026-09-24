@@ -312,6 +312,73 @@ def validate_git_ref_response(
     return {"kind": "ref", "ref": expected_ref, "sha": expected_sha}
 
 
+def validate_git_ref_read_response(
+    value: Any,
+    *,
+    expected_ref: str,
+    expected_sha: str | None = None,
+) -> dict[str, str]:
+    require(isinstance(expected_ref, str) and expected_ref.startswith("refs/heads/")
+            and expected_ref != "refs/heads/",
+            "expected Dependabot read Git ref must be a concrete heads ref")
+    require(isinstance(value, Mapping), "Dependabot read Git ref response must be an object")
+    require(value.get("ref") == expected_ref, "Dependabot read Git ref response identity changed")
+    obj = value.get("object")
+    require(isinstance(obj, Mapping), "Dependabot read Git ref response object must be an object")
+    require(obj.get("type") == "commit",
+            "Dependabot read Git ref response object type must be commit")
+    observed = _response_sha(obj.get("sha"), "Dependabot read Git ref response object sha")
+    object_url = obj.get("url")
+    require(isinstance(object_url, str) and bool(object_url.strip()),
+            "Dependabot read Git ref response object url must be a nonempty string")
+    if expected_sha is not None:
+        expected_sha = _response_sha(expected_sha, "expected Dependabot read Git ref sha")
+        require(observed == expected_sha, "Dependabot read Git ref response object sha changed")
+    return {"kind": "read-ref", "ref": expected_ref, "sha": observed, "objectUrl": object_url}
+
+
+def validate_wake_run_response(
+    value: Any,
+    *,
+    expected_run_id: int,
+    expected_repository: str,
+) -> dict[str, Any]:
+    require(type(expected_run_id) is int and expected_run_id > 0,
+            "expected Dependabot wake run id must be a positive integer")
+    require(isinstance(expected_repository, str) and bool(expected_repository.strip()),
+            "expected Dependabot wake repository must be a nonempty string")
+    require(isinstance(value, Mapping), "Dependabot wake run response must be an object")
+    run_id = value.get("id")
+    require(type(run_id) is int and run_id > 0 and run_id == expected_run_id,
+            "Dependabot wake run response id changed")
+    name = value.get("name")
+    require(isinstance(name, str) and name in {"Profile quality", "CodeQL"},
+            "Dependabot wake run response workflow identity changed")
+    event = value.get("event")
+    require(isinstance(event, str) and event in {"push", "pull_request", "workflow_dispatch"},
+            "Dependabot wake run response event changed")
+    head_branch = value.get("head_branch")
+    require(isinstance(head_branch, str) and bool(head_branch),
+            "Dependabot wake run response head_branch must be a nonempty string")
+    head_sha = _response_sha(value.get("head_sha"), "Dependabot wake run response head_sha")
+    for key in ("repository", "head_repository"):
+        repository = value.get(key)
+        require(isinstance(repository, Mapping),
+                f"Dependabot wake run response {key} must be an object")
+        full_name = repository.get("full_name")
+        require(isinstance(full_name, str) and full_name == expected_repository,
+                f"Dependabot wake run response {key} identity changed")
+    return {
+        "kind": "wake-run",
+        "id": run_id,
+        "name": name,
+        "event": event,
+        "headBranch": head_branch,
+        "headSha": head_sha,
+        "repository": expected_repository,
+    }
+
+
 def validate_merge_success_response(value: Any) -> dict[str, Any]:
     require(isinstance(value, Mapping), "Dependabot merge success response must be an object")
     require(type(value.get("merged")) is bool, "Dependabot merge success response merged must be boolean")
@@ -393,6 +460,46 @@ def self_test() -> None:
     )
     require(ref == {"kind": "ref", "ref": ref_name, "sha": commit_sha},
             "Dependabot Git ref response positive fixture changed")
+    ref_url = f"https://api.github.com/repos/{REPOSITORY}/git/commits/{commit_sha}"
+    read_ref = validate_git_ref_read_response(
+        {"ref": ref_name, "object": {"type": "commit", "sha": commit_sha, "url": ref_url}},
+        expected_ref=ref_name,
+        expected_sha=commit_sha,
+    )
+    require(
+        read_ref == {
+            "kind": "read-ref",
+            "ref": ref_name,
+            "sha": commit_sha,
+            "objectUrl": ref_url,
+        },
+        "Dependabot read Git ref response positive fixture changed",
+    )
+    wake_run = validate_wake_run_response(
+        {
+            "id": 123456,
+            "name": "CodeQL",
+            "event": "push",
+            "head_branch": "main",
+            "head_sha": commit_sha,
+            "repository": {"full_name": REPOSITORY},
+            "head_repository": {"full_name": REPOSITORY},
+        },
+        expected_run_id=123456,
+        expected_repository=REPOSITORY,
+    )
+    require(
+        wake_run == {
+            "kind": "wake-run",
+            "id": 123456,
+            "name": "CodeQL",
+            "event": "push",
+            "headBranch": "main",
+            "headSha": commit_sha,
+            "repository": REPOSITORY,
+        },
+        "Dependabot wake run response positive fixture changed",
+    )
     merge = validate_merge_success_response({
         "sha": commit_sha,
         "merged": True,
@@ -409,6 +516,144 @@ def self_test() -> None:
     )
 
     negative_response_fixtures = (
+        (
+            "read ref non-object",
+            lambda: validate_git_ref_read_response([], expected_ref=ref_name),
+            "must be an object",
+        ),
+        (
+            "read ref identity",
+            lambda: validate_git_ref_read_response(
+                {"ref": "refs/heads/main", "object": {"type": "commit", "sha": commit_sha, "url": ref_url}},
+                expected_ref=ref_name,
+            ),
+            "identity changed",
+        ),
+        (
+            "read ref object type",
+            lambda: validate_git_ref_read_response(
+                {"ref": ref_name, "object": {"type": "tag", "sha": commit_sha, "url": ref_url}},
+                expected_ref=ref_name,
+            ),
+            "type must be commit",
+        ),
+        (
+            "read ref bad sha",
+            lambda: validate_git_ref_read_response(
+                {"ref": ref_name, "object": {"type": "commit", "sha": "ABC", "url": ref_url}},
+                expected_ref=ref_name,
+            ),
+            "lowercase SHA-40",
+        ),
+        (
+            "read ref missing url",
+            lambda: validate_git_ref_read_response(
+                {"ref": ref_name, "object": {"type": "commit", "sha": commit_sha}},
+                expected_ref=ref_name,
+            ),
+            "url must be a nonempty string",
+        ),
+        (
+            "read ref expected sha mismatch",
+            lambda: validate_git_ref_read_response(
+                {"ref": ref_name, "object": {"type": "commit", "sha": commit_sha, "url": ref_url}},
+                expected_ref=ref_name,
+                expected_sha="5" * 40,
+            ),
+            "object sha changed",
+        ),
+        (
+            "wake non-object",
+            lambda: validate_wake_run_response(
+                [], expected_run_id=123456, expected_repository=REPOSITORY
+            ),
+            "must be an object",
+        ),
+        (
+            "wake string id",
+            lambda: validate_wake_run_response(
+                {
+                    "id": "123456",
+                    "name": "CodeQL",
+                    "event": "push",
+                    "head_branch": "main",
+                    "head_sha": commit_sha,
+                    "repository": {"full_name": REPOSITORY},
+                    "head_repository": {"full_name": REPOSITORY},
+                },
+                expected_run_id=123456,
+                expected_repository=REPOSITORY,
+            ),
+            "id changed",
+        ),
+        (
+            "wake workflow",
+            lambda: validate_wake_run_response(
+                {
+                    "id": 123456,
+                    "name": "Dependency review",
+                    "event": "push",
+                    "head_branch": "main",
+                    "head_sha": commit_sha,
+                    "repository": {"full_name": REPOSITORY},
+                    "head_repository": {"full_name": REPOSITORY},
+                },
+                expected_run_id=123456,
+                expected_repository=REPOSITORY,
+            ),
+            "workflow identity changed",
+        ),
+        (
+            "wake event",
+            lambda: validate_wake_run_response(
+                {
+                    "id": 123456,
+                    "name": "CodeQL",
+                    "event": "schedule",
+                    "head_branch": "main",
+                    "head_sha": commit_sha,
+                    "repository": {"full_name": REPOSITORY},
+                    "head_repository": {"full_name": REPOSITORY},
+                },
+                expected_run_id=123456,
+                expected_repository=REPOSITORY,
+            ),
+            "event changed",
+        ),
+        (
+            "wake head sha",
+            lambda: validate_wake_run_response(
+                {
+                    "id": 123456,
+                    "name": "CodeQL",
+                    "event": "push",
+                    "head_branch": "main",
+                    "head_sha": "BAD",
+                    "repository": {"full_name": REPOSITORY},
+                    "head_repository": {"full_name": REPOSITORY},
+                },
+                expected_run_id=123456,
+                expected_repository=REPOSITORY,
+            ),
+            "lowercase SHA-40",
+        ),
+        (
+            "wake repository",
+            lambda: validate_wake_run_response(
+                {
+                    "id": 123456,
+                    "name": "CodeQL",
+                    "event": "push",
+                    "head_branch": "main",
+                    "head_sha": commit_sha,
+                    "repository": {"full_name": "portyu9/other"},
+                    "head_repository": {"full_name": REPOSITORY},
+                },
+                expected_run_id=123456,
+                expected_repository=REPOSITORY,
+            ),
+            "repository identity changed",
+        ),
         ("blob non-object", lambda: validate_git_blob_response([]), "must be an object"),
         ("blob bad sha", lambda: validate_git_blob_response({"sha": "abc"}), "lowercase SHA-40"),
         ("tree bad sha", lambda: validate_git_tree_response({"sha": "A" * 40}), "lowercase SHA-40"),
@@ -557,6 +802,16 @@ def parser() -> argparse.ArgumentParser:
     ref_response.add_argument("--expected-ref", required=True)
     ref_response.add_argument("--expected-sha", required=True)
     ref_response.add_argument("--out", type=Path, required=True)
+    read_ref_response = sub.add_parser("git-ref-read-response")
+    read_ref_response.add_argument("--response", type=Path, required=True)
+    read_ref_response.add_argument("--expected-ref", required=True)
+    read_ref_response.add_argument("--expected-sha")
+    read_ref_response.add_argument("--out", type=Path, required=True)
+    wake_run_response = sub.add_parser("wake-run-response")
+    wake_run_response.add_argument("--response", type=Path, required=True)
+    wake_run_response.add_argument("--expected-run-id", type=int, required=True)
+    wake_run_response.add_argument("--expected-repository", required=True)
+    wake_run_response.add_argument("--out", type=Path, required=True)
     sub.add_parser("self-test")
     return value
 
@@ -573,6 +828,8 @@ def main() -> int:
             "git-tree-response",
             "git-commit-response",
             "git-ref-response",
+            "git-ref-read-response",
+            "wake-run-response",
             "merge-success-response",
         }:
             response = load_json(args.response)
@@ -591,6 +848,18 @@ def main() -> int:
                     response,
                     expected_ref=args.expected_ref,
                     expected_sha=args.expected_sha,
+                )
+            elif args.command == "git-ref-read-response":
+                result = validate_git_ref_read_response(
+                    response,
+                    expected_ref=args.expected_ref,
+                    expected_sha=args.expected_sha,
+                )
+            elif args.command == "wake-run-response":
+                result = validate_wake_run_response(
+                    response,
+                    expected_run_id=args.expected_run_id,
+                    expected_repository=args.expected_repository,
                 )
             else:
                 result = validate_merge_success_response(response)
