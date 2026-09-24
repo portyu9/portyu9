@@ -650,7 +650,62 @@ def project_spotlight_privileged_refs_to_legacy(sync: str) -> str:
     return projected
 
 
+
+def project_spotlight_readme_contents_to_legacy(sync: str) -> str:
+    candidate_digest = (
+        "          test \"$(sha256sum candidate-readme.md | cut -d' ' -f1)\" "
+        "= \"$README_SHA256_AFTER\""
+    )
+    current_digest = (
+        "          test \"$(sha256sum current-readme.md | cut -d' ' -f1)\" "
+        "= \"$(jq -r .readme_sha256_before \"$PLAN\")\""
+    )
+    overlays = (
+        (
+            "          MAIN_README_CONTENTS_RESPONSE=\"$(gh api "
+            "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main\")\"",
+            current_digest,
+            (
+                "          gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main\" "
+                "--jq .content \\\n"
+                "            | tr -d '\\n' | base64 --decode > current-readme.md\n"
+                + current_digest
+            ),
+        ),
+        (
+            "          README_BLOB_SHA=\"$(jq -r '.files[0].sha' <<<\"$COMPARE\")\"",
+            candidate_digest,
+            (
+                "          gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\" "
+                "--jq .content \\\n"
+                "            | tr -d '\\n' | base64 --decode > candidate-readme.md\n"
+                + candidate_digest
+            ),
+        ),
+        (
+            "          README_BLOB_SHA=\"$(jq -r '.[0].sha' <<<\"$FILES\")\"",
+            candidate_digest,
+            (
+                "          gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\" "
+                "--jq .content | tr -d '\\n' | base64 --decode > candidate-readme.md\n"
+                + candidate_digest
+            ),
+        ),
+    )
+    projected = sync
+    for start_marker, end_marker, legacy in overlays:
+        require(
+            projected.count(start_marker) == 1,
+            f"Spotlight item-9 README Contents projection start anchor changed: {start_marker}",
+        )
+        start = projected.index(start_marker)
+        end_start = projected.index(end_marker, start)
+        end = end_start + len(end_marker)
+        projected = projected[:start] + legacy + projected[end:]
+    return projected
+
 def project_item9(sync: str) -> str:
+    sync = project_spotlight_readme_contents_to_legacy(sync)
     sync = project_spotlight_privileged_refs_to_legacy(sync)
     sync = project_protected_workflow_evidence_to_legacy(sync)
     sync = project_ancestry_supersession_to_same_base(sync)

@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v88"
+VERSION = "governed-workflow-byte-identity-v89"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "1f441a8fe20522040f76056a7e45e31ae63d4f15",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "f467d359a583ac38fc623e9a8d569a6eeb48a322",
+    ".github/workflows/spotlight-link-sync.yml": "268d52bf5ae45b33261eeff2e25fc4819e1f6aab",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -509,9 +509,260 @@ def project_spotlight_privileged_refs_to_legacy(spotlight: str) -> str:
     return projected
 
 
+
+def project_spotlight_readme_contents_to_legacy(spotlight: str) -> str:
+    candidate_digest = (
+        "          test \"$(sha256sum candidate-readme.md | cut -d' ' -f1)\" "
+        "= \"$README_SHA256_AFTER\""
+    )
+    current_digest = (
+        "          test \"$(sha256sum current-readme.md | cut -d' ' -f1)\" "
+        "= \"$(jq -r .readme_sha256_before \"$PLAN\")\""
+    )
+    overlays = (
+        (
+            "          MAIN_README_CONTENTS_RESPONSE=\"$(gh api "
+            "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main\")\"",
+            current_digest,
+            (
+                "          gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main\" "
+                "--jq .content \\\n"
+                "            | tr -d '\\n' | base64 --decode > current-readme.md\n"
+                + current_digest
+            ),
+        ),
+        (
+            "          README_BLOB_SHA=\"$(jq -r '.files[0].sha' <<<\"$COMPARE\")\"",
+            candidate_digest,
+            (
+                "          gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\" "
+                "--jq .content \\\n"
+                "            | tr -d '\\n' | base64 --decode > candidate-readme.md\n"
+                + candidate_digest
+            ),
+        ),
+        (
+            "          README_BLOB_SHA=\"$(jq -r '.[0].sha' <<<\"$FILES\")\"",
+            candidate_digest,
+            (
+                "          gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\" "
+                "--jq .content | tr -d '\\n' | base64 --decode > candidate-readme.md\n"
+                + candidate_digest
+            ),
+        ),
+    )
+    projected = spotlight
+    for start_marker, end_marker, legacy in overlays:
+        require(
+            projected.count(start_marker) == 1,
+            f"Spotlight README Contents projection start anchor changed: {start_marker}",
+        )
+        start = projected.index(start_marker)
+        end_start = projected.index(end_marker, start)
+        end = end_start + len(end_marker)
+        projected = projected[:start] + legacy + projected[end:]
+    return projected
+
+
+def validate_spotlight_readme_contents_evidence(
+    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    propose = job_block(spotlight, "propose", "approve")
+    merge = job_block(spotlight, "merge", "decision_receipt")
+    candidate_fetch = (
+        "README_CONTENTS_RESPONSE=\"$(gh api "
+        "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\")\""
+    )
+    candidate_consume = "jq -er '.content' <<<\"$README_CONTENTS_RESPONSE\""
+    candidate_digest = (
+        "test \"$(sha256sum candidate-readme.md | cut -d' ' -f1)\" "
+        "= \"$README_SHA256_AFTER\""
+    )
+    common_schema = (
+        '(type == "object") and',
+        '(.type | type == "string" and . == "file") and',
+        '(.name | type == "string" and . == "README.md") and',
+        '(.path | type == "string" and . == "README.md") and',
+        '(.size | type == "number" and . == floor and . >= 0) and',
+        '(.encoding | type == "string" and . == "base64") and',
+        '(.content | type == "string" and length > 0)',
+    )
+
+    main_fetch = (
+        "MAIN_README_CONTENTS_RESPONSE=\"$(gh api "
+        "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main\")\""
+    )
+    main_consume = "jq -er '.content' <<<\"$MAIN_README_CONTENTS_RESPONSE\""
+    main_digest = (
+        "test \"$(sha256sum current-readme.md | cut -d' ' -f1)\" "
+        "= \"$(jq -r .readme_sha256_before \"$PLAN\")\""
+    )
+    for marker in (
+        main_fetch,
+        main_consume,
+        main_digest,
+        "malformed Spotlight proposal current-main README Contents evidence",
+    ):
+        require(
+            propose.count(marker) == 1,
+            f"Spotlight proposal current-main README Contents anchor changed: {marker}",
+        )
+    main_ref_validate = (
+        'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"'
+    )
+    main_fetch_pos = propose.index(main_fetch)
+    main_consume_pos = propose.index(main_consume)
+    main_digest_pos = propose.index(main_digest)
+    require(
+        propose.index(main_ref_validate) < main_fetch_pos < main_consume_pos < main_digest_pos,
+        "Spotlight proposal current-main README Contents evidence must follow typed main-ref proof and validate before content consumption",
+    )
+    main_schema = propose[main_fetch_pos:main_consume_pos]
+    for fragment in common_schema + (
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+    ):
+        require(
+            fragment in main_schema,
+            f"Spotlight proposal current-main README Contents schema changed: {fragment}",
+        )
+
+    specs = (
+        (
+            "proposal candidate",
+            propose,
+            "README_BLOB_SHA=\"$(jq -r '.files[0].sha' <<<\"$COMPARE\")\"",
+            "malformed or mismatched Spotlight proposal README Contents evidence",
+        ),
+        (
+            "terminal candidate",
+            merge,
+            "README_BLOB_SHA=\"$(jq -r '.[0].sha' <<<\"$FILES\")\"",
+            "malformed or mismatched Spotlight terminal README Contents evidence",
+        ),
+    )
+    for label, evidence, blob, error_text in specs:
+        for marker in (blob, candidate_fetch, candidate_consume, candidate_digest, error_text):
+            require(
+                evidence.count(marker) == 1,
+                f"Spotlight {label} README Contents evidence anchor changed: {marker}",
+            )
+        blob_pos = evidence.index(blob)
+        fetch_pos = evidence.index(candidate_fetch)
+        consume_pos = evidence.index(candidate_consume)
+        digest_pos = evidence.index(candidate_digest)
+        require(
+            blob_pos < fetch_pos < consume_pos < digest_pos,
+            f"Spotlight {label} README Contents evidence must validate before content consumption",
+        )
+        schema_block = evidence[fetch_pos:consume_pos]
+        for fragment in common_schema + (
+            '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and',
+            'jq -e --arg blob "$README_BLOB_SHA"',
+        ):
+            require(
+                fragment in schema_block,
+                f"Spotlight {label} README Contents schema changed: {fragment}",
+            )
+        require(
+            '[[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]'
+            in evidence[blob_pos:fetch_pos],
+            f"Spotlight {label} README blob identity must be canonical before Contents lookup",
+        )
+
+    require(
+        "--jq .content" not in spotlight,
+        "Spotlight privileged README evidence regressed to raw Contents scalar consumption",
+    )
+    require(
+        spotlight.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main"'
+        ) == 1
+        and spotlight.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}"'
+        ) == 2,
+        "Spotlight privileged README Contents endpoint/call-count contract changed",
+    )
+
+    if run_self_test:
+        for job, next_job in (("propose", "approve"), ("merge", "decision_receipt")):
+            start_marker = f"  {job}:\n"
+            end_marker = f"  {next_job}:\n"
+            start = spotlight.index(start_marker)
+            end = spotlight.index(end_marker, start)
+            evidence = spotlight[start:end]
+            current = '(.encoding | type == "string" and . == "base64") and'
+            expected_count = 2 if job == "propose" else 1
+            require(
+                evidence.count(current) == expected_count,
+                f"Spotlight {job} README Contents self-test schema topology changed",
+            )
+            for occurrence in range(expected_count):
+                positions = []
+                cursor = 0
+                while True:
+                    pos = evidence.find(current, cursor)
+                    if pos < 0:
+                        break
+                    positions.append(pos)
+                    cursor = pos + len(current)
+                target = positions[occurrence]
+                mutated_evidence = (
+                    evidence[:target]
+                    + '(.encoding | tostring == "base64") and'
+                    + evidence[target + len(current):]
+                )
+                mutated = spotlight[:start] + mutated_evidence + spotlight[end:]
+                try:
+                    validate_spotlight_readme_contents_evidence(
+                        mutated, run_self_test=False
+                    )
+                except ValueError as exc:
+                    require(
+                        "README Contents schema changed" in str(exc),
+                        f"Spotlight {job} README Contents self-test failed for wrong reason: {exc}",
+                    )
+                else:
+                    raise ValueError(
+                        f"Spotlight {job} README Contents self-test accepted type-coercing encoding evidence"
+                    )
+
+        terminal_start = spotlight.index("  merge:\n")
+        terminal_end = spotlight.index("  decision_receipt:\n", terminal_start)
+        terminal = spotlight[terminal_start:terminal_end]
+        current = (
+            '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and'
+        )
+        replacement = (
+            '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and'
+        )
+        require(
+            terminal.count(current) == 1,
+            "Spotlight terminal README Contents self-test blob-binding anchor changed",
+        )
+        weakened_terminal = terminal.replace(current, replacement, 1)
+        weakened = (
+            spotlight[:terminal_start] + weakened_terminal + spotlight[terminal_end:]
+        )
+        try:
+            validate_spotlight_readme_contents_evidence(
+                weakened, run_self_test=False
+            )
+        except ValueError as exc:
+            require(
+                "README Contents schema changed" in str(exc),
+                f"Spotlight terminal README blob-binding self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Spotlight terminal README Contents self-test accepted unbound blob identity"
+            )
+
+
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
     legacy = project_spotlight_privileged_refs_to_legacy(
-        spotlight[:spotlight.index("  decision_receipt:\n")]
+        project_spotlight_readme_contents_to_legacy(
+            spotlight[:spotlight.index("  decision_receipt:\n")]
+        )
     )
     reconcile = job_block(legacy, "reconcile", "budget")
     commit_schema_start_marker = (
@@ -3121,6 +3372,7 @@ def main() -> int:
         validate_spotlight_terminal_trusted_admission_evidence(spotlight)
         validate_spotlight_same_base_supersession(spotlight)
         validate_spotlight_privileged_ref_evidence_schema(spotlight)
+        validate_spotlight_readme_contents_evidence(spotlight)
 
         validate_spotlight_budget_artifact_history(spotlight)
 
@@ -3139,7 +3391,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:

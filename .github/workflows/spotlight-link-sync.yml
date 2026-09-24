@@ -767,7 +767,21 @@ jobs:
           MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content \
+          MAIN_README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main")"
+          jq -e '
+            (type == "object") and
+            (.type | type == "string" and . == "file") and
+            (.name | type == "string" and . == "README.md") and
+            (.path | type == "string" and . == "README.md") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+            (.size | type == "number" and . == floor and . >= 0) and
+            (.encoding | type == "string" and . == "base64") and
+            (.content | type == "string" and length > 0)
+          ' <<<"$MAIN_README_CONTENTS_RESPONSE" >/dev/null || {
+            echo "ERROR: malformed Spotlight proposal current-main README Contents evidence." >&2
+            exit 1
+          }
+          jq -er '.content' <<<"$MAIN_README_CONTENTS_RESPONSE" \
             | tr -d '\n' | base64 --decode > current-readme.md
           test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
 
@@ -882,7 +896,23 @@ jobs:
           test "$(jq '.files | length' <<<"$COMPARE")" = "1"
           test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
           test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content \
+          README_BLOB_SHA="$(jq -r '.files[0].sha' <<<"$COMPARE")"
+          [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"
+          jq -e --arg blob "$README_BLOB_SHA" '
+            (type == "object") and
+            (.type | type == "string" and . == "file") and
+            (.name | type == "string" and . == "README.md") and
+            (.path | type == "string" and . == "README.md") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and
+            (.size | type == "number" and . == floor and . >= 0) and
+            (.encoding | type == "string" and . == "base64") and
+            (.content | type == "string" and length > 0)
+          ' <<<"$README_CONTENTS_RESPONSE" >/dev/null || {
+            echo "ERROR: malformed or mismatched Spotlight proposal README Contents evidence." >&2
+            exit 1
+          }
+          jq -er '.content' <<<"$README_CONTENTS_RESPONSE" \
             | tr -d '\n' | base64 --decode > candidate-readme.md
           test "$(sha256sum candidate-readme.md | cut -d' ' -f1)" = "$README_SHA256_AFTER"
 
@@ -1740,7 +1770,23 @@ jobs:
           test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
           test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
           test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content | tr -d '\n' | base64 --decode > candidate-readme.md
+          README_BLOB_SHA="$(jq -r '.[0].sha' <<<"$FILES")"
+          [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"
+          jq -e --arg blob "$README_BLOB_SHA" '
+            (type == "object") and
+            (.type | type == "string" and . == "file") and
+            (.name | type == "string" and . == "README.md") and
+            (.path | type == "string" and . == "README.md") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and
+            (.size | type == "number" and . == floor and . >= 0) and
+            (.encoding | type == "string" and . == "base64") and
+            (.content | type == "string" and length > 0)
+          ' <<<"$README_CONTENTS_RESPONSE" >/dev/null || {
+            echo "ERROR: malformed or mismatched Spotlight terminal README Contents evidence." >&2
+            exit 1
+          }
+          jq -er '.content' <<<"$README_CONTENTS_RESPONSE" | tr -d '\n' | base64 --decode > candidate-readme.md
           test "$(sha256sum candidate-readme.md | cut -d' ' -f1)" = "$README_SHA256_AFTER"
           echo "Spotlight terminal stage: candidate-verified" >&2
 
