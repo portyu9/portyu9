@@ -676,6 +676,13 @@
       "rationale": "Authorize #633's exact read-only Ruleset drift sentinel: scheduled/manual trusted-main execution with contents: read only, pinned checkout, exact live-main SHA proof, and the existing fail-closed ruleset GET validator. No mutation, new secret, reviewer-token use, OIDC, artifact, bypass, direct-main write, or Administration authority is added; the frozen five-workflow base BOM remains unchanged and the sentinel is isolated as a one-workflow extension."
     },
     {
+      "id": "cap-ruleset-main-ref-singleton-schema-hardening-v1",
+      "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "expansionSha256": "20d0a3f313e6d072d9daff2331709c4897c6373551251d8c1a9ff62685bb2d99",
+      "rationale": "Authorize frozen #983's exact Ruleset reconciler main-ref response hardening. The five existing main-ref GETs are typed before SHA freshness use, binding exact refs/heads/main, commit target type, lowercase SHA-40, node id and URLs. Semantic BOM, endpoints/counts, App/JWT/token authority, ruleset mutation, triggers, permissions, transition semantics, receipt/attestation authority, required checks and bypass behavior are unchanged."
+    },
+    {
       "id": "cap-ruleset-receipt-recovery-attestation",
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
