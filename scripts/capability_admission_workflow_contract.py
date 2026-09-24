@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "af9674a51f8352844cee75a1adffe8f75d72f9dc"
+EXPECTED_GIT_BLOB = "91586841790d09c244ae33f79ada137ffbcaaa74"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -118,7 +118,7 @@ def validate_text(text: str) -> None:
         "TARGET_REPOSITORY: ${{ github.repository }}",
         'PR="$(jq -c \'.pull_request\' "$GITHUB_EVENT_PATH")"',
         'ACTION="$(jq -r \'.action // ""\' "$GITHUB_EVENT_PATH")"',
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
         'gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
         'gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
         'python3 scripts/workflow_capability_tcb.py select',
@@ -183,6 +183,139 @@ def validate_text(text: str) -> None:
     require(
         spotlight_fetch < spotlight_schema < spotlight_consumer,
         "trusted capability admission must validate Spotlight PR evidence before field consumption",
+    )
+
+    ref_schema_start = text.index("          validate_git_ref_object() {")
+    ref_schema_end = text.index("          validate_readme_contents_object() {", ref_schema_start)
+    ref_schema = text[ref_schema_start:ref_schema_end]
+    for schema_fragment in (
+        'local ref_json="$1" expected_ref="$2" expected_sha="${3:-}"',
+        '(type == "object") and',
+        '(.ref | type == "string" and . == $ref) and',
+        '(.object | type == "object" and',
+        '(.type | type == "string" and . == "commit") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))) and',
+        '($sha == "" or .object.sha == $sha)',
+    ):
+        require(
+            schema_fragment in ref_schema,
+            f"trusted capability admission Git-ref response schema changed: {schema_fragment}",
+        )
+
+    contents_schema_start = ref_schema_end
+    contents_schema_end = text.index('          case "$EVENT_NAME" in', contents_schema_start)
+    contents_schema = text[contents_schema_start:contents_schema_end]
+    for schema_fragment in (
+        'local contents_json="$1" expected_blob_sha="$2"',
+        '(type == "object") and',
+        '(.type | type == "string" and . == "file") and',
+        '(.name | type == "string" and . == "README.md") and',
+        '(.path | type == "string" and . == "README.md") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and',
+        '(.size | type == "number" and . == floor and . >= 0) and',
+        '(.encoding | type == "string" and . == "base64") and',
+        '(.content | type == "string" and length > 0)',
+    ):
+        require(
+            schema_fragment in contents_schema,
+            f"trusted capability admission README Contents response schema changed: {schema_fragment}",
+        )
+
+    discovery_lane = text.index("workflow_dispatch|schedule)")
+    discovery_ref_call = text.index(
+        'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+        discovery_lane,
+    )
+    discovery_ref_schema = text.index(
+        'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" || {',
+        discovery_ref_call,
+    )
+    discovery_ref_consume = text.index(
+        'MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"',
+        discovery_ref_call,
+    )
+    common_ref_call = text.index(
+        'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+        discovery_ref_call + 1,
+    )
+    common_ref_schema = text.index(
+        'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA" || {',
+        common_ref_call,
+    )
+    common_ref_consume = text.index(
+        'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"',
+        common_ref_call,
+    )
+    head_ref_call = text.index(
+        'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+        common_ref_consume,
+    )
+    head_ref_schema = text.index(
+        'validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {',
+        head_ref_call,
+    )
+    head_ref_consume = text.index(
+        'test "$(jq -r .object.sha <<<"$HEAD_REF_RESPONSE")" = "$HEAD_SHA"',
+        head_ref_call,
+    )
+    generated_ref_call = text.index(
+        'GENERATED_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated")"',
+        head_ref_consume,
+    )
+    generated_ref_schema = text.index(
+        'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" || {',
+        generated_ref_call,
+    )
+    generated_ref_consume = text.index(
+        'GENERATED_SHA="$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")"',
+        generated_ref_call,
+    )
+    require(
+        discovery_ref_call < discovery_ref_schema < discovery_ref_consume
+        < common_ref_call < common_ref_schema < common_ref_consume
+        < head_ref_call < head_ref_schema < head_ref_consume
+        < generated_ref_call < generated_ref_schema < generated_ref_consume,
+        "trusted capability admission Git-ref schemas must precede scalar consumption",
+    )
+
+    readme_call = text.index(
+        'README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
+        generated_ref_consume,
+    )
+    readme_schema = text.index(
+        'validate_readme_contents_object "$README_CONTENTS_RESPONSE" "$README_BLOB_SHA" || {',
+        readme_call,
+    )
+    readme_path_consume = text.index(
+        'test "$(jq -r .path <<<"$README_CONTENTS_RESPONSE")" = "README.md"',
+        readme_call,
+    )
+    readme_sha_consume = text.index(
+        'test "$(jq -r .sha <<<"$README_CONTENTS_RESPONSE")" = "$README_BLOB_SHA"',
+        readme_call,
+    )
+    readme_content_consume = text.index(
+        'jq -r .content <<<"$README_CONTENTS_RESPONSE" \\',
+        readme_call,
+    )
+    require(
+        readme_call < readme_schema < readme_path_consume < readme_sha_consume < readme_content_consume,
+        "trusted capability admission README Contents schema must precede scalar consumption",
+    )
+    require(
+        "README_BLOB_SHA=\"$(jq -r '.files[0].sha' <<<\"$COMPARE\")\"" in text,
+        "trusted capability admission README blob identity is no longer bound to typed compare evidence",
+    )
+    require(
+        "malformed Capability Admission main-ref discovery evidence." in text
+        and "malformed or stale Capability Admission main-ref evidence." in text
+        and "malformed or mismatched Capability Admission Spotlight candidate-ref evidence." in text
+        and "malformed Capability Admission generated-ref evidence." in text,
+        "trusted capability admission Git-ref schema failures must remain visible",
+    )
+    require(
+        "malformed or mismatched Capability Admission Spotlight README evidence." in text,
+        "trusted capability admission README Contents schema failure must remain visible",
     )
 
     require(text.count(ORDINARY_EVALUATOR) == 1,
@@ -524,6 +657,56 @@ def expect_spotlight_topology_schema_reorder_failure(
         raise ValueError("Capability Admission accepted Spotlight topology schema-after-consumption reordering")
 
 
+def expect_scoped_schema_failure(
+    text: str,
+    *,
+    start_marker: str,
+    end_marker: str,
+    old: str,
+    new: str,
+    expected: str,
+) -> None:
+    start = text.index(start_marker)
+    end = text.index(end_marker, start)
+    scope = text[start:end]
+    require(scope.count(old) == 1,
+            f"Capability Admission scoped schema self-test anchor count changed: {old!r}")
+    mutated_scope = scope.replace(old, new, 1)
+    mutated = text[:start] + mutated_scope + text[end:]
+    try:
+        validate_text(mutated)
+    except ValueError as exc:
+        require(expected in str(exc),
+                f"Capability Admission scoped schema self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"Capability Admission accepted malformed scoped response schema: {expected}")
+
+
+def expect_runtime_schema_reorder_failure(
+    text: str,
+    *,
+    call_marker: str,
+    schema_marker: str,
+    consume_marker: str,
+    expected: str,
+) -> None:
+    call_start = text.index(call_marker)
+    schema_start = text.index(schema_marker, call_start)
+    consume_start = text.index(consume_marker, schema_start)
+    schema_block = text[schema_start:consume_start]
+    without_schema = text[:schema_start] + text[consume_start:]
+    relocated_consume = without_schema.index(consume_marker, call_start)
+    consume_end = without_schema.index("\n", relocated_consume) + 1
+    mutated = without_schema[:consume_end] + schema_block + without_schema[consume_end:]
+    try:
+        validate_text(mutated)
+    except ValueError as exc:
+        require(expected in str(exc),
+                f"Capability Admission runtime schema reorder self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Capability Admission accepted runtime schema-after-consumption reordering")
+
+
 def self_test() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     validate_text(text)
@@ -545,6 +728,76 @@ def self_test() -> None:
         'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
         'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         "candidate-check publisher",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_git_ref_object() {",
+        end_marker="          validate_readme_contents_object() {",
+        old='(.ref | type == "string" and . == $ref) and',
+        new='(.ref == $ref) and',
+        expected="Git-ref response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_git_ref_object() {",
+        end_marker="          validate_readme_contents_object() {",
+        old='(.type | type == "string" and . == "commit") and',
+        new='(.type == "commit") and',
+        expected="Git-ref response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_git_ref_object() {",
+        end_marker="          validate_readme_contents_object() {",
+        old='($sha == "" or .object.sha == $sha)',
+        new='true',
+        expected="Git-ref response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_readme_contents_object() {",
+        end_marker='          case "$EVENT_NAME" in',
+        old='(.path | type == "string" and . == "README.md") and',
+        new='(.path == "README.md") and',
+        expected="README Contents response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_readme_contents_object() {",
+        end_marker='          case "$EVENT_NAME" in',
+        old='(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and',
+        new='(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        expected="README Contents response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_readme_contents_object() {",
+        end_marker='          case "$EVENT_NAME" in',
+        old='(.encoding | type == "string" and . == "base64") and',
+        new='(.encoding == "base64") and',
+        expected="README Contents response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker="          validate_readme_contents_object() {",
+        end_marker='          case "$EVENT_NAME" in',
+        old='(.content | type == "string" and length > 0)',
+        new='(.content != null)',
+        expected="README Contents response schema",
+    )
+    expect_runtime_schema_reorder_failure(
+        text,
+        call_marker='HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+        schema_marker='validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {',
+        consume_marker='test "$(jq -r .object.sha <<<"$HEAD_REF_RESPONSE")" = "$HEAD_SHA"',
+        expected="Git-ref schemas must precede scalar consumption",
+    )
+    expect_runtime_schema_reorder_failure(
+        text,
+        call_marker='README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
+        schema_marker='validate_readme_contents_object "$README_CONTENTS_RESPONSE" "$README_BLOB_SHA" || {',
+        consume_marker='test "$(jq -r .path <<<"$README_CONTENTS_RESPONSE")" = "README.md"',
+        expected="README Contents schema must precede scalar consumption",
     )
     candidate_schema_marker = 'jq -e --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \\'
     candidate_consume_marker = 'test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"'
