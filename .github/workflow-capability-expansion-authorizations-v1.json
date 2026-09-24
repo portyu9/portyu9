@@ -197,7 +197,7 @@
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "expansionSha256": "2aa8a64e6a664139d5c472da7bab62d8edc920271f5d0499f56734d21722fd43",
-      "rationale": "Authorize frozen #956's exact CodeQL Autofix trusted-source hardening: the existing protected pull_request workflow-run collection GET is typed as a bounded complete response with exact three-workflow identity, unique positive run/workflow/check-suite ids, positive run attempts, exact candidate branch/SHA/repository identity, and closed status/conclusion classes before any approval-loop scalar consumption. Semantic Workflow Capability BOM bytes and existing API endpoint/method/count, triggers, permissions, retries, approval authority, merge authority, required checks, rulesets, OIDC, direct-main writes and bypass behavior remain unchanged."
+      "rationale": "Authorize frozen #956's exact CodeQL Autofix trusted-source hardening: the existing protected pull_request workflow-run collection is typed before approval-loop scalar use, binding the exact three workflows, unique positive run/check-suite identities, positive attempts, candidate branch/SHA/repository identity, and reviewed status/conclusion classes. BOM capabilities, API surfaces/counts, permissions, approval/merge authority, required checks and bypass behavior are unchanged."
     },
     {
       "id": "cap-codeql-autofix-production-controller",
