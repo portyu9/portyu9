@@ -767,7 +767,21 @@ jobs:
           MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content \
+          MAIN_README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main")"
+          jq -e '
+            (type == "object") and
+            (.type | type == "string" and . == "file") and
+            (.name | type == "string" and . == "README.md") and
+            (.path | type == "string" and . == "README.md") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+            (.size | type == "number" and . == floor and . >= 0) and
+            (.encoding | type == "string" and . == "base64") and
+            (.content | type == "string" and length > 0)
+          ' <<<"$MAIN_README_CONTENTS_RESPONSE" >/dev/null || {
+            echo "ERROR: malformed Spotlight proposal current-main README Contents evidence." >&2
+            exit 1
+          }
+          jq -er '.content' <<<"$MAIN_README_CONTENTS_RESPONSE" \
             | tr -d '\n' | base64 --decode > current-readme.md
           test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
 
