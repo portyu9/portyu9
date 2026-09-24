@@ -445,18 +445,26 @@ jobs:
           COMPLETE=false
           APPROVAL_REQUESTED_RUN_IDS=""
           for ATTEMPT in $(seq 1 60); do
-            RUNS="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"
-            RUN_COUNT="$(jq -r .total_count <<<"$RUNS")"
+            gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
+              > "$RUNNER_TEMP/codeql-autofix-protected-runs.json"
+            python3 scripts/codeql_autofix_controller.py protected-workflow-runs-response \
+              --response-file "$RUNNER_TEMP/codeql-autofix-protected-runs.json" \
+              --head-sha "$HEAD_SHA" \
+              --branch "$BRANCH" \
+              --codeql-workflow-id "$CODEQL_WORKFLOW_ID" \
+              --dependency-workflow-id "$DEPENDENCY_WORKFLOW_ID" \
+              --profile-workflow-id "$PROFILE_WORKFLOW_ID" \
+              --out "$RUNNER_TEMP/codeql-autofix-protected-runs-normalized.json"
+            RUN_COUNT="$(jq -r .totalCount "$RUNNER_TEMP/codeql-autofix-protected-runs-normalized.json")"
             [[ "$RUN_COUNT" =~ ^[0-9]+$ ]]
             if [ "$RUN_COUNT" -lt 3 ]; then
               sleep 10
               continue
             fi
             test "$RUN_COUNT" = "3"
-            MATCHES="$(jq -c --argjson codeql "$CODEQL_WORKFLOW_ID" --argjson dependency "$DEPENDENCY_WORKFLOW_ID" --argjson profile "$PROFILE_WORKFLOW_ID" '[.workflow_runs[] | select(.workflow_id == $codeql or .workflow_id == $dependency or .workflow_id == $profile)]' <<<"$RUNS")"
+            MATCHES="$(jq -c .runs "$RUNNER_TEMP/codeql-autofix-protected-runs-normalized.json")"
             test "$(jq 'length' <<<"$MATCHES")" = "3"
-            test "$(jq '[.[].workflow_id] | unique | length' <<<"$MATCHES")" = "3"
-            jq -e --arg head "$HEAD_SHA" --arg branch "$BRANCH" --arg repo "$TARGET_REPOSITORY" 'all(.[]; .event == "pull_request" and .head_sha == $head and .head_branch == $branch and .head_repository.full_name == $repo)' <<<"$MATCHES" >/dev/null
+            test "$(jq '[.[].workflowId] | unique | length' <<<"$MATCHES")" = "3"
 
             COMPLETE=true
             while IFS=$'\t' read -r CHECK_RUN_ID STATUS CONCLUSION; do
