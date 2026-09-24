@@ -563,6 +563,22 @@ def self_test() -> None:
     )
     expect_spotlight_topology_schema_failure(
         text,
+        schema_marker=candidate_schema_marker,
+        consume_marker=candidate_consume_marker,
+        old='(.author | type == "object" and\n                (.name | type == "string" and . == $name) and',
+        new='(.author | type == "object" and\n                (.name == $name) and',
+        expected="Spotlight candidate commit response schema",
+    )
+    expect_spotlight_topology_schema_failure(
+        text,
+        schema_marker=candidate_schema_marker,
+        consume_marker=candidate_consume_marker,
+        old='(.committer | type == "object" and\n                (.name | type == "string" and . == $name) and',
+        new='(.committer | type == "object" and\n                (.name == $name) and',
+        expected="Spotlight candidate commit response schema",
+    )
+    expect_spotlight_topology_schema_failure(
+        text,
         schema_marker=compare_schema_marker,
         consume_marker=compare_consume_marker,
         old='(type == "object") and\n              (.status | type == "string" and . == "ahead") and',
@@ -581,8 +597,32 @@ def self_test() -> None:
         text,
         schema_marker=compare_schema_marker,
         consume_marker=compare_consume_marker,
+        old='(.base_commit | type == "object" and\n                (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)) and',
+        new='(.base_commit | type == "object" and\n                (.sha == $base)) and',
+        expected="Spotlight compare response schema",
+    )
+    expect_spotlight_topology_schema_failure(
+        text,
+        schema_marker=compare_schema_marker,
+        consume_marker=compare_consume_marker,
+        old='(.commits | type == "array" and length == 1 and\n                (.[0] | type == "object" and\n                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head))) and',
+        new='(.commits | type == "array" and length == 1 and\n                (.[0] | type == "object" and\n                  (.sha == $head))) and',
+        expected="Spotlight compare response schema",
+    )
+    expect_spotlight_topology_schema_failure(
+        text,
+        schema_marker=compare_schema_marker,
+        consume_marker=compare_consume_marker,
         old='(.filename | type == "string" and . == "README.md") and',
         new='(.filename == "README.md") and',
+        expected="Spotlight compare response schema",
+    )
+    expect_spotlight_topology_schema_failure(
+        text,
+        schema_marker=compare_schema_marker,
+        consume_marker=compare_consume_marker,
+        old='(.additions | type == "number" and . == floor and . >= 0) and',
+        new='(.additions >= 0) and',
         expected="Spotlight compare response schema",
     )
     expect_spotlight_topology_schema_reorder_failure(
