@@ -2455,21 +2455,21 @@ def validate_spotlight_terminal_trusted_admission_evidence(
 
     positions = (
         terminal.index(workflow_fetch),
-        terminal.index(workflow_schema),
         terminal.index(workflow_consume),
+        terminal.index(workflow_schema),
         terminal.index(run_fetch),
-        terminal.index(run_schema),
         terminal.index(run_normalized),
+        terminal.index(run_schema),
         terminal.index(run_consume),
         terminal.index(check_fetch),
-        terminal.index(check_schema),
         terminal.index(check_normalized),
+        terminal.index(check_schema),
         terminal.index(check_consume),
         terminal.index(terminal_stage),
     )
     require(
         list(positions) == sorted(positions) and len(set(positions)) == len(positions),
-        "Spotlight terminal trusted-admission evidence must remain fetch-schema-normalize-consume ordered",
+        "Spotlight terminal trusted-admission evidence must remain fetch-validate-normalize-consume ordered",
     )
 
     for fragment in (
@@ -2600,7 +2600,12 @@ def validate_spotlight_terminal_trusted_admission_evidence(
                 current in spotlight,
                 f"Spotlight terminal trusted-admission self-test fixture anchor changed: {current}",
             )
-            mutated = spotlight.replace(current, replacement, 1)
+            require(
+                current in terminal,
+                f"Spotlight terminal trusted-admission self-test target escaped terminal block: {current}",
+            )
+            mutated_terminal = terminal.replace(current, replacement, 1)
+            mutated = spotlight.replace(terminal, mutated_terminal, 1)
             try:
                 validate_spotlight_terminal_trusted_admission_evidence(
                     mutated, run_self_test=False
