@@ -298,6 +298,7 @@ def self_test_autofix_constructive_response_schemas(good: str) -> None:
 def validate_autofix_read_singleton_evidence(text: str) -> None:
     read_validator = "python3 scripts/codeql_autofix_controller.py read-ref-response"
     workflow_validator = "python3 scripts/codeql_autofix_controller.py workflow-definition-response"
+    pr_validator = "python3 scripts/codeql_autofix_controller.py pull-request-response"
     require(
         text.count(read_validator) == 4,
         "CodeQL Autofix read-ref response validator topology changed",
@@ -305,6 +306,10 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
     require(
         text.count(workflow_validator) == 3,
         "CodeQL Autofix must type exactly three workflow-definition responses",
+    )
+    require(
+        text.count(pr_validator) == 4,
+        "CodeQL Autofix must type exactly four pull-request singleton responses",
     )
     require(
         text.count("assert_main_sha() {") == 3
@@ -325,6 +330,9 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         'actions/workflows/codeql.yml" --jq .id',
         'actions/workflows/dependency-review.yml" --jq .id',
         'actions/workflows/profile-quality.yml" --jq .id',
+        'pulls/${PR_NUMBER}" --jq',
+        'jq -r .head.sha pr.json',
+        'jq -r .state final-pr.json',
         "final-main-ref.json",
     ):
         require(
@@ -421,6 +429,65 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         )
         cursor = consume_pos
 
+    pr_contracts = (
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
+            '--response-file "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
+            '--base-sha "$BASE_SHA"',
+            '--head-sha "$HEAD_SHA"',
+            '--out "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json"',
+            'test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$HEAD_SHA"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
+            '--response-file "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
+            '--base-sha "$BASE_SHA"',
+            '--head-sha "$HEAD_SHA"',
+            '--out "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json"',
+            'test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json")" = "$HEAD_SHA"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > pr.json',
+            '--response-file pr.json',
+            '--base-sha "$BASE_SHA"',
+            '--head-sha "$EXPECTED_HEAD_SHA"',
+            '--out pr-normalized.json',
+            'test "$(jq -r .headSha pr-normalized.json)" = "$EXPECTED_HEAD_SHA"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json',
+            '--response-file final-pr.json',
+            '--base-sha "$ADMITTED_BASE_SHA"',
+            '--head-sha "$ADMITTED_HEAD_SHA"',
+            '--out final-pr-normalized.json',
+            'test "$(jq -r .headSha final-pr-normalized.json)" = "$ADMITTED_HEAD_SHA"',
+        ),
+    )
+    cursor = -1
+    for fetch, response, base_arg, head_arg, output, consume in pr_contracts:
+        fetch_pos = text.index(fetch, cursor + 1)
+        validate_pos = text.index(pr_validator, fetch_pos)
+        consume_pos = text.index(consume, validate_pos)
+        block = text[validate_pos:consume_pos]
+        for fragment in (
+            response,
+            '--pr-number "$PR_NUMBER"',
+            '--repository "$TARGET_REPOSITORY"',
+            base_arg,
+            '--branch "$BRANCH"',
+            head_arg,
+            output,
+        ):
+            require(
+                fragment in block,
+                f"CodeQL Autofix pull-request singleton contract is missing: {fragment}",
+            )
+        require(
+            fetch_pos < validate_pos < consume_pos,
+            "CodeQL Autofix pull-request singleton must be typed before scalar consumption",
+        )
+        cursor = consume_pos
+
     require(
         'test "$(printf \'%s\\n\' "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" '
         '| LC_ALL=C sort -u | wc -l)" = "3"' in text,
@@ -449,6 +516,14 @@ def self_test_autofix_read_singleton_evidence(good: str) -> None:
         ),
         (
             good.replace(
+                "python3 scripts/codeql_autofix_controller.py pull-request-response",
+                "python3 scripts/codeql_autofix_controller.py commit",
+                1,
+            ),
+            "exactly four pull-request singleton responses",
+        ),
+        (
+            good.replace(
                 '          assert_main_sha "$BASE_SHA"',
                 '          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n'
                 '          assert_main_sha "$BASE_SHA"',
@@ -460,6 +535,15 @@ def self_test_autofix_read_singleton_evidence(good: str) -> None:
             good.replace(
                 'CODEQL_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/codeql-workflow-definition-normalized.json")"',
                 'CODEQL_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"',
+                1,
+            ),
+            "untyped singleton evidence consumption",
+        ),
+        (
+            good.replace(
+                "          python3 scripts/codeql_autofix_controller.py pull-request-response",
+                '          test "$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)" = "$HEAD_SHA"\\n'
+                "          python3 scripts/codeql_autofix_controller.py pull-request-response",
                 1,
             ),
             "untyped singleton evidence consumption",

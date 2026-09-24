@@ -142,6 +142,8 @@ jobs:
           if [ "$EXISTS" = "true" ]; then
             printf 'pr_number=%s\n' "$(jq -r .pr.prNumber existing.json)" >> "$GITHUB_OUTPUT"
             printf 'origin_run_id=%s\n' "$(jq -r .pr.originRunId existing.json)" >> "$GITHUB_OUTPUT"
+            printf 'base_sha=%s\n' "$(jq -r .pr.baseSha existing.json)" >> "$GITHUB_OUTPUT"
+            printf 'branch=%s\n' "$(jq -r .pr.branch existing.json)" >> "$GITHUB_OUTPUT"
             printf 'head_sha=%s\n' "$(jq -r .pr.headSha existing.json)" >> "$GITHUB_OUTPUT"
           fi
 
@@ -399,13 +401,21 @@ jobs:
           }
           assert_main_sha "$BASE_SHA"
           assert_head_sha "$HEAD_SHA"
-          PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-          test "$(jq -r .state <<<"$PR")" = "open"
-          test "$(jq -r .base.ref <<<"$PR")" = "main"
-          test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
-          test "$(jq -r .head.ref <<<"$PR")" = "$BRANCH"
-          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
-          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"
+          python3 scripts/codeql_autofix_controller.py pull-request-response \
+            --response-file "$RUNNER_TEMP/codeql-autofix-candidate-pr.json" \
+            --pr-number "$PR_NUMBER" \
+            --repository "$TARGET_REPOSITORY" \
+            --base-sha "$BASE_SHA" \
+            --branch "$BRANCH" \
+            --head-sha "$HEAD_SHA" \
+            --out "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json"
+          test "$(jq -r .state "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "open"
+          test "$(jq -r .baseRef "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "main"
+          test "$(jq -r .baseSha "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$BASE_SHA"
+          test "$(jq -r .headRef "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$BRANCH"
+          test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$HEAD_SHA"
+          test "$(jq -r .repository "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$TARGET_REPOSITORY"
 
           gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" > "$RUNNER_TEMP/codeql-workflow-definition.json"
           python3 scripts/codeql_autofix_controller.py workflow-definition-response \
@@ -550,7 +560,16 @@ jobs:
           test "$TRUSTED_READY" = "true"
           test "$GHAS_READY" = "true"
           assert_main_sha "$BASE_SHA"
-          test "$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" --jq .head.sha)" = "$HEAD_SHA"
+          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"
+          python3 scripts/codeql_autofix_controller.py pull-request-response \
+            --response-file "$RUNNER_TEMP/codeql-autofix-continuation-pr.json" \
+            --pr-number "$PR_NUMBER" \
+            --repository "$TARGET_REPOSITORY" \
+            --base-sha "$BASE_SHA" \
+            --branch "$BRANCH" \
+            --head-sha "$HEAD_SHA" \
+            --out "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json"
+          test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json")" = "$HEAD_SHA"
 
           gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" \
             -f event_type=codeql-autofix >/dev/null
@@ -563,6 +582,8 @@ jobs:
           ALERT_NUMBER: ${{ steps.target.outputs.alert_number }}
           PR_NUMBER: ${{ steps.existing.outputs.pr_number }}
           ORIGIN_RUN_ID: ${{ steps.existing.outputs.origin_run_id }}
+          BASE_SHA: ${{ steps.existing.outputs.base_sha }}
+          BRANCH: ${{ steps.existing.outputs.branch }}
           EXPECTED_HEAD_SHA: ${{ steps.existing.outputs.head_sha }}
         run: |
           set -euo pipefail
@@ -598,7 +619,15 @@ jobs:
           gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json
 
           gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > pr.json
-          test "$(jq -r .head.sha pr.json)" = "$EXPECTED_HEAD_SHA"
+          python3 scripts/codeql_autofix_controller.py pull-request-response \
+            --response-file pr.json \
+            --pr-number "$PR_NUMBER" \
+            --repository "$TARGET_REPOSITORY" \
+            --base-sha "$BASE_SHA" \
+            --branch "$BRANCH" \
+            --head-sha "$EXPECTED_HEAD_SHA" \
+            --out pr-normalized.json
+          test "$(jq -r .headSha pr-normalized.json)" = "$EXPECTED_HEAD_SHA"
           gh api --paginate --slurp \
             "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
             > pr-file-pages.json
@@ -608,7 +637,7 @@ jobs:
             '{pullRequest: $pr[0], files: [$pages[0][][] | .filename]}' \
             > pr-wrapper.json
 
-          HEAD_SHA="$(jq -r .head.sha pr.json)"
+          HEAD_SHA="$EXPECTED_HEAD_SHA"
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > admission-main-ref.json
           gh api --paginate --slurp \
@@ -641,15 +670,23 @@ jobs:
             --out admission.json
           jq -e '.eligible == true' admission.json >/dev/null
 
-          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json
-          test "$(jq -r .state final-pr.json)" = "open"
-          test "$(jq -r .base.ref final-pr.json)" = "main"
-          test "$(jq -r .base.sha final-pr.json)" = "$(jq -r .baseSha admission.json)"
-          test "$(jq -r .head.sha final-pr.json)" = "$(jq -r .headSha admission.json)"
-          test "$(jq -r .head.repo.full_name final-pr.json)" = "$TARGET_REPOSITORY"
-
           ADMITTED_BASE_SHA="$(jq -r .baseSha admission.json)"
           ADMITTED_HEAD_SHA="$(jq -r .headSha admission.json)"
+          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json
+          python3 scripts/codeql_autofix_controller.py pull-request-response \
+            --response-file final-pr.json \
+            --pr-number "$PR_NUMBER" \
+            --repository "$TARGET_REPOSITORY" \
+            --base-sha "$ADMITTED_BASE_SHA" \
+            --branch "$BRANCH" \
+            --head-sha "$ADMITTED_HEAD_SHA" \
+            --out final-pr-normalized.json
+          test "$(jq -r .state final-pr-normalized.json)" = "open"
+          test "$(jq -r .baseRef final-pr-normalized.json)" = "main"
+          test "$(jq -r .baseSha final-pr-normalized.json)" = "$ADMITTED_BASE_SHA"
+          test "$(jq -r .headSha final-pr-normalized.json)" = "$ADMITTED_HEAD_SHA"
+          test "$(jq -r .repository final-pr-normalized.json)" = "$TARGET_REPOSITORY"
+
           [[ "$ADMITTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$ADMITTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           assert_main_sha "$ADMITTED_BASE_SHA"
