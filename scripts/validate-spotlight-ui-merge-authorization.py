@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 import spotlight_ui_merge_authorization_item10_core as core
+from automation_approval_comment import self_test as approval_comment_self_test
 
 
 COMPRESSED_DOWNLOAD_STEP = (
@@ -581,6 +582,95 @@ NATIVE_REVIEW_GATE_FRAGMENTS = (
 )
 
 
+def validate_approval_comment_evidence_overlay(sync: str) -> None:
+    approve = core.job_block(sync, "approve", "authorize")
+    get_endpoint = 'repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
+    post_endpoint = 'repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments'
+    require(
+        approve.count(get_endpoint) == 1,
+        "Spotlight automation-approval comment read endpoint changed",
+    )
+    require(
+        approve.count(post_endpoint) == 2,
+        "Spotlight automation-approval comment endpoint inventory changed",
+    )
+    require(
+        approve.count("python3 scripts/automation_approval_comment.py evidence") == 1,
+        "Spotlight must type exactly one automation-approval comment collection",
+    )
+    require(
+        approve.count("python3 scripts/automation_approval_comment.py created") == 1,
+        "Spotlight must type exactly one created automation-approval comment response",
+    )
+    for fragment in (
+        '--comments-file "$RUNNER_TEMP/spotlight-approval-comment-pages.json"',
+        '--repository "$GITHUB_REPOSITORY"',
+        '--pr-number "$PR_NUMBER"',
+        '--marker "$APPROVAL_MARKER"',
+        '--out "$RUNNER_TEMP/spotlight-approval-comment-evidence.json"',
+        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/spotlight-approval-comment-evidence.json")"',
+        'test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"',
+        'if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then',
+        '--comment-file "$RUNNER_TEMP/spotlight-approval-comment-created.json"',
+        '--expected-body "$APPROVAL_BODY"',
+        '--out "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json"',
+        'test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"',
+        'test "$(jq -r .prNumber "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "$PR_NUMBER"',
+    ):
+        require(
+            fragment in approve,
+            f"Spotlight automation-approval comment contract is missing: {fragment}",
+        )
+
+    for forbidden in (
+        'COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"',
+        '[.[][] | select(.body | contains($marker))] | length > 0',
+        "'.body == $body' approval-comment.json",
+    ):
+        require(
+            forbidden not in approve,
+            f"Spotlight regressed to raw automation-approval comment evidence: {forbidden}",
+        )
+
+    fetch_pos = approve.index(get_endpoint)
+    validate_pos = approve.index("python3 scripts/automation_approval_comment.py evidence", fetch_pos)
+    consume_pos = approve.index(
+        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/spotlight-approval-comment-evidence.json")"',
+        validate_pos,
+    )
+    create_pos = approve.index(post_endpoint, consume_pos)
+    created_validate_pos = approve.index(
+        "python3 scripts/automation_approval_comment.py created",
+        create_pos,
+    )
+    created_consume_pos = approve.index(
+        'test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"',
+        created_validate_pos,
+    )
+    require(
+        fetch_pos < validate_pos < consume_pos < create_pos < created_validate_pos < created_consume_pos,
+        "Spotlight automation-approval comment evidence moved out of typed reviewed order",
+    )
+
+
+def self_test_approval_comment_evidence_overlay(sync: str) -> None:
+    validate_approval_comment_evidence_overlay(sync)
+    mutated = sync.replace(
+        "python3 scripts/automation_approval_comment.py evidence",
+        "python3 scripts/automation_approval_comment.py self-test",
+        1,
+    )
+    try:
+        validate_approval_comment_evidence_overlay(mutated)
+    except ValueError as exc:
+        require(
+            "type exactly one automation-approval comment collection" in str(exc),
+            f"Spotlight approval-comment self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Spotlight approval-comment contract accepted substituted evidence validator")
+
+
 def validate_native_governed_bot_review_overlay(sync: str) -> None:
     merge = core.job_block(sync, "merge", None)
     for fragment in NATIVE_REVIEW_GATE_FRAGMENTS:
@@ -710,6 +800,9 @@ def main() -> int:
         core.validate_preparer_script(preparer)
         core.validate_builder_script(builder, builder_core)
         core.validate_mac(sync)
+        approval_comment_self_test()
+        validate_approval_comment_evidence_overlay(sync)
+        self_test_approval_comment_evidence_overlay(sync)
         validate_native_governed_bot_review_overlay(sync)
         self_test_native_governed_bot_review_overlay(sync)
         validate_merge_success_response_overlay(sync)
@@ -721,7 +814,7 @@ def main() -> int:
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
             "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state plus the separate trusted capability-admission proof, "
             "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance, "
-            "the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
+            "trusted-actor automation-approval comment evidence, the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
             "response plus typed terminal PR/file/commit evidence before current-main acceptance, candidate cleanup, or decision-receipt evidence."
         )
         return 0
