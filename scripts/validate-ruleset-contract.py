@@ -688,7 +688,12 @@ def validate_sentinel_main_ref_evidence(text: str, *, run_self_test: bool = True
             f"Ruleset sentinel main-ref schema changed: {fragment}",
         )
 
-    positions = (text.index(capture), start, end, text.index(consume, start))
+    schema_proof = text.index(
+        'error("Ruleset sentinel main ref response must be an object")',
+        start,
+    )
+    consume_pos = text.index(consume, start)
+    positions = (text.index(capture), start, schema_proof, consume_pos)
     require(
         list(positions) == sorted(positions) and len(set(positions)) == len(positions),
         "Ruleset sentinel main-ref schema must precede trusted-main SHA consumption",
