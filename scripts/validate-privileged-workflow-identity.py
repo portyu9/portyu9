@@ -46,6 +46,9 @@ IMMUTABLE_PROJECTED = (
     '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
 )
 
+HARDENED_RUN_BRANCH_PROOF = '                  (.head_branch != $branch) or'
+LEGACY_RUN_BRANCH_PROOF = 'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"'
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
@@ -961,7 +964,20 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
             "Spotlight v21 immutable-candidate projection anchor changed")
     projected_immutable = legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
-    v21.validate_spotlight_immutable_candidates(projected_immutable)
+    require(
+        projected_immutable.count(HARDENED_RUN_BRANCH_PROOF) == 1,
+        "Spotlight hardened protected workflow candidate-branch proof changed",
+    )
+    require(
+        LEGACY_RUN_BRANCH_PROOF not in projected_immutable,
+        "Spotlight production workflow regained raw protected workflow branch consumption",
+    )
+    v21_immutable = projected_immutable.replace(
+        HARDENED_RUN_BRANCH_PROOF,
+        LEGACY_RUN_BRANCH_PROOF,
+        1,
+    )
+    v21.validate_spotlight_immutable_candidates(v21_immutable)
     projected = projected_immutable.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
     require(projected != projected_immutable,
             "Spotlight v21 mutation-budget projection could not isolate item-10 merge gating")
