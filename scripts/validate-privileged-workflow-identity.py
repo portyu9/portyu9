@@ -2758,7 +2758,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
         "Profile Stats Spotlight dispatch endpoint/call-count contract changed",
     )
     require(
-        'STATUS_LINE="$(head -n 1 <<<"$RESPONSE" | tr -d '\\r')"' in dispatch
+        "STATUS_LINE=\"$(head -n 1 <<<\"$RESPONSE\" | tr -d '\\r')\"" in dispatch
         and '[[ "$STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]]' in dispatch,
         "Profile Stats Spotlight dispatch must retain exact HTTP 204 acceptance proof",
     )
