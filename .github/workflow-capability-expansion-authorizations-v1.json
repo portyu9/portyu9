@@ -74,6 +74,13 @@
       "rationale": "Authorize #886's exact Capability Admission check-run creation-response schema hardening. Existing POST /check-runs authority, triggers, permissions, check names, external-id formats and downstream consumers remain unchanged. The returned check object must be typed and identity-bound before scalar consumption. No new endpoint, mutation, secret, OIDC, merge authority, required-check reduction, direct-main write, ruleset change or bypass is added."
     },
     {
+      "id": "cap-capability-admission-spotlight-topology-schema-hardening-v1",
+      "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "expansionSha256": "f7d5eb929bb44c91fb3b646df34eb0864bbf2906837a5d43e623845d0d9372d0",
+      "rationale": "Authorize frozen #922's exact Capability Admission Spotlight topology response-schema hardening. Existing read-only Git commit and compare GETs, triggers, permissions, candidate identity derivation, check publisher, mutations, merge authority and downstream consumers remain unchanged; exact candidate/base topology, bot identity, compare counts, commit identity and README file primitives must now validate before scalar consumption. Composite Workflow Capability is unchanged; no new endpoint, method, secret, OIDC authority, required-check reduction, direct-main write, ruleset change or bypass is added."
+    },
+    {
       "id": "cap-capability-admission-pr-object-schema-hardening",
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
