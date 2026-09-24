@@ -550,7 +550,80 @@ def project_ancestry_supersession_to_same_base(sync: str) -> str:
     return sync
 
 
+def project_spotlight_privileged_refs_to_legacy(sync: str) -> str:
+    helper = '''          validate_git_ref_object() {
+            local payload="$1" expected_ref="$2" expected_sha="$3"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (((.ref | type) == "string") and (.ref == $ref)) and
+              (((.object | type) == "object") and
+                (((.object.type | type) == "string") and (.object.type == "commit")) and
+                (((.object.sha | type) == "string") and
+                  (.object.sha | test("^[0-9a-f]{40}$")) and
+                  (.object.sha == $sha)) and
+                (((.object.url | type) == "string") and ((.object.url | length) > 0)))
+            ' <<<"$payload" >/dev/null
+          }
+
+'''
+    require(
+        sync.count(helper) == 4,
+        "Spotlight item-9 projection cannot isolate four privileged Git-ref validators",
+    )
+    projected = sync.replace(helper, "")
+    overlays = (
+        (
+            '''          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n',
+            5,
+        ),
+        (
+            '''          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
+          test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"\n',
+            4,
+        ),
+        (
+            '''          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"\n',
+            5,
+        ),
+        (
+            '''          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"\n',
+            1,
+        ),
+        (
+            '''          CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"
+          CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"
+''',
+            '          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"\n',
+            1,
+        ),
+    )
+    for hardened, legacy, expected_count in overlays:
+        require(
+            projected.count(hardened) == expected_count,
+            f"Spotlight item-9 Git-ref projection topology changed for: {legacy.strip()}",
+        )
+        projected = projected.replace(hardened, legacy)
+    return projected
+
+
 def project_item9(sync: str) -> str:
+    sync = project_spotlight_privileged_refs_to_legacy(sync)
     sync = project_protected_workflow_evidence_to_legacy(sync)
     sync = project_ancestry_supersession_to_same_base(sync)
     current_age_guard = (
