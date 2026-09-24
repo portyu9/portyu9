@@ -604,6 +604,7 @@ def validate_approval_comment_evidence_overlay(sync: str) -> None:
         'error("Spotlight automation-approval comment pagination is incomplete")',
         'error("Spotlight automation-approval comment item schema changed")',
         'error("Spotlight automation-approval comment ids are not unique")',
+        '([.[][] | .id] | group_by(.) | any(length > 1))',
         'error("duplicate trusted Spotlight automation-approval comments exist")',
         '.issue_url != ("https://api.github.com/repos/" + $repo + "/issues/" + ($pr | tostring))',
         '.url != ("https://api.github.com/repos/" + $repo + "/issues/comments/" + (.id | tostring))',
