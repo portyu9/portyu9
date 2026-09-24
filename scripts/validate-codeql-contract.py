@@ -295,6 +295,187 @@ def self_test_autofix_constructive_response_schemas(good: str) -> None:
             fail(f"Autofix constructive-response self-test accepted forbidden mutation: {expected}")
 
 
+def validate_autofix_read_singleton_evidence(text: str) -> None:
+    read_validator = "python3 scripts/codeql_autofix_controller.py read-ref-response"
+    workflow_validator = "python3 scripts/codeql_autofix_controller.py workflow-definition-response"
+    require(
+        text.count(read_validator) == 4,
+        "CodeQL Autofix read-ref response validator topology changed",
+    )
+    require(
+        text.count(workflow_validator) == 3,
+        "CodeQL Autofix must type exactly three workflow-definition responses",
+    )
+    require(
+        text.count("assert_main_sha() {") == 3
+        and text.count("assert_head_sha() {") == 1,
+        "CodeQL Autofix static ref helper topology changed",
+    )
+    require(
+        text.count('assert_main_sha "$BASE_SHA"') == 4
+        and text.count('assert_head_sha "$HEAD_SHA"') == 1
+        and text.count('assert_main_sha "$ADMITTED_BASE_SHA"') == 1
+        and text.count('assert_main_sha "$MERGE_SHA"') == 4,
+        "CodeQL Autofix expected-SHA ref reproof topology changed",
+    )
+
+    for forbidden in (
+        'git/ref/heads/main" --jq .object.sha',
+        'git/ref/heads/${BRANCH}" --jq .object.sha',
+        'actions/workflows/codeql.yml" --jq .id',
+        'actions/workflows/dependency-review.yml" --jq .id',
+        'actions/workflows/profile-quality.yml" --jq .id',
+        "final-main-ref.json",
+    ):
+        require(
+            forbidden not in text,
+            f"CodeQL Autofix regressed to untyped singleton evidence consumption: {forbidden}",
+        )
+
+    main_fetch = (
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" '
+        '> "$RUNNER_TEMP/codeql-autofix-main-ref.json"'
+    )
+    main_response = '--response-file "$RUNNER_TEMP/codeql-autofix-main-ref.json"'
+    main_expected = '--expected-ref "refs/heads/main"'
+    main_out = '--out "$RUNNER_TEMP/codeql-autofix-main-ref-normalized.json"'
+    main_consume = (
+        'test "$(jq -r .sha "$RUNNER_TEMP/codeql-autofix-main-ref-normalized.json")" '
+        '= "$expected_sha"'
+    )
+    require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref GET topology changed")
+    require(text.count(main_response) == 3 and text.count(main_expected) == 3
+            and text.count(main_out) == 3 and text.count(main_consume) == 3,
+            "CodeQL Autofix main-ref typed helper contract changed")
+
+    cursor = -1
+    for _ in range(3):
+        fetch_pos = text.find(main_fetch, cursor + 1)
+        require(fetch_pos > cursor, "CodeQL Autofix main-ref helper fetch disappeared")
+        validate_pos = text.find(read_validator, fetch_pos)
+        consume_pos = text.find(main_consume, validate_pos)
+        require(fetch_pos < validate_pos < consume_pos,
+                "CodeQL Autofix main-ref response must be typed before SHA consumption")
+        cursor = consume_pos
+
+    head_fetch = (
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" '
+        '> "$RUNNER_TEMP/codeql-autofix-head-ref.json"'
+    )
+    head_consume = (
+        'test "$(jq -r .sha "$RUNNER_TEMP/codeql-autofix-head-ref-normalized.json")" '
+        '= "$expected_sha"'
+    )
+    for fragment in (
+        head_fetch,
+        '--response-file "$RUNNER_TEMP/codeql-autofix-head-ref.json"',
+        '--expected-ref "refs/heads/${BRANCH}"',
+        '--out "$RUNNER_TEMP/codeql-autofix-head-ref-normalized.json"',
+        head_consume,
+    ):
+        require(fragment in text, f"CodeQL Autofix exact-head ref contract is missing: {fragment}")
+    head_fetch_pos = text.index(head_fetch)
+    head_validate_pos = text.index(read_validator, head_fetch_pos)
+    head_consume_pos = text.index(head_consume, head_validate_pos)
+    require(
+        head_fetch_pos < head_validate_pos < head_consume_pos,
+        "CodeQL Autofix candidate ref response must be typed before SHA consumption",
+    )
+
+    workflow_contracts = (
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" '
+            '> "$RUNNER_TEMP/codeql-workflow-definition.json"',
+            '--response-file "$RUNNER_TEMP/codeql-workflow-definition.json"',
+            '--expected-path ".github/workflows/codeql.yml"',
+            '--out "$RUNNER_TEMP/codeql-workflow-definition-normalized.json"',
+            'CODEQL_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/codeql-workflow-definition-normalized.json")"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" '
+            '> "$RUNNER_TEMP/dependency-workflow-definition.json"',
+            '--response-file "$RUNNER_TEMP/dependency-workflow-definition.json"',
+            '--expected-path ".github/workflows/dependency-review.yml"',
+            '--out "$RUNNER_TEMP/dependency-workflow-definition-normalized.json"',
+            'DEPENDENCY_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/dependency-workflow-definition-normalized.json")"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" '
+            '> "$RUNNER_TEMP/profile-workflow-definition.json"',
+            '--response-file "$RUNNER_TEMP/profile-workflow-definition.json"',
+            '--expected-path ".github/workflows/profile-quality.yml"',
+            '--out "$RUNNER_TEMP/profile-workflow-definition-normalized.json"',
+            'PROFILE_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/profile-workflow-definition-normalized.json")"',
+        ),
+    )
+    cursor = -1
+    for fetch, response, expected_path, output, consume in workflow_contracts:
+        for fragment in (fetch, response, expected_path, output, consume):
+            require(fragment in text, f"CodeQL Autofix workflow-definition contract is missing: {fragment}")
+        fetch_pos = text.index(fetch, cursor + 1)
+        validate_pos = text.index(workflow_validator, fetch_pos)
+        consume_pos = text.index(consume, validate_pos)
+        require(
+            fetch_pos < validate_pos < consume_pos,
+            "CodeQL Autofix workflow definition must be typed before ID consumption",
+        )
+        cursor = consume_pos
+
+    require(
+        'test "$(printf \'%s\\n\' "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" '
+        '| LC_ALL=C sort -u | wc -l)" = "3"' in text,
+        "CodeQL Autofix workflow IDs must remain exactly three distinct identities",
+    )
+
+
+def self_test_autofix_read_singleton_evidence(good: str) -> None:
+    validate_autofix_read_singleton_evidence(good)
+    mutations = (
+        (
+            good.replace(
+                "python3 scripts/codeql_autofix_controller.py read-ref-response",
+                "python3 scripts/codeql_autofix_controller.py commit",
+                1,
+            ),
+            "read-ref response validator topology changed",
+        ),
+        (
+            good.replace(
+                "python3 scripts/codeql_autofix_controller.py workflow-definition-response",
+                "python3 scripts/codeql_autofix_controller.py commit",
+                1,
+            ),
+            "exactly three workflow-definition responses",
+        ),
+        (
+            good.replace(
+                '          assert_main_sha "$BASE_SHA"',
+                '          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+                1,
+            ),
+            "untyped singleton evidence consumption",
+        ),
+        (
+            good.replace(
+                'CODEQL_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/codeql-workflow-definition-normalized.json")"',
+                'CODEQL_WORKFLOW_ID="$(gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"',
+                1,
+            ),
+            "untyped singleton evidence consumption",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_autofix_read_singleton_evidence(mutated)
+        except ValueError as exc:
+            require(
+                expected in str(exc),
+                f"Autofix singleton-evidence self-test failed for the wrong reason: {exc}",
+            )
+        else:
+            fail(f"Autofix singleton-evidence self-test accepted forbidden mutation: {expected}")
+
+
 def validate_autofix_continuation(text: str) -> None:
     require(
         text.count('repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100') == 1,
@@ -345,7 +526,7 @@ def validate_autofix_continuation(text: str) -> None:
         'MERGE_SHA="$(jq -r .sha merge-success-normalized.json)"',
         merge_validate_pos,
     )
-    main_reproof_pos = text.index('\n          assert_main_is_merge_sha\n', normalized_sha_pos)
+    main_reproof_pos = text.index('\n          assert_main_sha "$MERGE_SHA"\n', normalized_sha_pos)
     discovery_endpoint_pos = text.index(
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100',
         merge_pos,
@@ -376,9 +557,8 @@ def validate_autofix_continuation(text: str) -> None:
         "CodeQL Autofix typed merge-success validation / post-merge causal continuation ordering changed",
     )
     require(
-        text.count('assert_main_is_merge_sha() {') == 1
-        and text.count('assert_main_is_merge_sha') >= 4,
-        "CodeQL Autofix must repeatedly fail closed if main moves during post-merge continuation",
+        text.count('assert_main_sha "$MERGE_SHA"') == 4,
+        "CodeQL Autofix must repeatedly fail closed with typed main evidence during post-merge continuation",
     )
 
 
@@ -587,6 +767,7 @@ def main() -> int:
         self_test(codeql)
         autofix = AUTOFIX.read_text(encoding="utf-8")
         self_test_autofix_constructive_response_schemas(autofix)
+        self_test_autofix_read_singleton_evidence(autofix)
         validate_autofix_continuation(autofix)
         validate_autofix_readiness_evidence(autofix)
         validate_unsupported_evidence(autofix)
@@ -597,7 +778,7 @@ def main() -> int:
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
-            "controller trust/provenance, typed constructive mutation responses, typed exact-head Autofix readiness check evidence, unsupported-alert queue fixtures, "
+            "controller trust/provenance, typed constructive mutation responses, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, unsupported-alert queue fixtures, "
             "durable deduplicated unsupported evidence, and exact post-merge CodeQL continuation."
         )
         return 0
