@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "d96cc0f7fbaf69e218290739e2a01bbd8993bbbf"
+EXPECTED_GIT_BLOB = "af9674a51f8352844cee75a1adffe8f75d72f9dc"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -262,6 +262,92 @@ def validate_text(text: str) -> None:
         require(spotlight_binding in text,
                 f"trusted capability admission Spotlight proof changed: {spotlight_binding}")
 
+    candidate_call = 'CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    candidate_schema_marker = 'jq -e --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \\'
+    candidate_schema_end_marker = "' <<<\"$CANDIDATE_COMMIT\" >/dev/null || {"
+    candidate_consume_marker = 'test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"'
+    compare_call = 'COMPARE="$(gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"'
+    compare_schema_marker = 'jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \''
+    compare_schema_end_marker = "' <<<\"$COMPARE\" >/dev/null || {"
+    compare_consume_marker = 'test "$(jq -r .status <<<"$COMPARE")" = "ahead"'
+    for marker, label in (
+        (candidate_call, "candidate commit call"),
+        (candidate_schema_marker, "candidate commit schema"),
+        (candidate_schema_end_marker, "candidate commit schema end"),
+        (candidate_consume_marker, "candidate commit scalar consumption"),
+        (compare_call, "compare call"),
+        (compare_schema_marker, "compare schema"),
+        (compare_schema_end_marker, "compare schema end"),
+        (compare_consume_marker, "compare scalar consumption"),
+    ):
+        require(text.count(marker) == 1,
+                f"trusted capability admission Spotlight topology anchor changed: {label}")
+
+    candidate_call_pos = text.index(candidate_call)
+    candidate_schema_pos = text.index(candidate_schema_marker, candidate_call_pos)
+    candidate_schema_end_pos = text.index(candidate_schema_end_marker, candidate_schema_pos) + len(candidate_schema_end_marker)
+    candidate_consume_pos = text.index(candidate_consume_marker, candidate_schema_end_pos)
+    compare_call_pos = text.index(compare_call, candidate_consume_pos)
+    compare_schema_pos = text.index(compare_schema_marker, compare_call_pos)
+    compare_schema_end_pos = text.index(compare_schema_end_marker, compare_schema_pos) + len(compare_schema_end_marker)
+    compare_consume_pos = text.index(compare_consume_marker, compare_schema_end_pos)
+    require(
+        candidate_call_pos < candidate_schema_pos < candidate_schema_end_pos < candidate_consume_pos
+        < compare_call_pos < compare_schema_pos < compare_schema_end_pos < compare_consume_pos,
+        "trusted capability admission Spotlight topology schemas must precede scalar consumption",
+    )
+
+    candidate_schema = text[candidate_schema_pos:candidate_schema_end_pos]
+    for schema_fragment in (
+        '(type == "object") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.tree | type == "object" and',
+        '(.parents | type == "array" and length == 1 and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base))) and',
+        '(.author | type == "object" and',
+        '(.name | type == "string" and . == $name) and',
+        '(.email | type == "string" and . == $email)) and',
+        '(.committer | type == "object" and',
+        '(.date | type == "string" and length > 0)) and',
+        '(.message | type == "string" and . == "chore: sync rotating Spotlight links")',
+    ):
+        require(
+            schema_fragment in candidate_schema,
+            f"trusted capability admission Spotlight candidate commit response schema changed: {schema_fragment}",
+        )
+    require(
+        "malformed or mismatched Capability Admission Spotlight candidate commit evidence." in text,
+        "trusted capability admission Spotlight candidate commit response schema must fail visibly",
+    )
+
+    compare_schema = text[compare_schema_pos:compare_schema_end_pos]
+    for schema_fragment in (
+        '(type == "object") and',
+        '(.status | type == "string" and . == "ahead") and',
+        '(.base_commit | type == "object" and',
+        '(.merge_base_commit | type == "object" and',
+        '(.ahead_by | type == "number" and . == floor and . == 1) and',
+        '(.behind_by | type == "number" and . == floor and . == 0) and',
+        '(.total_commits | type == "number" and . == floor and . == 1) and',
+        '(.commits | type == "array" and length == 1 and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head))) and',
+        '(.files | type == "array" and length == 1 and',
+        '(.filename | type == "string" and . == "README.md") and',
+        '(.status | type == "string" and . == "modified") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.additions | type == "number" and . == floor and . >= 0) and',
+        '(.deletions | type == "number" and . == floor and . >= 0) and',
+        '(.changes | type == "number" and . == floor and . >= 0)))',
+    ):
+        require(
+            schema_fragment in compare_schema,
+            f"trusted capability admission Spotlight compare response schema changed: {schema_fragment}",
+        )
+    require(
+        "malformed or mismatched Capability Admission Spotlight compare evidence." in text,
+        "trusted capability admission Spotlight compare response schema must fail visibly",
+    )
+
     publisher = 'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
     schema_marker = "jq -e --arg name \"$CHECK_NAME\" --arg head \"$HEAD_SHA\" --arg external \"$EXTERNAL_ID\" --arg summary \"$SUMMARY\" '"
     schema_end_marker = "' <<<\"$CHECK\" >/dev/null || {"
@@ -386,6 +472,53 @@ def expect_check_schema_reorder_failure(text: str) -> None:
         raise ValueError("trusted capability admission contract accepted schema-after-consumption reordering")
 
 
+def expect_spotlight_topology_schema_failure(
+    text: str,
+    *,
+    schema_marker: str,
+    consume_marker: str,
+    old: str,
+    new: str,
+    expected: str,
+) -> None:
+    schema_start = text.index(schema_marker)
+    schema_end = text.index(consume_marker, schema_start)
+    schema = text[schema_start:schema_end]
+    require(schema.count(old) == 1,
+            f"Capability Admission Spotlight topology self-test anchor count changed: {old!r}")
+    mutated_schema = schema.replace(old, new, 1)
+    mutated = text[:schema_start] + mutated_schema + text[schema_end:]
+    try:
+        validate_text(mutated)
+    except ValueError as exc:
+        require(expected in str(exc),
+                f"Capability Admission Spotlight topology self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Capability Admission accepted malformed Spotlight topology response schema")
+
+
+def expect_spotlight_topology_schema_reorder_failure(
+    text: str,
+    *,
+    schema_marker: str,
+    consume_marker: str,
+) -> None:
+    schema_start = text.index(schema_marker)
+    consume_start = text.index(consume_marker, schema_start)
+    schema_block = text[schema_start:consume_start]
+    without_schema = text[:schema_start] + text[consume_start:]
+    relocated_consume = without_schema.index(consume_marker)
+    consume_end = without_schema.index("\n", relocated_consume) + 1
+    mutated = without_schema[:consume_end] + schema_block + without_schema[consume_end:]
+    try:
+        validate_text(mutated)
+    except ValueError as exc:
+        require("schemas must precede scalar consumption" in str(exc),
+                f"Capability Admission Spotlight topology reorder self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Capability Admission accepted Spotlight topology schema-after-consumption reordering")
+
+
 def self_test() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     validate_text(text)
@@ -407,6 +540,60 @@ def self_test() -> None:
         'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
         'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         "candidate-check publisher",
+    )
+    candidate_schema_marker = 'jq -e --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \\'
+    candidate_consume_marker = 'test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"'
+    compare_schema_marker = 'jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \''
+    compare_consume_marker = 'test "$(jq -r .status <<<"$COMPARE")" = "ahead"'
+    expect_spotlight_topology_schema_failure(
+        text,
+        schema_marker=candidate_schema_marker,
+        consume_marker=candidate_consume_marker,
+        old='(type == "object") and\n              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        new='(type != "null") and\n              (.sha | type == "string" and . == $head) and',
+        expected="Spotlight candidate commit response schema",
+    )
+    expect_spotlight_topology_schema_failure(
+        text,
+        schema_marker=candidate_schema_marker,
+        consume_marker=candidate_consume_marker,
+        old='(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base))) and',
+        new='(.sha == $base))) and',
+        expected="Spotlight candidate commit response schema",
+    )
+    expect_spotlight_topology_schema_failure(
+        text,
+        schema_marker=compare_schema_marker,
+        consume_marker=compare_consume_marker,
+        old='(type == "object") and\n              (.status | type == "string" and . == "ahead") and',
+        new='(type != "null") and\n              (.status == "ahead") and',
+        expected="Spotlight compare response schema",
+    )
+    expect_spotlight_topology_schema_failure(
+        text,
+        schema_marker=compare_schema_marker,
+        consume_marker=compare_consume_marker,
+        old='(.ahead_by | type == "number" and . == floor and . == 1) and',
+        new='(.ahead_by == 1) and',
+        expected="Spotlight compare response schema",
+    )
+    expect_spotlight_topology_schema_failure(
+        text,
+        schema_marker=compare_schema_marker,
+        consume_marker=compare_consume_marker,
+        old='(.filename | type == "string" and . == "README.md") and',
+        new='(.filename == "README.md") and',
+        expected="Spotlight compare response schema",
+    )
+    expect_spotlight_topology_schema_reorder_failure(
+        text,
+        schema_marker=candidate_schema_marker,
+        consume_marker=candidate_consume_marker,
+    )
+    expect_spotlight_topology_schema_reorder_failure(
+        text,
+        schema_marker=compare_schema_marker,
+        consume_marker=compare_consume_marker,
     )
     expect_check_schema_failure(text, '(type == "object") and', '(type != "null") and')
     expect_check_schema_failure(
@@ -505,6 +692,6 @@ if __name__ == "__main__":
     validate()
     print(
         "Trusted capability admission workflow contract passed: exact bytes; base-only execution; distinct exact ordinary and "
-        "delegated evaluator tree bindings; immutable Autofix provenance; deterministic Spotlight recovery; exact native "
+        "delegated evaluator tree bindings; immutable Autofix provenance; deterministic Spotlight recovery with typed pre-consumption candidate topology evidence; exact native "
         "Dependabot release/delegation reproof; data-only candidate TCB evaluation; and one bounded exact-head check publisher with a typed pre-consumption creation-response boundary."
     )
