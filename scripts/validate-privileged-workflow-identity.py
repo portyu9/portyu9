@@ -1250,9 +1250,13 @@ def validate_bot_review_identity_ref_evidence_schema(bot_review: str) -> None:
         ),
     )
     for fetch, schema, consume, label in boundaries:
+        require(
+            fetch in bot_review and schema in bot_review and consume in bot_review,
+            f"Bot PR reviewer {label} fetch/schema/consumer identity changed",
+        )
         fetch_pos = bot_review.index(fetch)
-        schema_pos = bot_review.index(schema, fetch_pos)
-        consume_pos = bot_review.index(consume, schema_pos)
+        schema_pos = bot_review.index(schema)
+        consume_pos = bot_review.index(consume)
         require(
             fetch_pos < schema_pos < consume_pos,
             f"Bot PR reviewer must validate {label} evidence before SHA consumption",
