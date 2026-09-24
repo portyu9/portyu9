@@ -765,7 +765,7 @@ jobs:
             --repository "$TARGET_REPOSITORY" \
             --pr-number "$PR_NUMBER" \
             --marker "$APPROVAL_MARKER" \
-            --out "$RUNNER_TEMP/dependabot-approval-comment-evidence.json"
+            > "$RUNNER_TEMP/dependabot-approval-comment-evidence.json"
           APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/dependabot-approval-comment-evidence.json")"
           test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"
           if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then
@@ -778,7 +778,7 @@ jobs:
               --repository "$TARGET_REPOSITORY" \
               --pr-number "$PR_NUMBER" \
               --expected-body "$APPROVAL_BODY" \
-              --out "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json"
+              > "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json"
             test "$(jq -r .actor "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json")" = "github-actions[bot]"
             test "$(jq -r .prNumber "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json")" = "$PR_NUMBER"
           fi
