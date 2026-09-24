@@ -71,7 +71,7 @@ def validate_trigger(event_name: str, event: Any, trusted_sha: str) -> dict[str,
 
 WORKFLOW_DEFINITION_IDENTITIES = {
     ".github/workflows/codeql.yml": "CodeQL",
-    ".github/workflows/dependency-review.yml": "Dependency Review",
+    ".github/workflows/dependency-review.yml": "Dependency review",
     ".github/workflows/profile-quality.yml": "Profile quality",
 }
 
