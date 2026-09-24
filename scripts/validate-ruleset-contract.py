@@ -333,11 +333,11 @@ def validate_reconciler_main_ref_evidence(text: str) -> None:
     require(legacy not in text,
             "Ruleset reconciler must not consume main-ref SHA through direct gh api --jq")
     require(
-        text.count('LIVE_MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"') == 1,
+        text.count('\n          LIVE_MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"') == 1,
         "Ruleset plan main-ref response capture changed",
     )
     require(
-        text.count('MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"') == 4,
+        text.count('\n          MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"') == 4,
         "Ruleset privileged main-ref response capture count changed",
     )
     for fragment in schema_fragments:
