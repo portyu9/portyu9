@@ -1119,7 +1119,7 @@ jobs:
                 error("Spotlight automation-approval comment pagination is incomplete")
               elif any(.[][];
                 (type != "object") or
-                ((.id | type == "number" and . == floor and . > 0) | not) or
+                ((.id | type) != "number") or ((.id | floor) != .id) or (.id <= 0) or
                 (.issue_url != ("https://api.github.com/repos/" + $repo + "/issues/" + ($pr | tostring))) or
                 (.url != ("https://api.github.com/repos/" + $repo + "/issues/comments/" + (.id | tostring))) or
                 ((.body | type) != "string") or
@@ -1162,7 +1162,7 @@ jobs:
               --arg body "$APPROVAL_BODY" '
                 if type != "object" then
                   error("created Spotlight automation-approval comment must be an object")
-                elif ((.id | type == "number" and . == floor and . > 0) | not) then
+                elif ((.id | type) != "number") or ((.id | floor) != .id) or (.id <= 0) then
                   error("created Spotlight automation-approval comment id is invalid")
                 elif .issue_url != ("https://api.github.com/repos/" + $repo + "/issues/" + ($pr | tostring)) then
                   error("created Spotlight automation-approval comment issue URL mismatch")
