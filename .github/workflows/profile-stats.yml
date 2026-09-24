@@ -871,10 +871,79 @@ jobs:
         run: |
           set -euo pipefail
           WORKFLOW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml")"
+          jq -e '
+            def positive_int: type == "number" and . == floor and . > 0;
+            (type == "object") and
+            (.id | positive_int) and
+            (.node_id | type == "string" and length > 0) and
+            (.name | type == "string" and . == "Sync Spotlight profile links") and
+            (.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and
+            (.state | type == "string" and . == "active") and
+            (.url | type == "string" and length > 0) and
+            (.html_url | type == "string" and length > 0) and
+            (.badge_url | type == "string" and length > 0) and
+            (.created_at | type == "string" and length > 0) and
+            (.updated_at | type == "string" and length > 0)
+          ' <<<"$WORKFLOW" >/dev/null || {
+            echo "ERROR: malformed or mismatched Profile Stats Spotlight workflow evidence." >&2
+            exit 1
+          }
           WORKFLOW_ID="$(jq -r .id <<<"$WORKFLOW")"
           [[ "$WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
-          test "$(jq -r .path <<<"$WORKFLOW")" = ".github/workflows/spotlight-link-sync.yml"
           RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1")"
+          jq -e \
+            --argjson workflow "$WORKFLOW_ID" \
+            --argjson repo "$GITHUB_REPOSITORY_ID" \
+            --arg repo_name "$GITHUB_REPOSITORY" '
+              def positive_int: type == "number" and . == floor and . > 0;
+              def allowed_status:
+                (. == "queued") or (. == "in_progress") or (. == "requested") or
+                (. == "waiting") or (. == "pending") or (. == "completed");
+              def allowed_conclusion:
+                (. == "success") or (. == "failure") or (. == "neutral") or
+                (. == "cancelled") or (. == "skipped") or (. == "timed_out") or
+                (. == "action_required") or (. == "stale") or (. == "startup_failure");
+              (. as $root
+              | (type == "object") and
+                ($root.total_count | type == "number" and . == floor and . >= 0) and
+                ($root.workflow_runs | type == "array" and length <= 1) and
+                (if $root.total_count == 0
+                 then ($root.workflow_runs | length) == 0
+                 else ($root.workflow_runs | length) == 1
+                 end) and
+                (all($root.workflow_runs[];
+                  type == "object" and
+                  (.id | positive_int) and
+                  (.node_id | type == "string" and length > 0) and
+                  (.workflow_id | type == "number" and . == floor and . == $workflow) and
+                  (.name | type == "string" and . == "Sync Spotlight profile links") and
+                  (.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and
+                  (.event | type == "string" and . == "workflow_dispatch") and
+                  (.head_branch | type == "string" and . == "main") and
+                  (.head_sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                  (.run_number | positive_int) and
+                  (.run_attempt | positive_int) and
+                  (.check_suite_id | positive_int) and
+                  (.check_suite_node_id | type == "string" and length > 0) and
+                  (.repository | type == "object" and
+                    (.id | type == "number" and . == floor and . == $repo) and
+                    (.full_name | type == "string" and . == $repo_name)) and
+                  (.head_repository | type == "object" and
+                    (.id | type == "number" and . == floor and . == $repo) and
+                    (.full_name | type == "string" and . == $repo_name)) and
+                  (.status | type == "string" and allowed_status) and
+                  (if .status == "completed"
+                   then (.conclusion | type == "string" and allowed_conclusion)
+                   else .conclusion == null
+                   end) and
+                  (.url | type == "string" and length > 0) and
+                  (.html_url | type == "string" and length > 0)
+                ))
+              )
+            ' <<<"$RUNS" >/dev/null || {
+              echo "ERROR: malformed or incomplete Profile Stats Spotlight run evidence." >&2
+              exit 1
+            }
           TOTAL="$(jq -r .total_count <<<"$RUNS")"
           COUNT="$(jq -r '.workflow_runs | length' <<<"$RUNS")"
           [[ "$TOTAL" =~ ^[0-9]+$ ]]
@@ -886,12 +955,6 @@ jobs:
             test "$COUNT" = "1"
             PREVIOUS_RUN_HIGH_WATER="$(jq -r '.workflow_runs[0].id' <<<"$RUNS")"
             [[ "$PREVIOUS_RUN_HIGH_WATER" =~ ^[1-9][0-9]*$ ]]
-            test "$(jq -r '.workflow_runs[0].workflow_id' <<<"$RUNS")" = "$WORKFLOW_ID"
-            test "$(jq -r '.workflow_runs[0].path' <<<"$RUNS")" = ".github/workflows/spotlight-link-sync.yml"
-            test "$(jq -r '.workflow_runs[0].event' <<<"$RUNS")" = "workflow_dispatch"
-            test "$(jq -r '.workflow_runs[0].head_branch' <<<"$RUNS")" = "main"
-            test "$(jq -r '.workflow_runs[0].repository.id' <<<"$RUNS")" = "$GITHUB_REPOSITORY_ID"
-            test "$(jq -r '.workflow_runs[0].head_repository.id' <<<"$RUNS")" = "$GITHUB_REPOSITORY_ID"
           fi
           RESPONSE="$(gh api --include --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \

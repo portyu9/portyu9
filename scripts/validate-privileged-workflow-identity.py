@@ -8,11 +8,11 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v85"
+VERSION = "governed-workflow-byte-identity-v86"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "1f441a8fe20522040f76056a7e45e31ae63d4f15",
-    ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
+    ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
     ".github/workflows/spotlight-link-sync.yml": "37dcfc628bf5c00ad1d43e8a85c1a866911dd1ee",
 }
 
@@ -2648,6 +2648,190 @@ def self_test() -> None:
         raise ValueError("governed artifact-history self-test accepted schema-after-output reordering")
 
 
+def validate_profile_stats_spotlight_dispatch_evidence(
+    profile: str, *, run_self_test: bool = True
+) -> None:
+    dispatch = job_block(profile, "dispatch", "decision_receipt")
+    workflow_fetch = (
+        'WORKFLOW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml")"'
+    )
+    workflow_schema = '(.state | type == "string" and . == "active") and'
+    workflow_schema_end = "' <<<\"$WORKFLOW\" >/dev/null || {"
+    workflow_consume = 'WORKFLOW_ID="$(jq -r .id <<<"$WORKFLOW")"'
+    runs_fetch = (
+        'RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1")"'
+    )
+    runs_schema = '--argjson workflow "$WORKFLOW_ID"'
+    runs_schema_end = "' <<<\"$RUNS\" >/dev/null || {"
+    runs_consume = 'TOTAL="$(jq -r .total_count <<<"$RUNS")"'
+    high_water = "PREVIOUS_RUN_HIGH_WATER=\"$(jq -r '.workflow_runs[0].id' <<<\"$RUNS\")\""
+    dispatch_post = (
+        'gh api --include --method POST \\\n'
+        '            "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'spotlight-link-sync.yml/dispatches"'
+    )
+
+    for marker in (
+        workflow_fetch, workflow_schema, workflow_schema_end, workflow_consume,
+        runs_fetch, runs_schema, runs_schema_end, runs_consume, high_water,
+        dispatch_post,
+    ):
+        require(
+            dispatch.count(marker) == 1,
+            f"Profile Stats Spotlight dispatch evidence anchor changed: {marker}",
+        )
+
+    positions = (
+        dispatch.index(workflow_fetch),
+        dispatch.index(workflow_schema),
+        dispatch.index(workflow_schema_end),
+        dispatch.index(workflow_consume),
+        dispatch.index(runs_fetch),
+        dispatch.index(runs_schema),
+        dispatch.index(runs_schema_end),
+        dispatch.index(runs_consume),
+        dispatch.index(dispatch_post),
+    )
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Profile Stats Spotlight dispatch evidence must be typed before scalar consumption/write",
+    )
+
+    workflow_block = dispatch[
+        dispatch.index(workflow_fetch):dispatch.index(workflow_schema_end)
+    ]
+    for fragment in (
+        '(.id | positive_int) and',
+        '(.node_id | type == "string" and length > 0) and',
+        '(.name | type == "string" and . == "Sync Spotlight profile links") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.state | type == "string" and . == "active") and',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0) and',
+        '(.badge_url | type == "string" and length > 0) and',
+        '(.created_at | type == "string" and length > 0) and',
+        '(.updated_at | type == "string" and length > 0)',
+    ):
+        require(
+            fragment in workflow_block,
+            f"Profile Stats Spotlight workflow singleton schema changed: {fragment}",
+        )
+
+    runs_block = dispatch[dispatch.index(runs_schema):dispatch.index(runs_schema_end)]
+    for fragment in (
+        '($root.total_count | type == "number" and . == floor and . >= 0) and',
+        '($root.workflow_runs | type == "array" and length <= 1) and',
+        'then ($root.workflow_runs | length) == 0',
+        'else ($root.workflow_runs | length) == 1',
+        '(.id | positive_int) and',
+        '(.node_id | type == "string" and length > 0) and',
+        '(.workflow_id | type == "number" and . == floor and . == $workflow) and',
+        '(.name | type == "string" and . == "Sync Spotlight profile links") and',
+        '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
+        '(.event | type == "string" and . == "workflow_dispatch") and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.run_number | positive_int) and',
+        '(.run_attempt | positive_int) and',
+        '(.check_suite_id | positive_int) and',
+        '(.check_suite_node_id | type == "string" and length > 0) and',
+        '(.repository | type == "object" and',
+        '(.id | type == "number" and . == floor and . == $repo) and',
+        '(.full_name | type == "string" and . == $repo_name)) and',
+        '(.head_repository | type == "object" and',
+        '(.status | type == "string" and allowed_status) and',
+        'then (.conclusion | type == "string" and allowed_conclusion)',
+        'else .conclusion == null',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0)',
+    ):
+        require(
+            fragment in runs_block,
+            f"Profile Stats Spotlight run collection schema changed: {fragment}",
+        )
+
+    for fragment in (
+        '(. == "queued") or (. == "in_progress") or (. == "requested") or',
+        '(. == "waiting") or (. == "pending") or (. == "completed");',
+        '(. == "success") or (. == "failure") or (. == "neutral") or',
+        '(. == "cancelled") or (. == "skipped") or (. == "timed_out") or',
+        '(. == "action_required") or (. == "stale") or (. == "startup_failure");',
+    ):
+        require(
+            fragment in runs_block,
+            f"Profile Stats Spotlight run status/conclusion allowlist changed: {fragment}",
+        )
+    require(
+        runs_block.count('(.id | type == "number" and . == floor and . == $repo) and') == 2
+        and runs_block.count('(.full_name | type == "string" and . == $repo_name)) and') == 2,
+        "Profile Stats Spotlight run repository/head-repository identity binding changed",
+    )
+
+    require(
+        dispatch.count(
+            'actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1'
+        ) == 1
+        and dispatch.count(
+            'actions/workflows/spotlight-link-sync.yml/dispatches'
+        ) == 1,
+        "Profile Stats Spotlight dispatch endpoint/call-count contract changed",
+    )
+    require(
+        "STATUS_LINE=\"$(head -n 1 <<<\"$RESPONSE\" | tr -d '\\r')\"" in dispatch
+        and '[[ "$STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]]' in dispatch,
+        "Profile Stats Spotlight dispatch must retain exact HTTP 204 acceptance proof",
+    )
+
+    if run_self_test:
+        for current, replacement, expected in (
+            (
+                '(.state | type == "string" and . == "active") and',
+                '(.state | tostring == "active") and',
+                "dispatch evidence anchor changed",
+            ),
+            (
+                '(.run_attempt | positive_int) and',
+                '(.run_attempt | tostring | length > 0) and',
+                "run collection schema changed",
+            ),
+            (
+                '(.check_suite_node_id | type == "string" and length > 0) and',
+                '(.check_suite_node_id | tostring | length > 0) and',
+                "run collection schema changed",
+            ),
+            (
+                '(.full_name | type == "string" and . == $repo_name)) and',
+                '(.full_name | tostring == $repo_name)) and',
+                "repository/head-repository identity binding changed",
+            ),
+            (
+                '(. == "waiting") or (. == "pending") or (. == "completed");',
+                '(. == "waiting") or (. == "pending") or (. == "made_up");',
+                "status/conclusion allowlist changed",
+            ),
+        ):
+            require(
+                current in profile,
+                f"Profile Stats dispatch self-test fixture anchor changed: {current}",
+            )
+            mutated = profile.replace(current, replacement, 1)
+            try:
+                validate_profile_stats_spotlight_dispatch_evidence(
+                    mutated, run_self_test=False
+                )
+            except ValueError as exc:
+                require(
+                    expected in str(exc),
+                    f"Profile Stats dispatch self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Profile Stats dispatch self-test accepted forbidden mutation: {expected}"
+                )
+
+
 def main() -> int:
     try:
         self_test()
@@ -2688,6 +2872,7 @@ def main() -> int:
         v21.validate_profile_stats_freshness(profile)
         v21.validate_profile_stats_lease_binding(profile)
         v21.validate_profile_stats_receipt(profile)
+        validate_profile_stats_spotlight_dispatch_evidence(profile)
 
         validate_v21_spotlight_invariants(spotlight)
         validate_item10_mac(spotlight)
@@ -2698,7 +2883,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:
