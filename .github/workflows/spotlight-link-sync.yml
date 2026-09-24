@@ -1130,7 +1130,7 @@ jobs:
                 ((.html_url | length) == 0)
               ) then
                 error("Spotlight automation-approval comment item schema changed")
-              elif ([.[][] | .id] | length) != ([.[][] | .id] | unique | length) then
+              elif ([.[][] | .id] | group_by(.) | any(length > 1)) then
                 error("Spotlight automation-approval comment ids are not unique")
               else
                 [.[][] | {id,login:.user.login,body}] as $comments
