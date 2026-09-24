@@ -435,7 +435,8 @@ jobs:
           python3 scripts/generate-profile-evidence.py \
             --signal-field-dir "$READY_DIR" \
             --portfolio-ledger-dir integration-portfolio-evidence \
-            --spotlight-dir integration-engineering-spotlight
+            --spotlight-dir integration-engineering-spotlight \
+            --offline
 
       - name: Validate generated engineering card geometry
         run: python3 scripts/validate-engineering-card-geometry.py --spotlight-dir integration-engineering-spotlight
@@ -464,7 +465,7 @@ jobs:
           python3 scripts/validate-signal-field-v214.py roundtrip-signal-field
           python3 scripts/validate-generated-signal-field.py roundtrip-signal-field
 
-      - name: Exercise canonical live profile evidence validation boundary
+      - name: Revalidate deterministic local profile evidence boundary
         env:
           SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: |
@@ -472,9 +473,10 @@ jobs:
           python3 scripts/validate-profile-evidence-boundary.py \
             --signal-field-dir "$SIGNAL_FIELD_DIR" \
             --spotlight-dir integration-engineering-spotlight \
-            --portfolio-ledger-dir integration-portfolio-evidence
+            --portfolio-ledger-dir integration-portfolio-evidence \
+            --offline
 
-      - name: Exercise exact live publication subject staging
+      - name: Exercise exact local publication subject staging
         env:
           SIGNAL_FIELD_DIR: ${{ steps.stats.outputs.ready-dir }}
         run: |

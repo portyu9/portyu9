@@ -8,10 +8,10 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v90"
+VERSION = "governed-workflow-byte-identity-v93"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
-    ".github/workflows/profile-quality.yml": "1f441a8fe20522040f76056a7e45e31ae63d4f15",
+    ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
     ".github/workflows/spotlight-link-sync.yml": "e9ba990a508c8cf6493ad91661294a8a2807beb3",
 }
@@ -3489,6 +3489,134 @@ def validate_profile_stats_spotlight_dispatch_evidence(
                 )
 
 
+def validate_profile_quality_portfolio_liveness_boundary(
+    profile_quality: str, profile_stats: str, *, run_self_test: bool = True
+) -> None:
+    integration = job_block(profile_quality, "integration", "dependabot_admission")
+    generation_anchor = (
+        'python3 scripts/generate-profile-evidence.py \\\n'
+        '            --signal-field-dir "$READY_DIR" \\\n'
+        '            --portfolio-ledger-dir integration-portfolio-evidence \\\n'
+        '            --spotlight-dir integration-engineering-spotlight \\\n'
+        '            --offline'
+    )
+    require(
+        generation_anchor in integration,
+        "Profile Quality integration must use deterministic offline Portfolio/Spotlight generation",
+    )
+
+    boundary_anchor = (
+        'python3 scripts/validate-profile-evidence-boundary.py \\\n'
+        '            --signal-field-dir "$SIGNAL_FIELD_DIR" \\\n'
+        '            --spotlight-dir integration-engineering-spotlight \\\n'
+        '            --portfolio-ledger-dir integration-portfolio-evidence \\\n'
+        '            --offline'
+    )
+    require(
+        boundary_anchor in integration,
+        "Profile Quality integration must use the canonical validation boundary in offline mode",
+    )
+    require(
+        integration.count("python3 scripts/generate-profile-evidence.py") == 1
+        and integration.count("python3 scripts/validate-profile-evidence-boundary.py") == 1
+        and integration.count("--offline") == 2,
+        "Profile Quality integration must have exactly one offline generation and one offline validation boundary",
+    )
+    for duplicated in (
+        "python3 scripts/validate-portfolio-evidence-ledger.py integration-portfolio-evidence",
+        "python3 scripts/validate-engineering-spotlight.py integration-engineering-spotlight",
+    ):
+        require(
+            duplicated not in integration,
+            f"Profile Quality integration must not duplicate canonical boundary sequencing: {duplicated}",
+        )
+
+    live_generation_anchor = (
+        'python3 source/scripts/generate-profile-evidence.py \\\n'
+        '            --signal-field-dir "$READY_DIR" \\\n'
+        '            --portfolio-ledger-dir portfolio-ledger-ready \\\n'
+        '            --spotlight-dir spotlight-ready'
+    )
+    require(
+        live_generation_anchor in profile_stats,
+        "Profile Stats must retain canonical live Portfolio/Spotlight evidence generation",
+    )
+    require(
+        '--spotlight-dir spotlight-ready \\\n            --offline' not in profile_stats,
+        "Profile Stats publication must not downgrade Portfolio/Spotlight generation to offline mode",
+    )
+    require(
+        profile_stats.count("python3 source/scripts/validate-profile-evidence-boundary.py") == 2,
+        "Profile Stats must retain both canonical live candidate validation boundaries",
+    )
+    require(
+        "python3 source/scripts/validate-profile-evidence-boundary.py --offline" not in profile_stats
+        and "--portfolio-ledger-dir portfolio-evidence \\\n            --offline" not in profile_stats
+        and "--portfolio-ledger-dir portfolio-ledger-publish-input \\\n            --offline" not in profile_stats,
+        "Profile Stats candidate validation boundaries must remain strict-live",
+    )
+
+    if run_self_test:
+        weakened_generation = profile_quality.replace(
+            '            --spotlight-dir integration-engineering-spotlight \\\n'
+            '            --offline',
+            '            --spotlight-dir integration-engineering-spotlight',
+            1,
+        )
+        try:
+            validate_profile_quality_portfolio_liveness_boundary(
+                weakened_generation, profile_stats, run_self_test=False
+            )
+        except ValueError as exc:
+            require(
+                "deterministic offline Portfolio/Spotlight generation" in str(exc),
+                f"Profile Quality generation-boundary self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Profile Quality generation-boundary self-test accepted live external portfolio merge authority"
+            )
+
+        weakened_boundary = profile_quality.replace(
+            '            --portfolio-ledger-dir integration-portfolio-evidence \\\n'
+            '            --offline',
+            '            --portfolio-ledger-dir integration-portfolio-evidence',
+            1,
+        )
+        try:
+            validate_profile_quality_portfolio_liveness_boundary(
+                weakened_boundary, profile_stats, run_self_test=False
+            )
+        except ValueError as exc:
+            require(
+                "canonical validation boundary in offline mode" in str(exc),
+                f"Profile Quality validation-boundary self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Profile Quality validation-boundary self-test accepted live external portfolio merge authority"
+            )
+
+        weakened_stats = profile_stats.replace(
+            '            --spotlight-dir spotlight-ready',
+            '            --spotlight-dir spotlight-ready \\\n            --offline',
+            1,
+        )
+        try:
+            validate_profile_quality_portfolio_liveness_boundary(
+                profile_quality, weakened_stats, run_self_test=False
+            )
+        except ValueError as exc:
+            require(
+                "must not downgrade Portfolio/Spotlight generation to offline mode" in str(exc),
+                f"Profile Stats live-generation self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Profile Stats live-generation self-test accepted offline production evidence"
+            )
+
+
 def main() -> int:
     try:
         self_test()
@@ -3529,6 +3657,7 @@ def main() -> int:
         validate_spotlight_budget_artifact_history(spotlight)
 
         profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+        validate_profile_quality_portfolio_liveness_boundary(profile_quality, profile)
         v21.validate_profile_stats_freshness(profile)
         v21.validate_profile_stats_lease_binding(profile)
         v21.validate_profile_stats_receipt(profile)
@@ -3543,7 +3672,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal protected workflow-run certificate provenance typed before MAC equality consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal protected workflow-run certificate provenance typed before MAC equality consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:
