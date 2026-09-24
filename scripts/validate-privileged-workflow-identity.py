@@ -260,12 +260,23 @@ def validate_item10_mac(spotlight: str) -> None:
     merged_pr_schema_pos = merge.index('validate_terminal_pr_object "$MERGED_PR"', merged_pr_pos)
     merged_pr_identity_pos = merge.index('jq -e --argjson pr "$PR_NUMBER" --arg merge "$MERGE_SHA"', merged_pr_schema_pos)
     merge_sha_bind_pos = merge.index('test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"', merged_pr_identity_pos)
-    current_main_pos = merge.index('CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"')
+    current_main_ref_pos = merge.index(
+        'CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'
+    )
+    current_main_validate_pos = merge.index(
+        'validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"',
+        current_main_ref_pos,
+    )
+    current_main_pos = merge.index(
+        'CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
+        current_main_validate_pos,
+    )
     cleanup_pos = merge.index('CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"')
     require(
         pre_pr_pos < pre_pr_schema_pos < files_pos < files_schema_pos < commit_pos < commit_schema_pos
         < provenance_pos < verify_pos < statement_pos < merge_pos < response_pos < merged_pr_pos
-        < merged_pr_schema_pos < merged_pr_identity_pos < merge_sha_bind_pos < current_main_pos < cleanup_pos,
+        < merged_pr_schema_pos < merged_pr_identity_pos < merge_sha_bind_pos
+        < current_main_ref_pos < current_main_validate_pos < current_main_pos < cleanup_pos,
         "Spotlight terminal typed candidate/MAC/merge/post-merge/current-main/cleanup ordering changed",
     )
     require('MERGE_SHA="$(jq -r .sha <<<"$RESULT")"' not in merge,
@@ -425,8 +436,83 @@ def validate_leases(profile: str, spotlight: str) -> None:
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
 
 
+def project_spotlight_privileged_refs_to_legacy(spotlight: str) -> str:
+    helper = '''          validate_git_ref_object() {
+            local payload="$1" expected_ref="$2" expected_sha="$3"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (((.ref | type) == "string") and (.ref == $ref)) and
+              (((.object | type) == "object") and
+                (((.object.type | type) == "string") and (.object.type == "commit")) and
+                (((.object.sha | type) == "string") and
+                  (.object.sha | test("^[0-9a-f]{40}$")) and
+                  (.object.sha == $sha)) and
+                (((.object.url | type) == "string") and ((.object.url | length) > 0)))
+            ' <<<"$payload" >/dev/null
+          }
+
+'''
+    require(
+        spotlight.count(helper) == 4,
+        "Spotlight v21 projection cannot isolate four privileged Git-ref validators",
+    )
+    projected = spotlight.replace(helper, "")
+
+    overlays = (
+        (
+            '''          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n',
+            5,
+        ),
+        (
+            '''          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
+          test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"\n',
+            4,
+        ),
+        (
+            '''          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"\n',
+            5,
+        ),
+        (
+            '''          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
+''',
+            '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"\n',
+            1,
+        ),
+        (
+            '''          CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"
+          CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"
+''',
+            '          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"\n',
+            1,
+        ),
+    )
+    for hardened, legacy, expected_count in overlays:
+        require(
+            projected.count(hardened) == expected_count,
+            f"Spotlight v21 Git-ref projection topology changed for: {legacy.strip()}",
+        )
+        projected = projected.replace(hardened, legacy)
+    return projected
+
+
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
-    legacy = spotlight[:spotlight.index("  decision_receipt:\n")]
+    legacy = project_spotlight_privileged_refs_to_legacy(
+        spotlight[:spotlight.index("  decision_receipt:\n")]
+    )
     reconcile = job_block(legacy, "reconcile", "budget")
     commit_schema_start_marker = (
         '            jq -e --arg head "$HEAD_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \'\n'
