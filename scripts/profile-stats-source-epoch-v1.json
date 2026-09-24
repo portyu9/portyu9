@@ -2,5 +2,5 @@
   "version": "profile-stats-source-epoch-v1",
   "algorithm": "sha256-sorted-path-nul-git-blob-oid-lf-v1",
   "file_count": 61,
-  "closure_sha256": "149daebc9f5ff46c9ccf1c0ecb6a7156340fb641be285da0d89a60a25adf760e"
+  "closure_sha256": "db16d9c574c14fdd6e0b65967c46171519c2eb9bbc7792553e504ceef7ec4e52"
 }
