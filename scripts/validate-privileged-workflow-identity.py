@@ -2656,7 +2656,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
         'WORKFLOW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
         'spotlight-link-sync.yml")"'
     )
-    workflow_schema = '(.name | type == "string" and . == "Sync Spotlight profile links") and'
+    workflow_schema = '(.state | type == "string" and . == "active") and'
     workflow_schema_end = "' <<<\"$WORKFLOW\" >/dev/null || {"
     workflow_consume = 'WORKFLOW_ID="$(jq -r .id <<<"$WORKFLOW")"'
     runs_fetch = (
