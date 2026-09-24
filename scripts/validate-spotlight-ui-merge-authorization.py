@@ -301,7 +301,18 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     merged_identity = merge.index('          jq -e --argjson pr "$PR_NUMBER" --arg merge "$MERGE_SHA"', merged_validate)
     merged_consume = merge.index('          test "$(jq -r .user.login <<<"$MERGED_PR")"', merged_identity)
     merge_sha_bind = merge.index('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"', merged_consume)
-    current_main = merge.index('          CURRENT_MAIN_SHA="$(gh api ', merged_fetch)
+    current_main_ref = merge.index(
+        '          CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+        merge_sha_bind,
+    )
+    current_main_schema = merge.index(
+        '          validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"',
+        current_main_ref,
+    )
+    current_main = merge.index(
+        '          CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
+        current_main_schema,
+    )
     cleanup = merge.index('          CANDIDATE_REFS="$(gh api ', current_main)
     identity_block = merge[merged_identity:merged_consume]
     for fragment in (
@@ -315,8 +326,11 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     ):
         require(fragment in identity_block,
                 f"Spotlight post-merge canonical PR identity is missing: {fragment}")
-    require(merged_fetch < merged_validate < merged_identity < merged_consume < merge_sha_bind < current_main < cleanup,
-            "Spotlight post-merge PR schema/identity/SHA binding must precede current-main acceptance and cleanup")
+    require(
+        merged_fetch < merged_validate < merged_identity < merged_consume < merge_sha_bind
+        < current_main_ref < current_main_schema < current_main < cleanup,
+        "Spotlight post-merge PR schema/identity/SHA binding must precede typed current-main acceptance and cleanup",
+    )
     require(merge.count('validate_terminal_pr_object "$PR"') == 1
             and merge.count('validate_terminal_pr_object "$MERGED_PR"') == 1,
             "Spotlight terminal PR schema must validate exactly the pre/post merge snapshots")
