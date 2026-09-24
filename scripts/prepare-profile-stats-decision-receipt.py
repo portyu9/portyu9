@@ -83,17 +83,18 @@ def complete_newer_window(payload: Any, high_water: int) -> list[dict[str, Any]]
 def matching_runs(payload: Any, env: dict[str, str], workflow_id: int, high_water: int) -> list[dict[str, Any]]:
     runs = complete_newer_window(payload, high_water)
     repository_id = int(core.env_value(env, "GITHUB_REPOSITORY_ID", core.POSITIVE))
-    base = core.env_value(env, "LEASE_BASE_SHA", core.SHA40)
     matches: list[dict[str, Any]] = []
     for run in runs:
         if run.get("id") is None or type(run.get("id")) is not int or run["id"] <= high_water:
             continue
+        head_sha = run.get("head_sha")
         if not (
             run.get("workflow_id") == workflow_id
             and run.get("path") == core.SPOTLIGHT_PATH
             and run.get("event") == "workflow_dispatch"
             and run.get("head_branch") == "main"
-            and run.get("head_sha") == base
+            and isinstance(head_sha, str)
+            and core.SHA40.fullmatch(head_sha) is not None
             and run.get("actor", {}).get("login") == core.BOT_LOGIN
             and run.get("actor", {}).get("id") == core.BOT_ID
             and run.get("triggering_actor", {}).get("login") == core.BOT_LOGIN
@@ -108,7 +109,12 @@ def matching_runs(payload: Any, env: dict[str, str], workflow_id: int, high_wate
     return matches
 
 
-def select_downstream_run(payload: Any, env: dict[str, str], workflow_id: int, high_water: int) -> dict[str, Any] | None:
+def select_downstream_run(
+    payload: Any,
+    env: dict[str, str],
+    workflow_id: int,
+    high_water: int,
+) -> dict[str, Any] | None:
     matches = matching_runs(payload, env, workflow_id, high_water)
     require(len(matches) <= 1,
             "Profile Stats dispatch attribution is ambiguous: multiple exact downstream Spotlight runs cross the high-water mark")
@@ -120,7 +126,56 @@ def select_downstream_run(payload: Any, env: dict[str, str], workflow_id: int, h
     return identity
 
 
-def observe_downstream_run(env: dict[str, str]) -> dict[str, Any]:
+def normalize_source_ancestry(
+    payload: Any,
+    env: dict[str, str],
+    downstream_head: str,
+) -> dict[str, Any]:
+    require(isinstance(payload, dict),
+            "Profile Stats downstream source compare response is malformed")
+    base = core.env_value(env, "LEASE_BASE_SHA", core.SHA40)
+    status = payload.get("status")
+    ahead = payload.get("ahead_by")
+    behind = payload.get("behind_by")
+    total = payload.get("total_commits")
+    base_commit = payload.get("base_commit")
+    merge_base = payload.get("merge_base_commit")
+    require(status in {"identical", "ahead"},
+            "Profile Stats downstream source compare is not an identical/ahead relation")
+    require(type(ahead) is int and ahead >= 0 and type(behind) is int and behind >= 0,
+            "Profile Stats downstream source compare counts are invalid")
+    require(type(total) is int and total >= 0 and total == ahead,
+            "Profile Stats downstream source compare total/ahead counts changed")
+    require(isinstance(base_commit, dict) and base_commit.get("sha") == base,
+            "Profile Stats downstream source compare base commit changed")
+    require(isinstance(merge_base, dict) and merge_base.get("sha") == base,
+            "Profile Stats downstream source compare merge base escaped leased main")
+    require(behind == 0,
+            "Profile Stats downstream source compare moved behind leased main")
+    if status == "identical":
+        require(downstream_head == base and ahead == 0,
+                "Profile Stats identical downstream source compare is inconsistent")
+    else:
+        require(downstream_head != base and ahead > 0,
+                "Profile Stats ahead downstream source compare is inconsistent")
+    proof = {
+        "baseSha": base,
+        "headSha": downstream_head,
+        "status": status,
+        "mergeBaseSha": merge_base["sha"],
+        "aheadBy": ahead,
+        "behindBy": behind,
+    }
+    return core.exact_source_ancestry(proof, env, downstream_head)
+
+
+def observe_source_ancestry(env: dict[str, str], downstream_head: str) -> dict[str, Any]:
+    base = core.env_value(env, "LEASE_BASE_SHA", core.SHA40)
+    endpoint = f"repos/{REPOSITORY}/compare/{base}...{downstream_head}"
+    return normalize_source_ancestry(gh_json(endpoint), env, downstream_head)
+
+
+def observe_downstream_run(env: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
     high_water = int(core.env_value(env, "DISPATCH_PREVIOUS_RUN_HIGH_WATER", core.NONNEGATIVE))
     workflow = gh_json(f"repos/{REPOSITORY}/actions/workflows/{SPOTLIGHT_WORKFLOW_NAME}")
     workflow_id = workflow.get("id") if isinstance(workflow, dict) else None
@@ -135,7 +190,8 @@ def observe_downstream_run(env: dict[str, str]) -> dict[str, Any]:
     for attempt in range(1, POLL_ATTEMPTS + 1):
         identity = select_downstream_run(gh_json(endpoint), env, workflow_id, high_water)
         if identity is not None:
-            return identity
+            ancestry = observe_source_ancestry(env, identity["headSha"])
+            return identity, ancestry
         if attempt < POLL_ATTEMPTS:
             time.sleep(POLL_SECONDS)
     raise ValueError("Profile Stats dispatch produced no exact downstream Spotlight run inside the bounded observation window")
@@ -168,6 +224,64 @@ def self_test() -> None:
     payload = {"total_count": 2, "workflow_runs": [run, boundary]}
     require(select_downstream_run(payload, dict(env), workflow_id, high_water) == downstream,
             "Profile Stats downstream-run selector rejected the exact causal fixture")
+
+    advanced_run = {**run, "head_sha": "b" * 40}
+    advanced_identity = {**downstream, "headSha": "b" * 40}
+    advanced_payload = {"total_count": 2, "workflow_runs": [advanced_run, boundary]}
+    require(select_downstream_run(advanced_payload, dict(env), workflow_id, high_water) == advanced_identity,
+            "Profile Stats downstream-run selector rejected a causal run after main advanced")
+
+    base = env["LEASE_BASE_SHA"]
+    identical_compare = {
+        "status": "identical",
+        "ahead_by": 0,
+        "behind_by": 0,
+        "total_commits": 0,
+        "base_commit": {"sha": base},
+        "merge_base_commit": {"sha": base},
+    }
+    require(
+        normalize_source_ancestry(identical_compare, dict(env), base)
+        == core.source_ancestry_fixture(env),
+        "Profile Stats source ancestry rejected identical main",
+    )
+    ahead_compare = {
+        "status": "ahead",
+        "ahead_by": 5,
+        "behind_by": 0,
+        "total_commits": 5,
+        "base_commit": {"sha": base},
+        "merge_base_commit": {"sha": base},
+    }
+    expected_ahead = {
+        "baseSha": base,
+        "headSha": "b" * 40,
+        "status": "ahead",
+        "mergeBaseSha": base,
+        "aheadBy": 5,
+        "behindBy": 0,
+    }
+    require(
+        normalize_source_ancestry(ahead_compare, dict(env), "b" * 40) == expected_ahead,
+        "Profile Stats source ancestry rejected proven forward main advance",
+    )
+
+    for mutation, expected in (
+        ({**ahead_compare, "status": "diverged"}, "identical/ahead relation"),
+        ({**ahead_compare, "behind_by": 1}, "moved behind"),
+        ({**ahead_compare, "merge_base_commit": {"sha": "c" * 40}}, "merge base"),
+        ({**ahead_compare, "total_commits": 4}, "total/ahead"),
+        ({**ahead_compare, "ahead_by": "5"}, "counts"),
+    ):
+        try:
+            normalize_source_ancestry(mutation, dict(env), "b" * 40)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"Profile Stats source ancestry failed for wrong reason: {exc}")
+        else:
+            raise ValueError(
+                f"Profile Stats source ancestry accepted forbidden compare mutation: {expected}"
+            )
 
     ambiguous_run = {**run, "id": run["id"] + 1, "check_suite_id": run["check_suite_id"] + 1}
     ambiguous = {"total_count": 3, "workflow_runs": [ambiguous_run, run, boundary]}
@@ -217,8 +331,8 @@ def main() -> int:
             return 0
         core.require(args.output is not None, "output path is required outside --self-test")
         env = dict(os.environ)
-        downstream = observe_downstream_run(env)
-        state = core.build_state(env, downstream)
+        downstream, source_ancestry = observe_downstream_run(env)
+        state = core.build_state(env, downstream, source_ancestry)
         args.output.write_text(json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
         print(f"Profile Stats Automation Decision Receipt state independently re-proved: {args.output}")
         return 0
