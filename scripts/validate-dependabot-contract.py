@@ -202,17 +202,18 @@ def validate_controller_wake_contract(text: str) -> None:
 
 def validate_controller_read_ref_response_contract(text: str) -> None:
     require(
-        text.count("python3 scripts/dependabot_controller.py git-ref-read-response") == 7,
+        text.count("python3 scripts/dependabot_controller.py git-ref-read-response") == 13,
         "Dependabot controller read-ref schema boundary count changed",
     )
     require(
-        text.count("assert_ref_sha() {") == 4,
-        "Dependabot controller must retain four reviewed local read-ref assertion wrappers",
+        text.count("assert_main_sha() {") == 5
+        and text.count("assert_head_sha() {") == 5,
+        "Dependabot controller must retain five reviewed static main/head ref assertion pairs",
     )
     require(
-        text.count('assert_ref_sha main "$BASE_SHA"') == 6
-        and text.count('assert_ref_sha "$HEAD_REF" "$HEAD_SHA"') == 5
-        and text.count('assert_ref_sha main "$MERGE_SHA"') == 1,
+        text.count('assert_main_sha "$BASE_SHA"') == 6
+        and text.count('assert_head_sha "$HEAD_SHA"') == 5
+        and text.count('assert_main_sha "$MERGE_SHA"') == 1,
         "Dependabot controller exact expected-SHA read-ref proof topology changed",
     )
     for forbidden in (
@@ -240,11 +241,14 @@ def validate_controller_read_ref_response_contract(text: str) -> None:
         '--expected-sha "$HEAD_SHA"',
         '--out "$RUNNER_TEMP/dependabot-validation-head-ref-normalized.json"',
         'test "$(jq -r .sha "$RUNNER_TEMP/dependabot-validation-head-ref-normalized.json")" = "$HEAD_SHA"',
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${branch}" > "$RUNNER_TEMP/dependabot-read-ref.json"',
-        '--expected-ref "refs/heads/${branch}"',
-        '--expected-sha "$expected_sha"',
-        '--out "$RUNNER_TEMP/dependabot-read-ref-normalized.json"',
-        'test "$(jq -r .sha "$RUNNER_TEMP/dependabot-read-ref-normalized.json")" = "$expected_sha"',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-main-ref.json"',
+        '--response "$RUNNER_TEMP/dependabot-main-ref.json"',
+        '--out "$RUNNER_TEMP/dependabot-main-ref-normalized.json"',
+        'test "$(jq -r .sha "$RUNNER_TEMP/dependabot-main-ref-normalized.json")" = "$expected_sha"',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-head-ref.json"',
+        '--response "$RUNNER_TEMP/dependabot-head-ref.json"',
+        '--out "$RUNNER_TEMP/dependabot-head-ref-normalized.json"',
+        'test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"',
     )
     for fragment in required:
         require(fragment in text, f"Dependabot read-ref response contract is missing: {fragment}")
@@ -381,7 +385,7 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         '--response "$MERGE_BODY"',
         '--out "$RUNNER_TEMP/dependabot-merge-success-normalized.json"',
         'MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"',
-        'assert_ref_sha main "$MERGE_SHA"',
+        'assert_main_sha "$MERGE_SHA"',
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
     ):
         require(fragment in text, f"Dependabot terminal merge response contract is missing: {fragment}")
@@ -395,7 +399,7 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         "if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then",
         'python3 scripts/dependabot_controller.py merge-success-response',
         'MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"',
-        'assert_ref_sha main "$MERGE_SHA"',
+        'assert_main_sha "$MERGE_SHA"',
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
     )
     cursor = -1
