@@ -839,11 +839,57 @@ def _expect_failure(function: Any, expected: str) -> None:
         )
 
 
+def validate_producer_run_workflow_contract(text: str) -> None:
+    fragments = (
+        'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"',
+        '--argjson run_id "$GITHUB_RUN_ID"',
+        '--argjson run_attempt "$GITHUB_RUN_ATTEMPT"',
+        '--arg source_sha "$SOURCE_SHA"',
+        '--arg repo "$GITHUB_REPOSITORY"',
+        '--argjson repo_id "$GITHUB_REPOSITORY_ID"',
+        '--arg workflow_name "Action provenance witness"',
+        '--arg workflow_path ".github/workflows/action-provenance-witness.yml"',
+        '(type == "object") and',
+        '(.id | type == "number" and . == floor and . > 0 and . == $run_id) and',
+        '(.run_attempt | type == "number" and . == floor and . > 0 and . == $run_attempt) and',
+        '(.name | type == "string" and . == $workflow_name) and',
+        '(.path | type == "string" and . == $workflow_path) and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $source_sha) and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.event | type == "string" and',
+        '(. == "push" or . == "schedule" or . == "workflow_dispatch")) and',
+        '(.repository |',
+        '(.head_repository |',
+        '(.id | type == "number" and . == floor and . > 0 and . == $repo_id) and',
+        '(.full_name | type == "string" and . == $repo)) and',
+        '(.run_started_at | type == "string" and length > 0)',
+    )
+    for fragment in fragments:
+        require(fragment in text,
+                f"Action provenance witness current producer-run schema is missing: {fragment}")
+
+    fetch = 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"'
+    schema = '          jq -e \\\n            --argjson run_id "$GITHUB_RUN_ID"'
+    first_consumer = '          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"'
+    require(text.count(fetch) == 1,
+            "Action provenance witness current producer-run endpoint count changed")
+    require(text.count(schema) == 1,
+            "Action provenance witness current producer-run schema boundary count changed")
+    require(text.count(first_consumer) == 1,
+            "Action provenance witness first current-run consumer identity changed")
+    require(
+        text.index(fetch) < text.index(schema) < text.index(first_consumer),
+        "Action provenance witness must validate current producer-run evidence before field consumption",
+    )
+
+
 def validate_signer_workflow_contract(text: str | None = None) -> None:
     if text is None:
         require(WITNESS_WORKFLOW.is_file() and not WITNESS_WORKFLOW.is_symlink(),
                 "Action provenance witness workflow is missing or aliased")
         text = WITNESS_WORKFLOW.read_text(encoding="utf-8")
+
+    validate_producer_run_workflow_contract(text)
 
     marker = "  attest:\n"
     require(text.count(marker) == 1,
@@ -907,6 +953,38 @@ def validate_signer_workflow_contract(text: str | None = None) -> None:
 def self_test() -> None:
     validate_schema_contract()
     validate_signer_workflow_contract()
+
+    workflow_text = WITNESS_WORKFLOW.read_text(encoding="utf-8")
+    id_guard = '(.id | type == "number" and . == floor and . > 0 and . == $run_id) and'
+    require(workflow_text.count(id_guard) == 1,
+            "Action provenance witness current producer-run id guard identity changed")
+    weakened = workflow_text.replace(
+        id_guard,
+        '(.id | tostring == ($run_id | tostring)) and',
+        1,
+    )
+    try:
+        validate_producer_run_workflow_contract(weakened)
+    except ValueError as exc:
+        require("current producer-run schema" in str(exc),
+                f"Action provenance witness type-coercion self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Action provenance witness type-coercion self-test accepted weakened current-run evidence")
+
+    fetch_line = '          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"\n'
+    consumer_line = '          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"\n'
+    require(workflow_text.count(fetch_line) == 1 and workflow_text.count(consumer_line) == 1,
+            "Action provenance witness current-run ordering fixture identity changed")
+    reordered = workflow_text.replace(consumer_line, "", 1)
+    reordered = reordered.replace(fetch_line, fetch_line + consumer_line, 1)
+    try:
+        validate_producer_run_workflow_contract(reordered)
+    except ValueError as exc:
+        require("before field consumption" in str(exc),
+                f"Action provenance witness schema-order self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Action provenance witness schema-order self-test accepted schema-after-consumption evidence")
+
     lock_bytes = _fixture_lock_bytes()
     policy_files = _fixture_policy_files()
     predicate = build_predicate(
