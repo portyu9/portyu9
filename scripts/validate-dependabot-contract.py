@@ -28,6 +28,7 @@ WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
 CONTROLLER = WORKFLOWS / "dependabot-controller.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
+APPROVAL_COMMENT_HELPER = ROOT / "scripts/automation_approval_comment.py"
 
 EXPECTED_DEPENDABOT = """version: 2
 
@@ -435,13 +436,13 @@ def validate_controller_approval_comment_contract(text: str) -> None:
         '--repository "$TARGET_REPOSITORY"',
         '--pr-number "$PR_NUMBER"',
         '--marker "$APPROVAL_MARKER"',
-        '--out "$RUNNER_TEMP/dependabot-approval-comment-evidence.json"',
+        '> "$RUNNER_TEMP/dependabot-approval-comment-evidence.json"',
         'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/dependabot-approval-comment-evidence.json")"',
         'test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"',
         'if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then',
         '--comment-file "$RUNNER_TEMP/dependabot-approval-comment-created.json"',
         '--expected-body "$APPROVAL_BODY"',
-        '--out "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json"',
+        '> "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json"',
         'test "$(jq -r .actor "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json")" = "github-actions[bot]"',
         'test "$(jq -r .prNumber "$RUNNER_TEMP/dependabot-approval-comment-created-normalized.json")" = "$PR_NUMBER"',
     ):
@@ -479,6 +480,28 @@ def validate_controller_approval_comment_contract(text: str) -> None:
         fetch_pos < validate_pos < consume_pos < create_pos < created_validate_pos < created_consume_pos,
         "Dependabot automation-approval comment evidence moved out of typed reviewed order",
     )
+
+
+def validate_approval_comment_helper_contract(text: str) -> None:
+    for forbidden in (
+        "def dump(",
+        "Path(path).write_text(",
+        'p.add_argument("--out"',
+    ):
+        require(
+            forbidden not in text,
+            f"automation-approval helper must not retain a generic clear-text file sink: {forbidden}",
+        )
+    for required in (
+        "def emit(value: Any) -> None:",
+        'print(json.dumps(value, sort_keys=True, separators=(",", ":")))',
+        "def load(path: str) -> Any:",
+        'return json.loads(Path(path).read_text(encoding="utf-8"))',
+    ):
+        require(
+            required in text,
+            f"automation-approval helper stdout-only boundary changed: {required}",
+        )
 
 
 def validate_quality_contract(text: str) -> None:
@@ -558,7 +581,7 @@ def self_test() -> None:
 
 def main() -> int:
     try:
-        for path in (DEPENDABOT, QUALITY, CONTROLLER, GOVERNANCE):
+        for path in (DEPENDABOT, QUALITY, CONTROLLER, GOVERNANCE, APPROVAL_COMMENT_HELPER):
             require(path.is_file(), f"Dependabot governance input is missing: {path.relative_to(ROOT)}")
 
         self_test()
@@ -571,6 +594,7 @@ def main() -> int:
         validate_controller_git_mutation_response_contract(controller_text)
         validate_controller_merge_success_response_contract(controller_text)
         validate_controller_approval_comment_contract(controller_text)
+        validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
