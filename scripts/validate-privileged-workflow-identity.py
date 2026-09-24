@@ -2413,21 +2413,21 @@ def validate_spotlight_terminal_trusted_admission_evidence(
 ) -> None:
     terminal = job_block(spotlight, "merge", "decision_receipt")
     workflow_fetch = (
-        'TRUSTED_WORKFLOW_RAW="$(gh api "repos/\${GITHUB_REPOSITORY}/actions/workflows/'
+        'TRUSTED_WORKFLOW_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
         'capability-admission.yml")"'
     )
     workflow_schema = 'error("Spotlight trusted-admission workflow definition must be an object")'
     workflow_consume = "TRUSTED_WORKFLOW_ID=\"$(jq -er '"
     run_fetch = (
-        'TRUSTED_RUN_RAW="$(gh api "repos/\${GITHUB_REPOSITORY}/actions/runs/'
-        '\${TRUSTED_RUN_ID}")"'
+        'TRUSTED_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/'
+        '${TRUSTED_RUN_ID}")"'
     )
     run_schema = 'error("Spotlight trusted-admission run must be an object")'
     run_normalized = "TRUSTED_RUN=\"$(jq -ce \\"
     run_consume = 'test "$(jq -r .workflow_id <<<"$TRUSTED_RUN")" = "$TRUSTED_WORKFLOW_ID"'
     check_fetch = (
-        'TRUSTED_CHECK_RAW="$(gh api "repos/\${GITHUB_REPOSITORY}/check-runs/'
-        '\${TRUSTED_CHECK_RUN_ID}")"'
+        'TRUSTED_CHECK_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/'
+        '${TRUSTED_CHECK_RUN_ID}")"'
     )
     check_schema = 'error("Spotlight trusted-admission check run must be an object")'
     check_normalized = "TRUSTED_CHECK=\"$(jq -ce \\"
@@ -2547,20 +2547,20 @@ def validate_spotlight_terminal_trusted_admission_evidence(
 
     require(
         terminal.count(
-            'gh api "repos/\${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml"'
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml"'
         ) == 1
         and terminal.count(
-            'gh api "repos/\${GITHUB_REPOSITORY}/actions/runs/\${TRUSTED_RUN_ID}"'
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}"'
         ) == 1
         and terminal.count(
-            'gh api "repos/\${GITHUB_REPOSITORY}/check-runs/\${TRUSTED_CHECK_RUN_ID}"'
+            'gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}"'
         ) == 1,
         "Spotlight terminal trusted-admission endpoint/call-count contract changed",
     )
     for forbidden in (
-        'TRUSTED_WORKFLOW_ID="$(gh api "repos/\${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"',
-        'TRUSTED_RUN="$(gh api "repos/\${GITHUB_REPOSITORY}/actions/runs/\${TRUSTED_RUN_ID}")"',
-        'TRUSTED_CHECK="$(gh api "repos/\${GITHUB_REPOSITORY}/check-runs/\${TRUSTED_CHECK_RUN_ID}")"',
+        'TRUSTED_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"',
+        'TRUSTED_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}")"',
+        'TRUSTED_CHECK="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}")"',
     ):
         require(
             forbidden not in terminal,
