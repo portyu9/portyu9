@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "91586841790d09c244ae33f79ada137ffbcaaa74"
+EXPECTED_GIT_BLOB = "20fb012eb29712899a3c93e0a4ebbd7c99215646"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -332,6 +332,193 @@ def validate_text(text: str) -> None:
     ):
         require(autofix_binding in text,
                 f"trusted capability admission Autofix proof changed: {autofix_binding}")
+
+    origin_call = 'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
+    origin_schema_marker = '--argjson run "$ORIGIN_RUN_ID"'
+    origin_schema_end_marker = "' origin-run.json >/dev/null || {"
+    origin_consume_marker = 'test "$(jq -r .id origin-run.json)" = "$ORIGIN_RUN_ID"'
+    for marker, label in (
+        (origin_call, "Autofix origin-run call"),
+        (origin_schema_marker, "Autofix origin-run schema"),
+        (origin_schema_end_marker, "Autofix origin-run schema end"),
+        (origin_consume_marker, "Autofix origin-run scalar consumption"),
+    ):
+        require(text.count(marker) == 1,
+                f"trusted capability admission candidate-source anchor changed: {label}")
+    origin_call_pos = text.index(origin_call)
+    origin_schema_pos = text.index(origin_schema_marker, origin_call_pos)
+    origin_schema_end_pos = text.index(origin_schema_end_marker, origin_schema_pos) + len(origin_schema_end_marker)
+    origin_consume_pos = text.index(origin_consume_marker, origin_call_pos)
+    require(
+        origin_call_pos < origin_schema_pos < origin_schema_end_pos < origin_consume_pos,
+        "trusted capability admission Autofix origin-run schema must precede scalar consumption",
+    )
+    origin_schema = text[origin_call_pos:origin_consume_pos]
+    for schema_fragment in (
+        'RECEIPT_EVENT="$(jq -r .event verified-receipt.json)"',
+        'test -n "$RECEIPT_EVENT"',
+        '--argjson run "$ORIGIN_RUN_ID"',
+        '--argjson attempt "$RECEIPT_ATTEMPT"',
+        '--arg event "$RECEIPT_EVENT"',
+        '--arg base "$BASE_SHA"',
+        '--arg repo "$TARGET_REPOSITORY"',
+        '(type == "object") and',
+        '(.id | type == "number" and . == floor and . > 0 and . == $run) and',
+        '(.run_attempt | type == "number" and . == floor and . > 0 and . == $attempt) and',
+        '(.workflow_id | type == "number" and . == floor and . > 0) and',
+        '(.run_number | type == "number" and . == floor and . > 0) and',
+        '(.check_suite_id | type == "number" and . == floor and . > 0) and',
+        '(.name | type == "string" and . == "CodeQL Autofix controller") and',
+        '(.path | type == "string" and . == ".github/workflows/codeql-autofix.yml") and',
+        '(.event | type == "string" and . == $event) and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and',
+        '(.status | type == "string" and . == "in_progress") and',
+        '(.conclusion == null) and',
+        '(.repository | type == "object" and',
+        '(.head_repository | type == "object" and',
+        '(.full_name | type == "string" and . == $repo))',
+        'malformed or mismatched Capability Admission CodeQL Autofix origin-run evidence.',
+    ):
+        require(
+            schema_fragment in origin_schema,
+            f"trusted capability admission Autofix origin-run response schema changed: {schema_fragment}",
+        )
+
+    commit_validator = '          validate_candidate_commit_response() {'
+    tree_validator = '          validate_candidate_tree_response() {'
+    blob_validator = '          validate_candidate_blob_response() {'
+    source_reset = '          rm -rf candidate-capability-source'
+    for marker, label in (
+        (commit_validator, "candidate commit validator"),
+        (tree_validator, "candidate tree validator"),
+        (blob_validator, "candidate blob validator"),
+        (source_reset, "candidate source reset"),
+    ):
+        require(text.count(marker) == 1,
+                f"trusted capability admission candidate-source validator anchor changed: {label}")
+
+    commit_schema = text[text.index(commit_validator):text.index(tree_validator)]
+    for schema_fragment in (
+        '(type == "object") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.url | type == "string" and length > 0) and',
+        '(.tree | type == "object" and',
+        '(.parents | type == "array" and',
+        'all(.[];',
+        '(.author | type == "object" and',
+        '(.committer | type == "object" and',
+        '(.message | type == "string" and length > 0)',
+    ):
+        require(
+            schema_fragment in commit_schema,
+            f"trusted capability admission candidate Git commit response schema changed: {schema_fragment}",
+        )
+
+    tree_schema = text[text.index(tree_validator):text.index(blob_validator)]
+    for schema_fragment in (
+        '(type == "object") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $expected) and',
+        '(.url | type == "string" and length > 0) and',
+        '(.truncated | type == "boolean" and . == false) and',
+        '(.tree | type == "array" and length > 0 and length <= 100000 and',
+        '(.path | type == "string" and length > 0 and',
+        '(startswith("/") | not) and',
+        '(contains("//") | not) and',
+        '(contains("\\u0000") | not) and',
+        '(test("(^|/)\\\\.\\\\.?(/|$)") | not)) and',
+        '(.type == "tree" and .mode == "040000") or',
+        '(.type == "blob" and',
+        '(.mode == "100644" or .mode == "100755" or .mode == "120000")) or',
+        '(.type == "commit" and .mode == "160000")',
+        '(.size | type == "number" and . == floor and . >= 0)',
+        '(([.tree[].path] | length) == ([.tree[].path] | unique | length))',
+    ):
+        require(
+            schema_fragment in tree_schema,
+            f"trusted capability admission candidate Git tree response schema changed: {schema_fragment}",
+        )
+
+    blob_schema = text[text.index(blob_validator):text.index(source_reset)]
+    for schema_fragment in (
+        '(type == "object") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $expected) and',
+        '(.url | type == "string" and length > 0) and',
+        '(.size | type == "number" and . == floor and . >= 0) and',
+        '(.encoding | type == "string" and . == "base64") and',
+        '(.content | type == "string" and length > 0)',
+    ):
+        require(
+            schema_fragment in blob_schema,
+            f"trusted capability admission candidate Git blob response schema changed: {schema_fragment}",
+        )
+
+    source_commit_call = '          COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    source_commit_validate = '          validate_candidate_commit_response "$COMMIT" "$HEAD_SHA" || {'
+    source_commit_consume = '          test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"'
+    source_tree_call = '          TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"'
+    source_tree_validate = '          validate_candidate_tree_response "$TREE" "$TREE_SHA" || {'
+    source_tree_consume = '          test "$(jq -r .truncated <<<"$TREE")" = "false"'
+    for marker, label in (
+        (source_commit_call, "candidate commit fetch"),
+        (source_commit_validate, "candidate commit validation"),
+        (source_commit_consume, "candidate commit consumption"),
+        (source_tree_call, "candidate tree fetch"),
+        (source_tree_validate, "candidate tree validation"),
+        (source_tree_consume, "candidate tree consumption"),
+    ):
+        require(text.count(marker) == 1,
+                f"trusted capability admission candidate-source ordering anchor changed: {label}")
+    source_commit_call_pos = text.index(source_commit_call)
+    source_commit_validate_pos = text.index(source_commit_validate, source_commit_call_pos)
+    source_commit_consume_pos = text.index(source_commit_consume, source_commit_call_pos)
+    source_tree_call_pos = text.index(source_tree_call, source_commit_consume_pos)
+    source_tree_validate_pos = text.index(source_tree_validate, source_tree_call_pos)
+    source_tree_consume_pos = text.index(source_tree_consume, source_tree_call_pos)
+    require(
+        source_commit_call_pos < source_commit_validate_pos < source_commit_consume_pos
+        < source_tree_call_pos < source_tree_validate_pos < source_tree_consume_pos,
+        "trusted capability admission candidate commit/tree schemas must precede scalar consumption",
+    )
+
+    selected_loop = '          for PATH_VALUE in "${SELECTED_PATHS[@]}"; do'
+    dependabot_source = '          if [ "$DEPENDABOT" = "true" ]; then'
+    selected_loop_pos = text.index(selected_loop, source_tree_consume_pos)
+    dependabot_source_pos = text.index(dependabot_source, selected_loop_pos)
+    primary_blob_call = '            BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"'
+    primary_blob_validate = '            validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {'
+    primary_blob_consume = '            test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"'
+    primary_blob_decode = '            jq -r .content <<<"$BLOB" | tr -d \'\\n\' | base64 --decode > "candidate-capability-source/$PATH_VALUE"'
+    primary_blob_call_pos = text.index(primary_blob_call, selected_loop_pos, dependabot_source_pos)
+    primary_blob_validate_pos = text.index(primary_blob_validate, primary_blob_call_pos, dependabot_source_pos)
+    primary_blob_consume_pos = text.index(primary_blob_consume, primary_blob_call_pos, dependabot_source_pos)
+    primary_blob_decode_pos = text.index(primary_blob_decode, primary_blob_call_pos, dependabot_source_pos)
+    require(
+        primary_blob_call_pos < primary_blob_validate_pos < primary_blob_consume_pos < primary_blob_decode_pos,
+        "trusted capability admission candidate blob schema must precede scalar/content consumption",
+    )
+
+    supplemental_blob_call = '              BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"'
+    supplemental_blob_validate = '              validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {'
+    supplemental_blob_consume = '              test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"'
+    supplemental_blob_decode = '              jq -r .content <<<"$BLOB" | tr -d \'\\n\' | base64 --decode > "candidate-capability-source/$PATH_VALUE"'
+    supplemental_blob_call_pos = text.index(supplemental_blob_call, dependabot_source_pos)
+    supplemental_blob_validate_pos = text.index(supplemental_blob_validate, supplemental_blob_call_pos)
+    supplemental_blob_consume_pos = text.index(supplemental_blob_consume, supplemental_blob_call_pos)
+    supplemental_blob_decode_pos = text.index(supplemental_blob_decode, supplemental_blob_call_pos)
+    require(
+        supplemental_blob_call_pos < supplemental_blob_validate_pos
+        < supplemental_blob_consume_pos < supplemental_blob_decode_pos,
+        "trusted capability admission Dependabot supplemental blob schema must precede scalar/content consumption",
+    )
+    for error_fragment in (
+        "malformed or mismatched Capability Admission candidate Git commit evidence.",
+        "malformed or ambiguous Capability Admission candidate Git tree evidence.",
+        "malformed or mismatched Capability Admission candidate Git blob evidence.",
+        "malformed or mismatched Capability Admission Dependabot supplemental Git blob evidence.",
+    ):
+        require(error_fragment in text,
+                f"trusted capability admission candidate-source schema must fail visibly: {error_fragment}")
 
     for dependabot_binding in (
         "dependabot-admission)",
@@ -706,6 +893,36 @@ def expect_runtime_schema_reorder_failure(
     else:
         raise ValueError("Capability Admission accepted runtime schema-after-consumption reordering")
 
+def expect_validator_reorder_failure(
+    text: str,
+    *,
+    call_marker: str,
+    validator_marker: str,
+    consume_marker: str,
+    validator_end_marker: str,
+    expected: str,
+) -> None:
+    call_start = text.index(call_marker)
+    validator_start = text.index(validator_marker, call_start)
+    consume_start = text.index(consume_marker, call_start)
+    validator_end = text.index(validator_end_marker, validator_start) + len(validator_end_marker)
+    require(
+        call_start < validator_start < validator_end <= consume_start,
+        "Capability Admission validator reorder self-test source ordering changed",
+    )
+    validator_block = text[validator_start:validator_end]
+    without_validator = text[:validator_start] + text[validator_end:]
+    relocated_consume = without_validator.index(consume_marker, call_start)
+    consume_end = without_validator.index("\n", relocated_consume) + 1
+    mutated = without_validator[:consume_end] + validator_block + without_validator[consume_end:]
+    try:
+        validate_text(mutated)
+    except ValueError as exc:
+        require(expected in str(exc),
+                f"Capability Admission validator reorder self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError(f"Capability Admission accepted validation-after-consumption ordering: {expected}")
+
 
 def self_test() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
@@ -893,6 +1110,103 @@ def self_test() -> None:
         schema_marker=compare_schema_marker,
         consume_marker=compare_consume_marker,
     )
+    origin_call = 'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
+    origin_consume = 'test "$(jq -r .id origin-run.json)" = "$ORIGIN_RUN_ID"'
+    expect_scoped_schema_failure(
+        text,
+        start_marker=origin_call,
+        end_marker=origin_consume,
+        old='(type == "object") and\n              (.id | type == "number" and . == floor and . > 0 and . == $run) and',
+        new='(type != "null") and\n              (.id == $run) and',
+        expected="Autofix origin-run response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker=origin_call,
+        end_marker=origin_consume,
+        old='(.status | type == "string" and . == "in_progress") and',
+        new='(.status == "in_progress") and',
+        expected="Autofix origin-run response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker=origin_call,
+        end_marker=origin_consume,
+        old='(.conclusion == null) and',
+        new='has("conclusion") and',
+        expected="Autofix origin-run response schema",
+    )
+
+    commit_validator = '          validate_candidate_commit_response() {'
+    tree_validator = '          validate_candidate_tree_response() {'
+    blob_validator = '          validate_candidate_blob_response() {'
+    source_reset = '          rm -rf candidate-capability-source'
+    expect_scoped_schema_failure(
+        text,
+        start_marker=commit_validator,
+        end_marker=tree_validator,
+        old='(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        new='(.sha == $head) and',
+        expected="candidate Git commit response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker=tree_validator,
+        end_marker=blob_validator,
+        old='(.truncated | type == "boolean" and . == false) and',
+        new='(.truncated == false) and',
+        expected="candidate Git tree response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker=tree_validator,
+        end_marker=blob_validator,
+        old='(([.tree[].path] | length) == ([.tree[].path] | unique | length))',
+        new='([.tree[].path] | length) > 0',
+        expected="candidate Git tree response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker=blob_validator,
+        end_marker=source_reset,
+        old='(.encoding | type == "string" and . == "base64") and',
+        new='(.encoding == "base64") and',
+        expected="candidate Git blob response schema",
+    )
+    expect_scoped_schema_failure(
+        text,
+        start_marker=blob_validator,
+        end_marker=source_reset,
+        old='(.content | type == "string" and length > 0)',
+        new='(.content != null)',
+        expected="candidate Git blob response schema",
+    )
+
+    expect_validator_reorder_failure(
+        text,
+        call_marker='          COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        validator_marker='          validate_candidate_commit_response "$COMMIT" "$HEAD_SHA" || {',
+        consume_marker='          test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"',
+        validator_end_marker='            exit 1\n          }\n',
+        expected="candidate commit/tree schemas must precede scalar consumption",
+    )
+    expect_validator_reorder_failure(
+        text,
+        call_marker='          TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"',
+        validator_marker='          validate_candidate_tree_response "$TREE" "$TREE_SHA" || {',
+        consume_marker='          test "$(jq -r .truncated <<<"$TREE")" = "false"',
+        validator_end_marker='            exit 1\n          }\n',
+        expected="candidate commit/tree schemas must precede scalar consumption",
+    )
+    expect_validator_reorder_failure(
+        text,
+        call_marker='            BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"',
+        validator_marker='            validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {',
+        consume_marker='            test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"',
+        validator_end_marker='              exit 1\n            }\n',
+        expected="candidate blob schema must precede scalar/content consumption",
+    )
+
     expect_check_schema_failure(text, '(type == "object") and', '(type != "null") and')
     expect_check_schema_failure(
         text,
@@ -990,6 +1304,6 @@ if __name__ == "__main__":
     validate()
     print(
         "Trusted capability admission workflow contract passed: exact bytes; base-only execution; distinct exact ordinary and "
-        "delegated evaluator tree bindings; immutable Autofix provenance; deterministic Spotlight recovery with typed pre-consumption candidate topology evidence; exact native "
-        "Dependabot release/delegation reproof; data-only candidate TCB evaluation; and one bounded exact-head check publisher with a typed pre-consumption creation-response boundary."
+        "delegated evaluator tree bindings; immutable Autofix provenance with typed origin-run evidence; deterministic Spotlight recovery with typed pre-consumption candidate topology evidence; exact native "
+        "Dependabot release/delegation reproof; typed commit/tree/blob boundaries before data-only candidate TCB materialization; and one bounded exact-head check publisher with a typed pre-consumption creation-response boundary."
     )
