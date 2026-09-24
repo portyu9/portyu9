@@ -80,6 +80,9 @@ IMMUTABLE_PROJECTED = (
     '          # Validate the complete candidate object before first publication or retry reuse.\n'
     '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
 )
+
+HARDENED_RUN_BRANCH_PROOF = '                  (.head_branch != $branch) or'
+LEGACY_RUN_BRANCH_PROOF = 'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"'
 CURRENT_MAIN_CAPTURE = (
     '          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"\n'
     '          test "$CURRENT_MAIN_SHA" = "$MERGE_SHA"\n'
@@ -346,7 +349,52 @@ def project_item9_sync_with_marker(sync: str) -> str:
 
     sync = project_ancestry_reconcile_to_same_base(sync)
     sync = project_native_review_gate_to_legacy_order(sync)
-    projected = ORIGINAL_PROJECT_ITEM9_SYNC(sync)
+    core.require(
+        sync.count(HARDENED_RUN_BRANCH_PROOF) == 1,
+        "Spotlight authority projection lost hardened protected workflow branch proof",
+    )
+    core.require(
+        LEGACY_RUN_BRANCH_PROOF not in sync,
+        "Spotlight authority projection found retired raw workflow-run branch proof in production",
+    )
+    sync_for_item9 = sync.replace(
+        HARDENED_RUN_BRANCH_PROOF,
+        LEGACY_RUN_BRANCH_PROOF,
+        1,
+    )
+    api_surface_projection = (
+        (
+            '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \\\n'
+            '            > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"\n',
+            '          CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"\n',
+        ),
+        (
+            '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" \\\n'
+            '            > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"\n',
+            '          DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"\n',
+        ),
+        (
+            '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" \\\n'
+            '            > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"\n',
+            '          PROFILE_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"\n',
+        ),
+        (
+            '            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \\\n'
+            '              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"\n',
+            '            RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"\n',
+        ),
+    )
+    for hardened, legacy_api in api_surface_projection:
+        core.require(
+            sync_for_item9.count(hardened) == 1,
+            f"Spotlight authority projection lost hardened API read surface: {hardened.splitlines()[0]}",
+        )
+        core.require(
+            legacy_api not in sync_for_item9,
+            f"Spotlight production workflow regained retired scalar API read: {legacy_api.strip()}",
+        )
+        sync_for_item9 = sync_for_item9.replace(hardened, legacy_api, 1)
+    projected = ORIGINAL_PROJECT_ITEM9_SYNC(sync_for_item9)
     if projected.count(SPOTLIGHT_REVIEWER_STEWARDSHIP) != 1:
         raise ValueError("Spotlight item-9 reviewer-stewardship projection anchor changed")
     projected = projected.replace(SPOTLIGHT_REVIEWER_STEWARDSHIP, "", 1)

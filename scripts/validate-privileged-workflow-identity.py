@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v82"
+VERSION = "governed-workflow-byte-identity-v83"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "e5f7f01f1f709515dae282606345fdfb01a7fc70",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "a4e60a9b05326f6447d62c4f693a3b18970ac857",
+    ".github/workflows/spotlight-link-sync.yml": "db6afb3275db9660760643cd771fb0b0e2990448",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -45,6 +45,9 @@ IMMUTABLE_PROJECTED = (
     f'          {IMMUTABLE_COMMENT}\n'
     '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
 )
+
+HARDENED_RUN_BRANCH_PROOF = '                  (.head_branch != $branch) or'
+LEGACY_RUN_BRANCH_PROOF = 'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"'
 
 
 def require(condition: bool, message: str) -> None:
@@ -961,7 +964,20 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     require(legacy.count(IMMUTABLE_ANCHOR) == 1,
             "Spotlight v21 immutable-candidate projection anchor changed")
     projected_immutable = legacy.replace(IMMUTABLE_ANCHOR, IMMUTABLE_PROJECTED, 1)
-    v21.validate_spotlight_immutable_candidates(projected_immutable)
+    require(
+        projected_immutable.count(HARDENED_RUN_BRANCH_PROOF) == 1,
+        "Spotlight hardened protected workflow candidate-branch proof changed",
+    )
+    require(
+        LEGACY_RUN_BRANCH_PROOF not in projected_immutable,
+        "Spotlight production workflow regained raw protected workflow branch consumption",
+    )
+    v21_immutable = projected_immutable.replace(
+        HARDENED_RUN_BRANCH_PROOF,
+        LEGACY_RUN_BRANCH_PROOF,
+        1,
+    )
+    v21.validate_spotlight_immutable_candidates(v21_immutable)
     projected = projected_immutable.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
     require(projected != projected_immutable,
             "Spotlight v21 mutation-budget projection could not isolate item-10 merge gating")
@@ -2119,6 +2135,24 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'exists:(($matches | length) == 1)',
         'error("created Spotlight automation-approval comment actor mismatch")',
         'test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"',
+        'error("Spotlight protected workflow definition must be an object")',
+        'error("Spotlight protected workflow definition id is invalid")',
+        'error("Spotlight protected workflow definition identity changed")',
+        'error("Spotlight protected workflow definition URLs are invalid")',
+        'error("Spotlight protected workflow-run response must be an object")',
+        'error("Spotlight protected workflow-run total_count is invalid")',
+        'error("Spotlight protected workflow_runs shape changed")',
+        'error("Spotlight protected workflow-run response is incomplete")',
+        'error("Spotlight protected workflow-run set is ambiguous")',
+        'error("Spotlight protected workflow-run item schema changed")',
+        'error("Spotlight protected workflow run ids are not unique")',
+        'error("Spotlight protected workflow ids are not unique")',
+        'error("Spotlight protected workflow check-suite ids are not unique")',
+        '> "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json"',
+        'RUNS_TOTAL="$(jq -r .totalCount "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json")"',
+        'RUNS="$(jq -c .runs "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json")"',
+        'CHECK_SUITE_ID="$(jq -r .checkSuiteId <<<"$RUN")"',
+        'RUN_ATTEMPT="$(jq -r .runAttempt <<<"$RUN")"',
     )
     for fragment in spotlight_fragments:
         require(fragment in spotlight, f"Spotlight event-driven admission proof contract is missing: {fragment}")
@@ -2140,6 +2174,28 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
             "Spotlight approval comment dedupe must not consume raw paginated comments")
     require("python3 scripts/automation_approval_comment.py" not in spotlight,
             "Spotlight approval job must not acquire runner-resident Python authority")
+    approve = job_block(spotlight, "approve", "authorize")
+    for forbidden in (
+        'CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"',
+        'DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"',
+        'PROFILE_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"',
+        'RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"',
+        'jq -r .head_sha <<<"$RUN"',
+        'jq -r .head_branch <<<"$RUN"',
+        'jq -r .repository.full_name <<<"$RUN"',
+        'jq -r .head_repository.full_name <<<"$RUN"',
+    ):
+        require(
+            forbidden not in approve,
+            f"Spotlight protected workflow evidence regressed to raw scalar consumption: {forbidden}",
+        )
+    require(
+        approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml"') == 1
+        and approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml"') == 1
+        and approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml"') == 1
+        and approve.count('repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100') == 1,
+        "Spotlight protected workflow evidence endpoint inventory changed",
+    )
 
 
 
@@ -2432,7 +2488,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
