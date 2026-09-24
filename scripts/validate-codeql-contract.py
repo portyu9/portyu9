@@ -450,7 +450,8 @@ def self_test_autofix_read_singleton_evidence(good: str) -> None:
         (
             good.replace(
                 '          assert_main_sha "$BASE_SHA"',
-                '          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"',
+                '          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n'
+                '          assert_main_sha "$BASE_SHA"',
                 1,
             ),
             "untyped singleton evidence consumption",
