@@ -1471,6 +1471,7 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
 def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     read_validator = "python3 scripts/codeql_autofix_controller.py read-ref-response"
     workflow_validator = "python3 scripts/codeql_autofix_controller.py workflow-definition-response"
+    pr_validator = "python3 scripts/codeql_autofix_controller.py pull-request-response"
     require(
         autofix.count(read_validator) == 4,
         "CodeQL Autofix read-ref response validator identity changed",
@@ -1478,6 +1479,10 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     require(
         autofix.count(workflow_validator) == 3,
         "CodeQL Autofix workflow-definition response validator identity changed",
+    )
+    require(
+        autofix.count(pr_validator) == 4,
+        "CodeQL Autofix pull-request singleton response validator identity changed",
     )
     require(
         autofix.count("assert_main_sha() {") == 3
@@ -1497,6 +1502,9 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
         'actions/workflows/codeql.yml" --jq .id',
         'actions/workflows/dependency-review.yml" --jq .id',
         'actions/workflows/profile-quality.yml" --jq .id',
+        'pulls/${PR_NUMBER}" --jq',
+        'jq -r .head.sha pr.json',
+        'jq -r .state final-pr.json',
         "final-main-ref.json",
         "assert_main_is_merge_sha",
     ):
@@ -1561,6 +1569,65 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
         require(
             fetch_pos < validate_pos < consume_pos,
             "CodeQL Autofix workflow-definition evidence must be typed before ID use",
+        )
+        cursor = consume_pos
+
+    pr_contracts = (
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
+            '--response-file "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
+            '--base-sha "$BASE_SHA"',
+            '--head-sha "$HEAD_SHA"',
+            '--out "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json"',
+            'test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$HEAD_SHA"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
+            '--response-file "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
+            '--base-sha "$BASE_SHA"',
+            '--head-sha "$HEAD_SHA"',
+            '--out "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json"',
+            'test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json")" = "$HEAD_SHA"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > pr.json',
+            '--response-file pr.json',
+            '--base-sha "$BASE_SHA"',
+            '--head-sha "$EXPECTED_HEAD_SHA"',
+            '--out pr-normalized.json',
+            'test "$(jq -r .headSha pr-normalized.json)" = "$EXPECTED_HEAD_SHA"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json',
+            '--response-file final-pr.json',
+            '--base-sha "$ADMITTED_BASE_SHA"',
+            '--head-sha "$ADMITTED_HEAD_SHA"',
+            '--out final-pr-normalized.json',
+            'test "$(jq -r .headSha final-pr-normalized.json)" = "$ADMITTED_HEAD_SHA"',
+        ),
+    )
+    cursor = -1
+    for fetch, response, base_arg, head_arg, output, consume in pr_contracts:
+        fetch_pos = autofix.index(fetch, cursor + 1)
+        validate_pos = autofix.index(pr_validator, fetch_pos)
+        consume_pos = autofix.index(consume, validate_pos)
+        block = autofix[validate_pos:consume_pos]
+        for fragment in (
+            response,
+            '--pr-number "$PR_NUMBER"',
+            '--repository "$TARGET_REPOSITORY"',
+            base_arg,
+            '--branch "$BRANCH"',
+            head_arg,
+            output,
+        ):
+            require(
+                fragment in block,
+                f"CodeQL Autofix pull-request singleton identity changed: {fragment}",
+            )
+        require(
+            fetch_pos < validate_pos < consume_pos,
+            "CodeQL Autofix pull-request singleton must be typed before scalar use",
         )
         cursor = consume_pos
 
