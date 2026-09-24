@@ -2796,6 +2796,21 @@ def validate_profile_stats_spotlight_dispatch_evidence(
                 '(.run_attempt | tostring | length > 0) and',
                 "run collection schema changed",
             ),
+            (
+                '(.check_suite_node_id | type == "string" and length > 0) and',
+                '(.check_suite_node_id | tostring | length > 0) and',
+                "run collection schema changed",
+            ),
+            (
+                '(.full_name | type == "string" and . == $repo_name)) and',
+                '(.full_name | tostring == $repo_name)) and',
+                "repository/head-repository identity binding changed",
+            ),
+            (
+                '(. == "waiting") or (. == "pending") or (. == "completed");',
+                '(. == "waiting") or (. == "pending") or (. == "made_up");',
+                "status/conclusion allowlist changed",
+            ),
         ):
             require(
                 current in profile,
