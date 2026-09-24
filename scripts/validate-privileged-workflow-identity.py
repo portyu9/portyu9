@@ -8,10 +8,10 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v91"
+VERSION = "governed-workflow-byte-identity-v92"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
-    ".github/workflows/profile-quality.yml": "3267d08986188a9d814bba58fa0ff891f92c7db0",
+    ".github/workflows/profile-quality.yml": "eea60552e520538142ec3890ea07b9c47ce9809a",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
     ".github/workflows/spotlight-link-sync.yml": "e9ba990a508c8cf6493ad91661294a8a2807beb3",
 }
@@ -3510,6 +3510,25 @@ def validate_profile_quality_portfolio_liveness_boundary(
         "Profile Quality integration must have exactly one offline canonical profile-evidence generation boundary",
     )
 
+    require(
+        "--require-live" not in integration
+        and "scripts/validate-profile-evidence-boundary.py" not in integration,
+        "Profile Quality integration must not execute the production live Portfolio/Spotlight validation boundary",
+    )
+    for fragment in (
+        "python3 scripts/validate-portfolio-evidence-ledger.py integration-portfolio-evidence",
+        "python3 scripts/validate-engineering-spotlight.py integration-engineering-spotlight",
+        "--ledger integration-portfolio-evidence/portfolio-evidence-ledger.json",
+        "python3 scripts/validate-profile-evidence-subjects.py",
+        '--signal-field-dir "$SIGNAL_FIELD_DIR"',
+        "--spotlight-dir integration-engineering-spotlight",
+        "--portfolio-ledger-dir integration-portfolio-evidence",
+    ):
+        require(
+            fragment in integration,
+            f"Profile Quality deterministic local evidence revalidation is missing: {fragment}",
+        )
+
     live_anchor = (
         'python3 source/scripts/generate-profile-evidence.py \\\n'
         '            --signal-field-dir "$READY_DIR" \\\n'
@@ -3621,7 +3640,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal protected workflow-run certificate provenance typed before MAC equality consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority while Profile Stats live evidence remains mandatory · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal protected workflow-run certificate provenance typed before MAC equality consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness and production live-boundary execution are excluded from protected merge authority while deterministic local Ledger/Spotlight/subject revalidation and Profile Stats live evidence remain mandatory · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:
