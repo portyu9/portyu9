@@ -33,10 +33,10 @@ def main() -> int:
             portfolio_ledger_dir=args.portfolio_ledger_dir,
         )
         removed_live_flags = 0
-        for index, (script, command_args) in enumerate(commands, start=1):
-            stage = payload["stages"][index - 1]
-            effective_args = command_args
-            if args.offline:
+        if args.offline:
+            offline_commands: list[tuple[Path, tuple[str, ...]]] = []
+            for index, (script, command_args) in enumerate(commands):
+                stage = payload["stages"][index]
                 removed = command_args.count("--require-live")
                 if removed:
                     if stage["id"] not in {"portfolio-ledger-live", "engineering-spotlight-live"}:
@@ -47,18 +47,21 @@ def main() -> int:
                         raise ValueError(
                             f"offline validation expected exactly one live flag for {stage['id']}"
                         )
-                    effective_args = tuple(
+                    command_args = tuple(
                         value for value in command_args if value != "--require-live"
                     )
                     removed_live_flags += removed
+                offline_commands.append((script, command_args))
+            if removed_live_flags != 2:
+                raise ValueError(
+                    "offline validation must relax exactly the reviewed Portfolio and Spotlight live assertions"
+                )
+            commands = tuple(offline_commands)
+
+        for index, (script, command_args) in enumerate(commands, start=1):
+            stage = payload["stages"][index - 1]
             print(f"[profile-evidence-boundary {index:02d}/{len(commands):02d}] {stage['id']}: {script.name}", flush=True)
-            subprocess.run([sys.executable, str(script), *effective_args], check=True)
-        if args.offline and removed_live_flags != 2:
-            raise ValueError(
-                "offline validation must relax exactly the reviewed Portfolio and Spotlight live assertions"
-            )
-        if not args.offline and removed_live_flags != 0:
-            raise ValueError("live validation unexpectedly altered canonical validator arguments")
+            subprocess.run([sys.executable, str(script), *command_args], check=True)
         mode = "deterministic local/offline subject closure" if args.offline else "exact live subject closure"
         print(
             f"Profile evidence candidate boundary passed: {payload['version']} · "
