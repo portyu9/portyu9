@@ -112,7 +112,7 @@
               "observation": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["acceptedStatus", "previousRunHighWater", "downstreamRun"],
+                "required": ["acceptedStatus", "previousRunHighWater", "downstreamRun", "sourceAncestry"],
                 "properties": {
                   "acceptedStatus": {"const": 204},
                   "previousRunHighWater": {"$ref": "#/$defs/nonNegativeInteger"},
@@ -154,6 +154,19 @@
                       "repositoryId": {"$ref": "#/$defs/positiveInteger"},
                       "headRepository": {"const": "portyu9/portyu9"},
                       "headRepositoryId": {"$ref": "#/$defs/positiveInteger"}
+                    }
+                  },
+                  "sourceAncestry": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["baseSha", "headSha", "status", "mergeBaseSha", "aheadBy", "behindBy"],
+                    "properties": {
+                      "baseSha": {"$ref": "#/$defs/sha40"},
+                      "headSha": {"$ref": "#/$defs/sha40"},
+                      "status": {"enum": ["identical", "ahead"]},
+                      "mergeBaseSha": {"$ref": "#/$defs/sha40"},
+                      "aheadBy": {"$ref": "#/$defs/nonNegativeInteger"},
+                      "behindBy": {"const": 0}
                     }
                   }
                 }
