@@ -648,6 +648,13 @@
       "rationale": "Authorize #730's exact isolated Profile Generator Compatibility Witness signer: one same-run digest-checked witness download, predicate/subject SHA-256 plus four-file raw Signal Field inventory proof, and one pinned actions/attest call under contents:read, id-token:write, attestations:write. No checkout, authored Python, Git/gh/token/secret, candidate execution, repository/PR/check/ref/Actions mutation, generator/retry broadening, check reduction, direct-main write, or bypass."
     },
     {
+      "id": "cap-profile-stats-dispatch-adr-main-advance-v1",
+      "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "expansionSha256": "cc3ed97e8469fdb96632323d2977bd04ae5ee5c0759f80b1fea2a0ed7d88f7fa",
+      "rationale": "Authorize frozen #1000's protected-TCB ADR liveness repair: preserve the leased base and exact high-water/bot/workflow/repository bindings; accept a later downstream main head only when typed Git compare evidence proves identical/ahead ancestry with exact merge base and behind_by=0. Composite Workflow Capability is unchanged; no trigger, permission, secret, mutation, merge/ruleset authority, required-check reduction, direct-main write, or bypass is added."
+    },
+    {
       "id": "cap-pull-review-evidence-schema-hardening",
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
