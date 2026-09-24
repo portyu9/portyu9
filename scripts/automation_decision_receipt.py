@@ -66,6 +66,14 @@ DISPATCH_RUN_KEYS = {
     "headRepository",
     "headRepositoryId",
 }
+DISPATCH_ANCESTRY_KEYS = {
+    "baseSha",
+    "headSha",
+    "status",
+    "mergeBaseSha",
+    "aheadBy",
+    "behindBy",
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -107,6 +115,11 @@ def env_value(env: dict[str, str], name: str, pattern: re.Pattern[str] | None = 
 
 def positive_int(value: Any, label: str) -> int:
     require(type(value) is int and value > 0, f"{label} must be one positive integer")
+    return value
+
+
+def nonnegative_int(value: Any, label: str) -> int:
+    require(type(value) is int and value >= 0, f"{label} must be one non-negative integer")
     return value
 
 
@@ -181,7 +194,7 @@ def validate_dispatch(effect: dict[str, Any], path: str, lease: dict[str, str]) 
             "Spotlight dispatch target changed")
     observation = exact_object(
         effect["observation"],
-        {"acceptedStatus", "previousRunHighWater", "downstreamRun"},
+        {"acceptedStatus", "previousRunHighWater", "downstreamRun", "sourceAncestry"},
         "Spotlight dispatch observation",
     )
     require(observation["acceptedStatus"] == 204,
@@ -201,14 +214,36 @@ def validate_dispatch(effect: dict[str, Any], path: str, lease: dict[str, str]) 
     require(downstream["path"] == SPOTLIGHT_WORKFLOW and downstream["event"] == "workflow_dispatch"
             and downstream["headBranch"] == "main",
             "Spotlight dispatch downstream workflow/event/branch identity changed")
-    require(sha40(downstream["headSha"], "Spotlight dispatch downstream head") == lease["baseSha"],
-            "Spotlight dispatch downstream head differs from leased source main")
+    downstream_head = sha40(downstream["headSha"], "Spotlight dispatch downstream head")
     require(downstream["actorLogin"] == BOT_LOGIN and downstream["actorId"] == BOT_ID
             and downstream["triggeringActorLogin"] == BOT_LOGIN and downstream["triggeringActorId"] == BOT_ID,
             "Spotlight dispatch downstream actor identity changed")
     require(downstream["repository"] == REPOSITORY and downstream["headRepository"] == REPOSITORY
             and downstream["repositoryId"] == downstream["headRepositoryId"],
             "Spotlight dispatch downstream repository identity changed")
+
+    ancestry = exact_object(
+        observation["sourceAncestry"], DISPATCH_ANCESTRY_KEYS,
+        "Spotlight dispatch downstream source ancestry",
+    )
+    base = lease["baseSha"]
+    require(sha40(ancestry["baseSha"], "Spotlight dispatch ancestry base") == base
+            and sha40(ancestry["headSha"], "Spotlight dispatch ancestry head") == downstream_head,
+            "Spotlight dispatch downstream source ancestry SHA binding changed")
+    require(sha40(ancestry["mergeBaseSha"], "Spotlight dispatch ancestry merge base") == base,
+            "Spotlight dispatch downstream source ancestry merge base escaped leased main")
+    require(ancestry["status"] in {"identical", "ahead"},
+            "Spotlight dispatch downstream source ancestry is not a forward main transition")
+    ahead = nonnegative_int(ancestry["aheadBy"], "Spotlight dispatch downstream ancestry aheadBy")
+    behind = nonnegative_int(ancestry["behindBy"], "Spotlight dispatch downstream ancestry behindBy")
+    require(behind == 0,
+            "Spotlight dispatch downstream source ancestry moved behind leased main")
+    if ancestry["status"] == "identical":
+        require(downstream_head == base and ahead == 0,
+                "Spotlight dispatch identical downstream source ancestry is inconsistent")
+    else:
+        require(downstream_head != base and ahead > 0,
+                "Spotlight dispatch ahead downstream source ancestry is inconsistent")
 
 
 def validate_stale_cleanup(effect: dict[str, Any], path: str) -> None:
@@ -434,6 +469,14 @@ def fixture(path: str) -> tuple[dict[str, Any], dict[str, str]]:
                         "headRepository": REPOSITORY,
                         "headRepositoryId": 1355082509,
                     },
+                    "sourceAncestry": {
+                        "baseSha": base,
+                        "headSha": base,
+                        "status": "identical",
+                        "mergeBaseSha": base,
+                        "aheadBy": 0,
+                        "behindBy": 0,
+                    },
                 },
             }]
         }, env
@@ -526,9 +569,30 @@ def self_test() -> None:
     stale_downstream["effects"][0]["observation"]["downstreamRun"]["runId"] = 9000
     expect_failure(stale_downstream, dict(profile_env), "high-water")
 
-    wrong_dispatch_head = copy.deepcopy(dispatch)
-    wrong_dispatch_head["effects"][0]["observation"]["downstreamRun"]["headSha"] = "4" * 40
-    expect_failure(wrong_dispatch_head, dict(profile_env), "leased source main")
+    advanced_dispatch = copy.deepcopy(dispatch)
+    advanced_dispatch["effects"][0]["observation"]["downstreamRun"]["headSha"] = "4" * 40
+    advanced_dispatch["effects"][0]["observation"]["sourceAncestry"].update({
+        "headSha": "4" * 40,
+        "status": "ahead",
+        "aheadBy": 2,
+    })
+    build(copy.deepcopy(advanced_dispatch), dict(profile_env))
+
+    wrong_dispatch_head = copy.deepcopy(advanced_dispatch)
+    wrong_dispatch_head["effects"][0]["observation"]["sourceAncestry"]["headSha"] = "5" * 40
+    expect_failure(wrong_dispatch_head, dict(profile_env), "SHA binding")
+
+    diverged_dispatch = copy.deepcopy(advanced_dispatch)
+    diverged_dispatch["effects"][0]["observation"]["sourceAncestry"]["status"] = "diverged"
+    expect_failure(diverged_dispatch, dict(profile_env), "forward main transition")
+
+    behind_dispatch = copy.deepcopy(advanced_dispatch)
+    behind_dispatch["effects"][0]["observation"]["sourceAncestry"]["behindBy"] = 1
+    expect_failure(behind_dispatch, dict(profile_env), "moved behind")
+
+    wrong_merge_base = copy.deepcopy(advanced_dispatch)
+    wrong_merge_base["effects"][0]["observation"]["sourceAncestry"]["mergeBaseSha"] = "5" * 40
+    expect_failure(wrong_merge_base, dict(profile_env), "merge base")
 
     wrong_dispatch_actor = copy.deepcopy(dispatch)
     wrong_dispatch_actor["effects"][0]["observation"]["downstreamRun"]["actorLogin"] = "portyu9"
