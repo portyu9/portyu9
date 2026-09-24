@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v77"
+VERSION = "governed-workflow-byte-identity-v78"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "df5f75635d678c6c48221f60dbb9653cb10900fc",
+    ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "e5f7f01f1f709515dae282606345fdfb01a7fc70",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
     ".github/workflows/spotlight-link-sync.yml": "398013d1a406dbb18b7e88821c638a9bcf35e433",
@@ -1170,6 +1170,95 @@ def validate_bot_review_single_object_evidence_schema(bot_review: str) -> None:
     )
 
 
+def validate_bot_review_identity_ref_evidence_schema(bot_review: str) -> None:
+    for fragment in (
+        'validate_git_ref_object() {',
+        'local response="$1" expected_branch="$2"',
+        '--arg ref "refs/heads/${expected_branch}"',
+        '(.ref | type == "string" and . == $ref) and',
+        '(.type | type == "string" and . == "commit") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.url | type == "string" and length > 0)',
+        'REVIEW_IDENTITY_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api user)"',
+        '(.login | type == "string" and . == "portyu9")',
+        'ERROR: malformed or mismatched portyu9 review-token identity response.',
+        'ERROR: malformed governed reviewer initial main-ref evidence.',
+        'ERROR: malformed governed reviewer current-main ref evidence.',
+        'ERROR: malformed governed reviewer current-head ref evidence for #${PR_NUMBER}.',
+        'ERROR: malformed governed reviewer final-main ref evidence.',
+        'ERROR: malformed governed reviewer final-head ref evidence for #${PR_NUMBER}.',
+    ):
+        require(
+            fragment in bot_review,
+            f"Bot PR reviewer identity/ref evidence schema contract is missing: {fragment}",
+        )
+
+    require(
+        bot_review.count('validate_git_ref_object "$') == 5,
+        "Bot PR reviewer must schema-validate exactly five authority-relevant Git-ref reads",
+    )
+    for forbidden in (
+        'gh api user --jq .login',
+        'git/ref/heads/main" --jq .object.sha',
+        'git/ref/heads/${HEAD_REF}" --jq .object.sha',
+    ):
+        require(
+            forbidden not in bot_review,
+            f"Bot PR reviewer regressed to direct singleton scalar consumption: {forbidden}",
+        )
+
+    identity_fetch = 'REVIEW_IDENTITY_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api user)"'
+    identity_schema = '(.login | type == "string" and . == "portyu9")'
+    identity_consume = 'REVIEW_LOGIN="$(jq -r .login <<<"$REVIEW_IDENTITY_RESPONSE")"'
+    require(
+        bot_review.index(identity_fetch)
+        < bot_review.index(identity_schema, bot_review.index(identity_fetch))
+        < bot_review.index(identity_consume),
+        "Bot PR reviewer must type the review-token user response before login consumption",
+    )
+
+    boundaries = (
+        (
+            'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+            'validate_git_ref_object "$MAIN_REF_RESPONSE" "main"',
+            'MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"',
+            "initial main-ref",
+        ),
+        (
+            'CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+            'validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "main"',
+            'if [ "$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")" != "$MAIN_SHA" ]; then',
+            "current-main ref",
+        ),
+        (
+            'CURRENT_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+            'validate_git_ref_object "$CURRENT_HEAD_REF_RESPONSE" "$HEAD_REF"',
+            'if [ "$(jq -r .object.sha <<<"$CURRENT_HEAD_REF_RESPONSE")" != "$HEAD_SHA" ]; then',
+            "current-head ref",
+        ),
+        (
+            'FINAL_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+            'validate_git_ref_object "$FINAL_MAIN_REF_RESPONSE" "main"',
+            'if [ "$(jq -r .object.sha <<<"$FINAL_MAIN_REF_RESPONSE")" != "$MAIN_SHA" ]; then',
+            "final-main ref",
+        ),
+        (
+            'FINAL_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+            'validate_git_ref_object "$FINAL_HEAD_REF_RESPONSE" "$HEAD_REF"',
+            'if [ "$(jq -r .object.sha <<<"$FINAL_HEAD_REF_RESPONSE")" != "$HEAD_SHA" ]; then',
+            "final-head ref",
+        ),
+    )
+    for fetch, schema, consume, label in boundaries:
+        fetch_pos = bot_review.index(fetch)
+        schema_pos = bot_review.index(schema, fetch_pos)
+        consume_pos = bot_review.index(consume, schema_pos)
+        require(
+            fetch_pos < schema_pos < consume_pos,
+            f"Bot PR reviewer must validate {label} evidence before SHA consumption",
+        )
+
+
 def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
     for fragment in (
         '(.check_runs | type == "array" and length <= 100) and',
@@ -1377,6 +1466,7 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
 
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_single_object_evidence_schema(bot_review)
+    validate_bot_review_identity_ref_evidence_schema(bot_review)
     validate_bot_review_run_check_evidence_schema(bot_review)
     validate_dependabot_readiness_run_check_evidence_schema(dependabot)
     validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
@@ -1855,6 +1945,39 @@ def self_test_spotlight_same_base_supersession() -> None:
 def self_test() -> None:
     v21.self_test()
     self_test_spotlight_same_base_supersession()
+
+    bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+    validate_bot_review_identity_ref_evidence_schema(bot_review)
+
+    initial_schema = 'validate_git_ref_object "$MAIN_REF_RESPONSE" "main"'
+    initial_consume = 'MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"'
+    reordered = bot_review.replace(initial_schema, "true # displaced initial main-ref schema", 1)
+    reordered = reordered.replace(
+        initial_consume,
+        initial_consume + "\n          " + initial_schema,
+        1,
+    )
+    try:
+        validate_bot_review_identity_ref_evidence_schema(reordered)
+    except ValueError as exc:
+        require("initial main-ref" in str(exc),
+                f"bot-review ref-order self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("bot-review ref-order self-test accepted schema-after-consumption reordering")
+
+    weakened_identity = bot_review.replace(
+        '(.login | type == "string" and . == "portyu9")',
+        '(.login | tostring == "portyu9")',
+        1,
+    )
+    try:
+        validate_bot_review_identity_ref_evidence_schema(weakened_identity)
+    except ValueError as exc:
+        require("identity/ref" in str(exc),
+                f"bot-review identity-schema self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("bot-review identity-schema self-test accepted type-coercing login evidence")
+
     spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
     validate_spotlight_same_base_supersession(spotlight)
     validate_spotlight_budget_artifact_history(spotlight)
@@ -1926,7 +2049,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
