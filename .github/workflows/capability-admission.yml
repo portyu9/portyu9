@@ -90,6 +90,32 @@ jobs:
             ' <<<"$pr" >/dev/null
           }
 
+          validate_git_ref_object() {
+            local ref_json="$1" expected_ref="$2" expected_sha="${3:-}"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
+              ($sha == "" or .object.sha == $sha)
+            ' <<<"$ref_json" >/dev/null
+          }
+
+          validate_readme_contents_object() {
+            local contents_json="$1" expected_blob_sha="$2"
+            jq -e --arg blob "$expected_blob_sha" '
+              (type == "object") and
+              (.type | type == "string" and . == "file") and
+              (.name | type == "string" and . == "README.md") and
+              (.path | type == "string" and . == "README.md") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and
+              (.size | type == "number" and . == floor and . >= 0) and
+              (.encoding | type == "string" and . == "base64") and
+              (.content | type == "string" and length > 0)
+            ' <<<"$contents_json" >/dev/null
+          }
+
           case "$EVENT_NAME" in
             pull_request_target)
               PR="$(jq -c '.pull_request' "$GITHUB_EVENT_PATH")"
@@ -164,7 +190,12 @@ jobs:
               else
                 SPOTLIGHT_MODE="scheduled"
               fi
-              MAIN_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+              MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+              validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" || {
+                echo "ERROR: malformed Capability Admission main-ref discovery evidence." >&2
+                exit 1
+              }
+              MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"
               [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
               gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" > spotlight-open-pr-pages.json
               python3 scripts/workflow_capability_api_collection.py pull-requests \
@@ -231,7 +262,12 @@ jobs:
           [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
-          test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA" || {
+            echo "ERROR: malformed or stale Capability Admission main-ref evidence." >&2
+            exit 1
+          }
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
 
           if [ "$DISPATCH" = "true" ]; then
             [[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]
@@ -249,7 +285,12 @@ jobs:
           if [ "$SPOTLIGHT" = "true" ]; then
             test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
             [[ "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
-            test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
+            HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+            validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {
+              echo "ERROR: malformed or mismatched Capability Admission Spotlight candidate-ref evidence." >&2
+              exit 1
+            }
+            test "$(jq -r .object.sha <<<"$HEAD_REF_RESPONSE")" = "$HEAD_SHA"
 
             CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
             jq -e --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \
@@ -318,9 +359,23 @@ jobs:
             test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
             test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
 
-            GENERATED_SHA="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)"
+            GENERATED_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated")"
+            validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" || {
+              echo "ERROR: malformed Capability Admission generated-ref evidence." >&2
+              exit 1
+            }
+            GENERATED_SHA="$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")"
             [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
-            gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" --jq .content \
+            README_BLOB_SHA="$(jq -r '.files[0].sha' <<<"$COMPARE")"
+            [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"
+            validate_readme_contents_object "$README_CONTENTS_RESPONSE" "$README_BLOB_SHA" || {
+              echo "ERROR: malformed or mismatched Capability Admission Spotlight README evidence." >&2
+              exit 1
+            }
+            test "$(jq -r .path <<<"$README_CONTENTS_RESPONSE")" = "README.md"
+            test "$(jq -r .sha <<<"$README_CONTENTS_RESPONSE")" = "$README_BLOB_SHA"
+            jq -r .content <<<"$README_CONTENTS_RESPONSE" \
               | tr -d '\n' | base64 --decode > spotlight-candidate-readme.md
             README_SHA256="$(sha256sum spotlight-candidate-readme.md | cut -d' ' -f1)"
             [[ "$README_SHA256" =~ ^[0-9a-f]{64}$ ]]
