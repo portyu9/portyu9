@@ -81,6 +81,13 @@
       "rationale": "Authorize #772's exact trusted Capability Admission PR-object schema hardening. The three existing PR GETs for CodeQL Autofix, delegated Dependabot, and Spotlight now require strict typed identity/state metadata before existing semantic decisions. Triggers, schedules, permissions, endpoints, evaluator, provenance, candidate execution, check publication, mutations and semantic Workflow Capability remain unchanged; no required-check reduction, direct-main write, ruleset change or bypass is added."
     },
     {
+      "id": "cap-capability-admission-ref-readme-response-schema-hardening-v1",
+      "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "expansionSha256": "75352f9822826f1b40bf88544ad097b8d5b7318589ccb95d993dbff4b878f2e0",
+      "rationale": "Authorize frozen #927's exact Capability Admission Git-ref and README Contents response-schema hardening. Existing read-only GETs, triggers, permissions, candidate identity, evaluator, publisher, mutations and merge authority are unchanged. Main/candidate/generated refs and README blob/base64 identity must validate before scalar/content use. Workflow Capability is unchanged; no new endpoint, method, secret, OIDC, check reduction, direct-main write, ruleset change or bypass."
+    },
+    {
       "id": "cap-capability-admission-spotlight-topology-schema-hardening-v1",
       "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
       "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
