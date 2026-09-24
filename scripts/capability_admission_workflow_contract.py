@@ -304,11 +304,13 @@ def validate_text(text: str) -> None:
         '(.tree | type == "object" and',
         '(.parents | type == "array" and length == 1 and',
         '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base))) and',
-        '(.author | type == "object" and',
-        '(.name | type == "string" and . == $name) and',
-        '(.email | type == "string" and . == $email)) and',
-        '(.committer | type == "object" and',
-        '(.date | type == "string" and length > 0)) and',
+        '(.author | type == "object" and\n'
+        '                (.name | type == "string" and . == $name) and\n'
+        '                (.email | type == "string" and . == $email)) and',
+        '(.committer | type == "object" and\n'
+        '                (.name | type == "string" and . == $name) and\n'
+        '                (.email | type == "string" and . == $email) and\n'
+        '                (.date | type == "string" and length > 0)) and',
         '(.message | type == "string" and . == "chore: sync rotating Spotlight links")',
     ):
         require(
@@ -324,13 +326,16 @@ def validate_text(text: str) -> None:
     for schema_fragment in (
         '(type == "object") and',
         '(.status | type == "string" and . == "ahead") and',
-        '(.base_commit | type == "object" and',
-        '(.merge_base_commit | type == "object" and',
+        '(.base_commit | type == "object" and\n'
+        '                (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)) and',
+        '(.merge_base_commit | type == "object" and\n'
+        '                (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)) and',
         '(.ahead_by | type == "number" and . == floor and . == 1) and',
         '(.behind_by | type == "number" and . == floor and . == 0) and',
         '(.total_commits | type == "number" and . == floor and . == 1) and',
-        '(.commits | type == "array" and length == 1 and',
-        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head))) and',
+        '(.commits | type == "array" and length == 1 and\n'
+        '                (.[0] | type == "object" and\n'
+        '                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head))) and',
         '(.files | type == "array" and length == 1 and',
         '(.filename | type == "string" and . == "README.md") and',
         '(.status | type == "string" and . == "modified") and',
@@ -494,7 +499,7 @@ def expect_spotlight_topology_schema_failure(
         require(expected in str(exc),
                 f"Capability Admission Spotlight topology self-test failed for wrong reason: {exc}")
     else:
-        raise ValueError("Capability Admission accepted malformed Spotlight topology response schema")
+        raise ValueError(f"Capability Admission accepted malformed Spotlight topology response schema: {expected}")
 
 
 def expect_spotlight_topology_schema_reorder_failure(
