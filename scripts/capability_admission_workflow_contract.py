@@ -750,7 +750,7 @@ def expect_validator_reorder_failure(
     consume_start = text.index(consume_marker, call_start)
     validator_end = text.index(validator_end_marker, validator_start) + len(validator_end_marker)
     require(
-        call_start < validator_start < validator_end < consume_start,
+        call_start < validator_start < validator_end <= consume_start,
         "Capability Admission validator reorder self-test source ordering changed",
     )
     validator_block = text[validator_start:validator_end]
