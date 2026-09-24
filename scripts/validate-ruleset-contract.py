@@ -332,6 +332,14 @@ def validate_reconciler_main_ref_evidence(text: str) -> None:
             "Ruleset reconciler must retain exactly five reviewed main-ref GET call sites")
     require(legacy not in text,
             "Ruleset reconciler must not consume main-ref SHA through direct gh api --jq")
+    require(
+        text.count('LIVE_MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"') == 1,
+        "Ruleset plan main-ref response capture changed",
+    )
+    require(
+        text.count('MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"') == 4,
+        "Ruleset privileged main-ref response capture count changed",
+    )
     for fragment in schema_fragments:
         require(
             text.count(fragment) == 5,
@@ -361,14 +369,14 @@ def validate_reconciler_main_ref_evidence(text: str) -> None:
         if index == 0:
             compare = block.find('test "$LIVE_MAIN_SHA" = "$TRUSTED_MAIN_SHA"')
             require(
-                'LIVE_MAIN_REF_RESPONSE=' in block and 'LIVE_MAIN_SHA="$(jq -er' in block,
-                "Ruleset plan main-ref fetch/normalization variables changed",
+                'LIVE_MAIN_SHA="$(jq -er' in block,
+                "Ruleset plan main-ref normalization variable changed",
             )
         else:
             compare = block.find('test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"')
             require(
-                'MAIN_REF_RESPONSE=' in block and 'MAIN_REF_SHA="$(jq -er' in block,
-                f"Ruleset privileged main-ref fetch/normalization variables changed at call {index + 1}",
+                'MAIN_REF_SHA="$(jq -er' in block,
+                f"Ruleset privileged main-ref normalization variable changed at call {index + 1}",
             )
         require(
             compare > schema_end,
