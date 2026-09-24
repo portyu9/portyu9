@@ -581,6 +581,128 @@ NATIVE_REVIEW_GATE_FRAGMENTS = (
 )
 
 
+def validate_protected_workflow_evidence_overlay(sync: str) -> None:
+    approve = core.job_block(sync, "approve", "authorize")
+    workflow_paths = (
+        (".github/workflows/codeql.yml", "CodeQL", "spotlight-codeql-workflow-definition.json", "CODEQL_WORKFLOW_ID"),
+        (".github/workflows/dependency-review.yml", "Dependency review", "spotlight-dependency-workflow-definition.json", "DEPENDENCY_WORKFLOW_ID"),
+        (".github/workflows/profile-quality.yml", "Profile quality", "spotlight-profile-workflow-definition.json", "PROFILE_WORKFLOW_ID"),
+    )
+    require(
+        "python3 scripts/dependabot_controller.py" not in approve
+        and "python3 scripts/automation_approval_comment.py" not in approve,
+        "Spotlight protected workflow evidence must preserve the jq-only privileged approval firewall",
+    )
+    for path_value, name, filename, variable in workflow_paths:
+        workflow_file = path_value.rsplit("/", 1)[1]
+        endpoint = f'repos/${GITHUB_REPOSITORY}/actions/workflows/{workflow_file}'
+        fetch = f'gh api "{endpoint}"'
+        consume = f'{variable}="$(jq -er --arg path "{path_value}" --arg name "{name}" \''
+        require(approve.count(fetch) == 1, f"Spotlight protected workflow definition endpoint changed: {path_value}")
+        require(approve.count(consume) == 1, f"Spotlight protected workflow definition validator changed: {path_value}")
+        require(
+            f'> "$RUNNER_TEMP/{filename}"' in approve,
+            f"Spotlight protected workflow definition raw evidence file changed: {path_value}",
+        )
+        fetch_pos = approve.index(fetch)
+        validate_pos = approve.index(consume, fetch_pos)
+        expected_pos = approve.index('EXPECTED_IDENTITIES="$(jq -cn', validate_pos)
+        require(
+            fetch_pos < validate_pos < expected_pos,
+            "Spotlight protected workflow definition must be validated before identity consumption",
+        )
+
+    for fragment in (
+        'error("Spotlight protected workflow definition must be an object")',
+        'error("Spotlight protected workflow definition id is invalid")',
+        'error("Spotlight protected workflow definition identity changed")',
+        'error("Spotlight protected workflow definition URLs are invalid")',
+        'for attempt in $(seq 1 60); do',
+        'repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100',
+        '> "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"',
+        'error("Spotlight protected workflow-run response must be an object")',
+        'error("Spotlight protected workflow-run total_count is invalid")',
+        'error("Spotlight protected workflow_runs shape changed")',
+        'error("Spotlight protected workflow-run response is incomplete")',
+        'error("Spotlight protected workflow-run set is ambiguous")',
+        'error("Spotlight protected workflow-run item schema changed")',
+        'error("Spotlight protected workflow run ids are not unique")',
+        'error("Spotlight protected workflow ids are not unique")',
+        'error("Spotlight protected workflow check-suite ids are not unique")',
+        '.event != "pull_request"',
+        '.head_sha != $head',
+        '.head_branch != $branch',
+        '.repository.full_name != $repo',
+        '.head_repository.full_name != $repo',
+        'totalCount:.total_count',
+        'workflowId:.workflow_id',
+        'checkSuiteId:.check_suite_id',
+        'runAttempt:.run_attempt',
+        '> "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json"',
+        'RUNS_TOTAL="$(jq -r .totalCount "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json")"',
+        'RUNS="$(jq -c .runs "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json")"',
+        '.workflowId == $workflow_id',
+        'CHECK_SUITE_ID="$(jq -r .checkSuiteId <<<"$RUN")"',
+        'RUN_ATTEMPT="$(jq -r .runAttempt <<<"$RUN")"',
+        'gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve"',
+    ):
+        require(
+            fragment in approve,
+            f"Spotlight protected workflow evidence contract is missing: {fragment}",
+        )
+
+    for forbidden in (
+        'CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"',
+        'DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"',
+        'PROFILE_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" --jq .id)"',
+        'RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"',
+        '\'.total_count // empty\' <<<"$RUNS"',
+        'jq -r .head_sha <<<"$RUN"',
+        'jq -r .head_branch <<<"$RUN"',
+        'jq -r .repository.full_name <<<"$RUN"',
+        'jq -r .head_repository.full_name <<<"$RUN"',
+    ):
+        require(
+            forbidden not in approve,
+            f"Spotlight protected workflow evidence regressed to raw scalar consumption: {forbidden}",
+        )
+
+    run_fetch = 'gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"'
+    run_validate = 'error("Spotlight protected workflow-run response must be an object")'
+    run_normalized = '> "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json"'
+    run_consume = 'RUNS_TOTAL="$(jq -r .totalCount "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json")"'
+    run_mutation = 'gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve"'
+    positions = [
+        approve.index(run_fetch),
+        approve.index(run_validate),
+        approve.index(run_normalized),
+        approve.index(run_consume),
+        approve.index(run_mutation),
+    ]
+    require(
+        positions == sorted(positions),
+        "Spotlight protected workflow-run evidence moved out of fetch-validate-normalize-consume-mutate order",
+    )
+
+
+def self_test_protected_workflow_evidence_overlay(sync: str) -> None:
+    validate_protected_workflow_evidence_overlay(sync)
+    mutated = sync.replace(
+        'totalCount:.total_count',
+        'totalCount:0',
+        1,
+    )
+    try:
+        validate_protected_workflow_evidence_overlay(mutated)
+    except ValueError as exc:
+        require(
+            "protected workflow evidence contract is missing" in str(exc),
+            f"Spotlight protected workflow evidence self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Spotlight protected workflow evidence accepted weakened normalized total count")
+
+
 def validate_approval_comment_evidence_overlay(sync: str) -> None:
     approve = core.job_block(sync, "approve", "authorize")
     get_endpoint = 'repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
@@ -822,6 +944,8 @@ def main() -> int:
         core.validate_preparer_script(preparer)
         core.validate_builder_script(builder, builder_core)
         core.validate_mac(sync)
+        validate_protected_workflow_evidence_overlay(sync)
+        self_test_protected_workflow_evidence_overlay(sync)
         validate_approval_comment_evidence_overlay(sync)
         self_test_approval_comment_evidence_overlay(sync)
         validate_native_governed_bot_review_overlay(sync)
