@@ -735,11 +735,28 @@ jobs:
           fi
 
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"
-          COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
-          if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
+          gh api --paginate --slurp \
+            "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            > approval-comment-pages.json
+          python3 scripts/codeql_autofix_controller.py approval-comment-evidence \
+            --comments-file approval-comment-pages.json \
+            --pr-number "$PR_NUMBER" \
+            --marker "$APPROVAL_MARKER" \
+            --out approval-comment-evidence.json
+          APPROVAL_COMMENT_EXISTS="$(jq -r .exists approval-comment-evidence.json)"
+          test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"
+          if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then
             printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: the exact CodeQL Autofix head \`${ADMITTED_HEAD_SHA}\` passed trusted admission, protected checks, GHAS CodeQL, review-thread closure, and an exact-base/head marker-bound APPROVED review by @portyu9. No manual workflow approval is required. Continuing with the governed expected-head merge."
-            gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
-            test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
+            gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -f body="$APPROVAL_BODY" \
+              > approval-comment.json
+            python3 scripts/codeql_autofix_controller.py approval-comment-created \
+              --comment-file approval-comment.json \
+              --pr-number "$PR_NUMBER" \
+              --expected-body "$APPROVAL_BODY" \
+              --out approval-comment-normalized.json
+            test "$(jq -r .actor approval-comment-normalized.json)" = "github-actions[bot]"
+            test "$(jq -r .prNumber approval-comment-normalized.json)" = "$PR_NUMBER"
           fi
 
           gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \

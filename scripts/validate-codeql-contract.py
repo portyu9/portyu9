@@ -819,6 +819,76 @@ def validate_unsupported_evidence(text: str) -> None:
     )
 
 
+def validate_approval_comment_evidence(text: str) -> None:
+    get_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
+    post_endpoint = 'gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"'
+    evidence_validator = "python3 scripts/codeql_autofix_controller.py approval-comment-evidence"
+    created_validator = "python3 scripts/codeql_autofix_controller.py approval-comment-created"
+
+    require(text.count(get_endpoint) == 1,
+            "CodeQL Autofix approval-comment read endpoint changed")
+    require(text.count(post_endpoint) == 1,
+            "CodeQL Autofix approval-comment mutation endpoint changed")
+    require(text.count(evidence_validator) == 1,
+            "CodeQL Autofix must type exactly one approval-comment page collection")
+    require(text.count(created_validator) == 1,
+            "CodeQL Autofix must type exactly one created approval-comment response")
+
+    for forbidden in (
+        'COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"',
+        '[.[][] | select(.body | contains($marker))] | length > 0',
+        'jq -r .body approval-comment.json',
+    ):
+        require(
+            forbidden not in text,
+            f"CodeQL Autofix regained raw approval-comment evidence consumption: {forbidden}",
+        )
+
+    marker_pos = text.index(
+        'APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"'
+    )
+    get_pos = text.index(get_endpoint, marker_pos)
+    validate_pos = text.index(evidence_validator, get_pos)
+    consume_pos = text.index(
+        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists approval-comment-evidence.json)"',
+        validate_pos,
+    )
+    branch_pos = text.index(
+        'if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then',
+        consume_pos,
+    )
+    post_pos = text.index(post_endpoint, branch_pos)
+    created_pos = text.index(created_validator, post_pos)
+    actor_pos = text.index(
+        'test "$(jq -r .actor approval-comment-normalized.json)" = "github-actions[bot]"',
+        created_pos,
+    )
+    merge_pos = text.index(
+        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+        actor_pos,
+    )
+    require(
+        marker_pos < get_pos < validate_pos < consume_pos < branch_pos < post_pos
+        < created_pos < actor_pos < merge_pos,
+        "CodeQL Autofix approval-comment fetch/validate/create ordering changed",
+    )
+    for fragment in (
+        '--comments-file approval-comment-pages.json',
+        '--pr-number "$PR_NUMBER"',
+        '--marker "$APPROVAL_MARKER"',
+        '--out approval-comment-evidence.json',
+        'test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"',
+        '--comment-file approval-comment.json',
+        '--expected-body "$APPROVAL_BODY"',
+        '--out approval-comment-normalized.json',
+        'test "$(jq -r .prNumber approval-comment-normalized.json)" = "$PR_NUMBER"',
+    ):
+        require(
+            fragment in text,
+            f"CodeQL Autofix approval-comment contract is missing: {fragment}",
+        )
+
+
 def validate_quality(text: str) -> None:
     require("python3 scripts/validate-codeql-contract.py" in text,
             "Profile Quality must execute the CodeQL governance validator")
@@ -903,6 +973,7 @@ def main() -> int:
         validate_autofix_continuation(autofix)
         validate_autofix_readiness_evidence(autofix)
         validate_unsupported_evidence(autofix)
+        validate_approval_comment_evidence(autofix)
         validate_quality(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
@@ -911,7 +982,7 @@ def main() -> int:
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
             "controller trust/provenance, typed constructive mutation responses, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, unsupported-alert queue fixtures, "
-            "durable deduplicated unsupported evidence, and exact post-merge CodeQL continuation."
+            "durable deduplicated unsupported evidence, trusted-actor-bound approval-comment evidence, and exact post-merge CodeQL continuation."
         )
         return 0
     except (OSError, ValueError) as exc:

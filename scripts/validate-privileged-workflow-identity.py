@@ -1671,6 +1671,70 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     )
 
 
+def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
+    get_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
+    post_endpoint = 'gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"'
+    evidence_validator = "python3 scripts/codeql_autofix_controller.py approval-comment-evidence"
+    created_validator = "python3 scripts/codeql_autofix_controller.py approval-comment-created"
+
+    require(
+        autofix.count(get_endpoint) == 1
+        and autofix.count(post_endpoint) == 1
+        and autofix.count(evidence_validator) == 1
+        and autofix.count(created_validator) == 1,
+        "CodeQL Autofix approval-comment evidence topology changed",
+    )
+    for forbidden in (
+        'COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"',
+        '[.[][] | select(.body | contains($marker))] | length > 0',
+        'jq -r .body approval-comment.json',
+    ):
+        require(
+            forbidden not in autofix,
+            f"CodeQL Autofix approval-comment evidence regressed to raw consumption: {forbidden}",
+        )
+
+    marker_pos = autofix.index(
+        'APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"'
+    )
+    get_pos = autofix.index(get_endpoint, marker_pos)
+    validate_pos = autofix.index(evidence_validator, get_pos)
+    consume_pos = autofix.index(
+        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists approval-comment-evidence.json)"',
+        validate_pos,
+    )
+    post_pos = autofix.index(post_endpoint, consume_pos)
+    created_pos = autofix.index(created_validator, post_pos)
+    actor_pos = autofix.index(
+        'test "$(jq -r .actor approval-comment-normalized.json)" = "github-actions[bot]"',
+        created_pos,
+    )
+    merge_pos = autofix.index(
+        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+        actor_pos,
+    )
+    require(
+        marker_pos < get_pos < validate_pos < consume_pos < post_pos
+        < created_pos < actor_pos < merge_pos,
+        "CodeQL Autofix approval-comment evidence must be typed before mutation/merge",
+    )
+    for fragment in (
+        '--comments-file approval-comment-pages.json',
+        '--pr-number "$PR_NUMBER"',
+        '--marker "$APPROVAL_MARKER"',
+        '--out approval-comment-evidence.json',
+        'if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then',
+        '--comment-file approval-comment.json',
+        '--expected-body "$APPROVAL_BODY"',
+        '--out approval-comment-normalized.json',
+        'test "$(jq -r .prNumber approval-comment-normalized.json)" = "$PR_NUMBER"',
+    ):
+        require(
+            fragment in autofix,
+            f"CodeQL Autofix approval-comment identity changed: {fragment}",
+        )
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
@@ -2238,6 +2302,7 @@ def main() -> int:
         capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
         validate_codeql_autofix_constructive_response_schemas(autofix)
         validate_codeql_autofix_read_singleton_evidence(autofix)
+        validate_codeql_autofix_approval_comment_evidence(autofix)
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
         validate_spotlight_event_admission(spotlight, capability)
         validate_spotlight_same_base_supersession(spotlight)

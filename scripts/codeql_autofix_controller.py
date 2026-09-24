@@ -475,6 +475,159 @@ def validate_created_unsupported_evidence(value: Any, expected_sha: str, marker:
     return {"id": comment_id, "commitSha": expected_sha, "marker": marker}
 
 
+def normalize_issue_comment_pages(value: Any, pr_number: int) -> list[dict[str, Any]]:
+    pr_number = positive_int(pr_number, "Autofix approval-comment PR number")
+    issue_url = f"https://api.github.com/repos/{REPOSITORY}/issues/{pr_number}"
+    require(isinstance(value, list), "Autofix approval-comment pages must be a slurped page array")
+    require(1 <= len(value) <= 20, "Autofix approval-comment page count must be between 1 and 20")
+    comments: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for page_index, page in enumerate(value):
+        require(
+            isinstance(page, list),
+            f"Autofix approval-comment page {page_index + 1} must be an array",
+        )
+        require(
+            len(page) <= 100,
+            f"Autofix approval-comment page {page_index + 1} exceeds per_page=100",
+        )
+        if page_index + 1 < len(value):
+            require(
+                len(page) == 100,
+                "non-final Autofix approval-comment page must contain exactly 100 entries",
+            )
+        for raw in page:
+            require(
+                isinstance(raw, Mapping),
+                "Autofix approval-comment collection contains a non-object",
+            )
+            comment_id = positive_int(raw.get("id"), "Autofix approval comment id")
+            require(
+                comment_id not in seen,
+                f"duplicate Autofix approval comment id: {comment_id}",
+            )
+            seen.add(comment_id)
+            require(
+                raw.get("issue_url") == issue_url,
+                "Autofix approval comment issue URL mismatch",
+            )
+            body = raw.get("body")
+            require(
+                isinstance(body, str),
+                "Autofix approval comment body must be a string",
+            )
+            user = raw.get("user")
+            require(
+                isinstance(user, Mapping),
+                "Autofix approval comment user must be an object",
+            )
+            login = user.get("login")
+            require(
+                isinstance(login, str) and bool(login),
+                "Autofix approval comment user.login must be non-empty",
+            )
+            html_url = raw.get("html_url")
+            require(
+                isinstance(html_url, str) and bool(html_url),
+                "Autofix approval comment html_url must be non-empty",
+            )
+            comments.append(
+                {
+                    "id": comment_id,
+                    "login": login,
+                    "body": body,
+                    "issueUrl": issue_url,
+                }
+            )
+    return comments
+
+
+def approval_comment_evidence(
+    comment_pages: Any,
+    *,
+    pr_number: int,
+    marker: str,
+) -> dict[str, Any]:
+    pr_number = positive_int(pr_number, "Autofix approval-comment PR number")
+    require(
+        isinstance(marker, str)
+        and re.fullmatch(
+            r"<!-- portyu9-automation-approval:v1 head=[0-9a-f]{40} -->",
+            marker,
+        )
+        is not None,
+        "Autofix approval-comment marker is malformed",
+    )
+    comments = normalize_issue_comment_pages(comment_pages, pr_number)
+    matches = [
+        comment
+        for comment in comments
+        if comment["login"] == "github-actions[bot]" and marker in comment["body"]
+    ]
+    require(
+        len(matches) <= 1,
+        "duplicate trusted Autofix approval comments exist",
+    )
+    return {
+        "exists": len(matches) == 1,
+        "commentId": matches[0]["id"] if matches else None,
+        "prNumber": pr_number,
+        "marker": marker,
+    }
+
+
+def validate_created_approval_comment(
+    value: Any,
+    *,
+    pr_number: int,
+    expected_body: str,
+) -> dict[str, Any]:
+    pr_number = positive_int(pr_number, "created Autofix approval-comment PR number")
+    require(
+        isinstance(expected_body, str) and bool(expected_body),
+        "created Autofix approval-comment expected body must be non-empty",
+    )
+    marker = expected_body.split("\n", 1)[0]
+    require(
+        re.fullmatch(
+            r"<!-- portyu9-automation-approval:v1 head=[0-9a-f]{40} -->",
+            marker,
+        )
+        is not None,
+        "created Autofix approval-comment marker is malformed",
+    )
+    issue_url = f"https://api.github.com/repos/{REPOSITORY}/issues/{pr_number}"
+    require(
+        isinstance(value, Mapping),
+        "created Autofix approval-comment response must be an object",
+    )
+    comment_id = positive_int(value.get("id"), "created Autofix approval comment id")
+    require(
+        value.get("issue_url") == issue_url,
+        "created Autofix approval comment issue URL mismatch",
+    )
+    require(
+        value.get("body") == expected_body,
+        "created Autofix approval comment body mismatch",
+    )
+    user = value.get("user")
+    require(
+        isinstance(user, Mapping) and user.get("login") == "github-actions[bot]",
+        "created Autofix approval comment actor mismatch",
+    )
+    html_url = value.get("html_url")
+    require(
+        isinstance(html_url, str) and bool(html_url),
+        "created Autofix approval comment html_url must be non-empty",
+    )
+    return {
+        "id": comment_id,
+        "prNumber": pr_number,
+        "actor": "github-actions[bot]",
+        "marker": marker,
+    }
+
+
 def discover_target(alert_pages: Any, base_sha: str) -> dict[str, Any]:
     alerts = flatten_pages(alert_pages)
     record = discovery.discover(alerts, base_sha=base_sha, pagination_complete=True)
@@ -1366,6 +1519,138 @@ def self_test() -> None:
     else:
         require(False, "unsupported evidence accepted stale alert identity")
 
+    approval_pr = 17
+    approval_marker = f"<!-- portyu9-automation-approval:v1 head={head} -->"
+    approval_body = approval_marker + "\nAutomation-approved exact head."
+    approval_issue_url = f"https://api.github.com/repos/{REPOSITORY}/issues/{approval_pr}"
+    approval_comment = {
+        "id": 77,
+        "issue_url": approval_issue_url,
+        "html_url": "https://github.com/portyu9/portyu9/pull/17#issuecomment-77",
+        "body": approval_body,
+        "user": {"login": "github-actions[bot]"},
+    }
+    approval = approval_comment_evidence(
+        [[approval_comment]],
+        pr_number=approval_pr,
+        marker=approval_marker,
+    )
+    require(
+        approval == {
+            "exists": True,
+            "commentId": 77,
+            "prNumber": approval_pr,
+            "marker": approval_marker,
+        },
+        "Autofix approval-comment evidence positive fixture changed",
+    )
+    human_marker = {
+        **approval_comment,
+        "id": 78,
+        "user": {"login": "portyu9"},
+    }
+    require(
+        approval_comment_evidence(
+            [[human_marker]],
+            pr_number=approval_pr,
+            marker=approval_marker,
+        )["exists"]
+        is False,
+        "human marker must not suppress the trusted Autofix approval comment",
+    )
+    try:
+        approval_comment_evidence(
+            [[approval_comment, {**approval_comment, "id": 79}]],
+            pr_number=approval_pr,
+            marker=approval_marker,
+        )
+    except ControllerError as exc:
+        require(
+            "duplicate trusted" in str(exc),
+            f"approval-comment duplicate fixture failed for the wrong reason: {exc}",
+        )
+    else:
+        require(False, "approval-comment evidence accepted duplicate trusted markers")
+
+    approval_mutations = (
+        ({}, "slurped page array"),
+        ([], "between 1 and 20"),
+        ([[None]], "contains a non-object"),
+        ([[{**approval_comment, "id": True}]], "positive integer"),
+        ([[approval_comment, approval_comment]], "duplicate Autofix approval comment id"),
+        ([[{**approval_comment, "issue_url": "https://api.github.com/repos/other/repo/issues/17"}]], "issue URL mismatch"),
+        ([[{**approval_comment, "body": None}]], "body must be a string"),
+        ([[{**approval_comment, "user": None}]], "user must be an object"),
+        ([[{**approval_comment, "user": {"login": ""}}]], "user.login must be non-empty"),
+        ([[{**approval_comment, "html_url": ""}]], "html_url must be non-empty"),
+    )
+    for mutated, expected in approval_mutations:
+        try:
+            approval_comment_evidence(
+                mutated,
+                pr_number=approval_pr,
+                marker=approval_marker,
+            )
+        except ControllerError as exc:
+            require(
+                expected in str(exc),
+                f"approval-comment evidence self-test failed for the wrong reason: {exc}",
+            )
+        else:
+            require(
+                False,
+                f"approval-comment evidence accepted forbidden mutation expected to trigger: {expected}",
+            )
+    try:
+        approval_comment_evidence(
+            [[approval_comment]],
+            pr_number=approval_pr,
+            marker="not-a-marker",
+        )
+    except ControllerError as exc:
+        require(
+            "marker is malformed" in str(exc),
+            f"approval-comment marker self-test failed for the wrong reason: {exc}",
+        )
+    else:
+        require(False, "approval-comment evidence accepted malformed marker")
+
+    created_approval = validate_created_approval_comment(
+        approval_comment,
+        pr_number=approval_pr,
+        expected_body=approval_body,
+    )
+    require(
+        created_approval["id"] == 77
+        and created_approval["actor"] == "github-actions[bot]",
+        "created Autofix approval-comment positive fixture changed",
+    )
+    created_approval_mutations = (
+        ([], "must be an object"),
+        ({**approval_comment, "id": 0}, "positive integer"),
+        ({**approval_comment, "issue_url": "https://api.github.com/repos/other/repo/issues/17"}, "issue URL mismatch"),
+        ({**approval_comment, "body": "wrong"}, "body mismatch"),
+        ({**approval_comment, "user": {"login": "portyu9"}}, "actor mismatch"),
+        ({**approval_comment, "html_url": ""}, "html_url must be non-empty"),
+    )
+    for mutated, expected in created_approval_mutations:
+        try:
+            validate_created_approval_comment(
+                mutated,
+                pr_number=approval_pr,
+                expected_body=approval_body,
+            )
+        except ControllerError as exc:
+            require(
+                expected in str(exc),
+                f"created approval-comment self-test failed for the wrong reason: {exc}",
+            )
+        else:
+            require(
+                False,
+                f"created approval-comment accepted forbidden mutation expected to trigger: {expected}",
+            )
+
     pages = [[{"number": 1, "state": "open", "base": {"ref": "main", "sha": base},
                "head": {"ref": "codeql-autofix/alert-4/run-123", "sha": head}, "draft": False, "node_id": "PR_x"}]]
     located = locate_existing(pages, 4)
@@ -1878,6 +2163,18 @@ def main() -> int:
     p.add_argument("--marker", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("approval-comment-evidence")
+    p.add_argument("--comments-file", required=True)
+    p.add_argument("--pr-number", type=int, required=True)
+    p.add_argument("--marker", required=True)
+    p.add_argument("--out", required=True)
+
+    p = sub.add_parser("approval-comment-created")
+    p.add_argument("--comment-file", required=True)
+    p.add_argument("--pr-number", type=int, required=True)
+    p.add_argument("--expected-body", required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("ref-state")
     p.add_argument("--refs-file", required=True)
     p.add_argument("--branch", required=True)
@@ -2000,6 +2297,18 @@ def main() -> int:
     elif args.command == "unsupported-evidence-created":
         dump(args.out, validate_created_unsupported_evidence(
             load(args.comment_file), args.expected_sha, args.marker
+        ))
+    elif args.command == "approval-comment-evidence":
+        dump(args.out, approval_comment_evidence(
+            load(args.comments_file),
+            pr_number=args.pr_number,
+            marker=args.marker,
+        ))
+    elif args.command == "approval-comment-created":
+        dump(args.out, validate_created_approval_comment(
+            load(args.comment_file),
+            pr_number=args.pr_number,
+            expected_body=args.expected_body,
         ))
     elif args.command == "ref-state":
         dump(args.out, classify_branch_ref_inventory(load(args.refs_file), args.branch))
