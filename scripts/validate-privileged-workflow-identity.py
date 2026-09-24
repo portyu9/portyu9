@@ -2158,6 +2158,7 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
             "Spotlight approval comment dedupe must not consume raw paginated comments")
     require("python3 scripts/automation_approval_comment.py" not in spotlight,
             "Spotlight approval job must not acquire runner-resident Python authority")
+    approve = job_block(spotlight, "approve", "authorize")
     for forbidden in (
         'CODEQL_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" --jq .id)"',
         'DEPENDENCY_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" --jq .id)"',
@@ -2169,14 +2170,14 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'jq -r .head_repository.full_name <<<"$RUN"',
     ):
         require(
-            forbidden not in spotlight,
+            forbidden not in approve,
             f"Spotlight protected workflow evidence regressed to raw scalar consumption: {forbidden}",
         )
     require(
-        spotlight.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml"') == 1
-        and spotlight.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml"') == 1
-        and spotlight.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml"') == 1
-        and spotlight.count('repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100') == 1,
+        approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml"') == 1
+        and approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml"') == 1
+        and approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml"') == 1
+        and approve.count('repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100') == 1,
         "Spotlight protected workflow evidence endpoint inventory changed",
     )
 
