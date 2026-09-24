@@ -595,7 +595,7 @@ def validate_protected_workflow_evidence_overlay(sync: str) -> None:
     )
     for path_value, name, filename, variable in workflow_paths:
         workflow_file = path_value.rsplit("/", 1)[1]
-        endpoint = f'repos/${GITHUB_REPOSITORY}/actions/workflows/{workflow_file}'
+        endpoint = f'repos/${{GITHUB_REPOSITORY}}/actions/workflows/{workflow_file}'
         fetch = f'gh api "{endpoint}"'
         consume = f'{variable}="$(jq -er --arg path "{path_value}" --arg name "{name}" \''
         require(approve.count(fetch) == 1, f"Spotlight protected workflow definition endpoint changed: {path_value}")
