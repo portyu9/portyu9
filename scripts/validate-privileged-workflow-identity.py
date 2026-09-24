@@ -2726,6 +2726,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
         'then ($root.workflow_runs | length) == 0',
         'else ($root.workflow_runs | length) == 1',
         '(.id | positive_int) and',
+        '(.node_id | type == "string" and length > 0) and',
         '(.workflow_id | type == "number" and . == floor and . == $workflow) and',
         '(.name | type == "string" and . == "Sync Spotlight profile links") and',
         '(.path | type == "string" and . == ".github/workflows/spotlight-link-sync.yml") and',
@@ -2735,7 +2736,10 @@ def validate_profile_stats_spotlight_dispatch_evidence(
         '(.run_number | positive_int) and',
         '(.run_attempt | positive_int) and',
         '(.check_suite_id | positive_int) and',
+        '(.check_suite_node_id | type == "string" and length > 0) and',
         '(.repository | type == "object" and',
+        '(.id | type == "number" and . == floor and . == $repo) and',
+        '(.full_name | type == "string" and . == $repo_name)) and',
         '(.head_repository | type == "object" and',
         '(.status | type == "string" and allowed_status) and',
         'then (.conclusion | type == "string" and allowed_conclusion)',
@@ -2747,6 +2751,23 @@ def validate_profile_stats_spotlight_dispatch_evidence(
             fragment in runs_block,
             f"Profile Stats Spotlight run collection schema changed: {fragment}",
         )
+
+    for fragment in (
+        '(. == "queued") or (. == "in_progress") or (. == "requested") or',
+        '(. == "waiting") or (. == "pending") or (. == "completed");',
+        '(. == "success") or (. == "failure") or (. == "neutral") or',
+        '(. == "cancelled") or (. == "skipped") or (. == "timed_out") or',
+        '(. == "action_required") or (. == "stale") or (. == "startup_failure");',
+    ):
+        require(
+            fragment in runs_block,
+            f"Profile Stats Spotlight run status/conclusion allowlist changed: {fragment}",
+        )
+    require(
+        runs_block.count('(.id | type == "number" and . == floor and . == $repo) and') == 2
+        and runs_block.count('(.full_name | type == "string" and . == $repo_name)) and') == 2,
+        "Profile Stats Spotlight run repository/head-repository identity binding changed",
+    )
 
     require(
         dispatch.count(
