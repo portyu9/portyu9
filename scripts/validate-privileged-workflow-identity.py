@@ -1468,6 +1468,103 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
     )
 
 
+def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
+    read_validator = "python3 scripts/codeql_autofix_controller.py read-ref-response"
+    workflow_validator = "python3 scripts/codeql_autofix_controller.py workflow-definition-response"
+    require(
+        autofix.count(read_validator) == 4,
+        "CodeQL Autofix read-ref response validator identity changed",
+    )
+    require(
+        autofix.count(workflow_validator) == 3,
+        "CodeQL Autofix workflow-definition response validator identity changed",
+    )
+    require(
+        autofix.count("assert_main_sha() {") == 3
+        and autofix.count("assert_head_sha() {") == 1,
+        "CodeQL Autofix static ref assertion helper identity changed",
+    )
+    require(
+        autofix.count('assert_main_sha "$BASE_SHA"') == 4
+        and autofix.count('assert_head_sha "$HEAD_SHA"') == 1
+        and autofix.count('assert_main_sha "$ADMITTED_BASE_SHA"') == 1
+        and autofix.count('assert_main_sha "$MERGE_SHA"') == 4,
+        "CodeQL Autofix expected-SHA ref assertion topology changed",
+    )
+    for forbidden in (
+        'git/ref/heads/main" --jq .object.sha',
+        'git/ref/heads/${BRANCH}" --jq .object.sha',
+        'actions/workflows/codeql.yml" --jq .id',
+        'actions/workflows/dependency-review.yml" --jq .id',
+        'actions/workflows/profile-quality.yml" --jq .id',
+        "final-main-ref.json",
+        "assert_main_is_merge_sha",
+    ):
+        require(
+            forbidden not in autofix,
+            f"CodeQL Autofix regained untyped singleton evidence consumption: {forbidden}",
+        )
+
+    main_fetch = (
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" '
+        '> "$RUNNER_TEMP/codeql-autofix-main-ref.json"'
+    )
+    main_consume = (
+        'test "$(jq -r .sha "$RUNNER_TEMP/codeql-autofix-main-ref-normalized.json")" '
+        '= "$expected_sha"'
+    )
+    require(
+        autofix.count(main_fetch) == 3
+        and autofix.count('--expected-ref "refs/heads/main"') == 3
+        and autofix.count(main_consume) == 3,
+        "CodeQL Autofix typed main-ref identity changed",
+    )
+    head_fetch = (
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" '
+        '> "$RUNNER_TEMP/codeql-autofix-head-ref.json"'
+    )
+    require(
+        autofix.count(head_fetch) == 1
+        and autofix.count('--expected-ref "refs/heads/${BRANCH}"') == 1,
+        "CodeQL Autofix exact candidate-ref identity changed",
+    )
+
+    workflow_fragments = (
+        (
+            'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml',
+            '--expected-path ".github/workflows/codeql.yml"',
+            'CODEQL_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/codeql-workflow-definition-normalized.json")"',
+        ),
+        (
+            'repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml',
+            '--expected-path ".github/workflows/dependency-review.yml"',
+            'DEPENDENCY_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/dependency-workflow-definition-normalized.json")"',
+        ),
+        (
+            'repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml',
+            '--expected-path ".github/workflows/profile-quality.yml"',
+            'PROFILE_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/profile-workflow-definition-normalized.json")"',
+        ),
+    )
+    cursor = -1
+    for endpoint, expected_path, consume in workflow_fragments:
+        fetch = f'gh api "{endpoint}"'
+        require(
+            autofix.count(fetch) == 1
+            and expected_path in autofix
+            and consume in autofix,
+            f"CodeQL Autofix workflow-definition identity changed: {endpoint}",
+        )
+        fetch_pos = autofix.index(fetch, cursor + 1)
+        validate_pos = autofix.index(workflow_validator, fetch_pos)
+        consume_pos = autofix.index(consume, validate_pos)
+        require(
+            fetch_pos < validate_pos < consume_pos,
+            "CodeQL Autofix workflow-definition evidence must be typed before ID use",
+        )
+        cursor = consume_pos
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
@@ -2034,6 +2131,7 @@ def main() -> int:
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
         validate_codeql_autofix_constructive_response_schemas(autofix)
+        validate_codeql_autofix_read_singleton_evidence(autofix)
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
         validate_spotlight_event_admission(spotlight, capability)
         validate_spotlight_same_base_supersession(spotlight)
