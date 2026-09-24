@@ -215,6 +215,20 @@ jobs:
           LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
         run: |
           set -euo pipefail
+          validate_git_ref_object() {
+            local payload="$1" expected_ref="$2" expected_sha="$3"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (((.ref | type) == "string") and (.ref == $ref)) and
+              (((.object | type) == "object") and
+                (((.object.type | type) == "string") and (.object.type == "commit")) and
+                (((.object.sha | type) == "string") and
+                  (.object.sha | test("^[0-9a-f]{40}$")) and
+                  (.object.sha == $sha)) and
+                (((.object.url | type) == "string") and ((.object.url | length) > 0)))
+            ' <<<"$payload" >/dev/null
+          }
+
           STALE_CLEANUPS_JSON='[]'
           echo "stale_cleanups_json=$STALE_CLEANUPS_JSON" >> "$GITHUB_OUTPUT"
           echo "stale_cleanup_effect_present=false" >> "$GITHUB_OUTPUT"
@@ -245,8 +259,12 @@ jobs:
           [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$README_SHA256_AFTER" =~ ^[0-9a-f]{64}$ ]]
           test "$BASE_SHA" = "$GITHUB_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
+          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
+          test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
 
           EXPECTED_CANDIDATE_BRANCH=""
           if [ "$CHANGED" = "true" ]; then
@@ -690,6 +708,20 @@ jobs:
           LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
         run: |
           set -euo pipefail
+          validate_git_ref_object() {
+            local payload="$1" expected_ref="$2" expected_sha="$3"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (((.ref | type) == "string") and (.ref == $ref)) and
+              (((.object | type) == "object") and
+                (((.object.type | type) == "string") and (.object.type == "commit")) and
+                (((.object.sha | type) == "string") and
+                  (.object.sha | test("^[0-9a-f]{40}$")) and
+                  (.object.sha == $sha)) and
+                (((.object.url | type) == "string") and ((.object.url | length) > 0)))
+            ' <<<"$payload" >/dev/null
+          }
+
           REF_CREATED=false
           PR_CREATED=false
           echo "ref_created=false" >> "$GITHUB_OUTPUT"
@@ -731,7 +763,9 @@ jobs:
           [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
 
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$SOURCE_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
           gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" --jq .content \
             | tr -d '\n' | base64 --decode > current-readme.md
           test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
@@ -867,7 +901,9 @@ jobs:
             REF_CREATED=true
             echo "ref_created=true" >> "$GITHUB_OUTPUT"
           fi
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
 
           PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
           COUNT="$(jq 'length' <<<"$PRS")"
@@ -958,6 +994,20 @@ jobs:
           LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
         run: |
           set -euo pipefail
+          validate_git_ref_object() {
+            local payload="$1" expected_ref="$2" expected_sha="$3"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (((.ref | type) == "string") and (.ref == $ref)) and
+              (((.object | type) == "object") and
+                (((.object.type | type) == "string") and (.object.type == "commit")) and
+                (((.object.sha | type) == "string") and
+                  (.object.sha | test("^[0-9a-f]{40}$")) and
+                  (.object.sha == $sha)) and
+                (((.object.url | type) == "string") and ((.object.url | length) > 0)))
+            ' <<<"$payload" >/dev/null
+          }
+
           APPROVAL_REQUESTS_JSON='[]'
           echo "approval_requests_json=$APPROVAL_REQUESTS_JSON" >> "$GITHUB_OUTPUT"
           # Verify exact short-lived mutation lease.
@@ -985,9 +1035,15 @@ jobs:
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
+          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
+          test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
+          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
           COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
           test "$(jq -r .status <<<"$COMPARE")" = "ahead"
           test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
@@ -1342,8 +1398,12 @@ jobs:
             echo "ERROR: exact-base/head portyu9 review did not materialize after the pre-convergence dispatch." >&2
             exit 1
           }
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
+          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
           PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           test "$(jq -r .state <<<"$PR_AFTER_REVIEW")" = "open"
           test "$(jq -r .base.sha <<<"$PR_AFTER_REVIEW")" = "$BASE_SHA"
@@ -1567,6 +1627,20 @@ jobs:
           EXPECTED_SUBJECT_SHA256: ${{ needs.authorize.outputs.subject_sha256 }}
         run: |
           set -euo pipefail
+          validate_git_ref_object() {
+            local payload="$1" expected_ref="$2" expected_sha="$3"
+            jq -e --arg ref "$expected_ref" --arg sha "$expected_sha" '
+              (type == "object") and
+              (((.ref | type) == "string") and (.ref == $ref)) and
+              (((.object | type) == "object") and
+                (((.object.type | type) == "string") and (.object.type == "commit")) and
+                (((.object.sha | type) == "string") and
+                  (.object.sha | test("^[0-9a-f]{40}$")) and
+                  (.object.sha == $sha)) and
+                (((.object.url | type) == "string") and ((.object.url | length) > 0)))
+            ' <<<"$payload" >/dev/null
+          }
+
           # Verify exact short-lived mutation lease.
           LEASE_TTL_SECONDS=1800
           LEASE_MIN_REMAINING_SECONDS=240
@@ -1625,9 +1699,15 @@ jobs:
           test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
           test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
           test "$(jq -r .title <<<"$PR")" = "chore: sync rotating Spotlight links"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
+          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
+          test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
+          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
           FILES="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100")"
           jq -e '
             (type == "array") and
@@ -1779,9 +1859,15 @@ jobs:
           test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"
           echo "Spotlight terminal stage: required-checks-and-native-review-gate-verified" >&2
 
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" --jq .object.sha)" = "$GENERATED_SHA"
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" --jq .object.sha)" = "$HEAD_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
+          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
+          test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
+          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
           echo "Spotlight terminal stage: pre-merge-roots-verified" >&2
 
           jq -n --arg sha "$HEAD_SHA" '{merge_method:"merge",sha:$sha}' > merge.json
@@ -1809,7 +1895,9 @@ jobs:
           test "$(jq -r .head.sha <<<"$MERGED_PR")" = "$HEAD_SHA"
           test "$(jq -r .head.repo.full_name <<<"$MERGED_PR")" = "$GITHUB_REPOSITORY"
           test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"
-          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"
+          CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"
           test "$CURRENT_MAIN_SHA" = "$MERGE_SHA"
           CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
           jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA" '
