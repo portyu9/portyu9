@@ -205,21 +205,7 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
-              "step": "Atomically reconcile canonical governance files onto the bot head"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
               "step": "Bind current main and one native Dependabot candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Perform exact-head protected Dependabot merge"
             },
             {
               "client": "gh-api",
