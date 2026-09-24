@@ -41,10 +41,17 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Bind current main and one native Dependabot candidate"
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Validate reconciled candidate and inspect protected checks"
             },
             {
               "client": "gh-api",
@@ -62,17 +69,10 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
+              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}",
               "method": "GET",
               "mutating": false,
-              "step": "Validate reconciled candidate and inspect protected checks"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Validate reconciled candidate and inspect protected checks"
+              "step": "Bind current main and one native Dependabot candidate"
             },
             {
               "client": "gh-api",
@@ -174,38 +174,17 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${branch}",
               "method": "GET",
               "mutating": false,
               "step": "Atomically reconcile canonical governance files onto the bot head"
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Perform exact-head protected Dependabot merge"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${branch}",
               "method": "GET",
               "mutating": false,
               "step": "Validate reconciled candidate and inspect protected checks"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Atomically reconcile canonical governance files onto the bot head"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Atomically reconcile canonical governance files onto the bot head"
             },
             {
               "client": "gh-api",
@@ -213,27 +192,6 @@
               "method": "GET",
               "mutating": false,
               "step": "Bind current main and one native Dependabot candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Perform exact-head protected Dependabot merge"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Perform exact-head protected Dependabot merge"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Validate reconciled candidate and inspect protected checks"
             },
             {
               "client": "gh-api",
@@ -258,6 +216,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Perform exact-head protected Dependabot merge"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments",
               "method": "POST",
               "mutating": true,
@@ -265,10 +230,10 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
               "method": "GET",
               "mutating": false,
-              "step": "Perform exact-head protected Dependabot merge"
+              "step": "Bind current main and one native Dependabot candidate"
             },
             {
               "client": "gh-api",
@@ -317,13 +282,6 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch",
               "method": "PUT",
               "mutating": true,
-              "step": "Bind current main and one native Dependabot candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100",
-              "method": "GET",
-              "mutating": false,
               "step": "Bind current main and one native Dependabot candidate"
             },
             {
@@ -493,14 +451,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Dispatch CodeQL after exact read-only validation"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${branch}",
               "method": "GET",
               "mutating": false,
               "step": "Dispatch CodeQL after exact read-only validation"
@@ -703,21 +654,14 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind exact controller-issued validation target"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${branch}",
               "method": "GET",
               "mutating": false,
               "step": "Verify exact delegated admission proof"
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact controller-issued validation target"
@@ -727,7 +671,7 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
-              "step": "Verify exact delegated admission proof"
+              "step": "Bind exact controller-issued validation target"
             },
             {
               "client": "gh-api",
@@ -735,6 +679,13 @@
               "method": "GET",
               "mutating": false,
               "step": "Reconstruct exact reconciled candidate as data"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10",
+              "method": "GET",
+              "mutating": false,
+              "step": "Bind exact controller-issued validation target"
             },
             {
               "client": "gh-api",
@@ -746,13 +697,6 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind exact controller-issued validation target"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10",
               "method": "GET",
               "mutating": false,
               "step": "Bind exact controller-issued validation target"
