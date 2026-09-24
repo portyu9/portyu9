@@ -513,22 +513,26 @@ def project_spotlight_privileged_refs_to_legacy(spotlight: str) -> str:
 def project_spotlight_readme_contents_to_legacy(spotlight: str) -> str:
     projected = spotlight
     digest_marker = (
-        '          test "$(sha256sum candidate-readme.md | cut -d\\' \\' -f1)" '
-        '= "$README_SHA256_AFTER"'
+        "          test \"$(sha256sum candidate-readme.md | cut -d' ' -f1)\" "
+        "= \"$README_SHA256_AFTER\""
     )
     overlays = (
         (
-            '          README_BLOB_SHA="$(jq -r \\'.files[0].sha\\' <<<"$COMPARE")"',
-            '          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" '
-            '--jq .content \\\n'
-            "            | tr -d '\\\\n' | base64 --decode > candidate-readme.md\n"
-            + digest_marker,
+            "          README_BLOB_SHA=\"$(jq -r '.files[0].sha' <<<\"$COMPARE\")\"",
+            (
+                "          gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\" "
+                "--jq .content \\\n"
+                "            | tr -d '\\n' | base64 --decode > candidate-readme.md\n"
+                + digest_marker
+            ),
         ),
         (
-            '          README_BLOB_SHA="$(jq -r \\'.[0].sha\\' <<<"$FILES")"',
-            '          gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" '
-            "--jq .content | tr -d '\\\\n' | base64 --decode > candidate-readme.md\n"
-            + digest_marker,
+            "          README_BLOB_SHA=\"$(jq -r '.[0].sha' <<<\"$FILES\")\"",
+            (
+                "          gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\" "
+                "--jq .content | tr -d '\\n' | base64 --decode > candidate-readme.md\n"
+                + digest_marker
+            ),
         ),
     )
     for start_marker, legacy in overlays:
@@ -549,26 +553,26 @@ def validate_spotlight_readme_contents_evidence(
     propose = job_block(spotlight, "propose", "approve")
     merge = job_block(spotlight, "merge", "decision_receipt")
     fetch = (
-        'README_CONTENTS_RESPONSE="$(gh api '
-        '"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"'
+        "README_CONTENTS_RESPONSE=\"$(gh api "
+        "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\")\""
     )
-    schema = 'jq -e --arg blob "$README_BLOB_SHA" \\''
-    consume = 'jq -er \\'.content\\' <<<"$README_CONTENTS_RESPONSE"'
+    schema = "jq -e --arg blob \"$README_BLOB_SHA\" '"
+    consume = "jq -er '.content' <<<\"$README_CONTENTS_RESPONSE\""
     digest = (
-        'test "$(sha256sum candidate-readme.md | cut -d\\' \\' -f1)" '
-        '= "$README_SHA256_AFTER"'
+        "test \"$(sha256sum candidate-readme.md | cut -d' ' -f1)\" "
+        "= \"$README_SHA256_AFTER\""
     )
     specs = (
         (
             "proposal",
             propose,
-            'README_BLOB_SHA="$(jq -r \\'.files[0].sha\\' <<<"$COMPARE")"',
+            "README_BLOB_SHA=\"$(jq -r '.files[0].sha' <<<\"$COMPARE\")\"",
             "malformed or mismatched Spotlight proposal README Contents evidence",
         ),
         (
             "terminal",
             merge,
-            'README_BLOB_SHA="$(jq -r \\'.[0].sha\\' <<<"$FILES")"',
+            "README_BLOB_SHA=\"$(jq -r '.[0].sha' <<<\"$FILES\")\"",
             "malformed or mismatched Spotlight terminal README Contents evidence",
         ),
     )
@@ -582,34 +586,35 @@ def validate_spotlight_readme_contents_evidence(
         '(.encoding | type == "string" and . == "base64") and',
         '(.content | type == "string" and length > 0)',
     )
-    for label, block, blob, error_text in specs:
+    for label, evidence, blob, error_text in specs:
         for marker in (blob, fetch, schema, consume, digest, error_text):
             require(
-                block.count(marker) == 1,
+                evidence.count(marker) == 1,
                 f"Spotlight {label} README Contents evidence anchor changed: {marker}",
             )
-        blob_pos = block.index(blob)
-        fetch_pos = block.index(fetch)
-        schema_pos = block.index(schema)
-        consume_pos = block.index(consume)
-        digest_pos = block.index(digest)
+        blob_pos = evidence.index(blob)
+        fetch_pos = evidence.index(fetch)
+        schema_pos = evidence.index(schema)
+        consume_pos = evidence.index(consume)
+        digest_pos = evidence.index(digest)
         require(
             blob_pos < fetch_pos < schema_pos < consume_pos < digest_pos,
             f"Spotlight {label} README Contents evidence must validate before content consumption",
         )
-        schema_block = block[schema_pos:consume_pos]
+        schema_block = evidence[schema_pos:consume_pos]
         for fragment in required_schema:
             require(
                 fragment in schema_block,
                 f"Spotlight {label} README Contents schema changed: {fragment}",
             )
         require(
-            '[[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]' in block[blob_pos:fetch_pos],
+            '[[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]'
+            in evidence[blob_pos:fetch_pos],
             f"Spotlight {label} README blob identity must be canonical before Contents lookup",
         )
 
     raw = (
-        'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" '
+        "gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\" "
         "--jq .content"
     )
     require(
@@ -625,19 +630,19 @@ def validate_spotlight_readme_contents_evidence(
 
     if run_self_test:
         for job, next_job in (("propose", "approve"), ("merge", "decision_receipt")):
-            start_marker = f"  {job}:\\n"
-            end_marker = f"  {next_job}:\\n"
+            start_marker = f"  {job}:\n"
+            end_marker = f"  {next_job}:\n"
             start = spotlight.index(start_marker)
             end = spotlight.index(end_marker, start)
-            block = spotlight[start:end]
+            evidence = spotlight[start:end]
             current = '(.encoding | type == "string" and . == "base64") and'
             replacement = '(.encoding | tostring == "base64") and'
             require(
-                block.count(current) == 1,
+                evidence.count(current) == 1,
                 f"Spotlight {job} README Contents self-test schema anchor changed",
             )
-            mutated_block = block.replace(current, replacement, 1)
-            mutated = spotlight[:start] + mutated_block + spotlight[end:]
+            mutated_evidence = evidence.replace(current, replacement, 1)
+            mutated = spotlight[:start] + mutated_evidence + spotlight[end:]
             try:
                 validate_spotlight_readme_contents_evidence(
                     mutated, run_self_test=False
@@ -652,8 +657,8 @@ def validate_spotlight_readme_contents_evidence(
                     f"Spotlight {job} README Contents self-test accepted type-coercing encoding evidence"
                 )
 
-        terminal_start = spotlight.index("  merge:\\n")
-        terminal_end = spotlight.index("  decision_receipt:\\n", terminal_start)
+        terminal_start = spotlight.index("  merge:\n")
+        terminal_end = spotlight.index("  decision_receipt:\n", terminal_start)
         terminal = spotlight[terminal_start:terminal_end]
         current = (
             '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and'
