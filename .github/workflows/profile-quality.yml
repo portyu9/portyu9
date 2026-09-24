@@ -435,7 +435,8 @@ jobs:
           python3 scripts/generate-profile-evidence.py \
             --signal-field-dir "$READY_DIR" \
             --portfolio-ledger-dir integration-portfolio-evidence \
-            --spotlight-dir integration-engineering-spotlight
+            --spotlight-dir integration-engineering-spotlight \
+            --offline
 
       - name: Validate generated engineering card geometry
         run: python3 scripts/validate-engineering-card-geometry.py --spotlight-dir integration-engineering-spotlight
