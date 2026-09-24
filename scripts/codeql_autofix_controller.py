@@ -124,6 +124,154 @@ def validate_workflow_definition_response(value: Any, expected_path: str) -> dic
     }
 
 
+PROTECTED_PR_RUN_STATUSES = {"queued", "in_progress", "requested", "waiting", "pending", "completed"}
+PROTECTED_PR_RUN_CONCLUSIONS = {
+    "success",
+    "failure",
+    "neutral",
+    "cancelled",
+    "skipped",
+    "timed_out",
+    "action_required",
+    "stale",
+    "startup_failure",
+    "waiting",
+}
+
+
+def validate_protected_workflow_runs_response(
+    value: Any,
+    *,
+    expected_sha: str,
+    branch: str,
+    codeql_workflow_id: int,
+    dependency_workflow_id: int,
+    profile_workflow_id: int,
+) -> dict[str, Any]:
+    expected_sha = sha(expected_sha, "Autofix protected workflow-run head SHA")
+    require(
+        isinstance(branch, str) and BRANCH_RE.fullmatch(branch) is not None,
+        "Autofix protected workflow-run branch identity is malformed",
+    )
+    codeql_workflow_id = positive_int(codeql_workflow_id, "Autofix CodeQL workflow id")
+    dependency_workflow_id = positive_int(
+        dependency_workflow_id, "Autofix Dependency Review workflow id"
+    )
+    profile_workflow_id = positive_int(
+        profile_workflow_id, "Autofix Profile Quality workflow id"
+    )
+    expected_workflows = {
+        codeql_workflow_id: (".github/workflows/codeql.yml", "CodeQL"),
+        dependency_workflow_id: (".github/workflows/dependency-review.yml", "Dependency review"),
+        profile_workflow_id: (".github/workflows/profile-quality.yml", "Profile quality"),
+    }
+    require(
+        len(expected_workflows) == 3,
+        "Autofix protected workflow ids must be three distinct positive identities",
+    )
+
+    require(isinstance(value, Mapping), "Autofix protected workflow-run response must be an object")
+    total_count = value.get("total_count")
+    require(
+        type(total_count) is int and 0 <= total_count <= 100,
+        "Autofix protected workflow-run total_count must be an integer in [0,100]",
+    )
+    raw_runs = value.get("workflow_runs")
+    require(
+        isinstance(raw_runs, list) and len(raw_runs) <= 100,
+        "Autofix protected workflow_runs must be an array with at most 100 entries",
+    )
+    require(
+        total_count == len(raw_runs),
+        "Autofix protected workflow-run total_count does not match returned array length",
+    )
+
+    seen_run_ids: set[int] = set()
+    seen_check_suite_ids: set[int] = set()
+    seen_workflow_ids: set[int] = set()
+    runs: list[dict[str, Any]] = []
+    for raw in raw_runs:
+        require(isinstance(raw, Mapping), "Autofix protected workflow-run collection contains a non-object")
+        run_id = positive_int(raw.get("id"), "Autofix protected workflow run id")
+        require(run_id not in seen_run_ids, f"duplicate Autofix protected workflow run id: {run_id}")
+        seen_run_ids.add(run_id)
+
+        workflow_id = positive_int(raw.get("workflow_id"), "Autofix protected workflow id")
+        require(
+            workflow_id in expected_workflows,
+            "Autofix protected workflow run references an unexpected workflow id",
+        )
+        require(
+            workflow_id not in seen_workflow_ids,
+            f"duplicate Autofix protected workflow id: {workflow_id}",
+        )
+        seen_workflow_ids.add(workflow_id)
+
+        check_suite_id = positive_int(
+            raw.get("check_suite_id"), "Autofix protected workflow check-suite id"
+        )
+        require(
+            check_suite_id not in seen_check_suite_ids,
+            f"duplicate Autofix protected workflow check-suite id: {check_suite_id}",
+        )
+        seen_check_suite_ids.add(check_suite_id)
+        run_attempt = positive_int(raw.get("run_attempt"), "Autofix protected workflow run attempt")
+
+        expected_path, expected_name = expected_workflows[workflow_id]
+        require(raw.get("path") == expected_path, "Autofix protected workflow run path mismatch")
+        require(raw.get("name") == expected_name, "Autofix protected workflow run name mismatch")
+        require(raw.get("event") == "pull_request", "Autofix protected workflow run event changed")
+        require(
+            sha(raw.get("head_sha"), "Autofix protected workflow run head SHA") == expected_sha,
+            "Autofix protected workflow run head SHA mismatch",
+        )
+        require(raw.get("head_branch") == branch, "Autofix protected workflow run head branch mismatch")
+
+        for key in ("repository", "head_repository"):
+            repository = raw.get(key)
+            require(
+                isinstance(repository, Mapping),
+                f"Autofix protected workflow run {key} must be an object",
+            )
+            require(
+                repository.get("full_name") == REPOSITORY,
+                f"Autofix protected workflow run {key} identity mismatch",
+            )
+
+        status = raw.get("status")
+        require(
+            isinstance(status, str) and status in PROTECTED_PR_RUN_STATUSES,
+            "Autofix protected workflow run status is outside the reviewed status set",
+        )
+        conclusion = raw.get("conclusion")
+        if status == "completed":
+            require(
+                isinstance(conclusion, str)
+                and bool(conclusion)
+                and conclusion in PROTECTED_PR_RUN_CONCLUSIONS,
+                "Autofix completed protected workflow run conclusion is outside the reviewed conclusion set",
+            )
+        else:
+            require(
+                conclusion is None,
+                "Autofix non-completed protected workflow run conclusion must be null",
+            )
+
+        runs.append(
+            {
+                "id": run_id,
+                "workflowId": workflow_id,
+                "checkSuiteId": check_suite_id,
+                "runAttempt": run_attempt,
+                "status": status,
+                "conclusion": conclusion,
+            }
+        )
+
+    runs.sort(key=lambda item: item["workflowId"])
+    return {"totalCount": total_count, "runs": runs}
+
+
 def current_main(ref_response: Any, expected_sha: str) -> dict[str, Any]:
     normalized = validate_read_ref_response(ref_response, DEFAULT_REF, expected_sha)
     return {"baseSha": normalized["sha"], "baseRef": DEFAULT_REF}
@@ -1014,6 +1162,126 @@ def self_test() -> None:
             require(False,
                     f"workflow-definition response self-test accepted forbidden mutation expected to trigger: {expected}")
 
+    protected_branch = "codeql-autofix/alert-4/run-123"
+    protected_workflow_ids = (1001, 1002, 1003)
+
+    def protected_run(
+        run_id: Any,
+        workflow_id: Any,
+        check_suite_id: Any,
+        *,
+        run_attempt: Any = 1,
+        path: Any | None = None,
+        name: Any | None = None,
+        event_name: Any = "pull_request",
+        observed_head: Any = head,
+        observed_branch: Any = protected_branch,
+        repository: Any = REPOSITORY,
+        head_repository: Any = REPOSITORY,
+        status: Any = "queued",
+        conclusion: Any = None,
+    ) -> dict[str, Any]:
+        identities = {
+            1001: (".github/workflows/codeql.yml", "CodeQL"),
+            1002: (".github/workflows/dependency-review.yml", "Dependency review"),
+            1003: (".github/workflows/profile-quality.yml", "Profile quality"),
+        }
+        expected_path, expected_name = identities.get(workflow_id, (".github/workflows/codeql.yml", "CodeQL"))
+        return {
+            "id": run_id,
+            "workflow_id": workflow_id,
+            "check_suite_id": check_suite_id,
+            "run_attempt": run_attempt,
+            "path": expected_path if path is None else path,
+            "name": expected_name if name is None else name,
+            "event": event_name,
+            "head_sha": observed_head,
+            "head_branch": observed_branch,
+            "repository": {"full_name": repository} if isinstance(repository, str) else repository,
+            "head_repository": (
+                {"full_name": head_repository} if isinstance(head_repository, str) else head_repository
+            ),
+            "status": status,
+            "conclusion": conclusion,
+        }
+
+    protected_response = {
+        "total_count": 3,
+        "workflow_runs": [
+            protected_run(201, 1001, 301, status="completed", conclusion="success"),
+            protected_run(202, 1002, 302, status="completed", conclusion="action_required"),
+            protected_run(203, 1003, 303, status="waiting", conclusion=None),
+        ],
+    }
+    normalized_protected = validate_protected_workflow_runs_response(
+        protected_response,
+        expected_sha=head,
+        branch=protected_branch,
+        codeql_workflow_id=protected_workflow_ids[0],
+        dependency_workflow_id=protected_workflow_ids[1],
+        profile_workflow_id=protected_workflow_ids[2],
+    )
+    require(
+        normalized_protected["totalCount"] == 3
+        and [run["workflowId"] for run in normalized_protected["runs"]] == [1001, 1002, 1003],
+        "Autofix protected workflow-run response positive fixture changed",
+    )
+    protected_mutations = (
+        ([], "must be an object"),
+        ({"total_count": True, "workflow_runs": []}, "integer in [0,100]"),
+        ({"total_count": 101, "workflow_runs": []}, "integer in [0,100]"),
+        ({"total_count": 1, "workflow_runs": []}, "does not match returned array length"),
+        ({"total_count": 1, "workflow_runs": [None]}, "contains a non-object"),
+        ({"total_count": 1, "workflow_runs": [protected_run(True, 1001, 301)]}, "must be a positive integer"),
+        ({
+            "total_count": 2,
+            "workflow_runs": [protected_run(201, 1001, 301), protected_run(201, 1002, 302)],
+        }, "duplicate Autofix protected workflow run id"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 9999, 301)]}, "unexpected workflow id"),
+        ({
+            "total_count": 2,
+            "workflow_runs": [protected_run(201, 1001, 301), protected_run(202, 1001, 302)],
+        }, "duplicate Autofix protected workflow id"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, True)]}, "must be a positive integer"),
+        ({
+            "total_count": 2,
+            "workflow_runs": [protected_run(201, 1001, 301), protected_run(202, 1002, 301)],
+        }, "duplicate Autofix protected workflow check-suite id"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, run_attempt=0)]}, "must be a positive integer"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, path=".github/workflows/other.yml")]}, "path mismatch"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, name="Other")]}, "name mismatch"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, event_name="push")]}, "event changed"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, observed_head="BAD")]}, "lowercase SHA-40"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, observed_head="c" * 40)]}, "head SHA mismatch"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, observed_branch="other")]}, "head branch mismatch"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, repository=None)]}, "repository must be an object"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, head_repository="other/repo")]}, "head_repository identity mismatch"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, status="mystery")]}, "outside the reviewed status set"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, status="queued", conclusion="success")]}, "must be null"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, status="completed", conclusion=None)]}, "reviewed conclusion set"),
+        ({"total_count": 1, "workflow_runs": [protected_run(201, 1001, 301, status="completed", conclusion="mystery")]}, "reviewed conclusion set"),
+    )
+    for mutated, expected in protected_mutations:
+        try:
+            validate_protected_workflow_runs_response(
+                mutated,
+                expected_sha=head,
+                branch=protected_branch,
+                codeql_workflow_id=protected_workflow_ids[0],
+                dependency_workflow_id=protected_workflow_ids[1],
+                profile_workflow_id=protected_workflow_ids[2],
+            )
+        except ControllerError as exc:
+            require(
+                expected in str(exc),
+                f"protected workflow-run response self-test failed for the wrong reason: {exc}",
+            )
+        else:
+            require(
+                False,
+                f"protected workflow-run response self-test accepted forbidden mutation expected to trigger: {expected}",
+            )
+
     def codeql_run(run_id: int, head_sha: str = base, *, status: str = "queued", conclusion: Any = None) -> dict[str, Any]:
         return {
             "id": run_id,
@@ -1574,6 +1842,15 @@ def main() -> int:
     p.add_argument("--expected-path", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("protected-workflow-runs-response")
+    p.add_argument("--response-file", required=True)
+    p.add_argument("--head-sha", required=True)
+    p.add_argument("--branch", required=True)
+    p.add_argument("--codeql-workflow-id", type=int, required=True)
+    p.add_argument("--dependency-workflow-id", type=int, required=True)
+    p.add_argument("--profile-workflow-id", type=int, required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("discover")
     p.add_argument("--alerts-file", required=True)
     p.add_argument("--base-sha", required=True)
@@ -1698,6 +1975,15 @@ def main() -> int:
     elif args.command == "workflow-definition-response":
         dump(args.out, validate_workflow_definition_response(
             load(args.response_file), args.expected_path
+        ))
+    elif args.command == "protected-workflow-runs-response":
+        dump(args.out, validate_protected_workflow_runs_response(
+            load(args.response_file),
+            expected_sha=args.head_sha,
+            branch=args.branch,
+            codeql_workflow_id=args.codeql_workflow_id,
+            dependency_workflow_id=args.dependency_workflow_id,
+            profile_workflow_id=args.profile_workflow_id,
         ))
     elif args.command == "discover":
         dump(args.out, discover_target(load(args.alerts_file), args.base_sha))
