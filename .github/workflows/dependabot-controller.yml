@@ -300,19 +300,29 @@ jobs:
           CANDIDATE_ROOT: ${{ steps.source.outputs.candidate_root }}
         run: |
           set -euo pipefail
-          assert_ref_sha() {
-            local branch="$1" expected_sha="$2"
-            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${branch}" > "$RUNNER_TEMP/dependabot-read-ref.json"
+          assert_main_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-main-ref.json"
             python3 scripts/dependabot_controller.py git-ref-read-response \
-              --response "$RUNNER_TEMP/dependabot-read-ref.json" \
-              --expected-ref "refs/heads/${branch}" \
+              --response "$RUNNER_TEMP/dependabot-main-ref.json" \
+              --expected-ref "refs/heads/main" \
               --expected-sha "$expected_sha" \
-              --out "$RUNNER_TEMP/dependabot-read-ref-normalized.json"
-            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-read-ref-normalized.json")" = "$expected_sha"
+              --out "$RUNNER_TEMP/dependabot-main-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-main-ref-normalized.json")" = "$expected_sha"
+          }
+          assert_head_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-head-ref.json"
+            python3 scripts/dependabot_controller.py git-ref-read-response \
+              --response "$RUNNER_TEMP/dependabot-head-ref.json" \
+              --expected-ref "refs/heads/${HEAD_REF}" \
+              --expected-sha "$expected_sha" \
+              --out "$RUNNER_TEMP/dependabot-head-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"
           }
 
-          assert_ref_sha main "$BASE_SHA"
-          assert_ref_sha "$HEAD_REF" "$HEAD_SHA"
+          assert_main_sha "$BASE_SHA"
+          assert_head_sha "$HEAD_SHA"
           python3 scripts/dependabot_controller.py derive \
             --proof dependabot-proof.json \
             --base-root . \
@@ -363,7 +373,7 @@ jobs:
             --expected-sha "$NEW_HEAD_SHA" \
             --out updated-ref-normalized.json
           test "$(jq -r .sha updated-ref-normalized.json)" = "$NEW_HEAD_SHA"
-          assert_ref_sha main "$BASE_SHA"
+          assert_main_sha "$BASE_SHA"
 
           jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$NEW_HEAD_SHA" \
             '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
@@ -393,20 +403,30 @@ jobs:
             --out reconciled.json
           test "$(jq -r .headSha reconciled.json)" = "$HEAD_SHA"
 
-          assert_ref_sha() {
-            local branch="$1" expected_sha="$2"
-            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${branch}" > "$RUNNER_TEMP/dependabot-read-ref.json"
+          assert_main_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-main-ref.json"
             python3 scripts/dependabot_controller.py git-ref-read-response \
-              --response "$RUNNER_TEMP/dependabot-read-ref.json" \
-              --expected-ref "refs/heads/${branch}" \
+              --response "$RUNNER_TEMP/dependabot-main-ref.json" \
+              --expected-ref "refs/heads/main" \
               --expected-sha "$expected_sha" \
-              --out "$RUNNER_TEMP/dependabot-read-ref-normalized.json"
-            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-read-ref-normalized.json")" = "$expected_sha"
+              --out "$RUNNER_TEMP/dependabot-main-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-main-ref-normalized.json")" = "$expected_sha"
+          }
+          assert_head_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-head-ref.json"
+            python3 scripts/dependabot_controller.py git-ref-read-response \
+              --response "$RUNNER_TEMP/dependabot-head-ref.json" \
+              --expected-ref "refs/heads/${HEAD_REF}" \
+              --expected-sha "$expected_sha" \
+              --out "$RUNNER_TEMP/dependabot-head-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"
           }
 
           assert_transaction() {
-            assert_ref_sha main "$BASE_SHA"
-            assert_ref_sha "$HEAD_REF" "$HEAD_SHA"
+            assert_main_sha "$BASE_SHA"
+            assert_head_sha "$HEAD_SHA"
           }
 
           workflow_dispatch_runs() {
@@ -645,6 +665,26 @@ jobs:
           HEAD_REF: ${{ steps.candidate.outputs.head_ref }}
         run: |
           set -euo pipefail
+          assert_main_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-main-ref.json"
+            python3 scripts/dependabot_controller.py git-ref-read-response \
+              --response "$RUNNER_TEMP/dependabot-main-ref.json" \
+              --expected-ref "refs/heads/main" \
+              --expected-sha "$expected_sha" \
+              --out "$RUNNER_TEMP/dependabot-main-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-main-ref-normalized.json")" = "$expected_sha"
+          }
+          assert_head_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-head-ref.json"
+            python3 scripts/dependabot_controller.py git-ref-read-response \
+              --response "$RUNNER_TEMP/dependabot-head-ref.json" \
+              --expected-ref "refs/heads/${HEAD_REF}" \
+              --expected-sha "$expected_sha" \
+              --out "$RUNNER_TEMP/dependabot-head-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"
+          }
           MERGE_ELIGIBLE=false
           for ATTEMPT in $(seq 1 12); do
             PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
@@ -655,8 +695,8 @@ jobs:
             test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
             test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
             test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
-            assert_ref_sha main "$BASE_SHA"
-            assert_ref_sha "$HEAD_REF" "$HEAD_SHA"
+            assert_main_sha "$BASE_SHA"
+            assert_head_sha "$HEAD_SHA"
 
             MERGEABLE="$(jq -r '.mergeable // ""' <<<"$PR")"
             MERGEABLE_STATE="$(jq -r '.mergeable_state // ""' <<<"$PR")"
@@ -754,7 +794,7 @@ jobs:
             --out "$RUNNER_TEMP/dependabot-merge-success-normalized.json"
           MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          assert_ref_sha main "$MERGE_SHA"
+          assert_main_sha "$MERGE_SHA"
           gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main >/dev/null
 
   validation_bind:
@@ -945,20 +985,30 @@ jobs:
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
 
-          assert_ref_sha() {
-            local branch="$1" expected_sha="$2"
-            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${branch}" > "$RUNNER_TEMP/dependabot-read-ref.json"
+          assert_main_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-main-ref.json"
             python3 scripts/dependabot_controller.py git-ref-read-response \
-              --response "$RUNNER_TEMP/dependabot-read-ref.json" \
-              --expected-ref "refs/heads/${branch}" \
+              --response "$RUNNER_TEMP/dependabot-main-ref.json" \
+              --expected-ref "refs/heads/main" \
               --expected-sha "$expected_sha" \
-              --out "$RUNNER_TEMP/dependabot-read-ref-normalized.json"
-            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-read-ref-normalized.json")" = "$expected_sha"
+              --out "$RUNNER_TEMP/dependabot-main-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-main-ref-normalized.json")" = "$expected_sha"
+          }
+          assert_head_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-head-ref.json"
+            python3 scripts/dependabot_controller.py git-ref-read-response \
+              --response "$RUNNER_TEMP/dependabot-head-ref.json" \
+              --expected-ref "refs/heads/${HEAD_REF}" \
+              --expected-sha "$expected_sha" \
+              --out "$RUNNER_TEMP/dependabot-head-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"
           }
 
           for ATTEMPT in $(seq 1 30); do
-            assert_ref_sha main "$BASE_SHA"
-            assert_ref_sha "$HEAD_REF" "$HEAD_SHA"
+            assert_main_sha "$BASE_SHA"
+            assert_head_sha "$HEAD_SHA"
             CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"
             if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then
               jq '.check_runs[0]' <<<"$CHECKS" > dependabot-admission-check.json
@@ -1247,15 +1297,25 @@ jobs:
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
 
-          assert_ref_sha() {
-            local branch="$1" expected_sha="$2"
-            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${branch}" > "$RUNNER_TEMP/dependabot-read-ref.json"
+          assert_main_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-main-ref.json"
             python3 scripts/dependabot_controller.py git-ref-read-response \
-              --response "$RUNNER_TEMP/dependabot-read-ref.json" \
-              --expected-ref "refs/heads/${branch}" \
+              --response "$RUNNER_TEMP/dependabot-main-ref.json" \
+              --expected-ref "refs/heads/main" \
               --expected-sha "$expected_sha" \
-              --out "$RUNNER_TEMP/dependabot-read-ref-normalized.json"
-            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-read-ref-normalized.json")" = "$expected_sha"
+              --out "$RUNNER_TEMP/dependabot-main-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-main-ref-normalized.json")" = "$expected_sha"
+          }
+          assert_head_sha() {
+            local expected_sha="$1"
+            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-head-ref.json"
+            python3 scripts/dependabot_controller.py git-ref-read-response \
+              --response "$RUNNER_TEMP/dependabot-head-ref.json" \
+              --expected-ref "refs/heads/${HEAD_REF}" \
+              --expected-sha "$expected_sha" \
+              --out "$RUNNER_TEMP/dependabot-head-ref-normalized.json"
+            test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"
           }
 
           PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
@@ -1266,8 +1326,8 @@ jobs:
           test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
           test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
           test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
-          assert_ref_sha main "$BASE_SHA"
-          assert_ref_sha "$HEAD_REF" "$HEAD_SHA"
+          assert_main_sha "$BASE_SHA"
+          assert_head_sha "$HEAD_SHA"
 
           gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
           echo "Dispatched CodeQL only after exact read-only Dependabot validation succeeded."
