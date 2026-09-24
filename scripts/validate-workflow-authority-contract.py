@@ -16,6 +16,7 @@ core.ITEM10_CANDIDATE_REPROOF = (
 
 ORIGINAL_STRIP_ADR_TAIL = core.strip_adr_tail
 ORIGINAL_PROJECT_ITEM9_SYNC = core.project_item9_sync
+ORIGINAL_VALIDATE_ITEM10_AUTHORITY = core.validate_item10_authority
 LEGACY_PROFILE_DISPATCH = '''  dispatch:
     name: dispatch-spotlight-link-sync
     needs: [receipt_attest, lease, attest]
@@ -481,6 +482,12 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
     return sync[:start] + legacy + sync[end:]
 
 
+def validate_item10_authority_with_typed_protected_runs(sync: str) -> None:
+    ORIGINAL_VALIDATE_ITEM10_AUTHORITY(
+        project_spotlight_terminal_protected_runs_to_legacy(sync)
+    )
+
+
 def project_item9_sync_with_marker(sync: str) -> str:
     sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
     sync = project_spotlight_readme_contents_to_legacy(sync)
@@ -699,6 +706,7 @@ def validate_policy_cross_contracts_with_trusted_admission(
     )
 
 
+core.validate_item10_authority = validate_item10_authority_with_typed_protected_runs
 core.item9.validate_policy_cross_contracts = validate_policy_cross_contracts_with_trusted_admission
 
 
