@@ -69,14 +69,64 @@ def validate_trigger(event_name: str, event: Any, trusted_sha: str) -> dict[str,
     return {"event": event_name, "trustedSha": trusted_sha}
 
 
+WORKFLOW_DEFINITION_IDENTITIES = {
+    ".github/workflows/codeql.yml": "CodeQL",
+    ".github/workflows/dependency-review.yml": "Dependency Review",
+    ".github/workflows/profile-quality.yml": "Profile quality",
+}
+
+
+def validate_read_ref_response(value: Any, expected_ref: str, expected_sha: str) -> dict[str, Any]:
+    require(
+        isinstance(expected_ref, str)
+        and expected_ref.startswith("refs/heads/")
+        and expected_ref != "refs/heads/",
+        "Autofix read-ref expected ref must be a concrete heads ref",
+    )
+    expected_sha = sha(expected_sha, "Autofix read-ref expected SHA")
+    require(isinstance(value, Mapping), "Autofix read-ref response must be an object")
+    require(value.get("ref") == expected_ref, "Autofix read-ref response identity mismatch")
+    obj = value.get("object")
+    require(isinstance(obj, Mapping), "Autofix read-ref response object must be an object")
+    require(obj.get("type") == "commit", "Autofix read-ref response object type changed")
+    observed = sha(obj.get("sha"), "Autofix read-ref response SHA")
+    require(observed == expected_sha, "Autofix read-ref response SHA mismatch")
+    object_url = obj.get("url")
+    require(
+        isinstance(object_url, str) and bool(object_url.strip()),
+        "Autofix read-ref response object URL must be a non-empty string",
+    )
+    return {"ref": expected_ref, "sha": observed, "objectUrl": object_url}
+
+
+def validate_workflow_definition_response(value: Any, expected_path: str) -> dict[str, Any]:
+    require(
+        isinstance(expected_path, str) and expected_path in WORKFLOW_DEFINITION_IDENTITIES,
+        "Autofix workflow-definition expected path is outside reviewed identity set",
+    )
+    expected_name = WORKFLOW_DEFINITION_IDENTITIES[expected_path]
+    require(isinstance(value, Mapping), "Autofix workflow-definition response must be an object")
+    workflow_id = positive_int(value.get("id"), "Autofix workflow-definition id")
+    require(value.get("path") == expected_path, "Autofix workflow-definition path mismatch")
+    require(value.get("name") == expected_name, "Autofix workflow-definition name mismatch")
+    require(value.get("state") == "active", "Autofix workflow-definition state changed")
+    for key in ("url", "html_url"):
+        observed = value.get(key)
+        require(
+            isinstance(observed, str) and bool(observed.strip()),
+            f"Autofix workflow-definition {key} must be a non-empty string",
+        )
+    return {
+        "id": workflow_id,
+        "path": expected_path,
+        "name": expected_name,
+        "state": "active",
+    }
+
+
 def current_main(ref_response: Any, expected_sha: str) -> dict[str, Any]:
-    expected_sha = sha(expected_sha, "expected main SHA")
-    require(isinstance(ref_response, Mapping), "main ref response must be an object")
-    obj = ref_response.get("object")
-    require(isinstance(obj, Mapping), "main ref response is missing object")
-    observed = sha(obj.get("sha"), "main ref object SHA")
-    require(observed == expected_sha, "main moved after controller checkout")
-    return {"baseSha": observed, "baseRef": DEFAULT_REF}
+    normalized = validate_read_ref_response(ref_response, DEFAULT_REF, expected_sha)
+    return {"baseSha": normalized["sha"], "baseRef": DEFAULT_REF}
 
 
 def flatten_pages(value: Any) -> list[Any]:
@@ -833,7 +883,71 @@ def self_test() -> None:
     head = "b" * 40
     event = {"workflow_run": {"name": "CodeQL", "conclusion": "success", "head_branch": "main", "head_sha": base}}
     require(validate_trigger("workflow_run", event, base)["trustedSha"] == base, "trigger positive fixture changed")
-    current_main({"object": {"sha": base}}, base)
+    ref_url = f"https://api.github.com/repos/{REPOSITORY}/git/commits/{base}"
+    current_main(
+        {"ref": DEFAULT_REF, "object": {"type": "commit", "sha": base, "url": ref_url}},
+        base,
+    )
+
+    ref_branch_read = "codeql-autofix/alert-4/run-123"
+    ref_branch_name = f"refs/heads/{ref_branch_read}"
+    read_ref = validate_read_ref_response(
+        {"ref": ref_branch_name, "object": {"type": "commit", "sha": head, "url": f"https://api.github.com/repos/{REPOSITORY}/git/commits/{head}"}},
+        ref_branch_name,
+        head,
+    )
+    require(read_ref["sha"] == head and read_ref["ref"] == ref_branch_name,
+            "Autofix read-ref response positive fixture changed")
+    read_ref_mutations = (
+        ([], "must be an object"),
+        ({"ref": DEFAULT_REF, "object": {"type": "commit", "sha": head, "url": ref_url}}, "identity mismatch"),
+        ({"ref": ref_branch_name, "object": None}, "object must be an object"),
+        ({"ref": ref_branch_name, "object": {"type": "tag", "sha": head, "url": ref_url}}, "object type changed"),
+        ({"ref": ref_branch_name, "object": {"type": "commit", "sha": "BAD", "url": ref_url}}, "lowercase SHA-40"),
+        ({"ref": ref_branch_name, "object": {"type": "commit", "sha": base, "url": ref_url}}, "SHA mismatch"),
+        ({"ref": ref_branch_name, "object": {"type": "commit", "sha": head}}, "URL must be a non-empty string"),
+        ({"ref": ref_branch_name, "object": {"type": "commit", "sha": head, "url": 7}}, "URL must be a non-empty string"),
+    )
+    for mutated, expected in read_ref_mutations:
+        try:
+            validate_read_ref_response(mutated, ref_branch_name, head)
+        except ControllerError as exc:
+            require(expected in str(exc), f"read-ref response self-test failed for the wrong reason: {exc}")
+        else:
+            require(False, f"read-ref response self-test accepted forbidden mutation expected to trigger: {expected}")
+
+    workflow_fixture = {
+        "id": 12345,
+        "path": ".github/workflows/codeql.yml",
+        "name": "CodeQL",
+        "state": "active",
+        "url": "https://api.github.com/repos/portyu9/portyu9/actions/workflows/12345",
+        "html_url": "https://github.com/portyu9/portyu9/actions/workflows/codeql.yml",
+    }
+    require(
+        validate_workflow_definition_response(workflow_fixture, ".github/workflows/codeql.yml")
+        == {"id": 12345, "path": ".github/workflows/codeql.yml", "name": "CodeQL", "state": "active"},
+        "Autofix workflow-definition response positive fixture changed",
+    )
+    workflow_mutations = (
+        ([], "must be an object"),
+        ({**workflow_fixture, "id": True}, "must be a positive integer"),
+        ({**workflow_fixture, "id": "12345"}, "must be a positive integer"),
+        ({**workflow_fixture, "path": ".github/workflows/other.yml"}, "path mismatch"),
+        ({**workflow_fixture, "name": "Other"}, "name mismatch"),
+        ({**workflow_fixture, "state": "disabled_manually"}, "state changed"),
+        ({**workflow_fixture, "url": ""}, "url must be a non-empty string"),
+        ({**workflow_fixture, "html_url": None}, "html_url must be a non-empty string"),
+    )
+    for mutated, expected in workflow_mutations:
+        try:
+            validate_workflow_definition_response(mutated, ".github/workflows/codeql.yml")
+        except ControllerError as exc:
+            require(expected in str(exc),
+                    f"workflow-definition response self-test failed for the wrong reason: {exc}")
+        else:
+            require(False,
+                    f"workflow-definition response self-test accepted forbidden mutation expected to trigger: {expected}")
 
     def codeql_run(run_id: int, head_sha: str = base, *, status: str = "queued", conclusion: Any = None) -> dict[str, Any]:
         return {
@@ -1323,6 +1437,17 @@ def main() -> int:
     p.add_argument("--expected-sha", required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("read-ref-response")
+    p.add_argument("--response-file", required=True)
+    p.add_argument("--expected-ref", required=True)
+    p.add_argument("--expected-sha", required=True)
+    p.add_argument("--out", required=True)
+
+    p = sub.add_parser("workflow-definition-response")
+    p.add_argument("--response-file", required=True)
+    p.add_argument("--expected-path", required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("discover")
     p.add_argument("--alerts-file", required=True)
     p.add_argument("--base-sha", required=True)
@@ -1431,6 +1556,14 @@ def main() -> int:
         dump(args.out, validate_trigger(args.event_name, load(args.event_file), args.trusted_sha))
     elif args.command == "main":
         dump(args.out, current_main(load(args.ref_file), args.expected_sha))
+    elif args.command == "read-ref-response":
+        dump(args.out, validate_read_ref_response(
+            load(args.response_file), args.expected_ref, args.expected_sha
+        ))
+    elif args.command == "workflow-definition-response":
+        dump(args.out, validate_workflow_definition_response(
+            load(args.response_file), args.expected_path
+        ))
     elif args.command == "discover":
         dump(args.out, discover_target(load(args.alerts_file), args.base_sha))
     elif args.command == "locate":
