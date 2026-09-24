@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v86"
+VERSION = "governed-workflow-byte-identity-v87"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "1f441a8fe20522040f76056a7e45e31ae63d4f15",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "37dcfc628bf5c00ad1d43e8a85c1a866911dd1ee",
+    ".github/workflows/spotlight-link-sync.yml": "19fa81bc09189cc3e3f72e00a2ffd63124c6db91",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -2407,6 +2407,221 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
 
 
 
+
+def validate_spotlight_terminal_trusted_admission_evidence(
+    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    terminal = job_block(spotlight, "merge", "decision_receipt")
+    workflow_fetch = (
+        'TRUSTED_WORKFLOW_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'capability-admission.yml")"'
+    )
+    workflow_schema = 'error("Spotlight trusted-admission workflow definition must be an object")'
+    workflow_consume = "TRUSTED_WORKFLOW_ID=\"$(jq -er '"
+    run_fetch = (
+        'TRUSTED_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/'
+        '${TRUSTED_RUN_ID}")"'
+    )
+    run_schema = 'error("Spotlight trusted-admission run must be an object")'
+    run_normalized = "TRUSTED_RUN=\"$(jq -ce \\"
+    run_consume = 'test "$(jq -r .workflow_id <<<"$TRUSTED_RUN")" = "$TRUSTED_WORKFLOW_ID"'
+    check_fetch = (
+        'TRUSTED_CHECK_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/'
+        '${TRUSTED_CHECK_RUN_ID}")"'
+    )
+    check_schema = 'error("Spotlight trusted-admission check run must be an object")'
+    check_normalized = "TRUSTED_CHECK=\"$(jq -ce \\"
+    check_consume = 'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"'
+    terminal_stage = 'echo "Spotlight terminal stage: trusted-admission-live-reproof-verified" >&2'
+
+    for marker in (
+        workflow_fetch,
+        workflow_schema,
+        workflow_consume,
+        run_fetch,
+        run_schema,
+        run_normalized,
+        run_consume,
+        check_fetch,
+        check_schema,
+        check_normalized,
+        check_consume,
+        terminal_stage,
+    ):
+        require(
+            terminal.count(marker) == 1,
+            f"Spotlight terminal trusted-admission evidence anchor changed: {marker}",
+        )
+
+    positions = (
+        terminal.index(workflow_fetch),
+        terminal.index(workflow_consume),
+        terminal.index(workflow_schema),
+        terminal.index(run_fetch),
+        terminal.index(run_normalized),
+        terminal.index(run_schema),
+        terminal.index(run_consume),
+        terminal.index(check_fetch),
+        terminal.index(check_normalized),
+        terminal.index(check_schema),
+        terminal.index(check_consume),
+        terminal.index(terminal_stage),
+    )
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Spotlight terminal trusted-admission evidence must remain fetch-validate-normalize-consume ordered",
+    )
+
+    for fragment in (
+        '((.id | positive_int) | not)',
+        '((.node_id | type) != "string") or ((.node_id | length) == 0)',
+        '.name != "Capability admission" or',
+        '.path != ".github/workflows/capability-admission.yml" or',
+        '.state != "active"',
+        '((.badge_url | type) != "string") or ((.badge_url | length) == 0)',
+        '((.created_at | type) != "string") or ((.created_at | length) == 0)',
+        '((.updated_at | type) != "string") or ((.updated_at | length) == 0)',
+        'error("Spotlight trusted-admission workflow metadata is invalid")',
+    ):
+        require(
+            fragment in terminal[terminal.index(workflow_consume):terminal.index(run_fetch)],
+            f"Spotlight terminal trusted workflow schema changed: {fragment}",
+        )
+
+    run_block = terminal[terminal.index(run_normalized):terminal.index(run_consume)]
+    for fragment in (
+        '--argjson run "$TRUSTED_RUN_ID"',
+        '--argjson workflow "$TRUSTED_WORKFLOW_ID"',
+        '--argjson attempt "$TRUSTED_RUN_ATTEMPT"',
+        '--arg base "$BASE_SHA"',
+        '--arg repo "$GITHUB_REPOSITORY"',
+        '.id != $run or',
+        '.workflow_id != $workflow or',
+        '.name != "Capability admission" or',
+        '.path != ".github/workflows/capability-admission.yml"',
+        '.event != "workflow_dispatch" or .head_branch != "main" or',
+        '.head_sha != $base',
+        '.run_attempt != $attempt or',
+        '((.check_suite_id | positive_int) | not) or',
+        '((.check_suite_node_id | type) != "string") or',
+        '.repository.full_name != $repo or',
+        '.head_repository.id != .repository.id or',
+        '.head_repository.full_name != $repo',
+        '.actor.login != "github-actions[bot]" or',
+        '.triggering_actor.id != .actor.id or',
+        '.triggering_actor.login != "github-actions[bot]"',
+        '.status != "completed" or .conclusion != "success"',
+        'run_started_at',
+        'error("Spotlight trusted-admission run metadata is invalid")',
+    ):
+        require(
+            fragment in run_block,
+            f"Spotlight terminal trusted run schema changed: {fragment}",
+        )
+
+    check_block = terminal[terminal.index(check_normalized):terminal.index(check_consume)]
+    for fragment in (
+        '--argjson check "$TRUSTED_CHECK_RUN_ID"',
+        '--arg head "$HEAD_SHA"',
+        '--arg external "$EXPECTED_TRUSTED_EXTERNAL_ID"',
+        '--arg details "$CERTIFIED_TRUSTED_DETAILS_URL"',
+        '--argjson suite "$CERTIFIED_TRUSTED_CHECK_SUITE_ID"',
+        '.id != $check or',
+        '.name != "trusted-capability-admission" or',
+        '.head_sha != $head',
+        '.app.id != 15368',
+        '.status != "completed" or .conclusion != "success"',
+        '.external_id != $external or',
+        '.details_url != $details',
+        '.check_suite.id != $suite',
+        '((.started_at | type) != "string") or ((.started_at | length) == 0)',
+        '((.completed_at | type) != "string") or ((.completed_at | length) == 0)',
+        '((.output | type) != "object") or',
+        '((.pull_requests | type) != "array") or ((.pull_requests | length) > 100)',
+        'error("Spotlight trusted-admission check metadata is invalid")',
+    ):
+        require(
+            fragment in check_block,
+            f"Spotlight terminal trusted check schema changed: {fragment}",
+        )
+
+    require(
+        terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml"'
+        ) == 1
+        and terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}"'
+        ) == 1
+        and terminal.count(
+            'gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}"'
+        ) == 1,
+        "Spotlight terminal trusted-admission endpoint/call-count contract changed",
+    )
+    for forbidden in (
+        'TRUSTED_WORKFLOW_ID="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" --jq .id)"',
+        'TRUSTED_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}")"',
+        'TRUSTED_CHECK="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}")"',
+    ):
+        require(
+            forbidden not in terminal,
+            f"Spotlight terminal trusted-admission regressed to raw scalar/object consumption: {forbidden}",
+        )
+
+    if run_self_test:
+        mutations = (
+            (
+                '.path != ".github/workflows/capability-admission.yml" or',
+                '(.path | tostring) != ".github/workflows/capability-admission.yml" or',
+                "trusted workflow schema changed",
+            ),
+            (
+                '.head_repository.id != .repository.id or',
+                '(.head_repository.id | tostring) != (.repository.id | tostring) or',
+                "trusted run schema changed",
+            ),
+            (
+                '.triggering_actor.id != .actor.id or',
+                '(.triggering_actor.id | tostring) != (.actor.id | tostring) or',
+                "trusted run schema changed",
+            ),
+            (
+                '.external_id != $external or',
+                '(.external_id | tostring) != $external or',
+                "trusted check schema changed",
+            ),
+            (
+                '.check_suite.id != $suite',
+                '(.check_suite.id | tostring) != ($suite | tostring)',
+                "trusted check schema changed",
+            ),
+        )
+        for current, replacement, expected in mutations:
+            require(
+                current in spotlight,
+                f"Spotlight terminal trusted-admission self-test fixture anchor changed: {current}",
+            )
+            require(
+                current in terminal,
+                f"Spotlight terminal trusted-admission self-test target escaped terminal block: {current}",
+            )
+            mutated_terminal = terminal.replace(current, replacement, 1)
+            mutated = spotlight.replace(terminal, mutated_terminal, 1)
+            try:
+                validate_spotlight_terminal_trusted_admission_evidence(
+                    mutated, run_self_test=False
+                )
+            except ValueError as exc:
+                require(
+                    expected in str(exc),
+                    f"Spotlight terminal trusted-admission self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    "Spotlight terminal trusted-admission self-test accepted forbidden mutation: "
+                    f"{expected}"
+                )
+
+
 def classify_spotlight_reconciliation_candidate(
     *,
     expected_current: bool,
@@ -2863,6 +3078,7 @@ def main() -> int:
         validate_codeql_autofix_approval_comment_evidence(autofix)
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
         validate_spotlight_event_admission(spotlight, capability)
+        validate_spotlight_terminal_trusted_admission_evidence(spotlight)
         validate_spotlight_same_base_supersession(spotlight)
         validate_spotlight_privileged_ref_evidence_schema(spotlight)
 
@@ -2883,7 +3099,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:
