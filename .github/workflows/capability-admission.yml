@@ -252,6 +252,28 @@ jobs:
             test "$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" --jq .object.sha)" = "$HEAD_SHA"
 
             CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+            jq -e --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \
+              --arg name "github-actions[bot]" \
+              --arg email "41898282+github-actions[bot]@users.noreply.github.com" '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.tree | type == "object" and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
+              (.parents | type == "array" and length == 1 and
+                (.[0] | type == "object" and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base))) and
+              (.author | type == "object" and
+                (.name | type == "string" and . == $name) and
+                (.email | type == "string" and . == $email)) and
+              (.committer | type == "object" and
+                (.name | type == "string" and . == $name) and
+                (.email | type == "string" and . == $email) and
+                (.date | type == "string" and length > 0)) and
+              (.message | type == "string" and . == "chore: sync rotating Spotlight links")
+            ' <<<"$CANDIDATE_COMMIT" >/dev/null || {
+              echo "ERROR: malformed or mismatched Capability Admission Spotlight candidate commit evidence." >&2
+              exit 1
+            }
             test "$(jq '.parents | length' <<<"$CANDIDATE_COMMIT")" = "1"
             test "$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")" = "$BASE_SHA"
             test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "github-actions[bot]"
@@ -261,6 +283,31 @@ jobs:
             test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
 
             COMPARE="$(gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
+            jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.status | type == "string" and . == "ahead") and
+              (.base_commit | type == "object" and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)) and
+              (.merge_base_commit | type == "object" and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)) and
+              (.ahead_by | type == "number" and . == floor and . == 1) and
+              (.behind_by | type == "number" and . == floor and . == 0) and
+              (.total_commits | type == "number" and . == floor and . == 1) and
+              (.commits | type == "array" and length == 1 and
+                (.[0] | type == "object" and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head))) and
+              (.files | type == "array" and length == 1 and
+                (.[0] | type == "object" and
+                  (.filename | type == "string" and . == "README.md") and
+                  (.status | type == "string" and . == "modified") and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                  (.additions | type == "number" and . == floor and . >= 0) and
+                  (.deletions | type == "number" and . == floor and . >= 0) and
+                  (.changes | type == "number" and . == floor and . >= 0)))
+            ' <<<"$COMPARE" >/dev/null || {
+              echo "ERROR: malformed or mismatched Capability Admission Spotlight compare evidence." >&2
+              exit 1
+            }
             test "$(jq -r .status <<<"$COMPARE")" = "ahead"
             test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
             test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
