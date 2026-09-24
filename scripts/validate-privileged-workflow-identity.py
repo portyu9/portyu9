@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v89"
+VERSION = "governed-workflow-byte-identity-v90"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "1f441a8fe20522040f76056a7e45e31ae63d4f15",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "268d52bf5ae45b33261eeff2e25fc4819e1f6aab",
+    ".github/workflows/spotlight-link-sync.yml": "e9ba990a508c8cf6493ad91661294a8a2807beb3",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -761,7 +761,9 @@ def validate_spotlight_readme_contents_evidence(
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
     legacy = project_spotlight_privileged_refs_to_legacy(
         project_spotlight_readme_contents_to_legacy(
-            spotlight[:spotlight.index("  decision_receipt:\n")]
+            project_spotlight_terminal_protected_runs_to_legacy(
+                spotlight[:spotlight.index("  decision_receipt:\n")]
+            )
         )
     )
     reconcile = job_block(legacy, "reconcile", "budget")
@@ -2660,6 +2662,155 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
 
 
 
+
+def project_spotlight_terminal_protected_runs_to_legacy(spotlight: str) -> str:
+    start_marker = "          normalize_protected_certificate_run() {\n"
+    end_marker = "          EXPECTED_CERTIFICATE_RUNS="
+    require(
+        spotlight.count(start_marker) == 1 and spotlight.count(end_marker) == 1,
+        "Spotlight terminal protected-run projection anchors changed",
+    )
+    start = spotlight.index(start_marker)
+    end_start = spotlight.index(end_marker, start)
+    end = spotlight.index("\n", end_start) + 1
+    legacy = (
+        '          CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"\n'
+        '          DEPENDENCY_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"\n'
+        '          PROFILE_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"\n'
+        '          EXPECTED_CERTIFICATE_RUNS="$(jq -cn --argjson codeql "$CODEQL_RUN" --argjson dependency "$DEPENDENCY_RUN" --argjson profile "$PROFILE_RUN" \'[{name:"CodeQL",workflowId:$codeql.workflow_id,runId:$codeql.id,runAttempt:$codeql.run_attempt,checkSuiteId:$codeql.check_suite_id,event:$codeql.event,headBranch:$codeql.head_branch,headSha:$codeql.head_sha,repository:$codeql.repository.full_name,headRepository:$codeql.head_repository.full_name,status:$codeql.status,conclusion:$codeql.conclusion},{name:"Dependency review",workflowId:$dependency.workflow_id,runId:$dependency.id,runAttempt:$dependency.run_attempt,checkSuiteId:$dependency.check_suite_id,event:$dependency.event,headBranch:$dependency.head_branch,headSha:$dependency.head_sha,repository:$dependency.repository.full_name,headRepository:$dependency.head_repository.full_name,status:$dependency.status,conclusion:$dependency.conclusion},{name:"Profile quality",workflowId:$profile.workflow_id,runId:$profile.id,runAttempt:$profile.run_attempt,checkSuiteId:$profile.check_suite_id,event:$profile.event,headBranch:$profile.head_branch,headSha:$profile.head_sha,repository:$profile.repository.full_name,headRepository:$profile.head_repository.full_name,status:$profile.status,conclusion:$profile.conclusion}] | sort_by(.name)\')"\n'
+    )
+    return spotlight[:start] + legacy + spotlight[end:]
+
+
+def validate_spotlight_terminal_protected_run_evidence(
+    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    terminal = job_block(spotlight, "merge", "decision_receipt")
+    helper = "          normalize_protected_certificate_run() {\n"
+    consume = '          EXPECTED_CERTIFICATE_RUNS="$(jq -cn --argjson codeql "$CODEQL_RUN" --argjson dependency "$DEPENDENCY_RUN" --argjson profile "$PROFILE_RUN" \'[$codeql,$dependency,$profile] | sort_by(.name)\')"'
+    require(terminal.count(helper) == 1, "Spotlight terminal protected-run normalizer topology changed")
+    require(terminal.count(consume) == 1, "Spotlight terminal protected-run certificate consumption changed")
+    helper_start = terminal.index(helper)
+    helper_end = terminal.index("          }\n          CODEQL_RUN_RAW=", helper_start)
+    helper_block = terminal[helper_start:helper_end]
+    for fragment in (
+        'local payload="$1" expected_run="$2" expected_suite="$3" expected_name="$4" expected_path="$5"',
+        '--argjson run "$expected_run"',
+        '--argjson suite "$expected_suite"',
+        '--arg name "$expected_name"',
+        '--arg path "$expected_path"',
+        '--arg branch "$CANDIDATE_BRANCH"',
+        '--arg head "$HEAD_SHA"',
+        '--arg repo "$GITHUB_REPOSITORY"',
+        '--argjson repo_id "$GITHUB_REPOSITORY_ID"',
+        'if type != "object" then',
+        '((.id | positive_int) | not) or .id != $run or',
+        '((.node_id | type) != "string") or ((.node_id | length) == 0) or',
+        '((.workflow_id | positive_int) | not) or',
+        '.name != $name or .path != $path',
+        '.event != "pull_request" or .head_branch != $branch or',
+        '.head_sha != $head',
+        '((.run_number | positive_int) | not) or',
+        '((.run_attempt | positive_int) | not) or',
+        '((.check_suite_id | positive_int) | not) or .check_suite_id != $suite or',
+        '((.check_suite_node_id | type) != "string") or',
+        '.repository.id != $repo_id or',
+        '.repository.full_name != $repo or',
+        '.head_repository.id != $repo_id or',
+        '.head_repository.full_name != $repo',
+        '.status != "completed" or .conclusion != "success"',
+        '((.url | type) != "string") or ((.url | length) == 0) or',
+        '((.html_url | type) != "string") or ((.html_url | length) == 0) or',
+        '((.created_at | type) != "string") or ((.created_at | length) == 0) or',
+        '((.updated_at | type) != "string") or ((.updated_at | length) == 0) or',
+        '((.run_started_at | type) != "string") or ((.run_started_at | length) == 0)',
+        'workflowId:.workflow_id',
+        'runId:.id',
+        'runAttempt:.run_attempt',
+        'checkSuiteId:.check_suite_id',
+        'headBranch:.head_branch',
+        'headSha:.head_sha',
+        'repository:.repository.full_name',
+        'headRepository:.head_repository.full_name',
+    ):
+        require(fragment in helper_block, f"Spotlight terminal protected-run response schema changed: {fragment}")
+
+    specs = (
+        (
+            'CODEQL_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"',
+            'CODEQL_RUN="$(normalize_protected_certificate_run "$CODEQL_RUN_RAW" "$CODEQL_RUN_ID" "$CODEQL_CHECK_SUITE_ID" "CodeQL" ".github/workflows/codeql.yml")"',
+            "CodeQL",
+        ),
+        (
+            'DEPENDENCY_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"',
+            'DEPENDENCY_RUN="$(normalize_protected_certificate_run "$DEPENDENCY_RUN_RAW" "$DEPENDENCY_RUN_ID" "$DEPENDENCY_CHECK_SUITE_ID" "Dependency review" ".github/workflows/dependency-review.yml")"',
+            "Dependency review",
+        ),
+        (
+            'PROFILE_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"',
+            'PROFILE_RUN="$(normalize_protected_certificate_run "$PROFILE_RUN_RAW" "$PROFILE_RUN_ID" "$PROFILE_CHECK_SUITE_ID" "Profile quality" ".github/workflows/profile-quality.yml")"',
+            "Profile quality",
+        ),
+    )
+    consume_pos = terminal.index(consume)
+    previous = helper_end
+    for fetch, normalize, label in specs:
+        require(terminal.count(fetch) == 1 and terminal.count(normalize) == 1,
+                f"Spotlight terminal {label} protected-run evidence topology changed")
+        fetch_pos = terminal.index(fetch)
+        normalize_pos = terminal.index(normalize, fetch_pos)
+        require(previous < fetch_pos < normalize_pos < consume_pos,
+                f"Spotlight terminal {label} run must fetch then normalize before certificate consumption")
+        previous = normalize_pos
+
+    require(
+        terminal.count('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}"') == 1
+        and terminal.count('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}"') == 1
+        and terminal.count('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}"') == 1,
+        "Spotlight terminal protected-run endpoint/call-count contract changed",
+    )
+    for forbidden in (
+        'CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"',
+        'DEPENDENCY_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"',
+        'PROFILE_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"',
+        '$codeql.workflow_id',
+        '$dependency.workflow_id',
+        '$profile.workflow_id',
+    ):
+        require(forbidden not in terminal,
+                f"Spotlight terminal protected-run evidence regressed to raw response consumption: {forbidden}")
+
+    if run_self_test:
+        mutations = (
+            ('.name != $name or .path != $path', '.name != $name'),
+            (
+                '((.check_suite_id | positive_int) | not) or .check_suite_id != $suite or',
+                '((.check_suite_id | positive_int) | not) or',
+            ),
+            (
+                '.repository.id != $repo_id or',
+                '(.repository.id | tostring) != ($repo_id | tostring) or',
+            ),
+        )
+        terminal_start = spotlight.index("  merge:\n")
+        terminal_end = spotlight.index("  decision_receipt:\n", terminal_start)
+        terminal_source = spotlight[terminal_start:terminal_end]
+        for current, replacement in mutations:
+            require(current in terminal_source,
+                    f"Spotlight terminal protected-run self-test anchor changed: {current}")
+            weakened_terminal = terminal_source.replace(current, replacement, 1)
+            weakened = spotlight[:terminal_start] + weakened_terminal + spotlight[terminal_end:]
+            try:
+                validate_spotlight_terminal_protected_run_evidence(weakened, run_self_test=False)
+            except ValueError as exc:
+                require("response schema changed" in str(exc),
+                        f"Spotlight terminal protected-run self-test failed for wrong reason: {exc}")
+            else:
+                raise ValueError(
+                    f"Spotlight terminal protected-run self-test accepted forbidden mutation: {current}"
+                )
+
+
 def validate_spotlight_terminal_trusted_admission_evidence(
     spotlight: str, *, run_self_test: bool = True
 ) -> None:
@@ -3369,6 +3520,7 @@ def main() -> int:
         validate_codeql_autofix_approval_comment_evidence(autofix)
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
         validate_spotlight_event_admission(spotlight, capability)
+        validate_spotlight_terminal_protected_run_evidence(spotlight)
         validate_spotlight_terminal_trusted_admission_evidence(spotlight)
         validate_spotlight_same_base_supersession(spotlight)
         validate_spotlight_privileged_ref_evidence_schema(spotlight)
@@ -3391,7 +3543,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal protected workflow-run certificate provenance typed before MAC equality consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:

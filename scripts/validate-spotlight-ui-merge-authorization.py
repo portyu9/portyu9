@@ -704,7 +704,29 @@ def project_spotlight_readme_contents_to_legacy(sync: str) -> str:
         projected = projected[:start] + legacy + projected[end:]
     return projected
 
+
+
+def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
+    start_marker = "          normalize_protected_certificate_run() {\n"
+    end_marker = "          EXPECTED_CERTIFICATE_RUNS="
+    require(
+        sync.count(start_marker) == 1 and sync.count(end_marker) == 1,
+        "Spotlight UI terminal protected-run projection anchors changed",
+    )
+    start = sync.index(start_marker)
+    end_start = sync.index(end_marker, start)
+    end = sync.index("\n", end_start) + 1
+    legacy = (
+        '          CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"\n'
+        '          DEPENDENCY_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"\n'
+        '          PROFILE_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"\n'
+        '          EXPECTED_CERTIFICATE_RUNS="$(jq -cn --argjson codeql "$CODEQL_RUN" --argjson dependency "$DEPENDENCY_RUN" --argjson profile "$PROFILE_RUN" \'[{name:"CodeQL",workflowId:$codeql.workflow_id,runId:$codeql.id,runAttempt:$codeql.run_attempt,checkSuiteId:$codeql.check_suite_id,event:$codeql.event,headBranch:$codeql.head_branch,headSha:$codeql.head_sha,repository:$codeql.repository.full_name,headRepository:$codeql.head_repository.full_name,status:$codeql.status,conclusion:$codeql.conclusion},{name:"Dependency review",workflowId:$dependency.workflow_id,runId:$dependency.id,runAttempt:$dependency.run_attempt,checkSuiteId:$dependency.check_suite_id,event:$dependency.event,headBranch:$dependency.head_branch,headSha:$dependency.head_sha,repository:$dependency.repository.full_name,headRepository:$dependency.head_repository.full_name,status:$dependency.status,conclusion:$dependency.conclusion},{name:"Profile quality",workflowId:$profile.workflow_id,runId:$profile.id,runAttempt:$profile.run_attempt,checkSuiteId:$profile.check_suite_id,event:$profile.event,headBranch:$profile.head_branch,headSha:$profile.head_sha,repository:$profile.repository.full_name,headRepository:$profile.head_repository.full_name,status:$profile.status,conclusion:$profile.conclusion}] | sort_by(.name)\')"\n'
+    )
+    return sync[:start] + legacy + sync[end:]
+
+
 def project_item9(sync: str) -> str:
+    sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
     sync = project_spotlight_readme_contents_to_legacy(sync)
     sync = project_spotlight_privileged_refs_to_legacy(sync)
     sync = project_protected_workflow_evidence_to_legacy(sync)

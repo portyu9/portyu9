@@ -1805,10 +1805,76 @@ jobs:
           test "$(jq -cS . "$SUBJECT")" = "$(jq -cS . <<<"$EXPECTED_SUBJECT")"
           jq -e --arg base "$BASE_SHA" --arg generated "$GENERATED_SHA" --arg readme "$README_SHA256_AFTER" --arg lease "$LEASE_ID" --arg candidate "$EXPECTED_CANDIDATE_ID" --arg issued "$LEASE_ISSUED_AT" --arg expires "$LEASE_EXPIRES_AT" --arg branch "$CANDIDATE_BRANCH" --arg head "$HEAD_SHA" --argjson pr "$PR_NUMBER" '.schemaVersion == 1 and .kind == "spotlight-merge-authorization" and .repository == "portyu9/portyu9" and .workflowRef == "portyu9/portyu9/.github/workflows/spotlight-link-sync.yml@refs/heads/main" and .source == {mainSha:$base,generatedSha:$generated,readmeSha256After:$readme} and .transaction == {leaseId:$lease,candidateId:$candidate,issuedAt:$issued,expiresAt:$expires} and .pullRequest.number == $pr and .pullRequest.baseRef == "main" and .pullRequest.headRef == $branch and .pullRequest.headSha == $head and .pullRequest.headRepository == "portyu9/portyu9" and .pullRequest.maintainerCanModify == false and .candidate.parentSha == $base and .candidate.readmeSha256 == $readme' "$CERTIFICATE" >/dev/null
           echo "Spotlight terminal stage: local-certificate-verified" >&2
-          CODEQL_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"
-          DEPENDENCY_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"
-          PROFILE_RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"
-          EXPECTED_CERTIFICATE_RUNS="$(jq -cn --argjson codeql "$CODEQL_RUN" --argjson dependency "$DEPENDENCY_RUN" --argjson profile "$PROFILE_RUN" '[{name:"CodeQL",workflowId:$codeql.workflow_id,runId:$codeql.id,runAttempt:$codeql.run_attempt,checkSuiteId:$codeql.check_suite_id,event:$codeql.event,headBranch:$codeql.head_branch,headSha:$codeql.head_sha,repository:$codeql.repository.full_name,headRepository:$codeql.head_repository.full_name,status:$codeql.status,conclusion:$codeql.conclusion},{name:"Dependency review",workflowId:$dependency.workflow_id,runId:$dependency.id,runAttempt:$dependency.run_attempt,checkSuiteId:$dependency.check_suite_id,event:$dependency.event,headBranch:$dependency.head_branch,headSha:$dependency.head_sha,repository:$dependency.repository.full_name,headRepository:$dependency.head_repository.full_name,status:$dependency.status,conclusion:$dependency.conclusion},{name:"Profile quality",workflowId:$profile.workflow_id,runId:$profile.id,runAttempt:$profile.run_attempt,checkSuiteId:$profile.check_suite_id,event:$profile.event,headBranch:$profile.head_branch,headSha:$profile.head_sha,repository:$profile.repository.full_name,headRepository:$profile.head_repository.full_name,status:$profile.status,conclusion:$profile.conclusion}] | sort_by(.name)')"
+          normalize_protected_certificate_run() {
+            local payload="$1" expected_run="$2" expected_suite="$3" expected_name="$4" expected_path="$5"
+            jq -ce \
+              --argjson run "$expected_run" \
+              --argjson suite "$expected_suite" \
+              --arg name "$expected_name" \
+              --arg path "$expected_path" \
+              --arg branch "$CANDIDATE_BRANCH" \
+              --arg head "$HEAD_SHA" \
+              --arg repo "$GITHUB_REPOSITORY" \
+              --argjson repo_id "$GITHUB_REPOSITORY_ID" '
+                def positive_int: type == "number" and . == floor and . > 0;
+                if type != "object" then
+                  error("Spotlight terminal protected workflow run must be an object")
+                elif ((.id | positive_int) | not) or .id != $run or
+                     ((.node_id | type) != "string") or ((.node_id | length) == 0) or
+                     ((.workflow_id | positive_int) | not) or
+                     .name != $name or .path != $path then
+                  error("Spotlight terminal protected workflow run identity changed")
+                elif .event != "pull_request" or .head_branch != $branch or
+                     ((.head_sha | type) != "string") or
+                     (.head_sha | test("^[0-9a-f]{40}$") | not) or .head_sha != $head then
+                  error("Spotlight terminal protected workflow run source identity changed")
+                elif ((.run_number | positive_int) | not) or
+                     ((.run_attempt | positive_int) | not) or
+                     ((.check_suite_id | positive_int) | not) or .check_suite_id != $suite or
+                     ((.check_suite_node_id | type) != "string") or
+                     ((.check_suite_node_id | length) == 0) then
+                  error("Spotlight terminal protected workflow run execution identity changed")
+                elif ((.repository | type) != "object") or
+                     ((.repository.id | positive_int) | not) or .repository.id != $repo_id or
+                     .repository.full_name != $repo or
+                     ((.head_repository | type) != "object") or
+                     ((.head_repository.id | positive_int) | not) or
+                     .head_repository.id != $repo_id or
+                     .head_repository.full_name != $repo then
+                  error("Spotlight terminal protected workflow run repository identity changed")
+                elif .status != "completed" or .conclusion != "success" then
+                  error("Spotlight terminal protected workflow run is not successful")
+                elif ((.url | type) != "string") or ((.url | length) == 0) or
+                     ((.html_url | type) != "string") or ((.html_url | length) == 0) or
+                     ((.created_at | type) != "string") or ((.created_at | length) == 0) or
+                     ((.updated_at | type) != "string") or ((.updated_at | length) == 0) or
+                     ((.run_started_at | type) != "string") or ((.run_started_at | length) == 0) then
+                  error("Spotlight terminal protected workflow run metadata is invalid")
+                else
+                  {
+                    name:$name,
+                    workflowId:.workflow_id,
+                    runId:.id,
+                    runAttempt:.run_attempt,
+                    checkSuiteId:.check_suite_id,
+                    event:.event,
+                    headBranch:.head_branch,
+                    headSha:.head_sha,
+                    repository:.repository.full_name,
+                    headRepository:.head_repository.full_name,
+                    status:.status,
+                    conclusion:.conclusion
+                  }
+                end
+              ' <<<"$payload"
+          }
+          CODEQL_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"
+          CODEQL_RUN="$(normalize_protected_certificate_run "$CODEQL_RUN_RAW" "$CODEQL_RUN_ID" "$CODEQL_CHECK_SUITE_ID" "CodeQL" ".github/workflows/codeql.yml")"
+          DEPENDENCY_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"
+          DEPENDENCY_RUN="$(normalize_protected_certificate_run "$DEPENDENCY_RUN_RAW" "$DEPENDENCY_RUN_ID" "$DEPENDENCY_CHECK_SUITE_ID" "Dependency review" ".github/workflows/dependency-review.yml")"
+          PROFILE_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"
+          PROFILE_RUN="$(normalize_protected_certificate_run "$PROFILE_RUN_RAW" "$PROFILE_RUN_ID" "$PROFILE_CHECK_SUITE_ID" "Profile quality" ".github/workflows/profile-quality.yml")"
+          EXPECTED_CERTIFICATE_RUNS="$(jq -cn --argjson codeql "$CODEQL_RUN" --argjson dependency "$DEPENDENCY_RUN" --argjson profile "$PROFILE_RUN" '[$codeql,$dependency,$profile] | sort_by(.name)')"
           test "$(jq -cS '.workflowRuns | sort_by(.name)' "$CERTIFICATE")" = "$(jq -cS . <<<"$EXPECTED_CERTIFICATE_RUNS")"
           EXPECTED_CERTIFICATE_CHECKS="$(jq -cn --arg head "$HEAD_SHA" --argjson codeql "$CODEQL_CHECK_SUITE_ID" --argjson dependency "$DEPENDENCY_CHECK_SUITE_ID" --argjson profile "$PROFILE_CHECK_SUITE_ID" '[{name:"analyze-actions",checkSuiteId:$codeql,appId:15368,status:"completed",conclusion:"success",headSha:$head},{name:"analyze-python",checkSuiteId:$codeql,appId:15368,status:"completed",conclusion:"success",headSha:$head},{name:"dependency-review",checkSuiteId:$dependency,appId:15368,status:"completed",conclusion:"success",headSha:$head},{name:"integration-pinned-upstream",checkSuiteId:$profile,appId:15368,status:"completed",conclusion:"success",headSha:$head},{name:"validate-contracts",checkSuiteId:$profile,appId:15368,status:"completed",conclusion:"success",headSha:$head}] | sort_by(.name)')"
           test "$(jq -cS '.checkRuns | sort_by(.name)' "$CERTIFICATE")" = "$(jq -cS . <<<"$EXPECTED_CERTIFICATE_CHECKS")"
