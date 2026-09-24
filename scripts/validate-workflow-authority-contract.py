@@ -80,6 +80,9 @@ IMMUTABLE_PROJECTED = (
     '          # Validate the complete candidate object before first publication or retry reuse.\n'
     '          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"\n'
 )
+
+HARDENED_RUN_BRANCH_PROOF = '                  (.head_branch != $branch) or'
+LEGACY_RUN_BRANCH_PROOF = 'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"'
 CURRENT_MAIN_CAPTURE = (
     '          CURRENT_MAIN_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"\n'
     '          test "$CURRENT_MAIN_SHA" = "$MERGE_SHA"\n'
@@ -346,7 +349,20 @@ def project_item9_sync_with_marker(sync: str) -> str:
 
     sync = project_ancestry_reconcile_to_same_base(sync)
     sync = project_native_review_gate_to_legacy_order(sync)
-    projected = ORIGINAL_PROJECT_ITEM9_SYNC(sync)
+    core.require(
+        sync.count(HARDENED_RUN_BRANCH_PROOF) == 1,
+        "Spotlight authority projection lost hardened protected workflow branch proof",
+    )
+    core.require(
+        LEGACY_RUN_BRANCH_PROOF not in sync,
+        "Spotlight authority projection found retired raw workflow-run branch proof in production",
+    )
+    sync_for_item9 = sync.replace(
+        HARDENED_RUN_BRANCH_PROOF,
+        LEGACY_RUN_BRANCH_PROOF,
+        1,
+    )
+    projected = ORIGINAL_PROJECT_ITEM9_SYNC(sync_for_item9)
     if projected.count(SPOTLIGHT_REVIEWER_STEWARDSHIP) != 1:
         raise ValueError("Spotlight item-9 reviewer-stewardship projection anchor changed")
     projected = projected.replace(SPOTLIGHT_REVIEWER_STEWARDSHIP, "", 1)
