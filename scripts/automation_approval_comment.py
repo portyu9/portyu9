@@ -328,10 +328,6 @@ def load(path: str) -> Any:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def emit(value: Any) -> None:
-    print(json.dumps(value, sort_keys=True, separators=(",", ":")))
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -353,26 +349,23 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.command == "evidence":
-            emit(
-                evidence(
-                    load(args.comments_file),
-                    repo=args.repository,
-                    pr_number=args.pr_number,
-                    expected_marker=args.marker,
-                )
+            decision = evidence(
+                load(args.comments_file),
+                repo=args.repository,
+                pr_number=args.pr_number,
+                expected_marker=args.marker,
             )
-        elif args.command == "created":
-            emit(
-                validate_created(
-                    load(args.comment_file),
-                    repo=args.repository,
-                    pr_number=args.pr_number,
-                    expected_body=args.expected_body,
-                )
+            return 0 if decision["exists"] else 3
+        if args.command == "created":
+            validate_created(
+                load(args.comment_file),
+                repo=args.repository,
+                pr_number=args.pr_number,
+                expected_body=args.expected_body,
             )
-        else:
-            self_test()
-            print("Governed automation-approval comment evidence self-test passed.")
+            return 0
+        self_test()
+        print("Governed automation-approval comment evidence self-test passed.")
         return 0
     except (OSError, json.JSONDecodeError, ApprovalCommentError) as exc:
         print(f"ERROR: {exc}", file=__import__("sys").stderr)
