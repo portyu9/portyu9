@@ -175,10 +175,24 @@ def validate_merge_success_response_overlay(sync: str) -> None:
     validation = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"')
     normalized_sha = merge.index('MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"')
     merged_pr = merge.index('MERGED_PR="$(gh api ')
-    current_main = merge.index('CURRENT_MAIN_SHA="$(gh api ')
-    cleanup = merge.index('CANDIDATE_REFS="$(gh api ')
-    require(mutation < validation < normalized_sha < merged_pr < current_main < cleanup,
-            "Spotlight merge-success validation must precede post-merge proof, current-main acceptance, and cleanup")
+    current_main_ref = merge.index(
+        'CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+        merged_pr,
+    )
+    current_main_schema = merge.index(
+        'validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "refs/heads/main" "$MERGE_SHA"',
+        current_main_ref,
+    )
+    current_main = merge.index(
+        'CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
+        current_main_schema,
+    )
+    cleanup = merge.index('CANDIDATE_REFS="$(gh api ', current_main)
+    require(
+        mutation < validation < normalized_sha < merged_pr
+        < current_main_ref < current_main_schema < current_main < cleanup,
+        "Spotlight merge-success validation must precede post-merge proof, typed current-main acceptance, and cleanup",
+    )
     require('test "$CURRENT_MAIN_SHA" = "$MERGE_SHA"' in merge and
             'echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"' in merge,
             "Spotlight must consume only the validated merge SHA for current-main proof and downstream evidence")
