@@ -2014,7 +2014,15 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'exact-base/head portyu9 review did not materialize after the pre-convergence dispatch.',
         'Observed exact-base/head marker-bound portyu9 approval before merge authorization.',
         'Spotlight terminal stage: trusted-admission-live-reproof-verified',
-        'jq -e --arg body "$APPROVAL_BODY" \'.body == $body\' approval-comment.json >/dev/null',
+        'python3 scripts/automation_approval_comment.py evidence',
+        '--comments-file "$RUNNER_TEMP/spotlight-approval-comment-pages.json"',
+        '--repository "$GITHUB_REPOSITORY"',
+        '--marker "$APPROVAL_MARKER"',
+        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/spotlight-approval-comment-evidence.json")"',
+        'python3 scripts/automation_approval_comment.py created',
+        '--comment-file "$RUNNER_TEMP/spotlight-approval-comment-created.json"',
+        '--expected-body "$APPROVAL_BODY"',
+        'test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"',
     )
     for fragment in spotlight_fragments:
         require(fragment in spotlight, f"Spotlight event-driven admission proof contract is missing: {fragment}")
@@ -2030,6 +2038,10 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
     )
     require('grep -Fxc "$APPROVAL_BODY"' not in spotlight,
             "Spotlight approval comment verification must compare the complete multiline body atomically")
+    require("'.body == $body' approval-comment.json" not in spotlight,
+            "Spotlight approval comment verification must not trust a raw body-only response")
+    require('COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"' not in spotlight,
+            "Spotlight approval comment dedupe must not consume raw paginated comments")
 
 
 
