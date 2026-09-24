@@ -19,6 +19,7 @@ from dependabot_pin_diff import self_test as pin_diff_self_test
 from dependabot_pr_identity import self_test as pr_identity_self_test
 from dependabot_reconciliation import self_test as reconciliation_self_test
 from dependabot_release import self_test as release_self_test
+from automation_approval_comment import self_test as approval_comment_self_test
 from workflow_capability_api_collection import self_test as api_collection_self_test
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,7 @@ WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
 CONTROLLER = WORKFLOWS / "dependabot-controller.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
+APPROVAL_COMMENT_HELPER = ROOT / "scripts/automation_approval_comment.py"
 
 EXPECTED_DEPENDABOT = """version: 2
 
@@ -410,6 +412,115 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         cursor = position
 
 
+def validate_controller_approval_comment_contract(text: str) -> None:
+    get_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
+    post_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments'
+    require(
+        text.count(get_endpoint) == 1,
+        "Dependabot automation-approval comment read endpoint changed",
+    )
+    require(
+        text.count(post_endpoint) == 2,
+        "Dependabot automation-approval comment endpoint inventory changed",
+    )
+    require(
+        text.count("python3 scripts/automation_approval_comment.py evidence") == 1,
+        "Dependabot must validate exactly one automation-approval comment collection",
+    )
+    require(
+        text.count("python3 scripts/automation_approval_comment.py created") == 1,
+        "Dependabot must validate exactly one created automation-approval comment response",
+    )
+    for fragment in (
+        "APPROVAL_COMMENT_EXISTS=false",
+        "if python3 scripts/automation_approval_comment.py evidence",
+        '--comments-file "$RUNNER_TEMP/dependabot-approval-comment-pages.json"',
+        '--repository "$TARGET_REPOSITORY"',
+        '--pr-number "$PR_NUMBER"',
+        '--marker "$APPROVAL_MARKER"; then',
+        "APPROVAL_COMMENT_EXISTS=true",
+        'APPROVAL_EVIDENCE_STATUS="$?"',
+        'if [ "$APPROVAL_EVIDENCE_STATUS" != "3" ]; then',
+        'echo "ERROR: malformed Dependabot automation-approval comment evidence." >&2',
+        'exit "$APPROVAL_EVIDENCE_STATUS"',
+        'test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"',
+        'if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then',
+        '--comment-file "$RUNNER_TEMP/dependabot-approval-comment-created.json"',
+        '--expected-body "$APPROVAL_BODY"',
+    ):
+        require(
+            fragment in text,
+            f"Dependabot automation-approval comment contract is missing: {fragment}",
+        )
+
+    for forbidden in (
+        'COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"',
+        '[.[][] | select(.body | contains($marker))] | length > 0',
+        'test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"',
+        'dependabot-approval-comment-evidence.json',
+        'dependabot-approval-comment-created-normalized.json',
+        'jq -r .actor',
+        'jq -r .prNumber',
+    ):
+        require(
+            forbidden not in text,
+            f"Dependabot regressed to output-bearing/raw automation-approval comment evidence: {forbidden}",
+        )
+
+    fetch_pos = text.index(get_endpoint)
+    validate_pos = text.index("if python3 scripts/automation_approval_comment.py evidence", fetch_pos)
+    present_pos = text.index("APPROVAL_COMMENT_EXISTS=true", validate_pos)
+    status_pos = text.index('APPROVAL_EVIDENCE_STATUS="$?"', present_pos)
+    absent_guard_pos = text.index(
+        'if [ "$APPROVAL_EVIDENCE_STATUS" != "3" ]; then',
+        status_pos,
+    )
+    decision_pos = text.index(
+        'test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"',
+        absent_guard_pos,
+    )
+    create_pos = text.index(post_endpoint, decision_pos)
+    created_validate_pos = text.index(
+        "python3 scripts/automation_approval_comment.py created",
+        create_pos,
+    )
+    merge_pos = text.index(
+        'repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge',
+        created_validate_pos,
+    )
+    require(
+        fetch_pos < validate_pos < present_pos < status_pos < absent_guard_pos
+        < decision_pos < create_pos < created_validate_pos < merge_pos,
+        "Dependabot automation-approval comment evidence moved out of fail-closed reviewed order",
+    )
+
+
+def validate_approval_comment_helper_contract(text: str) -> None:
+    for forbidden in (
+        "def dump(",
+        "def emit(",
+        "Path(path).write_text(",
+        "json.dumps(",
+        'p.add_argument("--out"',
+    ):
+        require(
+            forbidden not in text,
+            f"automation-approval helper must not retain a clear-text output sink: {forbidden}",
+        )
+    for required in (
+        "def load(path: str) -> Any:",
+        'return json.loads(Path(path).read_text(encoding="utf-8"))',
+        'decision = evidence(',
+        'return 0 if decision["exists"] else 3',
+        'validate_created(',
+        'print("Governed automation-approval comment evidence self-test passed.")',
+    ):
+        require(
+            required in text,
+            f"automation-approval helper exit-only boundary changed: {required}",
+        )
+
+
 def validate_quality_contract(text: str) -> None:
     require(
         '- ".github/dependabot.yml"' in text,
@@ -458,6 +569,7 @@ def self_test() -> None:
     admission_self_test()
     reconciliation_self_test()
     release_self_test()
+    approval_comment_self_test()
     controller_self_test()
     admission_proof_self_test()
     capability_admission_self_test()
@@ -486,7 +598,7 @@ def self_test() -> None:
 
 def main() -> int:
     try:
-        for path in (DEPENDABOT, QUALITY, CONTROLLER, GOVERNANCE):
+        for path in (DEPENDABOT, QUALITY, CONTROLLER, GOVERNANCE, APPROVAL_COMMENT_HELPER):
             require(path.is_file(), f"Dependabot governance input is missing: {path.relative_to(ROOT)}")
 
         self_test()
@@ -498,13 +610,15 @@ def main() -> int:
         validate_controller_collection_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
         validate_controller_merge_success_response_contract(controller_text)
+        validate_controller_approval_comment_contract(controller_text)
+        validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref singleton evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref singleton evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0

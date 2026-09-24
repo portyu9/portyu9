@@ -757,11 +757,34 @@ jobs:
           fi
 
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
-          COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
-          if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
+          gh api --paginate --slurp \
+            "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            > "$RUNNER_TEMP/dependabot-approval-comment-pages.json"
+          APPROVAL_COMMENT_EXISTS=false
+          if python3 scripts/automation_approval_comment.py evidence \
+            --comments-file "$RUNNER_TEMP/dependabot-approval-comment-pages.json" \
+            --repository "$TARGET_REPOSITORY" \
+            --pr-number "$PR_NUMBER" \
+            --marker "$APPROVAL_MARKER"; then
+            APPROVAL_COMMENT_EXISTS=true
+          else
+            APPROVAL_EVIDENCE_STATUS="$?"
+            if [ "$APPROVAL_EVIDENCE_STATUS" != "3" ]; then
+              echo "ERROR: malformed Dependabot automation-approval comment evidence." >&2
+              exit "$APPROVAL_EVIDENCE_STATUS"
+            fi
+          fi
+          test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"
+          if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then
             printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: all six protected exact-head gates are green for \`${HEAD_SHA}\` and an exact-base/head marker-bound APPROVED review by @portyu9 is verified. No manual workflow approval is required. Continuing with the governed expected-head merge."
-            gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
-            test "$(jq -r .body approval-comment.json | grep -Fxc "$APPROVAL_BODY")" = "1"
+            gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -f body="$APPROVAL_BODY" \
+              > "$RUNNER_TEMP/dependabot-approval-comment-created.json"
+            python3 scripts/automation_approval_comment.py created \
+              --comment-file "$RUNNER_TEMP/dependabot-approval-comment-created.json" \
+              --repository "$TARGET_REPOSITORY" \
+              --pr-number "$PR_NUMBER" \
+              --expected-body "$APPROVAL_BODY"
           fi
 
           MERGE_BODY="$RUNNER_TEMP/dependabot-merge-response.json"

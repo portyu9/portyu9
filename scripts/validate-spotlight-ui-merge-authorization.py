@@ -581,6 +581,118 @@ NATIVE_REVIEW_GATE_FRAGMENTS = (
 )
 
 
+def validate_approval_comment_evidence_overlay(sync: str) -> None:
+    approve = core.job_block(sync, "approve", "authorize")
+    get_endpoint = 'repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
+    post_endpoint = 'repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments'
+    require(
+        approve.count(get_endpoint) == 1,
+        "Spotlight automation-approval comment read endpoint changed",
+    )
+    require(
+        approve.count(post_endpoint) == 2,
+        "Spotlight automation-approval comment endpoint inventory changed",
+    )
+    require(
+        "python3 scripts/automation_approval_comment.py" not in approve,
+        "Spotlight privileged approval job must not acquire runner-resident Python authority",
+    )
+
+    required = (
+        'error("Spotlight automation-approval comment pages must be a bounded slurped page array")',
+        'error("Spotlight automation-approval comment page shape changed")',
+        'error("Spotlight automation-approval comment pagination is incomplete")',
+        'error("Spotlight automation-approval comment item schema changed")',
+        'error("Spotlight automation-approval comment ids are not unique")',
+        '([.[][] | .id] | group_by(.) | any(length > 1))',
+        'error("duplicate trusted Spotlight automation-approval comments exist")',
+        '.issue_url != ("https://api.github.com/repos/" + $repo + "/issues/" + ($pr | tostring))',
+        '.url != ("https://api.github.com/repos/" + $repo + "/issues/comments/" + (.id | tostring))',
+        '.login == "github-actions[bot]" and (.body | contains($marker))',
+        'exists:(($matches | length) == 1)',
+        'commentId:(if ($matches | length) == 1 then $matches[0].id else null end)',
+        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/spotlight-approval-comment-evidence.json")"',
+        'test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"',
+        'if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then',
+        'error("created Spotlight automation-approval comment must be an object")',
+        'error("created Spotlight automation-approval comment id is invalid")',
+        'error("created Spotlight automation-approval comment issue URL mismatch")',
+        'error("created Spotlight automation-approval comment URL mismatch")',
+        'error("created Spotlight automation-approval comment body mismatch")',
+        'error("created Spotlight automation-approval comment actor mismatch")',
+        'error("created Spotlight automation-approval comment html_url is invalid")',
+        '.user.login != "github-actions[bot]"',
+        '{id:.id,prNumber:$pr,repository:$repo,actor:.user.login}',
+        'test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"',
+        'test "$(jq -r .prNumber "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "$PR_NUMBER"',
+    )
+    for fragment in required:
+        require(
+            fragment in approve,
+            f"Spotlight automation-approval comment contract is missing: {fragment}",
+        )
+
+    for forbidden in (
+        'COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"',
+        '[.[][] | select(.body | contains($marker))] | length > 0',
+        "'.body == $body' approval-comment.json",
+    ):
+        require(
+            forbidden not in approve,
+            f"Spotlight regressed to raw automation-approval comment evidence: {forbidden}",
+        )
+
+    fetch_pos = approve.index(get_endpoint)
+    validate_pos = approve.index(
+        'error("Spotlight automation-approval comment pages must be a bounded slurped page array")',
+        fetch_pos,
+    )
+    normalized_pos = approve.index(
+        '> "$RUNNER_TEMP/spotlight-approval-comment-evidence.json"',
+        validate_pos,
+    )
+    consume_pos = approve.index(
+        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/spotlight-approval-comment-evidence.json")"',
+        normalized_pos,
+    )
+    create_pos = approve.index(post_endpoint, consume_pos)
+    created_validate_pos = approve.index(
+        'error("created Spotlight automation-approval comment must be an object")',
+        create_pos,
+    )
+    created_normalized_pos = approve.index(
+        '> "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json"',
+        created_validate_pos,
+    )
+    created_consume_pos = approve.index(
+        'test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"',
+        created_normalized_pos,
+    )
+    require(
+        fetch_pos < validate_pos < normalized_pos < consume_pos
+        < create_pos < created_validate_pos < created_normalized_pos < created_consume_pos,
+        "Spotlight automation-approval comment evidence moved out of typed reviewed order",
+    )
+
+
+def self_test_approval_comment_evidence_overlay(sync: str) -> None:
+    validate_approval_comment_evidence_overlay(sync)
+    mutated = sync.replace(
+        'exists:(($matches | length) == 1)',
+        'exists:(($matches | length) >= 1)',
+        1,
+    )
+    try:
+        validate_approval_comment_evidence_overlay(mutated)
+    except ValueError as exc:
+        require(
+            "automation-approval comment contract is missing" in str(exc),
+            f"Spotlight approval-comment self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Spotlight approval-comment contract accepted weakened trusted-match cardinality")
+
+
 def validate_native_governed_bot_review_overlay(sync: str) -> None:
     merge = core.job_block(sync, "merge", None)
     for fragment in NATIVE_REVIEW_GATE_FRAGMENTS:
@@ -710,6 +822,8 @@ def main() -> int:
         core.validate_preparer_script(preparer)
         core.validate_builder_script(builder, builder_core)
         core.validate_mac(sync)
+        validate_approval_comment_evidence_overlay(sync)
+        self_test_approval_comment_evidence_overlay(sync)
         validate_native_governed_bot_review_overlay(sync)
         self_test_native_governed_bot_review_overlay(sync)
         validate_merge_success_response_overlay(sync)
@@ -721,7 +835,7 @@ def main() -> int:
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
             "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state plus the separate trusted capability-admission proof, "
             "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance, "
-            "the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
+            "trusted-actor automation-approval comment evidence, the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
             "response plus typed terminal PR/file/commit evidence before current-main acceptance, candidate cleanup, or decision-receipt evidence."
         )
         return 0

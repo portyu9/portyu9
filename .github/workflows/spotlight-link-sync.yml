@@ -1104,11 +1104,83 @@ jobs:
           test "$(jq 'length' <<<"$PRS")" = "1"
           test "$(jq -r '.[0].number' <<<"$PRS")" = "$PR_NUMBER"
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
-          COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"
-          if ! jq -e --arg marker "$APPROVAL_MARKER" '[.[][] | select(.body | contains($marker))] | length > 0' <<<"$COMMENTS" >/dev/null; then
+          gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+            > "$RUNNER_TEMP/spotlight-approval-comment-pages.json"
+          jq -ce \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --argjson pr "$PR_NUMBER" \
+            --arg marker "$APPROVAL_MARKER" '
+              if type != "array" or length < 1 or length > 20 then
+                error("Spotlight automation-approval comment pages must be a bounded slurped page array")
+              elif any(.[]; type != "array" or length > 100) then
+                error("Spotlight automation-approval comment page shape changed")
+              elif (length > 1 and any(.[0:-1][]; length != 100)) then
+                error("Spotlight automation-approval comment pagination is incomplete")
+              elif any(.[][];
+                (type != "object") or
+                ((.id | type) != "number") or ((.id | floor) != .id) or (.id <= 0) or
+                (.issue_url != ("https://api.github.com/repos/" + $repo + "/issues/" + ($pr | tostring))) or
+                (.url != ("https://api.github.com/repos/" + $repo + "/issues/comments/" + (.id | tostring))) or
+                ((.body | type) != "string") or
+                ((.user | type) != "object") or
+                ((.user.login | type) != "string") or
+                ((.user.login | length) == 0) or
+                ((.html_url | type) != "string") or
+                ((.html_url | length) == 0)
+              ) then
+                error("Spotlight automation-approval comment item schema changed")
+              elif ([.[][] | .id] | group_by(.) | any(length > 1)) then
+                error("Spotlight automation-approval comment ids are not unique")
+              else
+                [.[][] | {id,login:.user.login,body}] as $comments
+                | [$comments[] | select(.login == "github-actions[bot]" and (.body | contains($marker)))] as $matches
+                | if ($matches | length) > 1 then
+                    error("duplicate trusted Spotlight automation-approval comments exist")
+                  else
+                    {
+                      exists:(($matches | length) == 1),
+                      commentId:(if ($matches | length) == 1 then $matches[0].id else null end),
+                      prNumber:$pr,
+                      repository:$repo,
+                      marker:$marker
+                    }
+                  end
+              end
+            ' "$RUNNER_TEMP/spotlight-approval-comment-pages.json" \
+            > "$RUNNER_TEMP/spotlight-approval-comment-evidence.json"
+          APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/spotlight-approval-comment-evidence.json")"
+          test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"
+          if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then
             printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: the exact Spotlight head \`${HEAD_SHA}\` passed all three protected PR workflows. An exact-head APPROVED review by @portyu9 is required before terminal merge; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path."
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$APPROVAL_BODY" > approval-comment.json
-            jq -e --arg body "$APPROVAL_BODY" '.body == $body' approval-comment.json >/dev/null
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -f body="$APPROVAL_BODY" \
+              > "$RUNNER_TEMP/spotlight-approval-comment-created.json"
+            jq -ce \
+              --arg repo "$GITHUB_REPOSITORY" \
+              --argjson pr "$PR_NUMBER" \
+              --arg body "$APPROVAL_BODY" '
+                if type != "object" then
+                  error("created Spotlight automation-approval comment must be an object")
+                elif ((.id | type) != "number") or ((.id | floor) != .id) or (.id <= 0) then
+                  error("created Spotlight automation-approval comment id is invalid")
+                elif .issue_url != ("https://api.github.com/repos/" + $repo + "/issues/" + ($pr | tostring)) then
+                  error("created Spotlight automation-approval comment issue URL mismatch")
+                elif .url != ("https://api.github.com/repos/" + $repo + "/issues/comments/" + (.id | tostring)) then
+                  error("created Spotlight automation-approval comment URL mismatch")
+                elif .body != $body then
+                  error("created Spotlight automation-approval comment body mismatch")
+                elif ((.user | type) != "object") or .user.login != "github-actions[bot]" then
+                  error("created Spotlight automation-approval comment actor mismatch")
+                elif ((.html_url | type) != "string") or ((.html_url | length) == 0) then
+                  error("created Spotlight automation-approval comment html_url is invalid")
+                else
+                  {id:.id,prNumber:$pr,repository:$repo,actor:.user.login}
+                end
+              ' "$RUNNER_TEMP/spotlight-approval-comment-created.json" \
+              > "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json"
+            test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"
+            test "$(jq -r .prNumber "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "$PR_NUMBER"
           fi
 
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
