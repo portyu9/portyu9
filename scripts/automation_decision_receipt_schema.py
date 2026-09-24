@@ -33,6 +33,14 @@ DISPATCH_DOWNSTREAM_REQUIRED = [
     "headRepository",
     "headRepositoryId",
 ]
+DISPATCH_ANCESTRY_REQUIRED = [
+    "baseSha",
+    "headSha",
+    "status",
+    "mergeBaseSha",
+    "aheadBy",
+    "behindBy",
+]
 
 
 def require(condition: bool, message: str) -> None:
@@ -79,8 +87,11 @@ def validate_dispatch_schema(conditions: list[Any]) -> None:
     require(isinstance(observation, dict) and observation.get("type") == "object"
             and observation.get("additionalProperties") is False,
             "Automation Decision Receipt dispatch observation must remain closed")
-    require(observation.get("required") == ["acceptedStatus", "previousRunHighWater", "downstreamRun"],
-            "Automation Decision Receipt dispatch observation required set changed")
+    require(
+        observation.get("required")
+        == ["acceptedStatus", "previousRunHighWater", "downstreamRun", "sourceAncestry"],
+        "Automation Decision Receipt dispatch observation required set changed",
+    )
     observed = observation.get("properties", {})
     require(observed.get("acceptedStatus") == {"const": 204},
             "Automation Decision Receipt dispatch acceptance schema changed")
@@ -112,6 +123,23 @@ def validate_dispatch_schema(conditions: list[Any]) -> None:
                 f"Automation Decision Receipt downstream {field} schema changed")
     require(fields.get("headSha") == {"$ref": "#/$defs/sha40"},
             "Automation Decision Receipt downstream head SHA schema changed")
+
+    ancestry = observed.get("sourceAncestry")
+    require(isinstance(ancestry, dict) and ancestry.get("type") == "object"
+            and ancestry.get("additionalProperties") is False,
+            "Automation Decision Receipt dispatch source ancestry must remain closed")
+    require(ancestry.get("required") == DISPATCH_ANCESTRY_REQUIRED,
+            "Automation Decision Receipt dispatch source ancestry required set changed")
+    ancestry_fields = ancestry.get("properties", {})
+    for field in ("baseSha", "headSha", "mergeBaseSha"):
+        require(ancestry_fields.get(field) == {"$ref": "#/$defs/sha40"},
+                f"Automation Decision Receipt dispatch source ancestry {field} schema changed")
+    require(ancestry_fields.get("status") == {"enum": ["identical", "ahead"]},
+            "Automation Decision Receipt dispatch source ancestry status schema changed")
+    require(ancestry_fields.get("aheadBy") == {"$ref": "#/$defs/nonNegativeInteger"},
+            "Automation Decision Receipt dispatch source ancestry aheadBy schema changed")
+    require(ancestry_fields.get("behindBy") == {"const": 0},
+            "Automation Decision Receipt dispatch source ancestry behindBy schema changed")
 
 
 def validate(schema: dict[str, Any]) -> None:
@@ -195,3 +223,16 @@ def self_test() -> None:
                 f"schema-binding dispatch self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("schema-binding self-test accepted changed downstream dispatch event")
+
+    changed_ancestry = copy.deepcopy(schema)
+    dispatch = dispatch_condition(changed_ancestry["$defs"]["effect"]["allOf"])
+    dispatch["then"]["properties"]["observation"]["properties"]["sourceAncestry"]["properties"]["status"] = {
+        "enum": ["identical", "ahead", "diverged"]
+    }
+    try:
+        validate(changed_ancestry)
+    except ValueError as exc:
+        require("source ancestry status" in str(exc),
+                f"schema-binding ancestry self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("schema-binding self-test accepted broadened dispatch ancestry status")
