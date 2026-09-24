@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v79"
+VERSION = "governed-workflow-byte-identity-v80"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "e5f7f01f1f709515dae282606345fdfb01a7fc70",
     ".github/workflows/profile-stats.yml": "627ecd3d7a5d9ca4e7051acf3c64d3edab914af0",
-    ".github/workflows/spotlight-link-sync.yml": "aa913adeee8cef0203b99f9521ec11f98544a36b",
+    ".github/workflows/spotlight-link-sync.yml": "b8dd6d69f38edbc0b36122b93284ace5f9508614",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -2014,14 +2014,11 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'exact-base/head portyu9 review did not materialize after the pre-convergence dispatch.',
         'Observed exact-base/head marker-bound portyu9 approval before merge authorization.',
         'Spotlight terminal stage: trusted-admission-live-reproof-verified',
-        'python3 scripts/automation_approval_comment.py evidence',
-        '--comments-file "$RUNNER_TEMP/spotlight-approval-comment-pages.json"',
-        '--repository "$GITHUB_REPOSITORY"',
-        '--marker "$APPROVAL_MARKER"',
-        'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/spotlight-approval-comment-evidence.json")"',
-        'python3 scripts/automation_approval_comment.py created',
-        '--comment-file "$RUNNER_TEMP/spotlight-approval-comment-created.json"',
-        '--expected-body "$APPROVAL_BODY"',
+        'error("Spotlight automation-approval comment pages must be a bounded slurped page array")',
+        '.login == "github-actions[bot]" and (.body | contains($marker))',
+        'error("duplicate trusted Spotlight automation-approval comments exist")',
+        'exists:(($matches | length) == 1)',
+        'error("created Spotlight automation-approval comment actor mismatch")',
         'test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"',
     )
     for fragment in spotlight_fragments:
@@ -2042,6 +2039,8 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
             "Spotlight approval comment verification must not trust a raw body-only response")
     require('COMMENTS="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"' not in spotlight,
             "Spotlight approval comment dedupe must not consume raw paginated comments")
+    require("python3 scripts/automation_approval_comment.py" not in spotlight,
+            "Spotlight approval job must not acquire runner-resident Python authority")
 
 
 
