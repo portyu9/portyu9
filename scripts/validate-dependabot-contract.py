@@ -304,6 +304,119 @@ def validate_controller_collection_contract(text: str) -> None:
     )
 
 
+def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
+    start_marker = "          approve_exact_pr_workflows() {\n"
+    end_marker = "\n\n          assert_transaction\n          approve_exact_pr_workflows\n"
+    require(
+        text.count(start_marker) == 1 and text.count(end_marker) == 1,
+        "Dependabot protected workflow approval block anchors changed",
+    )
+    block = text[text.index(start_marker):text.index(end_marker, text.index(start_marker))]
+
+    workflow_validator = "python3 scripts/dependabot_controller.py workflow-definition-response"
+    run_validator = "python3 scripts/dependabot_controller.py protected-workflow-runs-response"
+    require(
+        block.count(workflow_validator) == 3,
+        "Dependabot must type exactly three protected workflow-definition responses",
+    )
+    require(
+        block.count(run_validator) == 1,
+        "Dependabot must type exactly one protected pull-request workflow-run collection",
+    )
+    for forbidden in (
+        'actions/workflows/codeql.yml" --jq .id',
+        'actions/workflows/dependency-review.yml" --jq .id',
+        'actions/workflows/profile-quality.yml" --jq .id',
+        'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"',
+        "'.total_count // empty' <<<\"$runs\"",
+        'jq -r .head_sha <<<"$run"',
+        'jq -r .head_branch <<<"$run"',
+        'jq -r .event <<<"$run"',
+        'jq -r .repository.full_name <<<"$run"',
+        'jq -r .head_repository.full_name <<<"$run"',
+    ):
+        require(
+            forbidden not in block,
+            f"Dependabot protected workflow approval regained raw evidence consumption: {forbidden}",
+        )
+
+    workflow_contracts = (
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
+            '--response "$RUNNER_TEMP/dependabot-codeql-workflow-definition.json"',
+            '--expected-path ".github/workflows/codeql.yml"',
+            'codeql_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-codeql-workflow-definition-normalized.json")"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"',
+            '--response "$RUNNER_TEMP/dependabot-dependency-workflow-definition.json"',
+            '--expected-path ".github/workflows/dependency-review.yml"',
+            'dependency_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-dependency-workflow-definition-normalized.json")"',
+        ),
+        (
+            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"',
+            '--response "$RUNNER_TEMP/dependabot-profile-workflow-definition.json"',
+            '--expected-path ".github/workflows/profile-quality.yml"',
+            'profile_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-profile-workflow-definition-normalized.json")"',
+        ),
+    )
+    cursor = -1
+    for fetch, response, expected_path, consume in workflow_contracts:
+        fetch_pos = block.index(fetch, cursor + 1)
+        validate_pos = block.index(workflow_validator, fetch_pos)
+        consume_pos = block.index(consume, validate_pos)
+        validator_block = block[validate_pos:consume_pos]
+        for fragment in (response, expected_path):
+            require(
+                fragment in validator_block,
+                f"Dependabot workflow-definition contract is missing: {fragment}",
+            )
+        require(
+            fetch_pos < validate_pos < consume_pos,
+            "Dependabot workflow-definition evidence must be typed before ID consumption",
+        )
+        cursor = consume_pos
+
+    run_fetch = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}'
+        '&event=pull_request&per_page=100"'
+    )
+    run_consume = (
+        'total="$(jq -r .totalCount "$RUNNER_TEMP/dependabot-protected-workflow-runs-normalized.json")"'
+    )
+    for fragment in (
+        '> "$RUNNER_TEMP/dependabot-protected-workflow-runs.json"',
+        '--response "$RUNNER_TEMP/dependabot-protected-workflow-runs.json"',
+        '--head-sha "$HEAD_SHA"',
+        '--branch "$HEAD_REF"',
+        '--codeql-workflow-id "$codeql_workflow_id"',
+        '--dependency-workflow-id "$dependency_workflow_id"',
+        '--profile-workflow-id "$profile_workflow_id"',
+        '--out "$RUNNER_TEMP/dependabot-protected-workflow-runs-normalized.json"',
+        run_consume,
+        'runs="$(jq -c .runs "$RUNNER_TEMP/dependabot-protected-workflow-runs-normalized.json")"',
+        '.workflowId == $workflow_id',
+        '.checkSuiteId',
+        '.runAttempt',
+    ):
+        require(
+            fragment in block,
+            f"Dependabot protected workflow-run contract is missing: {fragment}",
+        )
+    fetch_pos = block.index(run_fetch)
+    validate_pos = block.index(run_validator, fetch_pos)
+    consume_pos = block.index(run_consume, validate_pos)
+    require(
+        fetch_pos < validate_pos < consume_pos,
+        "Dependabot protected workflow-run collection must be typed before scalar consumption",
+    )
+    require(
+        "for attempt in $(seq 1 12); do" in block
+        and 'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve"' in block,
+        "Dependabot protected workflow approval retry/mutation authority changed",
+    )
+
+
 def validate_controller_git_mutation_response_contract(text: str) -> None:
     commands = {
         "git-blob-response": 1,
@@ -607,6 +720,7 @@ def main() -> int:
         controller_text = CONTROLLER.read_text(encoding="utf-8")
         validate_controller_wake_contract(controller_text)
         validate_controller_read_ref_response_contract(controller_text)
+        validate_controller_protected_workflow_evidence_contract(controller_text)
         validate_controller_collection_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
         validate_controller_merge_success_response_contract(controller_text)
