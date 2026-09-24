@@ -67,6 +67,13 @@
       "rationale": "Authorize #787's exact Capability Admission bootstrap-order repair: the existing pinned trusted-main checkout and exact Python setup/runtime verification move before candidate binding so the already-reviewed collection parser exists when delegated/scheduled Spotlight admission executes. Triggers, permissions, endpoints, evaluator, check publisher, mutations and semantic Workflow Capability remain unchanged; no required-check reduction, direct-main write, ruleset change or bypass is added."
     },
     {
+      "id": "cap-capability-admission-candidate-source-response-schema-hardening-v1",
+      "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
+      "expansionSha256": "8688f6d4890e4b1c73585e712c04ec91b2301157900b218983dee3bde8a9b0a4",
+      "rationale": "Authorize #928's exact Capability Admission CodeQL Autofix origin-run and candidate Git commit/tree/blob response-schema hardening. Existing read-only GETs, triggers, permissions, evaluator, publisher, mutations and merge authority are unchanged. Origin-run and candidate source objects must validate before scalar/content use. Workflow Capability is unchanged; no new endpoint, method, secret, OIDC, check reduction, direct-main write, ruleset change or bypass."
+    },
+    {
       "id": "cap-capability-admission-check-run-response-schema-hardening",
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
