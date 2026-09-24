@@ -186,6 +186,13 @@
       "rationale": "Authorize #796's exact post-merge continuation: trusted main snapshots CodeQL workflow-dispatch runs, dispatches CodeQL on the merged main SHA, binds exactly one new exact-SHA run, waits for that run to succeed while main stays fixed, then emits one existing codeql-autofix repository dispatch. No new permissions, triggers, candidate execution, direct-main mutation, merge authority, ruleset bypass, secrets, or OIDC."
     },
     {
+      "id": "cap-codeql-autofix-pr-singleton-response-schema-hardening-v1",
+      "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "expansionSha256": "1962f801cc6d1a3fe785ce70aaf6ecb12b7d1ba82d819b726ba0ba592a994c38",
+      "rationale": "Authorize frozen #951's exact CodeQL Autofix trusted-source hardening: four ordinary pull-request singleton GET responses are typed against exact PR, repository, base, head and deterministic branch identity before any scalar use. Semantic Workflow Capability BOM bytes are unchanged, and existing API endpoints/counts, triggers, permissions, retries, review authority, mutations, merge authority, required checks, rulesets, OIDC and bypass behavior remain unchanged."
+    },
+    {
       "id": "cap-codeql-autofix-production-controller",
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
