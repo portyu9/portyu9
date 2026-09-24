@@ -45,8 +45,26 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           [[ "$TRUSTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
-          LIVE_MAIN_SHA="$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)"
-          [[ "$LIVE_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
+          LIVE_MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"
+          LIVE_MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$LIVE_MAIN_REF_RESPONSE")"
 
           case "$GITHUB_EVENT_NAME" in
             push|workflow_dispatch)
@@ -143,7 +161,27 @@ jobs:
           [[ "$ADMIN_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
           test -n "$ADMIN_PRIVATE_KEY"
           test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
-          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"
+          MAIN_REF_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN_REF_RESPONSE")"
+          test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"
           python3 scripts/ruleset_transition_contract.py validate --transition-digest "$TRANSITION_DIGEST"
           python3 scripts/ruleset_transition_contract.py emit-put \
             --transition-digest "$TRANSITION_DIGEST" \
@@ -220,7 +258,27 @@ jobs:
             .repositories[0].owner.login == "portyu9"
           ' token-repositories.json >/dev/null
 
-          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"
+          MAIN_REF_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN_REF_RESPONSE")"
+          test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"
           GH_TOKEN="$ADMIN_TOKEN" gh api "repos/portyu9/portyu9/rulesets/22148161" > live-prewrite.json
           PREWRITE="$(python3 scripts/ruleset_transition_contract.py classify --live live-prewrite.json)"
           PREWRITE_STATE="$(jq -r .state <<<"$PREWRITE")"
@@ -234,7 +292,27 @@ jobs:
           NOW="$(date +%s)"
           test "$NOW" -ge "$ISSUED_AT"
           test "$NOW" -lt "$EXPIRES_AT"
-          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"
+          MAIN_REF_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN_REF_RESPONSE")"
+          test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"
 
           set +e
           GH_TOKEN="$ADMIN_TOKEN" gh api --method PUT \
@@ -331,7 +409,27 @@ jobs:
           set -euo pipefail
           [[ "$EXPECTED_RECEIPT_SHA256" =~ ^sha256:[0-9a-f]{64}$ ]]
           test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
-          test "$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)" = "$TRUSTED_MAIN_SHA"
+          MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"
+          MAIN_REF_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN_REF_RESPONSE")"
+          test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"
           python3 scripts/ruleset_transition_contract.py validate             --transition-digest sha256:06debdba96bd6567d08d2672e40e0df24ddc60cd194326d330ff712ce8cbb29b
           test "sha256:$(sha256sum receipt/ruleset-reconciliation-receipt.json | cut -d' ' -f1)" = "$EXPECTED_RECEIPT_SHA256"
 
