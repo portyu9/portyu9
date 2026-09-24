@@ -232,7 +232,7 @@ def validate_text(text: str) -> None:
     )
     discovery_ref_consume = text.index(
         'MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"',
-        discovery_ref_schema,
+        discovery_ref_call,
     )
     common_ref_call = text.index(
         'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
@@ -244,7 +244,7 @@ def validate_text(text: str) -> None:
     )
     common_ref_consume = text.index(
         'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"',
-        common_ref_schema,
+        common_ref_call,
     )
     head_ref_call = text.index(
         'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
@@ -256,7 +256,7 @@ def validate_text(text: str) -> None:
     )
     head_ref_consume = text.index(
         'test "$(jq -r .object.sha <<<"$HEAD_REF_RESPONSE")" = "$HEAD_SHA"',
-        head_ref_schema,
+        head_ref_call,
     )
     generated_ref_call = text.index(
         'GENERATED_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated")"',
@@ -268,7 +268,7 @@ def validate_text(text: str) -> None:
     )
     generated_ref_consume = text.index(
         'GENERATED_SHA="$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")"',
-        generated_ref_schema,
+        generated_ref_call,
     )
     require(
         discovery_ref_call < discovery_ref_schema < discovery_ref_consume
@@ -288,15 +288,15 @@ def validate_text(text: str) -> None:
     )
     readme_path_consume = text.index(
         'test "$(jq -r .path <<<"$README_CONTENTS_RESPONSE")" = "README.md"',
-        readme_schema,
+        readme_call,
     )
     readme_sha_consume = text.index(
         'test "$(jq -r .sha <<<"$README_CONTENTS_RESPONSE")" = "$README_BLOB_SHA"',
-        readme_path_consume,
+        readme_call,
     )
     readme_content_consume = text.index(
         'jq -r .content <<<"$README_CONTENTS_RESPONSE" \\',
-        readme_sha_consume,
+        readme_call,
     )
     require(
         readme_call < readme_schema < readme_path_consume < readme_sha_consume < readme_content_consume,
