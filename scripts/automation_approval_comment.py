@@ -328,11 +328,8 @@ def load(path: str) -> Any:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def dump(path: str, value: Any) -> None:
-    Path(path).write_text(
-        json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-    )
+def emit(value: Any) -> None:
+    print(json.dumps(value, sort_keys=True, separators=(",", ":")))
 
 
 def main() -> int:
@@ -344,38 +341,34 @@ def main() -> int:
     p.add_argument("--repository", required=True)
     p.add_argument("--pr-number", type=int, required=True)
     p.add_argument("--marker", required=True)
-    p.add_argument("--out", required=True)
 
     p = sub.add_parser("created")
     p.add_argument("--comment-file", required=True)
     p.add_argument("--repository", required=True)
     p.add_argument("--pr-number", type=int, required=True)
     p.add_argument("--expected-body", required=True)
-    p.add_argument("--out", required=True)
 
     sub.add_parser("self-test")
 
     args = parser.parse_args()
     try:
         if args.command == "evidence":
-            dump(
-                args.out,
+            emit(
                 evidence(
                     load(args.comments_file),
                     repo=args.repository,
                     pr_number=args.pr_number,
                     expected_marker=args.marker,
-                ),
+                )
             )
         elif args.command == "created":
-            dump(
-                args.out,
+            emit(
                 validate_created(
                     load(args.comment_file),
                     repo=args.repository,
                     pr_number=args.pr_number,
                     expected_body=args.expected_body,
-                ),
+                )
             )
         else:
             self_test()
