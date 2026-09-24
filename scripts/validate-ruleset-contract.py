@@ -665,8 +665,9 @@ def validate_sentinel_main_ref_evidence(text: str, *, run_self_test: bool = True
     )
 
     start = text.index(normalize)
-    end = text.index(consume, start)
-    schema = text[start:end]
+    normalize_end_marker = '\' <<<"$LIVE_MAIN_REF_RESPONSE")"'
+    normalize_end = text.index(normalize_end_marker, start) + len(normalize_end_marker)
+    schema = text[start:normalize_end]
     for fragment in (
         'error("Ruleset sentinel main ref response must be an object")',
         '.ref != "refs/heads/main"',
@@ -692,8 +693,8 @@ def validate_sentinel_main_ref_evidence(text: str, *, run_self_test: bool = True
         'error("Ruleset sentinel main ref response must be an object")',
         start,
     )
-    consume_pos = text.index(consume, start)
-    positions = (text.index(capture), start, schema_proof, consume_pos)
+    consume_pos = text.index(consume)
+    positions = (text.index(capture), start, schema_proof, normalize_end, consume_pos)
     require(
         list(positions) == sorted(positions) and len(set(positions)) == len(positions),
         "Ruleset sentinel main-ref schema must precede trusted-main SHA consumption",
@@ -746,8 +747,8 @@ def validate_sentinel_main_ref_evidence(text: str, *, run_self_test: bool = True
                     f"{current}"
                 )
 
-        schema_block = text[start:end]
-        displaced = text[:start] + text[end:]
+        schema_block = text[start:normalize_end]
+        displaced = text[:start] + text[normalize_end:]
         consume_pos = displaced.index(consume)
         consume_end = displaced.index("\n", consume_pos) + 1
         reordered = displaced[:consume_end] + schema_block + displaced[consume_end:]
