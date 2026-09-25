@@ -5,6 +5,7 @@ on:
     workflows:
       - Profile quality
       - CodeQL
+      - Capability admission
     types:
       - completed
     branches:
@@ -86,18 +87,34 @@ jobs:
               WAKE_EVENT="$(jq -r .event <<<"$WAKE")"
               WAKE_HEAD_BRANCH="$(jq -r '.head_branch // ""' <<<"$WAKE")"
               WAKE_HEAD_SHA="$(jq -r .head_sha <<<"$WAKE")"
-              test "$WAKE_WORKFLOW" = "Profile quality" || test "$WAKE_WORKFLOW" = "CodeQL"
+              case "$WAKE_WORKFLOW" in
+                "Profile quality"|"CodeQL"|"Capability admission")
+                  ;;
+                *)
+                  echo "ERROR: unsupported Dependabot controller wake workflow: $WAKE_WORKFLOW" >&2
+                  exit 1
+                  ;;
+              esac
               test "$(jq -r .repository.full_name <<<"$WAKE")" = "$TARGET_REPOSITORY"
               test "$(jq -r .head_repository.full_name <<<"$WAKE")" = "$TARGET_REPOSITORY"
               [[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
               if [ "$WAKE_HEAD_BRANCH" = "main" ]; then
-                if [ "$WAKE_EVENT" = "pull_request" ]; then
-                  printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
-                  echo "Ignoring main-headed pull_request workflow_run wake; reverse ancestry-sync PRs are not Dependabot candidates."
-                  exit 0
+                if [ "$WAKE_WORKFLOW" = "Capability admission" ]; then
+                  if [ "$WAKE_EVENT" != "repository_dispatch" ]; then
+                    printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
+                    echo "Ignoring non-Dependabot Capability admission completion wake."
+                    exit 0
+                  fi
+                else
+                  if [ "$WAKE_EVENT" = "pull_request" ]; then
+                    printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
+                    echo "Ignoring main-headed pull_request workflow_run wake; reverse ancestry-sync PRs are not Dependabot candidates."
+                    exit 0
+                  fi
+                  test "$WAKE_EVENT" = "push" || test "$WAKE_EVENT" = "workflow_dispatch"
                 fi
-                test "$WAKE_EVENT" = "push" || test "$WAKE_EVENT" = "workflow_dispatch"
               else
+                test "$WAKE_WORKFLOW" = "Profile quality" || test "$WAKE_WORKFLOW" = "CodeQL"
                 test "$WAKE_EVENT" = "pull_request" || test "$WAKE_EVENT" = "workflow_dispatch"
                 [[ "$WAKE_HEAD_BRANCH" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
               fi
@@ -499,7 +516,7 @@ jobs:
 
           delegated_admission_attempt_ready() {
             local proof_checks proof_count proof_run_id proof_run_attempt
-            proof_checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")" || return 1
+            proof_checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100")" || return 1
             if ! jq -e --arg head "$HEAD_SHA" '
               (type == "object") and
               (.total_count == 1) and
@@ -673,39 +690,29 @@ jobs:
           READY=false
           if checks_ready; then
             READY=true
-          fi
-
-          if [ "$READY" != "true" ]; then
+            printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
+          elif delegated_admission_attempt_ready; then
             ACTIVE="$(workflow_dispatch_runs)"
             if jq -e '[.workflow_runs[] | select(.status != "completed")] | length > 0' <<<"$ACTIVE" >/dev/null; then
               printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
-              echo "Exact-head protected checks are already active; bounded convergence will re-evaluate them."
+              echo "Exact-head validation is already active; a later trusted workflow completion wake will resume convergence."
             else
               gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
-              jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" \
-                '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
-                > admission-dispatch.json
-              gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
               printf 'dispatched=true\n' >> "$GITHUB_OUTPUT"
-              echo "Dispatched exact-head admission and read-only validation; validation will sequence CodeQL after its three gates succeed."
+              echo "Trusted admission proof is complete; dispatched exact-head validation after the prerequisite instead of racing it."
             fi
-
-            for ATTEMPT in $(seq 1 24); do
-              sleep 15
-              assert_transaction
-              if checks_ready; then
-                READY=true
-                echo "All six exact-head protected checks converged successfully on bounded attempt ${ATTEMPT}."
-                break
-              fi
-            done
           else
-            printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
+            jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" \
+              '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
+              > admission-dispatch.json
+            gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
+            printf 'dispatched=true\n' >> "$GITHUB_OUTPUT"
+            echo "Dispatched trusted admission only; Capability admission completion is the causal wake for validation."
           fi
 
           printf 'ready=%s\n' "$READY" >> "$GITHUB_OUTPUT"
           if [ "$READY" != "true" ]; then
-            echo "Exact-head checks did not converge inside the bounded controller window; a later trusted wake may retry."
+            echo "Exact-head checks are not merge-ready yet; event-driven trusted wakes will resume without turning latency into failure."
           fi
 
       - name: Perform exact-head protected Dependabot merge
@@ -882,7 +889,7 @@ jobs:
 
   validation_bind:
     if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/dependabot/github_actions/')
-    name: trusted-capability-admission
+    name: dependabot-validation-bind
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
@@ -1124,30 +1131,18 @@ jobs:
             test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"
           }
 
-          for ATTEMPT in $(seq 1 30); do
-            assert_main_sha "$BASE_SHA"
-            assert_head_sha "$HEAD_SHA"
-            CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"
-            if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then
-              jq '.check_runs[0]' <<<"$CHECKS" > dependabot-admission-check.json
-              EXTERNAL_ID="$(jq -r '.external_id // ""' dependabot-admission-check.json)"
-              if [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then
-                if python3 scripts/dependabot_admission_proof.py verify-check \
-                  --check dependabot-admission-check.json \
-                  --pr-number "$PR_NUMBER" \
-                  --base-sha "$BASE_SHA" \
-                  --head-sha "$HEAD_SHA" \
-                  --out dependabot-admission-proof-verified.json; then
-                  echo "Consumed exact trusted-main delegated admission digest-bound retry-history proof on bounded attempt ${ATTEMPT}."
-                  exit 0
-                fi
-              fi
-            fi
-            sleep 5
-          done
-
-          echo "ERROR: exact trusted-main delegated admission proof did not arrive inside the bounded gate window" >&2
-          exit 1
+          assert_main_sha "$BASE_SHA"
+          assert_head_sha "$HEAD_SHA"
+          CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100")"
+          test "$(jq -r .total_count <<<"$CHECKS")" = "1"
+          jq '.check_runs[0]' <<<"$CHECKS" > dependabot-admission-check.json
+          python3 scripts/dependabot_admission_proof.py verify-check \
+            --check dependabot-admission-check.json \
+            --pr-number "$PR_NUMBER" \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --out dependabot-admission-proof-verified.json
+          echo "Consumed exact trusted-main required admission proof after causal validation dispatch sequencing."
 
   validate_contracts:
     if: github.event_name == 'workflow_dispatch' && needs.validation_bind.result == 'success'
