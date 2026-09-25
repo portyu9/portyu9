@@ -142,25 +142,38 @@ jobs:
           PR_NUMBER="$(jq -r '.[0].number' <<<"$MATCHES")"
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
           gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
-          HEAD_SHA="$(jq -r .head.sha dependabot-pr.json)"
-          HEAD_REF="$(jq -r .head.ref dependabot-pr.json)"
-          BASE_SHA="$(jq -r .base.sha dependabot-pr.json)"
+          python3 scripts/dependabot_controller.py pull-request-response \
+            --response dependabot-pr.json \
+            --expected-number "$PR_NUMBER" \
+            --expected-repository "$TARGET_REPOSITORY" \
+            --out dependabot-pr-normalized.json
+          HEAD_SHA="$(jq -r .headSha dependabot-pr-normalized.json)"
+          HEAD_REF="$(jq -r .headRef dependabot-pr-normalized.json)"
+          BASE_SHA="$(jq -r .baseSha dependabot-pr-normalized.json)"
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-          REQUESTED="$(jq '[.requested_reviewers[]? | select(.login == "portyu9")] | length' dependabot-pr.json)"
+          REQUESTED="$(jq -r 'if .portyu9Requested then 1 else 0 end' dependabot-pr-normalized.json)"
           [[ "$REQUESTED" =~ ^[0-9]+$ ]]
           if [ "$REQUESTED" = "0" ]; then
             gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
               -f 'reviewers[]=portyu9' > requested-reviewer.json
-            test "$(jq '[.requested_reviewers[]? | select(.login == "portyu9")] | length' requested-reviewer.json)" = "1"
+            python3 scripts/dependabot_controller.py pull-request-response \
+              --response requested-reviewer.json \
+              --expected-number "$PR_NUMBER" \
+              --expected-repository "$TARGET_REPOSITORY" \
+              --out requested-reviewer-normalized.json
+            test "$(jq -r .portyu9Requested requested-reviewer-normalized.json)" = "true"
           fi
 
           if [ "$BASE_SHA" != "$MAIN_SHA" ]; then
             gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
               -f expected_head_sha="$HEAD_SHA" > update-branch.json
-            test "$(jq -r .message update-branch.json)" = "Updating pull request branch."
+            python3 scripts/dependabot_controller.py update-branch-response \
+              --response update-branch.json \
+              --out update-branch-normalized.json
+            test "$(jq -r .message update-branch-normalized.json)" = "Updating pull request branch."
             printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
             echo "Requested exact-head Dependabot branch update; next scheduled pass will re-prove the new head."
             exit 0
@@ -710,19 +723,25 @@ jobs:
           }
           MERGE_ELIGIBLE=false
           for ATTEMPT in $(seq 1 12); do
-            PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr-snapshot.json"
+            python3 scripts/dependabot_controller.py pull-request-response \
+              --response "$RUNNER_TEMP/dependabot-pr-snapshot.json" \
+              --expected-number "$PR_NUMBER" \
+              --expected-repository "$TARGET_REPOSITORY" \
+              --out "$RUNNER_TEMP/dependabot-pr-snapshot-normalized.json"
+            PR="$(cat "$RUNNER_TEMP/dependabot-pr-snapshot-normalized.json")"
             test "$(jq -r .state <<<"$PR")" = "open"
             test "$(jq -r .draft <<<"$PR")" = "false"
-            test "$(jq -r .base.ref <<<"$PR")" = "main"
-            test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
-            test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
-            test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
-            test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+            test "$(jq -r .baseRef <<<"$PR")" = "main"
+            test "$(jq -r .baseSha <<<"$PR")" = "$BASE_SHA"
+            test "$(jq -r .headSha <<<"$PR")" = "$HEAD_SHA"
+            test "$(jq -r .headRef <<<"$PR")" = "$HEAD_REF"
+            test "$(jq -r .headRepository <<<"$PR")" = "$TARGET_REPOSITORY"
             assert_main_sha "$BASE_SHA"
             assert_head_sha "$HEAD_SHA"
 
             MERGEABLE="$(jq -r '.mergeable // ""' <<<"$PR")"
-            MERGEABLE_STATE="$(jq -r '.mergeable_state // ""' <<<"$PR")"
+            MERGEABLE_STATE="$(jq -r '.mergeableState // ""' <<<"$PR")"
             if [ "$MERGEABLE" = "true" ] && [ "$MERGEABLE_STATE" = "clean" ]; then
               MERGE_ELIGIBLE=true
               echo "GitHub protected-merge eligibility converged on bounded attempt ${ATTEMPT}."
@@ -901,16 +920,21 @@ jobs:
           PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
           gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
-          test "$(jq -r .number dependabot-pr.json)" = "$PR_NUMBER"
-          test "$(jq -r .user.login dependabot-pr.json)" = "dependabot[bot]"
-          test "$(jq -r .state dependabot-pr.json)" = "open"
-          test "$(jq -r .draft dependabot-pr.json)" = "false"
-          test "$(jq -r .maintainer_can_modify dependabot-pr.json)" = "false"
-          test "$(jq -r .base.ref dependabot-pr.json)" = "main"
-          test "$(jq -r .base.sha dependabot-pr.json)" = "$BASE_SHA"
-          test "$(jq -r .head.sha dependabot-pr.json)" = "$HEAD_SHA"
-          test "$(jq -r .head.ref dependabot-pr.json)" = "$HEAD_REF"
-          test "$(jq -r .head.repo.full_name dependabot-pr.json)" = "$TARGET_REPOSITORY"
+          python3 scripts/dependabot_controller.py pull-request-response \
+            --response dependabot-pr.json \
+            --expected-number "$PR_NUMBER" \
+            --expected-repository "$TARGET_REPOSITORY" \
+            --out dependabot-pr-normalized.json
+          test "$(jq -r .number dependabot-pr-normalized.json)" = "$PR_NUMBER"
+          test "$(jq -r .user dependabot-pr-normalized.json)" = "dependabot[bot]"
+          test "$(jq -r .state dependabot-pr-normalized.json)" = "open"
+          test "$(jq -r .draft dependabot-pr-normalized.json)" = "false"
+          test "$(jq -r .maintainerCanModify dependabot-pr-normalized.json)" = "false"
+          test "$(jq -r .baseRef dependabot-pr-normalized.json)" = "main"
+          test "$(jq -r .baseSha dependabot-pr-normalized.json)" = "$BASE_SHA"
+          test "$(jq -r .headSha dependabot-pr-normalized.json)" = "$HEAD_SHA"
+          test "$(jq -r .headRef dependabot-pr-normalized.json)" = "$HEAD_REF"
+          test "$(jq -r .headRepository dependabot-pr-normalized.json)" = "$TARGET_REPOSITORY"
           gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-validation-head-ref.json"
           python3 scripts/dependabot_controller.py git-ref-read-response \
             --response "$RUNNER_TEMP/dependabot-validation-head-ref.json" \
@@ -1364,14 +1388,20 @@ jobs:
             test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"
           }
 
-          PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr-snapshot.json"
+          python3 scripts/dependabot_controller.py pull-request-response \
+            --response "$RUNNER_TEMP/dependabot-pr-snapshot.json" \
+            --expected-number "$PR_NUMBER" \
+            --expected-repository "$TARGET_REPOSITORY" \
+            --out "$RUNNER_TEMP/dependabot-pr-snapshot-normalized.json"
+          PR="$(cat "$RUNNER_TEMP/dependabot-pr-snapshot-normalized.json")"
           test "$(jq -r .state <<<"$PR")" = "open"
           test "$(jq -r .draft <<<"$PR")" = "false"
-          test "$(jq -r .base.ref <<<"$PR")" = "main"
-          test "$(jq -r .base.sha <<<"$PR")" = "$BASE_SHA"
-          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
-          test "$(jq -r .head.ref <<<"$PR")" = "$HEAD_REF"
-          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+          test "$(jq -r .baseRef <<<"$PR")" = "main"
+          test "$(jq -r .baseSha <<<"$PR")" = "$BASE_SHA"
+          test "$(jq -r .headSha <<<"$PR")" = "$HEAD_SHA"
+          test "$(jq -r .headRef <<<"$PR")" = "$HEAD_REF"
+          test "$(jq -r .headRepository <<<"$PR")" = "$TARGET_REPOSITORY"
           assert_main_sha "$BASE_SHA"
           assert_head_sha "$HEAD_SHA"
 

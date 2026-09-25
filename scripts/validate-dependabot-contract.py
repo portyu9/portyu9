@@ -277,6 +277,83 @@ def validate_controller_read_ref_response_contract(text: str) -> None:
     )
 
 
+def validate_controller_pr_response_contract(text: str) -> None:
+    validator = "python3 scripts/dependabot_controller.py pull-request-response"
+    require(
+        text.count(validator) == 5,
+        "Dependabot controller pull-request response boundary count changed",
+    )
+    require(
+        text.count("python3 scripts/dependabot_controller.py update-branch-response") == 1,
+        "Dependabot controller update-branch response boundary count changed",
+    )
+    for forbidden in (
+        'HEAD_SHA="$(jq -r .head.sha dependabot-pr.json)"',
+        'HEAD_REF="$(jq -r .head.ref dependabot-pr.json)"',
+        'BASE_SHA="$(jq -r .base.sha dependabot-pr.json)"',
+        'test "$(jq -r .message update-branch.json)" = "Updating pull request branch."',
+        'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
+    ):
+        require(
+            forbidden not in text,
+            f"Dependabot controller regained raw singleton PR/update response consumption: {forbidden}",
+        )
+
+    initial_fetch = 'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json'
+    initial_schema = validator
+    initial_consume = 'HEAD_SHA="$(jq -r .headSha dependabot-pr-normalized.json)"'
+    require(
+        text.index(initial_fetch)
+        < text.index(initial_schema, text.index(initial_fetch))
+        < text.index(initial_consume),
+        "Dependabot initial selected PR must be typed before identity consumption",
+    )
+
+    reviewer_fetch = (
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
+    )
+    reviewer_schema = text.index(validator, text.index(reviewer_fetch))
+    reviewer_consume = text.index(
+        'test "$(jq -r .portyu9Requested requested-reviewer-normalized.json)" = "true"',
+        reviewer_schema,
+    )
+    require(
+        text.index(reviewer_fetch) < reviewer_schema < reviewer_consume,
+        "Dependabot reviewer mutation response must be typed before reviewer-state consumption",
+    )
+
+    update_fetch = 'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"'
+    update_schema = text.index(
+        "python3 scripts/dependabot_controller.py update-branch-response",
+        text.index(update_fetch),
+    )
+    update_consume = text.index(
+        'test "$(jq -r .message update-branch-normalized.json)" = "Updating pull request branch."',
+        update_schema,
+    )
+    require(
+        text.index(update_fetch) < update_schema < update_consume,
+        "Dependabot update-branch response must be typed before acknowledgement consumption",
+    )
+
+    require(
+        text.count('> "$RUNNER_TEMP/dependabot-pr-snapshot.json"') == 2
+        and text.count('PR="$(cat "$RUNNER_TEMP/dependabot-pr-snapshot-normalized.json")"') == 2,
+        "Dependabot protected merge/dispatch PR snapshot topology changed",
+    )
+
+    validation_fetch = text.rindex(initial_fetch)
+    validation_schema = text.index(validator, validation_fetch)
+    validation_consume = text.index(
+        'test "$(jq -r .number dependabot-pr-normalized.json)" = "$PR_NUMBER"',
+        validation_schema,
+    )
+    require(
+        validation_fetch < validation_schema < validation_consume,
+        "Dependabot validation PR must be typed before identity consumption",
+    )
+
+
 def validate_controller_collection_contract(text: str) -> None:
     require(
         text.count('python3 scripts/workflow_capability_api_collection.py pull-requests') == 1,
@@ -721,6 +798,7 @@ def main() -> int:
         validate_controller_wake_contract(controller_text)
         validate_controller_read_ref_response_contract(controller_text)
         validate_controller_protected_workflow_evidence_contract(controller_text)
+        validate_controller_pr_response_contract(controller_text)
         validate_controller_collection_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
         validate_controller_merge_success_response_contract(controller_text)
@@ -732,7 +810,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref singleton evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref and singleton PR/update response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0

@@ -256,6 +256,132 @@ def _response_positive_int(value: Any, label: str) -> int:
     return value
 
 
+DEPENDABOT_HEAD_REF = re.compile(
+    r"^dependabot/github_actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"
+)
+DEPENDABOT_MERGEABLE_STATES = {
+    "behind", "blocked", "clean", "dirty", "draft", "has_hooks", "unknown", "unstable",
+}
+
+
+def validate_pull_request_response(
+    value: Any, *, expected_number: int, expected_repository: str
+) -> dict[str, Any]:
+    expected_number = _response_positive_int(
+        expected_number, "expected Dependabot pull-request number"
+    )
+    require(
+        isinstance(expected_repository, str) and expected_repository == REPOSITORY,
+        "expected Dependabot pull-request repository identity changed",
+    )
+    require(isinstance(value, Mapping), "Dependabot pull-request response must be an object")
+    number = _response_positive_int(value.get("number"), "Dependabot pull-request response number")
+    require(number == expected_number, "Dependabot pull-request response number changed")
+    user = value.get("user")
+    require(isinstance(user, Mapping), "Dependabot pull-request response user must be an object")
+    require(user.get("login") == "dependabot[bot]",
+            "Dependabot pull-request response actor identity changed")
+    require(value.get("state") == "open", "Dependabot pull-request response state changed")
+    require(type(value.get("draft")) is bool and value.get("draft") is False,
+            "Dependabot pull-request response draft flag changed")
+    require(
+        type(value.get("maintainer_can_modify")) is bool
+        and value.get("maintainer_can_modify") is False,
+        "Dependabot pull-request response maintainer_can_modify flag changed",
+    )
+    base = value.get("base")
+    require(isinstance(base, Mapping), "Dependabot pull-request response base must be an object")
+    require(base.get("ref") == "main", "Dependabot pull-request response base ref changed")
+    base_sha = _response_sha(base.get("sha"), "Dependabot pull-request response base sha")
+    head = value.get("head")
+    require(isinstance(head, Mapping), "Dependabot pull-request response head must be an object")
+    head_ref = head.get("ref")
+    require(
+        isinstance(head_ref, str) and DEPENDABOT_HEAD_REF.fullmatch(head_ref) is not None,
+        "Dependabot pull-request response head ref changed",
+    )
+    head_sha = _response_sha(head.get("sha"), "Dependabot pull-request response head sha")
+    head_repo = head.get("repo")
+    require(
+        isinstance(head_repo, Mapping)
+        and head_repo.get("full_name") == expected_repository,
+        "Dependabot pull-request response head repository identity changed",
+    )
+    requested = value.get("requested_reviewers")
+    require(
+        isinstance(requested, list),
+        "Dependabot pull-request response requested_reviewers must be an array",
+    )
+    reviewer_logins: list[str] = []
+    for reviewer in requested:
+        require(
+            isinstance(reviewer, Mapping),
+            "Dependabot pull-request response requested reviewer must be an object",
+        )
+        login = reviewer.get("login")
+        require(
+            isinstance(login, str) and bool(login.strip()),
+            "Dependabot pull-request response requested reviewer login must be nonempty",
+        )
+        reviewer_logins.append(login)
+    require(
+        len(reviewer_logins) == len(set(reviewer_logins)),
+        "Dependabot pull-request response requested reviewers contain duplicates",
+    )
+    mergeable = value.get("mergeable")
+    require(
+        mergeable is None or type(mergeable) is bool,
+        "Dependabot pull-request response mergeable must be boolean or null",
+    )
+    mergeable_state = value.get("mergeable_state")
+    require(
+        mergeable_state is None
+        or (
+            isinstance(mergeable_state, str)
+            and mergeable_state in DEPENDABOT_MERGEABLE_STATES
+        ),
+        "Dependabot pull-request response mergeable_state is invalid",
+    )
+    for key in ("url", "html_url"):
+        observed = value.get(key)
+        require(
+            isinstance(observed, str) and bool(observed.strip()),
+            f"Dependabot pull-request response {key} must be a nonempty string",
+        )
+    return {
+        "kind": "pull-request",
+        "number": number,
+        "user": "dependabot[bot]",
+        "state": "open",
+        "draft": False,
+        "maintainerCanModify": False,
+        "baseRef": "main",
+        "baseSha": base_sha,
+        "headRef": head_ref,
+        "headSha": head_sha,
+        "headRepository": expected_repository,
+        "requestedReviewers": reviewer_logins,
+        "portyu9Requested": "portyu9" in reviewer_logins,
+        "mergeable": mergeable,
+        "mergeableState": mergeable_state,
+    }
+
+
+def validate_update_branch_response(value: Any) -> dict[str, str]:
+    require(isinstance(value, Mapping), "Dependabot update-branch response must be an object")
+    message = value.get("message")
+    require(
+        message == "Updating pull request branch.",
+        "Dependabot update-branch response message changed",
+    )
+    url = value.get("url")
+    require(
+        isinstance(url, str) and bool(url.strip()),
+        "Dependabot update-branch response url must be a nonempty string",
+    )
+    return {"kind": "update-branch", "message": message, "url": url}
+
+
 PROTECTED_PR_RUN_STATUSES = {"queued", "in_progress", "requested", "waiting", "pending", "completed"}
 PROTECTED_PR_RUN_CONCLUSIONS = {
     "success",
@@ -659,6 +785,46 @@ def self_test() -> None:
         },
         "Dependabot wake run response positive fixture changed",
     )
+    pr_response_fixture = {
+        "number": 17,
+        "user": {"login": "dependabot[bot]"},
+        "state": "open",
+        "draft": False,
+        "maintainer_can_modify": False,
+        "base": {"ref": "main", "sha": parent_sha},
+        "head": {
+            "ref": "dependabot/github_actions/github/codeql-action",
+            "sha": commit_sha,
+            "repo": {"full_name": REPOSITORY},
+        },
+        "requested_reviewers": [{"login": "portyu9"}],
+        "mergeable": None,
+        "mergeable_state": "unknown",
+        "url": "https://api.github.com/repos/portyu9/portyu9/pulls/17",
+        "html_url": "https://github.com/portyu9/portyu9/pull/17",
+    }
+    normalized_pr = validate_pull_request_response(
+        pr_response_fixture,
+        expected_number=17,
+        expected_repository=REPOSITORY,
+    )
+    require(
+        normalized_pr["headSha"] == commit_sha
+        and normalized_pr["baseSha"] == parent_sha
+        and normalized_pr["portyu9Requested"] is True,
+        "Dependabot pull-request response positive fixture changed",
+    )
+    update_response = validate_update_branch_response(
+        {
+            "message": "Updating pull request branch.",
+            "url": "https://api.github.com/repos/portyu9/portyu9/pulls/17",
+        }
+    )
+    require(
+        update_response["kind"] == "update-branch",
+        "Dependabot update-branch response positive fixture changed",
+    )
+
     workflow_fixture = {
         "id": 1001,
         "path": ".github/workflows/codeql.yml",
@@ -968,6 +1134,131 @@ def self_test() -> None:
             ),
             "repository identity changed",
         ),
+        (
+            "pull-request non-object",
+            lambda: validate_pull_request_response(
+                [], expected_number=17, expected_repository=REPOSITORY
+            ),
+            "must be an object",
+        ),
+        (
+            "pull-request string number",
+            lambda: validate_pull_request_response(
+                {**pr_response_fixture, "number": "17"},
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "positive integer",
+        ),
+        (
+            "pull-request actor drift",
+            lambda: validate_pull_request_response(
+                {**pr_response_fixture, "user": {"login": "github-actions[bot]"}},
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "actor identity changed",
+        ),
+        (
+            "pull-request draft",
+            lambda: validate_pull_request_response(
+                {**pr_response_fixture, "draft": True},
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "draft flag changed",
+        ),
+        (
+            "pull-request maintainer mutation",
+            lambda: validate_pull_request_response(
+                {**pr_response_fixture, "maintainer_can_modify": True},
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "maintainer_can_modify flag changed",
+        ),
+        (
+            "pull-request malformed base sha",
+            lambda: validate_pull_request_response(
+                {**pr_response_fixture, "base": {"ref": "main", "sha": "BAD"}},
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "lowercase SHA-40",
+        ),
+        (
+            "pull-request head ref drift",
+            lambda: validate_pull_request_response(
+                {
+                    **pr_response_fixture,
+                    "head": {**pr_response_fixture["head"], "ref": "feature/untrusted"},
+                },
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "head ref changed",
+        ),
+        (
+            "pull-request head repository drift",
+            lambda: validate_pull_request_response(
+                {
+                    **pr_response_fixture,
+                    "head": {
+                        **pr_response_fixture["head"],
+                        "repo": {"full_name": "portyu9/other"},
+                    },
+                },
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "head repository identity changed",
+        ),
+        (
+            "pull-request reviewer primitive",
+            lambda: validate_pull_request_response(
+                {**pr_response_fixture, "requested_reviewers": ["portyu9"]},
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "requested reviewer must be an object",
+        ),
+        (
+            "pull-request mergeable coercion",
+            lambda: validate_pull_request_response(
+                {**pr_response_fixture, "mergeable": "true"},
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "mergeable must be boolean or null",
+        ),
+        (
+            "pull-request mergeable state drift",
+            lambda: validate_pull_request_response(
+                {**pr_response_fixture, "mergeable_state": "surprise"},
+                expected_number=17,
+                expected_repository=REPOSITORY,
+            ),
+            "mergeable_state is invalid",
+        ),
+        (
+            "update-branch non-object",
+            lambda: validate_update_branch_response([]),
+            "must be an object",
+        ),
+        (
+            "update-branch message drift",
+            lambda: validate_update_branch_response(
+                {"message": "Queued", "url": "https://api.github.com/example"}
+            ),
+            "message changed",
+        ),
+        (
+            "update-branch missing url",
+            lambda: validate_update_branch_response(
+                {"message": "Updating pull request branch.", "url": ""}
+            ),
+            "url must be a nonempty string",
+        ),
         ("blob non-object", lambda: validate_git_blob_response([]), "must be an object"),
         ("blob bad sha", lambda: validate_git_blob_response({"sha": "abc"}), "lowercase SHA-40"),
         ("tree bad sha", lambda: validate_git_tree_response({"sha": "A" * 40}), "lowercase SHA-40"),
@@ -1121,6 +1412,14 @@ def parser() -> argparse.ArgumentParser:
     read_ref_response.add_argument("--expected-ref", required=True)
     read_ref_response.add_argument("--expected-sha")
     read_ref_response.add_argument("--out", type=Path, required=True)
+    pull_request_response = sub.add_parser("pull-request-response")
+    pull_request_response.add_argument("--response", type=Path, required=True)
+    pull_request_response.add_argument("--expected-number", type=int, required=True)
+    pull_request_response.add_argument("--expected-repository", required=True)
+    pull_request_response.add_argument("--out", type=Path, required=True)
+    update_branch_response = sub.add_parser("update-branch-response")
+    update_branch_response.add_argument("--response", type=Path, required=True)
+    update_branch_response.add_argument("--out", type=Path, required=True)
     wake_run_response = sub.add_parser("wake-run-response")
     wake_run_response.add_argument("--response", type=Path, required=True)
     wake_run_response.add_argument("--expected-run-id", type=int, required=True)
@@ -1155,6 +1454,8 @@ def main() -> int:
             "git-commit-response",
             "git-ref-response",
             "git-ref-read-response",
+            "pull-request-response",
+            "update-branch-response",
             "wake-run-response",
             "workflow-definition-response",
             "protected-workflow-runs-response",
@@ -1183,6 +1484,14 @@ def main() -> int:
                     expected_ref=args.expected_ref,
                     expected_sha=args.expected_sha,
                 )
+            elif args.command == "pull-request-response":
+                result = validate_pull_request_response(
+                    response,
+                    expected_number=args.expected_number,
+                    expected_repository=args.expected_repository,
+                )
+            elif args.command == "update-branch-response":
+                result = validate_update_branch_response(response)
             elif args.command == "wake-run-response":
                 result = validate_wake_run_response(
                     response,
