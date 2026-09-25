@@ -425,6 +425,39 @@ def validate_reconciler_main_ref_evidence_fixture(text: str) -> None:
         require(text.count(fragment) == 5, f"fixture main-ref schema changed: {fragment}")
 
 
+
+def validate_reconciler_admin_response_evidence(text: str) -> None:
+    """Require typed App/bootstrap responses before authority-bearing scalar use."""
+    fragments = (
+        'type == "object" and\n            (.id | type == "number" and floor == . and . == $installation)',
+        '(.app_id | type == "number" and floor == . and . == $app)',
+        '(.account.id | type == "number" and floor == . and . == 35150859)',
+        '(.permissions.administration | type == "string" and . == "write")',
+        '(.expires_at | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"))',
+        '(.total_count | type == "number" and floor == . and . == 1)',
+        '(.repositories | type == "array" and length == 1)',
+        '(.repositories[0].id | type == "number" and floor == . and . == 1355082509)',
+        '(.repositories[0].private | type == "boolean")',
+        '(.repositories[0].owner.login | type == "string" and . == "portyu9")',
+    )
+    for fragment in fragments:
+        require(fragment in text, f"Ruleset admin response schema fragment missing: {fragment}")
+
+    installation_fetch = text.index('"app/installations/\${ADMIN_INSTALLATION_ID}" > installation.json')
+    installation_schema = text.index('type == "object" and\n            (.id | type == "number"', installation_fetch)
+    token_fetch = text.index('"app/installations/\${ADMIN_INSTALLATION_ID}/access_tokens"', installation_schema)
+    token_schema = text.index('type == "object" and\n            (.token | type == "string"', token_fetch)
+    token_consume = text.index('ADMIN_TOKEN="$(jq -r .token installation-token.json)"', token_schema)
+    repos_fetch = text.index('"installation/repositories?per_page=100" > token-repositories.json', token_consume)
+    repos_schema = text.index('type == "object" and\n            (.total_count | type == "number"', repos_fetch)
+    prewrite = text.index('GH_TOKEN="$ADMIN_TOKEN" gh api "repos/portyu9/portyu9/rulesets/22148161"', repos_schema)
+    require(
+        installation_fetch < installation_schema < token_fetch < token_schema < token_consume < repos_fetch < repos_schema < prewrite,
+        "Ruleset admin response validation must precede token consumption and privileged ruleset reads",
+    )
+
+
+
 def validate_api_url(url: str) -> str:
     """Return a credential-safe GitHub ruleset URL or fail closed.
 
@@ -1025,6 +1058,7 @@ def main() -> int:
         reconciler = RECONCILER.read_text(encoding="utf-8")
         validate_reconciler_wake_contract(reconciler)
         validate_reconciler_main_ref_evidence(reconciler)
+        validate_reconciler_admin_response_evidence(reconciler)
         sentinel = SENTINEL.read_text(encoding="utf-8")
         validate_sentinel_main_ref_evidence(sentinel)
         self_test(payload)
