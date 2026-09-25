@@ -248,6 +248,28 @@ jobs:
           [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$GITHUB_WORKFLOW_SHA" = "$BASE_SHA"
           RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"
+          jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg head "$BASE_SHA" --arg event "$GITHUB_EVENT_NAME" \
+            --arg repo "$GITHUB_REPOSITORY" --argjson repo_id "$GITHUB_REPOSITORY_ID" '
+            (type == "object") and
+            (.id | type == "number" and . == floor and . == $run) and
+            (.run_attempt | type == "number" and . == floor and . == $attempt) and
+            (.workflow_id | type == "number" and . == floor and . > 0) and
+            (.run_number | type == "number" and . == floor and . > 0) and
+            (.event | type == "string" and . == $event) and
+            ((.status | type) == "string") and
+            ((.status == "queued") or (.status == "in_progress")) and
+            (.conclusion == null) and
+            (.head_sha | type == "string" and . == $head) and
+            (.head_branch | type == "string" and . == "main") and
+            (.path | type == "string" and . == ".github/workflows/profile-stats.yml") and
+            (.repository | type == "object" and
+              (.id | type == "number" and . == floor and . == $repo_id) and
+              (.full_name | type == "string" and . == $repo)) and
+            (.head_repository | type == "object" and
+              (.id | type == "number" and . == floor and . == $repo_id) and
+              (.full_name | type == "string" and . == $repo))
+          ' <<<"$RUN" >/dev/null
           test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"
           test "$(jq -r .run_attempt <<<"$RUN")" = "$GITHUB_RUN_ATTEMPT"
           test "$(jq -r .head_sha <<<"$RUN")" = "$BASE_SHA"
