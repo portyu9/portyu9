@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "3b55c6082991e3ace228c4d90664af8ab8bdd6aa",
+    ".github/workflows/spotlight-link-sync.yml": "20cd966f5e7b96a073fb1943425327f42f1e3aa6",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -2718,12 +2718,12 @@ def validate_spotlight_terminal_required_check_collection(
         '(.id | (type == "number") and (. == floor) and (. > 0)) and',
         '(.name | type == "string" and length > 0) and',
         '(.status | type == "string" and',
-        '. == "queued" or . == "in_progress" or . == "completed" or',
-        '. == "waiting" or . == "requested" or . == "pending")) and',
+        '((. == "queued") or (. == "in_progress") or (. == "completed") or',
+        '(. == "waiting") or (. == "requested") or (. == "pending"))) and',
         'if .status == "completed"',
         'then (.conclusion | type == "string" and',
-        '. == "action_required" or . == "cancelled" or . == "failure" or',
-        '. == "startup_failure" or . == "success" or . == "timed_out"))',
+        '((. == "action_required") or (. == "cancelled") or (. == "failure") or',
+        '(. == "startup_failure") or (. == "success") or (. == "timed_out")))',
         'else .conclusion == null end',
         '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
         '(.app | type == "object" and',
