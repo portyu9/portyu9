@@ -217,7 +217,12 @@ jobs:
               --argjson afterAlert "$ALERT_NUMBER" \
               '{event_type:"codeql-autofix",client_payload:{queueContinuation:true,baseSha:$baseSha,afterAlert:$afterAlert}}' \
               > unsupported-dispatch.json
-            gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json >/dev/null
+            UNSUPPORTED_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json)"
+            UNSUPPORTED_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$UNSUPPORTED_DISPATCH_RESPONSE" | tr -d '\r')"
+            [[ "$UNSUPPORTED_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+              echo "ERROR: CodeQL Autofix unsupported-alert repository dispatch returned unexpected status: ${UNSUPPORTED_DISPATCH_STATUS_LINE}" >&2
+              exit 1
+            }
             printf 'ready=false\n' >> "$GITHUB_OUTPUT"
             printf 'unsupported=true\n' >> "$GITHUB_OUTPUT"
             exit 0
@@ -506,7 +511,12 @@ jobs:
             --arg headSha "$HEAD_SHA" \
             '{event_type:"codeql-autofix-admission",client_payload:{prNumber:$prNumber,originRunId:$originRunId,alertNumber:$alertNumber,baseSha:$baseSha,headSha:$headSha}}' \
             > admission-dispatch.json
-          gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
+          ADMISSION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json)"
+          ADMISSION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$ADMISSION_DISPATCH_RESPONSE" | tr -d '\r')"
+          [[ "$ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: CodeQL Autofix admission repository dispatch returned unexpected status: ${ADMISSION_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }
 
           TRUSTED_READY=false
           GHAS_READY=false
@@ -579,8 +589,13 @@ jobs:
             --out "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json"
           test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json")" = "$HEAD_SHA"
 
-          gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" \
-            -f event_type=codeql-autofix >/dev/null
+          CONTINUATION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" \
+            -f event_type=codeql-autofix)"
+          CONTINUATION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CONTINUATION_DISPATCH_RESPONSE" | tr -d '\r')"
+          [[ "$CONTINUATION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: CodeQL Autofix existing-PR repository dispatch returned unexpected status: ${CONTINUATION_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }
 
       - name: Verify an existing Autofix PR and perform protected merge
         if: steps.target.outputs.has_target == 'true' && steps.existing.outputs.exists == 'true'
@@ -832,5 +847,10 @@ jobs:
           test "$POST_MERGE_CODEQL_CONCLUSION" = "success"
           assert_main_sha "$MERGE_SHA"
 
-          gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" \
-            -f event_type=codeql-autofix >/dev/null
+          POST_MERGE_CONTROLLER_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" \
+            -f event_type=codeql-autofix)"
+          POST_MERGE_CONTROLLER_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$POST_MERGE_CONTROLLER_DISPATCH_RESPONSE" | tr -d '\r')"
+          [[ "$POST_MERGE_CONTROLLER_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: CodeQL Autofix post-merge repository dispatch returned unexpected status: ${POST_MERGE_CONTROLLER_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }

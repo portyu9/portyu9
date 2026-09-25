@@ -760,6 +760,79 @@ def validate_controller_git_mutation_response_contract(text: str) -> None:
         cursor = position
 
 
+def validate_controller_repository_dispatch_status(text: str) -> None:
+    require(
+        text.count('repos/${TARGET_REPOSITORY}/dispatches') == 2,
+        "Dependabot repository-dispatch endpoint inventory changed",
+    )
+    specs = (
+        (
+            '\n          RECONCILED_ADMISSION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json)"',
+            '\n          RECONCILED_ADMISSION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$RECONCILED_ADMISSION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$RECONCILED_ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+            "Dependabot reconciled-head repository dispatch returned unexpected status:",
+            'actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null',
+        ),
+        (
+            '\n              ADMISSION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json)"',
+            '\n              ADMISSION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$ADMISSION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+            "Dependabot exact-head repository dispatch returned unexpected status:",
+            'printf \'dispatched=true\\n\' >> "$GITHUB_OUTPUT"',
+        ),
+    )
+    for response, status, guard, error, downstream in specs:
+        require(text.count(response) == 1,
+                f"Dependabot repository dispatch response capture changed: {response}")
+        require(text.count(status) == 1,
+                f"Dependabot repository dispatch status extraction changed: {status}")
+        require(text.count(guard) == 1,
+                f"Dependabot repository dispatch HTTP 204 guard changed: {guard}")
+        require(error in text,
+                f"Dependabot repository dispatch fail-closed diagnostic changed: {error}")
+        response_pos = text.index(response)
+        status_pos = text.index(status, response_pos)
+        guard_pos = text.index(guard, status_pos)
+        downstream_pos = text.index(downstream, guard_pos)
+        require(response_pos < status_pos < guard_pos < downstream_pos,
+                "Dependabot repository dispatch must validate HTTP 204 before downstream continuation")
+
+    require(
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null'
+        not in text,
+        "Dependabot must not discard repository-dispatch responses",
+    )
+
+
+def self_test_controller_repository_dispatch_status(text: str) -> None:
+    validate_controller_repository_dispatch_status(text)
+    response_blind = text.replace(
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json',
+        1,
+    )
+    try:
+        validate_controller_repository_dispatch_status(response_blind)
+    except ValueError as exc:
+        require("response capture changed" in str(exc),
+                f"Dependabot repository-dispatch response self-test failed for wrong reason: {exc}")
+    else:
+        fail("Dependabot repository-dispatch self-test accepted response-blind mutation")
+
+    wrong_status = text.replace(
+        '[[ "$ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+        '[[ "$ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_controller_repository_dispatch_status(wrong_status)
+    except ValueError as exc:
+        require("HTTP 204 guard changed" in str(exc),
+                f"Dependabot repository-dispatch status self-test failed for wrong reason: {exc}")
+    else:
+        fail("Dependabot repository-dispatch self-test accepted non-204 success class")
+
+
 def validate_controller_merge_success_response_contract(text: str) -> None:
     require(
         text.count("python3 scripts/dependabot_controller.py merge-success-response") == 1,
@@ -1214,6 +1287,7 @@ def main() -> int:
         validate_controller_collection_contract(controller_text)
         validate_controller_git_read_response_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
+        self_test_controller_repository_dispatch_status(controller_text)
         validate_release_resolution_parity_contract(controller_text)
         self_test_controller_merge_success_response_contract(controller_text)
         validate_controller_approval_comment_contract(controller_text)
@@ -1224,7 +1298,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, exact HTTP-204-validated repository dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
