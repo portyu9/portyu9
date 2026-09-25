@@ -1259,14 +1259,24 @@ jobs:
           test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
           test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
           test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches" \
-            -f ref=main >/dev/null
+          CAPABILITY_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches" \
+            -f ref=main)"
+          CAPABILITY_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CAPABILITY_DISPATCH_RESPONSE" | tr -d '\r')"
+          [[ "$CAPABILITY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: Spotlight Capability Admission dispatch returned unexpected status: ${CAPABILITY_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }
           echo "Dispatched event-driven Spotlight admission proof from trusted main; Capability Admission independently binds the unique current-main candidate."
 
           # Break the native-review cycle deterministically from the trusted parent:
           # launch exactly one reviewer pass before waiting for whole Profile Quality success.
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
-            -f ref=main >/dev/null
+          REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
+            -f ref=main)"
+          REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d '\r')"
+          [[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }
           echo "Dispatched exact pre-convergence portyu9 review evaluation from trusted main."
 
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \
