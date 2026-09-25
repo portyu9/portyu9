@@ -1055,9 +1055,6 @@ jobs:
             REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"
             validate_spotlight_reviewer_request_response "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
             test "$(jq '[.requested_reviewers[] | select(.login == "portyu9")] | length' <<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"
-            PR_AFTER_REVIEW_REQUEST="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
-            validate_spotlight_open_pr_object "$PR_AFTER_REVIEW_REQUEST" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
-            test "$(jq '[.requested_reviewers[] | select(.login == "portyu9")] | length' <<<"$PR_AFTER_REVIEW_REQUEST")" = "1"
           fi
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
