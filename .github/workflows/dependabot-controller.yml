@@ -168,15 +168,50 @@ jobs:
           fi
 
           if [ "$BASE_SHA" != "$MAIN_SHA" ]; then
+            PRE_UPDATE_HEAD_SHA="$HEAD_SHA"
             gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
-              -f expected_head_sha="$HEAD_SHA" > update-branch.json
+              -f expected_head_sha="$PRE_UPDATE_HEAD_SHA" > update-branch.json
             python3 scripts/dependabot_controller.py update-branch-response \
               --response update-branch.json \
               --out update-branch-normalized.json
             test "$(jq -r .message update-branch-normalized.json)" = "Updating pull request branch."
-            printf 'has_target=false\n' >> "$GITHUB_OUTPUT"
-            echo "Requested exact-head Dependabot branch update; next scheduled pass will re-prove the new head."
-            exit 0
+
+            UPDATE_CONVERGED=false
+            for UPDATE_ATTEMPT in $(seq 1 24); do
+              sleep 5
+              gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" \
+                > "$RUNNER_TEMP/dependabot-post-update-pr.json"
+              python3 scripts/dependabot_controller.py pull-request-response \
+                --response "$RUNNER_TEMP/dependabot-post-update-pr.json" \
+                --expected-number "$PR_NUMBER" \
+                --expected-repository "$TARGET_REPOSITORY" \
+                --out "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json"
+              UPDATED_HEAD_SHA="$(jq -r .headSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"
+              UPDATED_HEAD_REF="$(jq -r .headRef "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"
+              UPDATED_BASE_SHA="$(jq -r .baseSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"
+              [[ "$UPDATED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$UPDATED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+              test "$UPDATED_HEAD_REF" = "$HEAD_REF"
+
+              if [ "$UPDATED_BASE_SHA" = "$MAIN_SHA" ]; then
+                if [ "$UPDATED_HEAD_SHA" = "$PRE_UPDATE_HEAD_SHA" ]; then
+                  echo "ERROR: Dependabot update reported current-main ancestry without advancing the exact candidate head." >&2
+                  exit 1
+                fi
+                HEAD_SHA="$UPDATED_HEAD_SHA"
+                BASE_SHA="$UPDATED_BASE_SHA"
+                UPDATE_CONVERGED=true
+                echo "Dependabot exact-head update converged to current main on bounded attempt ${UPDATE_ATTEMPT}/24: ${PRE_UPDATE_HEAD_SHA} -> ${HEAD_SHA}."
+                break
+              fi
+
+              echo "Dependabot update convergence attempt ${UPDATE_ATTEMPT}/24: base=${UPDATED_BASE_SHA} head=${UPDATED_HEAD_SHA}; waiting for exact current-main rebinding."
+            done
+
+            if [ "$UPDATE_CONVERGED" != "true" ]; then
+              echo "ERROR: exact-head Dependabot branch update did not converge to the trusted current main inside the bounded window." >&2
+              exit 1
+            fi
           fi
 
           printf 'has_target=true\n' >> "$GITHUB_OUTPUT"
