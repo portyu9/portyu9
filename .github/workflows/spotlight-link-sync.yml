@@ -1189,7 +1189,7 @@ jobs:
                 (.requested_reviewers | type == "array" and length <= 100) and
                 (all(.requested_reviewers[];
                   type == "object" and
-                  (.id | type == "number" and . == floor and . > 0) and
+                  (.id | (type == "number") and (. == floor) and (. > 0)) and
                   (.login | type == "string" and length > 0))) and
                 (([.requested_reviewers[].id] | length) ==
                   ([.requested_reviewers[].id] | unique | length)) and
