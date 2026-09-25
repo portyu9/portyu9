@@ -10,6 +10,8 @@ Repository/API mutations remain visible in the trusted workflow rather than hidd
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import copy
 import json
 from pathlib import Path
@@ -476,6 +478,208 @@ def validate_update_branch_response(value: Any) -> dict[str, str]:
     return {"kind": "update-branch", "message": message, "url": url}
 
 
+GIT_TREE_MODE_BY_TYPE = {
+    "tree": {"040000"},
+    "blob": {"100644", "100755", "120000"},
+    "commit": {"160000"},
+}
+
+
+def _response_url(value: Any, label: str) -> str:
+    require(
+        isinstance(value, str) and bool(value.strip()),
+        f"{label} must be a nonempty string",
+    )
+    return value
+
+
+def _response_repository_path(value: Any, label: str) -> str:
+    require(isinstance(value, str) and bool(value), f"{label} must be nonempty")
+    require(not value.startswith("/"), f"{label} must be repository-relative")
+    require("\x00" not in value and "//" not in value, f"{label} is not canonical")
+    parts = value.split("/")
+    require(
+        all(part not in {"", ".", ".."} for part in parts),
+        f"{label} contains forbidden path traversal",
+    )
+    return value
+
+
+def validate_git_commit_read_response(
+    value: Any, *, expected_sha: str
+) -> dict[str, Any]:
+    expected_sha = _response_sha(expected_sha, "expected Dependabot Git commit-read sha")
+    require(
+        isinstance(value, Mapping),
+        "Dependabot Git commit-read response must be an object",
+    )
+    observed_sha = _response_sha(
+        value.get("sha"), "Dependabot Git commit-read response sha"
+    )
+    require(observed_sha == expected_sha, "Dependabot Git commit-read response sha changed")
+    _response_url(value.get("url"), "Dependabot Git commit-read response url")
+    tree = value.get("tree")
+    require(
+        isinstance(tree, Mapping),
+        "Dependabot Git commit-read response tree must be an object",
+    )
+    tree_sha = _response_sha(
+        tree.get("sha"), "Dependabot Git commit-read response tree sha"
+    )
+    tree_url = _response_url(
+        tree.get("url"), "Dependabot Git commit-read response tree url"
+    )
+    parents = value.get("parents")
+    require(
+        isinstance(parents, list) and len(parents) <= 64,
+        "Dependabot Git commit-read response parents must be a bounded array",
+    )
+    normalized_parents: list[dict[str, str]] = []
+    seen_parent_shas: set[str] = set()
+    for parent in parents:
+        require(
+            isinstance(parent, Mapping),
+            "Dependabot Git commit-read response parent must be an object",
+        )
+        parent_sha = _response_sha(
+            parent.get("sha"), "Dependabot Git commit-read response parent sha"
+        )
+        require(
+            parent_sha not in seen_parent_shas,
+            "Dependabot Git commit-read response parents contain duplicates",
+        )
+        seen_parent_shas.add(parent_sha)
+        parent_url = _response_url(
+            parent.get("url"), "Dependabot Git commit-read response parent url"
+        )
+        normalized_parents.append({"sha": parent_sha, "url": parent_url})
+    return {
+        "kind": "read-commit",
+        "sha": observed_sha,
+        "tree": {"sha": tree_sha, "url": tree_url},
+        "parents": normalized_parents,
+    }
+
+
+def validate_git_tree_read_response(
+    value: Any, *, expected_sha: str
+) -> dict[str, Any]:
+    expected_sha = _response_sha(expected_sha, "expected Dependabot Git tree-read sha")
+    require(
+        isinstance(value, Mapping),
+        "Dependabot Git tree-read response must be an object",
+    )
+    observed_sha = _response_sha(
+        value.get("sha"), "Dependabot Git tree-read response sha"
+    )
+    require(observed_sha == expected_sha, "Dependabot Git tree-read response sha changed")
+    _response_url(value.get("url"), "Dependabot Git tree-read response url")
+    require(
+        type(value.get("truncated")) is bool and value.get("truncated") is False,
+        "Dependabot Git tree-read response must be complete and non-truncated",
+    )
+    raw_entries = value.get("tree")
+    require(
+        isinstance(raw_entries, list) and len(raw_entries) <= 100000,
+        "Dependabot Git tree-read response tree must be a bounded array",
+    )
+    normalized_entries: list[dict[str, Any]] = []
+    seen_paths: set[str] = set()
+    for raw in raw_entries:
+        require(
+            isinstance(raw, Mapping),
+            "Dependabot Git tree-read response entry must be an object",
+        )
+        path = _response_repository_path(
+            raw.get("path"), "Dependabot Git tree-read response entry path"
+        )
+        require(
+            path not in seen_paths,
+            "Dependabot Git tree-read response paths contain duplicates",
+        )
+        seen_paths.add(path)
+        entry_type = raw.get("type")
+        mode = raw.get("mode")
+        require(
+            isinstance(entry_type, str) and entry_type in GIT_TREE_MODE_BY_TYPE,
+            "Dependabot Git tree-read response entry type changed",
+        )
+        require(
+            isinstance(mode, str) and mode in GIT_TREE_MODE_BY_TYPE[entry_type],
+            "Dependabot Git tree-read response entry mode/type pair changed",
+        )
+        entry_sha = _response_sha(
+            raw.get("sha"), "Dependabot Git tree-read response entry sha"
+        )
+        entry_url = _response_url(
+            raw.get("url"), "Dependabot Git tree-read response entry url"
+        )
+        size = raw.get("size") if "size" in raw else None
+        require(
+            size is None or (type(size) is int and size >= 0),
+            "Dependabot Git tree-read response entry size must be null or a nonnegative integer",
+        )
+        normalized_entries.append({
+            "path": path,
+            "mode": mode,
+            "type": entry_type,
+            "sha": entry_sha,
+            "url": entry_url,
+            "size": size,
+        })
+    return {
+        "kind": "read-tree",
+        "sha": observed_sha,
+        "truncated": False,
+        "tree": normalized_entries,
+    }
+
+
+def validate_git_blob_read_response(
+    value: Any, *, expected_sha: str
+) -> dict[str, Any]:
+    expected_sha = _response_sha(expected_sha, "expected Dependabot Git blob-read sha")
+    require(
+        isinstance(value, Mapping),
+        "Dependabot Git blob-read response must be an object",
+    )
+    observed_sha = _response_sha(
+        value.get("sha"), "Dependabot Git blob-read response sha"
+    )
+    require(observed_sha == expected_sha, "Dependabot Git blob-read response sha changed")
+    _response_url(value.get("url"), "Dependabot Git blob-read response url")
+    size = value.get("size")
+    require(
+        type(size) is int and size >= 0,
+        "Dependabot Git blob-read response size must be a nonnegative integer",
+    )
+    require(
+        value.get("encoding") == "base64",
+        "Dependabot Git blob-read response encoding must be base64",
+    )
+    content = value.get("content")
+    require(
+        isinstance(content, str) and bool(content.strip()),
+        "Dependabot Git blob-read response content must be a nonempty string",
+    )
+    compact_content = "".join(content.split())
+    try:
+        decoded = base64.b64decode(compact_content, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError("Dependabot Git blob-read response content is not valid base64") from exc
+    require(
+        len(decoded) == size,
+        "Dependabot Git blob-read response decoded size changed",
+    )
+    return {
+        "kind": "read-blob",
+        "sha": observed_sha,
+        "size": size,
+        "encoding": "base64",
+        "content": compact_content,
+    }
+
+
 PROTECTED_PR_RUN_STATUSES = {"queued", "in_progress", "requested", "waiting", "pending", "completed"}
 PROTECTED_PR_RUN_CONCLUSIONS = {
     "success",
@@ -820,6 +1024,57 @@ def self_test() -> None:
     tree_sha = "2" * 40
     parent_sha = "3" * 40
     commit_sha = "4" * 40
+    commit_url = f"https://api.github.com/repos/{REPOSITORY}/git/commits/{commit_sha}"
+    tree_url = f"https://api.github.com/repos/{REPOSITORY}/git/trees/{tree_sha}"
+    blob_url = f"https://api.github.com/repos/{REPOSITORY}/git/blobs/{blob_sha}"
+    parent_url = f"https://api.github.com/repos/{REPOSITORY}/git/commits/{parent_sha}"
+    read_commit = validate_git_commit_read_response(
+        {
+            "sha": commit_sha,
+            "url": commit_url,
+            "tree": {"sha": tree_sha, "url": tree_url},
+            "parents": [{"sha": parent_sha, "url": parent_url}],
+        },
+        expected_sha=commit_sha,
+    )
+    require(
+        read_commit["tree"]["sha"] == tree_sha and read_commit["parents"][0]["sha"] == parent_sha,
+        "Dependabot Git commit-read response positive fixture changed",
+    )
+    read_tree = validate_git_tree_read_response(
+        {
+            "sha": tree_sha,
+            "url": tree_url,
+            "truncated": False,
+            "tree": [{
+                "path": ".github/workflows/codeql.yml",
+                "mode": "100644",
+                "type": "blob",
+                "sha": blob_sha,
+                "url": blob_url,
+                "size": 4,
+            }],
+        },
+        expected_sha=tree_sha,
+    )
+    require(
+        read_tree["tree"][0]["path"] == ".github/workflows/codeql.yml",
+        "Dependabot Git tree-read response positive fixture changed",
+    )
+    read_blob = validate_git_blob_read_response(
+        {
+            "sha": blob_sha,
+            "url": blob_url,
+            "size": 4,
+            "encoding": "base64",
+            "content": "YWJjCg==\n",
+        },
+        expected_sha=blob_sha,
+    )
+    require(
+        read_blob["content"] == "YWJjCg==",
+        "Dependabot Git blob-read response positive fixture changed",
+    )
     ref_name = "refs/heads/dependabot/github_actions/github/codeql-action"
     require(validate_git_blob_response({"sha": blob_sha}) == {"kind": "blob", "sha": blob_sha},
             "Dependabot Git blob response positive fixture changed")
@@ -1485,6 +1740,127 @@ def self_test() -> None:
             ),
             "url must be a nonempty string",
         ),
+        (
+            "commit-read non-object",
+            lambda: validate_git_commit_read_response([], expected_sha=commit_sha),
+            "must be an object",
+        ),
+        (
+            "commit-read wrong sha",
+            lambda: validate_git_commit_read_response(
+                {
+                    "sha": "5" * 40,
+                    "url": commit_url,
+                    "tree": {"sha": tree_sha, "url": tree_url},
+                    "parents": [{"sha": parent_sha, "url": parent_url}],
+                },
+                expected_sha=commit_sha,
+            ),
+            "sha changed",
+        ),
+        (
+            "commit-read duplicate parent",
+            lambda: validate_git_commit_read_response(
+                {
+                    "sha": commit_sha,
+                    "url": commit_url,
+                    "tree": {"sha": tree_sha, "url": tree_url},
+                    "parents": [
+                        {"sha": parent_sha, "url": parent_url},
+                        {"sha": parent_sha, "url": parent_url},
+                    ],
+                },
+                expected_sha=commit_sha,
+            ),
+            "parents contain duplicates",
+        ),
+        (
+            "tree-read truncated",
+            lambda: validate_git_tree_read_response(
+                {"sha": tree_sha, "url": tree_url, "truncated": True, "tree": []},
+                expected_sha=tree_sha,
+            ),
+            "non-truncated",
+        ),
+        (
+            "tree-read traversal path",
+            lambda: validate_git_tree_read_response(
+                {
+                    "sha": tree_sha,
+                    "url": tree_url,
+                    "truncated": False,
+                    "tree": [{
+                        "path": "../escape",
+                        "mode": "100644",
+                        "type": "blob",
+                        "sha": blob_sha,
+                        "url": blob_url,
+                        "size": 4,
+                    }],
+                },
+                expected_sha=tree_sha,
+            ),
+            "path traversal",
+        ),
+        (
+            "tree-read duplicate path",
+            lambda: validate_git_tree_read_response(
+                {
+                    "sha": tree_sha,
+                    "url": tree_url,
+                    "truncated": False,
+                    "tree": [
+                        {"path": "README.md", "mode": "100644", "type": "blob", "sha": blob_sha, "url": blob_url, "size": 4},
+                        {"path": "README.md", "mode": "100644", "type": "blob", "sha": "6" * 40, "url": blob_url, "size": 4},
+                    ],
+                },
+                expected_sha=tree_sha,
+            ),
+            "paths contain duplicates",
+        ),
+        (
+            "tree-read mode type drift",
+            lambda: validate_git_tree_read_response(
+                {
+                    "sha": tree_sha,
+                    "url": tree_url,
+                    "truncated": False,
+                    "tree": [{
+                        "path": "README.md",
+                        "mode": "040000",
+                        "type": "blob",
+                        "sha": blob_sha,
+                        "url": blob_url,
+                    }],
+                },
+                expected_sha=tree_sha,
+            ),
+            "mode/type pair changed",
+        ),
+        (
+            "blob-read encoding drift",
+            lambda: validate_git_blob_read_response(
+                {"sha": blob_sha, "url": blob_url, "size": 4, "encoding": "utf-8", "content": "YWJjCg=="},
+                expected_sha=blob_sha,
+            ),
+            "encoding must be base64",
+        ),
+        (
+            "blob-read invalid base64",
+            lambda: validate_git_blob_read_response(
+                {"sha": blob_sha, "url": blob_url, "size": 4, "encoding": "base64", "content": "%%%"},
+                expected_sha=blob_sha,
+            ),
+            "not valid base64",
+        ),
+        (
+            "blob-read size mismatch",
+            lambda: validate_git_blob_read_response(
+                {"sha": blob_sha, "url": blob_url, "size": 5, "encoding": "base64", "content": "YWJjCg=="},
+                expected_sha=blob_sha,
+            ),
+            "decoded size changed",
+        ),
         ("blob non-object", lambda: validate_git_blob_response([]), "must be an object"),
         ("blob bad sha", lambda: validate_git_blob_response({"sha": "abc"}), "lowercase SHA-40"),
         ("tree bad sha", lambda: validate_git_tree_response({"sha": "A" * 40}), "lowercase SHA-40"),
@@ -1619,6 +1995,11 @@ def parser() -> argparse.ArgumentParser:
     validate.add_argument("--candidate-root", type=Path, required=True)
     validate.add_argument("--changed-paths", type=Path, required=True)
     validate.add_argument("--out", type=Path, required=True)
+    for name in ("git-commit-read-response", "git-tree-read-response", "git-blob-read-response"):
+        command = sub.add_parser(name)
+        command.add_argument("--response", type=Path, required=True)
+        command.add_argument("--expected-sha", required=True)
+        command.add_argument("--out", type=Path, required=True)
     for name in ("git-blob-response", "git-tree-response", "merge-success-response"):
         command = sub.add_parser(name)
         command.add_argument("--response", type=Path, required=True)
@@ -1682,6 +2063,9 @@ def main() -> int:
             print("Dependabot zero-touch controller self-test passed.")
             return 0
         if args.command in {
+            "git-commit-read-response",
+            "git-tree-read-response",
+            "git-blob-read-response",
             "git-blob-response",
             "git-tree-response",
             "git-commit-response",
@@ -1696,7 +2080,19 @@ def main() -> int:
             "merge-success-response",
         }:
             response = load_json(args.response)
-            if args.command == "git-blob-response":
+            if args.command == "git-commit-read-response":
+                result = validate_git_commit_read_response(
+                    response, expected_sha=args.expected_sha
+                )
+            elif args.command == "git-tree-read-response":
+                result = validate_git_tree_read_response(
+                    response, expected_sha=args.expected_sha
+                )
+            elif args.command == "git-blob-read-response":
+                result = validate_git_blob_read_response(
+                    response, expected_sha=args.expected_sha
+                )
+            elif args.command == "git-blob-response":
                 result = validate_git_blob_response(response)
             elif args.command == "git-tree-response":
                 result = validate_git_tree_response(response)

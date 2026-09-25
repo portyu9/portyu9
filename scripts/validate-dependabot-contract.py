@@ -543,6 +543,106 @@ def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
     )
 
 
+def validate_controller_git_read_response_contract(text: str) -> None:
+    validators = {
+        "git-commit-read-response": 2,
+        "git-tree-read-response": 2,
+        "git-blob-read-response": 2,
+    }
+    for command, expected_count in validators.items():
+        require(
+            text.count(f"python3 scripts/dependabot_controller.py {command}") == expected_count,
+            f"Dependabot controller must validate {command} exactly {expected_count} time(s)",
+        )
+
+    for forbidden in (
+        'COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        'TREE="$(gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"',
+        'BLOB="$(gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}")"',
+    ):
+        require(
+            forbidden not in text,
+            f"Dependabot controller regained raw candidate Git read consumption: {forbidden}",
+        )
+
+    blocks = (
+        (
+            '      - name: Assemble exact candidate tree as data\n',
+            '      - name: Prove bot identity, atomic pin closure, and public release provenance\n',
+            "controller candidate assembly",
+        ),
+        (
+            '      - name: Reconstruct exact reconciled candidate as data\n',
+            '      - name: Independently re-prove deterministic reconciliation\n',
+            "validation candidate reconstruction",
+        ),
+    )
+    for start_marker, end_marker, label in blocks:
+        require(
+            text.count(start_marker) == 1 and text.count(end_marker) == 1,
+            f"Dependabot {label} step anchors changed",
+        )
+        start = text.index(start_marker)
+        end = text.index(end_marker, start)
+        block = text[start:end]
+        required = (
+            'gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
+            '> "$RUNNER_TEMP/dependabot-candidate-commit-read.json"',
+            'python3 scripts/dependabot_controller.py git-commit-read-response',
+            '--response "$RUNNER_TEMP/dependabot-candidate-commit-read.json"',
+            '--expected-sha "$HEAD_SHA"',
+            '--out "$RUNNER_TEMP/dependabot-candidate-commit-read-normalized.json"',
+            'COMMIT="$(cat "$RUNNER_TEMP/dependabot-candidate-commit-read-normalized.json")"',
+            'TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"',
+            'gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
+            '> "$RUNNER_TEMP/dependabot-candidate-tree-read.json"',
+            'python3 scripts/dependabot_controller.py git-tree-read-response',
+            '--response "$RUNNER_TEMP/dependabot-candidate-tree-read.json"',
+            '--expected-sha "$TREE_SHA"',
+            '--out "$RUNNER_TEMP/dependabot-candidate-tree-read-normalized.json"',
+            'TREE="$(cat "$RUNNER_TEMP/dependabot-candidate-tree-read-normalized.json")"',
+            'ENTRY="$(jq -c --arg path "$PATH_VALUE"',
+            'gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}"',
+            '> "$RUNNER_TEMP/dependabot-candidate-blob-read.json"',
+            'python3 scripts/dependabot_controller.py git-blob-read-response',
+            '--response "$RUNNER_TEMP/dependabot-candidate-blob-read.json"',
+            '--expected-sha "$BLOB_SHA"',
+            '--out "$RUNNER_TEMP/dependabot-candidate-blob-read-normalized.json"',
+            'BLOB="$(cat "$RUNNER_TEMP/dependabot-candidate-blob-read-normalized.json")"',
+            'jq -r .content <<<"$BLOB" | base64 --decode',
+        )
+        for fragment in required:
+            require(
+                block.count(fragment) == 1,
+                f"Dependabot {label} Git read boundary anchor changed: {fragment}",
+            )
+        ordered = (
+            required[0],
+            required[1],
+            required[2],
+            required[6],
+            required[7],
+            required[8],
+            required[9],
+            required[10],
+            required[14],
+            required[15],
+            required[16],
+            required[17],
+            required[18],
+            required[22],
+            required[23],
+        )
+        cursor = -1
+        for fragment in ordered:
+            position = block.find(fragment, cursor + 1)
+            require(
+                position > cursor,
+                f"Dependabot {label} Git read response validation moved out of reviewed order: {fragment}",
+            )
+            cursor = position
+
+
 def validate_controller_git_mutation_response_contract(text: str) -> None:
     commands = {
         "git-blob-response": 1,
@@ -849,6 +949,7 @@ def main() -> int:
         validate_controller_protected_workflow_evidence_contract(controller_text)
         validate_controller_pr_response_contract(controller_text)
         validate_controller_collection_contract(controller_text)
+        validate_controller_git_read_response_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
         validate_controller_merge_success_response_contract(controller_text)
         validate_controller_approval_comment_contract(controller_text)
@@ -859,7 +960,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, and singleton PR/update response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0

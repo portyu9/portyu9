@@ -207,11 +207,23 @@ jobs:
           test -s changed-paths.txt
           test "$(sort -u changed-paths.txt | wc -l)" = "$(wc -l < changed-paths.txt)"
 
-          COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}" \
+            > "$RUNNER_TEMP/dependabot-candidate-commit-read.json"
+          python3 scripts/dependabot_controller.py git-commit-read-response \
+            --response "$RUNNER_TEMP/dependabot-candidate-commit-read.json" \
+            --expected-sha "$HEAD_SHA" \
+            --out "$RUNNER_TEMP/dependabot-candidate-commit-read-normalized.json"
+          COMMIT="$(cat "$RUNNER_TEMP/dependabot-candidate-commit-read-normalized.json")"
           test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
           TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          TREE="$(gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
+          gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1" \
+            > "$RUNNER_TEMP/dependabot-candidate-tree-read.json"
+          python3 scripts/dependabot_controller.py git-tree-read-response \
+            --response "$RUNNER_TEMP/dependabot-candidate-tree-read.json" \
+            --expected-sha "$TREE_SHA" \
+            --out "$RUNNER_TEMP/dependabot-candidate-tree-read-normalized.json"
+          TREE="$(cat "$RUNNER_TEMP/dependabot-candidate-tree-read-normalized.json")"
           test "$(jq -r .truncated <<<"$TREE")" = "false"
 
           mapfile -t FETCH_PATHS < <(
@@ -229,11 +241,17 @@ jobs:
             test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
             BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
             [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-            BLOB="$(gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}" \
+              > "$RUNNER_TEMP/dependabot-candidate-blob-read.json"
+            python3 scripts/dependabot_controller.py git-blob-read-response \
+              --response "$RUNNER_TEMP/dependabot-candidate-blob-read.json" \
+              --expected-sha "$BLOB_SHA" \
+              --out "$RUNNER_TEMP/dependabot-candidate-blob-read-normalized.json"
+            BLOB="$(cat "$RUNNER_TEMP/dependabot-candidate-blob-read-normalized.json")"
             test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
             test "$(jq -r .encoding <<<"$BLOB")" = "base64"
             mkdir -p "$CANDIDATE_ROOT/$(dirname "$PATH_VALUE")"
-            jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "$CANDIDATE_ROOT/$PATH_VALUE"
+            jq -r .content <<<"$BLOB" | base64 --decode > "$CANDIDATE_ROOT/$PATH_VALUE"
           done
           printf '%s\n' "$TREE_SHA" > candidate-tree-sha.txt
           printf 'candidate_root=%s\n' "$CANDIDATE_ROOT" >> "$GITHUB_OUTPUT"
@@ -981,11 +999,23 @@ jobs:
           rm -rf "$CANDIDATE_ROOT"
           cp -a . "$CANDIDATE_ROOT"
 
-          COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}" \
+            > "$RUNNER_TEMP/dependabot-candidate-commit-read.json"
+          python3 scripts/dependabot_controller.py git-commit-read-response \
+            --response "$RUNNER_TEMP/dependabot-candidate-commit-read.json" \
+            --expected-sha "$HEAD_SHA" \
+            --out "$RUNNER_TEMP/dependabot-candidate-commit-read-normalized.json"
+          COMMIT="$(cat "$RUNNER_TEMP/dependabot-candidate-commit-read-normalized.json")"
           test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
           TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          TREE="$(gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
+          gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1" \
+            > "$RUNNER_TEMP/dependabot-candidate-tree-read.json"
+          python3 scripts/dependabot_controller.py git-tree-read-response \
+            --response "$RUNNER_TEMP/dependabot-candidate-tree-read.json" \
+            --expected-sha "$TREE_SHA" \
+            --out "$RUNNER_TEMP/dependabot-candidate-tree-read-normalized.json"
+          TREE="$(cat "$RUNNER_TEMP/dependabot-candidate-tree-read-normalized.json")"
           test "$(jq -r .truncated <<<"$TREE")" = "false"
 
           while IFS= read -r PATH_VALUE; do
@@ -995,11 +1025,17 @@ jobs:
             test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
             BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
             [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-            BLOB="$(gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}" \
+              > "$RUNNER_TEMP/dependabot-candidate-blob-read.json"
+            python3 scripts/dependabot_controller.py git-blob-read-response \
+              --response "$RUNNER_TEMP/dependabot-candidate-blob-read.json" \
+              --expected-sha "$BLOB_SHA" \
+              --out "$RUNNER_TEMP/dependabot-candidate-blob-read-normalized.json"
+            BLOB="$(cat "$RUNNER_TEMP/dependabot-candidate-blob-read-normalized.json")"
             test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
             test "$(jq -r .encoding <<<"$BLOB")" = "base64"
             mkdir -p "$CANDIDATE_ROOT/$(dirname "$PATH_VALUE")"
-            jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "$CANDIDATE_ROOT/$PATH_VALUE"
+            jq -r .content <<<"$BLOB" | base64 --decode > "$CANDIDATE_ROOT/$PATH_VALUE"
           done < expected-paths.txt
 
           printf 'candidate_root=%s\n' "$CANDIDATE_ROOT" >> "$GITHUB_OUTPUT"
