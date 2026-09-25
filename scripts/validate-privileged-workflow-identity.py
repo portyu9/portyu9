@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v94"
+VERSION = "governed-workflow-byte-identity-v95"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "20cd966f5e7b96a073fb1943425327f42f1e3aa6",
+    ".github/workflows/spotlight-link-sync.yml": "2995cb4010c9c295c55e8e1304aa8220e70f1d2f",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -757,6 +757,141 @@ def validate_spotlight_readme_contents_evidence(
                 "Spotlight terminal README Contents self-test accepted unbound blob identity"
             )
 
+
+
+def validate_spotlight_pr_response_evidence(
+    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    propose = job_block(spotlight, "propose", "approve")
+    approve = job_block(spotlight, "approve", "authorize")
+    helper_marker = "          validate_spotlight_open_pr_object() {"
+    require(
+        propose.count(helper_marker) == 1 and approve.count(helper_marker) == 1,
+        "Spotlight proposer/approval PR response helper count changed",
+    )
+    schema_fragments = (
+        '(.number | type == "number" and . == floor and . > 0 and . == $pr) and',
+        '(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and',
+        '(.state | (type == "string") and (. == "open")) and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.merged | type == "boolean" and . == false) and',
+        '(.maintainer_can_modify | type == "boolean" and . == false) and',
+        '(.title | type == "string" and . == $title) and',
+        '(.body | type == "string" and . == $body) and',
+        '(.ref | type == "string" and . == "main") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base)) and',
+        '(.ref | type == "string" and . == $branch) and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.full_name | type == "string" and . == $repo))) and',
+        '(.requested_reviewers | type == "array" and length <= 100) and',
+        '(all(.requested_reviewers[];',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
+        '(.login | type == "string" and length > 0))) and',
+        '([.requested_reviewers[].id] | unique | length)) and',
+        '([.requested_reviewers[].login] | unique | length)) and',
+        '((.url | type) == "string" and (.url | length) > 0) and',
+        '((.html_url | type) == "string" and (.html_url | length) > 0)',
+    )
+    for label, job in (("proposer", propose), ("approval", approve)):
+        for fragment in schema_fragments:
+            require(fragment in job, f"Spotlight {label} PR response schema changed: {fragment}")
+
+    proposer_fetch = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    proposer_schema = (
+        'validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$SOURCE_SHA" '
+        '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
+    )
+    proposer_consume = 'test "$(jq -r .state <<<"$PR")" = "open"'
+    reviewer_mutation = 'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
+    reviewer_schema = (
+        'validate_spotlight_open_pr_object "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" '
+        '"$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"'
+    )
+    reviewer_consume = '<<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"'
+    for boundary_marker in (
+        proposer_fetch, proposer_schema, proposer_consume, reviewer_mutation,
+        'REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"',
+        reviewer_schema, reviewer_consume,
+    ):
+        require(
+            propose.count(boundary_marker) == 1,
+            f"Spotlight proposer PR response boundary anchor changed: {boundary_marker}",
+        )
+    require(
+        propose.index(proposer_fetch) < propose.index(proposer_schema)
+        < propose.index(proposer_consume) < propose.index(reviewer_mutation)
+        < propose.index(reviewer_schema) < propose.index(reviewer_consume),
+        "Spotlight proposer PR/reviewer responses must be typed before consumption",
+    )
+    require(
+        "requested_reviewers[]?" not in propose,
+        "Spotlight proposer regained permissive requested-reviewer traversal",
+    )
+
+    approval_fetch = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    approval_schema = (
+        'validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$BASE_SHA" '
+        '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
+    )
+    approval_consume = 'test "$(jq -r .user.login <<<"$PR")" = "$BOT_NAME"'
+    post_review_fetch = 'PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    post_review_schema = (
+        'validate_spotlight_open_pr_object "$PR_AFTER_REVIEW" "$PR_NUMBER" "$BASE_SHA" '
+        '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
+    )
+    post_review_consume = 'test "$(jq -r .state <<<"$PR_AFTER_REVIEW")" = "open"'
+    for boundary_marker in (
+        approval_fetch, approval_schema, approval_consume,
+        post_review_fetch, post_review_schema, post_review_consume,
+    ):
+        require(
+            approve.count(boundary_marker) == 1,
+            f"Spotlight approval PR response boundary anchor changed: {boundary_marker}",
+        )
+    require(
+        approve.index(approval_fetch) < approve.index(approval_schema)
+        < approve.index(approval_consume) < approve.index(post_review_fetch)
+        < approve.index(post_review_schema) < approve.index(post_review_consume),
+        "Spotlight approval PR snapshots must be typed before authorization consumption",
+    )
+    require(
+        spotlight.count("validate_spotlight_open_pr_object() {") == 2
+        and spotlight.count('validate_spotlight_open_pr_object "$') == 4,
+        "Spotlight PR response schema/call cardinality changed",
+    )
+
+    if run_self_test:
+        weakened = spotlight.replace(
+            post_review_schema, 'true # adversarially removed post-review PR schema', 1
+        )
+        try:
+            validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+        except ValueError as exc:
+            require(
+                "approval PR response boundary anchor changed" in str(exc),
+                f"Spotlight post-review PR schema self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError("Spotlight PR response self-test accepted an untyped post-review snapshot")
+        current = '(.requested_reviewers | type == "array" and length <= 100) and'
+        replacement = '(.requested_reviewers | tostring | length <= 100) and'
+        require(propose.count(current) == 1, "Spotlight proposer reviewer-array self-test anchor changed")
+        propose_start = spotlight.index("  propose:\n")
+        propose_end = spotlight.index("  approve:\n", propose_start)
+        weakened = (
+            spotlight[:propose_start]
+            + propose.replace(current, replacement, 1)
+            + spotlight[propose_end:]
+        )
+        try:
+            validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+        except ValueError as exc:
+            require(
+                "proposer PR response schema changed" in str(exc),
+                f"Spotlight reviewer-array self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError("Spotlight PR response self-test accepted type-coercing reviewer evidence")
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
     legacy = project_spotlight_privileged_refs_to_legacy(
@@ -3792,6 +3927,7 @@ def main() -> int:
         validate_spotlight_same_base_supersession(spotlight)
         validate_spotlight_privileged_ref_evidence_schema(spotlight)
         validate_spotlight_readme_contents_evidence(spotlight)
+        validate_spotlight_pr_response_evidence(spotlight)
 
         validate_spotlight_budget_artifact_history(spotlight)
 
