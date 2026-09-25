@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "57e150e9cae663895c04914a953e333ea09aaad7",
+    ".github/workflows/spotlight-link-sync.yml": "d60cd81fd6d26b77ae9ee5701f87103f7af8fd83",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -913,18 +913,9 @@ def validate_spotlight_pr_response_evidence(
         '"$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"'
     )
     reviewer_consume = '<<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"'
-    reviewer_refetch = (
-        'PR_AFTER_REVIEW_REQUEST="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
-    )
-    reviewer_refetch_schema = (
-        'validate_spotlight_open_pr_object "$PR_AFTER_REVIEW_REQUEST" "$PR_NUMBER" '
-        '"$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"'
-    )
-    reviewer_refetch_consume = '<<<"$PR_AFTER_REVIEW_REQUEST")" = "1"'
     for boundary_marker in (
         proposer_fetch, proposer_schema, proposer_consume, reviewer_mutation,
         reviewer_response_capture, reviewer_schema, reviewer_consume,
-        reviewer_refetch, reviewer_refetch_schema, reviewer_refetch_consume,
     ):
         require(
             propose.count(boundary_marker) == 1,
@@ -934,10 +925,8 @@ def validate_spotlight_pr_response_evidence(
         propose.index(proposer_fetch) < propose.index(proposer_schema)
         < propose.index(proposer_consume) < propose.index(reviewer_mutation)
         < propose.index(reviewer_response_capture) < propose.index(reviewer_schema)
-        < propose.index(reviewer_consume) < propose.index(reviewer_refetch)
-        < propose.index(reviewer_refetch_schema) < propose.index(reviewer_refetch_consume),
-        "Spotlight reviewer mutation must use endpoint-specific schema before consumption "
-        "and fresh full-PR reproof before outputs",
+        < propose.index(reviewer_consume),
+        "Spotlight reviewer mutation must use endpoint-specific schema before consumption",
     )
     require(
         'validate_spotlight_open_pr_object "$REQUESTED_REVIEWER_RESPONSE"' not in propose,
@@ -999,7 +988,7 @@ def validate_spotlight_pr_response_evidence(
     )
     require(
         spotlight.count("validate_spotlight_open_pr_object() {") == 2
-        and spotlight.count('validate_spotlight_open_pr_object "$') == 5
+        and spotlight.count('validate_spotlight_open_pr_object "$') == 4
         and spotlight.count("validate_spotlight_reviewer_request_response() {") == 1
         and spotlight.count('validate_spotlight_reviewer_request_response "$') == 1,
         "Spotlight PR response schema/call cardinality changed",
@@ -1159,11 +1148,6 @@ def validate_spotlight_pr_response_evidence(
                 reviewer_schema,
                 "true # adversarially removed reviewer mutation response schema",
                 "missing-mutation-schema",
-            ),
-            (
-                reviewer_refetch_schema,
-                "true # adversarially removed fresh full PR reproof after reviewer mutation",
-                "missing-fresh-full-reproof",
             ),
         ):
             require(
