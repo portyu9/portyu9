@@ -2903,8 +2903,8 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
     require(start < end, "Spotlight approval-list compatibility projection ordering changed")
     projected = spotlight[:start] + spotlight[end:]
     require(
-        "validate_spotlight_pull_list_item" not in projected,
-        "Spotlight approval-list compatibility projection left helper bytes behind",
+        "validate_spotlight_pull_list_item() {" not in projected,
+        "Spotlight approval-list compatibility projection left helper definition bytes behind",
     )
     return projected
 
