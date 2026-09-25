@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v99"
+VERSION = "governed-workflow-byte-identity-v100"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
+    ".github/workflows/bot-pr-user-approval.yml": "d3ef550b934c3eb0d638d6bdd51efe963d92b0d9",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
     ".github/workflows/spotlight-link-sync.yml": "9e6e9dedf66ba47f65ea69152075f9597f58407a",
@@ -3947,12 +3947,88 @@ def self_test_spotlight_same_base_supersession() -> None:
             )
 
 
+
+def validate_bot_review_dispatch_status_contract(bot_review: str) -> None:
+    dependabot_dispatch = (
+        'wake_response="$(gh api --include --method POST '
+        '"repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main)"'
+    )
+    codeql_dispatch = (
+        'wake_response="$(gh api --include --method POST '
+        '"repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main)"'
+    )
+    status_guard = (
+        '[[ "$wake_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+    )
+    for label, fragment in (
+        ("Dependabot", dependabot_dispatch),
+        ("CodeQL", codeql_dispatch),
+    ):
+        require(
+            bot_review.count(fragment) == 1,
+            f"Bot PR reviewer {label} recovery dispatch must capture one --include response for status validation",
+        )
+    require(
+        bot_review.count(status_guard) == 1,
+        "Bot PR reviewer recovery dispatches must share one exact HTTP 204 status guard",
+    )
+    require(
+        'recovery dispatch returned unexpected status: ${wake_status_line}' in bot_review,
+        "Bot PR reviewer recovery dispatch status failure must be explicit and fail closed",
+    )
+    for forbidden in (
+        'dependabot-controller.yml/dispatches" -f ref=main >/dev/null',
+        'codeql.yml/dispatches" -f ref=main >/dev/null',
+    ):
+        require(
+            forbidden not in bot_review,
+            f"Bot PR reviewer must not discard privileged workflow-dispatch responses: {forbidden}",
+        )
+    status_pos = bot_review.index(status_guard)
+    require(
+        bot_review.index(dependabot_dispatch) < status_pos
+        and bot_review.index(codeql_dispatch) < status_pos,
+        "Bot PR reviewer must validate the dispatch status only after the selected lane mutation returns",
+    )
+
+
 def self_test() -> None:
     v21.self_test()
     self_test_spotlight_same_base_supersession()
 
     bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
     validate_bot_review_identity_ref_evidence_schema(bot_review)
+    validate_bot_review_dispatch_status_contract(bot_review)
+
+    missing_include = bot_review.replace(
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"',
+        1,
+    )
+    try:
+        validate_bot_review_dispatch_status_contract(missing_include)
+    except ValueError as exc:
+        require(
+            "--include response" in str(exc),
+            f"bot-review dispatch-status self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("bot-review dispatch-status self-test accepted a response-blind Dependabot wake")
+
+    wrong_status = bot_review.replace(
+        '^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$)',
+        '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$)',
+        1,
+    )
+    try:
+        validate_bot_review_dispatch_status_contract(wrong_status)
+    except ValueError as exc:
+        require(
+            "HTTP 204 status guard" in str(exc),
+            f"bot-review dispatch-status-code self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("bot-review dispatch-status self-test accepted a non-204 success class")
 
     initial_schema = 'validate_git_ref_object "$MAIN_REF_RESPONSE" "main"'
     initial_consume = 'MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"'
@@ -4466,6 +4542,7 @@ def main() -> int:
         validate_native_bot_review_gate(profile_quality, governed_bot_review_gate)
 
         bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+        validate_bot_review_dispatch_status_contract(bot_review)
         dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
         autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
@@ -4500,7 +4577,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering and exact workflow-dispatch HTTP 204 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0

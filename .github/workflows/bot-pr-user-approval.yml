@@ -390,22 +390,28 @@ jobs:
           }
 
           wake_governed_lane_after_review() {
-            local lane="$1" head_ref="$2"
+            local lane="$1" head_ref="$2" wake_response wake_status_line
             case "$lane" in
               dependabot)
-                gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main >/dev/null
+                wake_response="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main)"
                 ;;
               codeql-autofix)
-                gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main >/dev/null
+                wake_response="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main)"
                 ;;
               spotlight)
                 echo "Spotlight parent workflow bounded-waits for the exact review; no post-review recovery wake is required."
+                return 0
                 ;;
               *)
                 echo "ERROR: cannot wake unknown governed bot lane: $lane" >&2
                 return 1
                 ;;
             esac
+            wake_status_line="$(head -n 1 <<<"$wake_response" | tr -d '\r')"
+            [[ "$wake_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+              echo "ERROR: governed ${lane} recovery dispatch returned unexpected status: ${wake_status_line}" >&2
+              return 1
+            }
           }
 
           prepare_review_retry_history
