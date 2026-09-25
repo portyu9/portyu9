@@ -700,12 +700,12 @@ def validate_text(text: str) -> None:
             "trusted capability admission check-run response scalar-consumption anchor changed")
     publisher_pos = text.index(publisher)
     status_pos = text.index(status_marker, publisher_pos)
-    guard_pos = text.index(status_guard, status_pos)
-    body_pos = text.index(body_marker, guard_pos)
-    body_guard_pos = text.index(body_guard, body_pos)
-    schema_pos = text.index(schema_marker, body_guard_pos)
+    guard_pos = text.index(status_guard, publisher_pos)
+    body_pos = text.index(body_marker, publisher_pos)
+    body_guard_pos = text.index(body_guard, publisher_pos)
+    schema_pos = text.index(schema_marker, publisher_pos)
     schema_end_pos = text.index(schema_end_marker, schema_pos) + len(schema_end_marker)
-    consume_pos = text.index(consume_marker, schema_end_pos)
+    consume_pos = text.index(consume_marker, publisher_pos)
     require(
         publisher_pos < status_pos < guard_pos < body_pos < body_guard_pos
         < schema_pos < schema_end_pos < consume_pos,
