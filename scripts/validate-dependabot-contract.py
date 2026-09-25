@@ -285,7 +285,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
     )
     validator = "python3 scripts/dependabot_controller.py pull-request-response"
     require(
-        text.count(validator) == 5,
+        text.count(validator) == 6,
         "Dependabot controller pull-request response boundary count changed",
     )
     require(
@@ -341,6 +341,52 @@ def validate_controller_pr_response_contract(text: str) -> None:
     require(
         text.index(update_fetch) < update_schema < update_consume,
         "Dependabot update-branch response must be typed before acknowledgement consumption",
+    )
+
+    require(
+        "Requested exact-head Dependabot branch update; next scheduled pass will re-prove the new head." not in text,
+        "Dependabot stale-base recovery regressed to schedule-dependent forward progress",
+    )
+    update_rebind_fragments = (
+        'PRE_UPDATE_HEAD_SHA="$HEAD_SHA"',
+        'for UPDATE_ATTEMPT in $(seq 1 24); do',
+        'sleep 5',
+        '> "$RUNNER_TEMP/dependabot-post-update-pr.json"',
+        '--response "$RUNNER_TEMP/dependabot-post-update-pr.json"',
+        '--expected-number "$PR_NUMBER"',
+        '--expected-repository "$TARGET_REPOSITORY"',
+        '--out "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json"',
+        'UPDATED_HEAD_SHA="$(jq -r .headSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"',
+        'UPDATED_HEAD_REF="$(jq -r .headRef "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"',
+        'UPDATED_BASE_SHA="$(jq -r .baseSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"',
+        'test "$UPDATED_HEAD_REF" = "$HEAD_REF"',
+        'if [ "$UPDATED_BASE_SHA" = "$MAIN_SHA" ]; then',
+        'if [ "$UPDATED_HEAD_SHA" = "$PRE_UPDATE_HEAD_SHA" ]; then',
+        'HEAD_SHA="$UPDATED_HEAD_SHA"',
+        'BASE_SHA="$UPDATED_BASE_SHA"',
+        'UPDATE_CONVERGED=true',
+        'Dependabot exact-head update converged to current main on bounded attempt',
+        'exact-head Dependabot branch update did not converge to the trusted current main inside the bounded window.',
+    )
+    for fragment in update_rebind_fragments:
+        require(
+            fragment in text,
+            f"Dependabot same-transaction update convergence contract is missing: {fragment}",
+        )
+    post_update_fetch = text.index(
+        '> "$RUNNER_TEMP/dependabot-post-update-pr.json"',
+        update_consume,
+    )
+    post_update_schema = text.index(validator, post_update_fetch)
+    post_update_consume = text.index(
+        'UPDATED_HEAD_SHA="$(jq -r .headSha "$RUNNER_TEMP/dependabot-post-update-pr-normalized.json")"',
+        post_update_schema,
+    )
+    rebound_head = text.index('HEAD_SHA="$UPDATED_HEAD_SHA"', post_update_consume)
+    output_target = text.index("printf 'has_target=true\\n' >> \"$GITHUB_OUTPUT\"", rebound_head)
+    require(
+        update_consume < post_update_fetch < post_update_schema < post_update_consume < rebound_head < output_target,
+        "Dependabot branch-update convergence must type the refreshed PR before exact-head rebinding and target publication",
     )
 
     require(
