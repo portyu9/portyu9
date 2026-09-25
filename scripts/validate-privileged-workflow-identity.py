@@ -8,11 +8,11 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v96"
+VERSION = "governed-workflow-byte-identity-v97"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
-    ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
+    ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
     ".github/workflows/spotlight-link-sync.yml": "9b4dfdc1d3d72cfd60498c3f384dd2908bae85ed",
 }
 
@@ -369,6 +369,69 @@ def validate_leases(profile: str, spotlight: str) -> None:
     guard = 'test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"'
     require(profile.count(guard) == 5,
             "Profile Stats write jobs must each reserve lease lifetime through hard timeout")
+
+    profile_lease = job_block(profile, "lease", "attest_publish")
+    profile_run_call_marker = 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
+    profile_run_schema_marker = (
+        'jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
+    )
+    profile_run_schema_end_marker = '\' <<<"$RUN" >/dev/null'
+    profile_run_consume_marker = 'test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"'
+    profile_generated_ref_marker = (
+        'REMOTE_GENERATED="$(git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/generated)"'
+    )
+    profile_issued_marker = 'ISSUED_AT="$(date -u +%s)"'
+    profile_lease_id_marker = 'LEASE_ID="$(printf'
+    profile_output_marker = 'echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"'
+    for marker in (
+        profile_run_call_marker, profile_run_schema_marker, profile_run_schema_end_marker,
+        profile_run_consume_marker, profile_generated_ref_marker, profile_issued_marker,
+        profile_lease_id_marker, profile_output_marker,
+    ):
+        require(profile_lease.count(marker) == 1,
+                f"Profile Stats mutation-lease run evidence contract anchor is missing or ambiguous: {marker}")
+
+    profile_run_call = profile_lease.index(profile_run_call_marker)
+    profile_run_schema = profile_lease.index(profile_run_schema_marker)
+    profile_run_schema_end = (
+        profile_lease.index(profile_run_schema_end_marker, profile_run_schema)
+        + len(profile_run_schema_end_marker)
+    )
+    profile_run_consume = profile_lease.index(profile_run_consume_marker)
+    profile_generated_ref = profile_lease.index(profile_generated_ref_marker)
+    profile_issued = profile_lease.index(profile_issued_marker)
+    profile_lease_id = profile_lease.index(profile_lease_id_marker)
+    profile_output = profile_lease.index(profile_output_marker)
+    require(
+        profile_run_call < profile_run_schema < profile_run_schema_end
+        < profile_run_consume < profile_generated_ref < profile_issued
+        < profile_lease_id < profile_output,
+        "Profile Stats mutation-lease run evidence validation must precede scalar consumption, "
+        "generated-ref reproof, and lease issuance",
+    )
+
+    profile_schema = profile_lease[profile_run_schema:profile_run_schema_end]
+    for fragment in (
+        '(type == "object") and',
+        '(.id | type == "number" and . == floor and . == $run) and',
+        '(.run_attempt | type == "number" and . == floor and . == $attempt) and',
+        '(.workflow_id | type == "number" and . == floor and . > 0) and',
+        '(.run_number | type == "number" and . == floor and . > 0) and',
+        '(.event | type == "string" and . == $event) and',
+        '((.status | type) == "string") and',
+        '((.status == "queued") or (.status == "in_progress")) and',
+        '(.conclusion == null) and',
+        '(.head_sha | type == "string" and . == $head) and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.path | type == "string" and . == ".github/workflows/profile-stats.yml") and',
+        '(.repository | type == "object" and',
+        '(.id | type == "number" and . == floor and . == $repo_id) and',
+        '(.full_name | type == "string" and . == $repo)) and',
+        '(.head_repository | type == "object" and',
+        '(.full_name | type == "string" and . == $repo))',
+    ):
+        require(fragment in profile_schema,
+                f"Profile Stats mutation-lease run evidence contract is missing: {fragment}")
 
     v21.validate_ordered_presence(spotlight, v21.MUTATION_LEASE_SEQUENCE,
                                   "Spotlight mutation-lease contract")
@@ -3607,6 +3670,91 @@ def self_test() -> None:
     spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
     profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
     validate_leases(profile, spotlight)
+
+    profile_lease_start = profile.index("  lease:\n")
+    profile_lease_end = profile.index("  attest_publish:\n", profile_lease_start)
+    profile_lease = profile[profile_lease_start:profile_lease_end]
+    for current, replacement, label in (
+        (
+            '            (type == "object") and',
+            '            (type == "array") and',
+            "object envelope",
+        ),
+        (
+            '            (.id | type == "number" and . == floor and . == $run) and',
+            '            (.id | tostring == ($run | tostring)) and',
+            "run-id primitive",
+        ),
+        (
+            '            ((.status == "queued") or (.status == "in_progress")) and',
+            '            ((.status == "queued") or (.status == "in_progress") or (.status == "completed")) and',
+            "terminal status expansion",
+        ),
+        (
+            '            (.conclusion == null) and',
+            '            (has("conclusion")) and',
+            "null-conclusion binding",
+        ),
+        (
+            '              (.full_name | type == "string" and . == $repo))',
+            '              (.full_name | type == "string"))',
+            "repository identity",
+        ),
+    ):
+        require(
+            profile_lease.count(current) >= 1,
+            f"Profile Stats lease run-evidence self-test anchor changed: {label}",
+        )
+        weakened_lease = profile_lease.replace(current, replacement, 1)
+        weakened_profile = (
+            profile[:profile_lease_start] + weakened_lease + profile[profile_lease_end:]
+        )
+        try:
+            validate_leases(weakened_profile, spotlight)
+        except ValueError as exc:
+            require(
+                "Profile Stats mutation-lease run evidence contract" in str(exc),
+                f"Profile Stats lease run-evidence self-test failed for wrong reason ({label}): {exc}",
+            )
+        else:
+            raise ValueError(
+                f"Profile Stats lease run-evidence self-test accepted forbidden mutation: {label}"
+            )
+
+    profile_schema_start = profile_lease.index(
+        '          jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
+    )
+    profile_schema_end_marker = '\' <<<"$RUN" >/dev/null'
+    profile_schema_end = (
+        profile_lease.index(profile_schema_end_marker, profile_schema_start)
+        + len(profile_schema_end_marker)
+    )
+    profile_schema_block = profile_lease[profile_schema_start:profile_schema_end]
+    without_profile_schema = (
+        profile_lease[:profile_schema_start] + profile_lease[profile_schema_end:]
+    )
+    profile_consume = '          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"\n'
+    profile_consume_pos = without_profile_schema.index(profile_consume) + len(profile_consume)
+    reordered_profile_lease = (
+        without_profile_schema[:profile_consume_pos]
+        + profile_schema_block + "\n"
+        + without_profile_schema[profile_consume_pos:]
+    )
+    reordered_profile = (
+        profile[:profile_lease_start] + reordered_profile_lease + profile[profile_lease_end:]
+    )
+    try:
+        validate_leases(reordered_profile, spotlight)
+    except ValueError as exc:
+        require(
+            "Profile Stats mutation-lease run evidence validation must precede scalar consumption" in str(exc),
+            f"Profile Stats lease ordering self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError(
+            "Profile Stats lease run-evidence self-test accepted schema after scalar consumption"
+        )
+
     for current, replacement, label in (
         (
             '            ((.status == "queued") or (.status == "in_progress")) and',
@@ -4037,7 +4185,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:
