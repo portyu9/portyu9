@@ -509,7 +509,7 @@
       "candidateBomSha256": "42994f014e4744279c9276eaa1c828c1aca8d75dd43525c782d0d52cb1ef2480",
       "expansionSha256": "1c545e44d4f13c95eb6b3c49047f8e9156b526439f4881490db0c59093f5a313",
       "id": "cap-dependabot-post-update-convergence-v1",
-      "rationale": "Authorize frozen #1062's exact Dependabot post-update same-transaction convergence. After the already-authorized exact-head update-branch mutation returns, the trusted controller performs a bounded 24×5-second read-only observation loop over the existing PR GET, typed through the existing singleton PR boundary, until base equals the exact trusted current main and the candidate head has advanced; only then does the same trusted transaction continue into existing workflow approval, admission, protected checks, review and exact-head merge. The update mutation remains outside the loop and the loop is classified operationRetry=false. No new permission, trigger, secret, mutation class, endpoint family, merge authority, required-check reduction, OIDC, direct-main write, ruleset change or bypass is added."
+      "rationale": "Authorize frozen #1062's exact same-transaction Dependabot post-update convergence. After the existing update-branch mutation returns, trusted code may perform a bounded 24x5s read-only PR GET observation loop, typed through the existing singleton PR boundary, until base equals exact current main and head advances. The mutation remains outside the loop; operationRetry=false. No new permission, trigger, mutation class, endpoint family, merge/check authority, OIDC, ruleset, or bypass."
     },
     {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
