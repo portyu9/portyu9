@@ -953,7 +953,7 @@ def validate_quality_contract(text: str) -> None:
         'TOTAL="$(jq -r .total_count <<<"$CHECKS")"',
         'if [ "$TOTAL" = "0" ]; then',
         'trusted-main Dependabot admission proof has not materialized yet; retrying.',
-        'if [ "$TOTAL" != "1" ]; then',
+        'elif [ "$TOTAL" != "1" ]; then',
         'ambiguous trusted-main Dependabot admission proof collection',
         'STATUS="$(jq -r .status <<<"$CHECK")"',
         "CONCLUSION=\"$(jq -r '.conclusion // \"null\"' <<<\"$CHECK\")\"",
