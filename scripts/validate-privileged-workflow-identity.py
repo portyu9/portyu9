@@ -375,7 +375,7 @@ def validate_leases(profile: str, spotlight: str) -> None:
     profile_run_schema_marker = (
         'jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
     )
-    profile_run_schema_end_marker = '\\' <<<"$RUN" >/dev/null'
+    profile_run_schema_end_marker = '\' <<<"$RUN" >/dev/null'
     profile_run_consume_marker = 'test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"'
     profile_generated_ref_marker = (
         'REMOTE_GENERATED="$(git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/generated)"'
@@ -3724,7 +3724,7 @@ def self_test() -> None:
     profile_schema_start = profile_lease.index(
         '          jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
     )
-    profile_schema_end_marker = '\\' <<<"$RUN" >/dev/null'
+    profile_schema_end_marker = '\' <<<"$RUN" >/dev/null'
     profile_schema_end = (
         profile_lease.index(profile_schema_end_marker, profile_schema_start)
         + len(profile_schema_end_marker)
