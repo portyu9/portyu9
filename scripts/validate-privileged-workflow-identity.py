@@ -1185,14 +1185,18 @@ def validate_spotlight_pr_response_evidence(
                     f"Spotlight PR response self-test accepted reviewer mutation weakening: {label}"
                 )
 
-        ordered_reviewer_pair = reviewer_schema + "\n            " + reviewer_consume
+        reviewer_consume_line = (
+            'test "$(jq \'[.requested_reviewers[] | select(.login == "portyu9")] | length\' '
+            '<<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"'
+        )
+        ordered_reviewer_pair = reviewer_schema + "\n            " + reviewer_consume_line
         require(
             propose.count(ordered_reviewer_pair) == 1,
             "Spotlight reviewer mutation ordering self-test anchor changed",
         )
         reordered_propose = propose.replace(
             ordered_reviewer_pair,
-            reviewer_consume + "\n            " + reviewer_schema,
+            reviewer_consume_line + "\n            " + reviewer_schema,
             1,
         )
         weakened = spotlight[:propose_start] + reordered_propose + spotlight[propose_end:]
