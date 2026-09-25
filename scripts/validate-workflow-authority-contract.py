@@ -521,14 +521,14 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
             "",
         ),
         (
-            '          REQUESTED="$(jq \\'[.requested_reviewers[] | select(.login == "portyu9")] | length\\' <<<"$PR")"\n',
-            '          REQUESTED="$(jq \\'[.requested_reviewers[]? | select(.login == "portyu9")] | length\\' <<<"$PR")"\n',
+            '          REQUESTED="$(jq \'[.requested_reviewers[] | select(.login == "portyu9")] | length\' <<<"$PR")"\n',
+            '          REQUESTED="$(jq \'[.requested_reviewers[]? | select(.login == "portyu9")] | length\' <<<"$PR")"\n',
         ),
         (
             '            REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"\n'
             '            validate_spotlight_open_pr_object "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n'
-            '            test "$(jq \\'[.requested_reviewers[] | select(.login == "portyu9")] | length\\' <<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"\n',
-            '            test "$(jq \\'[.requested_reviewers[]? | select(.login == "portyu9")] | length\\' requested-reviewer.json)" = "1"\n',
+            '            test "$(jq \'[.requested_reviewers[] | select(.login == "portyu9")] | length\' <<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"\n',
+            '            test "$(jq \'[.requested_reviewers[]? | select(.login == "portyu9")] | length\' requested-reviewer.json)" = "1"\n',
         ),
     )
     for hardened, legacy in overlays:
