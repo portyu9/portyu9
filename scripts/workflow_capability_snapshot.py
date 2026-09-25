@@ -208,16 +208,16 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
         "ruleset reconciler admin writer lost exact prewrite/readback classification",
     )
     for fragment in (
-        '.app_id == $app and',
-        '.target_type == "User" and',
-        '.account.id == 35150859 and',
-        '.account.login == "portyu9" and',
-        '.repository_selection == "selected" and',
-        '.permissions.administration == "write" and',
+        '(.app_id | type == "number" and floor == . and . == $app) and',
+        '(.target_type | type == "string" and . == "User") and',
+        '(.account.id | type == "number" and floor == . and . == 35150859) and',
+        '(.account.login | type == "string" and . == "portyu9") and',
+        '(.repository_selection | type == "string" and . == "selected") and',
+        '(.permissions.administration | type == "string" and . == "write") and',
         '((.permissions | keys - ["administration", "metadata"]) | length == 0) and',
         "-f 'permissions[administration]=write' > installation-token.json",
-        '.total_count == 1 and',
-        '.repositories[0].id == 1355082509 and',
+        '(.total_count | type == "number" and floor == . and . == 1) and',
+        '(.repositories[0].id | type == "number" and floor == . and . == 1355082509) and',
     ):
         require(fragment in source,
                 f"ruleset reconciler least-authority installation proof changed: {fragment}")
