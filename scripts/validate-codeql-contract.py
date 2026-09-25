@@ -608,6 +608,78 @@ def self_test_autofix_read_singleton_evidence(good: str) -> None:
             fail(f"Autofix singleton-evidence self-test accepted forbidden mutation: {expected}")
 
 
+
+def validate_autofix_workflow_run_approval_status(text: str) -> None:
+    endpoint = 'repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve'
+    response = (
+        'APPROVAL_RESPONSE="$(gh api --include --method POST '
+        '"repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve")"'
+    )
+    status = 'APPROVAL_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_RESPONSE" | tr -d \'\\r\')"'
+    guard = '[[ "$APPROVAL_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    downstream = 'APPROVAL_REQUESTED_RUN_IDS="${APPROVAL_REQUESTED_RUN_IDS} ${CHECK_RUN_ID}"'
+
+    require(text.count(endpoint) == 1,
+            "CodeQL Autofix protected-run approval endpoint inventory changed")
+    require(text.count(response) == 1,
+            "CodeQL Autofix protected-run approval must capture exactly one --include response")
+    require(text.count(status) == 1,
+            "CodeQL Autofix protected-run approval status extraction changed")
+    require(text.count(guard) == 1,
+            "CodeQL Autofix protected-run approval must require exact HTTP 201")
+    require(
+        "CodeQL Autofix protected-run approval returned unexpected status:" in text,
+        "CodeQL Autofix protected-run approval failure must be explicit and fail closed",
+    )
+    require(
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve" >/dev/null'
+        not in text,
+        "CodeQL Autofix must not discard the protected-run approval response",
+    )
+    response_pos = text.index(response)
+    status_pos = text.index(status, response_pos)
+    guard_pos = text.index(guard, status_pos)
+    downstream_pos = text.index(downstream, guard_pos)
+    require(
+        response_pos < status_pos < guard_pos < downstream_pos,
+        "CodeQL Autofix must prove HTTP 201 before recording protected-run approval state",
+    )
+
+
+def self_test_autofix_workflow_run_approval_status(text: str) -> None:
+    validate_autofix_workflow_run_approval_status(text)
+
+    response_blind = text.replace(
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve"',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${CHECK_RUN_ID}/approve"',
+        1,
+    )
+    try:
+        validate_autofix_workflow_run_approval_status(response_blind)
+    except ValueError as exc:
+        require(
+            "--include response" in str(exc),
+            f"Autofix protected-run approval response self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Autofix protected-run approval self-test accepted a response-blind mutation")
+
+    wrong_status = text.replace(
+        '[[ "$APPROVAL_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$APPROVAL_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_autofix_workflow_run_approval_status(wrong_status)
+    except ValueError as exc:
+        require(
+            "exact HTTP 201" in str(exc),
+            f"Autofix protected-run approval status self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Autofix protected-run approval self-test accepted a non-201 success class")
+
+
 def validate_autofix_continuation(text: str) -> None:
     require(
         text.count('repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100') == 1,
@@ -1111,6 +1183,7 @@ def main() -> int:
         autofix = AUTOFIX.read_text(encoding="utf-8")
         self_test_autofix_constructive_response_schemas(autofix)
         self_test_autofix_read_singleton_evidence(autofix)
+        self_test_autofix_workflow_run_approval_status(autofix)
         self_test_autofix_continuation(autofix)
         self_test_autofix_repository_dispatch_status(autofix)
         validate_autofix_readiness_evidence(autofix)
@@ -1123,7 +1196,7 @@ def main() -> int:
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
-            "controller trust/provenance, typed constructive mutation responses, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, unsupported-alert queue fixtures, "
+            "controller trust/provenance, typed constructive mutation responses, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, exact HTTP-201-validated protected-run approvals, unsupported-alert queue fixtures, "
             "durable deduplicated unsupported evidence, trusted-actor-bound approval-comment evidence, exact HTTP-204-validated repository dispatches and post-merge CodeQL workflow dispatch, and exact post-merge CodeQL continuation."
         )
         return 0
