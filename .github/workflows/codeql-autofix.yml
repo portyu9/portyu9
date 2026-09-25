@@ -785,9 +785,14 @@ jobs:
             --out post-merge-codeql-selection.json
           test "$(jq -r .state post-merge-codeql-selection.json)" = "pending"
 
-          gh api --method POST \
+          POST_MERGE_CODEQL_DISPATCH_RESPONSE="$(gh api --include --method POST \
             "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" \
-            -f ref=main >/dev/null
+            -f ref=main)"
+          POST_MERGE_CODEQL_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$POST_MERGE_CODEQL_DISPATCH_RESPONSE" | tr -d '\r')"
+          [[ "$POST_MERGE_CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: CodeQL Autofix post-merge CodeQL dispatch returned unexpected status: ${POST_MERGE_CODEQL_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }
 
           POST_MERGE_CODEQL_RUN_ID=""
           for attempt in $(seq 1 60); do

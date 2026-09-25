@@ -773,7 +773,10 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         '--out "$RUNNER_TEMP/dependabot-merge-success-normalized.json"',
         'MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"',
         'assert_main_sha "$MERGE_SHA"',
-        'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
+        'POST_MERGE_CODEQL_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main)"',
+        'POST_MERGE_CODEQL_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$POST_MERGE_CODEQL_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+        '[[ "$POST_MERGE_CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+        'Dependabot post-merge CodeQL dispatch returned unexpected status:',
     ):
         require(fragment in text, f"Dependabot terminal merge response contract is missing: {fragment}")
 
@@ -781,13 +784,18 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         'MERGE_SHA="$(jq -r .sha <<<"$MERGE")"' not in text,
         "Dependabot controller must not consume terminal merge SHA before typed success validation",
     )
+    require(
+        'actions/workflows/codeql.yml/dispatches" -f ref=main >/dev/null' not in text,
+        "Dependabot post-merge CodeQL dispatch must not discard its HTTP response",
+    )
 
     ordered = (
         "if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then",
         'python3 scripts/dependabot_controller.py merge-success-response',
         'MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"',
         'assert_main_sha "$MERGE_SHA"',
-        'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
+        'POST_MERGE_CODEQL_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main)"',
+        '[[ "$POST_MERGE_CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
     )
     cursor = -1
     for fragment in ordered:
@@ -795,6 +803,38 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         require(position > cursor,
                 f"Dependabot terminal merge success validation moved out of reviewed order: {fragment}")
         cursor = position
+
+
+def self_test_controller_merge_success_response_contract(text: str) -> None:
+    validate_controller_merge_success_response_contract(text)
+    mutations = (
+        (
+            text.replace(
+                'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main',
+                'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main',
+                1,
+            ),
+            "terminal merge response contract",
+        ),
+        (
+            text.replace(
+                '[[ "$POST_MERGE_CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+                '[[ "$POST_MERGE_CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "terminal merge response contract",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_controller_merge_success_response_contract(mutated)
+        except ValueError as exc:
+            require(
+                expected in str(exc),
+                f"Dependabot post-merge dispatch-status self-test failed for the wrong reason: {exc}",
+            )
+        else:
+            fail("Dependabot post-merge dispatch-status self-test accepted weakened response validation")
 
 
 def validate_controller_approval_comment_contract(text: str) -> None:
@@ -1175,7 +1215,7 @@ def main() -> int:
         validate_controller_git_read_response_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
         validate_release_resolution_parity_contract(controller_text)
-        validate_controller_merge_success_response_contract(controller_text)
+        self_test_controller_merge_success_response_contract(controller_text)
         validate_controller_approval_comment_contract(controller_text)
         validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
@@ -1184,7 +1224,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, mirrored canonical/delegated public release reproof, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
