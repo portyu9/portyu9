@@ -174,7 +174,7 @@ def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
         (
             'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"',
             'PYTHONPATH="$GITHUB_WORKSPACE/candidate-source/scripts"',
-            "contract is missing",
+            "accepted-base modules",
         ),
         (
             'echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."',
