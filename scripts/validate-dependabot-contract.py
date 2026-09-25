@@ -584,7 +584,7 @@ def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
     )
     require(
         "for attempt in $(seq 1 12); do" in block
-        and 'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve"' in block,
+        and 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve"' in block,
         "Dependabot protected workflow approval retry/mutation authority changed",
     )
 
