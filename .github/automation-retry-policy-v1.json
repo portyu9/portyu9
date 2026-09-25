@@ -127,6 +127,20 @@
       "mutationMode": "none"
     },
     {
+      "id": "dependabot-post-update-rebind",
+      "workflow": ".github/workflows/dependabot-controller.yml",
+      "job": "controller",
+      "step": "Bind current main and one native Dependabot candidate",
+      "ordinal": 1,
+      "variable": "UPDATE_ATTEMPT",
+      "maxIterations": 24,
+      "sleepSeconds": 5,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait for GitHub to publish the exact post-update Dependabot PR base/head before continuing the same trusted transaction; the update mutation remains outside the loop.",
+      "mutationMode": "none"
+    },
+    {
       "id": "dependabot-workflow-run-readiness",
       "workflow": ".github/workflows/dependabot-controller.yml",
       "job": "controller",
