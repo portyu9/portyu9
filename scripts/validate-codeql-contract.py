@@ -942,7 +942,7 @@ def validate_unsupported_evidence(text: str) -> None:
         created_verify_pos,
     )
     continuation_pos = text.index(
-        'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json',
+        'UNSUPPORTED_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json)"',
         main_after_pos,
     )
     require(
