@@ -949,6 +949,54 @@ def validate_quality_contract(text: str) -> None:
         "Profile Quality must execute the Dependabot governance validator",
     )
 
+    readiness_fragments = (
+        'TOTAL="$(jq -r .total_count <<<"$CHECKS")"',
+        'if [ "$TOTAL" = "0" ]; then',
+        'trusted-main Dependabot admission proof has not materialized yet; retrying.',
+        'elif [ "$TOTAL" != "1" ]; then',
+        'ambiguous trusted-main Dependabot admission proof collection',
+        'STATUS="$(jq -r .status <<<"$CHECK")"',
+        "CONCLUSION=\"$(jq -r '.conclusion // \"null\"' <<<\"$CHECK\")\"",
+        'if [ "$STATUS" != "completed" ]; then',
+        'waiting for terminal completion.',
+        'if [ "$CONCLUSION" != "success" ]; then',
+        'completed with conclusion=${CONCLUSION}.',
+        'latest completed proof check id=${CHECK_ID} is not bound to the exact current PR/base/head; waiting for the exact proof.',
+        'if [ "$PROOF_RUN_ATTEMPT" -gt 20 ]; then',
+        'SUMMARY_CANONICAL="$(jq -cS . <<<"$SUMMARY")"',
+        'OBSERVED_SUMMARY_SHA256="$(printf \'%s\' "$SUMMARY_CANONICAL" | sha256sum | cut -d\' \' -f1)"',
+        'if [ "$OBSERVED_SUMMARY_SHA256" != "$SUMMARY_SHA256" ]; then',
+        'proof summary digest does not match its external identity.',
+        'malformed or mismatched completed trusted-main Dependabot admission proof check evidence.',
+        '(.details_url | type == "string" and test("^https://github\\\\.com/portyu9/portyu9/runs/[1-9][0-9]*$"))',
+        '(.pull_requests | type == "array" and length <= 100)',
+    )
+    for fragment in readiness_fragments:
+        require(
+            fragment in text,
+            f"Profile Quality delegated admission readiness contract is missing: {fragment}",
+        )
+
+    for forbidden in (
+        'test -n "$SUMMARY"',
+        'test "$(printf \'%s\' "$SUMMARY" | jq -cS . | sha256sum | cut -d\' \' -f1)" = "$SUMMARY_SHA256"',
+        '([.pull_requests[]? | select(.number == $pr and .head.sha == $head and .base.sha == $base)] | length == 1)',
+    ):
+        require(
+            forbidden not in text,
+            f"Profile Quality delegated admission consumer regained race-prone or mutable evidence dependence: {forbidden}",
+        )
+
+    wait_pos = text.index('if [ "$STATUS" != "completed" ]; then')
+    external_pos = text.index('EXTERNAL_ID="$(jq -r', wait_pos)
+    terminal_pos = text.index('if [ "$CONCLUSION" != "success" ]; then', external_pos)
+    summary_pos = text.index('SUMMARY="$(jq -r', external_pos)
+    digest_pos = text.index('OBSERVED_SUMMARY_SHA256=', summary_pos)
+    accepted_pos = text.index('Consumed exact trusted-main Dependabot admission digest-bound retry-history proof', digest_pos)
+    require(
+        wait_pos < external_pos < terminal_pos < summary_pos < digest_pos < accepted_pos,
+        "Profile Quality delegated admission proof readiness/validation ordering changed",
+    )
 
 def validate_governance(text: str) -> None:
     for phrase in (
