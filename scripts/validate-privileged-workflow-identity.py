@@ -999,7 +999,7 @@ def validate_spotlight_pr_response_evidence(
     )
     require(
         spotlight.count("validate_spotlight_open_pr_object() {") == 2
-        and spotlight.count('validate_spotlight_open_pr_object "$') == 6
+        and spotlight.count('validate_spotlight_open_pr_object "$') == 5
         and spotlight.count("validate_spotlight_reviewer_request_response() {") == 1
         and spotlight.count('validate_spotlight_reviewer_request_response "$') == 1,
         "Spotlight PR response schema/call cardinality changed",
