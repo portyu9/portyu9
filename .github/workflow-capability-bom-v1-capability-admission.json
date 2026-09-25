@@ -207,7 +207,7 @@
               "target": "repos/${TARGET_REPOSITORY}/check-runs"
             }
           ],
-          "name": "${{ github.event_name == 'pull_request_target' && github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/') && 'dependabot-admission-delegated' || 'trusted-capability-admission' }}",
+          "name": "trusted-capability-admission",
           "needs": [],
           "oidc": false,
           "permissions": {

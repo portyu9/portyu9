@@ -26,7 +26,7 @@ env:
 
 jobs:
   admission:
-    name: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/') && 'dependabot-admission-delegated' || 'trusted-capability-admission' }}
+    name: trusted-capability-admission
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
@@ -120,17 +120,6 @@ jobs:
             pull_request_target)
               PR="$(jq -c '.pull_request' "$GITHUB_EVENT_PATH")"
               HEAD_REPOSITORY="$(jq -r '.head.repo.full_name' <<<"$PR")"
-              if [ "$(jq -r '.user.login // ""' <<<"$PR")" = "dependabot[bot]" ] &&
-                 [ "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY" ] &&
-                 [[ "$(jq -r '.head.ref // ""' <<<"$PR")" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]; then
-                printf 'has_candidate=false\n' >> "$GITHUB_OUTPUT"
-                printf 'dispatch=false\n' >> "$GITHUB_OUTPUT"
-                printf 'dependabot=false\n' >> "$GITHUB_OUTPUT"
-                printf 'spotlight=false\n' >> "$GITHUB_OUTPUT"
-                printf 'spotlight_mode=\n' >> "$GITHUB_OUTPUT"
-                echo "Native Dependabot pull_request_target admission is delegated to the trusted controller dispatch path."
-                exit 0
-              fi
               ;;
             repository_dispatch)
               ACTION="$(jq -r '.action // ""' "$GITHUB_EVENT_PATH")"
@@ -785,7 +774,7 @@ jobs:
             SUMMARY_SHA256="$(jq -r .summarySha256 dependabot-admission-proof-meta.json)"
             [[ "$SUMMARY_SHA256" =~ ^[0-9a-f]{64}$ ]]
             EXTERNAL_ID="dependabot-delegated-admission:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:${SUMMARY_SHA256}:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"
-            CHECK_NAME="trusted-capability-admission"
+            CHECK_NAME="trusted-capability-admission-proof"
           elif [ "$SPOTLIGHT" = "true" ]; then
             test "$SPOTLIGHT_MODE" = "delegated" || test "$SPOTLIGHT_MODE" = "scheduled"
             [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]

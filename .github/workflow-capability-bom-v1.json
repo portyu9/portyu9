@@ -143,6 +143,58 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Consume exact trusted-main Dependabot admission proof"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Consume exact trusted-main Dependabot admission proof"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
+              "method": "GET",
+              "mutating": false,
+              "step": "Consume exact trusted-main Dependabot admission proof"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Consume exact trusted-main Dependabot admission proof"
+            }
+          ],
+          "artifacts": [],
+          "id": "dependabot_admission",
+          "mutations": [],
+          "name": "${{ github.event_name == 'pull_request' && github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/') && 'trusted-capability-admission' || 'dependabot-admission-not-applicable' }}",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}",
               "method": "GET",
               "mutating": false,

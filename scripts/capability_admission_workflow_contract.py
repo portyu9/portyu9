@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "a1e940153cf124ecbc0991e49a951295b4dcc0a7"
+EXPECTED_GIT_BLOB = "20fb012eb29712899a3c93e0a4ebbd7c99215646"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -70,20 +70,6 @@ def validate_text(text: str) -> None:
             "trusted capability admission workflow permission set changed")
     require(text.count(job_permissions) == 1,
             "trusted capability admission job permission set changed")
-    require(
-        "dependabot-admission-delegated' || 'trusted-capability-admission" in text,
-        "native Dependabot pull_request_target job-name separation changed",
-    )
-    for delegated_noop in (
-        'if [ "$(jq -r \\'.user.login // ""\\' <<<"$PR")" = "dependabot[bot]" ] &&',
-        "Native Dependabot pull_request_target admission is delegated to the trusted controller dispatch path.",
-        "printf 'has_candidate=false\\n' >> \"$GITHUB_OUTPUT\"",
-        "printf 'dependabot=false\\n' >> \"$GITHUB_OUTPUT\"",
-    ):
-        require(
-            delegated_noop in text,
-            f"native Dependabot pull_request_target no-op contract changed: {delegated_noop}",
-        )
     for forbidden in (
         "contents: write", "actions: write", "pull-requests: write", "security-events: write",
         "id-token: write", "attestations: write", "--method PUT", "--method PATCH", "--method DELETE",
@@ -737,6 +723,7 @@ def validate_text(text: str) -> None:
         "-f conclusion=success",
         '-f external_id="$EXTERNAL_ID"',
         'test "$(jq -r .name <<<"$CHECK")" = "$CHECK_NAME"',
+        'CHECK_NAME="trusted-capability-admission-proof"',
         'CHECK_NAME="trusted-capability-admission"',
         'test "$(jq -r .app.id <<<"$CHECK")" = "15368"',
     ):
@@ -746,14 +733,6 @@ def validate_text(text: str) -> None:
         "if: steps.candidate.outputs.dispatch == 'true' || steps.candidate.outputs.dependabot == 'true' || steps.candidate.outputs.spotlight == 'true'"
         in text,
         "trusted capability admission check write is no longer bound to reviewed bot paths",
-    )
-    require(
-        text.count('CHECK_NAME="trusted-capability-admission"') == 3,
-        "all three trusted bot admission publishers must converge on the sole required context",
-    )
-    require(
-        "trusted-capability-admission-proof" not in text,
-        "trusted capability admission retained a parallel proof-only check context",
     )
 
 
