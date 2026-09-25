@@ -151,6 +151,13 @@
       "rationale": "Authorize #490's exact repository-dispatch admission for GitHub-token-created CodeQL Autofix PRs. Trusted default-branch code binds the open same-repo PR, exact main/base/head/branch and immutable controller receipt, treats candidate TCB bytes strictly as data, and may publish only trusted-capability-admission success to that candidate SHA. Other required checks, GHAS/review-thread proof, race checks, Protect Main, and exact-SHA merge remain fail-closed."
     },
     {
+      "id": "cap-codeql-autofix-commit-topology-v1",
+      "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "expansionSha256": "77c58e111f9997db84d4a7996e4aa47a91637d48b03739d80cc814c189332732",
+      "rationale": "Authorize frozen #1044 protected-controller hardening that proves CodeQL Autofix candidate parent/base, tree, Git author, Git committer, URL and message class from the existing compare response before eligibility. Equal base/candidate BOM hashes prove no semantic capability expansion. API calls, endpoints, triggers, permissions, secrets, mutations, checks, reviews, merge authority, rulesets, direct-main writes, OIDC and bypasses remain unchanged."
+    },
+    {
       "id": "cap-codeql-autofix-compare-head-binding",
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
