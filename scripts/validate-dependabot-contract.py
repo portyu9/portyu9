@@ -349,24 +349,33 @@ def validate_controller_pr_response_contract(text: str) -> None:
         "Dependabot protected merge/dispatch PR snapshot topology changed",
     )
 
+    validation_step_start = '      - name: Bind exact controller-issued validation target\n'
+    validation_step_end = '      - name: Reconstruct exact reconciled candidate as data\n'
+    require(
+        text.count(validation_step_start) == 1 and text.count(validation_step_end) == 1,
+        "Dependabot validation-bind step anchors changed",
+    )
+    validation_block = text[
+        text.index(validation_step_start):text.index(validation_step_end)
+    ]
     list_fetch = (
         'gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:'
         '${HEAD_REF}&per_page=10"'
     )
     list_output = '> "$RUNNER_TEMP/dependabot-validation-pr-list.json"'
-    list_schema = text.index(list_validator, text.index(list_fetch))
     list_consume = (
         'PR_NUMBER="$(jq -r .number "$RUNNER_TEMP/dependabot-validation-pr-list-normalized.json")"'
     )
-    validation_fetch = text.rindex(initial_fetch)
-    validation_schema = text.index(validator, validation_fetch)
-    validation_consume = text.index(
+    validation_fetch = validation_block.rindex(initial_fetch)
+    validation_schema = validation_block.index(validator, validation_fetch)
+    validation_consume = validation_block.index(
         'test "$(jq -r .number dependabot-pr-normalized.json)" = "$PR_NUMBER"',
         validation_schema,
     )
     for fragment in (
         list_fetch,
         list_output,
+        list_validator,
         '--response "$RUNNER_TEMP/dependabot-validation-pr-list.json"',
         '--expected-repository "$TARGET_REPOSITORY"',
         '--expected-base-sha "$BASE_SHA"',
@@ -376,14 +385,14 @@ def validate_controller_pr_response_contract(text: str) -> None:
         list_consume,
     ):
         require(
-            text.count(fragment) == 1,
+            validation_block.count(fragment) == 1,
             f"Dependabot validation pull-list boundary anchor changed: {fragment}",
         )
     require(
-        text.index(list_fetch)
-        < text.index(list_output, text.index(list_fetch))
-        < list_schema
-        < text.index(list_consume)
+        validation_block.index(list_fetch)
+        < validation_block.index(list_output, validation_block.index(list_fetch))
+        < validation_block.index(list_validator, validation_block.index(list_fetch))
+        < validation_block.index(list_consume)
         < validation_fetch
         < validation_schema
         < validation_consume,
