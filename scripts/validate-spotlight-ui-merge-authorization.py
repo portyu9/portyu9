@@ -914,7 +914,7 @@ def validate_protected_workflow_evidence_overlay(sync: str) -> None:
         '.workflowId == $workflow_id',
         'CHECK_SUITE_ID="$(jq -r .checkSuiteId <<<"$RUN")"',
         'RUN_ATTEMPT="$(jq -r .runAttempt <<<"$RUN")"',
-        'gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve"',
+        'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve"',
     ):
         require(
             fragment in approve,
@@ -941,7 +941,7 @@ def validate_protected_workflow_evidence_overlay(sync: str) -> None:
     run_validate = 'error("Spotlight protected workflow-run response must be an object")'
     run_normalized = '> "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json"'
     run_consume = 'RUNS_TOTAL="$(jq -r .totalCount "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json")"'
-    run_mutation = 'gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve"'
+    run_mutation = 'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve"'
     positions = [
         approve.index(run_fetch),
         approve.index(run_validate),
