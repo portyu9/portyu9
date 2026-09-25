@@ -820,6 +820,13 @@
       "rationale": "Authorize #687's exact Ruleset recovery YAML-guard correction. The existing signer keeps identical permissions, actions, subject, API reads and artifact authority; the job guard is YAML-quoted and rebound only to #687's merge push while exact receipt hash/field and live-successor proofs remain. No trigger, secret, endpoint, method, ruleset mutation, signer, attestation target, required-check reduction, merge capability or bypass is added."
     },
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "df9d96f5397051e0922b56443d08b777d70439d0a745c2aa88b40f36f0dcd663",
+      "id": "cap-security-controller-post-merge-codeql-dispatch-status-v1",
+      "rationale": "Authorize frozen #1084's exact trusted-source-only hardening of the two existing post-merge CodeQL workflow dispatches in CodeQL Autofix and Dependabot: capture gh api --include responses and require HTTP 204 before continuation. Base/candidate semantic BOMs are identical; endpoints, refs, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority and bypass remain unchanged."
+    },
+    {
       "baseBomSha256": "41af601f83d22181d72cbcc54f35034d8d79f4af3d7bf326fe307b41c116eb5b",
       "candidateBomSha256": "6afc47443664b9bd28d39b9c6ef795151705010db150b20d22349cbb00c8d464",
       "expansionSha256": "d987a3de4185a163e7ad0a09b74eef30218d2767317dc8b4d7684e7e5c1dbec7",
