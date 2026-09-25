@@ -1454,7 +1454,12 @@ jobs:
                   case " $APPROVAL_REQUESTED_RUN_IDS " in
                     *" $RUN_ID "*) : ;;
                     *)
-                      gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null
+                      APPROVAL_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve")"
+                      APPROVAL_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_RESPONSE" | tr -d '\r')"
+                      [[ "$APPROVAL_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+                        echo "ERROR: Spotlight protected-run approval returned unexpected status: ${APPROVAL_STATUS_LINE}" >&2
+                        exit 1
+                      }
                       APPROVAL_REQUESTED_RUN_IDS="${APPROVAL_REQUESTED_RUN_IDS} ${RUN_ID}"
                       APPROVAL_ENTRY="$(jq -cn --arg name "$NAME" --argjson workflow "$EXPECTED_ID" --argjson run "$RUN_ID" \
                         --argjson attempt "$RUN_ATTEMPT" --argjson suite "$CHECK_SUITE_ID" --arg head "$HEAD_SHA" \

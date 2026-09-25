@@ -693,7 +693,12 @@ jobs:
                   [[ "$run_attempt" =~ ^[1-9][0-9]*$ ]]
                   test "$(jq -r .workflowId <<<"$run")" = "$expected_id"
                   if [ "$status" = "action_required" ] || [ "$status" = "waiting" ] || [ "$conclusion" = "action_required" ]; then
-                    gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve" >/dev/null
+                    approval_response="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve")"
+                    approval_status_line="$(head -n 1 <<<"$approval_response" | tr -d '\r')"
+                    [[ "$approval_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+                      echo "ERROR: Dependabot protected-run approval returned unexpected status: ${approval_status_line}" >&2
+                      exit 1
+                    }
                     echo "Approved exact canonical Dependabot PR workflow: ${name} run ${run_id}."
                   elif [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then
                     echo "Canonical Dependabot PR workflow completed unsuccessfully before approval: ${name} (${conclusion})." >&2
