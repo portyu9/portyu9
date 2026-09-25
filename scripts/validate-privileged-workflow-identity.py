@@ -2740,10 +2740,13 @@ def validate_spotlight_terminal_required_check_collection(
             f"Spotlight terminal required-check response schema changed: {fragment}",
         )
 
+    equality = 'test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"'
     require(
-        'test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"' in terminal,
+        equality in terminal,
         "Spotlight terminal exact required-check provenance equality changed",
     )
+    equality_pos = terminal.index(equality, observed_pos)
+    check_set_block = terminal[scalar_pos:equality_pos]
     for required in (
         "analyze-actions",
         "analyze-python",
@@ -2753,8 +2756,8 @@ def validate_spotlight_terminal_required_check_collection(
         "validate-contracts",
     ):
         require(
-            terminal.count(f'.name == "{required}"') == 1
-            and terminal.count(f'name:"{required}"') == 1,
+            check_set_block.count(f'.name == "{required}"') == 1
+            and check_set_block.count(f'name:"{required}"') == 1,
             f"Spotlight terminal required-check set changed for {required}",
         )
 
