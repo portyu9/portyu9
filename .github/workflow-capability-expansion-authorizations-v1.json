@@ -895,6 +895,13 @@
       "expansionSha256": "ada0eb49a80556fdd29de0d1889143878ee4f979506604923335c59f43d932b9",
       "id": "cap-workflow-run-approval-response-status-v1",
       "rationale": "Authorize frozen #1096's exact trusted-source-only hardening of the three existing protected workflow-run approval POSTs in CodeQL Autofix, Dependabot and Spotlight: capture gh api --include responses and require HTTP 201 before approval state/evidence or success. Base/candidate semantic BOMs are identical; endpoints, run identity, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority and bypass remain unchanged."
+    },
+    {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "83ee38eb4f3b4db73b888ff4706ab769831a1c4591855ce8c2bf6d33c069bc11",
+      "id": "cap-dependabot-workflow-dispatch-response-status-v1",
+      "rationale": "Authorize frozen #1100's exact trusted-source-only hardening of three existing Dependabot workflow-dispatch POSTs: capture gh api --include responses and require HTTP 204 before reconciled-head validation success, exact-head validation continuation, or exact-head CodeQL success. Base/candidate semantic BOMs are identical; endpoints, refs, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets and bypass remain unchanged."
     }
   ],
   "ledgerId": "workflow-capability-expansion-authorizations-v1",
