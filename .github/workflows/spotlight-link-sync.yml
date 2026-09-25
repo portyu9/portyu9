@@ -2119,6 +2119,40 @@ jobs:
           echo "Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified" >&2
 
           CHECKS="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          jq -e --arg head "$HEAD_SHA" '
+            def positive_int: type == "number" and . == floor and . > 0;
+            def nonnegative_int: type == "number" and . == floor and . >= 0;
+            def allowed_status:
+              . == "queued" or . == "in_progress" or . == "completed" or
+              . == "waiting" or . == "requested" or . == "pending";
+            def allowed_conclusion:
+              . == "action_required" or . == "cancelled" or . == "failure" or
+              . == "neutral" or . == "skipped" or . == "stale" or
+              . == "startup_failure" or . == "success" or . == "timed_out";
+            (type == "object") and
+            (.total_count | nonnegative_int) and
+            (.total_count <= 100) and
+            (.check_runs | type == "array" and length <= 100) and
+            (.total_count == (.check_runs | length)) and
+            (all(.check_runs[];
+              (type == "object") and
+              (.id | positive_int) and
+              (.name | type == "string" and length > 0) and
+              (.status | type == "string" and allowed_status) and
+              (if .status == "completed"
+               then (.conclusion | type == "string" and allowed_conclusion)
+               else .conclusion == null end) and
+              (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.app | type == "object" and
+                (.id | positive_int) and
+                (.slug | type == "string" and length > 0)) and
+              (.check_suite | type == "object" and (.id | positive_int))
+            )) and
+            (([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))
+          ' <<<"$CHECKS" >/dev/null || {
+            echo "ERROR: malformed or incomplete Spotlight terminal check-run evidence." >&2
+            exit 1
+          }
           CHECKS_TOTAL="$(jq -r '.total_count // empty' <<<"$CHECKS")"
           CHECKS_COUNT="$(jq '.check_runs | length' <<<"$CHECKS")"
           [[ "$CHECKS_TOTAL" =~ ^[0-9]+$ ]]
