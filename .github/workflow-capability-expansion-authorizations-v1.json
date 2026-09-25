@@ -516,7 +516,7 @@
       "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "expansionSha256": "9d31473688b96c3f7f5ab066c75ef1af43028b7f108254367401c77812d07208",
       "id": "cap-dependabot-pr-native-self-contained-admission-v1",
-      "rationale": "Authorize frozen #1071's exact replacement of the cross-run Dependabot admission-proof relay with a self-contained PR-native read-only gate. The gate proves exact PR/base/head and unchanged Profile Quality bytes, executes verifier code only from the accepted-base checkout, treats the candidate checkout as inert data, independently re-proves the immutable CodeQL release, and runs the existing trusted semantic admission locally. This removes checks-read relay authority and bounded cross-run polling; no write permission, trigger, mutation class, merge authority, required-check reduction, direct-main write, OIDC authority, ruleset change, or bypass is added."
+      "rationale": "Authorize frozen #1071's exact replacement of the cross-run Dependabot proof relay with a self-contained PR-native read-only gate. It binds exact PR/base/head, proves Profile Quality bytes unchanged, executes verifier code only from accepted base, treats candidate checkout as inert data, re-proves the immutable CodeQL release, and runs trusted semantic admission locally. Removes checks-read relay authority and polling; adds no write, merge, bypass, OIDC, ruleset, or direct-main authority."
     },
     {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
