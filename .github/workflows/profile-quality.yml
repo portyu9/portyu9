@@ -704,8 +704,7 @@ jobs:
           [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-          git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
-            "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > "$RUNNER_TEMP/dependabot-release-refs.txt"
+          git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > "$RUNNER_TEMP/dependabot-release-refs.txt"
           gh api "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"
           gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > "$RUNNER_TEMP/dependabot-release.json"
           python3 trusted-base/scripts/dependabot_release.py \
