@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "e46fbd146af4cedbc773d0ef55b29b297e8f3fac",
+    ".github/workflows/spotlight-link-sync.yml": "3b55c6082991e3ace228c4d90664af8ab8bdd6aa",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -2715,7 +2715,7 @@ def validate_spotlight_terminal_required_check_collection(
         '(.check_runs | type == "array" and length <= 100) and',
         '(.total_count == (.check_runs | length)) and',
         '(all(.check_runs[];',
-        '(.id | type == "number" and . == floor and . > 0) and',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
         '(.name | type == "string" and length > 0) and',
         '(.status | type == "string" and',
         '. == "queued" or . == "in_progress" or . == "completed" or',
@@ -2727,10 +2727,10 @@ def validate_spotlight_terminal_required_check_collection(
         'else .conclusion == null end',
         '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
         '(.app | type == "object" and',
-        '(.id | type == "number" and . == floor and . > 0) and',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
         '(.slug | type == "string" and length > 0)) and',
         '(.check_suite | type == "object" and',
-        '(.id | type == "number" and . == floor and . > 0))',
+        '(.id | (type == "number") and (. == floor) and (. > 0)))',
         '(([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))',
         schema_error,
     ):
@@ -2771,8 +2771,8 @@ def validate_spotlight_terminal_required_check_collection(
                 '(.head_sha | tostring | test("^[0-9a-f]{40}$")) and',
             ),
             (
-                '(.check_suite | type == "object" and\n                (.id | type == "number" and . == floor and . > 0))',
-                '(.check_suite.id | type == "number" and . == floor and . > 0)',
+                '(.check_suite | type == "object" and\n                (.id | (type == "number") and (. == floor) and (. > 0)))',
+                '(.check_suite.id | (type == "number") and (. == floor) and (. > 0))',
             ),
         )
         terminal_start = spotlight.index("  merge:\n")
