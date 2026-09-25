@@ -299,7 +299,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
         'test "$(jq -r .message update-branch.json)" = "Updating pull request branch."',
         'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
         'PRS="$(gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10")"',
-        'PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"',
+        "PR_NUMBER=\"$(jq -r '.[0].number' <<<\"$PRS\")\"",
     ):
         require(
             forbidden not in text,
