@@ -4,8 +4,8 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:0647cd66bb471ba29d013f068b7314888f9b1770c4849c94a4d78dfa7a1f9513",
-  "evidence_id": "PL2-0647CD66BB471BA2",
+  "evidence_digest": "sha256:ec22551efd9e5ce73c424c8de77a191cccae6a8fc692c18af2ef959257141cee",
+  "evidence_id": "PL2-EC22551EFD9E5CE7",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -19,7 +19,8 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 25
+    "FAILING": 1,
+    "PASSING": 24
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -39,21 +40,21 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-25T01:48:29Z",
+          "completed_at_utc": "2026-09-25T05:14:03Z",
           "freshness": "SAME_DAY",
-          "head_sha": "77812b9cf4355366f0255aa9fe0ac258439e5f87",
+          "head_sha": "df97c28f0a110b749d8b890c688203bf6bbd63d0",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "PASSING",
-          "run_id": 36083200347,
-          "run_number": 2459,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/36083200347",
+          "result": "FAILING",
+          "run_id": 36097696184,
+          "run_number": 2503,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/36097696184",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "77812b9cf4355366f0255aa9fe0ac258439e5f87",
+      "subject_revision": "df97c28f0a110b749d8b890c688203bf6bbd63d0",
       "title": "AI QA CONTROL PLANE"
     },
     {
