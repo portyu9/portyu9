@@ -917,22 +917,22 @@ def validate_controller_workflow_dispatch_status(text: str) -> None:
     )
     specs = (
         (
-            'RECONCILED_VALIDATION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF")"',
-            'RECONCILED_VALIDATION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$RECONCILED_VALIDATION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '\n          RECONCILED_VALIDATION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF")"',
+            '\n          RECONCILED_VALIDATION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$RECONCILED_VALIDATION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
             '[[ "$RECONCILED_VALIDATION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
             "Dependabot reconciled-head validation workflow dispatch returned unexpected status:",
             'echo "Reconciled exact derived governance files and dispatched admission plus read-only validation for the new immutable head."',
         ),
         (
-            'VALIDATION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF")"',
-            'VALIDATION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$VALIDATION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '\n              VALIDATION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF")"',
+            '\n              VALIDATION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$VALIDATION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
             '[[ "$VALIDATION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
             "Dependabot exact-head validation workflow dispatch returned unexpected status:",
             'jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA"',
         ),
         (
-            'CODEQL_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="$HEAD_REF")"',
-            'CODEQL_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CODEQL_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '\n          CODEQL_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="$HEAD_REF")"',
+            '\n          CODEQL_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CODEQL_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
             '[[ "$CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
             "Dependabot exact-head CodeQL workflow dispatch returned unexpected status:",
             'echo "Dispatched CodeQL only after exact read-only Dependabot validation succeeded."',
