@@ -2215,6 +2215,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Create or reuse immutable README-only candidate"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers",
               "method": "POST",
               "mutating": true,
