@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v93"
+VERSION = "governed-workflow-byte-identity-v94"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "e9ba990a508c8cf6493ad91661294a8a2807beb3",
+    ".github/workflows/spotlight-link-sync.yml": "20cd966f5e7b96a073fb1943425327f42f1e3aa6",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -2682,6 +2682,144 @@ def project_spotlight_terminal_protected_runs_to_legacy(spotlight: str) -> str:
     return spotlight[:start] + legacy + spotlight[end:]
 
 
+def validate_spotlight_terminal_required_check_collection(
+    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    terminal = job_block(spotlight, "merge", "decision_receipt")
+    fetch = (
+        'CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' '
+        '"repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"'
+    )
+    scalar_consume = 'CHECKS_TOTAL="$(jq -r \'.total_count // empty\' <<<"$CHECKS")"'
+    observed_consume = 'OBSERVED_CHECKS="$(jq -c \'[.check_runs[] | select(.app.id == 15368'
+    schema_start = 'jq -e --arg head "$HEAD_SHA" \''
+    schema_error = "ERROR: malformed or incomplete Spotlight terminal check-run evidence."
+
+    require(terminal.count(fetch) == 1, "Spotlight terminal required-check fetch topology changed")
+    require(terminal.count(scalar_consume) == 1,
+            "Spotlight terminal check-run total-count consumption topology changed")
+    require(terminal.count(observed_consume) == 1,
+            "Spotlight terminal required-check selection topology changed")
+    fetch_pos = terminal.index(fetch)
+    schema_pos = terminal.index(schema_start, fetch_pos)
+    scalar_pos = terminal.index(scalar_consume, fetch_pos)
+    observed_pos = terminal.index(observed_consume, scalar_pos)
+    require(
+        fetch_pos < schema_pos < scalar_pos < observed_pos,
+        "Spotlight terminal check-run evidence must be schema-validated before scalar/filter consumption",
+    )
+    schema_block = terminal[schema_pos:scalar_pos]
+    for fragment in (
+        '(type == "object") and',
+        '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '(.check_runs | type == "array" and length <= 100) and',
+        '(.total_count == (.check_runs | length)) and',
+        '(all(.check_runs[];',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
+        '(.name | type == "string" and length > 0) and',
+        '(.status | type == "string" and',
+        '((. == "queued") or (. == "in_progress") or (. == "completed") or',
+        '(. == "waiting") or (. == "requested") or (. == "pending"))) and',
+        'if .status == "completed"',
+        'then (.conclusion | type == "string" and',
+        '((. == "action_required") or (. == "cancelled") or (. == "failure") or',
+        '(. == "startup_failure") or (. == "success") or (. == "timed_out")))',
+        'else .conclusion == null end',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.app | type == "object" and',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
+        '(.slug | type == "string" and length > 0)) and',
+        '(.check_suite | type == "object" and',
+        '(.id | (type == "number") and (. == floor) and (. > 0)))',
+        '(([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))',
+        schema_error,
+    ):
+        require(
+            fragment in schema_block,
+            f"Spotlight terminal required-check response schema changed: {fragment}",
+        )
+
+    equality = 'test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"'
+    require(
+        equality in terminal,
+        "Spotlight terminal exact required-check provenance equality changed",
+    )
+    equality_pos = terminal.index(equality, observed_pos)
+    check_set_block = terminal[scalar_pos:equality_pos]
+    for required in (
+        "analyze-actions",
+        "analyze-python",
+        "dependency-review",
+        "integration-pinned-upstream",
+        "trusted-governed-bot-review",
+        "validate-contracts",
+    ):
+        require(
+            check_set_block.count(f'.name == "{required}"') == 1
+            and check_set_block.count(f'name:"{required}"') == 1,
+            f"Spotlight terminal required-check set changed for {required}",
+        )
+
+    if run_self_test:
+        mutations = (
+            (
+                '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+                '(.total_count | tostring | length > 0) and',
+            ),
+            (
+                '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+                '(.head_sha | tostring | test("^[0-9a-f]{40}$")) and',
+            ),
+            (
+                '(.check_suite | type == "object" and\n                (.id | (type == "number") and (. == floor) and (. > 0)))',
+                '(.check_suite.id | (type == "number") and (. == floor) and (. > 0))',
+            ),
+        )
+        terminal_start = spotlight.index("  merge:\n")
+        terminal_end = spotlight.index("  decision_receipt:\n", terminal_start)
+        terminal_source = spotlight[terminal_start:terminal_end]
+        for current, replacement in mutations:
+            require(
+                current in terminal_source,
+                f"Spotlight terminal required-check self-test anchor changed: {current}",
+            )
+            weakened_terminal = terminal_source.replace(current, replacement, 1)
+            weakened = spotlight[:terminal_start] + weakened_terminal + spotlight[terminal_end:]
+            try:
+                validate_spotlight_terminal_required_check_collection(
+                    weakened, run_self_test=False
+                )
+            except ValueError as exc:
+                require(
+                    "required-check response schema changed" in str(exc),
+                    f"Spotlight terminal required-check self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Spotlight terminal required-check self-test accepted forbidden mutation: {current}"
+                )
+
+        duplicate_consume = terminal_source.replace(
+            fetch,
+            fetch + "\n          " + scalar_consume,
+            1,
+        )
+        weakened = spotlight[:terminal_start] + duplicate_consume + spotlight[terminal_end:]
+        try:
+            validate_spotlight_terminal_required_check_collection(
+                weakened, run_self_test=False
+            )
+        except ValueError as exc:
+            require(
+                "total-count consumption topology changed" in str(exc),
+                f"Spotlight terminal required-check ordering self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Spotlight terminal required-check self-test accepted scalar consumption before schema validation"
+            )
+
+
 def validate_spotlight_terminal_protected_run_evidence(
     spotlight: str, *, run_self_test: bool = True
 ) -> None:
@@ -3648,6 +3786,7 @@ def main() -> int:
         validate_codeql_autofix_approval_comment_evidence(autofix)
         validate_bot_review_liveness(bot_review, dependabot, autofix, spotlight)
         validate_spotlight_event_admission(spotlight, capability)
+        validate_spotlight_terminal_required_check_collection(spotlight)
         validate_spotlight_terminal_protected_run_evidence(spotlight)
         validate_spotlight_terminal_trusted_admission_evidence(spotlight)
         validate_spotlight_same_base_supersession(spotlight)
@@ -3672,7 +3811,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal protected workflow-run certificate provenance typed before MAC equality consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:
