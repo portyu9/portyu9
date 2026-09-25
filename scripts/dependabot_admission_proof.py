@@ -248,7 +248,7 @@ def verify_check(
     require(
         isinstance(details_url, str)
         and re.fullmatch(
-            rf"https://github\\.com/{re.escape(REPOSITORY)}/runs/[1-9][0-9]*",
+            rf"https://github\.com/{re.escape(REPOSITORY)}/runs/[1-9][0-9]*",
             details_url,
         )
         is not None,
