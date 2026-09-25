@@ -915,9 +915,16 @@ jobs:
           BASE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-validation-main-ref-normalized.json")"
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-          PRS="$(gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10")"
-          test "$(jq 'length' <<<"$PRS")" = "1"
-          PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
+          gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10" \
+            > "$RUNNER_TEMP/dependabot-validation-pr-list.json"
+          python3 scripts/dependabot_controller.py pull-request-list-response \
+            --response "$RUNNER_TEMP/dependabot-validation-pr-list.json" \
+            --expected-repository "$TARGET_REPOSITORY" \
+            --expected-base-sha "$BASE_SHA" \
+            --expected-head-ref "$HEAD_REF" \
+            --expected-head-sha "$HEAD_SHA" \
+            --out "$RUNNER_TEMP/dependabot-validation-pr-list-normalized.json"
+          PR_NUMBER="$(jq -r .number "$RUNNER_TEMP/dependabot-validation-pr-list-normalized.json")"
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
           gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
           python3 scripts/dependabot_controller.py pull-request-response \

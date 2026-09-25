@@ -264,6 +264,100 @@ DEPENDABOT_MERGEABLE_STATES = {
 }
 
 
+def validate_pull_request_list_response(
+    value: Any,
+    *,
+    expected_repository: str,
+    expected_base_sha: str,
+    expected_head_ref: str,
+    expected_head_sha: str,
+) -> dict[str, Any]:
+    require(
+        isinstance(expected_repository, str) and expected_repository == REPOSITORY,
+        "expected Dependabot pull-list repository identity changed",
+    )
+    expected_base_sha = _response_sha(
+        expected_base_sha, "expected Dependabot pull-list base sha"
+    )
+    expected_head_sha = _response_sha(
+        expected_head_sha, "expected Dependabot pull-list head sha"
+    )
+    require(
+        isinstance(expected_head_ref, str)
+        and DEPENDABOT_HEAD_REF.fullmatch(expected_head_ref) is not None,
+        "expected Dependabot pull-list head ref changed",
+    )
+    require(isinstance(value, list), "Dependabot pull-list response must be an array")
+    require(
+        len(value) == 1,
+        "Dependabot pull-list response must contain exactly one candidate",
+    )
+    item = value[0]
+    require(
+        isinstance(item, Mapping),
+        "Dependabot pull-list response candidate must be an object",
+    )
+    number = _response_positive_int(
+        item.get("number"), "Dependabot pull-list response candidate number"
+    )
+    user = item.get("user")
+    require(
+        isinstance(user, Mapping) and user.get("login") == "dependabot[bot]",
+        "Dependabot pull-list response actor identity changed",
+    )
+    require(item.get("state") == "open", "Dependabot pull-list response state changed")
+    require(
+        type(item.get("draft")) is bool and item.get("draft") is False,
+        "Dependabot pull-list response draft flag changed",
+    )
+    base = item.get("base")
+    require(
+        isinstance(base, Mapping),
+        "Dependabot pull-list response base must be an object",
+    )
+    require(base.get("ref") == "main", "Dependabot pull-list response base ref changed")
+    require(
+        _response_sha(base.get("sha"), "Dependabot pull-list response base sha")
+        == expected_base_sha,
+        "Dependabot pull-list response base sha changed",
+    )
+    head = item.get("head")
+    require(
+        isinstance(head, Mapping),
+        "Dependabot pull-list response head must be an object",
+    )
+    require(
+        head.get("ref") == expected_head_ref,
+        "Dependabot pull-list response head ref changed",
+    )
+    require(
+        _response_sha(head.get("sha"), "Dependabot pull-list response head sha")
+        == expected_head_sha,
+        "Dependabot pull-list response head sha changed",
+    )
+    head_repo = head.get("repo")
+    require(
+        isinstance(head_repo, Mapping)
+        and head_repo.get("full_name") == expected_repository,
+        "Dependabot pull-list response head repository identity changed",
+    )
+    for key in ("url", "html_url"):
+        observed = item.get(key)
+        require(
+            isinstance(observed, str) and bool(observed.strip()),
+            f"Dependabot pull-list response {key} must be a nonempty string",
+        )
+    return {
+        "kind": "pull-request-list",
+        "count": 1,
+        "number": number,
+        "baseSha": expected_base_sha,
+        "headRef": expected_head_ref,
+        "headSha": expected_head_sha,
+        "repository": expected_repository,
+    }
+
+
 def validate_pull_request_response(
     value: Any, *, expected_number: int, expected_repository: str
 ) -> dict[str, Any]:
@@ -803,6 +897,19 @@ def self_test() -> None:
         "url": "https://api.github.com/repos/portyu9/portyu9/pulls/17",
         "html_url": "https://github.com/portyu9/portyu9/pull/17",
     }
+    normalized_pr_list = validate_pull_request_list_response(
+        [pr_response_fixture],
+        expected_repository=REPOSITORY,
+        expected_base_sha=parent_sha,
+        expected_head_ref="dependabot/github_actions/github/codeql-action",
+        expected_head_sha=commit_sha,
+    )
+    require(
+        normalized_pr_list["number"] == 17
+        and normalized_pr_list["baseSha"] == parent_sha
+        and normalized_pr_list["headSha"] == commit_sha,
+        "Dependabot pull-list response positive fixture changed",
+    )
     normalized_pr = validate_pull_request_response(
         pr_response_fixture,
         expected_number=17,
@@ -1135,6 +1242,125 @@ def self_test() -> None:
             "repository identity changed",
         ),
         (
+            "pull-list non-array",
+            lambda: validate_pull_request_list_response(
+                {},
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "must be an array",
+        ),
+        (
+            "pull-list empty",
+            lambda: validate_pull_request_list_response(
+                [],
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "exactly one candidate",
+        ),
+        (
+            "pull-list duplicate candidate",
+            lambda: validate_pull_request_list_response(
+                [pr_response_fixture, pr_response_fixture],
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "exactly one candidate",
+        ),
+        (
+            "pull-list string number",
+            lambda: validate_pull_request_list_response(
+                [{**pr_response_fixture, "number": "17"}],
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "positive integer",
+        ),
+        (
+            "pull-list actor drift",
+            lambda: validate_pull_request_list_response(
+                [{**pr_response_fixture, "user": {"login": "github-actions[bot]"}}],
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "actor identity changed",
+        ),
+        (
+            "pull-list draft drift",
+            lambda: validate_pull_request_list_response(
+                [{**pr_response_fixture, "draft": True}],
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "draft flag changed",
+        ),
+        (
+            "pull-list base drift",
+            lambda: validate_pull_request_list_response(
+                [{**pr_response_fixture, "base": {"ref": "main", "sha": "5" * 40}}],
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "base sha changed",
+        ),
+        (
+            "pull-list head drift",
+            lambda: validate_pull_request_list_response(
+                [{
+                    **pr_response_fixture,
+                    "head": {**pr_response_fixture["head"], "sha": "6" * 40},
+                }],
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "head sha changed",
+        ),
+        (
+            "pull-list repository drift",
+            lambda: validate_pull_request_list_response(
+                [{
+                    **pr_response_fixture,
+                    "head": {
+                        **pr_response_fixture["head"],
+                        "repo": {"full_name": "portyu9/other"},
+                    },
+                }],
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "head repository identity changed",
+        ),
+        (
+            "pull-list empty url",
+            lambda: validate_pull_request_list_response(
+                [{**pr_response_fixture, "url": ""}],
+                expected_repository=REPOSITORY,
+                expected_base_sha=parent_sha,
+                expected_head_ref="dependabot/github_actions/github/codeql-action",
+                expected_head_sha=commit_sha,
+            ),
+            "url must be a nonempty string",
+        ),
+        (
             "pull-request non-object",
             lambda: validate_pull_request_response(
                 [], expected_number=17, expected_repository=REPOSITORY
@@ -1412,6 +1638,13 @@ def parser() -> argparse.ArgumentParser:
     read_ref_response.add_argument("--expected-ref", required=True)
     read_ref_response.add_argument("--expected-sha")
     read_ref_response.add_argument("--out", type=Path, required=True)
+    pull_request_list_response = sub.add_parser("pull-request-list-response")
+    pull_request_list_response.add_argument("--response", type=Path, required=True)
+    pull_request_list_response.add_argument("--expected-repository", required=True)
+    pull_request_list_response.add_argument("--expected-base-sha", required=True)
+    pull_request_list_response.add_argument("--expected-head-ref", required=True)
+    pull_request_list_response.add_argument("--expected-head-sha", required=True)
+    pull_request_list_response.add_argument("--out", type=Path, required=True)
     pull_request_response = sub.add_parser("pull-request-response")
     pull_request_response.add_argument("--response", type=Path, required=True)
     pull_request_response.add_argument("--expected-number", type=int, required=True)
@@ -1454,6 +1687,7 @@ def main() -> int:
             "git-commit-response",
             "git-ref-response",
             "git-ref-read-response",
+            "pull-request-list-response",
             "pull-request-response",
             "update-branch-response",
             "wake-run-response",
@@ -1483,6 +1717,14 @@ def main() -> int:
                     response,
                     expected_ref=args.expected_ref,
                     expected_sha=args.expected_sha,
+                )
+            elif args.command == "pull-request-list-response":
+                result = validate_pull_request_list_response(
+                    response,
+                    expected_repository=args.expected_repository,
+                    expected_base_sha=args.expected_base_sha,
+                    expected_head_ref=args.expected_head_ref,
+                    expected_head_sha=args.expected_head_sha,
                 )
             elif args.command == "pull-request-response":
                 result = validate_pull_request_response(
