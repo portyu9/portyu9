@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "74ae723f1ea6588e0e39c4382c9d42b8b45eff79",
+    ".github/workflows/spotlight-link-sync.yml": "2995cb4010c9c295c55e8e1304aa8220e70f1d2f",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -772,7 +772,7 @@ def validate_spotlight_pr_response_evidence(
     schema_fragments = (
         '(.number | type == "number" and . == floor and . > 0 and . == $pr) and',
         '(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and',
-        '(.state | type == "string" and . == "open") and',
+        '(.state | (type == "string") and (. == "open")) and',
         '(.draft | type == "boolean" and . == false) and',
         '(.merged | type == "boolean" and . == false) and',
         '(.maintainer_can_modify | type == "boolean" and . == false) and',
