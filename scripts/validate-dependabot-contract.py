@@ -278,6 +278,11 @@ def validate_controller_read_ref_response_contract(text: str) -> None:
 
 
 def validate_controller_pr_response_contract(text: str) -> None:
+    list_validator = "python3 scripts/dependabot_controller.py pull-request-list-response"
+    require(
+        text.count(list_validator) == 1,
+        "Dependabot validation pull-list response boundary count changed",
+    )
     validator = "python3 scripts/dependabot_controller.py pull-request-response"
     require(
         text.count(validator) == 5,
@@ -293,6 +298,8 @@ def validate_controller_pr_response_contract(text: str) -> None:
         'BASE_SHA="$(jq -r .base.sha dependabot-pr.json)"',
         'test "$(jq -r .message update-branch.json)" = "Updating pull request branch."',
         'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
+        'PRS="$(gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10")"',
+        'PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"',
     ):
         require(
             forbidden not in text,
@@ -342,15 +349,45 @@ def validate_controller_pr_response_contract(text: str) -> None:
         "Dependabot protected merge/dispatch PR snapshot topology changed",
     )
 
+    list_fetch = (
+        'gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:'
+        '${HEAD_REF}&per_page=10"'
+    )
+    list_output = '> "$RUNNER_TEMP/dependabot-validation-pr-list.json"'
+    list_schema = text.index(list_validator, text.index(list_fetch))
+    list_consume = (
+        'PR_NUMBER="$(jq -r .number "$RUNNER_TEMP/dependabot-validation-pr-list-normalized.json")"'
+    )
     validation_fetch = text.rindex(initial_fetch)
     validation_schema = text.index(validator, validation_fetch)
     validation_consume = text.index(
         'test "$(jq -r .number dependabot-pr-normalized.json)" = "$PR_NUMBER"',
         validation_schema,
     )
+    for fragment in (
+        list_fetch,
+        list_output,
+        '--response "$RUNNER_TEMP/dependabot-validation-pr-list.json"',
+        '--expected-repository "$TARGET_REPOSITORY"',
+        '--expected-base-sha "$BASE_SHA"',
+        '--expected-head-ref "$HEAD_REF"',
+        '--expected-head-sha "$HEAD_SHA"',
+        '--out "$RUNNER_TEMP/dependabot-validation-pr-list-normalized.json"',
+        list_consume,
+    ):
+        require(
+            text.count(fragment) == 1,
+            f"Dependabot validation pull-list boundary anchor changed: {fragment}",
+        )
     require(
-        validation_fetch < validation_schema < validation_consume,
-        "Dependabot validation PR must be typed before identity consumption",
+        text.index(list_fetch)
+        < text.index(list_output, text.index(list_fetch))
+        < list_schema
+        < text.index(list_consume)
+        < validation_fetch
+        < validation_schema
+        < validation_consume,
+        "Dependabot validation pull-list must be typed before PR-number selection and full hydration",
     )
 
 
@@ -810,7 +847,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref and singleton PR/update response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, and singleton PR/update response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
