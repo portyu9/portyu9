@@ -589,6 +589,78 @@ def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
     )
 
 
+
+def validate_controller_workflow_run_approval_status(text: str) -> None:
+    endpoint = 'repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve'
+    response = (
+        'approval_response="$(gh api --include --method POST '
+        '"repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve")"'
+    )
+    status = 'approval_status_line="$(head -n 1 <<<"$approval_response" | tr -d \'\\r\')"'
+    guard = '[[ "$approval_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    downstream = 'echo "Approved exact canonical Dependabot PR workflow: ${name} run ${run_id}."'
+
+    require(text.count(endpoint) == 1,
+            "Dependabot protected-run approval endpoint inventory changed")
+    require(text.count(response) == 1,
+            "Dependabot protected-run approval must capture exactly one --include response")
+    require(text.count(status) == 1,
+            "Dependabot protected-run approval status extraction changed")
+    require(text.count(guard) == 1,
+            "Dependabot protected-run approval must require exact HTTP 201")
+    require(
+        "Dependabot protected-run approval returned unexpected status:" in text,
+        "Dependabot protected-run approval failure must be explicit and fail closed",
+    )
+    require(
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve" >/dev/null'
+        not in text,
+        "Dependabot must not discard the protected-run approval response",
+    )
+    response_pos = text.index(response)
+    status_pos = text.index(status, response_pos)
+    guard_pos = text.index(guard, status_pos)
+    downstream_pos = text.index(downstream, guard_pos)
+    require(
+        response_pos < status_pos < guard_pos < downstream_pos,
+        "Dependabot must prove HTTP 201 before emitting protected-run approval success",
+    )
+
+
+def self_test_controller_workflow_run_approval_status(text: str) -> None:
+    validate_controller_workflow_run_approval_status(text)
+
+    response_blind = text.replace(
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve"',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve"',
+        1,
+    )
+    try:
+        validate_controller_workflow_run_approval_status(response_blind)
+    except ValueError as exc:
+        require(
+            "--include response" in str(exc),
+            f"Dependabot protected-run approval response self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot protected-run approval self-test accepted a response-blind mutation")
+
+    wrong_status = text.replace(
+        '[[ "$approval_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$approval_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_controller_workflow_run_approval_status(wrong_status)
+    except ValueError as exc:
+        require(
+            "exact HTTP 201" in str(exc),
+            f"Dependabot protected-run approval status self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot protected-run approval self-test accepted a non-201 success class")
+
+
 def validate_controller_git_read_response_contract(text: str) -> None:
     validators = {
         "git-commit-read-response": 2,
@@ -1283,6 +1355,7 @@ def main() -> int:
         validate_controller_wake_contract(controller_text)
         validate_controller_read_ref_response_contract(controller_text)
         validate_controller_protected_workflow_evidence_contract(controller_text)
+        self_test_controller_workflow_run_approval_status(controller_text)
         validate_controller_pr_response_contract(controller_text)
         validate_controller_collection_contract(controller_text)
         validate_controller_git_read_response_contract(controller_text)
@@ -1298,7 +1371,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, exact HTTP-204-validated repository dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
