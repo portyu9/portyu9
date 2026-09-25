@@ -2710,28 +2710,27 @@ def validate_spotlight_terminal_required_check_collection(
     )
     schema_block = terminal[schema_pos:scalar_pos]
     for fragment in (
-        'def positive_int: type == "number" and . == floor and . > 0;',
-        'def nonnegative_int: type == "number" and . == floor and . >= 0;',
-        '. == "queued" or . == "in_progress" or . == "completed" or',
-        '. == "waiting" or . == "requested" or . == "pending";',
-        '. == "action_required" or . == "cancelled" or . == "failure" or',
-        '. == "startup_failure" or . == "success" or . == "timed_out";',
         '(type == "object") and',
-        '(.total_count | nonnegative_int) and',
-        '(.total_count <= 100) and',
+        '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
         '(.check_runs | type == "array" and length <= 100) and',
         '(.total_count == (.check_runs | length)) and',
         '(all(.check_runs[];',
-        '(.id | positive_int) and',
+        '(.id | type == "number" and . == floor and . > 0) and',
         '(.name | type == "string" and length > 0) and',
-        '(.status | type == "string" and allowed_status) and',
+        '(.status | type == "string" and',
+        '. == "queued" or . == "in_progress" or . == "completed" or',
+        '. == "waiting" or . == "requested" or . == "pending")) and',
         'if .status == "completed"',
-        'then (.conclusion | type == "string" and allowed_conclusion)',
+        'then (.conclusion | type == "string" and',
+        '. == "action_required" or . == "cancelled" or . == "failure" or',
+        '. == "startup_failure" or . == "success" or . == "timed_out"))',
         'else .conclusion == null end',
         '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
         '(.app | type == "object" and',
+        '(.id | type == "number" and . == floor and . > 0) and',
         '(.slug | type == "string" and length > 0)) and',
-        '(.check_suite | type == "object" and (.id | positive_int))',
+        '(.check_suite | type == "object" and',
+        '(.id | type == "number" and . == floor and . > 0))',
         '(([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))',
         schema_error,
     ):
@@ -2764,7 +2763,7 @@ def validate_spotlight_terminal_required_check_collection(
     if run_self_test:
         mutations = (
             (
-                '(.total_count | nonnegative_int) and',
+                '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
                 '(.total_count | tostring | length > 0) and',
             ),
             (
@@ -2772,8 +2771,8 @@ def validate_spotlight_terminal_required_check_collection(
                 '(.head_sha | tostring | test("^[0-9a-f]{40}$")) and',
             ),
             (
-                '(.check_suite | type == "object" and (.id | positive_int))',
-                '(.check_suite.id | positive_int)',
+                '(.check_suite | type == "object" and\n                (.id | type == "number" and . == floor and . > 0))',
+                '(.check_suite.id | type == "number" and . == floor and . > 0)',
             ),
         )
         terminal_start = spotlight.index("  merge:\n")
