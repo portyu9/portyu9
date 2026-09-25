@@ -443,9 +443,9 @@ def validate_reconciler_admin_response_evidence(text: str) -> None:
     for fragment in fragments:
         require(fragment in text, f"Ruleset admin response schema fragment missing: {fragment}")
 
-    installation_fetch = text.index('"app/installations/\${ADMIN_INSTALLATION_ID}" > installation.json')
+    installation_fetch = text.index('"app/installations/${ADMIN_INSTALLATION_ID}" > installation.json')
     installation_schema = text.index('type == "object" and\n            (.id | type == "number"', installation_fetch)
-    token_fetch = text.index('"app/installations/\${ADMIN_INSTALLATION_ID}/access_tokens"', installation_schema)
+    token_fetch = text.index('"app/installations/${ADMIN_INSTALLATION_ID}/access_tokens"', installation_schema)
     token_schema = text.index('type == "object" and\n            (.token | type == "string"', token_fetch)
     token_consume = text.index('ADMIN_TOKEN="$(jq -r .token installation-token.json)"', token_schema)
     repos_fetch = text.index('"installation/repositories?per_page=100" > token-repositories.json', token_consume)
