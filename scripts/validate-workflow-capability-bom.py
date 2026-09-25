@@ -2,7 +2,11 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,16 +83,60 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+
+def trusted_diagnostic() -> None:
+    """Disposable carrier: emit exact frozen #1068 trusted-authorization tuple."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    base_sha = "86975656f797f1ef12a9e3a0caab9a5f361835b4"
+    source_sha = "d3d6ad190558a8c29b26f7b8dca5c4ddf10d10cb"
+    expected_tree = "484590a5f8a98c0e698006299958638649bf98df"
+    subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base_sha, source_sha], check=True)
+    with tempfile.TemporaryDirectory(prefix="trusted-admission-") as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
+        tree = subprocess.check_output(
+            ["git", "rev-parse", "HEAD^{tree}"], cwd=candidate, text=True
+        ).strip()
+        require(tree == expected_tree, "frozen #1068 candidate tree identity changed")
+        code = (
+            "from pathlib import Path\n"
+            "import sys\n"
+            "trusted=Path(sys.argv[1]).resolve(); candidate=Path(sys.argv[2]).resolve(); tree=sys.argv[3]\n"
+            "sys.path.insert(0, str(trusted / 'scripts'))\n"
+            "import workflow_capability_admission as admission\n"
+            "try:\n"
+            "    admission.evaluate(candidate, candidate_tree_sha=tree)\n"
+            "except ValueError as exc:\n"
+            "    print('TRUSTED-ADMISSION-DIAGNOSTIC-TREE:', tree)\n"
+            "    print('TRUSTED-ADMISSION-DIAGNOSTIC:', exc)\n"
+            "    raise SystemExit(0)\n"
+            "print('TRUSTED-ADMISSION-DIAGNOSTIC-TREE:', tree)\n"
+            "print('TRUSTED-ADMISSION-DIAGNOSTIC: exact frozen source admitted without authorization tuple')\n"
+        )
+        subprocess.run(
+            [sys.executable, "-c", code, str(trusted), str(candidate), tree],
+            check=True,
+        )
+        subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=True)
+        subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=True)
+
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        trusted_diagnostic()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
             "composite snapshot, exact trusted-workflow bytes, and admission self-tests passed."
         )
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
