@@ -1018,7 +1018,7 @@ def validate_quality_contract(text: str) -> None:
         "path: candidate-source",
         "- name: Set up Python",
         "- name: Verify resolved Python runtime",
-        "run: python3 trusted-base/scripts/verify-python-runtime.py",
+        "run: python3 scripts/verify-python-runtime.py",\n        "working-directory: trusted-base",
         "- name: Verify exact accepted-base admission source identity",
         'test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"',
         'test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"',
