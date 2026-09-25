@@ -1039,7 +1039,12 @@ def validate_spotlight_pr_response_evidence(
     )
     require(
         spotlight.count("validate_spotlight_open_pr_object() {") == 2
-        and spotlight.count('validate_spotlight_open_pr_object "        "Spotlight PR response schema/call cardinality changed",
+        and spotlight.count('validate_spotlight_open_pr_object \"$') == 3
+        and spotlight.count("validate_spotlight_reviewer_request_response() {") == 1
+        and spotlight.count('validate_spotlight_reviewer_request_response \"$') == 1
+        and spotlight.count("validate_spotlight_pull_list_item() {") == 1
+        and spotlight.count('validate_spotlight_pull_list_item \"$') == 1,
+        "Spotlight PR response schema/call cardinality changed",
     )
 
     if run_self_test:
