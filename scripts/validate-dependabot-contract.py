@@ -956,7 +956,7 @@ def validate_quality_contract(text: str) -> None:
         'if [ "$TOTAL" != "1" ]; then',
         'ambiguous trusted-main Dependabot admission proof collection',
         'STATUS="$(jq -r .status <<<"$CHECK")"',
-        'CONCLUSION="$(jq -r '.conclusion // "null"' <<<"$CHECK")"',
+        "CONCLUSION=\"$(jq -r '.conclusion // \"null\"' <<<\"$CHECK\")\"",
         'if [ "$STATUS" != "completed" ]; then',
         'waiting for terminal completion.',
         'if [ "$CONCLUSION" != "success" ]; then',
