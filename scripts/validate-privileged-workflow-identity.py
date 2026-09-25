@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v97"
+VERSION = "governed-workflow-byte-identity-v98"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "9b4dfdc1d3d72cfd60498c3f384dd2908bae85ed",
+    ".github/workflows/spotlight-link-sync.yml": "d60cd81fd6d26b77ae9ee5701f87103f7af8fd83",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -828,10 +828,51 @@ def validate_spotlight_pr_response_evidence(
     propose = job_block(spotlight, "propose", "approve")
     approve = job_block(spotlight, "approve", "authorize")
     helper_marker = "          validate_spotlight_open_pr_object() {"
+    reviewer_helper_marker = "          validate_spotlight_reviewer_request_response() {"
     require(
         propose.count(helper_marker) == 1 and approve.count(helper_marker) == 1,
         "Spotlight proposer/approval PR response helper count changed",
     )
+    require(
+        propose.count(reviewer_helper_marker) == 1
+        and approve.count(reviewer_helper_marker) == 0,
+        "Spotlight reviewer-request response helper count changed",
+    )
+    reviewer_helper_start = propose.index(reviewer_helper_marker)
+    reviewer_helper_end = propose.index("\n\n          REF_CREATED=false", reviewer_helper_start)
+    reviewer_helper = propose[reviewer_helper_start:reviewer_helper_end]
+    reviewer_schema_fragments = (
+        '(.number | type == "number" and . == floor and . > 0 and . == $pr) and',
+        '(.state | type == "string" and . == "open") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.ref | type == "string" and . == "main") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and',
+        '(.ref | type == "string" and . == $branch) and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.full_name | type == "string" and . == $repo))) and',
+        '(.requested_reviewers | type == "array" and length <= 100) and',
+        '(all(.requested_reviewers[];',
+        '(.id | type == "number" and . == floor and . > 0) and',
+        '(.login | type == "string" and length > 0))) and',
+        '([.requested_reviewers[].id] | unique | length)) and',
+        '([.requested_reviewers[].login] | unique | length)) and',
+        '(([.requested_reviewers[] | select(.login == "portyu9")] | length) == 1)',
+    )
+    for fragment in reviewer_schema_fragments:
+        require(
+            fragment in reviewer_helper,
+            f"Spotlight reviewer-request response schema changed: {fragment}",
+        )
+    for forbidden in (
+        '(.merged | type == "boolean" and . == false) and',
+        '(.maintainer_can_modify | type == "boolean" and . == false) and',
+        '(.title | type == "string" and . == $title) and',
+        '(.body | type == "string" and . == $body) and',
+    ):
+        require(
+            forbidden not in reviewer_helper,
+            f"Spotlight reviewer-request response regained full-GET-only field: {forbidden}",
+        )
     schema_fragments = (
         '(.number | type == "number" and . == floor and . > 0 and . == $pr) and',
         '(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and',
@@ -866,15 +907,15 @@ def validate_spotlight_pr_response_evidence(
     )
     proposer_consume = 'test "$(jq -r .state <<<"$PR")" = "open"'
     reviewer_mutation = 'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
+    reviewer_response_capture = 'REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"'
     reviewer_schema = (
-        'validate_spotlight_open_pr_object "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" '
-        '"$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"'
+        'validate_spotlight_reviewer_request_response "$REQUESTED_REVIEWER_RESPONSE" '
+        '"$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"'
     )
     reviewer_consume = '<<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"'
     for boundary_marker in (
         proposer_fetch, proposer_schema, proposer_consume, reviewer_mutation,
-        'REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"',
-        reviewer_schema, reviewer_consume,
+        reviewer_response_capture, reviewer_schema, reviewer_consume,
     ):
         require(
             propose.count(boundary_marker) == 1,
@@ -883,8 +924,13 @@ def validate_spotlight_pr_response_evidence(
     require(
         propose.index(proposer_fetch) < propose.index(proposer_schema)
         < propose.index(proposer_consume) < propose.index(reviewer_mutation)
-        < propose.index(reviewer_schema) < propose.index(reviewer_consume),
-        "Spotlight proposer PR/reviewer responses must be typed before consumption",
+        < propose.index(reviewer_response_capture) < propose.index(reviewer_schema)
+        < propose.index(reviewer_consume),
+        "Spotlight reviewer mutation must use endpoint-specific schema before consumption",
+    )
+    require(
+        'validate_spotlight_open_pr_object "$REQUESTED_REVIEWER_RESPONSE"' not in propose,
+        "Spotlight reviewer mutation response regained incompatible full-GET PR schema",
     )
     require(
         "requested_reviewers[]?" not in propose,
@@ -942,7 +988,9 @@ def validate_spotlight_pr_response_evidence(
     )
     require(
         spotlight.count("validate_spotlight_open_pr_object() {") == 2
-        and spotlight.count('validate_spotlight_open_pr_object "$') == 5,
+        and spotlight.count('validate_spotlight_open_pr_object "$') == 4
+        and spotlight.count("validate_spotlight_reviewer_request_response() {") == 1
+        and spotlight.count('validate_spotlight_reviewer_request_response "$') == 1,
         "Spotlight PR response schema/call cardinality changed",
     )
 
@@ -1028,23 +1076,125 @@ def validate_spotlight_pr_response_evidence(
 
         current = '(.requested_reviewers | type == "array" and length <= 100) and'
         replacement = '(.requested_reviewers | tostring | length <= 100) and'
-        require(propose.count(current) == 1, "Spotlight proposer reviewer-array self-test anchor changed")
+        require(
+            reviewer_helper.count(current) == 1,
+            "Spotlight reviewer-request reviewer-array self-test anchor changed",
+        )
         propose_start = spotlight.index("  propose:\n")
         propose_end = spotlight.index("  approve:\n", propose_start)
-        weakened = (
-            spotlight[:propose_start]
-            + propose.replace(current, replacement, 1)
-            + spotlight[propose_end:]
+        mutated_helper = reviewer_helper.replace(current, replacement, 1)
+        weakened_propose = (
+            propose[:reviewer_helper_start]
+            + mutated_helper
+            + propose[reviewer_helper_end:]
         )
+        weakened = spotlight[:propose_start] + weakened_propose + spotlight[propose_end:]
         try:
             validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
         except ValueError as exc:
             require(
-                "proposer PR response schema changed" in str(exc),
-                f"Spotlight reviewer-array self-test failed for wrong reason: {exc}",
+                "reviewer-request response schema changed" in str(exc),
+                f"Spotlight reviewer-request array self-test failed for wrong reason: {exc}",
             )
         else:
-            raise ValueError("Spotlight PR response self-test accepted type-coercing reviewer evidence")
+            raise ValueError(
+                "Spotlight PR response self-test accepted type-coercing reviewer mutation evidence"
+            )
+
+        helper_mutations = (
+            (
+                '(([.requested_reviewers[] | select(.login == "portyu9")] | length) == 1)',
+                '(([.requested_reviewers[] | select(.login == "portyu9")] | length) >= 1)',
+                "reviewer-cardinality",
+            ),
+            (
+                '([.requested_reviewers[].login] | unique | length)) and',
+                '([.requested_reviewers[].login] | length)) and',
+                "reviewer-uniqueness",
+            ),
+        )
+        for helper_current, helper_replacement, label in helper_mutations:
+            require(
+                reviewer_helper.count(helper_current) == 1,
+                f"Spotlight reviewer-request {label} self-test anchor changed",
+            )
+            mutated_helper = reviewer_helper.replace(helper_current, helper_replacement, 1)
+            weakened_propose = (
+                propose[:reviewer_helper_start]
+                + mutated_helper
+                + propose[reviewer_helper_end:]
+            )
+            weakened = spotlight[:propose_start] + weakened_propose + spotlight[propose_end:]
+            try:
+                validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+            except ValueError as exc:
+                require(
+                    "reviewer-request response schema changed" in str(exc),
+                    f"Spotlight reviewer-request {label} self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Spotlight PR response self-test accepted weakened reviewer mutation {label}"
+                )
+
+        for current_boundary, replacement_boundary, label in (
+            (
+                reviewer_schema,
+                'validate_spotlight_open_pr_object "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" '
+                '"$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"',
+                "full-get-schema-on-mutation",
+            ),
+            (
+                reviewer_schema,
+                "true # adversarially removed reviewer mutation response schema",
+                "missing-mutation-schema",
+            ),
+        ):
+            require(
+                propose.count(current_boundary) == 1,
+                f"Spotlight reviewer mutation {label} self-test anchor changed",
+            )
+            weakened_propose = propose.replace(current_boundary, replacement_boundary, 1)
+            weakened = spotlight[:propose_start] + weakened_propose + spotlight[propose_end:]
+            try:
+                validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+            except ValueError as exc:
+                require(
+                    "boundary anchor changed" in str(exc)
+                    or "incompatible full-GET PR schema" in str(exc),
+                    f"Spotlight reviewer mutation {label} self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Spotlight PR response self-test accepted reviewer mutation weakening: {label}"
+                )
+
+        reviewer_consume_line = (
+            'test "$(jq \'[.requested_reviewers[] | select(.login == "portyu9")] | length\' '
+            '<<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"'
+        )
+        ordered_reviewer_pair = reviewer_schema + "\n            " + reviewer_consume_line
+        require(
+            propose.count(ordered_reviewer_pair) == 1,
+            "Spotlight reviewer mutation ordering self-test anchor changed",
+        )
+        reordered_propose = propose.replace(
+            ordered_reviewer_pair,
+            reviewer_consume_line + "\n            " + reviewer_schema,
+            1,
+        )
+        weakened = spotlight[:propose_start] + reordered_propose + spotlight[propose_end:]
+        try:
+            validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+        except ValueError as exc:
+            require(
+                "endpoint-specific schema before consumption" in str(exc),
+                f"Spotlight reviewer mutation ordering self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Spotlight PR response self-test accepted reviewer mutation schema after consumption"
+            )
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
     legacy = project_spotlight_privileged_refs_to_legacy(
@@ -2599,6 +2749,20 @@ def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
         )
 
 
+def project_spotlight_reviewer_request_helper_to_legacy(spotlight: str) -> str:
+    """Remove the independently validated reviewer-request helper from frozen review-schema counts."""
+    start_marker = "          validate_spotlight_reviewer_request_response() {\n"
+    end_marker = "\n\n          REF_CREATED=false"
+    require(
+        spotlight.count(start_marker) == 1 and spotlight.count(end_marker) >= 1,
+        "Spotlight reviewer-request compatibility projection anchors changed",
+    )
+    start = spotlight.index(start_marker)
+    end = spotlight.index(end_marker, start)
+    require(start < end, "Spotlight reviewer-request compatibility projection ordering changed")
+    return spotlight[:start] + spotlight[end:]
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
@@ -2608,7 +2772,10 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
     validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
-    validate_pull_review_evidence_schema(spotlight, "Spotlight authorization/terminal merge", 2)
+    spotlight_review_projection = project_spotlight_reviewer_request_helper_to_legacy(spotlight)
+    validate_pull_review_evidence_schema(
+        spotlight_review_projection, "Spotlight authorization/terminal merge", 2
+    )
     for fragment in (
         'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
         'spotlight|dependabot|codeql-autofix)',

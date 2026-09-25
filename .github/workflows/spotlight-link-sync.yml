@@ -764,6 +764,41 @@ jobs:
               ' <<<"$payload" >/dev/null
           }
 
+          validate_spotlight_reviewer_request_response() {
+            local payload="$1" expected_pr="$2" expected_base="$3" expected_branch="$4" expected_head="$5"
+            jq -e \
+              --argjson pr "$expected_pr" \
+              --arg base "$expected_base" \
+              --arg branch "$expected_branch" \
+              --arg head "$expected_head" \
+              --arg repo "$GITHUB_REPOSITORY" '
+                (type == "object") and
+                (.number | type == "number" and . == floor and . > 0 and . == $pr) and
+                (.state | type == "string" and . == "open") and
+                (.draft | type == "boolean" and . == false) and
+                (.base | type == "object" and
+                  (.ref | type == "string" and . == "main") and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and
+                  (.repo | type == "object" and
+                    (.full_name | type == "string" and . == $repo))) and
+                (.head | type == "object" and
+                  (.ref | type == "string" and . == $branch) and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+                  (.repo | type == "object" and
+                    (.full_name | type == "string" and . == $repo))) and
+                (.requested_reviewers | type == "array" and length <= 100) and
+                (all(.requested_reviewers[];
+                  type == "object" and
+                  (.id | type == "number" and . == floor and . > 0) and
+                  (.login | type == "string" and length > 0))) and
+                (([.requested_reviewers[].id] | length) ==
+                  ([.requested_reviewers[].id] | unique | length)) and
+                (([.requested_reviewers[].login] | length) ==
+                  ([.requested_reviewers[].login] | unique | length)) and
+                (([.requested_reviewers[] | select(.login == "portyu9")] | length) == 1)
+              ' <<<"$payload" >/dev/null
+          }
+
           REF_CREATED=false
           PR_CREATED=false
           echo "ref_created=false" >> "$GITHUB_OUTPUT"
@@ -1018,7 +1053,7 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
               -f 'reviewers[]=portyu9' > requested-reviewer.json
             REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"
-            validate_spotlight_open_pr_object "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
+            validate_spotlight_reviewer_request_response "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
             test "$(jq '[.requested_reviewers[] | select(.login == "portyu9")] | length' <<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"
           fi
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
