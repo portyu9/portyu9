@@ -2126,7 +2126,7 @@ jobs:
             (.total_count == (.check_runs | length)) and
             (all(.check_runs[];
               (type == "object") and
-              (.id | type == "number" and . == floor and . > 0) and
+              (.id | (type == "number") and (. == floor) and (. > 0)) and
               (.name | type == "string" and length > 0) and
               (.status | type == "string" and
                 (. == "queued" or . == "in_progress" or . == "completed" or
@@ -2139,10 +2139,10 @@ jobs:
                else .conclusion == null end) and
               (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
               (.app | type == "object" and
-                (.id | type == "number" and . == floor and . > 0) and
+                (.id | (type == "number") and (. == floor) and (. > 0)) and
                 (.slug | type == "string" and length > 0)) and
               (.check_suite | type == "object" and
-                (.id | type == "number" and . == floor and . > 0))
+                (.id | (type == "number") and (. == floor) and (. > 0)))
             )) and
             (([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))
           ' <<<"$CHECKS" >/dev/null || {
