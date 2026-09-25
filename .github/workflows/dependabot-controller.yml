@@ -1042,6 +1042,7 @@ jobs:
 
       - name: Independently re-prove deterministic reconciliation
         env:
+          GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.bind.outputs.pr_number }}
           HEAD_SHA: ${{ steps.bind.outputs.head_sha }}
           CANDIDATE_ROOT: ${{ steps.candidate_data.outputs.candidate_root }}
