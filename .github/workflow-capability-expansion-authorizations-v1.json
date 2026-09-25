@@ -82,7 +82,7 @@
       "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "expansionSha256": "35ce5cfe2a04b527df3a82a5b60c66afee84a73dd6511bf3a9dc56718ea4bc19",
       "id": "cap-capability-admission-check-run-response-status-v1",
-      "rationale": "Authorize frozen #1105's exact trusted-source-only hardening of the existing Capability Admission POST /check-runs publisher: capture gh api --include, require HTTP 201 before response-body extraction, then preserve the already-accepted strict created-check object schema and scalar reproof. Base/candidate semantic BOMs are identical; endpoint, call count, payload, check identity, permissions, triggers, secrets/OIDC, merge authority, required checks, direct-main authority, rulesets and bypass remain unchanged."
+      "rationale": "Authorize frozen #1105 hardening of the existing Capability Admission POST /check-runs: capture gh api --include and require HTTP 201 before extracting the already-typed created-check response. Semantic BOMs are unchanged; endpoint, payload, call count, check identity, permissions, triggers, secrets/OIDC, merge authority, required checks, direct-main authority, rulesets and bypass are unchanged."
     },
     {
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
