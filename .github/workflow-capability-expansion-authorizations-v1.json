@@ -726,7 +726,7 @@
       "candidateBomSha256": "42994f014e4744279c9276eaa1c828c1aca8d75dd43525c782d0d52cb1ef2480",
       "expansionSha256": "b7c2b68a358062badb9e06a941907f7f2da2621246c98f8de293d66f87697410",
       "id": "cap-ruleset-admin-response-schema-v1",
-      "rationale": "Authorize frozen #1068's exact trusted-source hardening of the Ruleset reconciler Administration App bootstrap. App installation, installation-token, and installation-repositories responses must cross stronger object/primitive schema boundaries before credential or repository-scope authority is consumed. The semantic Workflow Capability BOM is unchanged. No trigger, permission, secret, endpoint, method, API call, App scope, mutation class, ruleset transition, required-check reduction, direct-main authority, or bypass is added."
+      "rationale": "Authorize frozen #1068's exact trusted-source hardening of the Ruleset reconciler Administration App bootstrap. Installation, token, and repository-scope responses gain stronger object/primitive validation before authority is consumed. The semantic Workflow Capability BOM is unchanged. No trigger, permission, secret, endpoint, API call, App scope, mutation class, ruleset authority, required-check reduction, direct-main write, or bypass is added."
     },
     {
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
