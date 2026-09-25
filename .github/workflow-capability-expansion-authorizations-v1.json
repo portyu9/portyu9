@@ -505,6 +505,13 @@
       "rationale": "Authorize #578's exact source-only Dependabot post-review liveness change. After an exact-base/head v2 APPROVED review by portyu9, the already-authorized Dependabot workflow dispatch targets main so the trusted controller can re-prove the current candidate immediately. No workflow capability BOM, endpoint, token permission, required check, merge method, bypass, or candidate execution authority changes."
     },
     {
+      "baseBomSha256": "c5ad4475ec8b073f6107696abf5d87cfcce0588fd01bb9c68aeb00f2ac0579b3",
+      "candidateBomSha256": "42994f014e4744279c9276eaa1c828c1aca8d75dd43525c782d0d52cb1ef2480",
+      "expansionSha256": "1c545e44d4f13c95eb6b3c49047f8e9156b526439f4881490db0c59093f5a313",
+      "id": "cap-dependabot-post-update-convergence-v1",
+      "rationale": "Authorize frozen #1062's exact same-transaction Dependabot post-update convergence. After the existing update-branch mutation returns, trusted code may perform a bounded 24x5s read-only PR GET observation loop, typed through the existing singleton PR boundary, until base equals exact current main and head advances. The mutation remains outside the loop; operationRetry=false. No new permission, trigger, mutation class, endpoint family, merge/check authority, OIDC, ruleset, or bypass."
+    },
+    {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "expansionSha256": "f06c9a4c356f669404d71fa89000df0f1648c8ea7974c041bb037094bcb54e06",
