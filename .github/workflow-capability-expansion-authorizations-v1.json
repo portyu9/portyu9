@@ -515,6 +515,13 @@
       "rationale": "Authorize #546's exact full-PR Dependabot validation binder. The collection query still proves one matching open PR, then trusted validation hydrates GET /pulls/{number} so detailed state/draft/maintainer/base/head assertions use the complete GitHub PR schema. This adds one read-only API surface only; permissions, triggers, candidate-data boundary, delegated admission, CodeQL sequencing, and exact-head merge authority are unchanged."
     },
     {
+      "id": "cap-dependabot-validation-pull-list-schema-v1",
+      "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "expansionSha256": "b73d90d1503ef6dc1717cb5b99242aa9aab092688451ea0da1d1820d482e23e4",
+      "rationale": "Authorize frozen #1036 protected-TCB hardening that validates the existing Dependabot validation-bind pull-list response before PR-number selection. Equal base/candidate BOM hashes prove no semantic capability expansion. The exact GET endpoint, call count, triggers, permissions, secrets, mutations, delegated admission, protected checks, review behavior, merge/CodeQL dispatch authority, rulesets, direct-main writes, OIDC authority and bypasses remain unchanged."
+    },
+    {
       "id": "cap-dependabot-wake-ref-response-schema-hardening-v1",
       "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
       "candidateBomSha256": "d78ed665d31068301a4e87777b17b8eb2dd19ca80de0f983987b99f1ac87ea53",
