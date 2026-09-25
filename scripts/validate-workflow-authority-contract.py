@@ -488,10 +488,66 @@ def validate_item10_authority_with_typed_protected_runs(sync: str) -> None:
     )
 
 
+
+def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
+    helper_start = "          validate_spotlight_open_pr_object() {\n"
+    for next_marker in (
+        "          REF_CREATED=false\n",
+        "          APPROVAL_REQUESTS_JSON='[]'\n",
+    ):
+        core.require(
+            sync.count(next_marker) == 1,
+            f"Spotlight PR-response projection next anchor changed: {next_marker.strip()}",
+        )
+        next_pos = sync.index(next_marker)
+        helper_pos = sync.rfind(helper_start, 0, next_pos)
+        core.require(
+            helper_pos >= 0,
+            f"Spotlight PR-response projection helper missing before: {next_marker.strip()}",
+        )
+        sync = sync[:helper_pos] + sync[next_pos:]
+
+    overlays = (
+        (
+            '          validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n',
+            "",
+        ),
+        (
+            '          validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n',
+            "",
+        ),
+        (
+            '          validate_spotlight_open_pr_object "$PR_AFTER_REVIEW" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n',
+            "",
+        ),
+        (
+            '          REQUESTED="$(jq \\'[.requested_reviewers[] | select(.login == "portyu9")] | length\\' <<<"$PR")"\n',
+            '          REQUESTED="$(jq \\'[.requested_reviewers[]? | select(.login == "portyu9")] | length\\' <<<"$PR")"\n',
+        ),
+        (
+            '            REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"\n'
+            '            validate_spotlight_open_pr_object "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n'
+            '            test "$(jq \\'[.requested_reviewers[] | select(.login == "portyu9")] | length\\' <<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"\n',
+            '            test "$(jq \\'[.requested_reviewers[]? | select(.login == "portyu9")] | length\\' requested-reviewer.json)" = "1"\n',
+        ),
+    )
+    for hardened, legacy in overlays:
+        core.require(
+            sync.count(hardened) == 1,
+            f"Spotlight PR-response projection hardened anchor changed: {hardened.splitlines()[0]}",
+        )
+        sync = sync.replace(hardened, legacy, 1)
+    core.require(
+        "validate_spotlight_open_pr_object" not in sync,
+        "Spotlight PR-response projection left v95 runtime schema bytes in the historical item-9 view",
+    )
+    return sync
+
 def project_item9_sync_with_marker(sync: str) -> str:
     sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
     sync = project_spotlight_readme_contents_to_legacy(sync)
     sync = project_spotlight_privileged_refs_to_legacy(sync)
+    sync = project_spotlight_pr_response_evidence_to_legacy(sync)
     reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
     reviewer_marker = 'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.'
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
