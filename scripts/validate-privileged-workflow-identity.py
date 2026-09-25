@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "b4d2be2171068e4a1b713c264f3e64b8a7667353",
+    ".github/workflows/spotlight-link-sync.yml": "9e6e9dedf66ba47f65ea69152075f9597f58407a",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -899,7 +899,7 @@ def validate_spotlight_pr_response_evidence(
         '(.full_name | type == "string" and . == $repo))) and',
         '(.requested_reviewers | type == "array" and length <= 100) and',
         '(all(.requested_reviewers[];',
-        '(.id | type == "number" and . == floor and . > 0) and',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
         '(.login | type == "string" and length > 0))) and',
         '([.requested_reviewers[].id] | unique | length)) and',
         '([.requested_reviewers[].login] | unique | length)) and',
