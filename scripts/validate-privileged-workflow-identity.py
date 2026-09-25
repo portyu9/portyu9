@@ -1084,23 +1084,100 @@ def validate_spotlight_pr_response_evidence(
 
         current = '(.requested_reviewers | type == "array" and length <= 100) and'
         replacement = '(.requested_reviewers | tostring | length <= 100) and'
-        require(propose.count(current) == 1, "Spotlight proposer reviewer-array self-test anchor changed")
+        require(
+            reviewer_helper.count(current) == 1,
+            "Spotlight reviewer-request reviewer-array self-test anchor changed",
+        )
         propose_start = spotlight.index("  propose:\n")
         propose_end = spotlight.index("  approve:\n", propose_start)
+        mutated_helper = reviewer_helper.replace(current, replacement, 1)
+        weakened_propose = (
+            propose[:reviewer_helper_start]
+            + mutated_helper
+            + propose[reviewer_helper_end:]
+        )
         weakened = (
-            spotlight[:propose_start]
-            + propose.replace(current, replacement, 1)
-            + spotlight[propose_end:]
+            spotlight[:propose_start] + weakened_propose + spotlight[propose_end:]
         )
         try:
             validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
         except ValueError as exc:
             require(
-                "proposer PR response schema changed" in str(exc),
-                f"Spotlight reviewer-array self-test failed for wrong reason: {exc}",
+                "reviewer-request response schema changed" in str(exc),
+                f"Spotlight reviewer-request array self-test failed for wrong reason: {exc}",
             )
         else:
-            raise ValueError("Spotlight PR response self-test accepted type-coercing reviewer evidence")
+            raise ValueError(
+                "Spotlight PR response self-test accepted type-coercing reviewer mutation evidence"
+            )
+
+        for current_boundary, replacement_boundary, label in (
+            (
+                reviewer_schema,
+                'validate_spotlight_open_pr_object "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" '
+                '"$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"',
+                "full-get-schema-on-mutation",
+            ),
+            (
+                reviewer_schema,
+                'true # adversarially removed reviewer mutation response schema',
+                "missing-mutation-schema",
+            ),
+            (
+                reviewer_refetch_schema,
+                'true # adversarially removed fresh full PR reproof after reviewer mutation',
+                "missing-fresh-full-reproof",
+            ),
+        ):
+            require(
+                propose.count(current_boundary) == 1,
+                f"Spotlight reviewer mutation {label} self-test anchor changed",
+            )
+            weakened_propose = propose.replace(
+                current_boundary, replacement_boundary, 1
+            )
+            weakened = (
+                spotlight[:propose_start] + weakened_propose + spotlight[propose_end:]
+            )
+            try:
+                validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+            except ValueError as exc:
+                require(
+                    (
+                        "boundary anchor changed" in str(exc)
+                        or "incompatible full-GET PR schema" in str(exc)
+                    ),
+                    f"Spotlight reviewer mutation {label} self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Spotlight PR response self-test accepted reviewer mutation weakening: {label}"
+                )
+
+        ordered_reviewer_pair = reviewer_schema + "\n            " + reviewer_consume
+        require(
+            propose.count(ordered_reviewer_pair) == 1,
+            "Spotlight reviewer mutation ordering self-test anchor changed",
+        )
+        reordered_propose = propose.replace(
+            ordered_reviewer_pair,
+            reviewer_consume + "\n            " + reviewer_schema,
+            1,
+        )
+        weakened = (
+            spotlight[:propose_start] + reordered_propose + spotlight[propose_end:]
+        )
+        try:
+            validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+        except ValueError as exc:
+            require(
+                "endpoint-specific schema before consumption" in str(exc),
+                f"Spotlight reviewer mutation ordering self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Spotlight PR response self-test accepted reviewer mutation schema after consumption"
+            )
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
     legacy = project_spotlight_privileged_refs_to_legacy(
