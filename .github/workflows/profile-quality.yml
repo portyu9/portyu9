@@ -678,17 +678,15 @@ jobs:
               if [ "$STATUS" != "completed" ]; then
                 echo "Attempt ${ATTEMPT}/36: proof check id=${CHECK_ID} status=${STATUS} conclusion=${CONCLUSION}; waiting for terminal completion."
               else
-                if [ "$CONCLUSION" != "success" ]; then
-                  echo "ERROR: trusted-main Dependabot admission proof check id=${CHECK_ID} completed with conclusion=${CONCLUSION}." >&2
-                  exit 1
-                fi
-
                 EXTERNAL_ID="$(jq -r '.external_id // ""' <<<"$CHECK")"
                 if ! [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then
-                  echo "ERROR: completed trusted-main Dependabot admission proof has a malformed or mismatched external identity." >&2
-                  exit 1
-                fi
-                PROOF_RUN_ID="${BASH_REMATCH[1]}"
+                  echo "Attempt ${ATTEMPT}/36: latest completed proof check id=${CHECK_ID} is not bound to the exact current PR/base/head; waiting for the exact proof."
+                else
+                  if [ "$CONCLUSION" != "success" ]; then
+                    echo "ERROR: exact trusted-main Dependabot admission proof check id=${CHECK_ID} completed with conclusion=${CONCLUSION}." >&2
+                    exit 1
+                  fi
+                  PROOF_RUN_ID="${BASH_REMATCH[1]}"
                 PROOF_RUN_ATTEMPT="${BASH_REMATCH[2]}"
                 SUMMARY_SHA256="${BASH_REMATCH[3]}"
                 if [ "$PROOF_RUN_ATTEMPT" -gt 20 ]; then
@@ -757,8 +755,9 @@ jobs:
                   exit 1
                 fi
 
-                echo "Consumed exact trusted-main Dependabot admission digest-bound retry-history proof on bounded attempt ${ATTEMPT} (check id=${CHECK_ID}, producer run=${PROOF_RUN_ID}, producer attempt=${PROOF_RUN_ATTEMPT})."
-                exit 0
+                  echo "Consumed exact trusted-main Dependabot admission digest-bound retry-history proof on bounded attempt ${ATTEMPT} (check id=${CHECK_ID}, producer run=${PROOF_RUN_ID}, producer attempt=${PROOF_RUN_ATTEMPT})."
+                  exit 0
+                fi
               fi
             fi
             sleep 5
