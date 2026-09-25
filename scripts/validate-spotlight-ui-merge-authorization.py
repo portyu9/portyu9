@@ -131,7 +131,7 @@ def validate_merge_success_fixture(payload: object) -> dict[str, object]:
 
 
 def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
-    """Project the v95 PR/reviewer response schema overlay out of the frozen item-9 proof."""
+    """Project the v96 PR/reviewer response schema overlay out of the frozen item-9 proof."""
     helper_start = "          validate_spotlight_open_pr_object() {\n"
     for next_marker in (
         "          REF_CREATED=false\n",
@@ -163,6 +163,14 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
             "",
         ),
         (
+            '          jq -e \'(type == "array") and (length == 1)\' <<<"$PRS" >/dev/null\n'
+            '          APPROVAL_PR="$(jq -c \'.[0]\' <<<"$PRS")"\n'
+            '          validate_spotlight_open_pr_object "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n'
+            '          test "$(jq -r .number <<<"$APPROVAL_PR")" = "$PR_NUMBER"\n',
+            '          test "$(jq \'length\' <<<"$PRS")" = "1"\n'
+            '          test "$(jq -r \'.[0].number\' <<<"$PRS")" = "$PR_NUMBER"\n',
+        ),
+        (
             '          REQUESTED="$(jq \'[.requested_reviewers[] | select(.login == "portyu9")] | length\' <<<"$PR")"\n',
             '          REQUESTED="$(jq \'[.requested_reviewers[]? | select(.login == "portyu9")] | length\' <<<"$PR")"\n',
         ),
@@ -181,7 +189,7 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
         sync = sync.replace(hardened, legacy, 1)
     require(
         "validate_spotlight_open_pr_object" not in sync,
-        "Spotlight PR-response projection left v95 runtime schema bytes in the frozen item-9 view",
+        "Spotlight PR-response projection left v96 runtime schema bytes in the frozen item-9 view",
     )
     return sync
 

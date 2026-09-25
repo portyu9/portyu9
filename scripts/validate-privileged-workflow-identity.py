@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v95"
+VERSION = "governed-workflow-byte-identity-v96"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "0720ed73ab84843259015e25ec225184b26dc277",
-    ".github/workflows/spotlight-link-sync.yml": "2995cb4010c9c295c55e8e1304aa8220e70f1d2f",
+    ".github/workflows/spotlight-link-sync.yml": "9b4dfdc1d3d72cfd60498c3f384dd2908bae85ed",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -834,6 +834,21 @@ def validate_spotlight_pr_response_evidence(
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
     )
     approval_consume = 'test "$(jq -r .user.login <<<"$PR")" = "$BOT_NAME"'
+    approval_collection_fetch = (
+        'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:'
+        '${CANDIDATE_BRANCH}&base=main&per_page=10")"'
+    )
+    approval_collection_envelope = (
+        'jq -e \'(type == "array") and (length == 1)\' <<<"$PRS" >/dev/null'
+    )
+    approval_collection_extract = 'APPROVAL_PR="$(jq -c \'.[0]\' <<<"$PRS")"'
+    approval_collection_schema = (
+        'validate_spotlight_open_pr_object "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" '
+        '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
+    )
+    approval_collection_consume = (
+        'test "$(jq -r .number <<<"$APPROVAL_PR")" = "$PR_NUMBER"'
+    )
     post_review_fetch = 'PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
     post_review_schema = (
         'validate_spotlight_open_pr_object "$PR_AFTER_REVIEW" "$PR_NUMBER" "$BASE_SHA" '
@@ -842,6 +857,9 @@ def validate_spotlight_pr_response_evidence(
     post_review_consume = 'test "$(jq -r .state <<<"$PR_AFTER_REVIEW")" = "open"'
     for boundary_marker in (
         approval_fetch, approval_schema, approval_consume,
+        approval_collection_fetch, approval_collection_envelope,
+        approval_collection_extract, approval_collection_schema,
+        approval_collection_consume,
         post_review_fetch, post_review_schema, post_review_consume,
     ):
         require(
@@ -850,13 +868,18 @@ def validate_spotlight_pr_response_evidence(
         )
     require(
         approve.index(approval_fetch) < approve.index(approval_schema)
-        < approve.index(approval_consume) < approve.index(post_review_fetch)
+        < approve.index(approval_consume) < approve.index(approval_collection_fetch)
+        < approve.index(approval_collection_envelope)
+        < approve.index(approval_collection_extract)
+        < approve.index(approval_collection_schema)
+        < approve.index(approval_collection_consume)
+        < approve.index(post_review_fetch)
         < approve.index(post_review_schema) < approve.index(post_review_consume),
-        "Spotlight approval PR snapshots must be typed before authorization consumption",
+        "Spotlight approval PR snapshots/collection must be typed before authorization consumption",
     )
     require(
         spotlight.count("validate_spotlight_open_pr_object() {") == 2
-        and spotlight.count('validate_spotlight_open_pr_object "$') == 4,
+        and spotlight.count('validate_spotlight_open_pr_object "$') == 5,
         "Spotlight PR response schema/call cardinality changed",
     )
 
@@ -873,6 +896,73 @@ def validate_spotlight_pr_response_evidence(
             )
         else:
             raise ValueError("Spotlight PR response self-test accepted an untyped post-review snapshot")
+        for current_boundary, replacement_boundary, label in (
+            (
+                approval_collection_envelope,
+                'jq -e \'(type == "object") and (length == 1)\' <<<"$PRS" >/dev/null',
+                "collection-non-array",
+            ),
+            (
+                approval_collection_envelope,
+                'jq -e \'(type == "array") and (length <= 1)\' <<<"$PRS" >/dev/null',
+                "collection-cardinality",
+            ),
+            (
+                approval_collection_schema,
+                'true # adversarially removed approval PR collection object schema',
+                "collection-object",
+            ),
+        ):
+            require(
+                approve.count(current_boundary) == 1,
+                f"Spotlight approval PR {label} self-test anchor changed",
+            )
+            approve_start = spotlight.index("  approve:\n")
+            approve_end = spotlight.index("  authorize:\n", approve_start)
+            weakened = (
+                spotlight[:approve_start]
+                + approve.replace(current_boundary, replacement_boundary, 1)
+                + spotlight[approve_end:]
+            )
+            try:
+                validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+            except ValueError as exc:
+                require(
+                    "approval PR response boundary anchor changed" in str(exc),
+                    f"Spotlight approval PR {label} self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Spotlight PR response self-test accepted weakened approval PR {label}"
+                )
+
+        ordered_collection_pair = (
+            approval_collection_schema + "\n          " + approval_collection_consume
+        )
+        require(
+            approve.count(ordered_collection_pair) == 1,
+            "Spotlight approval PR collection ordering self-test anchor changed",
+        )
+        reordered_approve = approve.replace(
+            ordered_collection_pair,
+            approval_collection_consume + "\n          " + approval_collection_schema,
+            1,
+        )
+        approve_start = spotlight.index("  approve:\n")
+        approve_end = spotlight.index("  authorize:\n", approve_start)
+        weakened = spotlight[:approve_start] + reordered_approve + spotlight[approve_end:]
+        try:
+            validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+        except ValueError as exc:
+            require(
+                "snapshots/collection must be typed before authorization consumption" in str(exc),
+                f"Spotlight approval PR collection ordering self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Spotlight PR response self-test accepted approval collection schema after consumption"
+            )
+
         current = '(.requested_reviewers | type == "array" and length <= 100) and'
         replacement = '(.requested_reviewers | tostring | length <= 100) and'
         require(propose.count(current) == 1, "Spotlight proposer reviewer-array self-test anchor changed")
