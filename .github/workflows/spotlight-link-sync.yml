@@ -1159,6 +1159,47 @@ jobs:
               ' <<<"$payload" >/dev/null
           }
 
+          validate_spotlight_pull_list_item() {
+            local payload="$1" expected_pr="$2" expected_base="$3" expected_branch="$4" expected_head="$5"
+            jq -e \
+              --argjson pr "$expected_pr" \
+              --arg base "$expected_base" \
+              --arg branch "$expected_branch" \
+              --arg head "$expected_head" \
+              --arg repo "$GITHUB_REPOSITORY" \
+              --arg title "chore: sync rotating Spotlight links" \
+              --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
+                (type == "object") and
+                (.number | type == "number" and . == floor and . > 0 and . == $pr) and
+                (.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and
+                (.state | type == "string" and . == "open") and
+                (.draft | type == "boolean" and . == false) and
+                (.title | type == "string" and . == $title) and
+                (.body | type == "string" and . == $body) and
+                (.base | type == "object" and
+                  (.ref | type == "string" and . == "main") and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and
+                  (.repo | type == "object" and
+                    (.full_name | type == "string" and . == $repo))) and
+                (.head | type == "object" and
+                  (.ref | type == "string" and . == $branch) and
+                  (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+                  (.repo | type == "object" and
+                    (.full_name | type == "string" and . == $repo))) and
+                (.requested_reviewers | type == "array" and length <= 100) and
+                (all(.requested_reviewers[];
+                  type == "object" and
+                  (.id | (type == "number") and (. == floor) and (. > 0)) and
+                  (.login | type == "string" and length > 0))) and
+                (([.requested_reviewers[].id] | length) ==
+                  ([.requested_reviewers[].id] | unique | length)) and
+                (([.requested_reviewers[].login] | length) ==
+                  ([.requested_reviewers[].login] | unique | length)) and
+                (.url | type == "string" and length > 0) and
+                (.html_url | type == "string" and length > 0)
+              ' <<<"$payload" >/dev/null
+          }
+
           APPROVAL_REQUESTS_JSON='[]'
           echo "approval_requests_json=$APPROVAL_REQUESTS_JSON" >> "$GITHUB_OUTPUT"
           # Verify exact short-lived mutation lease.
@@ -1432,7 +1473,7 @@ jobs:
           PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
           jq -e '(type == "array") and (length == 1)' <<<"$PRS" >/dev/null
           APPROVAL_PR="$(jq -c '.[0]' <<<"$PRS")"
-          validate_spotlight_open_pr_object "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
+          validate_spotlight_pull_list_item "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
           test "$(jq -r .number <<<"$APPROVAL_PR")" = "$PR_NUMBER"
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
           gh api --paginate --slurp \

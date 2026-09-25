@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v98"
+VERSION = "governed-workflow-byte-identity-v99"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "7134ee932cf299c8d8d94e7dd9b4a83f1d732926",
     ".github/workflows/profile-quality.yml": "9bed95a2db82013438d6fb6396958ff170a80d5d",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "d60cd81fd6d26b77ae9ee5701f87103f7af8fd83",
+    ".github/workflows/spotlight-link-sync.yml": "9e6e9dedf66ba47f65ea69152075f9597f58407a",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -873,6 +873,68 @@ def validate_spotlight_pr_response_evidence(
             forbidden not in reviewer_helper,
             f"Spotlight reviewer-request response regained full-GET-only field: {forbidden}",
         )
+    pull_list_helper_marker = "          validate_spotlight_pull_list_item() {"
+    require(
+        propose.count(pull_list_helper_marker) == 0
+        and approve.count(pull_list_helper_marker) == 1,
+        "Spotlight approval-list response helper count changed",
+    )
+    pull_list_helper_start = approve.index(pull_list_helper_marker)
+    pull_list_helper_end = approve.index(
+        "\n\n          APPROVAL_REQUESTS_JSON='[]'", pull_list_helper_start
+    )
+    pull_list_helper = approve[pull_list_helper_start:pull_list_helper_end]
+    pull_list_schema_fragments = (
+        '(type == "object") and',
+        '(.number | type == "number" and . == floor and . > 0 and . == $pr) and',
+        '(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and',
+        '(.state | type == "string" and . == "open") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.title | type == "string" and . == $title) and',
+        '(.body | type == "string" and . == $body) and',
+        '(.ref | type == "string" and . == "main") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and',
+        '(.ref | type == "string" and . == $branch) and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.full_name | type == "string" and . == $repo))) and',
+        '(.requested_reviewers | type == "array" and length <= 100) and',
+        '(all(.requested_reviewers[];',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
+        '(.login | type == "string" and length > 0))) and',
+        '([.requested_reviewers[].id] | unique | length)) and',
+        '([.requested_reviewers[].login] | unique | length)) and',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0)',
+    )
+    for fragment in pull_list_schema_fragments:
+        require(
+            fragment in pull_list_helper,
+            f"Spotlight approval-list response schema changed: {fragment}",
+        )
+    require(
+        pull_list_helper.count(
+            '(.full_name | type == "string" and . == $repo))) and'
+        ) == 2,
+        "Spotlight approval-list response must bind both base/head repository identity",
+    )
+    require(
+        pull_list_helper.count(
+            '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and'
+        ) == 1
+        and pull_list_helper.count(
+            '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and'
+        ) == 1,
+        "Spotlight approval-list response must bind exact base/head SHA identity",
+    )
+    for forbidden in (
+        '(.merged | type == "boolean" and . == false) and',
+        '(.maintainer_can_modify | type == "boolean" and . == false) and',
+    ):
+        require(
+            forbidden not in pull_list_helper,
+            f"Spotlight approval-list response regained full-GET-only field: {forbidden}",
+        )
+
     schema_fragments = (
         '(.number | type == "number" and . == floor and . > 0 and . == $pr) and',
         '(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and',
@@ -952,7 +1014,7 @@ def validate_spotlight_pr_response_evidence(
     )
     approval_collection_extract = 'APPROVAL_PR="$(jq -c \'.[0]\' <<<"$PRS")"'
     approval_collection_schema = (
-        'validate_spotlight_open_pr_object "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" '
+        'validate_spotlight_pull_list_item "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" '
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
     )
     approval_collection_consume = (
@@ -976,6 +1038,10 @@ def validate_spotlight_pr_response_evidence(
             f"Spotlight approval PR response boundary anchor changed: {boundary_marker}",
         )
     require(
+        'validate_spotlight_open_pr_object "$APPROVAL_PR"' not in approve,
+        "Spotlight approval-list item regained incompatible full-GET PR schema",
+    )
+    require(
         approve.index(approval_fetch) < approve.index(approval_schema)
         < approve.index(approval_consume) < approve.index(approval_collection_fetch)
         < approve.index(approval_collection_envelope)
@@ -988,9 +1054,11 @@ def validate_spotlight_pr_response_evidence(
     )
     require(
         spotlight.count("validate_spotlight_open_pr_object() {") == 2
-        and spotlight.count('validate_spotlight_open_pr_object "$') == 4
+        and spotlight.count('validate_spotlight_open_pr_object "$') == 3
         and spotlight.count("validate_spotlight_reviewer_request_response() {") == 1
-        and spotlight.count('validate_spotlight_reviewer_request_response "$') == 1,
+        and spotlight.count('validate_spotlight_reviewer_request_response "$') == 1
+        and spotlight.count("validate_spotlight_pull_list_item() {") == 1
+        and spotlight.count('validate_spotlight_pull_list_item "$') == 1,
         "Spotlight PR response schema/call cardinality changed",
     )
 
@@ -1023,6 +1091,12 @@ def validate_spotlight_pr_response_evidence(
                 'true # adversarially removed approval PR collection object schema',
                 "collection-object",
             ),
+            (
+                approval_collection_schema,
+                'validate_spotlight_open_pr_object "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" '
+                '"$CANDIDATE_BRANCH" "$HEAD_SHA"',
+                "collection-full-get-schema",
+            ),
         ):
             require(
                 approve.count(current_boundary) == 1,
@@ -1039,12 +1113,65 @@ def validate_spotlight_pr_response_evidence(
                 validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
             except ValueError as exc:
                 require(
-                    "approval PR response boundary anchor changed" in str(exc),
+                    "approval PR response boundary anchor changed" in str(exc)
+                    or "incompatible full-GET PR schema" in str(exc),
                     f"Spotlight approval PR {label} self-test failed for wrong reason: {exc}",
                 )
             else:
                 raise ValueError(
                     f"Spotlight PR response self-test accepted weakened approval PR {label}"
+                )
+
+        list_helper_mutations = (
+            (
+                '(type == "object") and',
+                '(type == "array") and',
+                "list-item-object",
+            ),
+            (
+                '(.number | type == "number" and . == floor and . > 0 and . == $pr) and',
+                '(.number | type == "number" and . == floor and . > 0) and',
+                "list-item-pr-number",
+            ),
+            (
+                '(.requested_reviewers | type == "array" and length <= 100) and',
+                '(.requested_reviewers | tostring | length <= 100) and',
+                "list-item-reviewer-array",
+            ),
+            (
+                '([.requested_reviewers[].login] | unique | length)) and',
+                '([.requested_reviewers[].login] | length)) and',
+                "list-item-reviewer-uniqueness",
+            ),
+        )
+        approve_start = spotlight.index("  approve:\n")
+        approve_end = spotlight.index("  authorize:\n", approve_start)
+        for helper_current, helper_replacement, label in list_helper_mutations:
+            require(
+                pull_list_helper.count(helper_current) == 1,
+                f"Spotlight approval-list {label} self-test anchor changed",
+            )
+            mutated_helper = pull_list_helper.replace(
+                helper_current, helper_replacement, 1
+            )
+            weakened_approve = (
+                approve[:pull_list_helper_start]
+                + mutated_helper
+                + approve[pull_list_helper_end:]
+            )
+            weakened = (
+                spotlight[:approve_start] + weakened_approve + spotlight[approve_end:]
+            )
+            try:
+                validate_spotlight_pr_response_evidence(weakened, run_self_test=False)
+            except ValueError as exc:
+                require(
+                    "approval-list response schema changed" in str(exc),
+                    f"Spotlight approval-list {label} self-test failed for wrong reason: {exc}",
+                )
+            else:
+                raise ValueError(
+                    f"Spotlight PR response self-test accepted weakened approval-list {label}"
                 )
 
         ordered_collection_pair = (
@@ -2763,6 +2890,25 @@ def project_spotlight_reviewer_request_helper_to_legacy(spotlight: str) -> str:
     return spotlight[:start] + spotlight[end:]
 
 
+def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
+    """Remove the independently validated approval-list helper from frozen review-schema counts."""
+    start_marker = "          validate_spotlight_pull_list_item() {\n"
+    end_marker = "\n\n          APPROVAL_REQUESTS_JSON='[]'"
+    require(
+        spotlight.count(start_marker) == 1 and spotlight.count(end_marker) == 1,
+        "Spotlight approval-list compatibility projection anchors changed",
+    )
+    start = spotlight.index(start_marker)
+    end = spotlight.index(end_marker, start)
+    require(start < end, "Spotlight approval-list compatibility projection ordering changed")
+    projected = spotlight[:start] + spotlight[end:]
+    require(
+        "validate_spotlight_pull_list_item() {" not in projected,
+        "Spotlight approval-list compatibility projection left helper definition bytes behind",
+    )
+    return projected
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
@@ -2773,6 +2919,9 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
     spotlight_review_projection = project_spotlight_reviewer_request_helper_to_legacy(spotlight)
+    spotlight_review_projection = project_spotlight_approval_list_helper_to_legacy(
+        spotlight_review_projection
+    )
     validate_pull_review_evidence_schema(
         spotlight_review_projection, "Spotlight authorization/terminal merge", 2
     )

@@ -523,7 +523,7 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
         (
             '          jq -e \'(type == "array") and (length == 1)\' <<<"$PRS" >/dev/null\n'
             '          APPROVAL_PR="$(jq -c \'.[0]\' <<<"$PRS")"\n'
-            '          validate_spotlight_open_pr_object "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n'
+            '          validate_spotlight_pull_list_item "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n'
             '          test "$(jq -r .number <<<"$APPROVAL_PR")" = "$PR_NUMBER"\n',
             '          test "$(jq \'length\' <<<"$PRS")" = "1"\n'
             '          test "$(jq -r \'.[0].number\' <<<"$PRS")" = "$PR_NUMBER"\n',
@@ -547,7 +547,8 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
         sync = sync.replace(hardened, legacy, 1)
     core.require(
         "validate_spotlight_open_pr_object" not in sync
-        and "validate_spotlight_reviewer_request_response" not in sync,
+        and "validate_spotlight_reviewer_request_response" not in sync
+        and "validate_spotlight_pull_list_item" not in sync,
         "Spotlight PR-response projection left modern runtime schema bytes in the historical item-9 view",
     )
     return sync
