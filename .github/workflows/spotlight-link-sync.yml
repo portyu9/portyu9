@@ -736,7 +736,7 @@ jobs:
                 (type == "object") and
                 (.number | type == "number" and . == floor and . > 0 and . == $pr) and
                 (.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and
-                (.state | type == "string" and . == "open") and
+                (.state | (type == "string") and (. == "open")) and
                 (.draft | type == "boolean" and . == false) and
                 (.merged | type == "boolean" and . == false) and
                 (.maintainer_can_modify | type == "boolean" and . == false) and
@@ -1096,7 +1096,7 @@ jobs:
                 (type == "object") and
                 (.number | type == "number" and . == floor and . > 0 and . == $pr) and
                 (.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and
-                (.state | type == "string" and . == "open") and
+                (.state | (type == "string") and (. == "open")) and
                 (.draft | type == "boolean" and . == false) and
                 (.merged | type == "boolean" and . == false) and
                 (.maintainer_can_modify | type == "boolean" and . == false) and
