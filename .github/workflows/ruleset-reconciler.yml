@@ -211,14 +211,18 @@ jobs:
 
           GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" "app/installations/${ADMIN_INSTALLATION_ID}" > installation.json
           jq -e --argjson app "$ADMIN_APP_ID" --argjson installation "$ADMIN_INSTALLATION_ID" '
-            .id == $installation and
-            .app_id == $app and
-            .target_type == "User" and
-            .account.id == 35150859 and
-            .account.login == "portyu9" and
-            .repository_selection == "selected" and
-            .permissions.administration == "write" and
+            type == "object" and
+            (.id | type == "number" and floor == . and . == $installation) and
+            (.app_id | type == "number" and floor == . and . == $app) and
+            (.target_type | type == "string" and . == "User") and
+            (.account | type == "object") and
+            (.account.id | type == "number" and floor == . and . == 35150859) and
+            (.account.login | type == "string" and . == "portyu9") and
+            (.repository_selection | type == "string" and . == "selected") and
+            (.permissions | type == "object") and
+            (.permissions.administration | type == "string" and . == "write") and
             ((.permissions | keys - ["administration", "metadata"]) | length == 0) and
+            (((.permissions.metadata // "read") | type) == "string") and
             ((.permissions.metadata // "read") == "read")
           ' installation.json >/dev/null
 
@@ -227,9 +231,13 @@ jobs:
             -f 'repositories[]=portyu9' \
             -f 'permissions[administration]=write' > installation-token.json
           jq -e '
+            type == "object" and
             (.token | type == "string" and length > 20) and
-            .permissions.administration == "write" and
+            (.expires_at | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")) and
+            (.permissions | type == "object") and
+            (.permissions.administration | type == "string" and . == "write") and
             ((.permissions | keys - ["administration", "metadata"]) | length == 0) and
+            (((.permissions.metadata // "read") | type) == "string") and
             ((.permissions.metadata // "read") == "read")
           ' installation-token.json >/dev/null
           ADMIN_TOKEN="$(jq -r .token installation-token.json)"
@@ -250,12 +258,16 @@ jobs:
 
           GH_TOKEN="$ADMIN_TOKEN" gh api "installation/repositories?per_page=100" > token-repositories.json
           jq -e '
-            .total_count == 1 and
-            (.repositories | length) == 1 and
-            .repositories[0].id == 1355082509 and
-            .repositories[0].name == "portyu9" and
-            .repositories[0].full_name == "portyu9/portyu9" and
-            .repositories[0].owner.login == "portyu9"
+            type == "object" and
+            (.total_count | type == "number" and floor == . and . == 1) and
+            (.repositories | type == "array" and length == 1) and
+            (.repositories[0] | type == "object") and
+            (.repositories[0].id | type == "number" and floor == . and . == 1355082509) and
+            (.repositories[0].name | type == "string" and . == "portyu9") and
+            (.repositories[0].full_name | type == "string" and . == "portyu9/portyu9") and
+            (.repositories[0].private | type == "boolean") and
+            (.repositories[0].owner | type == "object") and
+            (.repositories[0].owner.login | type == "string" and . == "portyu9")
           ' token-repositories.json >/dev/null
 
           MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"
