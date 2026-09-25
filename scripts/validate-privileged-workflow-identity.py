@@ -2761,6 +2761,20 @@ def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
         )
 
 
+def project_spotlight_reviewer_request_helper_to_legacy(spotlight: str) -> str:
+    """Remove the independently validated reviewer-request helper from frozen review-schema counts."""
+    start_marker = "          validate_spotlight_reviewer_request_response() {\n"
+    end_marker = "\n\n          REF_CREATED=false"
+    require(
+        spotlight.count(start_marker) == 1 and spotlight.count(end_marker) >= 1,
+        "Spotlight reviewer-request compatibility projection anchors changed",
+    )
+    start = spotlight.index(start_marker)
+    end = spotlight.index(end_marker, start)
+    require(start < end, "Spotlight reviewer-request compatibility projection ordering changed")
+    return spotlight[:start] + spotlight[end:]
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
@@ -2770,7 +2784,10 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
     validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
-    validate_pull_review_evidence_schema(spotlight, "Spotlight authorization/terminal merge", 2)
+    spotlight_review_projection = project_spotlight_reviewer_request_helper_to_legacy(spotlight)
+    validate_pull_review_evidence_schema(
+        spotlight_review_projection, "Spotlight authorization/terminal merge", 2
+    )
     for fragment in (
         'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
         'spotlight|dependabot|codeql-autofix)',
