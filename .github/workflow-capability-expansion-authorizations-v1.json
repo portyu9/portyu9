@@ -438,6 +438,13 @@
       "rationale": "Authorize frozen #1049's exact delegated Dependabot release-reproof parity repair: two public read-only metadata GETs are added to the trusted delegated verifier so it uses the same strict repository/release evidence interface as the canonical controller. Candidate execution, write endpoints, mutations, triggers, permissions, secrets, merge authority, required checks, rulesets, direct-main writes, OIDC and bypasses remain unchanged."
     },
     {
+      "id": "cap-dependabot-delegated-release-reproof-token-v1",
+      "baseBomSha256": "88ffdb7cb971f6389ed68dd566eef42ffa4088a03d793518f5b533600b16c1d2",
+      "candidateBomSha256": "88ffdb7cb971f6389ed68dd566eef42ffa4088a03d793518f5b533600b16c1d2",
+      "expansionSha256": "76c3dd043d5d6e40f6d2a35978134f5aad6bfded172dd132486e541783f1b324",
+      "rationale": "Authorize frozen #1054's exact protected-source-only token wiring for the delegated Dependabot release reproof step plus its static regression contract. Semantic Workflow Capability is unchanged; the job already had read-only checks/contents/pull-request permissions and github.token reference. No endpoint, trigger, mutation, candidate execution, merge authority, required-check weakening, ruleset, direct-main write, OIDC, secret or bypass capability is added."
+    },
+    {
       "id": "cap-dependabot-duplicate-check-convergence",
       "baseBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "candidateBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
