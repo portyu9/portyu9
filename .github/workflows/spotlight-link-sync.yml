@@ -2129,13 +2129,13 @@ jobs:
               (.id | (type == "number") and (. == floor) and (. > 0)) and
               (.name | type == "string" and length > 0) and
               (.status | type == "string" and
-                (. == "queued" or . == "in_progress" or . == "completed" or
-                 . == "waiting" or . == "requested" or . == "pending")) and
+                ((. == "queued") or (. == "in_progress") or (. == "completed") or
+                 (. == "waiting") or (. == "requested") or (. == "pending"))) and
               (if .status == "completed"
                then (.conclusion | type == "string" and
-                 (. == "action_required" or . == "cancelled" or . == "failure" or
-                  . == "neutral" or . == "skipped" or . == "stale" or
-                  . == "startup_failure" or . == "success" or . == "timed_out"))
+                 ((. == "action_required") or (. == "cancelled") or (. == "failure") or
+                  (. == "neutral") or (. == "skipped") or (. == "stale") or
+                  (. == "startup_failure") or (. == "success") or (. == "timed_out")))
                else .conclusion == null end) and
               (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
               (.app | type == "object" and
