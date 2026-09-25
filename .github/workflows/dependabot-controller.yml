@@ -450,7 +450,12 @@ jobs:
             echo "ERROR: Dependabot reconciled-head repository dispatch returned unexpected status: ${RECONCILED_ADMISSION_DISPATCH_STATUS_LINE}" >&2
             exit 1
           }
-          gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
+          RECONCILED_VALIDATION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF")"
+          RECONCILED_VALIDATION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$RECONCILED_VALIDATION_DISPATCH_RESPONSE" | tr -d '\r')"
+          [[ "$RECONCILED_VALIDATION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: Dependabot reconciled-head validation workflow dispatch returned unexpected status: ${RECONCILED_VALIDATION_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }
           echo "Reconciled exact derived governance files and dispatched admission plus read-only validation for the new immutable head."
 
       - name: Validate reconciled candidate and inspect protected checks
@@ -726,7 +731,12 @@ jobs:
               printf 'dispatched=false\n' >> "$GITHUB_OUTPUT"
               echo "Exact-head protected checks are already active; bounded convergence will re-evaluate them."
             else
-              gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
+              VALIDATION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF")"
+              VALIDATION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$VALIDATION_DISPATCH_RESPONSE" | tr -d '\r')"
+              [[ "$VALIDATION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+                echo "ERROR: Dependabot exact-head validation workflow dispatch returned unexpected status: ${VALIDATION_DISPATCH_STATUS_LINE}" >&2
+                exit 1
+              }
               jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" \
                 '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
                 > admission-dispatch.json
@@ -1509,6 +1519,11 @@ jobs:
           assert_main_sha "$BASE_SHA"
           assert_head_sha "$HEAD_SHA"
 
-          gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
+          CODEQL_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="$HEAD_REF")"
+          CODEQL_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CODEQL_DISPATCH_RESPONSE" | tr -d '\r')"
+          [[ "$CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: Dependabot exact-head CodeQL workflow dispatch returned unexpected status: ${CODEQL_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }
           echo "Dispatched CodeQL only after exact read-only Dependabot validation succeeded."
 
