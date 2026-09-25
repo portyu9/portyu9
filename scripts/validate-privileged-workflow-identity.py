@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v100"
+VERSION = "governed-workflow-byte-identity-v101"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "d3ef550b934c3eb0d638d6bdd51efe963d92b0d9",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "9e6e9dedf66ba47f65ea69152075f9597f58407a",
+    ".github/workflows/spotlight-link-sync.yml": "e1a76ff9024464387f6702491366276efd839581",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -3177,7 +3177,6 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
 
     spotlight_fragments = (
         'actions/workflows/capability-admission.yml/dispatches',
-        '-f ref=main >/dev/null',
         'Capability Admission independently binds the unique current-main candidate.',
         "TRUSTED_RUN_ID=\"$(jq -r '.trustedAdmission.workflowRun.runId' \"$CERTIFICATE\")\"",
         "TRUSTED_RUN_ATTEMPT=\"$(jq -r '.trustedAdmission.workflowRun.runAttempt' \"$CERTIFICATE\")\"",
@@ -3992,6 +3991,69 @@ def validate_bot_review_dispatch_status_contract(bot_review: str) -> None:
     )
 
 
+
+def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
+    capability_dispatch = (
+        'CAPABILITY_DISPATCH_RESPONSE="$(gh api --include --method POST '
+        '"repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches" \\'
+    )
+    reviewer_dispatch = (
+        'REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST '
+        '"repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\'
+    )
+    capability_guard = (
+        '[[ "$CAPABILITY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+    )
+    reviewer_guard = (
+        '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+    )
+    for label, fragment in (
+        ("Capability Admission", capability_dispatch),
+        ("governed reviewer", reviewer_dispatch),
+    ):
+        require(
+            spotlight.count(fragment) == 1,
+            f"Spotlight {label} dispatch must capture exactly one --include response",
+        )
+    for label, guard in (
+        ("Capability Admission", capability_guard),
+        ("governed reviewer", reviewer_guard),
+    ):
+        require(
+            spotlight.count(guard) == 1,
+            f"Spotlight {label} dispatch must require exact HTTP 204 status",
+        )
+    for fragment in (
+        'CAPABILITY_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CAPABILITY_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+        'REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+        'ERROR: Spotlight Capability Admission dispatch returned unexpected status: ${CAPABILITY_DISPATCH_STATUS_LINE}',
+        'ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}',
+    ):
+        require(fragment in spotlight, f"Spotlight dispatch response-status contract is missing: {fragment}")
+    for forbidden in (
+        'capability-admission.yml/dispatches" \\\n            -f ref=main >/dev/null',
+        'bot-pr-user-approval.yml/dispatches" \\\n            -f ref=main >/dev/null',
+    ):
+        require(
+            forbidden not in spotlight,
+            f"Spotlight must not discard privileged workflow-dispatch responses: {forbidden}",
+        )
+    capability_status = spotlight.index(capability_guard)
+    capability_success = spotlight.index(
+        'Dispatched event-driven Spotlight admission proof from trusted main;'
+    )
+    reviewer_status = spotlight.index(reviewer_guard)
+    reviewer_success = spotlight.index(
+        'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.'
+    )
+    convergence = spotlight.index('          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do')
+    require(
+        spotlight.index(capability_dispatch) < capability_status < capability_success
+        < spotlight.index(reviewer_dispatch) < reviewer_status < reviewer_success < convergence,
+        "Spotlight dispatches must prove HTTP 204 before success markers and convergence waits",
+    )
+
+
 def self_test() -> None:
     v21.self_test()
     self_test_spotlight_same_base_supersession()
@@ -4060,6 +4122,38 @@ def self_test() -> None:
         raise ValueError("bot-review identity-schema self-test accepted type-coercing login evidence")
 
     spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+    validate_spotlight_dispatch_status_contract(spotlight)
+
+    weakened_spotlight_dispatch = spotlight.replace(
+        'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches"',
+        'gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches"',
+        1,
+    )
+    try:
+        validate_spotlight_dispatch_status_contract(weakened_spotlight_dispatch)
+    except ValueError as exc:
+        require(
+            "--include response" in str(exc),
+            f"Spotlight dispatch-response self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Spotlight dispatch-response self-test accepted a response-blind admission wake")
+
+    weakened_spotlight_status = spotlight.replace(
+        '^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$)',
+        '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$)',
+        1,
+    )
+    try:
+        validate_spotlight_dispatch_status_contract(weakened_spotlight_status)
+    except ValueError as exc:
+        require(
+            "exact HTTP 204 status" in str(exc),
+            f"Spotlight dispatch-status self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Spotlight dispatch-status self-test accepted a non-204 admission response")
+
     profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
     validate_leases(profile, spotlight)
 
@@ -4546,6 +4640,7 @@ def main() -> int:
         dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
         autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        validate_spotlight_dispatch_status_contract(spotlight)
         capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
         validate_codeql_autofix_constructive_response_schemas(autofix)
         validate_codeql_autofix_read_singleton_evidence(autofix)
@@ -4577,7 +4672,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering and exact workflow-dispatch HTTP 204 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus admission dispatch, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering and exact workflow-dispatch HTTP 204 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-204 admission/reviewer dispatch status validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
