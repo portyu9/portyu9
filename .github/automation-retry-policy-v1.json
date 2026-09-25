@@ -197,20 +197,6 @@
       "mutationMode": "none"
     },
     {
-      "id": "profile-quality-dependabot-admission-proof",
-      "workflow": ".github/workflows/profile-quality.yml",
-      "job": "dependabot_admission",
-      "step": "Consume exact trusted-main Dependabot admission proof",
-      "ordinal": 1,
-      "variable": "ATTEMPT",
-      "maxIterations": 36,
-      "sleepSeconds": 5,
-      "class": "bounded-observation",
-      "operationRetry": false,
-      "purpose": "Wait for the exact trusted-main Dependabot admission proof.",
-      "mutationMode": "none"
-    },
-    {
       "id": "spotlight-protected-workflow-convergence",
       "workflow": ".github/workflows/spotlight-link-sync.yml",
       "job": "approve",

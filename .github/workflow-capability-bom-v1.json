@@ -139,35 +139,96 @@
       "id": "profile-quality",
       "jobs": [
         {
-          "actions": [],
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact Dependabot candidate as inert data"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact accepted-base trusted admission source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100",
+              "endpoint": "repos/${DEPENDENCY_REPOSITORY}",
               "method": "GET",
               "mutating": false,
-              "step": "Consume exact trusted-main Dependabot admission proof"
+              "step": "Fetch exact candidate release evidence"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Fetch exact candidate release evidence"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Prove exact PR-native Dependabot context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}",
+              "method": "GET",
+              "mutating": false,
+              "step": "Prove exact PR-native Dependabot context"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
               "method": "GET",
               "mutating": false,
-              "step": "Consume exact trusted-main Dependabot admission proof"
+              "step": "Prove exact PR-native Dependabot context"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
               "method": "GET",
               "mutating": false,
-              "step": "Consume exact trusted-main Dependabot admission proof"
+              "step": "Prove exact PR-native Dependabot context"
             },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
-              "step": "Consume exact trusted-main Dependabot admission proof"
+              "step": "Prove exact PR-native Dependabot context"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Fetch exact candidate release evidence"
+            },
+            {
+              "client": "git",
+              "mutating": false,
+              "operation": "ls-remote",
+              "remote": "https://github.com/${DEPENDENCY_REPOSITORY}.git",
+              "step": "Fetch exact candidate release evidence",
+              "targets": [
+                "refs/tags/${CANDIDATE_TAG}",
+                "refs/tags/${CANDIDATE_TAG}^{}"
+              ]
             }
           ],
           "artifacts": [],
@@ -177,12 +238,13 @@
           "needs": [],
           "oidc": false,
           "permissions": {
-            "checks": "read",
             "contents": "read",
             "pull-requests": "read"
           },
           "references": {
-            "env": [],
+            "env": [
+              "PYTHON_VERSION"
+            ],
             "githubToken": [
               "github.token"
             ],

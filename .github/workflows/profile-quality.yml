@@ -515,12 +515,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
-      checks: read
       contents: read
       pull-requests: read
 
     steps:
-      - name: Consume exact trusted-main Dependabot admission proof
+      - name: Prove exact PR-native Dependabot context
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}
@@ -556,6 +555,7 @@ jobs:
                 (.number | type == "number" and . == floor and . > 0 and . == $number) and
                 (.state | type == "string" and . == "open") and
                 (.draft | type == "boolean" and . == false) and
+                (.maintainer_can_modify | type == "boolean" and . == false) and
                 (.user | type == "object" and (.login | type == "string" and . == "dependabot[bot]")) and
                 (.base | type == "object" and
                   (.ref | type == "string" and . == $base_ref) and
@@ -585,186 +585,166 @@ jobs:
             ' <<<"$response" >/dev/null
           }
 
-          validate_admission_check_collection() {
-            local response="$1"
-            jq -e \
-              --arg head "$HEAD_SHA" \
-              --arg base "$BASE_SHA" \
-              --argjson pr "$PR_NUMBER" '
-                def positive_int: type == "number" and . == floor and . > 0;
-                def allowed_status:
-                  . == "queued" or . == "in_progress" or . == "requested" or
-                  . == "waiting" or . == "pending" or . == "completed";
-                def allowed_conclusion:
-                  . == "success" or . == "failure" or . == "neutral" or
-                  . == "cancelled" or . == "skipped" or . == "timed_out" or
-                  . == "action_required" or . == "stale" or . == "startup_failure";
-                . as $root
-                | (type == "object") and
-                  ($root.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
-                  ($root.check_runs | type == "array" and length == $root.total_count) and
-                  (all($root.check_runs[];
-                    type == "object" and
-                    (.id | positive_int) and
-                    (.node_id | type == "string" and length > 0) and
-                    (.name | type == "string" and . == "trusted-capability-admission-proof") and
-                    (.head_sha | type == "string" and . == $head) and
-                    (.app | type == "object" and (.id | type == "number" and . == 15368)) and
-                    (.status | type == "string" and allowed_status) and
-                    (if .status == "completed" then
-                       (.conclusion | type == "string" and allowed_conclusion)
-                     else
-                       .conclusion == null
-                     end) and
-                    (.external_id == null or (.external_id | type == "string")) and
-                    (.output | type == "object" and
-                      (.summary == null or (.summary | type == "string"))) and
-                    (.check_suite | type == "object" and (.id | positive_int)) and
-                    (.pull_requests | type == "array" and length <= 100) and
-                    (all(.pull_requests[];
-                      type == "object" and
-                      (.number | positive_int) and
-                      (.head | type == "object" and
-                        (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
-                      (.base | type == "object" and
-                        (.sha | type == "string" and test("^[0-9a-f]{40}$")))
-                    ))
-                  )) and
-                  (([$root.check_runs[].id] | length) ==
-                   ([$root.check_runs[].id] | unique | length)) and
-                  (if $root.total_count == 1 then
-                    ([ $root.check_runs[0].pull_requests[]?
-                       | select(.number == $pr and .head.sha == $head and .base.sha == $base)
-                     ] | length) <= 1
-                   else
-                    true
-                   end)
-              ' <<<"$response" >/dev/null
+          validate_contents_file_object() {
+            local response="$1" expected_path="$2"
+            jq -e --arg path "$expected_path" '
+              (type == "object") and
+              (.type | type == "string" and . == "file") and
+              (.path | type == "string" and . == $path) and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.size | type == "number" and . == floor and . > 0) and
+              (.url | type == "string" and length > 0) and
+              (.git_url | type == "string" and length > 0)
+            ' <<<"$response" >/dev/null
           }
 
-          for ATTEMPT in $(seq 1 36); do
-            PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-            validate_dependabot_pr_object "$PR" || {
-              echo "ERROR: malformed or mismatched PR-native Dependabot admission PR evidence." >&2
-              exit 1
-            }
-            MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-            validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA" || {
-              echo "ERROR: malformed or stale PR-native Dependabot admission main-ref evidence." >&2
-              exit 1
-            }
-            HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
-            validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {
-              echo "ERROR: malformed or stale PR-native Dependabot admission head-ref evidence." >&2
-              exit 1
-            }
+          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"
+          PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"
+          validate_dependabot_pr_object "$PR" || {
+            echo "ERROR: malformed or mismatched PR-native Dependabot admission PR evidence." >&2
+            exit 1
+          }
 
-            CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"
-            validate_admission_check_collection "$CHECKS" || {
-              echo "ERROR: malformed or incomplete PR-native Dependabot admission check evidence." >&2
-              exit 1
-            }
-            TOTAL="$(jq -r .total_count <<<"$CHECKS")"
-            if [ "$TOTAL" = "0" ]; then
-              echo "Attempt ${ATTEMPT}/36: trusted-main Dependabot admission proof has not materialized yet; retrying."
-            elif [ "$TOTAL" != "1" ]; then
-              echo "ERROR: ambiguous trusted-main Dependabot admission proof collection: expected one latest check, observed ${TOTAL}." >&2
-              exit 1
-            else
-              CHECK="$(jq -c '.check_runs[0]' <<<"$CHECKS")"
-              CHECK_ID="$(jq -r .id <<<"$CHECK")"
-              STATUS="$(jq -r .status <<<"$CHECK")"
-              CONCLUSION="$(jq -r '.conclusion // "null"' <<<"$CHECK")"
-              if [ "$STATUS" != "completed" ]; then
-                echo "Attempt ${ATTEMPT}/36: proof check id=${CHECK_ID} status=${STATUS} conclusion=${CONCLUSION}; waiting for terminal completion."
-              else
-                EXTERNAL_ID="$(jq -r '.external_id // ""' <<<"$CHECK")"
-                if ! [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then
-                  echo "Attempt ${ATTEMPT}/36: latest completed proof check id=${CHECK_ID} is not bound to the exact current PR/base/head; waiting for the exact proof."
-                else
-                  if [ "$CONCLUSION" != "success" ]; then
-                    echo "ERROR: exact trusted-main Dependabot admission proof check id=${CHECK_ID} completed with conclusion=${CONCLUSION}." >&2
-                    exit 1
-                  fi
-                  PROOF_RUN_ID="${BASH_REMATCH[1]}"
-                PROOF_RUN_ATTEMPT="${BASH_REMATCH[2]}"
-                SUMMARY_SHA256="${BASH_REMATCH[3]}"
-                if [ "$PROOF_RUN_ATTEMPT" -gt 20 ]; then
-                  echo "ERROR: trusted-main Dependabot admission proof run attempt ${PROOF_RUN_ATTEMPT} exceeds the reviewed retry-history bound." >&2
-                  exit 1
-                fi
+          MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA" || {
+            echo "ERROR: malformed or stale PR-native Dependabot admission main-ref evidence." >&2
+            exit 1
+          }
+          HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+          validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {
+            echo "ERROR: malformed or stale PR-native Dependabot admission head-ref evidence." >&2
+            exit 1
+          }
 
-                SUMMARY="$(jq -r '.output.summary // ""' <<<"$CHECK")"
-                if [ -z "$SUMMARY" ]; then
-                  echo "ERROR: completed trusted-main Dependabot admission proof check id=${CHECK_ID} is missing its proof summary." >&2
-                  exit 1
-                fi
-                if ! SUMMARY_CANONICAL="$(jq -cS . <<<"$SUMMARY")"; then
-                  echo "ERROR: completed trusted-main Dependabot admission proof summary is not valid JSON." >&2
-                  exit 1
-                fi
-                OBSERVED_SUMMARY_SHA256="$(printf '%s' "$SUMMARY_CANONICAL" | sha256sum | cut -d' ' -f1)"
-                if [ "$OBSERVED_SUMMARY_SHA256" != "$SUMMARY_SHA256" ]; then
-                  echo "ERROR: trusted-main Dependabot admission proof summary digest does not match its external identity." >&2
-                  exit 1
-                fi
+          BASE_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"
+          HEAD_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"
+          validate_contents_file_object "$BASE_GATE" ".github/workflows/profile-quality.yml" || {
+            echo "ERROR: malformed accepted-base Profile Quality workflow evidence." >&2
+            exit 1
+          }
+          validate_contents_file_object "$HEAD_GATE" ".github/workflows/profile-quality.yml" || {
+            echo "ERROR: malformed candidate Profile Quality workflow evidence." >&2
+            exit 1
+          }
+          BASE_GATE_BLOB="$(jq -r .sha <<<"$BASE_GATE")"
+          HEAD_GATE_BLOB="$(jq -r .sha <<<"$HEAD_GATE")"
+          test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {
+            echo "ERROR: Dependabot candidate attempted to alter its PR-native admission workflow." >&2
+            exit 1
+          }
 
-                if ! jq -e \
-                  --argjson run "$PROOF_RUN_ID" \
-                  --argjson attempt "$PROOF_RUN_ATTEMPT" \
-                  --arg base "$BASE_SHA" '
-                    .schemaVersion == 1 and
-                    .kind == "dependabot-delegated-admission-proof" and
-                    .workflowRun == {
-                      runId: $run,
-                      runAttempt: $attempt,
-                      name: "Capability admission",
-                      path: ".github/workflows/capability-admission.yml",
-                      event: "repository_dispatch",
-                      headBranch: "main",
-                      headSha: $base
-                    } and
-                    (.retryHistory | type == "array" and length == ($attempt - 1)) and
-                    ([.retryHistory[].attempt] == (if $attempt == 1 then [] else [range(1; $attempt)] end)) and
-                    all(.retryHistory[];
-                      (.checkSuiteId | type == "number" and . > 0 and floor == .) and
-                      .status == "completed" and
-                      (.conclusion | type == "string" and length > 0) and
-                      (.actor | type == "string" and length > 0) and
-                      (.triggeringActor | type == "string" and length > 0)
-                    )
-                  ' <<<"$SUMMARY" >/dev/null; then
-                  echo "ERROR: completed trusted-main Dependabot admission proof summary has a malformed or mismatched trusted workflow identity." >&2
-                  exit 1
-                fi
+      - name: Checkout exact accepted-base trusted admission source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-base
+          persist-credentials: false
+          fetch-depth: 1
 
-                if ! jq -e \
-                  --arg head "$HEAD_SHA" '
-                    .name == "trusted-capability-admission-proof" and
-                    .head_sha == $head and
-                    .app.id == 15368 and
-                    .status == "completed" and
-                    .conclusion == "success" and
-                    (.details_url | type == "string" and test("^https://github\\.com/portyu9/portyu9/runs/[1-9][0-9]*$")) and
-                    (.output | type == "object" and
-                      (.title | type == "string" and . == "Trusted capability admission passed") and
-                      (.summary | type == "string" and length > 0)) and
-                    (.pull_requests | type == "array" and length <= 100)
-                  ' <<<"$CHECK" >/dev/null; then
-                  echo "ERROR: malformed or mismatched completed trusted-main Dependabot admission proof check evidence." >&2
-                  exit 1
-                fi
+      - name: Checkout exact Dependabot candidate as inert data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate-source
+          persist-credentials: false
+          fetch-depth: 1
 
-                  echo "Consumed exact trusted-main Dependabot admission digest-bound retry-history proof on bounded attempt ${ATTEMPT} (check id=${CHECK_ID}, producer run=${PROOF_RUN_ID}, producer attempt=${PROOF_RUN_ATTEMPT})."
-                  exit 0
-                fi
-              fi
-            fi
-            sleep 5
-          done
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-          echo "ERROR: exact trusted-main Dependabot admission proof did not arrive inside the bounded PR-native gate window" >&2
-          exit 1
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+        working-directory: trusted-base
+
+      - name: Verify exact accepted-base admission source identity
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"
+          test -z "$(git -C trusted-base status --porcelain)"
+          test -z "$(git -C candidate-source status --porcelain)"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_capability_admission.py)" = "96107595641a0f9ff0203d9df2b684b1822b0346"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_controller.py)" = "b47cda8236412e8a051df46c80ad8520b2b56afa"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_tcb.py)" = "963da472bad7f0ba7270dee0393a132a20dd4cc6"
+          TREE_SHA="$(git -C candidate-source rev-parse 'HEAD^{tree}')"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          printf '%s\n' "$TREE_SHA" > "$RUNNER_TEMP/dependabot-candidate-tree-sha"
+
+      - name: Fetch exact candidate release evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"
+          export PYTHONPATH
+
+          gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > "$RUNNER_TEMP/dependabot-file-pages.json"
+          python3 trusted-base/scripts/workflow_capability_api_collection.py files \
+            --input "$RUNNER_TEMP/dependabot-file-pages.json" \
+            --out "$RUNNER_TEMP/dependabot-changed-paths.txt"
+          test -s "$RUNNER_TEMP/dependabot-changed-paths.txt"
+
+          python3 trusted-base/scripts/dependabot_controller.py probe \
+            --pr "$RUNNER_TEMP/dependabot-pr.json" \
+            --expected-head "$HEAD_SHA" \
+            --base-root trusted-base \
+            --candidate-root candidate-source \
+            --out "$RUNNER_TEMP/dependabot-probe.json"
+
+          DEPENDENCY_REPOSITORY="$(jq -r .dependencyRepository "$RUNNER_TEMP/dependabot-probe.json")"
+          CANDIDATE_TAG="$(jq -r .after.tag "$RUNNER_TEMP/dependabot-probe.json")"
+          CANDIDATE_SHA="$(jq -r .after.sha "$RUNNER_TEMP/dependabot-probe.json")"
+          test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
+          [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > "$RUNNER_TEMP/dependabot-release-refs.txt"
+          gh api "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"
+          gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > "$RUNNER_TEMP/dependabot-release.json"
+          python3 trusted-base/scripts/dependabot_release.py \
+            --refs "$RUNNER_TEMP/dependabot-release-refs.txt" \
+            --repository-json "$RUNNER_TEMP/dependabot-release-repository.json" \
+            --release-json "$RUNNER_TEMP/dependabot-release.json" \
+            --repository "$DEPENDENCY_REPOSITORY" \
+            --tag "$CANDIDATE_TAG" \
+            --expected-sha "$CANDIDATE_SHA" \
+            --out "$RUNNER_TEMP/dependabot-release-identity.json"
+          test "$(jq -r .sha "$RUNNER_TEMP/dependabot-release-identity.json")" = "$CANDIDATE_SHA"
+
+      - name: Evaluate exact accepted-base semantic admission
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"
+          export PYTHONPATH
+          TREE_SHA="$(cat "$RUNNER_TEMP/dependabot-candidate-tree-sha")"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          python3 trusted-base/scripts/dependabot_capability_admission.py \
+            candidate-source \
+            --candidate-tree-sha "$TREE_SHA" \
+            --pr "$RUNNER_TEMP/dependabot-pr.json" \
+            --expected-head-sha "$HEAD_SHA" \
+            --resolved-release "$RUNNER_TEMP/dependabot-release-identity.json" \
+            --changed-paths "$RUNNER_TEMP/dependabot-changed-paths.txt" \
+            > "$RUNNER_TEMP/dependabot-native-admission.json"
+          jq -e '
+            .decision.allowed == true and
+            .decision.authorizationId == "delegated-dependabot-codeql-v1" and
+            (.diff.expansions | type == "array") and
+            (.diff.reductions | type == "array")
+          ' "$RUNNER_TEMP/dependabot-native-admission.json" >/dev/null
+          echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."
 
   governed_bot_review:
     if: github.event_name == 'pull_request'
