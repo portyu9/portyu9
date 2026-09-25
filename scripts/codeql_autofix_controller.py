@@ -874,6 +874,54 @@ def validate_compare(value: Any, base_sha: str, head_sha: str) -> dict[str, Any]
     require(len(commits) == 1, "Autofix compare must contain exactly one commit")
     head = commits[0]
     require(isinstance(head, Mapping) and head.get("sha") == head_sha, "compare head identity mismatch")
+    head_url = head.get("url")
+    require(isinstance(head_url, str) and bool(head_url.strip()),
+            "Autofix compare head commit URL must be a non-empty string")
+
+    parents = head.get("parents")
+    require(isinstance(parents, list), "Autofix compare head parents must be an array")
+    require(len(parents) == 1, "Autofix compare head must have exactly one parent")
+    parent = parents[0]
+    require(isinstance(parent, Mapping), "Autofix compare head parent must be an object")
+    require(
+        sha(parent.get("sha"), "Autofix compare head parent SHA") == base_sha,
+        "Autofix compare head parent must equal the exact base",
+    )
+    parent_url = parent.get("url")
+    require(isinstance(parent_url, str) and bool(parent_url.strip()),
+            "Autofix compare head parent URL must be a non-empty string")
+
+    commit = head.get("commit")
+    require(isinstance(commit, Mapping), "Autofix compare head commit payload must be an object")
+    tree = commit.get("tree")
+    require(isinstance(tree, Mapping), "Autofix compare head tree must be an object")
+    tree_sha = sha(tree.get("sha"), "Autofix compare head tree SHA")
+    tree_url = tree.get("url")
+    require(isinstance(tree_url, str) and bool(tree_url.strip()),
+            "Autofix compare head tree URL must be a non-empty string")
+
+    author = commit.get("author")
+    require(isinstance(author, Mapping), "Autofix compare head author must be an object")
+    require(
+        author.get("name") == "github-actions[bot]"
+        and author.get("email") == "41898282+github-actions[bot]@users.noreply.github.com",
+        "Autofix compare head Git author identity changed",
+    )
+    committer = commit.get("committer")
+    require(isinstance(committer, Mapping), "Autofix compare head committer must be an object")
+    require(
+        committer.get("name") == "GitHub" and committer.get("email") == "noreply@github.com",
+        "Autofix compare head Git committer identity changed",
+    )
+    message = commit.get("message")
+    require(isinstance(message, str) and bool(message.strip()),
+            "Autofix compare head commit message must be a non-empty string")
+    first_line = message.splitlines()[0]
+    require(
+        re.fullmatch(r"CodeQL Autofix alert #[1-9][0-9]*", first_line) is not None,
+        "Autofix compare head commit message class changed",
+    )
+
     files = value.get("files")
     require(isinstance(files, list), "Autofix compare is missing changed files")
     paths: list[str] = []
@@ -2076,21 +2124,120 @@ def self_test() -> None:
         else:
             require(False, f"merge-success response self-test accepted forbidden mutation expected to trigger: {expected}")
 
+    compare_head = {
+        "sha": head,
+        "url": f"https://api.github.com/repos/{REPOSITORY}/commits/{head}",
+        "parents": [
+            {
+                "sha": base,
+                "url": f"https://api.github.com/repos/{REPOSITORY}/commits/{base}",
+            }
+        ],
+        "commit": {
+            "author": {
+                "name": "github-actions[bot]",
+                "email": "41898282+github-actions[bot]@users.noreply.github.com",
+            },
+            "committer": {"name": "GitHub", "email": "noreply@github.com"},
+            "message": "CodeQL Autofix alert #6\n\nCo-authored-by: fixture",
+            "tree": {
+                "sha": "c" * 40,
+                "url": f"https://api.github.com/repos/{REPOSITORY}/git/trees/{'c' * 40}",
+            },
+        },
+    }
     compare = {
         "base_commit": {"sha": base},
         "merge_base_commit": {"sha": base},
         "status": "ahead",
         "ahead_by": 1,
         "total_commits": 1,
-        "commits": [{"sha": head}],
+        "commits": [compare_head],
         "files": [{"filename": "scripts/autofix_acceptance_fixture.py", "status": "modified"}],
     }
     require(validate_compare(compare, base, head)["headSha"] == head, "compare positive fixture changed")
     compare_mutations = (
         ({**compare, "total_commits": 2}, "exactly one commit"),
         ({**compare, "commits": []}, "exactly one commit"),
-        ({**compare, "commits": [{"sha": head}, {"sha": "c" * 40}]}, "exactly one commit"),
-        ({**compare, "commits": [{"sha": "c" * 40}]}, "compare head identity mismatch"),
+        ({**compare, "commits": [compare_head, {**compare_head, "sha": "d" * 40}]}, "exactly one commit"),
+        ({**compare, "commits": [{**compare_head, "sha": "d" * 40}]}, "compare head identity mismatch"),
+        ({**compare, "commits": [{**compare_head, "url": ""}]}, "head commit URL must be a non-empty string"),
+        ({**compare, "commits": [{**compare_head, "parents": []}]}, "exactly one parent"),
+        ({
+            **compare,
+            "commits": [{
+                **compare_head,
+                "parents": [
+                    compare_head["parents"][0],
+                    {"sha": "d" * 40, "url": "https://api.github.com/example"},
+                ],
+            }],
+        }, "exactly one parent"),
+        ({
+            **compare,
+            "commits": [{
+                **compare_head,
+                "parents": [{"sha": "d" * 40, "url": "https://api.github.com/example"}],
+            }],
+        }, "parent must equal the exact base"),
+        ({
+            **compare,
+            "commits": [{
+                **compare_head,
+                "parents": [{"sha": base, "url": ""}],
+            }],
+        }, "parent URL must be a non-empty string"),
+        ({
+            **compare,
+            "commits": [{
+                **compare_head,
+                "commit": {**compare_head["commit"], "tree": {"sha": "BAD", "url": "https://api.github.com/example"}},
+            }],
+        }, "lowercase SHA-40"),
+        ({
+            **compare,
+            "commits": [{
+                **compare_head,
+                "commit": {**compare_head["commit"], "tree": {"sha": "c" * 40, "url": ""}},
+            }],
+        }, "tree URL must be a non-empty string"),
+        ({
+            **compare,
+            "commits": [{
+                **compare_head,
+                "commit": {
+                    **compare_head["commit"],
+                    "author": {"name": "GitHub", "email": "noreply@github.com"},
+                },
+            }],
+        }, "Git author identity changed"),
+        ({
+            **compare,
+            "commits": [{
+                **compare_head,
+                "commit": {
+                    **compare_head["commit"],
+                    "committer": {
+                        "name": "github-actions[bot]",
+                        "email": "41898282+github-actions[bot]@users.noreply.github.com",
+                    },
+                },
+            }],
+        }, "Git committer identity changed"),
+        ({
+            **compare,
+            "commits": [{
+                **compare_head,
+                "commit": {**compare_head["commit"], "message": "Autofix alert #6"},
+            }],
+        }, "commit message class changed"),
+        ({
+            **compare,
+            "commits": [{
+                **compare_head,
+                "commit": {**compare_head["commit"], "message": "CodeQL Autofix alert #0"},
+            }],
+        }, "commit message class changed"),
     )
     for mutated, expected in compare_mutations:
         try:
