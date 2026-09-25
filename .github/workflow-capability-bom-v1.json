@@ -226,8 +226,7 @@
               "remote": "https://github.com/${DEPENDENCY_REPOSITORY}.git",
               "step": "Fetch exact candidate release evidence",
               "targets": [
-                "refs/tags/${CANDIDATE_TAG}",
-                "refs/tags/${CANDIDATE_TAG}^{}"
+                "refs/tags/${CANDIDATE_TAG}"
               ]
             }
           ],
