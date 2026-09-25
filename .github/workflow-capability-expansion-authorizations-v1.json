@@ -516,7 +516,7 @@
       "candidateBomSha256": "88ffdb7cb971f6389ed68dd566eef42ffa4088a03d793518f5b533600b16c1d2",
       "expansionSha256": "42975105f4133ee24797048485278aecef3e7f074415b3b09ceed8fa1a40286a",
       "id": "cap-dependabot-proof-consumer-readiness-v1",
-      "rationale": "Authorize #1059's exact protected-source Dependabot proof-consumer readiness hardening. Semantic Workflow Capability is unchanged. The existing read-only gate now retries absent, nonterminal, and stale proof states, validates exact digest-bound terminal success with named diagnostics, and removes authority dependence on mutable check-run PR association metadata. No trigger, permission, endpoint, mutation, merge authority, required-check reduction, ruleset, direct-main write, OIDC, secret, or bypass is added."
+      "rationale": "Authorize #1059's exact protected-source proof-consumer readiness hardening. Semantic Workflow Capability is unchanged. The read-only gate retries absent, nonterminal, and stale proofs; exact digest-bound terminal success remains mandatory; mutable check-run PR association is no longer authority-bearing. No trigger, permission, endpoint, mutation, merge authority, required-check reduction, ruleset, direct-main write, OIDC, secret, or bypass is added."
     },
     {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
