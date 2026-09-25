@@ -139,13 +139,13 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         (
             'BASE_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
             'validate_contents_file_object "$BASE_GATE" ".github/workflows/profile-quality.yml"',
-            'HEAD_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
+            'BASE_GATE_BLOB="$(jq -r .sha <<<"$BASE_GATE")"',
             "accepted-base workflow blob",
         ),
         (
             'HEAD_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
             'validate_contents_file_object "$HEAD_GATE" ".github/workflows/profile-quality.yml"',
-            'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
+            'HEAD_GATE_BLOB="$(jq -r .sha <<<"$HEAD_GATE")"',
             "candidate workflow blob",
         ),
     )
