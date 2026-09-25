@@ -575,6 +575,13 @@
       "rationale": "Authorize frozen #940's exact Dependabot trusted-source hardening: workflow-run wake and read-only main/head Git-ref responses are fully typed before scalar use, while repeated ref GETs are reduced and endpoint grammar remains static. Existing triggers, permissions, secrets, mutations, merge authority, checks, retries, rulesets and bypass behavior remain unchanged."
     },
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "83ee38eb4f3b4db73b888ff4706ab769831a1c4591855ce8c2bf6d33c069bc11",
+      "id": "cap-dependabot-workflow-dispatch-response-status-v1",
+      "rationale": "Authorize frozen #1100's exact trusted-source-only hardening of three existing Dependabot workflow-dispatch POSTs: capture gh api --include responses and require HTTP 204 before reconciled-head validation success, exact-head validation continuation, or exact-head CodeQL success. Base/candidate semantic BOMs are identical; endpoints, refs, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets and bypass remain unchanged."
+    },
+    {
       "baseBomSha256": "d78302730fd243e92efc1a00e165d8214bf84ba4385992fe3b4582e6ad12fa30",
       "candidateBomSha256": "ea9eb3e6b10ae247e6d6fedbecb641daf9277f668a515726fb1150d9fb951c7a",
       "expansionSha256": "76150b2f94ee9000f269dd2a62fd9c9bc138c9a8b5795509518e96755cda98ad",
@@ -895,13 +902,6 @@
       "expansionSha256": "ada0eb49a80556fdd29de0d1889143878ee4f979506604923335c59f43d932b9",
       "id": "cap-workflow-run-approval-response-status-v1",
       "rationale": "Authorize frozen #1096's exact trusted-source-only hardening of the three existing protected workflow-run approval POSTs in CodeQL Autofix, Dependabot and Spotlight: capture gh api --include responses and require HTTP 201 before approval state/evidence or success. Base/candidate semantic BOMs are identical; endpoints, run identity, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority and bypass remain unchanged."
-    },
-    {
-      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
-      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
-      "expansionSha256": "83ee38eb4f3b4db73b888ff4706ab769831a1c4591855ce8c2bf6d33c069bc11",
-      "id": "cap-dependabot-workflow-dispatch-response-status-v1",
-      "rationale": "Authorize frozen #1100's exact trusted-source-only hardening of three existing Dependabot workflow-dispatch POSTs: capture gh api --include responses and require HTTP 204 before reconciled-head validation success, exact-head validation continuation, or exact-head CodeQL success. Base/candidate semantic BOMs are identical; endpoints, refs, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets and bypass remain unchanged."
     }
   ],
   "ledgerId": "workflow-capability-expansion-authorizations-v1",
