@@ -613,6 +613,25 @@ def validate_autofix_continuation(text: str) -> None:
         text.count('repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100') == 1,
         "CodeQL Autofix post-merge run discovery endpoint changed",
     )
+    dispatch_fetch = (
+        'POST_MERGE_CODEQL_DISPATCH_RESPONSE="$(gh api --include --method POST \\\n'
+        '            "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" \\\n'
+        '            -f ref=main)"'
+    )
+    dispatch_status = 'POST_MERGE_CODEQL_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$POST_MERGE_CODEQL_DISPATCH_RESPONSE" | tr -d \'\\r\')"'
+    dispatch_guard = '[[ "$POST_MERGE_CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+    require(
+        text.count(dispatch_fetch) == 1,
+        "CodeQL Autofix post-merge CodeQL dispatch must capture exactly one --include response",
+    )
+    require(
+        text.count(dispatch_status) == 1 and text.count(dispatch_guard) == 1,
+        "CodeQL Autofix post-merge CodeQL dispatch must require exact HTTP 204 before continuation",
+    )
+    require(
+        'CodeQL Autofix post-merge CodeQL dispatch returned unexpected status:' in text,
+        "CodeQL Autofix post-merge dispatch failure must be explicit and fail closed",
+    )
     require(
         text.count('python3 scripts/codeql_autofix_controller.py followup-select') == 2,
         "CodeQL Autofix must bind the post-merge CodeQL dispatch before and after creation",
@@ -671,9 +690,10 @@ def validate_autofix_continuation(text: str) -> None:
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
         snapshot_pos,
     )
+    dispatch_guard_pos = text.index(dispatch_guard, scan_dispatch_pos)
     exact_run_pos = text.index(
         'repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}',
-        scan_dispatch_pos,
+        dispatch_guard_pos,
     )
     success_pos = text.index(
         'test "$POST_MERGE_CODEQL_CONCLUSION" = "success"',
@@ -685,13 +705,46 @@ def validate_autofix_continuation(text: str) -> None:
     )
     require(
         merge_pos < merge_validate_pos < normalized_sha_pos < discovery_endpoint_pos
-        < main_reproof_pos < snapshot_pos < scan_dispatch_pos < exact_run_pos < success_pos < continuation_pos,
+        < main_reproof_pos < snapshot_pos < scan_dispatch_pos < dispatch_guard_pos
+        < exact_run_pos < success_pos < continuation_pos,
         "CodeQL Autofix typed merge-success validation / post-merge causal continuation ordering changed",
     )
     require(
         text.count('assert_main_sha "$MERGE_SHA"') == 4,
         "CodeQL Autofix must repeatedly fail closed with typed main evidence during post-merge continuation",
     )
+
+
+def self_test_autofix_continuation(text: str) -> None:
+    validate_autofix_continuation(text)
+    mutations = (
+        (
+            text.replace(
+                'gh api --include --method POST \\\n            "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"',
+                'gh api --method POST \\\n            "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"',
+                1,
+            ),
+            "--include response",
+        ),
+        (
+            text.replace(
+                '^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$)',
+                '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$)',
+                1,
+            ),
+            "exact HTTP 204",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_autofix_continuation(mutated)
+        except ValueError as exc:
+            require(
+                expected in str(exc),
+                f"Autofix continuation dispatch-status self-test failed for the wrong reason: {exc}",
+            )
+        else:
+            fail(f"Autofix continuation dispatch-status self-test accepted weakened contract: {expected}")
 
 
 def validate_autofix_readiness_evidence(text: str) -> None:
@@ -970,7 +1023,7 @@ def main() -> int:
         autofix = AUTOFIX.read_text(encoding="utf-8")
         self_test_autofix_constructive_response_schemas(autofix)
         self_test_autofix_read_singleton_evidence(autofix)
-        validate_autofix_continuation(autofix)
+        self_test_autofix_continuation(autofix)
         validate_autofix_readiness_evidence(autofix)
         validate_unsupported_evidence(autofix)
         validate_approval_comment_evidence(autofix)
@@ -982,7 +1035,7 @@ def main() -> int:
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
             "controller trust/provenance, typed constructive mutation responses, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, unsupported-alert queue fixtures, "
-            "durable deduplicated unsupported evidence, trusted-actor-bound approval-comment evidence, and exact post-merge CodeQL continuation."
+            "durable deduplicated unsupported evidence, trusted-actor-bound approval-comment evidence, exact HTTP-204-validated post-merge CodeQL dispatch, and exact post-merge CodeQL continuation."
         )
         return 0
     except (OSError, ValueError) as exc:
