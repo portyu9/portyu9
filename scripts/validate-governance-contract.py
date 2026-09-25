@@ -262,7 +262,7 @@ def validate_quality_native_gate(text: str) -> None:
         1,
     )
     projected_quality = projected_quality.replace(
-        'if [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then',
+        'if ! [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then',
         'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         1,
     )
