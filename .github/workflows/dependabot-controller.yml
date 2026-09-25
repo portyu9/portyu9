@@ -913,7 +913,12 @@ jobs:
           MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
           assert_main_sha "$MERGE_SHA"
-          gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main >/dev/null
+          POST_MERGE_CODEQL_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main)"
+          POST_MERGE_CODEQL_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$POST_MERGE_CODEQL_DISPATCH_RESPONSE" | tr -d '\r')"
+          [[ "$POST_MERGE_CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: Dependabot post-merge CodeQL dispatch returned unexpected status: ${POST_MERGE_CODEQL_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }
 
   validation_bind:
     if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/dependabot/github_actions/')
