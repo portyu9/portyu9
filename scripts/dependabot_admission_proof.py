@@ -246,21 +246,19 @@ def verify_check(
             "delegated admission candidate identity changed")
     details_url = check.get("details_url")
     require(
-        details_url == f"https://github.com/{REPOSITORY}/actions/runs/{run_id}",
+        isinstance(details_url, str)
+        and re.fullmatch(
+            rf"https://github\.com/{re.escape(REPOSITORY)}/runs/[1-9][0-9]*",
+            details_url,
+        )
+        is not None,
         "delegated admission details URL changed",
     )
     pulls = check.get("pull_requests")
-    require(isinstance(pulls, list), "delegated admission check pull_requests must be an array")
-    matching_pulls = [
-        item for item in pulls
-        if isinstance(item, Mapping)
-        and item.get("number") == pr_number
-        and isinstance(item.get("head"), Mapping)
-        and item["head"].get("sha") == head_sha
-        and isinstance(item.get("base"), Mapping)
-        and item["base"].get("sha") == base_sha
-    ]
-    require(len(matching_pulls) == 1, "delegated admission check lost exact PR association")
+    require(
+        isinstance(pulls, list) and len(pulls) <= 100,
+        "delegated admission check pull_requests must be a bounded array",
+    )
     output = check.get("output")
     require(isinstance(output, Mapping), "delegated admission check output is missing")
     require(output.get("title") == "Trusted capability admission passed",
@@ -352,7 +350,7 @@ def self_test() -> None:
         "status": "completed",
         "conclusion": "success",
         "external_id": f"dependabot-delegated-admission:123:2:{summary_digest}:77:{base}:{head}",
-        "details_url": f"https://github.com/{REPOSITORY}/actions/runs/123",
+        "details_url": f"https://github.com/{REPOSITORY}/runs/901",
         "pull_requests": [{"number": 77, "head": {"sha": head}, "base": {"sha": base}}],
         "output": {"title": "Trusted capability admission passed", "summary": canonical(summary)},
     }
@@ -366,6 +364,15 @@ def self_test() -> None:
     observed = verify_check(check, pr_number=77, base_sha=base, head_sha=head)
     require(observed["runAttempt"] == 2 and observed["priorAttempts"] == 1, "positive proof fixture changed")
     require(verify_current_run(current, observed) == observed, "current-run positive fixture changed")
+
+    mutable_association = dict(check)
+    mutable_association["pull_requests"] = [
+        {"number": 77, "head": {"sha": "c" * 40}, "base": {"sha": "d" * 40}}
+    ]
+    require(
+        verify_check(mutable_association, pr_number=77, base_sha=base, head_sha=head)["runId"] == 123,
+        "proof verifier regained authority dependence on mutable check-run PR association metadata",
+    )
 
     mutations = (
         ({**prior, "run_attempt": 2}, "not contiguous"),

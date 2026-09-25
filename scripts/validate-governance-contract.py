@@ -64,6 +64,14 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'ERROR: malformed or stale PR-native Dependabot admission main-ref evidence.',
         'ERROR: malformed or stale PR-native Dependabot admission head-ref evidence.',
         'ERROR: malformed or incomplete PR-native Dependabot admission check evidence.',
+        'TOTAL="$(jq -r .total_count <<<"$CHECKS")"',
+        'if [ "$TOTAL" = "0" ]; then',
+        'elif [ "$TOTAL" != "1" ]; then',
+        'STATUS="$(jq -r .status <<<"$CHECK")"',
+        'if [ "$STATUS" != "completed" ]; then',
+        "EXTERNAL_ID=\"$(jq -r '.external_id // \"\"' <<<\"$CHECK\")\"",
+        'latest completed proof check id=${CHECK_ID} is not bound to the exact current PR/base/head; waiting for the exact proof.',
+        'if [ "$CONCLUSION" != "success" ]; then',
     ):
         require(
             fragment in block,
@@ -125,7 +133,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         (
             'CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"',
             'validate_admission_check_collection "$CHECKS"',
-            'if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then',
+            'TOTAL="$(jq -r .total_count <<<"$CHECKS")"',
             "check collection",
         ),
     )
@@ -150,6 +158,11 @@ def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
             'validate_admission_check_collection "$CHECKS"',
             'true # displaced admission check schema',
             "check collection schema count changed",
+        ),
+        (
+            'TOTAL="$(jq -r .total_count <<<"$CHECKS")"',
+            'if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then',
+            "evidence schema is missing",
         ),
         (
             'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
@@ -249,7 +262,7 @@ def validate_quality_native_gate(text: str) -> None:
         1,
     )
     projected_quality = projected_quality.replace(
-        'if [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then',
+        'if ! [[ "$EXTERNAL_ID" =~ ^dependabot-delegated-admission:([1-9][0-9]*):([1-9][0-9]*):([0-9a-f]{64}):${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}$ ]]; then',
         'EXTERNAL_ID="dependabot-delegated-admission:${PR_NUMBER}:${BASE_SHA}:${HEAD_SHA}"',
         1,
     )
