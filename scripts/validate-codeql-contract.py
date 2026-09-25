@@ -700,7 +700,7 @@ def validate_autofix_continuation(text: str) -> None:
         exact_run_pos,
     )
     continuation_pos = text.index(
-        '-f event_type=codeql-autofix >/dev/null',
+        'POST_MERGE_CONTROLLER_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches"',
         success_pos,
     )
     require(
@@ -728,8 +728,8 @@ def self_test_autofix_continuation(text: str) -> None:
         ),
         (
             text.replace(
-                '^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$)',
-                '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$)',
+                '[[ "$POST_MERGE_CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+                '[[ "$POST_MERGE_CODEQL_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
                 1,
             ),
             "exact HTTP 204",
@@ -745,6 +745,94 @@ def self_test_autofix_continuation(text: str) -> None:
             )
         else:
             fail(f"Autofix continuation dispatch-status self-test accepted weakened contract: {expected}")
+
+
+def validate_autofix_repository_dispatch_status(text: str) -> None:
+    require(
+        text.count('repos/${TARGET_REPOSITORY}/dispatches') == 4,
+        "CodeQL Autofix repository-dispatch endpoint inventory changed",
+    )
+    specs = (
+        (
+            'UNSUPPORTED_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json)"',
+            'UNSUPPORTED_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$UNSUPPORTED_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$UNSUPPORTED_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+            "CodeQL Autofix unsupported-alert repository dispatch returned unexpected status:",
+            'printf \'ready=false\\n\' >> "$GITHUB_OUTPUT"',
+        ),
+        (
+            'ADMISSION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json)"',
+            'ADMISSION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$ADMISSION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+            "CodeQL Autofix admission repository dispatch returned unexpected status:",
+            "TRUSTED_READY=false",
+        ),
+        (
+            'CONTINUATION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" \\\n            -f event_type=codeql-autofix)"',
+            'CONTINUATION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CONTINUATION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$CONTINUATION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+            "CodeQL Autofix existing-PR repository dispatch returned unexpected status:",
+            "      - name: Verify an existing Autofix PR and perform protected merge",
+        ),
+        (
+            'POST_MERGE_CONTROLLER_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" \\\n            -f event_type=codeql-autofix)"',
+            'POST_MERGE_CONTROLLER_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$POST_MERGE_CONTROLLER_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$POST_MERGE_CONTROLLER_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+            "CodeQL Autofix post-merge repository dispatch returned unexpected status:",
+            None,
+        ),
+    )
+    for response, status, guard, error, downstream in specs:
+        require(text.count(response) == 1, f"CodeQL Autofix repository dispatch response capture changed: {response}")
+        require(text.count(status) == 1, f"CodeQL Autofix repository dispatch status extraction changed: {status}")
+        require(text.count(guard) == 1, f"CodeQL Autofix repository dispatch HTTP 204 guard changed: {guard}")
+        require(error in text, f"CodeQL Autofix repository dispatch fail-closed diagnostic changed: {error}")
+        response_pos = text.index(response)
+        status_pos = text.index(status, response_pos)
+        guard_pos = text.index(guard, status_pos)
+        require(response_pos < status_pos < guard_pos,
+                "CodeQL Autofix repository dispatch must validate status after the mutation response")
+        if downstream is not None:
+            downstream_pos = text.index(downstream, guard_pos)
+            require(guard_pos < downstream_pos,
+                    "CodeQL Autofix repository dispatch status validation moved after downstream continuation")
+
+    for forbidden in (
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json >/dev/null',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null',
+        '-f event_type=codeql-autofix >/dev/null',
+    ):
+        require(forbidden not in text,
+                f"CodeQL Autofix must not discard repository-dispatch responses: {forbidden}")
+
+
+def self_test_autofix_repository_dispatch_status(text: str) -> None:
+    validate_autofix_repository_dispatch_status(text)
+    response_blind = text.replace(
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input unsupported-dispatch.json',
+        1,
+    )
+    try:
+        validate_autofix_repository_dispatch_status(response_blind)
+    except ValueError as exc:
+        require("response capture changed" in str(exc),
+                f"Autofix repository-dispatch response self-test failed for wrong reason: {exc}")
+    else:
+        fail("Autofix repository-dispatch self-test accepted response-blind mutation")
+
+    wrong_status = text.replace(
+        '[[ "$ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+        '[[ "$ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_autofix_repository_dispatch_status(wrong_status)
+    except ValueError as exc:
+        require("HTTP 204 guard changed" in str(exc),
+                f"Autofix repository-dispatch status self-test failed for wrong reason: {exc}")
+    else:
+        fail("Autofix repository-dispatch self-test accepted non-204 success class")
 
 
 def validate_autofix_readiness_evidence(text: str) -> None:
@@ -1024,6 +1112,7 @@ def main() -> int:
         self_test_autofix_constructive_response_schemas(autofix)
         self_test_autofix_read_singleton_evidence(autofix)
         self_test_autofix_continuation(autofix)
+        self_test_autofix_repository_dispatch_status(autofix)
         validate_autofix_readiness_evidence(autofix)
         validate_unsupported_evidence(autofix)
         validate_approval_comment_evidence(autofix)
@@ -1035,7 +1124,7 @@ def main() -> int:
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
             "controller trust/provenance, typed constructive mutation responses, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, unsupported-alert queue fixtures, "
-            "durable deduplicated unsupported evidence, trusted-actor-bound approval-comment evidence, exact HTTP-204-validated post-merge CodeQL dispatch, and exact post-merge CodeQL continuation."
+            "durable deduplicated unsupported evidence, trusted-actor-bound approval-comment evidence, exact HTTP-204-validated repository dispatches and post-merge CodeQL workflow dispatch, and exact post-merge CodeQL continuation."
         )
         return 0
     except (OSError, ValueError) as exc:
