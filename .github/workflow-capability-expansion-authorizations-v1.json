@@ -361,6 +361,13 @@
       "rationale": "Authorize #528's exact trust-boundary registration for scripts/dependabot_* so future Dependabot admission, reconciliation, and controller source is protected before any write-capable automation consumes it. This changes no workflow trigger, permission, semantic capability, or merge authority."
     },
     {
+      "id": "cap-dependabot-candidate-git-read-response-schema-v1",
+      "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
+      "expansionSha256": "ab3620ea3d56949668d2880fe62448a81893cca4d15a0d33a52803942fa71871",
+      "rationale": "Authorize frozen #1040 protected-TCB hardening that validates existing Dependabot candidate Git commit/tree/blob read responses before trusted reconstruction consumes identity or content. Equal base/candidate BOM hashes prove no semantic capability expansion. Endpoints, call counts, triggers, permissions, secrets, mutations, delegated admission, protected checks, merge/CodeQL authority, rulesets, direct-main writes, OIDC and bypasses remain unchanged."
+    },
+    {
       "id": "cap-dependabot-checkset-quiescence",
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
