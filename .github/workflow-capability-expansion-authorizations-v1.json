@@ -827,6 +827,13 @@
       "rationale": "Authorize frozen #1084's exact trusted-source-only hardening of the two existing post-merge CodeQL workflow dispatches in CodeQL Autofix and Dependabot: capture gh api --include responses and require HTTP 204 before continuation. Base/candidate semantic BOMs are identical; endpoints, refs, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority and bypass remain unchanged."
     },
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "442c4fac98bb160dc48d860d6d18362ae956d17ec7296611be79c9cc099d3a17",
+      "id": "cap-security-controller-repository-dispatch-status-v1",
+      "rationale": "Authorize frozen #1089's trusted-source-only hardening of six existing CodeQL Autofix/Dependabot repository-dispatch POSTs: capture gh api --include responses and require HTTP 204 before continuation. Base/candidate semantic BOMs are identical; endpoints, payloads, call counts, permissions, triggers, mutation classes, merge authority, required checks, secrets/OIDC, direct-main authority and bypass remain unchanged."
+    },
+    {
       "baseBomSha256": "41af601f83d22181d72cbcc54f35034d8d79f4af3d7bf326fe307b41c116eb5b",
       "candidateBomSha256": "6afc47443664b9bd28d39b9c6ef795151705010db150b20d22349cbb00c8d464",
       "expansionSha256": "d987a3de4185a163e7ad0a09b74eef30218d2767317dc8b4d7684e7e5c1dbec7",
