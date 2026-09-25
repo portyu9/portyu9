@@ -834,6 +834,69 @@ def validate_controller_approval_comment_contract(text: str) -> None:
     )
 
 
+def validate_release_resolution_parity_contract(text: str) -> None:
+    resolver = "python3 scripts/dependabot_release.py"
+    ls_remote = 'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"'
+    repository_get = 'gh api "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json'
+    release_get = (
+        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json'
+    )
+    repository_arg = "--repository-json release-repository.json"
+    release_arg = "--release-json release.json"
+    output_arg = "--out resolved-release.json"
+    consume_sha = 'RESOLVED_SHA="$(jq -r .sha resolved-release.json)"'
+    verify_sha = 'test "$RESOLVED_SHA" = "$CANDIDATE_SHA"'
+    admit = "python3 scripts/dependabot_controller.py admit"
+    resolved_arg = "--resolved-release resolved-release.json"
+
+    for fragment, expected_count in (
+        (ls_remote, 2),
+        (repository_get, 2),
+        (release_get, 2),
+        (resolver, 2),
+        (repository_arg, 2),
+        (release_arg, 2),
+        (output_arg, 2),
+        (consume_sha, 2),
+        (verify_sha, 2),
+        (resolved_arg, 2),
+    ):
+        require(
+            text.count(fragment) == expected_count,
+            f"Dependabot canonical/delegated release reproof parity changed: {fragment}",
+        )
+
+    for forbidden in (
+        "--resolved-release-sha",
+        "resolved-release-sha.txt",
+    ):
+        require(
+            forbidden not in text,
+            f"Dependabot release reproof retained obsolete interface: {forbidden}",
+        )
+
+    cursor = -1
+    for label in ("canonical controller", "delegated admission"):
+        ls_pos = text.index(ls_remote, cursor + 1)
+        repository_pos = text.index(repository_get, ls_pos)
+        release_pos = text.index(release_get, repository_pos)
+        resolver_pos = text.index(resolver, release_pos)
+        repository_arg_pos = text.index(repository_arg, resolver_pos)
+        release_arg_pos = text.index(release_arg, repository_arg_pos)
+        output_pos = text.index(output_arg, release_arg_pos)
+        consume_pos = text.index(consume_sha, output_pos)
+        verify_pos = text.index(verify_sha, consume_pos)
+        admit_pos = text.index(admit, verify_pos)
+        resolved_arg_pos = text.index(resolved_arg, admit_pos)
+        require(
+            ls_pos < repository_pos < release_pos < resolver_pos
+            < repository_arg_pos < release_arg_pos < output_pos
+            < consume_pos < verify_pos < admit_pos < resolved_arg_pos,
+            f"Dependabot {label} release reproof ordering changed",
+        )
+        cursor = resolved_arg_pos
+
+
 def validate_approval_comment_helper_contract(text: str) -> None:
     for forbidden in (
         "def dump(",
@@ -951,6 +1014,7 @@ def main() -> int:
         validate_controller_collection_contract(controller_text)
         validate_controller_git_read_response_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
+        validate_release_resolution_parity_contract(controller_text)
         validate_controller_merge_success_response_contract(controller_text)
         validate_controller_approval_comment_contract(controller_text)
         validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
@@ -960,7 +1024,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, mirrored canonical/delegated public release reproof, typed terminal merge success evidence, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
