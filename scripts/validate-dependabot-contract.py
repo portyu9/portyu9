@@ -961,7 +961,7 @@ def validate_quality_contract(text: str) -> None:
         'waiting for terminal completion.',
         'if [ "$CONCLUSION" != "success" ]; then',
         'completed with conclusion=${CONCLUSION}.',
-        'completed trusted-main Dependabot admission proof has a malformed or mismatched external identity.',
+        'latest completed proof check id=${CHECK_ID} is not bound to the exact current PR/base/head; waiting for the exact proof.',
         'if [ "$PROOF_RUN_ATTEMPT" -gt 20 ]; then',
         'SUMMARY_CANONICAL="$(jq -cS . <<<"$SUMMARY")"',
         'OBSERVED_SUMMARY_SHA256="$(printf \'%s\' "$SUMMARY_CANONICAL" | sha256sum | cut -d\' \' -f1)"',
@@ -988,13 +988,13 @@ def validate_quality_contract(text: str) -> None:
         )
 
     wait_pos = text.index('if [ "$STATUS" != "completed" ]; then')
-    terminal_pos = text.index('if [ "$CONCLUSION" != "success" ]; then', wait_pos)
-    external_pos = text.index('EXTERNAL_ID="$(jq -r', terminal_pos)
+    external_pos = text.index('EXTERNAL_ID="$(jq -r', wait_pos)
+    terminal_pos = text.index('if [ "$CONCLUSION" != "success" ]; then', external_pos)
     summary_pos = text.index('SUMMARY="$(jq -r', external_pos)
     digest_pos = text.index('OBSERVED_SUMMARY_SHA256=', summary_pos)
     accepted_pos = text.index('Consumed exact trusted-main Dependabot admission digest-bound retry-history proof', digest_pos)
     require(
-        wait_pos < terminal_pos < external_pos < summary_pos < digest_pos < accepted_pos,
+        wait_pos < external_pos < terminal_pos < summary_pos < digest_pos < accepted_pos,
         "Profile Quality delegated admission proof readiness/validation ordering changed",
     )
 
