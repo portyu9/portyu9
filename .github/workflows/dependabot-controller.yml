@@ -427,8 +427,7 @@ jobs:
             '{event_type:"dependabot-admission",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha}}' \
             > admission-dispatch.json
           gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null
-          gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null
-          echo "Reconciled exact derived governance files and dispatched admission plus read-only validation for the new immutable head."
+          echo "Reconciled exact derived governance files and dispatched trusted admission only; Capability admission completion will causally wake validation."
 
       - name: Validate reconciled candidate and inspect protected checks
         if: steps.candidate.outputs.has_target == 'true' && steps.proof.outputs.state == 'reconciled'
