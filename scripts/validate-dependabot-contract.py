@@ -995,54 +995,102 @@ def validate_quality_contract(text: str) -> None:
         "Profile Quality must execute the Dependabot governance validator",
     )
 
-    readiness_fragments = (
-        'TOTAL="$(jq -r .total_count <<<"$CHECKS")"',
-        'if [ "$TOTAL" = "0" ]; then',
-        'trusted-main Dependabot admission proof has not materialized yet; retrying.',
-        'elif [ "$TOTAL" != "1" ]; then',
-        'ambiguous trusted-main Dependabot admission proof collection',
-        'STATUS="$(jq -r .status <<<"$CHECK")"',
-        "CONCLUSION=\"$(jq -r '.conclusion // \"null\"' <<<\"$CHECK\")\"",
-        'if [ "$STATUS" != "completed" ]; then',
-        'waiting for terminal completion.',
-        'if [ "$CONCLUSION" != "success" ]; then',
-        'completed with conclusion=${CONCLUSION}.',
-        'latest completed proof check id=${CHECK_ID} is not bound to the exact current PR/base/head; waiting for the exact proof.',
-        'if [ "$PROOF_RUN_ATTEMPT" -gt 20 ]; then',
-        'SUMMARY_CANONICAL="$(jq -cS . <<<"$SUMMARY")"',
-        'OBSERVED_SUMMARY_SHA256="$(printf \'%s\' "$SUMMARY_CANONICAL" | sha256sum | cut -d\' \' -f1)"',
-        'if [ "$OBSERVED_SUMMARY_SHA256" != "$SUMMARY_SHA256" ]; then',
-        'proof summary digest does not match its external identity.',
-        'malformed or mismatched completed trusted-main Dependabot admission proof check evidence.',
-        '(.details_url | type == "string" and test("^https://github\\\\.com/portyu9/portyu9/runs/[1-9][0-9]*$"))',
-        '(.pull_requests | type == "array" and length <= 100)',
+    start = text.index("\n  dependabot_admission:")
+    end = text.index("\n  governed_bot_review:", start)
+    block = text[start:end]
+
+    required_fragments = (
+        "- name: Prove exact PR-native Dependabot context",
+        '(.maintainer_can_modify | type == "boolean" and . == false)',
+        'validate_dependabot_pr_object "$PR"',
+        'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+        'validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA"',
+        'BASE_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
+        'HEAD_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
+        'validate_contents_file_object "$BASE_GATE" ".github/workflows/profile-quality.yml"',
+        'validate_contents_file_object "$HEAD_GATE" ".github/workflows/profile-quality.yml"',
+        'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
+        "- name: Checkout exact accepted-base trusted admission source",
+        "ref: ${{ github.event.pull_request.base.sha }}",
+        "path: trusted-base",
+        "- name: Checkout exact Dependabot candidate as inert data",
+        "ref: ${{ github.event.pull_request.head.sha }}",
+        "path: candidate-source",
+        "- name: Verify exact accepted-base admission source identity",
+        'test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"',
+        'test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"',
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_capability_admission.py)" = "96107595641a0f9ff0203d9df2b684b1822b0346"',
+        "- name: Fetch exact candidate release evidence",
+        'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"',
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"',
+        "python3 trusted-base/scripts/dependabot_controller.py probe",
+        'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}"',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}"',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}"',
+        "python3 trusted-base/scripts/dependabot_release.py",
+        "- name: Evaluate exact accepted-base semantic admission",
+        "python3 trusted-base/scripts/dependabot_capability_admission.py",
+        "candidate-source",
+        '.decision.authorizationId == "delegated-dependabot-codeql-v1"',
+        'echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."',
     )
-    for fragment in readiness_fragments:
+    for fragment in required_fragments:
         require(
-            fragment in text,
-            f"Profile Quality delegated admission readiness contract is missing: {fragment}",
+            fragment in block,
+            f"Profile Quality PR-native Dependabot admission contract is missing: {fragment}",
         )
 
+    require(
+        "permissions:\n      contents: read\n      pull-requests: read" in block,
+        "Profile Quality PR-native Dependabot admission permissions changed",
+    )
     for forbidden in (
-        'test -n "$SUMMARY"',
-        'test "$(printf \'%s\' "$SUMMARY" | jq -cS . | sha256sum | cut -d\' \' -f1)" = "$SUMMARY_SHA256"',
-        '([.pull_requests[]? | select(.number == $pr and .head.sha == $head and .base.sha == $base)] | length == 1)',
+        "checks: read",
+        "actions: read",
+        "checks: write",
+        "actions: write",
+        "contents: write",
+        "pull-requests: write",
+        "id-token: write",
+        "trusted-capability-admission-proof",
+        'for ATTEMPT in $(seq 1 36)',
+        "trusted-main Dependabot admission proof has not materialized yet",
+        "dependabot-delegated-admission:",
     ):
         require(
-            forbidden not in text,
-            f"Profile Quality delegated admission consumer regained race-prone or mutable evidence dependence: {forbidden}",
+            forbidden not in block,
+            f"Profile Quality PR-native Dependabot admission retained forbidden relay/authority surface: {forbidden}",
         )
 
-    wait_pos = text.index('if [ "$STATUS" != "completed" ]; then')
-    external_pos = text.index('EXTERNAL_ID="$(jq -r', wait_pos)
-    terminal_pos = text.index('if [ "$CONCLUSION" != "success" ]; then', external_pos)
-    summary_pos = text.index('SUMMARY="$(jq -r', external_pos)
-    digest_pos = text.index('OBSERVED_SUMMARY_SHA256=', summary_pos)
-    accepted_pos = text.index('Consumed exact trusted-main Dependabot admission digest-bound retry-history proof', digest_pos)
-    require(
-        wait_pos < external_pos < terminal_pos < summary_pos < digest_pos < accepted_pos,
-        "Profile Quality delegated admission proof readiness/validation ordering changed",
+    ordered = (
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'validate_dependabot_pr_object "$PR"',
+        'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+        'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
+        'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+        'validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA"',
+        'BASE_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
+        'HEAD_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
+        'validate_contents_file_object "$BASE_GATE" ".github/workflows/profile-quality.yml"',
+        'validate_contents_file_object "$HEAD_GATE" ".github/workflows/profile-quality.yml"',
+        'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
+        "- name: Checkout exact accepted-base trusted admission source",
+        "- name: Checkout exact Dependabot candidate as inert data",
+        "- name: Verify exact accepted-base admission source identity",
+        "- name: Fetch exact candidate release evidence",
+        "python3 trusted-base/scripts/dependabot_controller.py probe",
+        'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}"',
+        "python3 trusted-base/scripts/dependabot_release.py",
+        "- name: Evaluate exact accepted-base semantic admission",
+        "python3 trusted-base/scripts/dependabot_capability_admission.py",
+        'echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."',
     )
+    cursor = -1
+    for fragment in ordered:
+        position = block.index(fragment, cursor + 1)
+        require(position > cursor, f"Profile Quality PR-native admission ordering changed: {fragment}")
+        cursor = position
+
 
 def validate_governance(text: str) -> None:
     for phrase in (
