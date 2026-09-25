@@ -636,6 +636,15 @@ def project_item9_sync_with_marker(sync: str) -> str:
             '              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"\n',
             '            RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"\n',
         ),
+        (
+            '                      APPROVAL_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve")"\n'
+            '                      APPROVAL_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_RESPONSE" | tr -d \'\\r\')"\n'
+            '                      [[ "$APPROVAL_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '                        echo "ERROR: Spotlight protected-run approval returned unexpected status: ${APPROVAL_STATUS_LINE}" >&2\n'
+            '                        exit 1\n'
+            '                      }\n',
+            '                      gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve" >/dev/null\n',
+        ),
     )
     for hardened, legacy_api in api_surface_projection:
         core.require(
