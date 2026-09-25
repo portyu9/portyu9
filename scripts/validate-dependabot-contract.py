@@ -835,6 +835,18 @@ def validate_controller_approval_comment_contract(text: str) -> None:
 
 
 def validate_release_resolution_parity_contract(text: str) -> None:
+    delegated_step_binding = (
+        "      - name: Independently re-prove deterministic reconciliation\n"
+        "        env:\n"
+        "          GH_TOKEN: ${{ github.token }}\n"
+        "          PR_NUMBER: ${{ steps.bind.outputs.pr_number }}\n"
+        "          HEAD_SHA: ${{ steps.bind.outputs.head_sha }}\n"
+        "          CANDIDATE_ROOT: ${{ steps.candidate_data.outputs.candidate_root }}\n"
+    )
+    require(
+        text.count(delegated_step_binding) == 1,
+        "delegated Dependabot release reproof must bind exact GitHub token once",
+    )
     resolver = "python3 scripts/dependabot_release.py"
     ls_remote = 'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"'
     repository_get = 'gh api "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json'
