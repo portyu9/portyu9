@@ -767,15 +767,15 @@ def validate_controller_repository_dispatch_status(text: str) -> None:
     )
     specs = (
         (
-            'RECONCILED_ADMISSION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json)"',
-            'RECONCILED_ADMISSION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$RECONCILED_ADMISSION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '\n          RECONCILED_ADMISSION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json)"',
+            '\n          RECONCILED_ADMISSION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$RECONCILED_ADMISSION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
             '[[ "$RECONCILED_ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
             "Dependabot reconciled-head repository dispatch returned unexpected status:",
             'actions/workflows/dependabot-controller.yml/dispatches" -f ref="$HEAD_REF" >/dev/null',
         ),
         (
-            'ADMISSION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json)"',
-            'ADMISSION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$ADMISSION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '\n              ADMISSION_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json)"',
+            '\n              ADMISSION_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$ADMISSION_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
             '[[ "$ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
             "Dependabot exact-head repository dispatch returned unexpected status:",
             'printf \'dispatched=true\\n\' >> "$GITHUB_OUTPUT"',
