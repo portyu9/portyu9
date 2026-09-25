@@ -372,6 +372,9 @@ def validate_controller_pr_response_contract(text: str) -> None:
         'test "$(jq -r .number dependabot-pr-normalized.json)" = "$PR_NUMBER"',
         validation_schema,
     )
+    list_block = validation_block[
+        validation_block.index(list_fetch):validation_fetch
+    ]
     for fragment in (
         list_fetch,
         list_output,
@@ -385,7 +388,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
         list_consume,
     ):
         require(
-            validation_block.count(fragment) == 1,
+            list_block.count(fragment) == 1,
             f"Dependabot validation pull-list boundary anchor changed: {fragment}",
         )
     require(
