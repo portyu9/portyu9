@@ -913,17 +913,19 @@ jobs:
               --expected-body "$APPROVAL_BODY"
           fi
 
+          MERGE_HTTP_RESPONSE="$RUNNER_TEMP/dependabot-merge-http-response.txt"
           MERGE_BODY="$RUNNER_TEMP/dependabot-merge-response.json"
           MERGE_ERR="$RUNNER_TEMP/dependabot-merge-error.txt"
           set +e
-          gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
+          gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
             -f merge_method=merge \
             -f sha="$HEAD_SHA" \
             -f commit_title="Dependabot CodeQL Action release" \
             -f commit_message="Trusted atomic Dependabot CodeQL update merged after exact-head delegated admission and protected checks." \
-            >"$MERGE_BODY" 2>"$MERGE_ERR"
+            >"$MERGE_HTTP_RESPONSE" 2>"$MERGE_ERR"
           MERGE_STATUS=$?
           set -e
+          sed '1,/^[[:space:]]*$/d' "$MERGE_HTTP_RESPONSE" > "$MERGE_BODY"
           MERGE="$(cat "$MERGE_BODY")"
           if [ "$MERGE_STATUS" -ne 0 ]; then
             MERGE_MESSAGE="$(jq -r '.message // empty' "$MERGE_BODY" 2>/dev/null || true)"
@@ -933,6 +935,11 @@ jobs:
             echo "::error::Dependabot merge API request failed: ${MERGE_MESSAGE}"
             exit 1
           fi
+          MERGE_STATUS_LINE="$(head -n 1 "$MERGE_HTTP_RESPONSE" | tr -d '\r')"
+          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
+            echo "ERROR: Dependabot terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2
+            exit 1
+          }
           if [ "$(jq -r '.merged // false' <<<"$MERGE")" != "true" ]; then
             MERGE_MESSAGE="$(jq -r '.message // "GitHub merge API returned merged=false without a message."' <<<"$MERGE")"
             echo "::error::Dependabot merge API rejected exact-head merge: ${MERGE_MESSAGE}"
