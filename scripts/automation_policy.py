@@ -26,6 +26,7 @@ LEASE_WORKFLOWS = automation_leases.LEASE_WORKFLOWS
 RECEIPT_JOBS = ("receipt", "receipt_attest")
 MAC_JOBS = ("authorize", "authorize_attest")
 DECISION_RECEIPT_JOBS = ("decision_receipt", "decision_receipt_attest")
+PROFILE_DISPATCH_PLAN_JOBS = ("dispatch_plan",)
 DECISION_RECEIPT_CONTRACT = ".github/automation-decision-receipts-v1.json"
 ADR_SIGNER_PERMISSIONS = {"contents": "read", "id-token": "write", "attestations": "write"}
 
@@ -80,7 +81,7 @@ def project_legacy_policy(payload: dict[str, Any]) -> dict[str, Any]:
 
         extension_jobs: tuple[str, ...]
         if workflow_id == "profile-stats":
-            extension_jobs = RECEIPT_JOBS + DECISION_RECEIPT_JOBS
+            extension_jobs = RECEIPT_JOBS + PROFILE_DISPATCH_PLAN_JOBS + DECISION_RECEIPT_JOBS
         else:
             extension_jobs = MAC_JOBS + DECISION_RECEIPT_JOBS
         for job_id in extension_jobs:
@@ -172,8 +173,13 @@ def _validate_full_workflow_extensions(policy: dict[str, Any]) -> None:
                 "needs": ["receipt", "lease", "attest"],
                 "permissions": {"contents": "read", "id-token": "write", "attestations": "write"},
             }, "automation policy Profile Stats receipt signer authority changed")
-            require(jobs["dispatch"]["needs"] == ["receipt_attest", "lease", "attest"],
-                    "automation policy dispatch must remain downstream of publication receipt attestation")
+            require(jobs["dispatch_plan"] == {
+                "name": "prepare-spotlight-dispatch-read-only",
+                "needs": ["receipt_attest", "lease", "attest"],
+                "permissions": {"actions": "read", "contents": "read"},
+            }, "automation policy Profile Stats dispatch-plan authority changed")
+            require(jobs["dispatch"]["needs"] == ["dispatch_plan", "receipt_attest", "lease", "attest"],
+                    "automation policy dispatch must remain downstream of read-only planning and publication receipt attestation")
         else:
             require(jobs["authorize"] == {
                 "name": "prepare-merge-authorization-read-only",
@@ -296,13 +302,16 @@ def self_test(policy: dict[str, Any]) -> None:
     lease_write["workflows"]["profile-stats"]["jobs"]["lease"]["permissions"] = {"actions": "write"}
     expect_policy_failure(lease_write, "only Actions-read authority")
 
+    dispatch_plan_write = copy.deepcopy(policy)
+    dispatch_plan_write["workflows"]["profile-stats"]["jobs"]["dispatch_plan"]["permissions"]["actions"] = "write"
+    expect_policy_failure(dispatch_plan_write, "dispatch-plan authority changed")
     receipt_write = copy.deepcopy(policy)
     receipt_write["workflows"]["profile-stats"]["jobs"]["receipt"]["permissions"] = {"contents": "write"}
     expect_policy_failure(receipt_write, "receipt preparer authority changed")
 
     dispatch_bypass = copy.deepcopy(policy)
-    dispatch_bypass["workflows"]["profile-stats"]["jobs"]["dispatch"]["needs"] = ["publish", "lease", "attest"]
-    expect_policy_failure(dispatch_bypass, "downstream of publication receipt attestation")
+    dispatch_bypass["workflows"]["profile-stats"]["jobs"]["dispatch"]["needs"] = ["receipt_attest", "lease", "attest"]
+    expect_policy_failure(dispatch_bypass, "downstream of read-only planning and publication receipt attestation")
 
     adr_preparer_write = copy.deepcopy(policy)
     adr_preparer_write["workflows"]["profile-stats"]["jobs"]["decision_receipt"]["permissions"]["contents"] = "write"
