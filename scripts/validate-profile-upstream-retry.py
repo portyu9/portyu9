@@ -104,16 +104,18 @@ def validate(text: str) -> None:
         "        id: profile_generator_witness_discovery",
         "        continue-on-error: true",
         "GH_TOKEN: ${{ github.token }}",
-        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100"',
-        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}"',
-        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100"',
+        'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100"',
+        'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}"',
+        'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100"',
         "python3 scripts/profile_generator_compatibility_witness.py select-run",
         "python3 scripts/profile_generator_compatibility_witness.py select-artifact",
     ):
         require(fragment in discovery,
                 f"Profile generator compatibility witness discovery contract changed: {fragment}")
-    require(discovery.count("gh api ") == 3,
-            "Profile generator compatibility witness discovery API surface changed")
+    require(discovery.count("python3 scripts/automation_github_read.py") == 3,
+            "Profile generator compatibility witness discovery must use exactly three governed GitHub read call sites")
+    require("gh api " not in discovery,
+            "Profile generator compatibility witness discovery regained direct gh api read transport")
 
     require("        id: profile_generator_witness_download\n" in download,
             "Profile generator compatibility witness download step id changed")
@@ -300,6 +302,16 @@ def self_test(text: str) -> None:
                      'READY_DIR: ${{ steps.stats_primary.outputs.ready-dir }}', 1),
         "canonical successful-output selector",
     )
+    profile_discovery_transport_drift = text.replace(
+        'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100"',
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100"',
+        1,
+    )
+    expect_failure(
+        profile_discovery_transport_drift,
+        "must use exactly three governed GitHub read call sites",
+    )
+
     injected_poll = text.replace(
         "      - name: Generate actual pinned upstream Signal Field\n",
         "      - name: Poll Search first\n        run: gh api search/issues\n\n"
