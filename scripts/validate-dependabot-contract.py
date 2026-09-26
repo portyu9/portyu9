@@ -1266,6 +1266,10 @@ def self_test_controller_merge_success_response_contract(text: str) -> None:
 def validate_controller_approval_comment_contract(text: str) -> None:
     get_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
     post_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments'
+    post_mutation = 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"'
+    post_status = 'APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    post_guard = '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    post_extract = 'sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/dependabot-approval-comment-created.json"'
     require(
         text.count(get_endpoint) == 1,
         "Dependabot automation-approval comment read endpoint changed",
@@ -1282,6 +1286,14 @@ def validate_controller_approval_comment_contract(text: str) -> None:
         text.count("python3 scripts/automation_approval_comment.py created") == 1,
         "Dependabot must validate exactly one created automation-approval comment response",
     )
+    require(text.count(post_mutation) == 1,
+            "Dependabot automation-approval comment mutation capture changed")
+    require(text.count(post_status) == 1 and text.count(post_guard) == 1,
+            "Dependabot automation-approval comment mutation must require exact HTTP 201")
+    require("Dependabot automation-approval comment returned unexpected status:" in text,
+            "Dependabot automation-approval comment status failure must be explicit")
+    require(text.count(post_extract) == 1,
+            "Dependabot automation-approval comment response body extraction changed")
     for fragment in (
         "APPROVAL_COMMENT_EXISTS=false",
         "if python3 scripts/automation_approval_comment.py evidence",
@@ -1330,10 +1342,13 @@ def validate_controller_approval_comment_contract(text: str) -> None:
         'test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"',
         absent_guard_pos,
     )
-    create_pos = text.index(post_endpoint, decision_pos)
+    create_pos = text.index(post_mutation, decision_pos)
+    create_status_pos = text.index(post_status)
+    create_guard_pos = text.index(post_guard)
+    create_extract_pos = text.index(post_extract)
     created_validate_pos = text.index(
         "python3 scripts/automation_approval_comment.py created",
-        create_pos,
+        create_extract_pos,
     )
     merge_pos = text.index(
         'repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge',
@@ -1341,9 +1356,57 @@ def validate_controller_approval_comment_contract(text: str) -> None:
     )
     require(
         fetch_pos < validate_pos < present_pos < status_pos < absent_guard_pos
-        < decision_pos < create_pos < created_validate_pos < merge_pos,
-        "Dependabot automation-approval comment evidence moved out of fail-closed reviewed order",
+        < decision_pos < create_pos < create_status_pos < create_guard_pos
+        < create_extract_pos < created_validate_pos < merge_pos,
+        "Dependabot automation-approval comment evidence/status moved out of fail-closed reviewed order",
     )
+
+
+
+def self_test_controller_approval_comment_contract(text: str) -> None:
+    validate_controller_approval_comment_contract(text)
+    mutations = (
+        (
+            text.replace(
+                'gh api --include --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"',
+                'gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"',
+                1,
+            ),
+            "mutation capture changed",
+        ),
+        (
+            text.replace(
+                '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "exact HTTP 201",
+        ),
+        (
+            text.replace(
+                '            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+                '              echo "ERROR: Dependabot automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2\n'
+                '              exit 1\n'
+                '            }\n'
+                '            sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/dependabot-approval-comment-created.json"\n',
+                '            sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/dependabot-approval-comment-created.json"\n'
+                '            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+                '              echo "ERROR: Dependabot automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2\n'
+                '              exit 1\n'
+                '            }\n',
+                1,
+            ),
+            "moved out of fail-closed reviewed order",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_controller_approval_comment_contract(mutated)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"Dependabot approval-comment status self-test failed for wrong reason: {exc}")
+        else:
+            fail(f"Dependabot approval-comment status self-test accepted weakened contract: {expected}")
 
 
 def validate_release_resolution_parity_contract(text: str) -> None:
@@ -1646,7 +1709,7 @@ def main() -> int:
         self_test_controller_workflow_dispatch_status(controller_text)
         validate_release_resolution_parity_contract(controller_text)
         self_test_controller_merge_success_response_contract(controller_text)
-        validate_controller_approval_comment_contract(controller_text)
+        self_test_controller_approval_comment_contract(controller_text)
         validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
         validate_quality_contract(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
@@ -1654,7 +1717,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor exact HTTP-201-validated automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
