@@ -673,6 +673,13 @@
       "rationale": "Authorize frozen #897 governed-review liveness hardening. Workflow Capability is unchanged. Spotlight moves the existing reviewer dispatch after trusted admission and before whole-workflow convergence, once per pass. The native evaluator adds only bounded read-only GitHub GET retries for classified transient failures. Auth, malformed, schema, policy, veto, and all mutation failures remain terminal. No new permission, trigger, endpoint class, merge/ruleset authority, check reduction, or bypass."
     },
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "e37bb35703d67ddef566310db5763315855354d41fd18f89cdc5d99307d62bd0",
+      "id": "cap-governed-reviewer-request-response-status-v1",
+      "rationale": "Authorize frozen #1111 hardening of the three existing governed reviewer-request POSTs in Dependabot, CodeQL Autofix, and Spotlight: capture gh api --include and require HTTP 201 before the existing typed response validation. Semantic BOMs are unchanged; endpoints, reviewer payload, call counts, permissions, triggers, mutation classes, review/merge authority, required checks, secrets/OIDC, direct-main authority, rulesets, and bypass remain unchanged."
+    },
+    {
       "baseBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
       "candidateBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
       "expansionSha256": "5552c484daa2a1faf522cfc7d0899d37c66affcc3679b4a36bd9fc329d2dc3b3",
