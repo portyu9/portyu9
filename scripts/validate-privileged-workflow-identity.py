@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v105"
+VERSION = "governed-workflow-byte-identity-v106"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "09176420becea053799334de00c7dcb1b7dfdc2f",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "8775d23dc9cb064fc4e6b17439db4edfa7ec6831",
+    ".github/workflows/spotlight-link-sync.yml": "3fb2361661c3448f6c07ee7d81a1dc607af18b09",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -2822,16 +2822,22 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
 
 def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
     get_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
-    post_endpoint = 'gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"'
+    post_endpoint = 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"'
+    post_status = 'APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    post_guard = '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    post_extract = 'sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > approval-comment.json'
     evidence_validator = "python3 scripts/codeql_autofix_controller.py approval-comment-evidence"
     created_validator = "python3 scripts/codeql_autofix_controller.py approval-comment-created"
 
     require(
         autofix.count(get_endpoint) == 1
         and autofix.count(post_endpoint) == 1
+        and autofix.count(post_status) == 1
+        and autofix.count(post_guard) == 1
+        and autofix.count(post_extract) == 1
         and autofix.count(evidence_validator) == 1
         and autofix.count(created_validator) == 1,
-        "CodeQL Autofix approval-comment evidence topology changed",
+        "CodeQL Autofix approval-comment evidence/status topology changed",
     )
     for forbidden in (
         'COMMENTS="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100")"',
@@ -2853,7 +2859,10 @@ def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
         validate_pos,
     )
     post_pos = autofix.index(post_endpoint, consume_pos)
-    created_pos = autofix.index(created_validator, post_pos)
+    post_status_pos = autofix.index(post_status)
+    post_guard_pos = autofix.index(post_guard)
+    post_extract_pos = autofix.index(post_extract)
+    created_pos = autofix.index(created_validator, post_extract_pos)
     actor_pos = autofix.index(
         'test "$(jq -r .actor approval-comment-normalized.json)" = "github-actions[bot]"',
         created_pos,
@@ -2864,8 +2873,9 @@ def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
     )
     require(
         marker_pos < get_pos < validate_pos < consume_pos < post_pos
+        < post_status_pos < post_guard_pos < post_extract_pos
         < created_pos < actor_pos < merge_pos,
-        "CodeQL Autofix approval-comment evidence must be typed before mutation/merge",
+        "CodeQL Autofix approval-comment evidence/status must be typed before mutation/merge",
     )
     for fragment in (
         '--comments-file approval-comment-pages.json',
@@ -3211,6 +3221,11 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         '.login == "github-actions[bot]" and (.body | contains($marker))',
         'error("duplicate trusted Spotlight automation-approval comments exist")',
         'exists:(($matches | length) == 1)',
+        'APPROVAL_COMMENT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"',
+        'APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"',
+        '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        'Spotlight automation-approval comment returned unexpected status:',
+        'sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/spotlight-approval-comment-created.json"',
         'error("created Spotlight automation-approval comment actor mismatch")',
         'test "$(jq -r .actor "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json")" = "github-actions[bot]"',
         'error("Spotlight protected workflow definition must be an object")',

@@ -773,9 +773,14 @@ jobs:
           test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"
           if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then
             printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: the exact CodeQL Autofix head \`${ADMITTED_HEAD_SHA}\` passed trusted admission, protected checks, GHAS CodeQL, review-thread closure, and an exact-base/head marker-bound APPROVED review by @portyu9. No manual workflow approval is required. Continuing with the governed expected-head merge."
-            gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-              -f body="$APPROVAL_BODY" \
-              > approval-comment.json
+            APPROVAL_COMMENT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -f body="$APPROVAL_BODY")"
+            APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: CodeQL Autofix automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > approval-comment.json
             python3 scripts/codeql_autofix_controller.py approval-comment-created \
               --comment-file approval-comment.json \
               --pr-number "$PR_NUMBER" \
