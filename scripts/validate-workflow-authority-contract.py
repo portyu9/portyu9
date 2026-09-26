@@ -691,6 +691,46 @@ def project_item9_sync_with_marker(sync: str) -> str:
             '            RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"\n',
         ),
         (
+            '            BLOB_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"\n'
+            '            BLOB_STATUS_LINE="$(head -n 1 <<<"$BLOB_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight Git blob creation returned unexpected status: ${BLOB_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            BLOB="$(sed \'1,/^[[:space:]]*$/d\' <<<"$BLOB_HTTP_RESPONSE")"\n',
+            '            BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"\n',
+        ),
+        (
+            '            TREE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"\n'
+            '            TREE_STATUS_LINE="$(head -n 1 <<<"$TREE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight Git tree creation returned unexpected status: ${TREE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            TREE="$(sed \'1,/^[[:space:]]*$/d\' <<<"$TREE_HTTP_RESPONSE")"\n',
+            '            TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"\n',
+        ),
+        (
+            '            CANDIDATE_COMMIT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"\n'
+            '            CANDIDATE_COMMIT_STATUS_LINE="$(head -n 1 <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight Git commit creation returned unexpected status: ${CANDIDATE_COMMIT_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            CANDIDATE_COMMIT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"\n',
+            '            CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"\n',
+        ),
+        (
+            '            CREATED_REF_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"\n'
+            '            CREATED_REF_STATUS_LINE="$(head -n 1 <<<"$CREATED_REF_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight Git ref creation returned unexpected status: ${CREATED_REF_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            CREATED_REF="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CREATED_REF_HTTP_RESPONSE")"\n',
+            '            CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"\n',
+        ),
+        (
             SPOTLIGHT_APPROVAL_COMMENT_STATUS,
             SPOTLIGHT_APPROVAL_COMMENT_LEGACY,
         ),
