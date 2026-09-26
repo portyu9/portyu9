@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v108"
+VERSION = "governed-workflow-byte-identity-v109"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "09176420becea053799334de00c7dcb1b7dfdc2f",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "f0a4f21670607cc7b7a55529cbe6527f07e83a2b",
+    ".github/workflows/spotlight-link-sync.yml": "549c42e51635c0bfafc95255fb31ed663f0efd8e",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -4608,8 +4608,8 @@ def self_test() -> None:
         raise ValueError("Spotlight dispatch-response self-test accepted a response-blind admission wake")
 
     weakened_spotlight_status = spotlight.replace(
-        '^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$)',
-        '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$)',
+        '[[ "$CAPABILITY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+        '[[ "$CAPABILITY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
         1,
     )
     try:
