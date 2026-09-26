@@ -540,6 +540,50 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 def validate_item10_authority_with_typed_protected_runs(sync: str) -> None:
     projected = project_spotlight_terminal_merge_status_to_legacy(sync)
+    lifecycle_overlays = (
+        (
+            '              CLOSED_PR_HTTP_RESPONSE="$(gh api --include --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"\n'
+            '              CLOSED_PR_STATUS_LINE="$(head -n 1 <<<"$CLOSED_PR_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '              [[ "$CLOSED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+            '                echo "ERROR: Spotlight stale PR close returned unexpected status: ${CLOSED_PR_STATUS_LINE}" >&2\n'
+            '                exit 1\n'
+            '              }\n'
+            '              CLOSED_PR="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CLOSED_PR_HTTP_RESPONSE")"\n',
+            '              CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"\n',
+        ),
+        (
+            '            STALE_REF_DELETE_HTTP_RESPONSE="$(gh api --include --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}")"\n'
+            '            STALE_REF_DELETE_STATUS_LINE="$(head -n 1 <<<"$STALE_REF_DELETE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$STALE_REF_DELETE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight stale candidate ref deletion returned unexpected status: ${STALE_REF_DELETE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n',
+            '            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null\n',
+        ),
+        (
+            '            PR_CREATE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json)"\n'
+            '            PR_CREATE_STATUS_LINE="$(head -n 1 <<<"$PR_CREATE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$PR_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight proposal PR creation returned unexpected status: ${PR_CREATE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            sed \'1,/^[[:space:]]*$/d\' <<<"$PR_CREATE_HTTP_RESPONSE" > pr-response.json\n',
+            '            gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json\n',
+        ),
+        (
+            '            TERMINAL_REF_DELETE_HTTP_RESPONSE="$(gh api --include --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}")"\n'
+            '            TERMINAL_REF_DELETE_STATUS_LINE="$(head -n 1 <<<"$TERMINAL_REF_DELETE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$TERMINAL_REF_DELETE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight terminal candidate ref deletion returned unexpected status: ${TERMINAL_REF_DELETE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n',
+            '            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null\n',
+        ),
+    )
+    for hardened, legacy in lifecycle_overlays:
+        core.require(projected.count(hardened) == 1,
+                     "Spotlight item-10 lifecycle-status projection anchor changed")
+        projected = projected.replace(hardened, legacy, 1)
     ORIGINAL_VALIDATE_ITEM10_AUTHORITY(
         project_spotlight_terminal_protected_runs_to_legacy(projected)
     )
