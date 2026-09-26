@@ -100,6 +100,11 @@ def validate(text: str) -> None:
     primary = step_block(integration, names[3], names[4])
     selector = step_block(integration, names[4], names[5])
 
+    require(discovery.count("python3 scripts/automation_github_read.py") == 3,
+            "Profile generator compatibility witness discovery must use exactly three governed GitHub read call sites")
+    require("gh api " not in discovery,
+            "Profile generator compatibility witness discovery regained direct gh api read transport")
+
     for fragment in (
         "        id: profile_generator_witness_discovery",
         "        continue-on-error: true",
@@ -112,11 +117,6 @@ def validate(text: str) -> None:
     ):
         require(fragment in discovery,
                 f"Profile generator compatibility witness discovery contract changed: {fragment}")
-    require(discovery.count("python3 scripts/automation_github_read.py") == 3,
-            "Profile generator compatibility witness discovery must use exactly three governed GitHub read call sites")
-    require("gh api " not in discovery,
-            "Profile generator compatibility witness discovery regained direct gh api read transport")
-
     require("        id: profile_generator_witness_download\n" in download,
             "Profile generator compatibility witness download step id changed")
     require("        if: steps.profile_generator_witness_discovery.outcome == 'success'\n" in download,
