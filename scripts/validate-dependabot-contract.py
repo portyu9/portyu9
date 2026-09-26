@@ -1154,7 +1154,8 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
     )
     require(
         text.index('if [ "$MERGE_STATUS" -ne 0 ]; then') < text.index(merge_status)
-        < text.index(merge_guard) < text.index("if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then"),
+        < text.index(merge_guard) < text.index(merge_extract)
+        < text.index("if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then"),
         "Dependabot terminal merge must preserve API-failure diagnostics then prove HTTP 200 before success-body consumption",
     )
 
@@ -1169,10 +1170,10 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
 
     ordered = (
         merge_fetch,
-        merge_extract,
         'if [ "$MERGE_STATUS" -ne 0 ]; then',
         merge_status,
         merge_guard,
+        merge_extract,
         "if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then",
         'python3 scripts/dependabot_controller.py merge-success-response',
         'MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"',
