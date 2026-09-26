@@ -618,15 +618,12 @@ def self_test_reconciler_admin_status_evidence(text: str) -> None:
         '          }\n'
         '          sed \'1,/^[[:space:]]*$/d\' "$INSTALLATION_TOKEN_HTTP_RESPONSE" > installation-token.json\n'
     )
-    token_reordered = token_guard_block.replace(
-        '          [[ "$INSTALLATION_TOKEN_STATUS_LINE"',
+    token_reordered = (
         '          sed \'1,/^[[:space:]]*$/d\' "$INSTALLATION_TOKEN_HTTP_RESPONSE" > installation-token.json\n'
-        '          [[ "$INSTALLATION_TOKEN_STATUS_LINE"',
-        1,
-    ).replace(
-        '          sed \'1,/^[[:space:]]*$/d\' "$INSTALLATION_TOKEN_HTTP_RESPONSE" > installation-token.json\n',
-        "",
-        1,
+        '          [[ "$INSTALLATION_TOKEN_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '            echo "ERROR: Ruleset Administration App token creation returned unexpected status: ${INSTALLATION_TOKEN_STATUS_LINE}" >&2\n'
+        '            exit 1\n'
+        '          }\n'
     )
     reordered = text.replace(token_guard_block, token_reordered, 1)
     try:
@@ -638,6 +635,31 @@ def self_test_reconciler_admin_status_evidence(text: str) -> None:
         )
     else:
         raise ValueError("Ruleset admin HTTP-status self-test accepted token body before status proof")
+
+    put_guard_block = (
+        '            [[ "$RULESET_PUT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Protect Main ruleset update returned unexpected status: ${RULESET_PUT_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+        '            sed \'1,/^[[:space:]]*$/d\' "$RULESET_PUT_HTTP_RESPONSE" > ruleset-put-response.json\n'
+    )
+    put_reordered = (
+        '            sed \'1,/^[[:space:]]*$/d\' "$RULESET_PUT_HTTP_RESPONSE" > ruleset-put-response.json\n'
+        '            [[ "$RULESET_PUT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Protect Main ruleset update returned unexpected status: ${RULESET_PUT_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+    )
+    reordered = text.replace(put_guard_block, put_reordered, 1)
+    try:
+        validate_reconciler_admin_status_evidence(reordered)
+    except ValueError as exc:
+        require(
+            "successful PUT must prove HTTP 200 before body extraction" in str(exc),
+            f"Ruleset admin PUT-order self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Ruleset admin HTTP-status self-test accepted PUT body before status proof")
 
 
 def validate_api_url(url: str) -> str:
