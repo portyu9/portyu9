@@ -315,8 +315,9 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     try:
-        self_test()
         if args.self_test:
+            require(args.endpoint is None, "--self-test does not accept an endpoint")
+            self_test()
             print(
                 "Governed GitHub read client self-test passed: authenticated repository-scoped "
                 "GET only; 3 attempts/20s timeout; 1s/2s backoff; capped Retry-After; "
