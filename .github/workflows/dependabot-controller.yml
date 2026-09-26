@@ -925,9 +925,8 @@ jobs:
             >"$MERGE_HTTP_RESPONSE" 2>"$MERGE_ERR"
           MERGE_STATUS=$?
           set -e
-          sed '1,/^[[:space:]]*$/d' "$MERGE_HTTP_RESPONSE" > "$MERGE_BODY"
-          MERGE="$(cat "$MERGE_BODY")"
           if [ "$MERGE_STATUS" -ne 0 ]; then
+            sed '1,/^[[:space:]]*$/d' "$MERGE_HTTP_RESPONSE" > "$MERGE_BODY"
             MERGE_MESSAGE="$(jq -r '.message // empty' "$MERGE_BODY" 2>/dev/null || true)"
             if [ -z "$MERGE_MESSAGE" ]; then
               MERGE_MESSAGE="$(tr '\n' ' ' < "$MERGE_ERR")"
@@ -940,6 +939,8 @@ jobs:
             echo "ERROR: Dependabot terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2
             exit 1
           }
+          sed '1,/^[[:space:]]*$/d' "$MERGE_HTTP_RESPONSE" > "$MERGE_BODY"
+          MERGE="$(cat "$MERGE_BODY")"
           if [ "$(jq -r '.merged // false' <<<"$MERGE")" != "true" ]; then
             MERGE_MESSAGE="$(jq -r '.message // "GitHub merge API returned merged=false without a message."' <<<"$MERGE")"
             echo "::error::Dependabot merge API rejected exact-head merge: ${MERGE_MESSAGE}"
