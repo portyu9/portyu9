@@ -73,7 +73,7 @@
       "mutationRetry": false,
       "endpointScope": "repository-relative",
       "maxResponseBytes": 8000000,
-      "rationale": "Canonical authenticated repository-scoped GET transport for governed automation. Each retry issues a fresh GET and accepts only strict UTF-8 duplicate-key-safe JSON; authorization, not-found, malformed payload, schema/policy failures and every mutation remain terminal."
+      "rationale": "Canonical authenticated repository-scoped read-only GET transport for governed automation. Each retry issues a fresh GET and accepts only strict UTF-8 duplicate-key-safe JSON; authorization, not-found, malformed payload, schema/policy failures and every mutation remain terminal."
     }
   ],
   "terminalOperations": [
