@@ -63,6 +63,22 @@ LEGACY_MERGE_MUTATION = (
     '          RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
 )
 
+APPROVAL_COMMENT_HTTP_STATUS_BLOCK = (
+    '            APPROVAL_COMMENT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \\\n'
+    '              -f body="$APPROVAL_BODY")"\n'
+    '            APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+    '            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+    '              echo "ERROR: Spotlight automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2\n'
+    '              exit 1\n'
+    '            }\n'
+    '            sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/spotlight-approval-comment-created.json"\n'
+)
+LEGACY_APPROVAL_COMMENT_MUTATION = (
+    '            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \\\n'
+    '              -f body="$APPROVAL_BODY" \\\n'
+    '              > "$RUNNER_TEMP/spotlight-approval-comment-created.json"\n'
+)
+
 LEGACY_PROFILE_DISPATCH = '''  dispatch:
     name: dispatch-spotlight-link-sync
     needs: [receipt_attest, lease, attest]
@@ -250,6 +266,14 @@ def project_merge_http_status_to_legacy(sync: str) -> str:
     require(LEGACY_MERGE_MUTATION not in sync,
             "Spotlight terminal merge-status projection found both hardened and legacy mutations")
     return sync.replace(MERGE_HTTP_STATUS_BLOCK, LEGACY_MERGE_MUTATION, 1)
+
+
+def project_approval_comment_http_status_to_legacy(sync: str) -> str:
+    require(sync.count(APPROVAL_COMMENT_HTTP_STATUS_BLOCK) == 1,
+            "Spotlight approval-comment status projection cannot isolate exact HTTP wrapper")
+    require(LEGACY_APPROVAL_COMMENT_MUTATION not in sync,
+            "Spotlight approval-comment status projection found both hardened and legacy mutations")
+    return sync.replace(APPROVAL_COMMENT_HTTP_STATUS_BLOCK, LEGACY_APPROVAL_COMMENT_MUTATION, 1)
 
 
 def project_merge_success_response_to_legacy(sync: str) -> str:
@@ -900,6 +924,7 @@ def project_item9(sync: str) -> str:
     require(legacy_age_guard not in sync,
             "Spotlight item-9 projection found both same-base and legacy age guards")
     sync = sync.replace(current_age_guard, legacy_age_guard, 1)
+    sync = project_approval_comment_http_status_to_legacy(sync)
     sync = project_merge_http_status_to_legacy(sync)
     sync = project_merge_success_response_to_legacy(sync)
     sync = project_strict_pull_review_schema_to_legacy(sync)
@@ -1070,6 +1095,10 @@ def validate_approval_comment_evidence_overlay(sync: str) -> None:
     approve = core.job_block(sync, "approve", "authorize")
     get_endpoint = 'repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
     post_endpoint = 'repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments'
+    post_mutation = 'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"'
+    post_status = 'APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    post_guard = '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    post_extract = 'sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/spotlight-approval-comment-created.json"'
     require(
         approve.count(get_endpoint) == 1,
         "Spotlight automation-approval comment read endpoint changed",
@@ -1082,6 +1111,14 @@ def validate_approval_comment_evidence_overlay(sync: str) -> None:
         "python3 scripts/automation_approval_comment.py" not in approve,
         "Spotlight privileged approval job must not acquire runner-resident Python authority",
     )
+    require(approve.count(post_mutation) == 1,
+            "Spotlight automation-approval comment mutation capture changed")
+    require(approve.count(post_status) == 1 and approve.count(post_guard) == 1,
+            "Spotlight automation-approval comment mutation must require exact HTTP 201")
+    require("Spotlight automation-approval comment returned unexpected status:" in approve,
+            "Spotlight automation-approval comment status failure must be explicit")
+    require(approve.count(post_extract) == 1,
+            "Spotlight automation-approval comment response body extraction changed")
 
     required = (
         'error("Spotlight automation-approval comment pages must be a bounded slurped page array")',
@@ -1140,10 +1177,13 @@ def validate_approval_comment_evidence_overlay(sync: str) -> None:
         'APPROVAL_COMMENT_EXISTS="$(jq -r .exists "$RUNNER_TEMP/spotlight-approval-comment-evidence.json")"',
         normalized_pos,
     )
-    create_pos = approve.index(post_endpoint, consume_pos)
+    create_pos = approve.index(post_mutation, consume_pos)
+    create_status_pos = approve.index(post_status)
+    create_guard_pos = approve.index(post_guard)
+    create_extract_pos = approve.index(post_extract)
     created_validate_pos = approve.index(
         'error("created Spotlight automation-approval comment must be an object")',
-        create_pos,
+        create_extract_pos,
     )
     created_normalized_pos = approve.index(
         '> "$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json"',
@@ -1155,8 +1195,9 @@ def validate_approval_comment_evidence_overlay(sync: str) -> None:
     )
     require(
         fetch_pos < validate_pos < normalized_pos < consume_pos
-        < create_pos < created_validate_pos < created_normalized_pos < created_consume_pos,
-        "Spotlight automation-approval comment evidence moved out of typed reviewed order",
+        < create_pos < create_status_pos < create_guard_pos < create_extract_pos
+        < created_validate_pos < created_normalized_pos < created_consume_pos,
+        "Spotlight automation-approval comment evidence/status moved out of typed reviewed order",
     )
 
 
@@ -1176,6 +1217,51 @@ def self_test_approval_comment_evidence_overlay(sync: str) -> None:
         )
     else:
         raise ValueError("Spotlight approval-comment contract accepted weakened trusted-match cardinality")
+
+    for weakened, expected in (
+        (
+            sync.replace(
+                'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"',
+                'gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"',
+                1,
+            ),
+            "mutation capture changed",
+        ),
+        (
+            sync.replace(
+                '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "exact HTTP 201",
+        ),
+        (
+            sync.replace(
+                APPROVAL_COMMENT_HTTP_STATUS_BLOCK,
+                APPROVAL_COMMENT_HTTP_STATUS_BLOCK.replace(
+                    '            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+                    '              echo "ERROR: Spotlight automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2\n'
+                    '              exit 1\n'
+                    '            }\n'
+                    '            sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/spotlight-approval-comment-created.json"\n',
+                    '            sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/spotlight-approval-comment-created.json"\n'
+                    '            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+                    '              echo "ERROR: Spotlight automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2\n'
+                    '              exit 1\n'
+                    '            }\n',
+                ),
+                1,
+            ),
+            "moved out of typed reviewed order",
+        ),
+    ):
+        try:
+            validate_approval_comment_evidence_overlay(weakened)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"Spotlight approval-comment status self-test failed for wrong reason: {exc}")
+        else:
+            raise ValueError(f"Spotlight approval-comment status self-test accepted weakened contract: {expected}")
 
 
 def validate_native_governed_bot_review_overlay(sync: str) -> None:
@@ -1323,7 +1409,7 @@ def main() -> int:
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
             "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state plus the separate trusted capability-admission proof, "
             "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance, "
-            "trusted-actor automation-approval comment evidence, the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
+            "trusted-actor exact HTTP-201-validated automation-approval comment evidence, the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
             "response plus typed terminal PR/file/commit evidence before current-main acceptance, candidate cleanup, or decision-receipt evidence."
         )
         return 0
