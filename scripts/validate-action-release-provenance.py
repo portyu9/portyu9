@@ -191,7 +191,6 @@ def fetch_public_api(
     opener: Callable[..., Any] | None = None,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> str:
-    open_request = opener if opener is not None else urllib.request.build_opener(NoRedirect()).open
     for attempt in range(PUBLIC_API_ATTEMPTS):
         request = urllib.request.Request(
             url,
@@ -199,7 +198,14 @@ def fetch_public_api(
             headers=public_api_headers(os.environ.get("GH_TOKEN")),
         )
         try:
-            with open_request(request, timeout=PUBLIC_API_TIMEOUT_SECONDS) as response:
+            if opener is None:
+                response_context = urllib.request.build_opener(NoRedirect()).open(
+                    request,
+                    timeout=PUBLIC_API_TIMEOUT_SECONDS,
+                )
+            else:
+                response_context = opener(request, timeout=PUBLIC_API_TIMEOUT_SECONDS)
+            with response_context as response:
                 require(response.status == 200, f"{label}: unexpected HTTP status {response.status}")
                 require(response.geturl() == url, f"{label}: public API request was redirected")
                 raw = response.read(PUBLIC_API_MAX_BYTES + 1)
