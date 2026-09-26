@@ -785,6 +785,13 @@
       "rationale": "Authorize frozen #1161's exact Profile Generator Compatibility Witness migration: route its two existing current/prior-attempt GitHub run GETs through the accepted canonical authenticated read-only retry client, bind helper/retry-policy bytes into the witness closure, and reject direct gh-api transport. No new endpoint, call count, permission, mutation, secret/OIDC, merge authority, required-check reduction, direct-main write, ruleset change, mutation retry, or bypass is added."
     },
     {
+      "baseBomSha256": "40fd5a6821802adc9ce1364b9da28a69159ed8a23aab2a57dc142fc104fbb8bb",
+      "candidateBomSha256": "777d972509bc55cecd154eca0013d01dfaddfc18be4c5f6cb5d899f3545a9286",
+      "expansionSha256": "88fb8278f8790bc7e1e202bedef70380b4ec35fc1fd6fbcf6f1668bf7865a90e",
+      "id": "cap-profile-quality-dependabot-admission-canonical-read-v1",
+      "rationale": "Authorize frozen #1173's exact PR-native Dependabot admission read hardening: route seven existing authenticated singleton GitHub GETs (PR, main/head refs, base/head Profile Quality contents, dependency repository and exact release) through the already-accepted bounded canonical GET-only retry client while preserving the one paginated pull-files collection, every evidence schema/consumption boundary, endpoint and call count, permissions, release identity, semantic admission and mutation non-retry guarantees. No trigger, permission, secret/OIDC, endpoint, mutation, merge authority, required-check reduction, direct-main write, ruleset change or bypass is added."
+    },
+    {
       "baseBomSha256": "064955edce467b646ff1f3404fb11d42a87d6f856dafb5d1dfa54e447f74eb31",
       "candidateBomSha256": "40fd5a6821802adc9ce1364b9da28a69159ed8a23aab2a57dc142fc104fbb8bb",
       "expansionSha256": "8780843ca5182884f16e8830f7428c134a60110661468c154eb0df1fc5890113",
