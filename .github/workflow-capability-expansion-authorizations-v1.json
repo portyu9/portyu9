@@ -771,6 +771,13 @@
       "rationale": "Authorize frozen #1121 hardening of the existing Ruleset Administration App token POST and Protect Main PUT: require HTTP 201 before token-body consumption and HTTP 200 on nominal PUT success while preserving nonzero-write exact-successor readback. Semantic BOMs, endpoints, call counts, permissions, App scope, transition, retries, direct-main authority, OIDC/attestation, rulesets, required checks, and bypass remain unchanged."
     },
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "461d9c7f56967b9d2c851f2b7e1272f00b60e4515daa951b72f6bba74eabda4f",
+      "id": "cap-ruleset-admin-mutation-response-status-v2",
+      "rationale": "Authorize exact synced #1121 after accepted #1122 changed unrelated protected-TCB bytes: the existing Ruleset Administration App token POST and Protect Main PUT still require HTTP 201 before token-body consumption and HTTP 200 on nominal PUT success, preserving nonzero-write exact-successor readback. No endpoint, call count, permission, App scope, transition, retry, direct-main authority, OIDC/attestation, ruleset, required-check, or bypass change is added."
+    },
+    {
       "baseBomSha256": "42994f014e4744279c9276eaa1c828c1aca8d75dd43525c782d0d52cb1ef2480",
       "candidateBomSha256": "42994f014e4744279c9276eaa1c828c1aca8d75dd43525c782d0d52cb1ef2480",
       "expansionSha256": "b7c2b68a358062badb9e06a941907f7f2da2621246c98f8de293d66f87697410",
