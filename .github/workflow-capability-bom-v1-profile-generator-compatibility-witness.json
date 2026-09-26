@@ -141,8 +141,8 @@
           ],
           "paths": [
             ".github/action-lock.json",
-            ".github/attestation/profile-generator-compatibility-witness-v1.schema.json",
             ".github/automation-retry-policy-v1.json",
+            ".github/attestation/profile-generator-compatibility-witness-v1.schema.json",
             ".github/workflows/profile-generator-compatibility-witness.yml",
             ".github/workflows/profile-quality.yml",
             "scripts/action_identity_lock.py",
