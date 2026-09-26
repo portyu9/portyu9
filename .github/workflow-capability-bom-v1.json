@@ -165,55 +165,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${DEPENDENCY_REPOSITORY}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Fetch exact candidate release evidence"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Fetch exact candidate release evidence"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Prove exact PR-native Dependabot context"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Prove exact PR-native Dependabot context"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Prove exact PR-native Dependabot context"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Prove exact PR-native Dependabot context"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Prove exact PR-native Dependabot context"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
               "method": "GET",
               "mutating": false,
