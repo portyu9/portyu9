@@ -1149,12 +1149,16 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         require(fragment in text, f"Dependabot terminal merge response contract is missing: {fragment}")
 
     require(
+        text.count(merge_extract) == 2,
+        "Dependabot terminal merge must isolate one diagnostic body and one post-HTTP-200 success body",
+    )
+    require(
         'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"' not in text,
         "Dependabot terminal merge must not discard HTTP transport status",
     )
     require(
         text.index('if [ "$MERGE_STATUS" -ne 0 ]; then') < text.index(merge_status)
-        < text.index(merge_guard) < text.index(merge_extract)
+        < text.index(merge_guard) < text.index(merge_extract, text.index(merge_guard))
         < text.index("if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then"),
         "Dependabot terminal merge must preserve API-failure diagnostics then prove HTTP 200 before success-body consumption",
     )
