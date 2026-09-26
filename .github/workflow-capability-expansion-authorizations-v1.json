@@ -1,6 +1,13 @@
 {
   "authorizations": [
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "a8151e43bc823a6dcd57c1e6ee6b502c3d07ffa7e130a875bdf2ad755a06baba",
+      "id": "cap-action-provenance-transient-read-retry-v1",
+      "rationale": "Authorize frozen #1140's exact protected retry-policy validator change for authenticated Action provenance GET retry classification. Semantic Workflow Capability is unchanged; only scripts/automation_retry_policy.py protected-source bytes change. No permission, trigger, endpoint, mutation, secret/OIDC, required-check reduction, direct-main write, ruleset change, bypass, or mutation replay is added."
+    },
+    {
       "baseBomSha256": "027d28fa7b8baeddea2988bf70ca0abe54d940f054d75a4ddec19e7b345a8555",
       "candidateBomSha256": "486e75eb6243bd538ca68aae366ada59f1bd89905d8673f2328c93c76a74be04",
       "expansionSha256": "f0080dc5cfc28afa48487d91320f8f805bd55ef06f05f87ae3e9f862eaefd2a2",
