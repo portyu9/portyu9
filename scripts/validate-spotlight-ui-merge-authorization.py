@@ -60,7 +60,7 @@ MERGE_HTTP_STATUS_BLOCK = (
     '          RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"\n'
 )
 LEGACY_MERGE_MUTATION = (
-    '          RESULT="$(gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
+    '          RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
 )
 
 LEGACY_PROFILE_DISPATCH = '''  dispatch:
@@ -1186,7 +1186,7 @@ def validate_native_governed_bot_review_overlay(sync: str) -> None:
     gate = merge.index(check_read)
     roots = merge.index('Spotlight terminal stage: pre-merge-roots-verified')
     mutation = merge.index(
-        'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
+        'gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
     )
     require(review < gate < roots < mutation,
             "Spotlight native governed-bot gate and root reproof must run after review/veto proof and before merge mutation")
