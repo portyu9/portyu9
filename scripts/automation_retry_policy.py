@@ -408,6 +408,19 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in producer_step,
             "Action provenance witness producer governed reads lost run-scoped token binding")
 
+    compatibility_witness = texts[".github/workflows/profile-generator-compatibility-witness.yml"]
+    compatibility_producer_step = named_step(
+        compatibility_witness,
+        "prepare",
+        "Bind exact trusted run identity and issuance",
+    )
+    require(compatibility_producer_step.count("python3 scripts/automation_github_read.py") == 2,
+            "Profile generator compatibility witness producer must use exactly two governed GitHub read call sites")
+    require("gh api " not in compatibility_producer_step,
+            "Profile generator compatibility witness producer regained direct gh api read transport")
+    require("GH_TOKEN: ${{ github.token }}" in compatibility_producer_step,
+            "Profile generator compatibility witness producer governed reads lost run-scoped token binding")
+
 
 def validate(policy: dict[str, Any], texts: dict[str, str]) -> None:
     require(isinstance(policy, dict) and set(policy) == {
@@ -447,6 +460,20 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         1,
     )
     expect_failure(copy.deepcopy(policy), profile_drift, "must fail its job directly")
+
+    compatibility_transport_drift = dict(texts)
+    compatibility_transport_drift[".github/workflows/profile-generator-compatibility-witness.yml"] = (
+        compatibility_transport_drift[".github/workflows/profile-generator-compatibility-witness.yml"].replace(
+            "python3 scripts/automation_github_read.py",
+            "gh api",
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        compatibility_transport_drift,
+        "must use exactly two governed GitHub read call sites",
+    )
 
     loop_drift = dict(texts)
     loop_drift[".github/workflows/bot-pr-user-approval.yml"] = loop_drift[
