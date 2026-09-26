@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v102"
+VERSION = "governed-workflow-byte-identity-v103"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "d3ef550b934c3eb0d638d6bdd51efe963d92b0d9",
+    ".github/workflows/bot-pr-user-approval.yml": "09176420becea053799334de00c7dcb1b7dfdc2f",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
     ".github/workflows/spotlight-link-sync.yml": "f0ce209b2bb44583c66430588faa004ad52da13b",
@@ -2068,7 +2068,7 @@ def validate_bot_review_single_object_evidence_schema(bot_review: str) -> None:
         "Bot PR reviewer must schema-validate exactly both privileged single-PR reads",
     )
 
-    review_mutation = 'REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST'
+    review_mutation = 'REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST'
     review_schema = '(.id | ((type == "number") and . == floor and . > 0)) and'
     review_success = 'Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER}'
     mutation_pos = bot_review.index(review_mutation)
@@ -3103,7 +3103,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     continue_pos = bot_review.index('              continue', recovery_wake_pos)
     require(marker_approved_pos < recovery_wake_pos < continue_pos,
             "Bot PR existing-marker recovery wake must occur before the reviewer skips the already-approved candidate")
-    review_mutation_pos = bot_review.index('REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST')
+    review_mutation_pos = bot_review.index('REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST')
     post_mutation_wake_pos = bot_review.rindex('wake_governed_lane_after_review "$LANE" "$HEAD_REF"')
     require(review_mutation_pos < post_mutation_wake_pos,
             "Bot PR new-review controller wake must occur only after the real-user exact-base/head approval mutation")
@@ -3992,6 +3992,62 @@ def validate_bot_review_dispatch_status_contract(bot_review: str) -> None:
 
 
 
+def validate_bot_review_creation_status_contract(bot_review: str) -> None:
+    response = (
+        'REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST'
+        '               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"'
+        '               --input review-request.json)"'
+    )
+    status = 'REVIEW_STATUS_LINE="$(head -n 1 <<<"$REVIEW_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    guard = '[[ "$REVIEW_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {'
+    body = 'REVIEW_RESPONSE="$(sed \'1,/^[[:space:]]*$/d\' <<<"$REVIEW_HTTP_RESPONSE")"'
+    body_guard = 'test "$REVIEW_RESPONSE" != "$REVIEW_HTTP_RESPONSE"'
+    schema = '(.id | ((type == "number") and . == floor and . > 0)) and'
+    success = (
+        'Submitted exact-base/head marker-bound portyu9 approval for governed bot PR '
+        '#${PR_NUMBER} at ${HEAD_SHA}.'
+    )
+
+    require(
+        bot_review.count(response) == 1,
+        "Bot PR reviewer review creation must capture exactly one --include response",
+    )
+    require(
+        bot_review.count(status) == 1,
+        "Bot PR reviewer review creation status extraction changed",
+    )
+    require(
+        bot_review.count(guard) == 1,
+        "Bot PR reviewer review creation must require exact HTTP 200",
+    )
+    require(
+        "governed bot review creation returned unexpected status:" in bot_review,
+        "Bot PR reviewer review creation status failure must be explicit and fail closed",
+    )
+    require(
+        bot_review.count(body) == 1 and bot_review.count(body_guard) == 1,
+        "Bot PR reviewer review creation body extraction changed",
+    )
+    require(
+        'REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST'
+        not in bot_review,
+        "Bot PR reviewer must not consume a response-blind review creation mutation",
+    )
+
+    response_pos = bot_review.index(response)
+    status_pos = bot_review.index(status, response_pos)
+    guard_pos = bot_review.index(guard, response_pos)
+    body_pos = bot_review.index(body, response_pos)
+    body_guard_pos = bot_review.index(body_guard, response_pos)
+    schema_pos = bot_review.index(schema, response_pos)
+    success_pos = bot_review.index(success, response_pos)
+    require(
+        response_pos < status_pos < guard_pos < body_pos < body_guard_pos < schema_pos < success_pos,
+        "Bot PR reviewer must prove HTTP 200 and extract the body before validating/accepting the review response",
+    )
+
+
+
 def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     capability_dispatch = (
         'CAPABILITY_DISPATCH_RESPONSE="$(gh api --include --method POST '
@@ -4109,6 +4165,7 @@ def self_test() -> None:
     bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
     validate_bot_review_identity_ref_evidence_schema(bot_review)
     validate_bot_review_dispatch_status_contract(bot_review)
+    validate_bot_review_creation_status_contract(bot_review)
 
     missing_include = bot_review.replace(
         'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"',
@@ -4139,6 +4196,63 @@ def self_test() -> None:
         )
     else:
         raise ValueError("bot-review dispatch-status self-test accepted a non-204 success class")
+
+
+    review_missing_include = bot_review.replace(
+        'gh api --include --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"',
+        'gh api --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"',
+        1,
+    )
+    try:
+        validate_bot_review_creation_status_contract(review_missing_include)
+    except ValueError as exc:
+        require(
+            "--include response" in str(exc),
+            f"bot-review creation-status response self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("bot-review creation-status self-test accepted a response-blind review mutation")
+
+    review_wrong_status = bot_review.replace(
+        '[[ "$REVIEW_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        '[[ "$REVIEW_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_bot_review_creation_status_contract(review_wrong_status)
+    except ValueError as exc:
+        require(
+            "exact HTTP 200" in str(exc),
+            f"bot-review creation-status code self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("bot-review creation-status self-test accepted a non-200 success class")
+
+    review_status = 'REVIEW_STATUS_LINE="$(head -n 1 <<<"$REVIEW_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    review_guard = '[[ "$REVIEW_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {'
+    review_error = '              echo "ERROR: governed bot review creation returned unexpected status: ${REVIEW_STATUS_LINE}" >&2\n'
+    review_exit = '              exit 1\n            }\n'
+    review_body = '            REVIEW_RESPONSE="$(sed \'1,/^[[:space:]]*$/d\' <<<"$REVIEW_HTTP_RESPONSE")"\n'
+    review_body_guard = '            test "$REVIEW_RESPONSE" != "$REVIEW_HTTP_RESPONSE"\n'
+    status_block = (
+        "            " + review_status + "\n"
+        + "            " + review_guard + "\n"
+        + review_error
+        + review_exit
+    )
+    body_block = review_body + review_body_guard
+    ordered_block = status_block + body_block
+    require(ordered_block in bot_review, "bot-review review-status fixture anchor changed")
+    review_reordered = bot_review.replace(ordered_block, body_block + status_block, 1)
+    try:
+        validate_bot_review_creation_status_contract(review_reordered)
+    except ValueError as exc:
+        require(
+            "prove HTTP 200 and extract the body" in str(exc),
+            f"bot-review creation-status ordering self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("bot-review creation-status self-test accepted body extraction before status proof")
 
     initial_schema = 'validate_git_ref_object "$MAIN_REF_RESPONSE" "main"'
     initial_consume = 'MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"'
@@ -4717,6 +4831,7 @@ def main() -> int:
 
         bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
         validate_bot_review_dispatch_status_contract(bot_review)
+        validate_bot_review_creation_status_contract(bot_review)
         dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
         autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
@@ -4753,7 +4868,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering and exact workflow-dispatch HTTP 204 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-204 admission/reviewer dispatch status validation and exact-201 protected-run approval validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering, exact workflow-dispatch HTTP 204 validation, and exact review-creation HTTP 200 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-204 admission/reviewer dispatch status validation and exact-201 protected-run approval validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
