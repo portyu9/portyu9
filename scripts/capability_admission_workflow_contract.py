@@ -5,11 +5,11 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-import pr_closing_directive_guard
+import automation_pr_closing_directive_guard
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-CLOSING_GUARD = ROOT / "scripts/pr_closing_directive_guard.py"
+CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
 EXPECTED_GIT_BLOB = "39839753deae3073ea7b8c3b7891c3eec9338212"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
@@ -131,7 +131,7 @@ def validate_text(text: str) -> None:
         require(binding in text, f"trusted capability admission identity binding changed: {binding}")
 
     closing_guard = (
-        "python3 scripts/pr_closing_directive_guard.py \\\n"
+        "python3 scripts/automation_pr_closing_directive_guard.py \\\n"
         "                --event \"$GITHUB_EVENT_PATH\" \\\n"
         "                --repository \"$TARGET_REPOSITORY\""
     )
@@ -998,7 +998,7 @@ def expect_validator_reorder_failure(
 
 
 def self_test() -> None:
-    pr_closing_directive_guard.self_test()
+    automation_pr_closing_directive_guard.self_test()
     text = WORKFLOW.read_text(encoding="utf-8")
     validate_text(text)
     expect_failure(text, "checks: write", "contents: write", "permission set changed", count=2)
