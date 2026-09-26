@@ -300,7 +300,7 @@ def self_test(policy: dict[str, Any]) -> None:
 
     lease_write = copy.deepcopy(policy)
     lease_write["workflows"]["profile-stats"]["jobs"]["lease"]["permissions"] = {"actions": "write"}
-    expect_policy_failure(lease_write, "only Actions-read authority")
+    expect_policy_failure(lease_write, "exact reviewed read authority")
 
     dispatch_plan_write = copy.deepcopy(policy)
     dispatch_plan_write["workflows"]["profile-stats"]["jobs"]["dispatch_plan"]["permissions"]["actions"] = "write"
