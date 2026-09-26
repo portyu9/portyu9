@@ -79,7 +79,7 @@ jobs:
           [[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
 
-          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"
+          RUN="$(python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"
           jq -e \
             --argjson run_id "$GITHUB_RUN_ID" \
             --argjson run_attempt "$GITHUB_RUN_ATTEMPT" \
@@ -130,7 +130,8 @@ jobs:
             if [ "$WITNESS_HISTORY_ATTEMPT" -ge "$GITHUB_RUN_ATTEMPT" ]; then
               break
             fi
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${WITNESS_HISTORY_ATTEMPT}" \
+            python3 scripts/automation_github_read.py \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${WITNESS_HISTORY_ATTEMPT}" \
               | jq -c '.' >> witness-prior-attempts.ndjson
             sleep 1
           done
