@@ -1156,11 +1156,17 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"' not in text,
         "Dependabot terminal merge must not discard HTTP transport status",
     )
+    nonzero_pos = text.find('if [ "$MERGE_STATUS" -ne 0 ]; then')
+    status_pos = text.find(merge_status, nonzero_pos + 1)
+    guard_pos = text.find(merge_guard, status_pos + 1)
+    success_extract_pos = text.find(merge_extract, guard_pos + 1)
+    merged_check_pos = text.find(
+        "if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then",
+        success_extract_pos + 1,
+    )
     require(
-        text.index('if [ "$MERGE_STATUS" -ne 0 ]; then') < text.index(merge_status)
-        < text.index(merge_guard) < text.index(merge_extract, text.index(merge_guard))
-        < text.index("if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then"),
-        "Dependabot terminal merge must preserve API-failure diagnostics then prove HTTP 200 before success-body consumption",
+        -1 < nonzero_pos < status_pos < guard_pos < success_extract_pos < merged_check_pos,
+        "Dependabot terminal merge success validation moved out of reviewed order",
     )
 
     require(
