@@ -105,6 +105,22 @@ SPOTLIGHT_MERGE_HTTP_STATUS = (
 SPOTLIGHT_MERGE_LEGACY = (
     '          RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
 )
+
+SPOTLIGHT_APPROVAL_COMMENT_STATUS = (
+    '            APPROVAL_COMMENT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \\\n'
+    '              -f body="$APPROVAL_BODY")"\n'
+    '            APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+    '            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+    '              echo "ERROR: Spotlight automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2\n'
+    '              exit 1\n'
+    '            }\n'
+    '            sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/spotlight-approval-comment-created.json"\n'
+)
+SPOTLIGHT_APPROVAL_COMMENT_LEGACY = (
+    '            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \\\n'
+    '              -f body="$APPROVAL_BODY" \\\n'
+    '              > "$RUNNER_TEMP/spotlight-approval-comment-created.json"\n'
+)
 SPOTLIGHT_REVIEWER_STEWARDSHIP = "          REQUESTED=\"$(jq '[.requested_reviewers[]? | select(.login == \"portyu9\")] | length' <<<\"$PR\")\"\n          [[ \"$REQUESTED\" =~ ^[0-9]+$ ]]\n          if [ \"$REQUESTED\" = \"0\" ]; then\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers\" \\\n              -f 'reviewers[]=portyu9' > requested-reviewer.json\n            test \"$(jq '[.requested_reviewers[]? | select(.login == \"portyu9\")] | length' requested-reviewer.json)\" = \"1\"\n          fi\n"
 SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n      pull-requests: write\n"
 LEGACY_SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n"
@@ -673,6 +689,10 @@ def project_item9_sync_with_marker(sync: str) -> str:
             '            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \\\n'
             '              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"\n',
             '            RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"\n',
+        ),
+        (
+            SPOTLIGHT_APPROVAL_COMMENT_STATUS,
+            SPOTLIGHT_APPROVAL_COMMENT_LEGACY,
         ),
         (
             '                      APPROVAL_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve")"\n'

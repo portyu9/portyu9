@@ -1198,7 +1198,10 @@ def validate_unsupported_evidence(text: str) -> None:
 
 def validate_approval_comment_evidence(text: str) -> None:
     get_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
-    post_endpoint = 'gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"'
+    post_endpoint = 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"'
+    post_status = 'APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    post_guard = '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    post_extract = 'sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > approval-comment.json'
     evidence_validator = "python3 scripts/codeql_autofix_controller.py approval-comment-evidence"
     created_validator = "python3 scripts/codeql_autofix_controller.py approval-comment-created"
 
@@ -1206,6 +1209,12 @@ def validate_approval_comment_evidence(text: str) -> None:
             "CodeQL Autofix approval-comment read endpoint changed")
     require(text.count(post_endpoint) == 1,
             "CodeQL Autofix approval-comment mutation endpoint changed")
+    require(text.count(post_status) == 1 and text.count(post_guard) == 1,
+            "CodeQL Autofix approval-comment mutation must require exact HTTP 201")
+    require('CodeQL Autofix automation-approval comment returned unexpected status:' in text,
+            "CodeQL Autofix approval-comment status failure must be explicit")
+    require(text.count(post_extract) == 1,
+            "CodeQL Autofix approval-comment response body extraction changed")
     require(text.count(evidence_validator) == 1,
             "CodeQL Autofix must type exactly one approval-comment page collection")
     require(text.count(created_validator) == 1,
@@ -1235,7 +1244,10 @@ def validate_approval_comment_evidence(text: str) -> None:
         consume_pos,
     )
     post_pos = text.index(post_endpoint, branch_pos)
-    created_pos = text.index(created_validator, post_pos)
+    post_status_pos = text.index(post_status)
+    post_guard_pos = text.index(post_guard)
+    post_extract_pos = text.index(post_extract)
+    created_pos = text.index(created_validator, post_extract_pos)
     actor_pos = text.index(
         'test "$(jq -r .actor approval-comment-normalized.json)" = "github-actions[bot]"',
         created_pos,
@@ -1246,8 +1258,8 @@ def validate_approval_comment_evidence(text: str) -> None:
     )
     require(
         marker_pos < get_pos < validate_pos < consume_pos < branch_pos < post_pos
-        < created_pos < actor_pos < merge_pos,
-        "CodeQL Autofix approval-comment fetch/validate/create ordering changed",
+        < post_status_pos < post_guard_pos < post_extract_pos < created_pos < actor_pos < merge_pos,
+        "CodeQL Autofix approval-comment fetch/validate/status/create ordering changed",
     )
     for fragment in (
         '--comments-file approval-comment-pages.json',
@@ -1264,6 +1276,53 @@ def validate_approval_comment_evidence(text: str) -> None:
             fragment in text,
             f"CodeQL Autofix approval-comment contract is missing: {fragment}",
         )
+
+
+
+def self_test_approval_comment_evidence(text: str) -> None:
+    validate_approval_comment_evidence(text)
+    mutations = (
+        (
+            text.replace(
+                'gh api --include --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"',
+                'gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"',
+                1,
+            ),
+            "mutation endpoint changed",
+        ),
+        (
+            text.replace(
+                '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "exact HTTP 201",
+        ),
+        (
+            text.replace(
+                '            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+                '              echo "ERROR: CodeQL Autofix automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2\n'
+                '              exit 1\n'
+                '            }\n'
+                '            sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > approval-comment.json\n',
+                '            sed \'1,/^[[:space:]]*$/d\' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > approval-comment.json\n'
+                '            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+                '              echo "ERROR: CodeQL Autofix automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2\n'
+                '              exit 1\n'
+                '            }\n',
+                1,
+            ),
+            "ordering changed",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_approval_comment_evidence(mutated)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"CodeQL Autofix approval-comment status self-test failed for wrong reason: {exc}")
+        else:
+            fail(f"CodeQL Autofix approval-comment status self-test accepted weakened contract: {expected}")
 
 
 def validate_quality(text: str) -> None:
@@ -1353,7 +1412,7 @@ def main() -> int:
         self_test_autofix_repository_dispatch_status(autofix)
         validate_autofix_readiness_evidence(autofix)
         validate_unsupported_evidence(autofix)
-        validate_approval_comment_evidence(autofix)
+        self_test_approval_comment_evidence(autofix)
         validate_quality(QUALITY.read_text(encoding="utf-8"))
         validate_governance(GOVERNANCE.read_text(encoding="utf-8"))
 
@@ -1362,7 +1421,7 @@ def main() -> int:
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
             "controller trust/provenance, typed constructive mutation responses with exact HTTP-201-validated reviewer requests, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, exact HTTP-201-validated protected-run approvals, unsupported-alert queue fixtures, "
-            "durable deduplicated unsupported evidence, trusted-actor-bound approval-comment evidence, exact HTTP-204-validated repository dispatches and post-merge CodeQL workflow dispatch, and exact post-merge CodeQL continuation."
+            "durable deduplicated unsupported evidence, trusted-actor-bound exact HTTP-201-validated approval-comment evidence, exact HTTP-204-validated repository dispatches and post-merge CodeQL workflow dispatch, and exact post-merge CodeQL continuation."
         )
         return 0
     except (OSError, ValueError) as exc:

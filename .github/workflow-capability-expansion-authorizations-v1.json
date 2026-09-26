@@ -666,6 +666,13 @@
       "rationale": "Authorize frozen #966 governed approval-comment evidence hardening across Dependabot and Spotlight: existing PR issue-comment reads are typed before marker dedupe; only github-actions[bot] can satisfy the marker, duplicate trusted markers fail closed, and created responses bind exact PR/comment URLs, body and actor. Semantic BOM and existing endpoints/counts, permissions, review/merge authority, required checks, rulesets and bypass behavior remain unchanged."
     },
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "9011f17deb2211d98d1cc574e8c51ac4dff8fdfd115b8eb27a1e9de427781122",
+      "id": "cap-governed-approval-comment-response-status-v1",
+      "rationale": "Authorize frozen #1122 hardening of the existing CodeQL Autofix, Dependabot, and Spotlight automation-approval issue-comment POSTs: capture gh api --include and require HTTP 201 before consuming the already-typed trusted-actor response. Semantic BOMs, endpoints, bodies, call counts, permissions, triggers, mutation classes, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets, retries, and bypass remain unchanged."
+    },
+    {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "f7c4b2d408c729ef2cad41d9f7539b0b1231402095512d3a5a1c129a3128a107",
@@ -755,6 +762,13 @@
       "expansionSha256": "5d6431769d38cf2addf390f12a9ab5aaa23b42f3550d5de8a8ad178fceb9a1b2",
       "id": "cap-review-thread-graphql-schema-hardening",
       "rationale": "Authorize #659's exact review-thread GraphQL schema hardening. The governed bot reviewer and CodeQL Autofix admission keep the same endpoints and authority but now reject GraphQL errors, incomplete pagination, malformed/non-object nodes, and non-boolean isResolved/hasNextPage primitives before review or merge authorization can proceed. The composite BOM is unchanged; no trigger, permission, secret, OIDC authority, mutation, protected-check reduction, merge capability, or bypass is added."
+    },
+    {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "7aa6cdbd260ba91d217b4e988cd9d0545dc13c4a1a44d3bfd22716f23b11cef1",
+      "id": "cap-ruleset-admin-mutation-response-status-v1",
+      "rationale": "Authorize frozen #1121 hardening of the existing Ruleset Administration App token POST and Protect Main PUT: require HTTP 201 before token-body consumption and HTTP 200 on nominal PUT success while preserving nonzero-write exact-successor readback. Semantic BOMs, endpoints, call counts, permissions, App scope, transition, retries, direct-main authority, OIDC/attestation, rulesets, required checks, and bypass remain unchanged."
     },
     {
       "baseBomSha256": "42994f014e4744279c9276eaa1c828c1aca8d75dd43525c782d0d52cb1ef2480",
