@@ -184,6 +184,196 @@ def validate_codeql(text: str) -> None:
             "CodeQL results must retain a stable per-language SARIF category")
 
 
+def validate_autofix_constructive_http_statuses(text: str) -> None:
+    request_call = (
+        'gh api --include --method POST \\\n'
+        '            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"'
+    )
+    request_status = (
+        'AUTOFIX_CREATE_STATUS_LINE="$(head -n 1 "$AUTOFIX_CREATE_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    )
+    request_guard = (
+        '[[ "$AUTOFIX_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+(200|202)([[:space:]]|$) ]] || {'
+    )
+    request_extract = (
+        'sed \'1,/^[[:space:]]*$/d\' "$AUTOFIX_CREATE_HTTP_RESPONSE" > autofix-create.json'
+    )
+    for fragment, label in (
+        (request_call, "Autofix request mutation capture"),
+        (request_status, "Autofix request status extraction"),
+        (request_guard, "Autofix request HTTP 200/202 guard"),
+        (request_extract, "Autofix request body extraction"),
+    ):
+        require(text.count(fragment) == 1,
+                f"CodeQL Autofix constructive HTTP status {label} changed")
+    require(
+        'gh api -X POST \\\n            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"' not in text,
+        "CodeQL Autofix request must not discard HTTP transport status",
+    )
+    request_call_pos = text.index(request_call)
+    request_status_pos = text.index(request_status, request_call_pos)
+    request_guard_pos = text.index(request_guard, request_status_pos)
+    request_extract_pos = text.index(request_extract, request_guard_pos)
+    status_read_pos = text.index(
+        '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix" \\\n'
+        "            > autofix-status.json",
+        request_extract_pos,
+    )
+    require(
+        request_call_pos < request_status_pos < request_guard_pos < request_extract_pos < status_read_pos,
+        "CodeQL Autofix request HTTP success proof must precede body extraction and status polling",
+    )
+    require(
+        'test "$ERROR_TEXT" = "gh: Alert is not supported by autofix. (HTTP 422)"' in text,
+        "CodeQL Autofix must preserve the exact unsupported HTTP-422 classification",
+    )
+
+    specs = (
+        (
+            'UNSUPPORTED_EVIDENCE_HTTP_RESPONSE="$RUNNER_TEMP/codeql-autofix-unsupported-evidence-http-response.txt"',
+            'gh api --include --method POST \\\n                "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments"',
+            'UNSUPPORTED_EVIDENCE_STATUS_LINE="$(head -n 1 "$UNSUPPORTED_EVIDENCE_HTTP_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$UNSUPPORTED_EVIDENCE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            'sed \'1,/^[[:space:]]*$/d\' "$UNSUPPORTED_EVIDENCE_HTTP_RESPONSE" > unsupported-evidence-created.json',
+            "python3 scripts/codeql_autofix_controller.py unsupported-evidence-created",
+            "unsupported-evidence comment",
+        ),
+        (
+            'CREATED_REF_HTTP_RESPONSE="$RUNNER_TEMP/codeql-autofix-created-ref-http-response.txt"',
+            'gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/refs"',
+            'CREATED_REF_STATUS_LINE="$(head -n 1 "$CREATED_REF_HTTP_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            'sed \'1,/^[[:space:]]*$/d\' "$CREATED_REF_HTTP_RESPONSE" > created-ref.json',
+            "python3 scripts/codeql_autofix_controller.py created-ref-response",
+            "candidate ref",
+        ),
+        (
+            'AUTOFIX_COMMIT_HTTP_RESPONSE="$RUNNER_TEMP/codeql-autofix-commit-http-response.txt"',
+            'gh api --include --method POST \\\n            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"',
+            'AUTOFIX_COMMIT_STATUS_LINE="$(head -n 1 "$AUTOFIX_COMMIT_HTTP_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$AUTOFIX_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            'sed \'1,/^[[:space:]]*$/d\' "$AUTOFIX_COMMIT_HTTP_RESPONSE" > autofix-commit.json',
+            "python3 scripts/codeql_autofix_controller.py commit",
+            "Autofix commit",
+        ),
+        (
+            'CREATED_PR_HTTP_RESPONSE="$RUNNER_TEMP/codeql-autofix-created-pr-http-response.txt"',
+            'gh api --include --method POST "repos/${TARGET_REPOSITORY}/pulls"',
+            'CREATED_PR_STATUS_LINE="$(head -n 1 "$CREATED_PR_HTTP_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$CREATED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            'sed \'1,/^[[:space:]]*$/d\' "$CREATED_PR_HTTP_RESPONSE" > created-pr.json',
+            "python3 scripts/codeql_autofix_controller.py receipt",
+            "remediation PR",
+        ),
+    )
+    for response_var, mutation, status, guard, extract, validator, label in specs:
+        for fragment, fragment_label in (
+            (response_var, "response capture"),
+            (mutation, "mutation capture"),
+            (status, "status extraction"),
+            (guard, "exact HTTP 201 guard"),
+            (extract, "body extraction"),
+            (validator, "typed downstream validator"),
+        ):
+            require(text.count(fragment) >= 1,
+                    f"CodeQL Autofix {label} {fragment_label} changed")
+        response_pos = text.index(response_var)
+        mutation_pos = text.index(mutation, response_pos)
+        status_pos = text.index(status, mutation_pos)
+        guard_pos = text.index(guard, mutation_pos)
+        extract_pos = text.index(extract, mutation_pos)
+        validator_pos = text.index(validator, mutation_pos)
+        require(
+            response_pos < mutation_pos < status_pos < guard_pos < extract_pos < validator_pos,
+            f"CodeQL Autofix {label} HTTP 201 proof must precede body extraction and typed consumption",
+        )
+
+    for forbidden in (
+        'gh api --method POST \\\n                "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments"',
+        'gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs"',
+        'gh api -X POST \\\n            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"',
+        'gh api -X POST "repos/${TARGET_REPOSITORY}/pulls"',
+    ):
+        require(forbidden not in text,
+                f"CodeQL Autofix constructive path regained response-blind mutation: {forbidden}")
+
+
+def self_test_autofix_constructive_http_statuses(good: str) -> None:
+    validate_autofix_constructive_http_statuses(good)
+    mutations = (
+        (
+            good.replace(
+                'gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/refs"',
+                'gh api --method POST "repos/${TARGET_REPOSITORY}/git/refs"',
+                1,
+            ),
+            "candidate ref mutation capture changed",
+        ),
+        (
+            good.replace(
+                '[[ "$AUTOFIX_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                '[[ "$AUTOFIX_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "Autofix commit exact HTTP 201 guard changed",
+        ),
+        (
+            good.replace(
+                '[[ "$AUTOFIX_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+(200|202)([[:space:]]|$) ]] || {',
+                '[[ "$AUTOFIX_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "Autofix request HTTP 200/202 guard changed",
+        ),
+        (
+            good.replace(
+                '[[ "$CREATED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                '[[ "$CREATED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "remediation PR exact HTTP 201 guard changed",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_autofix_constructive_http_statuses(mutated)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"Autofix constructive-status self-test failed for the wrong reason: {exc}")
+        else:
+            fail(f"Autofix constructive-status self-test accepted forbidden mutation: {expected}")
+
+    commit_guard_block = (
+        '          [[ "$AUTOFIX_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '            echo "ERROR: CodeQL Autofix commit creation returned unexpected status: ${AUTOFIX_COMMIT_STATUS_LINE}" >&2\n'
+        '            exit 1\n'
+        '          }\n'
+        '          sed \'1,/^[[:space:]]*$/d\' "$AUTOFIX_COMMIT_HTTP_RESPONSE" > autofix-commit.json\n'
+    )
+    reordered = commit_guard_block.replace(
+        '          [[ "$AUTOFIX_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '            echo "ERROR: CodeQL Autofix commit creation returned unexpected status: ${AUTOFIX_COMMIT_STATUS_LINE}" >&2\n'
+        '            exit 1\n'
+        '          }\n'
+        '          sed \'1,/^[[:space:]]*$/d\' "$AUTOFIX_COMMIT_HTTP_RESPONSE" > autofix-commit.json\n',
+        '          sed \'1,/^[[:space:]]*$/d\' "$AUTOFIX_COMMIT_HTTP_RESPONSE" > autofix-commit.json\n'
+        '          [[ "$AUTOFIX_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '            echo "ERROR: CodeQL Autofix commit creation returned unexpected status: ${AUTOFIX_COMMIT_STATUS_LINE}" >&2\n'
+        '            exit 1\n'
+        '          }\n',
+        1,
+    )
+    require(commit_guard_block in good,
+            "Autofix constructive-status reorder self-test anchor changed")
+    try:
+        validate_autofix_constructive_http_statuses(good.replace(commit_guard_block, reordered, 1))
+    except ValueError as exc:
+        require("must precede body extraction" in str(exc),
+                f"Autofix constructive-status reorder self-test failed for the wrong reason: {exc}")
+    else:
+        fail("Autofix constructive-status self-test accepted body extraction before status proof")
+
+
 def validate_autofix_constructive_response_schemas(text: str) -> None:
     created_ref_validator = "python3 scripts/codeql_autofix_controller.py created-ref-response"
     reviewer_validator = "python3 scripts/codeql_autofix_controller.py reviewer-request-response"
@@ -220,14 +410,14 @@ def validate_autofix_constructive_response_schemas(text: str) -> None:
         require(forbidden not in text,
                 f"CodeQL Autofix must not consume an untyped constructive mutation response: {forbidden}")
 
-    ref_post = text.index('gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs"')
+    ref_post = text.index('gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/refs"')
     ref_validate = text.index(created_ref_validator, ref_post)
     ref_consume = text.index('test "$(jq -r .ref created-ref-normalized.json)" = "$TARGET_REF"', ref_validate)
     autofix_commit = text.index(
         '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"',
         ref_consume,
     )
-    pr_create = text.index('gh api -X POST "repos/${TARGET_REPOSITORY}/pulls"', autofix_commit)
+    pr_create = text.index('gh api --include --method POST "repos/${TARGET_REPOSITORY}/pulls"', autofix_commit)
     receipt = text.index("python3 scripts/codeql_autofix_controller.py receipt", pr_create)
     reviewer_post = text.index(
         'repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers',
@@ -1404,6 +1594,7 @@ def main() -> int:
         codeql = CODEQL.read_text(encoding="utf-8")
         self_test(codeql)
         autofix = AUTOFIX.read_text(encoding="utf-8")
+        self_test_autofix_constructive_http_statuses(autofix)
         self_test_autofix_constructive_response_schemas(autofix)
         self_test_autofix_reviewer_request_status(autofix)
         self_test_autofix_read_singleton_evidence(autofix)
@@ -1420,7 +1611,7 @@ def main() -> int:
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
-            "controller trust/provenance, typed constructive mutation responses with exact HTTP-201-validated reviewer requests, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, exact HTTP-201-validated protected-run approvals, unsupported-alert queue fixtures, "
+            "controller trust/provenance, typed constructive mutation responses with exact HTTP-200/202 Autofix request and HTTP-201 comment/ref/commit/PR/reviewer transport proof, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, exact HTTP-201-validated protected-run approvals, unsupported-alert queue fixtures, "
             "durable deduplicated unsupported evidence, trusted-actor-bound exact HTTP-201-validated approval-comment evidence, exact HTTP-204-validated repository dispatches and post-merge CodeQL workflow dispatch, and exact post-merge CodeQL continuation."
         )
         return 0

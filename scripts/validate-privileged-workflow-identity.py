@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v107"
+VERSION = "governed-workflow-byte-identity-v108"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "09176420becea053799334de00c7dcb1b7dfdc2f",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
@@ -2635,29 +2635,90 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
         "--out requested-reviewer-normalized.json",
         'test "$(jq -r .reviewer requested-reviewer-normalized.json)" = "portyu9"',
         'test "$(jq -r .headSha requested-reviewer-normalized.json)" = "$HEAD_SHA"',
+        '[[ "$AUTOFIX_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+(200|202)([[:space:]]|$) ]] || {',
+        '[[ "$UNSUPPORTED_EVIDENCE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$AUTOFIX_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$CREATED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
     ):
         require(fragment in autofix,
-                f"CodeQL Autofix constructive response identity is missing: {fragment}")
+                f"CodeQL Autofix constructive response/status identity is missing: {fragment}")
     for forbidden in (
         'jq -r .ref created-ref.json',
         'jq -r .object.sha created-ref.json',
         '.requested_reviewers[]? | select(.login == "portyu9")',
+        'gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs"',
+        'gh api -X POST \\\n            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"',
+        'gh api -X POST "repos/${TARGET_REPOSITORY}/pulls"',
     ):
         require(forbidden not in autofix,
-                f"CodeQL Autofix constructive path consumes untyped mutation response: {forbidden}")
+                f"CodeQL Autofix constructive path regressed to untyped/response-blind mutation evidence: {forbidden}")
 
-    ref_post = autofix.index('gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs"')
-    ref_validate = autofix.index(created_ref, ref_post)
+    request_post = autofix.index(
+        'gh api --include --method POST \\\n'
+        '            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"'
+    )
+    request_status = autofix.index('AUTOFIX_CREATE_STATUS_LINE=', request_post)
+    request_guard = autofix.index(
+        '[[ "$AUTOFIX_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+(200|202)([[:space:]]|$) ]] || {',
+        request_status,
+    )
+    request_extract = autofix.index(
+        'sed \'1,/^[[:space:]]*$/d\' "$AUTOFIX_CREATE_HTTP_RESPONSE" > autofix-create.json',
+        request_guard,
+    )
+    unsupported_post = autofix.index(
+        'gh api --include --method POST \\\n'
+        '                "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments"',
+        request_post,
+    )
+    unsupported_guard = autofix.index(
+        '[[ "$UNSUPPORTED_EVIDENCE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        unsupported_post,
+    )
+    unsupported_extract = autofix.index(
+        'unsupported-evidence-created.json',
+        unsupported_guard,
+    )
+
+    ref_post = autofix.index('gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/refs"')
+    ref_guard = autofix.index(
+        '[[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        ref_post,
+    )
+    ref_extract = autofix.index(
+        'sed \'1,/^[[:space:]]*$/d\' "$CREATED_REF_HTTP_RESPONSE" > created-ref.json',
+        ref_guard,
+    )
+    ref_validate = autofix.index(created_ref, ref_extract)
     ref_consume = autofix.index(
         'test "$(jq -r .ref created-ref-normalized.json)" = "$TARGET_REF"',
         ref_validate,
     )
     autofix_commit = autofix.index(
-        '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"',
+        'gh api --include --method POST \\\n'
+        '            "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits"',
         ref_consume,
     )
-    pr_create = autofix.index('gh api -X POST "repos/${TARGET_REPOSITORY}/pulls"', autofix_commit)
-    receipt = autofix.index("python3 scripts/codeql_autofix_controller.py receipt", pr_create)
+    commit_guard = autofix.index(
+        '[[ "$AUTOFIX_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        autofix_commit,
+    )
+    commit_extract = autofix.index(
+        'sed \'1,/^[[:space:]]*$/d\' "$AUTOFIX_COMMIT_HTTP_RESPONSE" > autofix-commit.json',
+        commit_guard,
+    )
+    commit_validate = autofix.index("python3 scripts/codeql_autofix_controller.py commit", commit_extract)
+    pr_create = autofix.index('gh api --include --method POST "repos/${TARGET_REPOSITORY}/pulls"', commit_validate)
+    pr_guard = autofix.index(
+        '[[ "$CREATED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        pr_create,
+    )
+    pr_extract = autofix.index(
+        'sed \'1,/^[[:space:]]*$/d\' "$CREATED_PR_HTTP_RESPONSE" > created-pr.json',
+        pr_guard,
+    )
+    receipt = autofix.index("python3 scripts/codeql_autofix_controller.py receipt", pr_extract)
     reviewer_post = autofix.index(
         'repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers',
         receipt,
@@ -2668,9 +2729,13 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
         reviewer_validate,
     )
     require(
-        ref_post < ref_validate < ref_consume < autofix_commit < pr_create < receipt
+        request_post < unsupported_post < unsupported_guard < unsupported_extract
+        < request_status < request_guard < request_extract
+        < ref_post < ref_guard < ref_extract < ref_validate < ref_consume
+        < autofix_commit < commit_guard < commit_extract < commit_validate
+        < pr_create < pr_guard < pr_extract < receipt
         < reviewer_post < reviewer_validate < reviewer_consume,
-        "CodeQL Autofix constructive response schema ordering changed",
+        "CodeQL Autofix constructive response/status ordering changed",
     )
 
 
@@ -5078,7 +5143,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering, exact workflow-dispatch HTTP 204 validation, and exact review-creation HTTP 200 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-201 reviewer-request, exact-204 admission/reviewer dispatch, and exact-201 protected-run approval status validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema plus exact HTTP-200/202/201 transport ordering locked · bot-review credential/ref response schema ordering, exact workflow-dispatch HTTP 204 validation, and exact review-creation HTTP 200 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-201 reviewer-request, exact-204 admission/reviewer dispatch, and exact-201 protected-run approval status validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
