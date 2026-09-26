@@ -785,6 +785,13 @@
       "rationale": "Authorize frozen #1161's exact Profile Generator Compatibility Witness migration: route its two existing current/prior-attempt GitHub run GETs through the accepted canonical authenticated read-only retry client, bind helper/retry-policy bytes into the witness closure, and reject direct gh-api transport. No new endpoint, call count, permission, mutation, secret/OIDC, merge authority, required-check reduction, direct-main write, ruleset change, mutation retry, or bypass is added."
     },
     {
+      "baseBomSha256": "064955edce467b646ff1f3404fb11d42a87d6f856dafb5d1dfa54e447f74eb31",
+      "candidateBomSha256": "40fd5a6821802adc9ce1364b9da28a69159ed8a23aab2a57dc142fc104fbb8bb",
+      "expansionSha256": "8780843ca5182884f16e8830f7428c134a60110661468c154eb0df1fc5890113",
+      "id": "cap-profile-quality-witness-consumer-canonical-read-v1",
+      "rationale": "Authorize frozen #1167's exact Profile Quality signed-witness consumer migration: route the six existing authenticated JSON discovery GETs (three Action provenance witness and three Profile Generator Compatibility Witness) through the accepted canonical bounded read-only retry client, while preserving endpoint/call counts, selectors, artifact/attestation verification, continue-on-error fallback semantics, permissions, and all mutation non-retry guarantees. No new endpoint, permission, trigger, secret/OIDC, mutation, merge authority, required-check reduction, ruleset change, direct-main write, or bypass is added."
+    },
+    {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "expansionSha256": "cc3ed97e8469fdb96632323d2977bd04ae5ee5c0759f80b1fea2a0ed7d88f7fa",
