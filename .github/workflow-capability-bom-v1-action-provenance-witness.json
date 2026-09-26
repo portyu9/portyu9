@@ -83,22 +83,7 @@
               "step": "Set up Python"
             }
           ],
-          "apiSurfaces": [
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind exact trusted run identity and issuance"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${WITNESS_HISTORY_ATTEMPT}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind exact trusted run identity and issuance"
-            }
-          ],
+          "apiSurfaces": [],
           "artifacts": [
             {
               "if-no-files-found": "error",
@@ -150,10 +135,13 @@
           "paths": [
             ".github/GOVERNANCE.md",
             ".github/action-lock.json",
+            ".github/automation-retry-policy-v1.json",
             ".github/attestation/action-provenance-witness-v1.schema.json",
             ".github/workflows/action-provenance-witness.yml",
             ".github/workflows/profile-quality.yml",
             "scripts/action_identity_lock.py",
+            "scripts/automation_github_read.py",
+            "scripts/automation_retry_policy.py",
             "scripts/action_provenance_witness.py",
             "scripts/dependabot_release.py",
             "scripts/validate-action-release-provenance.py",
