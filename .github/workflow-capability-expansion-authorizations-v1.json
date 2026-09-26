@@ -719,7 +719,7 @@
       "candidateBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
       "expansionSha256": "d73d144f30855e201f5ab0b68c32fbc881d9f4c95c41eb2c6bc87eaffc00d887",
       "id": "cap-main-check-cancellation-isolation-v1",
-      "rationale": "Authorize exact cancellation-domain narrowing for #1149: PR-associated Bot PR review wakes may supersede only wakes for the same PR while no-PR/current-main and explicit recovery wakes are run-scoped; Spotlight planning-class push jobs retain latest-main supersession while schedule/workflow-dispatch recovery jobs are run-scoped. Terminal Spotlight mutation remains non-cancellable serialized. No permission, trigger, mutation class/count, lease, required-check, review/merge authority, direct-main write, or bypass expansion is added."
+      "rationale": "Authorize #1149 cancellation-domain narrowing: same-PR reviewer wakes may supersede each other; no-PR/recovery wakes are run-scoped. Spotlight push planning retains latest-main supersession while recovery planning is run-scoped. Terminal Spotlight mutations remain non-cancellable and serialized. No permission, trigger, mutation, lease, required-check, review/merge authority, direct-main write, or bypass expansion."
     },
     {
       "baseBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
