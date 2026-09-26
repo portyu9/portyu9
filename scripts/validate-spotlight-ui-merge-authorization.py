@@ -1328,6 +1328,7 @@ def validate_git_publication_status_overlay(sync: str) -> None:
             '[[ "$BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
             'BLOB="$(sed \'1,/^[[:space:]]*$/d\' <<<"$BLOB_HTTP_RESPONSE")"',
             '(.url | type == "string" and length > 0)',
+            'README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"',
             "Spotlight Git blob creation returned unexpected status:",
         ),
         (
@@ -1336,6 +1337,7 @@ def validate_git_publication_status_overlay(sync: str) -> None:
             '[[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
             'TREE="$(sed \'1,/^[[:space:]]*$/d\' <<<"$TREE_HTTP_RESPONSE")"',
             '(.truncated | type == "boolean")',
+            'CANDIDATE_TREE_SHA="$(jq -r .sha <<<"$TREE")"',
             "Spotlight Git tree creation returned unexpected status:",
         ),
         (
@@ -1344,6 +1346,7 @@ def validate_git_publication_status_overlay(sync: str) -> None:
             '[[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
             'CANDIDATE_COMMIT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"',
             'jq -e --arg tree "$CANDIDATE_TREE_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL"',
+            'HEAD_SHA="$(jq -r .sha <<<"$CANDIDATE_COMMIT")"',
             "Spotlight Git commit creation returned unexpected status:",
         ),
         (
@@ -1352,16 +1355,17 @@ def validate_git_publication_status_overlay(sync: str) -> None:
             '[[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
             'CREATED_REF="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CREATED_REF_HTTP_RESPONSE")"',
             'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA"',
+            'test "$(jq -r .ref <<<"$CREATED_REF")" = "refs/heads/${CANDIDATE_BRANCH}"',
             "Spotlight Git ref creation returned unexpected status:",
         ),
     )
-    for mutation, status, guard, extract, schema, error in specs:
+    for mutation, status, guard, extract, schema, consume, error in specs:
         for fragment, label in (
             (mutation, "mutation capture"),
             (status, "status extraction"),
             (guard, "HTTP 201 guard"),
             (extract, "body extraction"),
-            (schema, "typed schema"),
+            (consume, "first field consumption"),
         ):
             require(propose.count(fragment) == 1,
                     f"Spotlight Git publication {label} changed: {fragment}")
@@ -1371,10 +1375,16 @@ def validate_git_publication_status_overlay(sync: str) -> None:
         status_pos = propose.index(status)
         guard_pos = propose.index(guard)
         extract_pos = propose.index(extract)
-        schema_pos = propose.index(schema)
+        consume_pos = propose.index(consume, extract_pos)
+        typed_boundary = propose[extract_pos:consume_pos]
         require(
-            mutation_pos < status_pos < guard_pos < extract_pos < schema_pos,
-            f"Spotlight Git publication HTTP 201 proof moved out of reviewed order: {error}",
+            typed_boundary.count(schema) == 1,
+            f"Spotlight Git publication typed schema changed inside exact mutation boundary: {schema}",
+        )
+        schema_pos = propose.index(schema, extract_pos, consume_pos)
+        require(
+            mutation_pos < status_pos < guard_pos < extract_pos < schema_pos < consume_pos,
+            f"Spotlight Git publication HTTP 201/schema proof moved out of reviewed order: {error}",
         )
 
     for legacy in (
