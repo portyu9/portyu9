@@ -280,9 +280,9 @@ def validate_autofix_constructive_http_statuses(text: str) -> None:
         response_pos = text.index(response_var)
         mutation_pos = text.index(mutation, response_pos)
         status_pos = text.index(status, mutation_pos)
-        guard_pos = text.index(guard, status_pos)
-        extract_pos = text.index(extract, guard_pos)
-        validator_pos = text.index(validator, extract_pos)
+        guard_pos = text.index(guard, mutation_pos)
+        extract_pos = text.index(extract, mutation_pos)
+        validator_pos = text.index(validator, mutation_pos)
         require(
             response_pos < mutation_pos < status_pos < guard_pos < extract_pos < validator_pos,
             f"CodeQL Autofix {label} HTTP 201 proof must precede body extraction and typed consumption",
