@@ -858,10 +858,20 @@ def validate_autofix_continuation(text: str) -> None:
         "CodeQL Autofix must not consume the terminal merge response before typed success validation",
     )
 
+    for fragment, label in (
+        (merge_fetch, "mutation"),
+        (merge_status, "status extraction"),
+        (merge_guard, "HTTP 200 guard"),
+        (merge_extract, "body extraction"),
+    ):
+        require(
+            text.count(fragment) == 1,
+            f"CodeQL Autofix terminal merge {label} anchor is not singleton",
+        )
     merge_pos = text.index(merge_fetch)
-    merge_status_pos = text.index(merge_status, merge_pos)
-    merge_guard_pos = text.index(merge_guard, merge_status_pos)
-    merge_extract_pos = text.index(merge_extract, merge_guard_pos)
+    merge_status_pos = text.index(merge_status)
+    merge_guard_pos = text.index(merge_guard)
+    merge_extract_pos = text.index(merge_extract)
     merge_validate_pos = text.index(
         'python3 scripts/codeql_autofix_controller.py merge-success-response',
         merge_extract_pos,
