@@ -226,10 +226,17 @@ jobs:
             ((.permissions.metadata // "read") == "read")
           ' installation.json >/dev/null
 
-          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --method POST \
+          INSTALLATION_TOKEN_HTTP_RESPONSE="$RUNNER_TEMP/ruleset-installation-token-http-response.txt"
+          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --include --method POST \
             "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens" \
             -f 'repositories[]=portyu9' \
-            -f 'permissions[administration]=write' > installation-token.json
+            -f 'permissions[administration]=write' > "$INSTALLATION_TOKEN_HTTP_RESPONSE"
+          INSTALLATION_TOKEN_STATUS_LINE="$(head -n 1 "$INSTALLATION_TOKEN_HTTP_RESPONSE" | tr -d '\r')"
+          [[ "$INSTALLATION_TOKEN_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+            echo "ERROR: Ruleset Administration App token creation returned unexpected status: ${INSTALLATION_TOKEN_STATUS_LINE}" >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' "$INSTALLATION_TOKEN_HTTP_RESPONSE" > installation-token.json
           jq -e '
             type == "object" and
             (.token | type == "string" and length > 20) and
@@ -326,12 +333,21 @@ jobs:
           ' <<<"$MAIN_REF_RESPONSE")"
           test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"
 
+          RULESET_PUT_HTTP_RESPONSE="$RUNNER_TEMP/ruleset-put-http-response.txt"
           set +e
-          GH_TOKEN="$ADMIN_TOKEN" gh api --method PUT \
+          GH_TOKEN="$ADMIN_TOKEN" gh api --include --method PUT \
             "repos/portyu9/portyu9/rulesets/22148161" \
-            --input ruleset-put.json > ruleset-put-response.json
+            --input ruleset-put.json > "$RULESET_PUT_HTTP_RESPONSE"
           WRITE_STATUS="$?"
           set -e
+          if [ "$WRITE_STATUS" -eq 0 ]; then
+            RULESET_PUT_STATUS_LINE="$(head -n 1 "$RULESET_PUT_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$RULESET_PUT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
+              echo "ERROR: Protect Main ruleset update returned unexpected status: ${RULESET_PUT_STATUS_LINE}" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' "$RULESET_PUT_HTTP_RESPONSE" > ruleset-put-response.json
+          fi
 
           GH_TOKEN="$ADMIN_TOKEN" gh api "repos/portyu9/portyu9/rulesets/22148161" > live-after.json
           AFTER="$(python3 scripts/ruleset_transition_contract.py classify --live live-after.json)"
