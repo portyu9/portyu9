@@ -1387,7 +1387,62 @@ def project_spotlight_git_publication_status_to_legacy(spotlight: str) -> str:
     return spotlight
 
 
+def project_spotlight_lifecycle_status_to_legacy(spotlight: str) -> str:
+    overlays = (
+        (
+            '              CLOSED_PR_HTTP_RESPONSE="$(gh api --include --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"\n'
+            '              CLOSED_PR_STATUS_LINE="$(head -n 1 <<<"$CLOSED_PR_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '              [[ "$CLOSED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+            '                echo "ERROR: Spotlight stale PR close returned unexpected status: ${CLOSED_PR_STATUS_LINE}" >&2\n'
+            '                exit 1\n'
+            '              }\n'
+            '              CLOSED_PR="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CLOSED_PR_HTTP_RESPONSE")"\n',
+            '              CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"\n',
+        ),
+        (
+            '            STALE_REF_DELETE_HTTP_RESPONSE="$(gh api --include --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}")"\n'
+            '            STALE_REF_DELETE_STATUS_LINE="$(head -n 1 <<<"$STALE_REF_DELETE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$STALE_REF_DELETE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight stale candidate ref deletion returned unexpected status: ${STALE_REF_DELETE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n',
+            '            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null\n',
+        ),
+        (
+            '            PR_CREATE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json)"\n'
+            '            PR_CREATE_STATUS_LINE="$(head -n 1 <<<"$PR_CREATE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$PR_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight proposal PR creation returned unexpected status: ${PR_CREATE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            sed \'1,/^[[:space:]]*$/d\' <<<"$PR_CREATE_HTTP_RESPONSE" > pr-response.json\n',
+            '            gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json\n',
+        ),
+        (
+            '            TERMINAL_REF_DELETE_HTTP_RESPONSE="$(gh api --include --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}")"\n'
+            '            TERMINAL_REF_DELETE_STATUS_LINE="$(head -n 1 <<<"$TERMINAL_REF_DELETE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$TERMINAL_REF_DELETE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight terminal candidate ref deletion returned unexpected status: ${TERMINAL_REF_DELETE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n',
+            '            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null\n',
+        ),
+    )
+    for hardened, legacy in overlays:
+        require(
+            spotlight.count(hardened) == 1,
+            "Spotlight v21 projection cannot isolate lifecycle HTTP-status wrapper",
+        )
+        require(
+            legacy not in spotlight,
+            "Spotlight v21 projection found both hardened and legacy lifecycle mutation",
+        )
+        spotlight = spotlight.replace(hardened, legacy, 1)
+    return spotlight
+
+
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
+    spotlight = project_spotlight_lifecycle_status_to_legacy(spotlight)
     spotlight = project_spotlight_git_publication_status_to_legacy(spotlight)
     legacy = project_spotlight_privileged_refs_to_legacy(
         project_spotlight_readme_contents_to_legacy(
@@ -3946,6 +4001,7 @@ def classify_spotlight_reconciliation_candidate(
 
 
 def validate_spotlight_same_base_supersession(spotlight: str) -> None:
+    spotlight = project_spotlight_lifecycle_status_to_legacy(spotlight)
     reconcile = job_block(spotlight, "reconcile", "budget")
     expected_marker = ('            if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && '
                        '[ "$BRANCH" = "$EXPECTED_CANDIDATE_BRANCH" ]; then')
