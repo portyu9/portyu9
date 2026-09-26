@@ -715,6 +715,13 @@
       "rationale": "Authorize frozen #1116 hardening of the existing Dependabot, CodeQL Autofix, and Spotlight terminal merge PUTs: capture gh api --include and require HTTP 200 before consuming the already-typed success response, while preserving Dependabot's existing nonzero failure diagnostics. Semantic BOMs, endpoints, call counts, permissions, triggers, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets, retries, and bypass remain unchanged."
     },
     {
+      "baseBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
+      "candidateBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
+      "expansionSha256": "d73d144f30855e201f5ab0b68c32fbc881d9f4c95c41eb2c6bc87eaffc00d887",
+      "id": "cap-main-check-cancellation-isolation-v1",
+      "rationale": "Authorize exact cancellation-domain narrowing for #1149: PR-associated Bot PR review wakes may supersede only wakes for the same PR while no-PR/current-main and explicit recovery wakes are run-scoped; Spotlight planning-class push jobs retain latest-main supersession while schedule/workflow-dispatch recovery jobs are run-scoped. Terminal Spotlight mutation remains non-cancellable serialized. No permission, trigger, mutation class/count, lease, required-check, review/merge authority, direct-main write, or bypass expansion is added."
+    },
+    {
       "baseBomSha256": "f55151c433289e0c7bf72e8fe81073ebc554fd00854c736626aa68b64680f841",
       "candidateBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
       "expansionSha256": "5552c484daa2a1faf522cfc7d0899d37c66affcc3679b4a36bd9fc329d2dc3b3",
