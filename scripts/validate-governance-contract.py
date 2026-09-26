@@ -208,7 +208,7 @@ def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
             'echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."',
             'echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."\\n'
             '          for ATTEMPT in $(seq 1 36); do sleep 5; done',
-            "forbidden relay/candidate/write surface",
+            "forbidden relay/candidate/write/direct-singleton surface",
         ),
         (
             'HEAD:scripts/dependabot_capability_admission.py)" = "96107595641a0f9ff0203d9df2b684b1822b0346"',
