@@ -918,6 +918,13 @@
       "rationale": "Authorize frozen #913 to add one read-only Spotlight reconcile GET comparing a validated candidate parent to exact current main, solely to prove an old bot candidate base is an accepted ancestor before bypassing the 30-minute uncertainty floor. Existing typed candidate/README/PR/close/delete proofs remain mandatory; divergent, malformed, or unproven young candidates remain preserved. No permission, trigger, secret, mutation, merge/ruleset authority, required-check reduction, or bypass is added."
     },
     {
+      "baseBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
+      "candidateBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
+      "expansionSha256": "39c877e6cafa9e75edf2e229664c1e67d10abad79e5ab5aa160b73ecf7ebd8b3",
+      "id": "cap-spotlight-event-scoped-concurrency-parser-v1",
+      "rationale": "Authorize only the trusted parser extension that preserves every existing static concurrency group rule and recognizes one exact additional group string solely for spotlight-link-sync planning: push events share main-lineage while non-push recovery events are run-scoped. This prerequisite changes no workflow, Automation Policy value, permission, trigger, mutation, lease, required check, or merge/review authority."
+    },
+    {
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
       "expansionSha256": "671ca7710df1e6190b8dc5256a58ffb6b9f68d158e63aeb0c08a9bd08cba96bf",
