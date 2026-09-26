@@ -371,8 +371,8 @@ def validate_quality_contract(text: str) -> None:
         "if: steps.action_provenance_witness_verify.outcome != 'success'",
     ):
         require(phrase in text, f"Profile Quality witness consumer contract is missing: {phrase}")
-    action_discovery_start = text.index("      - name: Discover exact fresh signed Action provenance witness\\n")
-    action_download_start = text.index("      - name: Download exact fresh signed Action provenance witness\\n", action_discovery_start)
+    action_discovery_start = text.index("      - name: Discover exact fresh signed Action provenance witness")
+    action_download_start = text.index("      - name: Download exact fresh signed Action provenance witness", action_discovery_start)
     action_discovery = text[action_discovery_start:action_download_start]
     require(action_discovery.count("python3 scripts/automation_github_read.py") == 3,
             "Profile Quality Action witness discovery must use exactly three governed GitHub read call sites")
