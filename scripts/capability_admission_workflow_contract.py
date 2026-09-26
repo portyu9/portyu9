@@ -5,9 +5,13 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import pr_closing_directive_guard
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "0c9fda2528eb81eeba090750b10a43045a0898ca"
+CLOSING_GUARD = ROOT / "scripts/pr_closing_directive_guard.py"
+EXPECTED_GIT_BLOB = "c4f14c33744b63f074255257ab9a91bafacd1c0a"
+EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -125,6 +129,24 @@ def validate_text(text: str) -> None:
         'TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"',
     ):
         require(binding in text, f"trusted capability admission identity binding changed: {binding}")
+
+    closing_guard = (
+        "python3 scripts/pr_closing_directive_guard.py \\\n"
+        "                --event \"$GITHUB_EVENT_PATH\" \\\n"
+        "                --repository \"$TARGET_REPOSITORY\""
+    )
+    require(text.count(closing_guard) == 1,
+            "trusted Capability Admission must run exactly one PR closing-directive guard")
+    pull_target_case = text.index("            pull_request_target)")
+    closing_guard_pos = text.index(closing_guard, pull_target_case)
+    pull_event_consumer = text.index(
+        "PR=\"$(jq -c '.pull_request' \"$GITHUB_EVENT_PATH\")\"",
+        pull_target_case,
+    )
+    require(
+        pull_target_case < closing_guard_pos < pull_event_consumer,
+        "trusted PR closing-directive guard must run before ordinary PR metadata consumption",
+    )
 
     for pr_schema_fragment in (
         'validate_api_pr_object() {',
@@ -759,10 +781,19 @@ def validate_text(text: str) -> None:
 def validate() -> None:
     require(WORKFLOW.is_file() and not WORKFLOW.is_symlink(),
             "trusted capability admission workflow is missing or aliased")
+    require(CLOSING_GUARD.is_file() and not CLOSING_GUARD.is_symlink(),
+            "trusted PR closing-directive guard is missing or aliased")
     data = WORKFLOW.read_bytes()
     observed = git_blob_sha(data)
     require(observed == EXPECTED_GIT_BLOB,
             f"trusted capability admission workflow bytes changed: expected={EXPECTED_GIT_BLOB} observed={observed}")
+    guard_data = CLOSING_GUARD.read_bytes()
+    guard_observed = git_blob_sha(guard_data)
+    require(
+        guard_observed == EXPECTED_CLOSING_GUARD_GIT_BLOB,
+        "trusted PR closing-directive guard bytes changed: "
+        f"expected={EXPECTED_CLOSING_GUARD_GIT_BLOB} observed={guard_observed}",
+    )
     validate_text(data.decode("utf-8"))
 
 
@@ -967,6 +998,7 @@ def expect_validator_reorder_failure(
 
 
 def self_test() -> None:
+    pr_closing_directive_guard.self_test()
     text = WORKFLOW.read_text(encoding="utf-8")
     validate_text(text)
     expect_failure(text, "checks: write", "contents: write", "permission set changed", count=2)

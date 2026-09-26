@@ -113,7 +113,8 @@ def get_json_text(
     token: str | None = None,
     opener: Callable[..., Any] | None = None,
     sleeper: Callable[[float], None] = time.sleep,
-) -> str:
+    allow_not_found: bool = False,
+) -> str | None:
     normalized = normalize_endpoint(endpoint)
     credential = os.environ.get("GH_TOKEN") if token is None else token
     require(credential is not None, "GH_TOKEN is required for governed GitHub API reads")
@@ -149,6 +150,8 @@ def get_json_text(
             strict_json(text)
             return text
         except urllib.error.HTTPError as exc:
+            if exc.code == 404 and allow_not_found:
+                return None
             if attempt + 1 >= ATTEMPTS or not retryable_http_error(exc):
                 raise ValueError(f"GitHub API GET returned HTTP {exc.code}") from exc
             delay = retry_delay_seconds(exc, attempt)
@@ -282,6 +285,26 @@ def self_test() -> None:
     require(sleeps == [1.0, 2.0],
             "governed retry fixture backoff sequence changed")
 
+    not_found_calls: list[str] = []
+
+    def not_found_open(request: urllib.request.Request, *, timeout: int) -> Any:
+        not_found_calls.append(request.full_url)
+        raise urllib.error.HTTPError(request.full_url, 404, "fixture", {}, None)
+
+    require(
+        get_json_text(
+            endpoint,
+            token="fixture-token",
+            opener=not_found_open,
+            sleeper=lambda _: None,
+            allow_not_found=True,
+        )
+        is None,
+        "explicit optional GitHub read must normalize exact HTTP 404 to absence",
+    )
+    require(len(not_found_calls) == 1,
+            "optional GitHub read must not retry exact HTTP 404")
+
     terminal_calls: list[str] = []
 
     def terminal_open(request: urllib.request.Request, *, timeout: int) -> Any:
@@ -331,7 +354,9 @@ def main() -> int:
             )
             return 0
         require(args.endpoint is not None, "GitHub API endpoint is required")
-        sys.stdout.write(get_json_text(args.endpoint))
+        response = get_json_text(args.endpoint)
+        require(response is not None, "ordinary governed GitHub read unexpectedly returned absence")
+        sys.stdout.write(response)
         return 0
     except (ValueError, json.JSONDecodeError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
