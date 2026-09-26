@@ -18,6 +18,9 @@ PERMISSION_VALUES = {"read", "write", "none"}
 JOB_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 STATE_ID = re.compile(r"^[a-z][a-z0-9-]*$")
 CONCURRENCY_GROUP = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+SPOTLIGHT_EVENT_SCOPED_PLANNING_GROUP = (
+    "spotlight-link-sync-planning-${{ github.event_name == 'push' && 'main-lineage' || github.run_id }}"
+)
 TRANSACTION_PHASES = ("propose", "approve", "mutate", "verify", "terminalize")
 TRANSACTION_WORKFLOWS = {"profile-stats", "spotlight-link-sync"}
 CONCURRENCY_WORKFLOWS = TRANSACTION_WORKFLOWS
@@ -106,10 +109,18 @@ def validate_concurrency_policy(
         class_label = f"{label} {class_id}"
         spec = exact_keys(classes[class_id], {"group", "cancelInProgress", "queue", "jobs"}, class_label)
         group = spec["group"]
-        require(
+        group_is_static = (
             isinstance(group, str)
             and group == group.lower()
-            and CONCURRENCY_GROUP.fullmatch(group) is not None,
+            and CONCURRENCY_GROUP.fullmatch(group) is not None
+        )
+        group_is_reviewed_spotlight_event_scope = (
+            workflow_id == "spotlight-link-sync"
+            and class_id == "planning"
+            and group == SPOTLIGHT_EVENT_SCOPED_PLANNING_GROUP
+        )
+        require(
+            group_is_static or group_is_reviewed_spotlight_event_scope,
             f"{class_label} group is invalid",
         )
         folded = group.casefold()
