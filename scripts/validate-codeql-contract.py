@@ -911,7 +911,7 @@ def validate_autofix_continuation(text: str) -> None:
         < merge_validate_pos < normalized_sha_pos < discovery_endpoint_pos
         < main_reproof_pos < snapshot_pos < scan_dispatch_pos < dispatch_guard_pos
         < exact_run_pos < success_pos < continuation_pos,
-        "CodeQL Autofix typed merge-success validation / post-merge causal continuation ordering changed",
+        "CodeQL Autofix terminal merge/status and post-merge continuation moved out of reviewed order",
     )
     require(
         text.count('assert_main_sha "$MERGE_SHA"') == 4,
