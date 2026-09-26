@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import pr_closing_directive_guard
+
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "0c9fda2528eb81eeba090750b10a43045a0898ca"
+EXPECTED_GIT_BLOB = "c4f14c33744b63f074255257ab9a91bafacd1c0a"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -125,6 +127,24 @@ def validate_text(text: str) -> None:
         'TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"',
     ):
         require(binding in text, f"trusted capability admission identity binding changed: {binding}")
+
+    closing_guard = (
+        "python3 scripts/pr_closing_directive_guard.py \\\n"
+        "                --event \"$GITHUB_EVENT_PATH\" \\\n"
+        "                --repository \"$TARGET_REPOSITORY\""
+    )
+    require(text.count(closing_guard) == 1,
+            "trusted Capability Admission must run exactly one PR closing-directive guard")
+    pull_target_case = text.index("            pull_request_target)")
+    closing_guard_pos = text.index(closing_guard, pull_target_case)
+    pull_event_consumer = text.index(
+        "PR=\"$(jq -c '.pull_request' \"$GITHUB_EVENT_PATH\")\"",
+        pull_target_case,
+    )
+    require(
+        pull_target_case < closing_guard_pos < pull_event_consumer,
+        "trusted PR closing-directive guard must run before ordinary PR metadata consumption",
+    )
 
     for pr_schema_fragment in (
         'validate_api_pr_object() {',
@@ -967,6 +987,7 @@ def expect_validator_reorder_failure(
 
 
 def self_test() -> None:
+    pr_closing_directive_guard.self_test()
     text = WORKFLOW.read_text(encoding="utf-8")
     validate_text(text)
     expect_failure(text, "checks: write", "contents: write", "permission set changed", count=2)
