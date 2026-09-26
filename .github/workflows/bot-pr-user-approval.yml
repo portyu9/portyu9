@@ -715,7 +715,14 @@ jobs:
               "$REVIEW_PROVENANCE" \
               "Automated exact-base/head approval by portyu9 after all lane-required protected gates completed successfully for base \`${MAIN_SHA}\` and head \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
             jq -n --arg body "$BODY" --arg commit "$HEAD_SHA"               '{event:"APPROVE",body:$body,commit_id:$commit}' > review-request.json
-            REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
+            REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
+            REVIEW_STATUS_LINE="$(head -n 1 <<<"$REVIEW_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$REVIEW_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
+              echo "ERROR: governed bot review creation returned unexpected status: ${REVIEW_STATUS_LINE}" >&2
+              exit 1
+            }
+            REVIEW_RESPONSE="$(sed '1,/^[[:space:]]*$/d' <<<"$REVIEW_HTTP_RESPONSE")"
+            test "$REVIEW_RESPONSE" != "$REVIEW_HTTP_RESPONSE"
             jq -e --arg head "$HEAD_SHA" --arg body "$BODY" '
               (type == "object") and
               (.id | ((type == "number") and . == floor and . > 0)) and
