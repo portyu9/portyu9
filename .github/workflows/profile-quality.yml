@@ -90,6 +90,7 @@ jobs:
             test -s "candidate-capability-source/$PATH_VALUE"
           done
           export FROZEN_CANDIDATE_TREE_SHA
+          export PYTHONPATH="$GITHUB_WORKSPACE/scripts"
           python3 - <<'PY'
           import json
           import os
