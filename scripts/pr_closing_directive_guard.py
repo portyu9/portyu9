@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 import re
+import sys
 from typing import Any, Callable
 
 import automation_github_read
@@ -221,7 +222,7 @@ def main() -> int:
             print(f"PR closing-directive guard passed: canonical issue target #{target} is not a pull request.")
         return 0
     except (ValueError, json.JSONDecodeError, OSError) as exc:
-        print(f"ERROR: {exc}", file=__import__("sys").stderr)
+        print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
 
