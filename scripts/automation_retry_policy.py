@@ -434,6 +434,41 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require("GH_TOKEN: ${{ github.token }}" in discovery_step,
                 f"Profile Quality {label} discovery lost run-scoped token binding")
 
+    dependabot_context_step = named_step(
+        profile_quality,
+        "dependabot_admission",
+        "Prove exact PR-native Dependabot context",
+    )
+    require(dependabot_context_step.count("python3 trusted-base/scripts/automation_github_read.py") == 5,
+            "Profile Quality Dependabot context proof must use exactly five governed GitHub read call sites")
+    require("gh api " not in dependabot_context_step,
+            "Profile Quality Dependabot context proof regained direct gh api read transport")
+    require("GH_TOKEN: ${{ github.token }}" in dependabot_context_step,
+            "Profile Quality Dependabot context proof governed reads lost run-scoped token binding")
+
+    dependabot_release_step = named_step(
+        profile_quality,
+        "dependabot_admission",
+        "Fetch exact candidate release evidence",
+    )
+    require(dependabot_release_step.count("python3 trusted-base/scripts/automation_github_read.py") == 2,
+            "Profile Quality Dependabot release proof must use exactly two governed singleton GitHub read call sites")
+    paginated_files = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/'
+        '${PR_NUMBER}/files?per_page=100"'
+    )
+    require(dependabot_release_step.count("gh api ") == 1
+            and dependabot_release_step.count(paginated_files) == 1,
+            "Profile Quality Dependabot release proof must retain exactly one bounded paginated gh api collection")
+    for forbidden in (
+        'gh api "repos/${DEPENDENCY_REPOSITORY}"',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}"',
+    ):
+        require(forbidden not in dependabot_release_step,
+                f"Profile Quality Dependabot release proof regained direct singleton transport: {forbidden}")
+    require("GH_TOKEN: ${{ github.token }}" in dependabot_release_step,
+            "Profile Quality Dependabot release proof governed reads lost run-scoped token binding")
+
 
 def validate(policy: dict[str, Any], texts: dict[str, str]) -> None:
     require(isinstance(policy, dict) and set(policy) == {
@@ -503,6 +538,40 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
             consumer_transport_drift,
             "must use exactly three governed GitHub read call sites",
         )
+
+    dependabot_context_transport_drift = dict(texts)
+    context_source = dependabot_context_transport_drift[".github/workflows/profile-quality.yml"]
+    context_governed = (
+        'python3 trusted-base/scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+    )
+    require(context_governed in context_source,
+            "retry-policy self-test fixture missing Dependabot context governed read")
+    dependabot_context_transport_drift[".github/workflows/profile-quality.yml"] = (
+        context_source.replace(context_governed, 'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"', 1)
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_context_transport_drift,
+        "must use exactly five governed GitHub read call sites",
+    )
+
+    dependabot_release_transport_drift = dict(texts)
+    release_source = dependabot_release_transport_drift[".github/workflows/profile-quality.yml"]
+    release_governed = (
+        'python3 trusted-base/scripts/automation_github_read.py '
+        '"repos/${DEPENDENCY_REPOSITORY}"'
+    )
+    require(release_governed in release_source,
+            "retry-policy self-test fixture missing Dependabot release governed read")
+    dependabot_release_transport_drift[".github/workflows/profile-quality.yml"] = (
+        release_source.replace(release_governed, 'gh api "repos/${DEPENDENCY_REPOSITORY}"', 1)
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_release_transport_drift,
+        "must use exactly two governed singleton GitHub read call sites",
+    )
 
     loop_drift = dict(texts)
     loop_drift[".github/workflows/bot-pr-user-approval.yml"] = loop_drift[
