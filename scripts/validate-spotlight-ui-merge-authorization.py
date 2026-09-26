@@ -1557,8 +1557,7 @@ def validate_lifecycle_http_status_overlay(sync: str) -> None:
 
     terminal_delete_pos = merge.index(blocks[3])
     terminal_readback = merge.index(
-        'AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"',
-        terminal_delete_pos,
+        'AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
     )
     require(terminal_delete_pos < terminal_readback,
             "Spotlight terminal ref-delete HTTP 204 proof must precede absence readback")
