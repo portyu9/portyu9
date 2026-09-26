@@ -837,7 +837,16 @@ def validate_autofix_continuation(text: str) -> None:
         text.count('python3 scripts/codeql_autofix_controller.py merge-success-response') == 1,
         "CodeQL Autofix must validate exactly one terminal merge success response",
     )
+    merge_fetch = 'MERGE_HTTP_RESPONSE="$(gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
+    merge_status = 'MERGE_STATUS_LINE="$(head -n 1 <<<"$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    merge_guard = '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {'
+    merge_extract = 'sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE" > merge.json'
     for fragment in (
+        merge_fetch,
+        merge_status,
+        merge_guard,
+        'CodeQL Autofix terminal merge returned unexpected status:',
+        merge_extract,
         '--response-file merge.json',
         '--out merge-success-normalized.json',
         'MERGE_SHA="$(jq -r .sha merge-success-normalized.json)"',
@@ -849,10 +858,13 @@ def validate_autofix_continuation(text: str) -> None:
         "CodeQL Autofix must not consume the terminal merge response before typed success validation",
     )
 
-    merge_pos = text.index('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge')
+    merge_pos = text.index(merge_fetch)
+    merge_status_pos = text.index(merge_status, merge_pos)
+    merge_guard_pos = text.index(merge_guard, merge_status_pos)
+    merge_extract_pos = text.index(merge_extract, merge_guard_pos)
     merge_validate_pos = text.index(
         'python3 scripts/codeql_autofix_controller.py merge-success-response',
-        merge_pos,
+        merge_extract_pos,
     )
     normalized_sha_pos = text.index(
         'MERGE_SHA="$(jq -r .sha merge-success-normalized.json)"',
@@ -885,7 +897,8 @@ def validate_autofix_continuation(text: str) -> None:
         success_pos,
     )
     require(
-        merge_pos < merge_validate_pos < normalized_sha_pos < discovery_endpoint_pos
+        merge_pos < merge_status_pos < merge_guard_pos < merge_extract_pos
+        < merge_validate_pos < normalized_sha_pos < discovery_endpoint_pos
         < main_reproof_pos < snapshot_pos < scan_dispatch_pos < dispatch_guard_pos
         < exact_run_pos < success_pos < continuation_pos,
         "CodeQL Autofix typed merge-success validation / post-merge causal continuation ordering changed",
@@ -899,6 +912,38 @@ def validate_autofix_continuation(text: str) -> None:
 def self_test_autofix_continuation(text: str) -> None:
     validate_autofix_continuation(text)
     mutations = (
+        (
+            text.replace(
+                'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+                'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+                1,
+            ),
+            "merge-success response contract",
+        ),
+        (
+            text.replace(
+                '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "merge-success response contract",
+        ),
+        (
+            text.replace(
+                '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+                '            echo "ERROR: CodeQL Autofix terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+                '            exit 1\n'
+                '          }\n'
+                '          sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE" > merge.json\n',
+                '          sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE" > merge.json\n'
+                '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+                '            echo "ERROR: CodeQL Autofix terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+                '            exit 1\n'
+                '          }\n',
+                1,
+            ),
+            "moved out of reviewed order",
+        ),
         (
             text.replace(
                 'gh api --include --method POST \\\n            "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches"',
@@ -1186,7 +1231,7 @@ def validate_approval_comment_evidence(text: str) -> None:
         created_pos,
     )
     merge_pos = text.index(
-        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+        'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         actor_pos,
     )
     require(
