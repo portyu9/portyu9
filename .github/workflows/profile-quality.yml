@@ -143,7 +143,7 @@ jobs:
           set -euo pipefail
           NOW="$(date -u +%s)"
           [[ "$NOW" =~ ^[1-9][0-9]*$ ]]
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100" > action-provenance-witness-runs.json
+          python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100" > action-provenance-witness-runs.json
           python3 scripts/action_provenance_witness.py select-run \
             --runs action-provenance-witness-runs.json \
             --now "$NOW" \
@@ -154,8 +154,8 @@ jobs:
           [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}" > selected-action-provenance-witness-attempt.json
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100" > selected-action-provenance-witness-artifacts.json
+          python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}" > selected-action-provenance-witness-attempt.json
+          python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100" > selected-action-provenance-witness-artifacts.json
           python3 scripts/action_provenance_witness.py select-artifact \
             --artifacts selected-action-provenance-witness-artifacts.json \
             --selected-run selected-action-provenance-witness-run.json \
@@ -293,7 +293,7 @@ jobs:
           set -euo pipefail
           NOW="$(date -u +%s)"
           [[ "$NOW" =~ ^[1-9][0-9]*$ ]]
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100" > profile-generator-compatibility-witness-runs.json
+          python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100" > profile-generator-compatibility-witness-runs.json
           python3 scripts/profile_generator_compatibility_witness.py select-run \
             --runs profile-generator-compatibility-witness-runs.json \
             --now "$NOW" \
@@ -304,8 +304,8 @@ jobs:
           [[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]]
           [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}" > selected-profile-generator-compatibility-witness-attempt.json
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100" > selected-profile-generator-compatibility-witness-artifacts.json
+          python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}" > selected-profile-generator-compatibility-witness-attempt.json
+          python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100" > selected-profile-generator-compatibility-witness-artifacts.json
           python3 scripts/profile_generator_compatibility_witness.py select-artifact \
             --artifacts selected-profile-generator-compatibility-witness-artifacts.json \
             --selected-run selected-profile-generator-compatibility-witness-run.json \
