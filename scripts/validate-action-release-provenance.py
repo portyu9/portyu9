@@ -351,9 +351,9 @@ def validate_quality_contract(text: str) -> None:
     ) == 2, "Profile Quality witness consumers read authority changed")
     for phrase in (
         "Discover exact fresh signed Action provenance witness",
-        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100"',
-        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}"',
-        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100"',
+        'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100"',
+        'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}"',
+        'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100"',
         "python3 scripts/action_provenance_witness.py select-run",
         "python3 scripts/action_provenance_witness.py select-artifact",
         "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1",
@@ -371,6 +371,15 @@ def validate_quality_contract(text: str) -> None:
         "if: steps.action_provenance_witness_verify.outcome != 'success'",
     ):
         require(phrase in text, f"Profile Quality witness consumer contract is missing: {phrase}")
+    action_discovery_start = text.index("      - name: Discover exact fresh signed Action provenance witness\\n")
+    action_download_start = text.index("      - name: Download exact fresh signed Action provenance witness\\n", action_discovery_start)
+    action_discovery = text[action_discovery_start:action_download_start]
+    require(action_discovery.count("python3 scripts/automation_github_read.py") == 3,
+            "Profile Quality Action witness discovery must use exactly three governed GitHub read call sites")
+    require("gh api " not in action_discovery,
+            "Profile Quality Action witness discovery regained direct gh api read transport")
+    require("GH_TOKEN: ${{ github.token }}" in action_discovery,
+            "Profile Quality Action witness discovery lost run-scoped token binding")
     require('- ".github/workflows/**"' in text,
             "Profile Quality push paths must cover workflow action identity changes")
     require('- ".github/action-lock.json"' in text,
