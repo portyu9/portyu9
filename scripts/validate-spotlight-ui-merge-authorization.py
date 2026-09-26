@@ -123,6 +123,63 @@ GIT_PUBLICATION_STATUS_BLOCKS = (
     ),
 )
 
+LIFECYCLE_STATUS_BLOCKS = (
+    (
+        (
+            '              CLOSED_PR_HTTP_RESPONSE="$(gh api --include --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"\n'
+            '              CLOSED_PR_STATUS_LINE="$(head -n 1 <<<"$CLOSED_PR_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '              [[ "$CLOSED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+            '                echo "ERROR: Spotlight stale PR close returned unexpected status: ${CLOSED_PR_STATUS_LINE}" >&2\n'
+            '                exit 1\n'
+            '              }\n'
+            '              CLOSED_PR="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CLOSED_PR_HTTP_RESPONSE")"\n'
+        ),
+        (
+            '              CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"\n'
+        ),
+    ),
+    (
+        (
+            '            STALE_REF_DELETE_HTTP_RESPONSE="$(gh api --include --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}")"\n'
+            '            STALE_REF_DELETE_STATUS_LINE="$(head -n 1 <<<"$STALE_REF_DELETE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$STALE_REF_DELETE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight stale candidate ref deletion returned unexpected status: ${STALE_REF_DELETE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+        ),
+        (
+            '            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null\n'
+        ),
+    ),
+    (
+        (
+            '            PR_CREATE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json)"\n'
+            '            PR_CREATE_STATUS_LINE="$(head -n 1 <<<"$PR_CREATE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$PR_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight proposal PR creation returned unexpected status: ${PR_CREATE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            sed \'1,/^[[:space:]]*$/d\' <<<"$PR_CREATE_HTTP_RESPONSE" > pr-response.json\n'
+        ),
+        (
+            '            gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json\n'
+        ),
+    ),
+    (
+        (
+            '            TERMINAL_REF_DELETE_HTTP_RESPONSE="$(gh api --include --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}")"\n'
+            '            TERMINAL_REF_DELETE_STATUS_LINE="$(head -n 1 <<<"$TERMINAL_REF_DELETE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$TERMINAL_REF_DELETE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight terminal candidate ref deletion returned unexpected status: ${TERMINAL_REF_DELETE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+        ),
+        (
+            '            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null\n'
+        ),
+    ),
+)
+
 LEGACY_PROFILE_DISPATCH = '''  dispatch:
     name: dispatch-spotlight-link-sync
     needs: [receipt_attest, lease, attest]
@@ -330,6 +387,16 @@ def project_git_publication_status_to_legacy(sync: str) -> str:
     return sync
 
 
+def project_lifecycle_status_to_legacy(sync: str) -> str:
+    for hardened, legacy in LIFECYCLE_STATUS_BLOCKS:
+        require(sync.count(hardened) == 1,
+                "Spotlight lifecycle status projection cannot isolate exact HTTP wrapper")
+        require(legacy not in sync,
+                "Spotlight lifecycle status projection found both hardened and legacy mutation")
+        sync = sync.replace(hardened, legacy, 1)
+    return sync
+
+
 def project_merge_success_response_to_legacy(sync: str) -> str:
     require(sync.count(MERGE_SUCCESS_BLOCK) == 1,
             "Spotlight merge-success response projection cannot isolate the exact validated block")
@@ -339,8 +406,10 @@ def project_merge_success_response_to_legacy(sync: str) -> str:
 
 
 def validate_mac_with_merge_http_projection(sync: str) -> None:
-    """Project only the new transport wrapper before rerunning frozen item-10 MAC proof."""
-    ORIGINAL_VALIDATE_MAC(project_merge_http_status_to_legacy(sync))
+    """Project transport-only wrappers before rerunning the frozen item-10 MAC proof."""
+    ORIGINAL_VALIDATE_MAC(
+        project_merge_http_status_to_legacy(project_lifecycle_status_to_legacy(sync))
+    )
 
 
 def validate_merge_success_response_overlay(sync: str) -> None:
@@ -963,6 +1032,7 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 def project_item9(sync: str) -> str:
     sync = project_git_publication_status_to_legacy(sync)
+    sync = project_lifecycle_status_to_legacy(sync)
     sync = project_spotlight_pr_response_evidence_to_legacy(sync)
     sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
     sync = project_spotlight_readme_contents_to_legacy(sync)
@@ -1450,6 +1520,98 @@ def self_test_git_publication_status_overlay(sync: str) -> None:
         raise ValueError("Spotlight Git publication status self-test accepted body extraction before status proof")
 
 
+def validate_lifecycle_http_status_overlay(sync: str) -> None:
+    reconcile = core.job_block(sync, "reconcile", "budget")
+    propose = core.job_block(sync, "propose", "approve")
+    merge = core.job_block(sync, "merge", None)
+    blocks = [item[0] for item in LIFECYCLE_STATUS_BLOCKS]
+    legacy = [item[1] for item in LIFECYCLE_STATUS_BLOCKS]
+
+    for hardened in blocks:
+        require(sync.count(hardened) == 1,
+                "Spotlight lifecycle mutation must retain exactly one reviewed HTTP-status wrapper")
+    for old in legacy:
+        require(old not in sync,
+                "Spotlight lifecycle mutation regained response-blind transport")
+
+    close_pos = reconcile.index(blocks[0])
+    close_schema = reconcile.index(
+        'jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA"',
+        close_pos,
+    )
+    stale_delete_pos = reconcile.index(blocks[1], close_schema)
+    stale_readback = reconcile.index(
+        'REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"',
+        stale_delete_pos,
+    )
+    require(close_pos < close_schema < stale_delete_pos < stale_readback,
+            "Spotlight stale lifecycle HTTP proof must precede typed close consumption and deletion readback")
+
+    pr_create_pos = propose.index(blocks[2])
+    pr_schema = propose.index(
+        'jq -e --arg title "chore: sync rotating Spotlight links"',
+        pr_create_pos,
+    )
+    require(pr_create_pos < pr_schema,
+            "Spotlight proposal PR HTTP 201 proof must precede typed PR response consumption")
+
+    terminal_delete_pos = merge.index(blocks[3])
+    terminal_readback = merge.index(
+        'AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+    )
+    require(terminal_delete_pos < terminal_readback,
+            "Spotlight terminal ref-delete HTTP 204 proof must precede absence readback")
+
+
+def self_test_lifecycle_http_status_overlay(sync: str) -> None:
+    validate_lifecycle_http_status_overlay(sync)
+
+    response_blind = sync.replace(
+        LIFECYCLE_STATUS_BLOCKS[0][0],
+        LIFECYCLE_STATUS_BLOCKS[0][1],
+        1,
+    )
+    try:
+        validate_lifecycle_http_status_overlay(response_blind)
+    except ValueError as exc:
+        require("lifecycle mutation" in str(exc),
+                f"Spotlight lifecycle response-blind self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Spotlight lifecycle status self-test accepted response-blind stale PR close")
+
+    wrong_status = sync.replace(
+        '[[ "$PR_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$PR_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_lifecycle_http_status_overlay(wrong_status)
+    except ValueError as exc:
+        require("HTTP-status wrapper" in str(exc),
+                f"Spotlight lifecycle wrong-status self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Spotlight lifecycle status self-test accepted non-201 PR creation")
+
+    readback = (
+        '            AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"\n'
+    )
+    ordered = LIFECYCLE_STATUS_BLOCKS[3][0] + readback
+    require(ordered in sync,
+            "Spotlight lifecycle readback-order self-test anchor changed")
+    reordered = sync.replace(
+        ordered,
+        readback + LIFECYCLE_STATUS_BLOCKS[3][0],
+        1,
+    )
+    try:
+        validate_lifecycle_http_status_overlay(reordered)
+    except ValueError as exc:
+        require("absence readback" in str(exc),
+                f"Spotlight lifecycle readback-order self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Spotlight lifecycle status self-test accepted readback before DELETE status proof")
+
+
 def validate_native_governed_bot_review_overlay(sync: str) -> None:
     merge = core.job_block(sync, "merge", None)
     for fragment in NATIVE_REVIEW_GATE_FRAGMENTS:
@@ -1586,6 +1748,8 @@ def main() -> int:
         self_test_approval_comment_evidence_overlay(sync)
         validate_git_publication_status_overlay(sync)
         self_test_git_publication_status_overlay(sync)
+        validate_lifecycle_http_status_overlay(sync)
+        self_test_lifecycle_http_status_overlay(sync)
         validate_native_governed_bot_review_overlay(sync)
         self_test_native_governed_bot_review_overlay(sync)
         validate_merge_success_response_overlay(sync)

@@ -472,7 +472,13 @@ jobs:
               test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
               test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
               jq -n '{state:"closed"}' > close-pr.json
-              CLOSED_PR="$(gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"
+              CLOSED_PR_HTTP_RESPONSE="$(gh api --include --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"
+              CLOSED_PR_STATUS_LINE="$(head -n 1 <<<"$CLOSED_PR_HTTP_RESPONSE" | tr -d '\r')"
+              [[ "$CLOSED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
+                echo "ERROR: Spotlight stale PR close returned unexpected status: ${CLOSED_PR_STATUS_LINE}" >&2
+                exit 1
+              }
+              CLOSED_PR="$(sed '1,/^[[:space:]]*$/d' <<<"$CLOSED_PR_HTTP_RESPONSE")"
               jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \
                 --arg title "chore: sync rotating Spotlight links" \
                 --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
@@ -501,7 +507,12 @@ jobs:
               PR_CLOSED=true
             fi
 
-            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}" >/dev/null
+            STALE_REF_DELETE_HTTP_RESPONSE="$(gh api --include --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH}")"
+            STALE_REF_DELETE_STATUS_LINE="$(head -n 1 <<<"$STALE_REF_DELETE_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$STALE_REF_DELETE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight stale candidate ref deletion returned unexpected status: ${STALE_REF_DELETE_STATUS_LINE}" >&2
+              exit 1
+            }
             REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"
             jq -e '(type == "array") and (length == 0)' <<<"$REMAINING_REFS" >/dev/null
             REMAINING_EXACT="$(jq --arg ref "refs/heads/${BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$REMAINING_REFS")"
@@ -1042,7 +1053,13 @@ jobs:
             jq -n --arg title "chore: sync rotating Spotlight links" --arg head "$CANDIDATE_BRANCH" --arg base "main" \
               --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." \
               '{title:$title,head:$head,base:$base,body:$body,maintainer_can_modify:false}' > pr.json
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json > pr-response.json
+            PR_CREATE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json)"
+            PR_CREATE_STATUS_LINE="$(head -n 1 <<<"$PR_CREATE_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$PR_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight proposal PR creation returned unexpected status: ${PR_CREATE_STATUS_LINE}" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' <<<"$PR_CREATE_HTTP_RESPONSE" > pr-response.json
             jq -e --arg title "chore: sync rotating Spotlight links" --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." --arg base "$SOURCE_SHA" --arg branch "$CANDIDATE_BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" '
               ((type) == "object") and
               (.number | type == "number" and . == floor and . > 0) and
@@ -2437,7 +2454,12 @@ jobs:
           test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"
           if [ "$EXACT_REF_COUNT" = "1" ]; then
             test "$(jq -r --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)][0].object.sha' <<<"$CANDIDATE_REFS")" = "$HEAD_SHA"
-            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}" >/dev/null
+            TERMINAL_REF_DELETE_HTTP_RESPONSE="$(gh api --include --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${CANDIDATE_BRANCH}")"
+            TERMINAL_REF_DELETE_STATUS_LINE="$(head -n 1 <<<"$TERMINAL_REF_DELETE_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$TERMINAL_REF_DELETE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight terminal candidate ref deletion returned unexpected status: ${TERMINAL_REF_DELETE_STATUS_LINE}" >&2
+              exit 1
+            }
             AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
             jq -e '(type == "array") and (length == 0)' <<<"$AFTER_REFS" >/dev/null
             AFTER_EXACT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$AFTER_REFS")"
