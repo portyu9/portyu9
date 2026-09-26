@@ -98,19 +98,19 @@ def trusted_diagnostic() -> None:
         subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
         tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=candidate, text=True).strip()
         code = (
-            "from pathlib import Path\\n"
-            "import sys\\n"
-            "trusted=Path(sys.argv[1]).resolve(); candidate=Path(sys.argv[2]).resolve(); tree=sys.argv[3]\\n"
-            "sys.path.insert(0, str(trusted / 'scripts'))\\n"
-            "import workflow_capability_admission as admission\\n"
-            "try:\\n"
-            "    admission.evaluate(candidate, candidate_tree_sha=tree)\\n"
-            "except ValueError as exc:\\n"
-            "    print('TRUSTED-ADMISSION-DIAGNOSTIC-TREE:', tree)\\n"
-            "    print('TRUSTED-ADMISSION-DIAGNOSTIC:', exc)\\n"
-            "    raise SystemExit(0)\\n"
-            "print('TRUSTED-ADMISSION-DIAGNOSTIC-TREE:', tree)\\n"
-            "print('TRUSTED-ADMISSION-DIAGNOSTIC: exact synced source admitted without authorization tuple')\\n"
+            "from pathlib import Path\n"
+            "import sys\n"
+            "trusted=Path(sys.argv[1]).resolve(); candidate=Path(sys.argv[2]).resolve(); tree=sys.argv[3]\n"
+            "sys.path.insert(0, str(trusted / 'scripts'))\n"
+            "import workflow_capability_admission as admission\n"
+            "try:\n"
+            "    admission.evaluate(candidate, candidate_tree_sha=tree)\n"
+            "except ValueError as exc:\n"
+            "    print('TRUSTED-ADMISSION-DIAGNOSTIC-TREE:', tree)\n"
+            "    print('TRUSTED-ADMISSION-DIAGNOSTIC:', exc)\n"
+            "    raise SystemExit(0)\n"
+            "print('TRUSTED-ADMISSION-DIAGNOSTIC-TREE:', tree)\n"
+            "print('TRUSTED-ADMISSION-DIAGNOSTIC: exact synced source admitted without authorization tuple')\n"
         )
         subprocess.run([sys.executable, "-c", code, str(trusted), str(candidate), tree], check=True)
         subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=True)
