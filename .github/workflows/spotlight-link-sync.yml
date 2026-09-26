@@ -878,7 +878,13 @@ jobs:
           else
             CONTENT="$(base64 -w0 "$PROPOSED")"
             jq -n --arg content "$CONTENT" '{content:$content,encoding:"base64"}' > blob.json
-            BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"
+            BLOB_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"
+            BLOB_STATUS_LINE="$(head -n 1 <<<"$BLOB_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git blob creation returned unexpected status: ${BLOB_STATUS_LINE}" >&2
+              exit 1
+            }
+            BLOB="$(sed '1,/^[[:space:]]*$/d' <<<"$BLOB_HTTP_RESPONSE")"
             jq -e '
               (type == "object") and
               (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
@@ -896,7 +902,13 @@ jobs:
             [[ "$BASE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
             jq -n --arg base_tree "$BASE_TREE_SHA" --arg blob "$README_BLOB_SHA" \
               '{base_tree:$base_tree,tree:[{path:"README.md",mode:"100644",type:"blob",sha:$blob}]}' > tree.json
-            TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"
+            TREE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"
+            TREE_STATUS_LINE="$(head -n 1 <<<"$TREE_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git tree creation returned unexpected status: ${TREE_STATUS_LINE}" >&2
+              exit 1
+            }
+            TREE="$(sed '1,/^[[:space:]]*$/d' <<<"$TREE_HTTP_RESPONSE")"
             jq -e '
               (type == "object") and
               (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
@@ -910,7 +922,13 @@ jobs:
             jq -n --arg message "chore: sync rotating Spotlight links" --arg tree "$CANDIDATE_TREE_SHA" \
               --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \
               '{message:$message,tree:$tree,parents:[$parent],author:{name:$name,email:$email},committer:{name:$name,email:$email}}' > commit.json
-            CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"
+            CANDIDATE_COMMIT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"
+            CANDIDATE_COMMIT_STATUS_LINE="$(head -n 1 <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git commit creation returned unexpected status: ${CANDIDATE_COMMIT_STATUS_LINE}" >&2
+              exit 1
+            }
+            CANDIDATE_COMMIT="$(sed '1,/^[[:space:]]*$/d' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"
             jq -e --arg tree "$CANDIDATE_TREE_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" '
               (type == "object") and
               (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
@@ -994,7 +1012,13 @@ jobs:
 
           if [ "$EXACT_REF_COUNT" = "0" ]; then
             jq -n --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg sha "$HEAD_SHA" '{ref:$ref,sha:$sha}' > ref.json
-            CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"
+            CREATED_REF_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"
+            CREATED_REF_STATUS_LINE="$(head -n 1 <<<"$CREATED_REF_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git ref creation returned unexpected status: ${CREATED_REF_STATUS_LINE}" >&2
+              exit 1
+            }
+            CREATED_REF="$(sed '1,/^[[:space:]]*$/d' <<<"$CREATED_REF_HTTP_RESPONSE")"
             jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA" '
               (type == "object") and
               (.ref | type == "string" and . == $ref) and
