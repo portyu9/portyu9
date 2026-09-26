@@ -778,6 +778,13 @@
       "rationale": "Authorize #730's exact isolated Profile Generator Compatibility Witness signer: one same-run digest-checked witness download, predicate/subject SHA-256 plus four-file raw Signal Field inventory proof, and one pinned actions/attest call under contents:read, id-token:write, attestations:write. No checkout, authored Python, Git/gh/token/secret, candidate execution, repository/PR/check/ref/Actions mutation, generator/retry broadening, check reduction, direct-main write, or bypass."
     },
     {
+      "baseBomSha256": "1f4877fc71584fc1157d65e9c9bc091166551a3a9c3c206c490c5f8fe693a014",
+      "candidateBomSha256": "064955edce467b646ff1f3404fb11d42a87d6f856dafb5d1dfa54e447f74eb31",
+      "expansionSha256": "14c5996b32de87fddf44568414f250506c5d85f4e0420fa3fed79e15103d734c",
+      "id": "cap-profile-generator-witness-canonical-read-v1",
+      "rationale": "Authorize frozen #1161's exact Profile Generator Compatibility Witness migration: route its two existing current/prior-attempt GitHub run GETs through the accepted canonical authenticated read-only retry client, bind helper/retry-policy bytes into the witness closure, and reject direct gh-api transport. No new endpoint, call count, permission, mutation, secret/OIDC, merge authority, required-check reduction, direct-main write, ruleset change, mutation retry, or bypass is added."
+    },
+    {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "expansionSha256": "cc3ed97e8469fdb96632323d2977bd04ae5ee5c0759f80b1fea2a0ed7d88f7fa",
