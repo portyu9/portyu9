@@ -215,6 +215,7 @@ jobs:
       queue: max
     permissions:
       actions: read
+      contents: read
     outputs:
       lease_id: ${{ steps.lease.outputs.lease_id }}
       issued_at: ${{ steps.lease.outputs.issued_at }}
@@ -223,6 +224,27 @@ jobs:
       candidate_id: ${{ steps.lease.outputs.candidate_id }}
 
     steps:
+      - name: Checkout exact trusted source for governed reads
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Verify exact governed read source identity
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+
       - name: Mint exact short-lived mutation lease
         id: lease
         env:
@@ -247,7 +269,7 @@ jobs:
           test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
           [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$GITHUB_WORKFLOW_SHA" = "$BASE_SHA"
-          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"
+          RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"
           jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT" \
             --arg head "$BASE_SHA" --arg event "$GITHUB_EVENT_NAME" \
             --arg repo "$GITHUB_REPOSITORY" --argjson repo_id "$GITHUB_REPOSITORY_ID" '
@@ -837,8 +859,8 @@ jobs:
           predicate-path: receipt-attestation-input/generated-publication-receipt.json
           show-summary: true
 
-  dispatch:
-    name: dispatch-spotlight-link-sync
+  dispatch_plan:
+    name: prepare-spotlight-dispatch-read-only
     needs: [receipt_attest, lease, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
@@ -847,52 +869,40 @@ jobs:
       cancel-in-progress: false
       queue: max
     permissions:
-      actions: write
+      actions: read
+      contents: read
     outputs:
-      previous_run_high_water: ${{ steps.dispatch.outputs.previous_run_high_water }}
-      accepted_status: ${{ steps.dispatch.outputs.accepted_status }}
+      previous_run_high_water: ${{ steps.plan.outputs.previous_run_high_water }}
 
     steps:
-      - name: Verify exact short-lived mutation lease
-        env:
-          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
-          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
-          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
-          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
-          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
-          EXPECTED_BASE_SHA: ${{ github.sha }}
-          EXPECTED_CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}
+      - name: Checkout exact trusted source for governed reads
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Verify exact governed read source identity
         run: |
           set -euo pipefail
-          LEASE_TTL_SECONDS=1800
-          LEASE_MIN_REMAINING_SECONDS=180
-          [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$LEASE_ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
-          [[ "$LEASE_EXPIRES_AT" =~ ^[1-9][0-9]*$ ]]
-          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
-          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
-          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/profile-stats.yml@refs/heads/main"
-          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
-          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
-          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
-          NOW_EPOCH="$(date -u +%s)"
-          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
-          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
-          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
-          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
-            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/profile-stats.yml" \
-            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
-            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
-          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
 
-      - name: Dispatch exact Spotlight reconciliation workflow
-        id: dispatch
+      - name: Plan exact Spotlight reconciliation dispatch
+        id: plan
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          WORKFLOW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml")"
+          WORKFLOW="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml")"
           jq -e '
             def positive_int: type == "number" and . == floor and . > 0;
             (type == "object") and
@@ -912,7 +922,7 @@ jobs:
           }
           WORKFLOW_ID="$(jq -r .id <<<"$WORKFLOW")"
           [[ "$WORKFLOW_ID" =~ ^[1-9][0-9]*$ ]]
-          RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1")"
+          RUNS="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1")"
           jq -e \
             --argjson workflow "$WORKFLOW_ID" \
             --argjson repo "$GITHUB_REPOSITORY_ID" \
@@ -978,6 +988,65 @@ jobs:
             PREVIOUS_RUN_HIGH_WATER="$(jq -r '.workflow_runs[0].id' <<<"$RUNS")"
             [[ "$PREVIOUS_RUN_HIGH_WATER" =~ ^[1-9][0-9]*$ ]]
           fi
+          echo "previous_run_high_water=$PREVIOUS_RUN_HIGH_WATER" >> "$GITHUB_OUTPUT"
+
+  dispatch:
+    name: dispatch-spotlight-link-sync
+    needs: [dispatch_plan, receipt_attest, lease, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    concurrency:
+      group: profile-stats-terminal
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      actions: write
+    outputs:
+      previous_run_high_water: ${{ steps.dispatch.outputs.previous_run_high_water }}
+      accepted_status: ${{ steps.dispatch.outputs.accepted_status }}
+
+    steps:
+      - name: Verify exact short-lived mutation lease
+        env:
+          LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
+          LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
+          LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
+          LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
+          EXPECTED_BASE_SHA: ${{ github.sha }}
+          EXPECTED_CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}
+        run: |
+          set -euo pipefail
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=180
+          [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$LEASE_ISSUED_AT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$LEASE_EXPIRES_AT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/profile-stats.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/profile-stats.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+
+      - name: Dispatch exact Spotlight reconciliation workflow
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_RUN_HIGH_WATER: ${{ needs.dispatch_plan.outputs.previous_run_high_water }}
+        run: |
+          set -euo pipefail
+          [[ "$PREVIOUS_RUN_HIGH_WATER" =~ ^[0-9]+$ ]]
           RESPONSE="$(gh api --include --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \
             -f ref=main)"
