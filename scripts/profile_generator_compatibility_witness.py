@@ -77,10 +77,13 @@ CLAIM = (
 # any production witness exists; this first unit intentionally changes no workflow bytes.
 POLICY_PATHS = (
     ".github/action-lock.json",
+    ".github/automation-retry-policy-v1.json",
     ".github/attestation/profile-generator-compatibility-witness-v1.schema.json",
     ".github/workflows/profile-generator-compatibility-witness.yml",
     ".github/workflows/profile-quality.yml",
     "scripts/action_identity_lock.py",
+    "scripts/automation_github_read.py",
+    "scripts/automation_retry_policy.py",
     "scripts/generate-profile-evidence.py",
     "scripts/profile-evidence-generation-v1.json",
     "scripts/profile_generator_compatibility_witness.py",
@@ -796,8 +799,18 @@ def expect_failure(callable_obj, expected: str) -> None:
 
 
 def validate_producer_run_workflow_contract(text: str) -> None:
+    current_fetch = (
+        'RUN="$(python3 scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"'
+    )
+    history_fetch = (
+        '            python3 scripts/automation_github_read.py \\\n'
+        '              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${WITNESS_HISTORY_ATTEMPT}" \\\n'
+        "              | jq -c '.' >> witness-prior-attempts.ndjson"
+    )
     fragments = (
-        'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"',
+        current_fetch,
+        history_fetch,
         '--argjson run_id "$GITHUB_RUN_ID"',
         '--argjson run_attempt "$GITHUB_RUN_ATTEMPT"',
         '--arg source_sha "$SOURCE_SHA"',
@@ -822,20 +835,25 @@ def validate_producer_run_workflow_contract(text: str) -> None:
     )
     for fragment in fragments:
         require(fragment in text,
-                f"profile generator compatibility witness current producer-run schema is missing: {fragment}")
+                f"Profile generator compatibility witness current producer-run schema is missing: {fragment}")
 
-    fetch = 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"'
     schema = '          jq -e \\\n            --argjson run_id "$GITHUB_RUN_ID"'
     first_consumer = '          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"'
-    require(text.count(fetch) == 1,
-            "profile generator compatibility witness current producer-run endpoint count changed")
+    require(text.count(current_fetch) == 1,
+            "Profile generator compatibility witness current producer-run endpoint count changed")
+    require(text.count(history_fetch) == 1,
+            "Profile generator compatibility witness prior-attempt endpoint count changed")
+    require(text.count("python3 scripts/automation_github_read.py") == 2,
+            "Profile generator compatibility witness must own exactly two governed GitHub read call sites")
+    require("gh api " not in text,
+            "Profile generator compatibility witness regained direct gh api transport outside governed read client")
     require(text.count(schema) == 1,
-            "profile generator compatibility witness current producer-run schema boundary count changed")
+            "Profile generator compatibility witness current producer-run schema boundary count changed")
     require(text.count(first_consumer) == 1,
-            "profile generator compatibility witness first current-run consumer identity changed")
+            "Profile generator compatibility witness first current-run consumer identity changed")
     require(
-        text.index(fetch) < text.index(schema) < text.index(first_consumer),
-        "profile generator compatibility witness must validate current producer-run evidence before field consumption",
+        text.index(current_fetch) < text.index(schema) < text.index(first_consumer),
+        "Profile generator compatibility witness must validate current producer-run evidence before field consumption",
     )
 
 
@@ -928,7 +946,10 @@ def self_test() -> None:
     else:
         raise ValueError("profile generator compatibility witness type-coercion self-test accepted weakened current-run evidence")
 
-    fetch_line = '          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"\n'
+    fetch_line = (
+        '          RUN="$(python3 scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"\n'
+    )
     consumer_line = '          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"\n'
     require(workflow_text.count(fetch_line) == 1 and workflow_text.count(consumer_line) == 1,
             "profile generator compatibility witness current-run ordering fixture identity changed")
