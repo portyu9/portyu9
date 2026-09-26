@@ -406,7 +406,13 @@ jobs:
             FILE="$RUNNER_TEMP/derived/$PATH_VALUE"
             test -s "$FILE"
             CONTENT="$(base64 -w0 < "$FILE")"
-            gh api --method POST "repos/${TARGET_REPOSITORY}/git/blobs" -f content="$CONTENT" -f encoding=base64 > git-blob-response.json
+            gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/blobs" -f content="$CONTENT" -f encoding=base64 > git-blob-http-response.txt
+            GIT_BLOB_STATUS_LINE="$(head -n 1 git-blob-http-response.txt | tr -d '\r')"
+            [[ "$GIT_BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Dependabot Git blob creation returned unexpected status: ${GIT_BLOB_STATUS_LINE}" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' git-blob-http-response.txt > git-blob-response.json
             python3 scripts/dependabot_controller.py git-blob-response \
               --response git-blob-response.json \
               --out git-blob-response-normalized.json
@@ -418,7 +424,13 @@ jobs:
           done
           jq -n --arg base_tree "$TREE_SHA" --slurpfile tree tree-entries.json \
             '{base_tree:$base_tree,tree:$tree[0]}' > tree-request.json
-          gh api --method POST "repos/${TARGET_REPOSITORY}/git/trees" --input tree-request.json > git-tree-response.json
+          gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/trees" --input tree-request.json > git-tree-http-response.txt
+          GIT_TREE_STATUS_LINE="$(head -n 1 git-tree-http-response.txt | tr -d '\r')"
+          [[ "$GIT_TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+            echo "ERROR: Dependabot Git tree creation returned unexpected status: ${GIT_TREE_STATUS_LINE}" >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' git-tree-http-response.txt > git-tree-response.json
           python3 scripts/dependabot_controller.py git-tree-response \
             --response git-tree-response.json \
             --out git-tree-response-normalized.json
@@ -427,7 +439,13 @@ jobs:
 
           jq -n --arg message 'Reconcile Dependabot CodeQL governance' --arg tree "$NEW_TREE_SHA" --arg parent "$HEAD_SHA" \
             '{message:$message,tree:$tree,parents:[$parent]}' > commit-request.json
-          gh api --method POST "repos/${TARGET_REPOSITORY}/git/commits" --input commit-request.json > git-commit-response.json
+          gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/commits" --input commit-request.json > git-commit-http-response.txt
+          GIT_COMMIT_STATUS_LINE="$(head -n 1 git-commit-http-response.txt | tr -d '\r')"
+          [[ "$GIT_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+            echo "ERROR: Dependabot Git commit creation returned unexpected status: ${GIT_COMMIT_STATUS_LINE}" >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' git-commit-http-response.txt > git-commit-response.json
           python3 scripts/dependabot_controller.py git-commit-response \
             --response git-commit-response.json \
             --expected-tree "$NEW_TREE_SHA" \
@@ -437,8 +455,14 @@ jobs:
           [[ "$NEW_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$NEW_HEAD_SHA" != "$HEAD_SHA"
 
-          gh api --method PATCH "repos/${TARGET_REPOSITORY}/git/refs/heads/${HEAD_REF}" \
-            -f sha="$NEW_HEAD_SHA" -F force=false > updated-ref.json
+          gh api --include --method PATCH "repos/${TARGET_REPOSITORY}/git/refs/heads/${HEAD_REF}" \
+            -f sha="$NEW_HEAD_SHA" -F force=false > updated-ref-http-response.txt
+          GIT_REF_UPDATE_STATUS_LINE="$(head -n 1 updated-ref-http-response.txt | tr -d '\r')"
+          [[ "$GIT_REF_UPDATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
+            echo "ERROR: Dependabot Git ref update returned unexpected status: ${GIT_REF_UPDATE_STATUS_LINE}" >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' updated-ref-http-response.txt > updated-ref.json
           python3 scripts/dependabot_controller.py git-ref-response \
             --response updated-ref.json \
             --expected-ref "refs/heads/${HEAD_REF}" \

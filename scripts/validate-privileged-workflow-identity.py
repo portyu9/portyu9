@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v106"
+VERSION = "governed-workflow-byte-identity-v107"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "09176420becea053799334de00c7dcb1b7dfdc2f",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "3fb2361661c3448f6c07ee7d81a1dc607af18b09",
+    ".github/workflows/spotlight-link-sync.yml": "f0a4f21670607cc7b7a55529cbe6527f07e83a2b",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -1331,7 +1331,64 @@ def validate_spotlight_pr_response_evidence(
                 "Spotlight PR response self-test accepted reviewer mutation schema after consumption"
             )
 
+def project_spotlight_git_publication_status_to_legacy(spotlight: str) -> str:
+    overlays = (
+        (
+            '            BLOB_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"\n'
+            '            BLOB_STATUS_LINE="$(head -n 1 <<<"$BLOB_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight Git blob creation returned unexpected status: ${BLOB_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            BLOB="$(sed \'1,/^[[:space:]]*$/d\' <<<"$BLOB_HTTP_RESPONSE")"\n',
+            '            BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"\n',
+        ),
+        (
+            '            TREE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"\n'
+            '            TREE_STATUS_LINE="$(head -n 1 <<<"$TREE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight Git tree creation returned unexpected status: ${TREE_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            TREE="$(sed \'1,/^[[:space:]]*$/d\' <<<"$TREE_HTTP_RESPONSE")"\n',
+            '            TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"\n',
+        ),
+        (
+            '            CANDIDATE_COMMIT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"\n'
+            '            CANDIDATE_COMMIT_STATUS_LINE="$(head -n 1 <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight Git commit creation returned unexpected status: ${CANDIDATE_COMMIT_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            CANDIDATE_COMMIT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"\n',
+            '            CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"\n',
+        ),
+        (
+            '            CREATED_REF_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"\n'
+            '            CREATED_REF_STATUS_LINE="$(head -n 1 <<<"$CREATED_REF_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+            '            [[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+            '              echo "ERROR: Spotlight Git ref creation returned unexpected status: ${CREATED_REF_STATUS_LINE}" >&2\n'
+            '              exit 1\n'
+            '            }\n'
+            '            CREATED_REF="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CREATED_REF_HTTP_RESPONSE")"\n',
+            '            CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"\n',
+        ),
+    )
+    for hardened, legacy in overlays:
+        require(
+            spotlight.count(hardened) == 1,
+            "Spotlight v21 projection cannot isolate Git publication HTTP-status wrapper",
+        )
+        require(
+            legacy not in spotlight,
+            "Spotlight v21 projection found both hardened and legacy Git publication mutation",
+        )
+        spotlight = spotlight.replace(hardened, legacy, 1)
+    return spotlight
+
+
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
+    spotlight = project_spotlight_git_publication_status_to_legacy(spotlight)
     legacy = project_spotlight_privileged_refs_to_legacy(
         project_spotlight_readme_contents_to_legacy(
             project_spotlight_terminal_protected_runs_to_legacy(

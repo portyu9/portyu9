@@ -79,6 +79,50 @@ LEGACY_APPROVAL_COMMENT_MUTATION = (
     '              > "$RUNNER_TEMP/spotlight-approval-comment-created.json"\n'
 )
 
+
+GIT_PUBLICATION_STATUS_BLOCKS = (
+    (
+        '            BLOB_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"\n'
+        '            BLOB_STATUS_LINE="$(head -n 1 <<<"$BLOB_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+        '            [[ "$BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Spotlight Git blob creation returned unexpected status: ${BLOB_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+        '            BLOB="$(sed \'1,/^[[:space:]]*$/d\' <<<"$BLOB_HTTP_RESPONSE")"\n',
+        '            BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"\n',
+    ),
+    (
+        '            TREE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"\n'
+        '            TREE_STATUS_LINE="$(head -n 1 <<<"$TREE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+        '            [[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Spotlight Git tree creation returned unexpected status: ${TREE_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+        '            TREE="$(sed \'1,/^[[:space:]]*$/d\' <<<"$TREE_HTTP_RESPONSE")"\n',
+        '            TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"\n',
+    ),
+    (
+        '            CANDIDATE_COMMIT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"\n'
+        '            CANDIDATE_COMMIT_STATUS_LINE="$(head -n 1 <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+        '            [[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Spotlight Git commit creation returned unexpected status: ${CANDIDATE_COMMIT_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+        '            CANDIDATE_COMMIT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"\n',
+        '            CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"\n',
+    ),
+    (
+        '            CREATED_REF_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"\n'
+        '            CREATED_REF_STATUS_LINE="$(head -n 1 <<<"$CREATED_REF_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+        '            [[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Spotlight Git ref creation returned unexpected status: ${CREATED_REF_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+        '            CREATED_REF="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CREATED_REF_HTTP_RESPONSE")"\n',
+        '            CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"\n',
+    ),
+)
+
 LEGACY_PROFILE_DISPATCH = '''  dispatch:
     name: dispatch-spotlight-link-sync
     needs: [receipt_attest, lease, attest]
@@ -274,6 +318,16 @@ def project_approval_comment_http_status_to_legacy(sync: str) -> str:
     require(LEGACY_APPROVAL_COMMENT_MUTATION not in sync,
             "Spotlight approval-comment status projection found both hardened and legacy mutations")
     return sync.replace(APPROVAL_COMMENT_HTTP_STATUS_BLOCK, LEGACY_APPROVAL_COMMENT_MUTATION, 1)
+
+
+def project_git_publication_status_to_legacy(sync: str) -> str:
+    for hardened, legacy in GIT_PUBLICATION_STATUS_BLOCKS:
+        require(sync.count(hardened) == 1,
+                "Spotlight Git publication status projection cannot isolate exact HTTP wrapper")
+        require(legacy not in sync,
+                "Spotlight Git publication status projection found both hardened and legacy mutation")
+        sync = sync.replace(hardened, legacy, 1)
+    return sync
 
 
 def project_merge_success_response_to_legacy(sync: str) -> str:
@@ -908,6 +962,7 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 
 def project_item9(sync: str) -> str:
+    sync = project_git_publication_status_to_legacy(sync)
     sync = project_spotlight_pr_response_evidence_to_legacy(sync)
     sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
     sync = project_spotlight_readme_contents_to_legacy(sync)
@@ -1264,6 +1319,137 @@ def self_test_approval_comment_evidence_overlay(sync: str) -> None:
             raise ValueError(f"Spotlight approval-comment status self-test accepted weakened contract: {expected}")
 
 
+def validate_git_publication_status_overlay(sync: str) -> None:
+    propose = core.job_block(sync, "propose", "approve")
+    specs = (
+        (
+            'BLOB_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"',
+            'BLOB_STATUS_LINE="$(head -n 1 <<<"$BLOB_HTTP_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            'BLOB="$(sed \'1,/^[[:space:]]*$/d\' <<<"$BLOB_HTTP_RESPONSE")"',
+            '(.url | type == "string" and length > 0)',
+            'README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"',
+            "Spotlight Git blob creation returned unexpected status:",
+        ),
+        (
+            'TREE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"',
+            'TREE_STATUS_LINE="$(head -n 1 <<<"$TREE_HTTP_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            'TREE="$(sed \'1,/^[[:space:]]*$/d\' <<<"$TREE_HTTP_RESPONSE")"',
+            '(.truncated | type == "boolean")',
+            'CANDIDATE_TREE_SHA="$(jq -r .sha <<<"$TREE")"',
+            "Spotlight Git tree creation returned unexpected status:",
+        ),
+        (
+            'CANDIDATE_COMMIT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"',
+            'CANDIDATE_COMMIT_STATUS_LINE="$(head -n 1 <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            'CANDIDATE_COMMIT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"',
+            'jq -e --arg tree "$CANDIDATE_TREE_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL"',
+            'HEAD_SHA="$(jq -r .sha <<<"$CANDIDATE_COMMIT")"',
+            "Spotlight Git commit creation returned unexpected status:",
+        ),
+        (
+            'CREATED_REF_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
+            'CREATED_REF_STATUS_LINE="$(head -n 1 <<<"$CREATED_REF_HTTP_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            'CREATED_REF="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CREATED_REF_HTTP_RESPONSE")"',
+            'jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA"',
+            'test "$(jq -r .ref <<<"$CREATED_REF")" = "refs/heads/${CANDIDATE_BRANCH}"',
+            "Spotlight Git ref creation returned unexpected status:",
+        ),
+    )
+    for mutation, status, guard, extract, schema, consume, error in specs:
+        for fragment, label in (
+            (mutation, "mutation capture"),
+            (status, "status extraction"),
+            (guard, "HTTP 201 guard"),
+            (extract, "body extraction"),
+            (consume, "first field consumption"),
+        ):
+            require(propose.count(fragment) == 1,
+                    f"Spotlight Git publication {label} changed: {fragment}")
+        require(error in propose,
+                f"Spotlight Git publication fail-closed diagnostic changed: {error}")
+        mutation_pos = propose.index(mutation)
+        status_pos = propose.index(status)
+        guard_pos = propose.index(guard)
+        extract_pos = propose.index(extract)
+        consume_pos = propose.index(consume, extract_pos)
+        typed_boundary = propose[extract_pos:consume_pos]
+        require(
+            typed_boundary.count(schema) == 1,
+            f"Spotlight Git publication typed schema changed inside exact mutation boundary: {schema}",
+        )
+        schema_pos = propose.index(schema, extract_pos, consume_pos)
+        require(
+            mutation_pos < status_pos < guard_pos < extract_pos < schema_pos < consume_pos,
+            f"Spotlight Git publication HTTP 201/schema proof moved out of reviewed order: {error}",
+        )
+
+    for legacy in (
+        'BLOB="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"',
+        'TREE="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"',
+        'CANDIDATE_COMMIT="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"',
+        'CREATED_REF="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"',
+    ):
+        require(legacy not in propose,
+                f"Spotlight Git publication regained response-blind transport: {legacy}")
+
+
+def self_test_git_publication_status_overlay(sync: str) -> None:
+    validate_git_publication_status_overlay(sync)
+    mutations = (
+        (
+            sync.replace(
+                'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/blobs"',
+                'gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs"',
+                1,
+            ),
+            "mutation capture changed",
+        ),
+        (
+            sync.replace(
+                '[[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                '[[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "HTTP 201 guard changed",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_git_publication_status_overlay(mutated)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"Spotlight Git publication status self-test failed for wrong reason: {exc}")
+        else:
+            raise ValueError(f"Spotlight Git publication status self-test accepted weakened contract: {expected}")
+
+    hardened, _legacy = GIT_PUBLICATION_STATUS_BLOCKS[2]
+    reordered = hardened.replace(
+        '            [[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Spotlight Git commit creation returned unexpected status: ${CANDIDATE_COMMIT_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+        '            CANDIDATE_COMMIT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"\n',
+        '            CANDIDATE_COMMIT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"\n'
+        '            [[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Spotlight Git commit creation returned unexpected status: ${CANDIDATE_COMMIT_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n',
+        1,
+    )
+    mutated = sync.replace(hardened, reordered, 1)
+    try:
+        validate_git_publication_status_overlay(mutated)
+    except ValueError as exc:
+        require("moved out of reviewed order" in str(exc),
+                f"Spotlight Git publication reorder self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("Spotlight Git publication status self-test accepted body extraction before status proof")
+
+
 def validate_native_governed_bot_review_overlay(sync: str) -> None:
     merge = core.job_block(sync, "merge", None)
     for fragment in NATIVE_REVIEW_GATE_FRAGMENTS:
@@ -1398,6 +1584,8 @@ def main() -> int:
         self_test_protected_workflow_evidence_overlay(sync)
         validate_approval_comment_evidence_overlay(sync)
         self_test_approval_comment_evidence_overlay(sync)
+        validate_git_publication_status_overlay(sync)
+        self_test_git_publication_status_overlay(sync)
         validate_native_governed_bot_review_overlay(sync)
         self_test_native_governed_bot_review_overlay(sync)
         validate_merge_success_response_overlay(sync)
@@ -1409,7 +1597,7 @@ def main() -> int:
             "Spotlight UI merge authorization validation passed: item-11 ADR/observation overlays are projected away before the complete frozen item-10 proof; "
             "stale reconciliation still validates the exact full PR object, the read-only MAC preparer independently re-proves live state plus the separate trusted capability-admission proof, "
             "the isolated OIDC signer attests only the deterministic certificate subject, and terminal merge binds canonical live provenance, "
-            "trusted-actor exact HTTP-201-validated automation-approval comment evidence, the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
+            "trusted-actor exact HTTP-201-validated automation-approval comment evidence, exact HTTP-201-validated candidate Git publication, the exact post-review trusted-governed-bot-review context, the CLI's direct verified statement, and a typed canonical GitHub merge-success "
             "response plus typed terminal PR/file/commit evidence before current-main acceptance, candidate cleanup, or decision-receipt evidence."
         )
         return 0
