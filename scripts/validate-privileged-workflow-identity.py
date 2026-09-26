@@ -2670,7 +2670,7 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
     unsupported_post = autofix.index(
         'gh api --include --method POST \\\n'
         '                "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments"',
-        request_extract,
+        request_post,
     )
     unsupported_guard = autofix.index(
         '[[ "$UNSUPPORTED_EVIDENCE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
@@ -2729,8 +2729,8 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
         reviewer_validate,
     )
     require(
-        request_post < request_status < request_guard < request_extract
-        < unsupported_post < unsupported_guard < unsupported_extract
+        request_post < unsupported_post < unsupported_guard < unsupported_extract
+        < request_status < request_guard < request_extract
         < ref_post < ref_guard < ref_extract < ref_validate < ref_consume
         < autofix_commit < commit_guard < commit_extract < commit_validate
         < pr_create < pr_guard < pr_extract < receipt
