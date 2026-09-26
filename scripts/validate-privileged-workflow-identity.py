@@ -4036,11 +4036,11 @@ def validate_bot_review_creation_status_contract(bot_review: str) -> None:
 
     response_pos = bot_review.index(response)
     status_pos = bot_review.index(status, response_pos)
-    guard_pos = bot_review.index(guard, status_pos)
-    body_pos = bot_review.index(body, guard_pos)
-    body_guard_pos = bot_review.index(body_guard, body_pos)
-    schema_pos = bot_review.index(schema, body_guard_pos)
-    success_pos = bot_review.index(success, schema_pos)
+    guard_pos = bot_review.index(guard, response_pos)
+    body_pos = bot_review.index(body, response_pos)
+    body_guard_pos = bot_review.index(body_guard, response_pos)
+    schema_pos = bot_review.index(schema, response_pos)
+    success_pos = bot_review.index(success, response_pos)
     require(
         response_pos < status_pos < guard_pos < body_pos < body_guard_pos < schema_pos < success_pos,
         "Bot PR reviewer must prove HTTP 200 and extract the body before validating/accepting the review response",
