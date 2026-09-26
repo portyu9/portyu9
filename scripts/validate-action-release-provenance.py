@@ -15,7 +15,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any
+import time
+from typing import Any, Callable
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -52,6 +53,11 @@ PROVENANCE_VALUE = re.compile(
 )
 STRING_ASSIGNMENT = re.compile(r'(?m)^(?P<name>[A-Z][A-Z0-9_]*)\s*=\s*"(?P<value>[^"]+)"\s*$')
 PUBLIC_API_MAX_BYTES = 2_000_000
+PUBLIC_API_ATTEMPTS = 3
+PUBLIC_API_TIMEOUT_SECONDS = 20
+PUBLIC_API_BACKOFF_SECONDS = (1.0, 2.0)
+PUBLIC_API_MAX_RETRY_AFTER_SECONDS = 5.0
+PUBLIC_API_RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
 
 def fail(message: str) -> None:
@@ -155,30 +161,83 @@ def public_api_headers(token: str | None) -> dict[str, str]:
     return headers
 
 
-def fetch_public_api(url: str, label: str) -> str:
-    request = urllib.request.Request(
-        url,
-        method="GET",
-        headers=public_api_headers(os.environ.get("GH_TOKEN")),
-    )
-    opener = urllib.request.build_opener(NoRedirect())
+def retryable_public_api_http_error(exc: urllib.error.HTTPError) -> bool:
+    if exc.code in PUBLIC_API_RETRYABLE_HTTP_STATUS:
+        return True
+    if exc.code != 403:
+        return False
+    headers = exc.headers or {}
+    return headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After"))
+
+
+def public_api_retry_delay_seconds(exc: BaseException, failure_index: int) -> float:
+    default = PUBLIC_API_BACKOFF_SECONDS[
+        min(failure_index, len(PUBLIC_API_BACKOFF_SECONDS) - 1)
+    ]
+    if not isinstance(exc, urllib.error.HTTPError) or not exc.headers:
+        return default
+    raw = str(exc.headers.get("Retry-After") or "").strip()
     try:
-        with opener.open(request, timeout=20) as response:
-            require(response.status == 200, f"{label}: unexpected HTTP status {response.status}")
-            require(response.geturl() == url, f"{label}: public API request was redirected")
-            raw = response.read(PUBLIC_API_MAX_BYTES + 1)
-            require(len(raw) <= PUBLIC_API_MAX_BYTES, f"{label}: public API response exceeds size bound")
-            content_type = response.headers.get_content_type()
-            require(content_type == "application/json",
-                    f"{label}: unexpected public API content type: {content_type}")
-    except urllib.error.HTTPError as exc:
-        fail(f"{label}: public GitHub API returned HTTP {exc.code}")
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        fail(f"{label}: public GitHub API read failed: {exc}")
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        fail(f"{label}: public GitHub API response is not UTF-8: {exc}")
+        requested = float(raw)
+    except ValueError:
+        return default
+    return max(0.0, min(requested, PUBLIC_API_MAX_RETRY_AFTER_SECONDS))
+
+
+def fetch_public_api(
+    url: str,
+    label: str,
+    *,
+    opener: Callable[..., Any] | None = None,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> str:
+    for attempt in range(PUBLIC_API_ATTEMPTS):
+        request = urllib.request.Request(
+            url,
+            method="GET",
+            headers=public_api_headers(os.environ.get("GH_TOKEN")),
+        )
+        try:
+            if opener is None:
+                response_context = urllib.request.build_opener(NoRedirect()).open(
+                    request,
+                    timeout=PUBLIC_API_TIMEOUT_SECONDS,
+                )
+            else:
+                response_context = opener(request, timeout=PUBLIC_API_TIMEOUT_SECONDS)
+            with response_context as response:
+                require(response.status == 200, f"{label}: unexpected HTTP status {response.status}")
+                require(response.geturl() == url, f"{label}: public API request was redirected")
+                raw = response.read(PUBLIC_API_MAX_BYTES + 1)
+                require(len(raw) <= PUBLIC_API_MAX_BYTES, f"{label}: public API response exceeds size bound")
+                content_type = response.headers.get_content_type()
+                require(content_type == "application/json",
+                        f"{label}: unexpected public API content type: {content_type}")
+            try:
+                return raw.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                fail(f"{label}: public GitHub API response is not UTF-8: {exc}")
+        except urllib.error.HTTPError as exc:
+            if attempt + 1 >= PUBLIC_API_ATTEMPTS or not retryable_public_api_http_error(exc):
+                fail(f"{label}: public GitHub API returned HTTP {exc.code}")
+            delay = public_api_retry_delay_seconds(exc, attempt)
+            print(
+                f"RETRY: {label}: transient GitHub API HTTP {exc.code}; "
+                f"attempt {attempt + 1}/{PUBLIC_API_ATTEMPTS}, sleeping {delay:g}s",
+                file=sys.stderr,
+            )
+            sleeper(delay)
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError) as exc:
+            if attempt + 1 >= PUBLIC_API_ATTEMPTS:
+                fail(f"{label}: public GitHub API exhausted transient transport retry budget: {exc}")
+            delay = public_api_retry_delay_seconds(exc, attempt)
+            print(
+                f"RETRY: {label}: transient GitHub API transport failure; "
+                f"attempt {attempt + 1}/{PUBLIC_API_ATTEMPTS}, sleeping {delay:g}s",
+                file=sys.stderr,
+            )
+            sleeper(delay)
+    fail(f"{label}: unreachable public GitHub API retry state")
 
 
 def resolve_public_tag(repository: str, tag: str) -> str:
@@ -357,6 +416,41 @@ def self_test() -> None:
         require("GH_TOKEN" in str(exc), "invalid GH_TOKEN self-test raised the wrong error")
     else:
         raise ValueError("public API header self-test accepted malformed GH_TOKEN")
+    require(PUBLIC_API_ATTEMPTS == 3, "public API retry budget changed")
+    require(PUBLIC_API_TIMEOUT_SECONDS == 20, "public API timeout changed")
+    require(PUBLIC_API_BACKOFF_SECONDS == (1.0, 2.0), "public API backoff schedule changed")
+    require(PUBLIC_API_MAX_RETRY_AFTER_SECONDS == 5.0, "public API Retry-After cap changed")
+    require(
+        PUBLIC_API_RETRYABLE_HTTP_STATUS == frozenset({408, 429, 500, 502, 503, 504}),
+        "public API retryable HTTP allowlist changed",
+    )
+    rate_limited = urllib.error.HTTPError(
+        "https://api.github.com/test", 403, "fixture",
+        {"X-RateLimit-Remaining": "0", "Retry-After": "999"}, None,
+    )
+    ordinary_forbidden = urllib.error.HTTPError(
+        "https://api.github.com/test", 403, "fixture", {}, None,
+    )
+    unauthorized = urllib.error.HTTPError(
+        "https://api.github.com/test", 401, "fixture", {}, None,
+    )
+    service_unavailable = urllib.error.HTTPError(
+        "https://api.github.com/test", 503, "fixture", {}, None,
+    )
+    require(retryable_public_api_http_error(rate_limited),
+            "rate-limit-evidenced HTTP 403 must be retryable")
+    require(not retryable_public_api_http_error(ordinary_forbidden),
+            "ordinary HTTP 403 must remain terminal")
+    require(not retryable_public_api_http_error(unauthorized),
+            "HTTP 401 must remain terminal")
+    require(retryable_public_api_http_error(service_unavailable),
+            "HTTP 503 must remain retryable")
+    require(public_api_retry_delay_seconds(rate_limited, 0) == 5.0,
+            "public API Retry-After must remain capped at five seconds")
+    require(public_api_retry_delay_seconds(service_unavailable, 0) == 1.0,
+            "public API deterministic first backoff changed")
+    require(public_api_retry_delay_seconds(service_unavailable, 1) == 2.0,
+            "public API deterministic second backoff changed")
     a = "a" * 40
     b = "b" * 40
     good = (

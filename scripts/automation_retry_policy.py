@@ -13,6 +13,7 @@ POLICY = ROOT / ".github/automation-retry-policy-v1.json"
 WORKFLOWS = ROOT / ".github/workflows"
 PINNED_GENERATOR = "shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0"
 GOVERNED_REVIEW_GATE = ROOT / "scripts/governed_bot_review_gate.py"
+ACTION_RELEASE_PROVENANCE = ROOT / "scripts/validate-action-release-provenance.py"
 
 SEQ_LOOP = re.compile(
     r"^\s*for\s+(?P<variable>[A-Za-z_][A-Za-z0-9_]*)\s+in\s+\$\(seq\s+1\s+(?P<maximum>[1-9][0-9]*)\);\s*do\s*$"
@@ -26,7 +27,10 @@ MUTATION = re.compile(
     r"--method\s+(?:POST|PUT|PATCH|DELETE)\b|\bgh\s+pr\s+(?:merge|review)\b|\bgit\s+push\b"
 )
 
-EXPECTED_AUTOMATIC_RETRY_IDS = {"governed-bot-review-read-transient"}
+EXPECTED_AUTOMATIC_RETRY_IDS = {
+    "governed-bot-review-read-transient",
+    "action-release-provenance-read-transient",
+}
 EXPECTED_TERMINAL_IDS = {
     "profile-quality-live-generator-fallback",
     "dependabot-live-generator-validation",
@@ -269,35 +273,40 @@ def validate_reentry(policy: dict[str, Any], texts: dict[str, str]) -> None:
                 f"trusted re-entry semantics must explicitly deny retry carry-over: {item.get('id')}")
 
 
-def validate_automatic_retries(policy: dict[str, Any]) -> None:
+def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) -> None:
     entries = policy.get("automaticRetries")
     require(isinstance(entries, list), "retry policy automaticRetries must be an array")
     require(
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 1 and isinstance(entries[0], dict),
-            "retry policy must authorize exactly one classified automatic retry")
-    item = entries[0]
-    require(item.get("source") == "scripts/governed_bot_review_gate.py",
-            "automatic retry source changed")
-    require(item.get("operation") == "read-only-github-api-get",
-            "automatic retry operation must remain read-only GitHub GET")
-    require(item.get("failureClassifier") == "transport-or-github-transient-v1",
-            "automatic retry transient classifier changed")
-    require(item.get("maxAttempts") == 3 and item.get("timeoutSeconds") == 20,
-            "automatic retry attempt/timeout budget changed")
-    require(item.get("backoffSeconds") == [1.0, 2.0],
-            "automatic retry deterministic backoff changed")
-    require(item.get("retryableHttpStatus") == [408, 429, 500, 502, 503, 504],
-            "automatic retry HTTP status allowlist changed")
-    require(item.get("rateLimited403") is True and item.get("retryAfterCapSeconds") == 5.0,
-            "automatic retry GitHub rate-limit classifier changed")
-    require(item.get("mutationRetry") is False,
-            "automatic retry must never authorize mutation replay")
-    require(isinstance(item.get("rationale"), str) and "read-only" in item["rationale"],
-            "automatic retry rationale must preserve read-only scope")
+    require(len(entries) == 2 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly two classified automatic read retries")
+    by_id = {item["id"]: item for item in entries}
+    require(len(by_id) == 2, "automatic retry IDs must remain unique")
 
+    for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
+        item = by_id[identifier]
+        require(item.get("operation") == "read-only-github-api-get",
+                f"automatic retry operation must remain read-only GitHub GET: {identifier}")
+        require(item.get("failureClassifier") == "transport-or-github-transient-v1",
+                f"automatic retry transient classifier changed: {identifier}")
+        require(item.get("maxAttempts") == 3 and item.get("timeoutSeconds") == 20,
+                f"automatic retry attempt/timeout budget changed: {identifier}")
+        require(item.get("backoffSeconds") == [1.0, 2.0],
+                f"automatic retry deterministic backoff changed: {identifier}")
+        require(item.get("retryableHttpStatus") == [408, 429, 500, 502, 503, 504],
+                f"automatic retry HTTP status allowlist changed: {identifier}")
+        require(item.get("rateLimited403") is True and item.get("retryAfterCapSeconds") == 5.0,
+                f"automatic retry GitHub rate-limit classifier changed: {identifier}")
+        require(item.get("mutationRetry") is False,
+                f"automatic retry must never authorize mutation replay: {identifier}")
+        require(isinstance(item.get("rationale"), str) and "read-only" in item["rationale"],
+                f"automatic retry rationale must preserve read-only scope: {identifier}")
+
+    review_item = by_id["governed-bot-review-read-transient"]
+    require(review_item.get("source") == "scripts/governed_bot_review_gate.py",
+            "governed-review automatic retry source changed")
     gate = GOVERNED_REVIEW_GATE.read_text(encoding="utf-8")
     for fragment in (
         "READ_ATTEMPTS = 3",
@@ -318,13 +327,48 @@ def validate_automatic_retries(policy: dict[str, Any]) -> None:
         require(forbidden not in gate,
                 f"review-gate automatic retry source acquired mutation method: {forbidden}")
 
+    provenance_item = by_id["action-release-provenance-read-transient"]
+    require(provenance_item.get("source") == "scripts/validate-action-release-provenance.py",
+            "Action provenance automatic retry source changed")
+    provenance = ACTION_RELEASE_PROVENANCE.read_text(encoding="utf-8")
+    for fragment in (
+        "PUBLIC_API_ATTEMPTS = 3",
+        "PUBLIC_API_TIMEOUT_SECONDS = 20",
+        "PUBLIC_API_BACKOFF_SECONDS = (1.0, 2.0)",
+        "PUBLIC_API_MAX_RETRY_AFTER_SECONDS = 5.0",
+        "PUBLIC_API_RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})",
+        "def retryable_public_api_http_error(exc: urllib.error.HTTPError) -> bool:",
+        'headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After"))',
+        "for attempt in range(PUBLIC_API_ATTEMPTS):",
+        'method="GET"',
+        "attempt + 1 >= PUBLIC_API_ATTEMPTS or not retryable_public_api_http_error(exc)",
+        "except (urllib.error.URLError, TimeoutError, ConnectionResetError) as exc:",
+        'headers=public_api_headers(os.environ.get("GH_TOKEN"))',
+    ):
+        require(fragment in provenance,
+                f"classified Action provenance read retry contract is missing: {fragment}")
+    for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
+        require(forbidden not in provenance,
+                f"Action provenance automatic retry source acquired mutation method: {forbidden}")
+
+    witness = texts[".github/workflows/action-provenance-witness.yml"]
+    live_step = named_step(
+        witness,
+        "prepare",
+        "Prove exact live Action release provenance",
+    )
+    require("GH_TOKEN: ${{ github.token }}" in live_step,
+            "Action provenance witness must authenticate classified public metadata reads")
+    require("python3 scripts/validate-action-release-provenance.py" in live_step,
+            "Action provenance witness live proof invocation changed")
+
 
 def validate(policy: dict[str, Any], texts: dict[str, str]) -> None:
     require(isinstance(policy, dict) and set(policy) == {
         "schemaVersion", "automaticRetries", "terminalOperations", "boundedObservation", "trustedReentry"
     }, "retry policy top-level shape changed")
     require(policy.get("schemaVersion") == 1, "retry policy schemaVersion changed")
-    validate_automatic_retries(policy)
+    validate_automatic_retries(policy, texts)
     validate_terminal_operations(policy, texts)
     validate_bounded_observation(policy, texts)
     validate_reentry(policy, texts)
@@ -381,7 +425,7 @@ def validate_repository(root: Path = ROOT) -> None:
 if __name__ == "__main__":
     validate_repository()
     print(
-        "Automation retry taxonomy validation passed: exactly one classified read-only GitHub retry is authorized; "
+        "Automation retry taxonomy validation passed: exactly two classified read-only GitHub retries are authorized; "
         "unclassified generator/ruleset and mutation failures remain terminal; all 17 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )
