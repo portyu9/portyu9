@@ -74,8 +74,13 @@ def validate_policy(workflow_id: str, workflow: dict[str, Any]) -> None:
                 f"{label} minimumRemainingSeconds must be a positive integer below TTL: {job_id}")
 
     lease_permissions = jobs[lease_job]["permissions"]
-    require(lease_permissions == {"actions": "read"},
-            f"{label} mint job must retain only Actions-read authority")
+    expected_lease_permissions = (
+        {"actions": "read", "contents": "read"}
+        if workflow_id == "profile-stats"
+        else {"actions": "read"}
+    )
+    require(lease_permissions == expected_lease_permissions,
+            f"{label} mint job must retain exact reviewed read authority")
     write_jobs = {
         job_id for job_id, job in jobs.items()
         if any(permission == "write" for permission in job["permissions"].values())
