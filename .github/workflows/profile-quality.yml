@@ -54,6 +54,72 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Diagnose frozen #1140 Capability Admission tuple
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FROZEN_CANDIDATE_SHA: 7d9f768f55d17eaae6eaa2ec8fb744f4f949d76f
+          FROZEN_CANDIDATE_TREE_SHA: 9188cf3af856387837a102c696b6de4c9da09d95
+        run: |
+          set -euo pipefail
+          [[ "$FROZEN_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FROZEN_CANDIDATE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${FROZEN_CANDIDATE_SHA}")"
+          test "$(jq -r .sha <<<"$CANDIDATE_COMMIT")" = "$FROZEN_CANDIDATE_SHA"
+          test "$(jq -r .tree.sha <<<"$CANDIDATE_COMMIT")" = "$FROZEN_CANDIDATE_TREE_SHA"
+          CANDIDATE_TREE="$(gh api "repos/${GITHUB_REPOSITORY}/git/trees/${FROZEN_CANDIDATE_TREE_SHA}?recursive=1")"
+          test "$(jq -r .sha <<<"$CANDIDATE_TREE")" = "$FROZEN_CANDIDATE_TREE_SHA"
+          test "$(jq -r .truncated <<<"$CANDIDATE_TREE")" = "false"
+          rm -rf candidate-capability-source
+          mkdir -p candidate-capability-source
+          mapfile -t SELECTED_PATHS < <(
+            jq -r '.tree[] | select(.type == "blob") | .path' <<<"$CANDIDATE_TREE" |
+              LC_ALL=C sort |
+              python3 scripts/workflow_capability_tcb.py select
+          )
+          test "${#SELECTED_PATHS[@]}" -gt 0
+          for PATH_VALUE in "${SELECTED_PATHS[@]}"; do
+            ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path and .type == "blob")]' <<<"$CANDIDATE_TREE")"
+            test "$(jq 'length' <<<"$ENTRY")" = "1"
+            BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
+            [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"
+            test "$(jq -r .encoding <<<"$BLOB")" = "base64"
+            mkdir -p "candidate-capability-source/$(dirname "$PATH_VALUE")"
+            jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "candidate-capability-source/$PATH_VALUE"
+            test -s "candidate-capability-source/$PATH_VALUE"
+          done
+          export FROZEN_CANDIDATE_TREE_SHA
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          import trusted_workflow_capability
+          import workflow_capability_admission
+          import workflow_capability_diff
+          import workflow_capability_snapshot
+
+          base = workflow_capability_snapshot.load_combined()
+          candidate_root = Path("candidate-capability-source")
+          candidate = trusted_workflow_capability.compile_repository(candidate_root)
+          diff = workflow_capability_diff.semantic_diff(base, candidate)
+          diff = workflow_capability_admission.protect_trusted_control(base, candidate, diff)
+          diff = workflow_capability_admission.protect_trusted_sources(
+              candidate_root,
+              os.environ["FROZEN_CANDIDATE_TREE_SHA"],
+              diff,
+          )
+          result = {
+              "baseBomSha256": diff["baseBomSha256"],
+              "candidateBomSha256": diff["candidateBomSha256"],
+              "expansionSha256": diff["expansionSha256"],
+              "expansions": diff["expansions"],
+              "reductions": diff["reductions"],
+          }
+          print("CAPABILITY-DIAGNOSTIC=" + json.dumps(result, sort_keys=True, separators=(",", ":")))
+          PY
+
       - name: Validate privileged workflow byte identity
         run: python3 scripts/validate-privileged-workflow-identity.py
 
