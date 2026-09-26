@@ -50,6 +50,18 @@ LEGACY_MERGE_SUCCESS_BLOCK = (
     '          MERGE_SHA="$(jq -r .sha <<<"$RESULT")"\n'
     '          test "$MERGE_SHA" != "null"\n'
 )
+MERGE_HTTP_STATUS_BLOCK = (
+    '          MERGE_HTTP_RESPONSE="$(gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
+    '          MERGE_STATUS_LINE="$(head -n 1 <<<"$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+    '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+    '            echo "ERROR: Spotlight terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+    '            exit 1\n'
+    '          }\n'
+    '          RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"\n'
+)
+LEGACY_MERGE_MUTATION = (
+    '          RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
+)
 
 LEGACY_PROFILE_DISPATCH = '''  dispatch:
     name: dispatch-spotlight-link-sync
@@ -107,6 +119,7 @@ LEGACY_PROFILE_DISPATCH = '''  dispatch:
             -f ref=main
 '''
 ORIGINAL_PROJECT_ITEM9 = core.project_item9
+ORIGINAL_VALIDATE_MAC = core.validate_mac
 ORIGINAL_VALIDATE_BUILDER_SCRIPT = core.validate_builder_script
 LEGACY_PROTECTED_WORKFLOW_EVIDENCE = "          CODEQL_WORKFLOW_ID=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml\" --jq .id)\"\n          DEPENDENCY_WORKFLOW_ID=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml\" --jq .id)\"\n          PROFILE_WORKFLOW_ID=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml\" --jq .id)\"\n          EXPECTED_IDENTITIES=\"$(jq -cn --argjson codeql \"$CODEQL_WORKFLOW_ID\" --argjson dependency \"$DEPENDENCY_WORKFLOW_ID\" --argjson profile \"$PROFILE_WORKFLOW_ID\" \\\n            '[{\"name\":\"CodeQL\",\"workflow_id\":$codeql},{\"name\":\"Dependency review\",\"workflow_id\":$dependency},{\"name\":\"Profile quality\",\"workflow_id\":$profile}] | sort_by(.name)')\"\n\n          APPROVAL_REQUESTED_RUN_IDS=\"\"\n          for attempt in $(seq 1 60); do\n            RUNS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100\")\"\n            RUNS_TOTAL=\"$(jq -r '.total_count // empty' <<<\"$RUNS\")\"\n            RUNS_COUNT=\"$(jq '.[(\"workflow\" + \"_runs\")] | length' <<<\"$RUNS\")\"\n            [[ \"$RUNS_TOTAL\" =~ ^[0-9]+$ ]]\n            [[ \"$RUNS_COUNT\" =~ ^[0-9]+$ ]]\n            test \"$RUNS_TOTAL\" = \"$RUNS_COUNT\" || { echo \"Canonical Spotlight-link workflow-run response is incomplete.\" >&2; exit 1; }\n            test \"$RUNS_TOTAL\" -le 3 || { echo \"Canonical Spotlight-link workflow-run set is ambiguous.\" >&2; exit 1; }\n            ALL_SUCCESS=false\n            if [ \"$RUNS_TOTAL\" = \"3\" ]; then\n              OBSERVED_IDENTITIES=\"$(jq -c '[.[(\"workflow\" + \"_runs\")][] | {name,workflow_id}] | sort_by(.name)' <<<\"$RUNS\")\"\n              test \"$OBSERVED_IDENTITIES\" = \"$EXPECTED_IDENTITIES\" || { echo \"Canonical Spotlight-link workflow-run identities changed.\" >&2; exit 1; }\n              ALL_SUCCESS=true\n              for NAME in \"CodeQL\" \"Dependency review\" \"Profile quality\"; do\n                case \"$NAME\" in\n                  \"CodeQL\") EXPECTED_ID=\"$CODEQL_WORKFLOW_ID\" ;;\n                  \"Dependency review\") EXPECTED_ID=\"$DEPENDENCY_WORKFLOW_ID\" ;;\n                  \"Profile quality\") EXPECTED_ID=\"$PROFILE_WORKFLOW_ID\" ;;\n                  *) exit 1 ;;\n                esac\n                RUN_COUNT=\"$(jq --arg name \"$NAME\" --argjson workflow_id \"$EXPECTED_ID\" '[.[(\"workflow\" + \"_runs\")][] | select(.name == $name and .workflow_id == $workflow_id)] | length' <<<\"$RUNS\")\"\n                test \"$RUN_COUNT\" = \"1\"\n                RUN=\"$(jq -c --arg name \"$NAME\" --argjson workflow_id \"$EXPECTED_ID\" '[.[(\"workflow\" + \"_runs\")][] | select(.name == $name and .workflow_id == $workflow_id)][0]' <<<\"$RUNS\")\"\n                RUN_ID=\"$(jq -r .id <<<\"$RUN\")\"\n                CHECK_SUITE_ID=\"$(jq -r .check_suite_id <<<\"$RUN\")\"\n                RUN_ATTEMPT=\"$(jq -r .run_attempt <<<\"$RUN\")\"\n                STATUS=\"$(jq -r .status <<<\"$RUN\")\"\n                CONCLUSION=\"$(jq -r '.conclusion // \"\"' <<<\"$RUN\")\"\n                [[ \"$RUN_ID\" =~ ^[1-9][0-9]*$ ]]\n                [[ \"$CHECK_SUITE_ID\" =~ ^[1-9][0-9]*$ ]]\n                [[ \"$RUN_ATTEMPT\" =~ ^[1-9][0-9]*$ ]]\n                test \"$(jq -r .head_sha <<<\"$RUN\")\" = \"$HEAD_SHA\"\n                test \"$(jq -r .head_branch <<<\"$RUN\")\" = \"$CANDIDATE_BRANCH\"\n                test \"$(jq -r .event <<<\"$RUN\")\" = \"pull_request\"\n                test \"$(jq -r .workflow_id <<<\"$RUN\")\" = \"$EXPECTED_ID\"\n                test \"$(jq -r .repository.full_name <<<\"$RUN\")\" = \"$GITHUB_REPOSITORY\"\n                test \"$(jq -r .head_repository.full_name <<<\"$RUN\")\" = \"$GITHUB_REPOSITORY\"\n                case \"$NAME\" in\n                  \"CodeQL\") CODEQL_RUN_ID=\"$RUN_ID\"; CODEQL_CHECK_SUITE_ID=\"$CHECK_SUITE_ID\" ;;\n                  \"Dependency review\") DEPENDENCY_RUN_ID=\"$RUN_ID\"; DEPENDENCY_CHECK_SUITE_ID=\"$CHECK_SUITE_ID\" ;;\n                  \"Profile quality\") PROFILE_RUN_ID=\"$RUN_ID\"; PROFILE_CHECK_SUITE_ID=\"$CHECK_SUITE_ID\" ;;\n                  *) exit 1 ;;\n                esac\n                if [ \"$STATUS\" = \"action_required\" ] || [ \"$STATUS\" = \"waiting\" ] || [ \"$CONCLUSION\" = \"action_required\" ]; then\n                  case \" $APPROVAL_REQUESTED_RUN_IDS \" in\n                    *\" $RUN_ID \"*) : ;;\n                    *)\n                      gh api --method POST \"repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve\" >/dev/null\n                      APPROVAL_REQUESTED_RUN_IDS=\"${APPROVAL_REQUESTED_RUN_IDS} ${RUN_ID}\"\n                      APPROVAL_ENTRY=\"$(jq -cn --arg name \"$NAME\" --argjson workflow \"$EXPECTED_ID\" --argjson run \"$RUN_ID\" \\\n                        --argjson attempt \"$RUN_ATTEMPT\" --argjson suite \"$CHECK_SUITE_ID\" --arg head \"$HEAD_SHA\" \\\n                        '{workflowName:$name,workflowId:$workflow,runId:$run,runAttempt:$attempt,checkSuiteId:$suite,headSha:$head}')\"\n                      APPROVAL_REQUESTS_JSON=\"$(jq -c --argjson entry \"$APPROVAL_ENTRY\" '. + [$entry]' <<<\"$APPROVAL_REQUESTS_JSON\")\"\n                      echo \"approval_requests_json=$APPROVAL_REQUESTS_JSON\" >> \"$GITHUB_OUTPUT\"\n                      ;;\n                  esac\n                  ALL_SUCCESS=false\n                elif [ \"$STATUS\" = \"completed\" ] && [ \"$CONCLUSION\" = \"success\" ]; then\n                  :\n                elif [ \"$STATUS\" = \"completed\" ]; then\n                  echo \"Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION).\" >&2\n                  exit 1\n                else\n                  ALL_SUCCESS=false\n                fi\n              done\n            fi\n            if [ \"$ALL_SUCCESS\" = \"true\" ]; then break; fi\n            test \"$attempt\" -lt 60\n            sleep 10\n          done\n          test \"$ALL_SUCCESS\" = \"true\"\n\n"
 
@@ -231,6 +244,14 @@ def project_protected_workflow_evidence_to_legacy(sync: str) -> str:
     return sync[:start] + LEGACY_PROTECTED_WORKFLOW_EVIDENCE + sync[end:]
 
 
+def project_merge_http_status_to_legacy(sync: str) -> str:
+    require(sync.count(MERGE_HTTP_STATUS_BLOCK) == 1,
+            "Spotlight terminal merge-status projection cannot isolate exact HTTP wrapper")
+    require(LEGACY_MERGE_MUTATION not in sync,
+            "Spotlight terminal merge-status projection found both hardened and legacy mutations")
+    return sync.replace(MERGE_HTTP_STATUS_BLOCK, LEGACY_MERGE_MUTATION, 1)
+
+
 def project_merge_success_response_to_legacy(sync: str) -> str:
     require(sync.count(MERGE_SUCCESS_BLOCK) == 1,
             "Spotlight merge-success response projection cannot isolate the exact validated block")
@@ -239,18 +260,32 @@ def project_merge_success_response_to_legacy(sync: str) -> str:
     return sync.replace(MERGE_SUCCESS_BLOCK, LEGACY_MERGE_SUCCESS_BLOCK, 1)
 
 
+def validate_mac_with_merge_http_projection(sync: str) -> None:
+    """Project only the new transport wrapper before rerunning frozen item-10 MAC proof."""
+    ORIGINAL_VALIDATE_MAC(project_merge_http_status_to_legacy(sync))
+
+
 def validate_merge_success_response_overlay(sync: str) -> None:
     merge = core.job_block(sync, "merge", None)
+    require(merge.count(MERGE_HTTP_STATUS_BLOCK) == 1,
+            "Spotlight terminal merge HTTP-status block changed")
     require(merge.count(MERGE_SUCCESS_BLOCK) == 1,
             "Spotlight terminal merge-success response schema block changed")
+    require(
+        'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"' not in merge,
+        "Spotlight terminal merge must not consume a response-blind mutation",
+    )
     require(merge.count('<<<"$RESULT"') == 1,
             "Spotlight terminal merge may consume the raw merge response only through the canonical validator")
     require('test "$(jq -r .merged <<<"$RESULT")" = "true"' not in merge and
             'MERGE_SHA="$(jq -r .sha <<<"$RESULT")"' not in merge,
             "Spotlight terminal merge retained a direct unvalidated merge-response consumer")
 
-    mutation = merge.index('RESULT="$(gh api --method PUT ')
-    validation = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"')
+    mutation = merge.index('MERGE_HTTP_RESPONSE="$(gh api --include --method PUT ')
+    status = merge.index('MERGE_STATUS_LINE="$(head -n 1 <<<"$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"', mutation)
+    guard = merge.index('[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {', status)
+    extraction = merge.index('RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"', guard)
+    validation = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"', extraction)
     normalized_sha = merge.index('MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"')
     merged_pr = merge.index('MERGED_PR="$(gh api ')
     current_main_ref = merge.index(
@@ -267,7 +302,7 @@ def validate_merge_success_response_overlay(sync: str) -> None:
     )
     cleanup = merge.index('CANDIDATE_REFS="$(gh api ', current_main)
     require(
-        mutation < validation < normalized_sha < merged_pr
+        mutation < status < guard < extraction < validation < normalized_sha < merged_pr
         < current_main_ref < current_main_schema < current_main < cleanup,
         "Spotlight merge-success validation must precede post-merge proof, typed current-main acceptance, and cleanup",
     )
@@ -308,6 +343,51 @@ def self_test_merge_success_response_overlay(sync: str) -> None:
         ({"merged": True, "sha": "a" * 40, "message": None}, "message must be nonempty"),
     ):
         expect_merge_success_fixture_failure(payload, expected)
+
+    for weakened, expected in (
+        (
+            sync.replace(
+                'gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+                'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+                1,
+            ),
+            "HTTP-status block changed",
+        ),
+        (
+            sync.replace(
+                '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "HTTP-status block changed",
+        ),
+        (
+            sync.replace(
+                MERGE_HTTP_STATUS_BLOCK,
+                MERGE_HTTP_STATUS_BLOCK.replace(
+                    '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+                    '            echo "ERROR: Spotlight terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+                    '            exit 1\n'
+                    '          }\n'
+                    '          RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"\n',
+                    '          RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"\n'
+                    '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+                    '            echo "ERROR: Spotlight terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+                    '            exit 1\n'
+                    '          }\n',
+                ),
+                1,
+            ),
+            "HTTP-status block changed",
+        ),
+    ):
+        try:
+            validate_merge_success_response_overlay(weakened)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"Spotlight merge-status self-test failed for wrong reason: {exc}")
+        else:
+            raise ValueError("Spotlight merge-status self-test accepted weakened transport validation")
 
     weakened = sync.replace(
         'MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"',
@@ -820,6 +900,7 @@ def project_item9(sync: str) -> str:
     require(legacy_age_guard not in sync,
             "Spotlight item-9 projection found both same-base and legacy age guards")
     sync = sync.replace(current_age_guard, legacy_age_guard, 1)
+    sync = project_merge_http_status_to_legacy(sync)
     sync = project_merge_success_response_to_legacy(sync)
     sync = project_strict_pull_review_schema_to_legacy(sync)
     sync = project_native_review_gate_to_item10_order(sync)
@@ -1111,7 +1192,7 @@ def validate_native_governed_bot_review_overlay(sync: str) -> None:
     gate = merge.index(check_read)
     roots = merge.index('Spotlight terminal stage: pre-merge-roots-verified')
     mutation = merge.index(
-        'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
+        'gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
     )
     require(review < gate < roots < mutation,
             "Spotlight native governed-bot gate and root reproof must run after review/veto proof and before merge mutation")
@@ -1202,6 +1283,7 @@ def validate_builder_script_with_trusted_admission(wrapper: str, builder_core: s
 
 core.DOWNLOAD_STEP = COMPRESSED_DOWNLOAD_STEP
 core.project_item9 = project_item9
+core.validate_mac = validate_mac_with_merge_http_projection
 core.validate_preparer_script = validate_preparer_script_with_trusted_admission
 core.validate_builder_script = validate_builder_script_with_trusted_admission
 

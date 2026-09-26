@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v104"
+VERSION = "governed-workflow-byte-identity-v105"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "09176420becea053799334de00c7dcb1b7dfdc2f",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "9e4e68cf7b976eb56bb7e27bd8880b6087aef868",
+    ".github/workflows/spotlight-link-sync.yml": "8775d23dc9cb064fc4e6b17439db4edfa7ec6831",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -214,7 +214,11 @@ def validate_item10_mac(spotlight: str) -> None:
         '--arg marker "$REVIEW_MARKER"',
         'contains($marker)',
         'echo "Spotlight terminal stage: exact-base-head-portyu9-approval-and-manual-veto-verified" >&2',
-        'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
+        'MERGE_HTTP_RESPONSE="$(gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"',
+        'MERGE_STATUS_LINE="$(head -n 1 <<<"$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"',
+        '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        'ERROR: Spotlight terminal merge returned unexpected status:',
+        'RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"',
         'MERGE_SUCCESS_FILTER=\'if type != "object" then error("Spotlight merge response must be an object")',
         'elif (.merged | type) != "boolean" or .merged != true',
         '(.sha | test("^[0-9a-f]{40}$") | not)',
@@ -254,8 +258,11 @@ def validate_item10_mac(spotlight: str) -> None:
     provenance_pos = merge.index('echo "Spotlight terminal stage: certificate-provenance-verified" >&2')
     verify_pos = merge.index('gh attestation verify "$SUBJECT"')
     statement_pos = merge.index('.verificationResult.statement')
-    merge_pos = merge.index('RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"')
-    response_pos = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"')
+    merge_pos = merge.index('MERGE_HTTP_RESPONSE="$(gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"')
+    merge_status_pos = merge.index('MERGE_STATUS_LINE="$(head -n 1 <<<"$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"', merge_pos)
+    merge_guard_pos = merge.index('[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {', merge_status_pos)
+    merge_body_pos = merge.index('RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"', merge_guard_pos)
+    response_pos = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"', merge_body_pos)
     merged_pr_pos = merge.index('MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"', response_pos)
     merged_pr_schema_pos = merge.index('validate_terminal_pr_object "$MERGED_PR"', merged_pr_pos)
     merged_pr_identity_pos = merge.index('jq -e --argjson pr "$PR_NUMBER" --arg merge "$MERGE_SHA"', merged_pr_schema_pos)
@@ -274,7 +281,8 @@ def validate_item10_mac(spotlight: str) -> None:
     cleanup_pos = merge.index('CANDIDATE_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"')
     require(
         pre_pr_pos < pre_pr_schema_pos < files_pos < files_schema_pos < commit_pos < commit_schema_pos
-        < provenance_pos < verify_pos < statement_pos < merge_pos < response_pos < merged_pr_pos
+        < provenance_pos < verify_pos < statement_pos < merge_pos < merge_status_pos
+        < merge_guard_pos < merge_body_pos < response_pos < merged_pr_pos
         < merged_pr_schema_pos < merged_pr_identity_pos < merge_sha_bind_pos
         < current_main_ref_pos < current_main_validate_pos < current_main_pos < cleanup_pos,
         "Spotlight terminal typed candidate/MAC/merge/post-merge/current-main/cleanup ordering changed",
@@ -2851,7 +2859,7 @@ def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
         created_pos,
     )
     merge_pos = autofix.index(
-        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+        'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         actor_pos,
     )
     require(
@@ -3116,10 +3124,15 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'test "$WAKE_REF" = "refs/heads/main"',
         'test "$WAKE_ACTOR" = "github-actions[bot]"',
         "startsWith(github.ref, 'refs/heads/dependabot/github_actions/')",
+        'MERGE_HTTP_RESPONSE="$RUNNER_TEMP/dependabot-merge-http-response.txt"',
         'MERGE_BODY="$RUNNER_TEMP/dependabot-merge-response.json"',
         'MERGE_ERR="$RUNNER_TEMP/dependabot-merge-error.txt"',
+        'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         'MERGE_STATUS=$?',
         'if [ "$MERGE_STATUS" -ne 0 ]; then',
+        'MERGE_STATUS_LINE="$(head -n 1 "$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"',
+        '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        'Dependabot terminal merge returned unexpected status:',
         'Dependabot merge API request failed: ${MERGE_MESSAGE}',
         'Dependabot merge API rejected exact-head merge: ${MERGE_MESSAGE}',
     ):

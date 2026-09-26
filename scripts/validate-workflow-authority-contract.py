@@ -93,6 +93,18 @@ LEGACY_MAIN_PROOF = (
 )
 CURRENT_MAIN_OUTPUT = '      current_main_sha: ${{ steps.merge.outputs.current_main_sha }}\n'
 CURRENT_MAIN_ECHO = '          echo "current_main_sha=$CURRENT_MAIN_SHA" >> "$GITHUB_OUTPUT"\n'
+SPOTLIGHT_MERGE_HTTP_STATUS = (
+    '          MERGE_HTTP_RESPONSE="$(gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
+    '          MERGE_STATUS_LINE="$(head -n 1 <<<"$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+    '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+    '            echo "ERROR: Spotlight terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+    '            exit 1\n'
+    '          }\n'
+    '          RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"\n'
+)
+SPOTLIGHT_MERGE_LEGACY = (
+    '          RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
+)
 SPOTLIGHT_REVIEWER_STEWARDSHIP = "          REQUESTED=\"$(jq '[.requested_reviewers[]? | select(.login == \"portyu9\")] | length' <<<\"$PR\")\"\n          [[ \"$REQUESTED\" =~ ^[0-9]+$ ]]\n          if [ \"$REQUESTED\" = \"0\" ]; then\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers\" \\\n              -f 'reviewers[]=portyu9' > requested-reviewer.json\n            test \"$(jq '[.requested_reviewers[]? | select(.login == \"portyu9\")] | length' requested-reviewer.json)\" = \"1\"\n          fi\n"
 SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n      pull-requests: write\n"
 LEGACY_SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n"
@@ -479,6 +491,18 @@ def project_spotlight_privileged_refs_to_legacy(sync: str) -> str:
 
 
 
+def project_spotlight_terminal_merge_status_to_legacy(sync: str) -> str:
+    core.require(
+        sync.count(SPOTLIGHT_MERGE_HTTP_STATUS) == 1,
+        "Spotlight authority terminal merge-status projection cannot isolate exact HTTP wrapper",
+    )
+    core.require(
+        SPOTLIGHT_MERGE_LEGACY not in sync,
+        "Spotlight production workflow regained response-blind terminal merge",
+    )
+    return sync.replace(SPOTLIGHT_MERGE_HTTP_STATUS, SPOTLIGHT_MERGE_LEGACY, 1)
+
+
 def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
     start_marker = "          normalize_protected_certificate_run() {\n"
     end_marker = "          EXPECTED_CERTIFICATE_RUNS="
@@ -499,8 +523,9 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 
 def validate_item10_authority_with_typed_protected_runs(sync: str) -> None:
+    projected = project_spotlight_terminal_merge_status_to_legacy(sync)
     ORIGINAL_VALIDATE_ITEM10_AUTHORITY(
-        project_spotlight_terminal_protected_runs_to_legacy(sync)
+        project_spotlight_terminal_protected_runs_to_legacy(projected)
     )
 
 
@@ -582,6 +607,7 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
     return sync
 
 def project_item9_sync_with_marker(sync: str) -> str:
+    sync = project_spotlight_terminal_merge_status_to_legacy(sync)
     sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
     sync = project_spotlight_readme_contents_to_legacy(sync)
     sync = project_spotlight_privileged_refs_to_legacy(sync)

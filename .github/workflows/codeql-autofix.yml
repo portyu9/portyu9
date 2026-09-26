@@ -785,12 +785,17 @@ jobs:
             test "$(jq -r .prNumber approval-comment-normalized.json)" = "$PR_NUMBER"
           fi
 
-          gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
+          MERGE_HTTP_RESPONSE="$(gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
             -f merge_method=merge \
             -f sha="$ADMITTED_HEAD_SHA" \
             -f commit_title="CodeQL Autofix alert #${ALERT_NUMBER}" \
-            -f commit_message="Trusted CodeQL Autofix merged after exact-head admission and Protect Main enforcement." \
-            > merge.json
+            -f commit_message="Trusted CodeQL Autofix merged after exact-head admission and Protect Main enforcement.")"
+          MERGE_STATUS_LINE="$(head -n 1 <<<"$MERGE_HTTP_RESPONSE" | tr -d '\r')"
+          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
+            echo "ERROR: CodeQL Autofix terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' <<<"$MERGE_HTTP_RESPONSE" > merge.json
           python3 scripts/codeql_autofix_controller.py merge-success-response \
             --response-file merge.json \
             --out merge-success-normalized.json
