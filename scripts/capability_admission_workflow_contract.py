@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
-EXPECTED_GIT_BLOB = "20fb012eb29712899a3c93e0a4ebbd7c99215646"
+EXPECTED_GIT_BLOB = "0c9fda2528eb81eeba090750b10a43045a0898ca"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -673,23 +673,43 @@ def validate_text(text: str) -> None:
         "trusted capability admission Spotlight compare response schema must fail visibly",
     )
 
-    publisher = 'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
+    publisher = 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
+    legacy_publisher = 'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
+    status_marker = 'CHECK_STATUS_LINE="$(head -n 1 <<<"$CHECK_RESPONSE" | tr -d \'\\r\')"'
+    status_guard = '[[ "$CHECK_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    body_marker = 'CHECK="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CHECK_RESPONSE")"'
+    body_guard = 'test "$CHECK" != "$CHECK_RESPONSE"'
     schema_marker = "jq -e --arg name \"$CHECK_NAME\" --arg head \"$HEAD_SHA\" --arg external \"$EXTERNAL_ID\" --arg summary \"$SUMMARY\" '"
     schema_end_marker = "' <<<\"$CHECK\" >/dev/null || {"
     consume_marker = '[[ "$(jq -r .id <<<"$CHECK")" =~ ^[1-9][0-9]*$ ]]'
-    require(text.count(publisher) == 1,
+    require(text.count(publisher) == 1 and legacy_publisher not in text,
             "trusted capability admission exact candidate-check publisher surface changed")
+    require(text.count(status_marker) == 1,
+            "trusted capability admission check-run response status extraction changed")
+    require(text.count(status_guard) == 1,
+            "trusted capability admission check-run HTTP 201 guard changed")
+    require(
+        "trusted capability-admission check-run creation returned unexpected status:" in text,
+        "trusted capability admission check-run status failure must be explicit and fail closed",
+    )
+    require(text.count(body_marker) == 1 and text.count(body_guard) == 1,
+            "trusted capability admission check-run response body extraction changed")
     require(text.count(schema_marker) == 1 and text.count(schema_end_marker) == 1,
             "trusted capability admission check-run response schema anchor changed")
     require(text.count(consume_marker) == 1,
             "trusted capability admission check-run response scalar-consumption anchor changed")
     publisher_pos = text.index(publisher)
+    status_pos = text.index(status_marker, publisher_pos)
+    guard_pos = text.index(status_guard, publisher_pos)
+    body_pos = text.index(body_marker, publisher_pos)
+    body_guard_pos = text.index(body_guard, publisher_pos)
     schema_pos = text.index(schema_marker, publisher_pos)
     schema_end_pos = text.index(schema_end_marker, schema_pos) + len(schema_end_marker)
     consume_pos = text.index(consume_marker, publisher_pos)
     require(
-        publisher_pos < schema_pos < schema_end_pos < consume_pos,
-        "trusted capability admission check-run response schema must precede scalar consumption",
+        publisher_pos < status_pos < guard_pos < body_pos < body_guard_pos
+        < schema_pos < schema_end_pos < consume_pos,
+        "trusted capability admission check-run HTTP 201 status and body schema must precede scalar consumption",
     )
     schema = text[schema_pos:schema_end_pos]
     for schema_fragment in (
@@ -795,6 +815,28 @@ def expect_check_schema_reorder_failure(text: str) -> None:
                 f"trusted capability admission schema-reordering self-test failed for wrong reason: {exc}")
     else:
         raise ValueError("trusted capability admission contract accepted schema-after-consumption reordering")
+
+
+def expect_check_status_reorder_failure(text: str) -> None:
+    status_marker = 'CHECK_STATUS_LINE="$(head -n 1 <<<"$CHECK_RESPONSE" | tr -d \'\\r\')"'
+    body_marker = 'CHECK="$(sed \'1,/^[[:space:]]*$/d\' <<<"$CHECK_RESPONSE")"'
+    status_start = text.index(status_marker)
+    status_end_marker = "          }\n"
+    status_end = text.index(status_end_marker, status_start) + len(status_end_marker)
+    status_block = text[status_start:status_end]
+    without_status = text[:status_start] + text[status_end:]
+    relocated_body = without_status.index(body_marker, status_start)
+    body_end = without_status.index("\n", relocated_body) + 1
+    mutated = without_status[:body_end] + status_block + without_status[body_end:]
+    try:
+        validate_text(mutated)
+    except ValueError as exc:
+        require(
+            "HTTP 201 status and body schema must precede scalar consumption" in str(exc),
+            f"trusted capability admission status-reordering self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("trusted capability admission contract accepted status-after-body extraction")
 
 
 def expect_spotlight_topology_schema_failure(
@@ -942,10 +984,17 @@ def self_test() -> None:
     )
     expect_failure(
         text,
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
         'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
-        'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         "candidate-check publisher",
     )
+    expect_failure(
+        text,
+        '[[ "$CHECK_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$CHECK_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        "HTTP 201 guard changed",
+    )
+    expect_check_status_reorder_failure(text)
     expect_scoped_schema_failure(
         text,
         start_marker="          validate_git_ref_object() {",
