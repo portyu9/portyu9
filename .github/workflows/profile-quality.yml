@@ -519,6 +519,27 @@ jobs:
       pull-requests: read
 
     steps:
+      - name: Checkout exact accepted-base trusted admission source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-base
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
+        working-directory: trusted-base
+
+      - name: Verify exact accepted-base governed read transport identity
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
       - name: Prove exact PR-native Dependabot context
         env:
           GH_TOKEN: ${{ github.token }}
@@ -598,26 +619,26 @@ jobs:
             ' <<<"$response" >/dev/null
           }
 
-          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"
+          python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"
           PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"
           validate_dependabot_pr_object "$PR" || {
             echo "ERROR: malformed or mismatched PR-native Dependabot admission PR evidence." >&2
             exit 1
           }
 
-          MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA" || {
             echo "ERROR: malformed or stale PR-native Dependabot admission main-ref evidence." >&2
             exit 1
           }
-          HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+          HEAD_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
           validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {
             echo "ERROR: malformed or stale PR-native Dependabot admission head-ref evidence." >&2
             exit 1
           }
 
-          BASE_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"
-          HEAD_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"
+          BASE_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"
+          HEAD_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"
           validate_contents_file_object "$BASE_GATE" ".github/workflows/profile-quality.yml" || {
             echo "ERROR: malformed accepted-base Profile Quality workflow evidence." >&2
             exit 1
@@ -633,14 +654,6 @@ jobs:
             exit 1
           }
 
-      - name: Checkout exact accepted-base trusted admission source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: trusted-base
-          persist-credentials: false
-          fetch-depth: 1
-
       - name: Checkout exact Dependabot candidate as inert data
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -648,15 +661,6 @@ jobs:
           path: candidate-source
           persist-credentials: false
           fetch-depth: 1
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Verify resolved Python runtime
-        run: python3 scripts/verify-python-runtime.py
-        working-directory: trusted-base
 
       - name: Verify exact accepted-base admission source identity
         env:
@@ -673,6 +677,7 @@ jobs:
           test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_tcb.py)" = "963da472bad7f0ba7270dee0393a132a20dd4cc6"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
           TREE_SHA="$(git -C candidate-source rev-parse 'HEAD^{tree}')"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
           printf '%s\n' "$TREE_SHA" > "$RUNNER_TEMP/dependabot-candidate-tree-sha"
@@ -709,8 +714,8 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > "$RUNNER_TEMP/dependabot-release-refs.txt"
-          gh api "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"
-          gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > "$RUNNER_TEMP/dependabot-release.json"
+          python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"
+          python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > "$RUNNER_TEMP/dependabot-release.json"
           python3 trusted-base/scripts/dependabot_release.py \
             --refs "$RUNNER_TEMP/dependabot-release-refs.txt" \
             --repository-json "$RUNNER_TEMP/dependabot-release-repository.json" \

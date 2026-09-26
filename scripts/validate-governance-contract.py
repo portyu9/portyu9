@@ -37,27 +37,29 @@ def validate_action_identity_projection() -> None:
 
 def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
     for fragment in (
+        "name: Checkout exact accepted-base trusted admission source",
+        "ref: ${{ github.event.pull_request.base.sha }}",
+        "path: trusted-base",
+        "name: Set up Python",
+        "name: Verify resolved Python runtime",
+        "run: python3 scripts/verify-python-runtime.py",
+        "working-directory: trusted-base",
+        "name: Verify exact accepted-base governed read transport identity",
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         "name: Prove exact PR-native Dependabot context",
         "validate_dependabot_pr_object() {",
         '(.maintainer_can_modify | type == "boolean" and . == false) and',
         "validate_git_ref_object() {",
         "validate_contents_file_object() {",
-        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
-        'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
-        'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
-        'BASE_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
-        'HEAD_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
+        'python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'MAIN_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+        'HEAD_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+        'BASE_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
+        'HEAD_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
         'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
-        "name: Checkout exact accepted-base trusted admission source",
-        "ref: ${{ github.event.pull_request.base.sha }}",
-        "path: trusted-base",
         "name: Checkout exact Dependabot candidate as inert data",
         "ref: ${{ github.event.pull_request.head.sha }}",
         "path: candidate-source",
-        "name: Set up Python",
-        "name: Verify resolved Python runtime",
-        "run: python3 scripts/verify-python-runtime.py",
-        "working-directory: trusted-base",
         "name: Verify exact accepted-base admission source identity",
         'test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"',
         'test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"',
@@ -66,6 +68,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"',
         'HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"',
         'HEAD:scripts/workflow_capability_tcb.py)" = "963da472bad7f0ba7270dee0393a132a20dd4cc6"',
+        'HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         "name: Fetch exact candidate release evidence",
         'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"',
         "trusted-base/scripts/workflow_capability_api_collection.py files",
@@ -73,8 +76,8 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         '--base-root trusted-base',
         '--candidate-root candidate-source',
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
-        'gh api "repos/${DEPENDENCY_REPOSITORY}"',
-        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}"',
+        'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}"',
+        'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}"',
         "trusted-base/scripts/dependabot_release.py",
         "name: Evaluate exact accepted-base semantic admission",
         'PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"',
@@ -96,6 +99,15 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         block.count('PYTHONPATH="$GITHUB_WORKSPACE/trusted-base/scripts"') == 2,
         "PR-native Dependabot admission must execute both trusted Python phases from accepted-base modules",
     )
+    require(
+        block.count("python3 trusted-base/scripts/automation_github_read.py") == 7,
+        "PR-native Dependabot admission must use exactly seven governed singleton GitHub reads",
+    )
+    require(
+        block.count("gh api ") == 1
+        and 'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"' in block,
+        "PR-native Dependabot admission must retain exactly one bounded paginated raw GitHub collection",
+    )
     for forbidden in (
         "trusted-capability-admission-proof",
         "check-runs?app_id=",
@@ -111,39 +123,46 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         "pull-requests: write",
         "id-token: write",
         "attestations: write",
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}"',
+        'gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}"',
+        'gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}"',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}"',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}"',
     ):
         require(
             forbidden not in block,
-            f"PR-native Dependabot admission acquired forbidden relay/candidate/write surface: {forbidden}",
+            f"PR-native Dependabot admission acquired forbidden relay/candidate/write/direct-singleton surface: {forbidden}",
         )
 
     boundaries = (
         (
-            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+            'python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
             'validate_dependabot_pr_object "$PR"',
-            'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+            'MAIN_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
             "PR singleton",
         ),
         (
-            'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+            'MAIN_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
             'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
-            'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+            'HEAD_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
             "main ref",
         ),
         (
-            'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+            'HEAD_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
             'validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA"',
-            'BASE_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
+            'BASE_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
             "head ref",
         ),
         (
-            'BASE_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
+            'BASE_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${BASE_SHA}")"',
             'validate_contents_file_object "$BASE_GATE" ".github/workflows/profile-quality.yml"',
             'BASE_GATE_BLOB="$(jq -r .sha <<<"$BASE_GATE")"',
             "accepted-base workflow blob",
         ),
         (
-            'HEAD_GATE="$(gh api "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
+            'HEAD_GATE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/.github/workflows/profile-quality.yml?ref=${HEAD_SHA}")"',
             'validate_contents_file_object "$HEAD_GATE" ".github/workflows/profile-quality.yml"',
             'HEAD_GATE_BLOB="$(jq -r .sha <<<"$HEAD_GATE")"',
             "candidate workflow blob",
@@ -158,9 +177,18 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
             f"Profile Quality Dependabot admission must type {label} evidence before consumption",
         )
 
-
 def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
     mutations = (
+        (
+            'python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+            "contract is missing",
+        ),
+        (
+            'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}"',
+            'gh api "repos/${DEPENDENCY_REPOSITORY}"',
+            "contract is missing",
+        ),
         (
             'test "$BASE_GATE_BLOB" = "$HEAD_GATE_BLOB" || {',
             'true || {',
@@ -180,7 +208,7 @@ def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
             'echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."',
             'echo "Exact accepted-base PR-native Dependabot semantic admission passed without cross-run proof polling."\\n'
             '          for ATTEMPT in $(seq 1 36); do sleep 5; done',
-            "forbidden relay/candidate/write surface",
+            "forbidden relay/candidate/write/direct-singleton surface",
         ),
         (
             'HEAD:scripts/dependabot_capability_admission.py)" = "96107595641a0f9ff0203d9df2b684b1822b0346"',
