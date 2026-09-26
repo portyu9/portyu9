@@ -942,6 +942,136 @@ def validate_controller_git_mutation_response_contract(text: str) -> None:
         cursor = position
 
 
+def validate_controller_git_mutation_status_contract(text: str) -> None:
+    specs = (
+        (
+            'gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/blobs" -f content="$CONTENT" -f encoding=base64 > git-blob-http-response.txt',
+            'GIT_BLOB_STATUS_LINE="$(head -n 1 git-blob-http-response.txt | tr -d \'\\r\')"',
+            '[[ "$GIT_BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            "Dependabot Git blob creation returned unexpected status:",
+            "sed '1,/^[[:space:]]*$/d' git-blob-http-response.txt > git-blob-response.json",
+            "python3 scripts/dependabot_controller.py git-blob-response",
+        ),
+        (
+            'gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/trees" --input tree-request.json > git-tree-http-response.txt',
+            'GIT_TREE_STATUS_LINE="$(head -n 1 git-tree-http-response.txt | tr -d \'\\r\')"',
+            '[[ "$GIT_TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            "Dependabot Git tree creation returned unexpected status:",
+            "sed '1,/^[[:space:]]*$/d' git-tree-http-response.txt > git-tree-response.json",
+            "python3 scripts/dependabot_controller.py git-tree-response",
+        ),
+        (
+            'gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/commits" --input commit-request.json > git-commit-http-response.txt',
+            'GIT_COMMIT_STATUS_LINE="$(head -n 1 git-commit-http-response.txt | tr -d \'\\r\')"',
+            '[[ "$GIT_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+            "Dependabot Git commit creation returned unexpected status:",
+            "sed '1,/^[[:space:]]*$/d' git-commit-http-response.txt > git-commit-response.json",
+            "python3 scripts/dependabot_controller.py git-commit-response",
+        ),
+        (
+            'gh api --include --method PATCH "repos/${TARGET_REPOSITORY}/git/refs/heads/${HEAD_REF}"',
+            'GIT_REF_UPDATE_STATUS_LINE="$(head -n 1 updated-ref-http-response.txt | tr -d \'\\r\')"',
+            '[[ "$GIT_REF_UPDATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+            "Dependabot Git ref update returned unexpected status:",
+            "sed '1,/^[[:space:]]*$/d' updated-ref-http-response.txt > updated-ref.json",
+            "python3 scripts/dependabot_controller.py git-ref-response",
+        ),
+    )
+    for mutation, status, guard, error, extract, validator in specs:
+        for fragment, label in (
+            (mutation, "mutation capture"),
+            (status, "status extraction"),
+            (guard, "status guard"),
+            (extract, "body extraction"),
+            (validator, "typed validator"),
+        ):
+            require(
+                text.count(fragment) == 1,
+                f"Dependabot Git publication {label} changed: {fragment}",
+            )
+        require(error in text,
+                f"Dependabot Git publication fail-closed diagnostic changed: {error}")
+        mutation_pos = text.index(mutation)
+        status_pos = text.index(status)
+        guard_pos = text.index(guard)
+        extract_pos = text.index(extract)
+        validator_pos = text.index(validator)
+        require(
+            mutation_pos < status_pos < guard_pos < extract_pos < validator_pos,
+            f"Dependabot Git publication status/body validation moved out of reviewed order: {error}",
+        )
+
+    for legacy in (
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/git/blobs"',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/git/trees"',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/git/commits"',
+        'gh api --method PATCH "repos/${TARGET_REPOSITORY}/git/refs/heads/${HEAD_REF}"',
+    ):
+        require(legacy not in text,
+                f"Dependabot Git publication mutation regained response-blind transport: {legacy}")
+
+
+def self_test_controller_git_mutation_status_contract(text: str) -> None:
+    validate_controller_git_mutation_status_contract(text)
+    mutations = (
+        (
+            text.replace(
+                'gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/blobs"',
+                'gh api --method POST "repos/${TARGET_REPOSITORY}/git/blobs"',
+                1,
+            ),
+            "mutation capture changed",
+        ),
+        (
+            text.replace(
+                '[[ "$GIT_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                '[[ "$GIT_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "status guard changed",
+        ),
+        (
+            text.replace(
+                '[[ "$GIT_REF_UPDATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                '[[ "$GIT_REF_UPDATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "status guard changed",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_controller_git_mutation_status_contract(mutated)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"Dependabot Git publication status self-test failed for wrong reason: {exc}")
+        else:
+            fail(f"Dependabot Git publication status self-test accepted weakened contract: {expected}")
+
+    guard_block = (
+        '          [[ "$GIT_TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '            echo "ERROR: Dependabot Git tree creation returned unexpected status: ${GIT_TREE_STATUS_LINE}" >&2\n'
+        '            exit 1\n'
+        '          }\n'
+        "          sed '1,/^[[:space:]]*$/d' git-tree-http-response.txt > git-tree-response.json\n"
+    )
+    reordered = (
+        "          sed '1,/^[[:space:]]*$/d' git-tree-http-response.txt > git-tree-response.json\n"
+        '          [[ "$GIT_TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '            echo "ERROR: Dependabot Git tree creation returned unexpected status: ${GIT_TREE_STATUS_LINE}" >&2\n'
+        '            exit 1\n'
+        '          }\n'
+    )
+    mutated = text.replace(guard_block, reordered, 1)
+    try:
+        validate_controller_git_mutation_status_contract(mutated)
+    except ValueError as exc:
+        require("moved out of reviewed order" in str(exc),
+                f"Dependabot Git publication reorder self-test failed for wrong reason: {exc}")
+    else:
+        fail("Dependabot Git publication status self-test accepted body extraction before status proof")
+
+
 def validate_controller_repository_dispatch_status(text: str) -> None:
     require(
         text.count('repos/${TARGET_REPOSITORY}/dispatches') == 2,
@@ -1705,6 +1835,7 @@ def main() -> int:
         validate_controller_collection_contract(controller_text)
         validate_controller_git_read_response_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
+        self_test_controller_git_mutation_status_contract(controller_text)
         self_test_controller_repository_dispatch_status(controller_text)
         self_test_controller_workflow_dispatch_status(controller_text)
         validate_release_resolution_parity_contract(controller_text)
@@ -1717,7 +1848,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor exact HTTP-201-validated automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology with exact HTTP-201/200 transport proof, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor exact HTTP-201-validated automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
