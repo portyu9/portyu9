@@ -4,12 +4,13 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:c8f71c2e113dddc060dea30c8221c9e6a83e021aaec95328619512d7629945f1",
-  "evidence_id": "PL2-C8F71C2E113DDDC0",
+  "evidence_digest": "sha256:b0ebdbdcd7886362d99099f843c2a568fc81e5f36aae49e0361f427d550a47ae",
+  "evidence_id": "PL2-B0EBDBDCD7886362",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 25
+    "AGED": 24,
+    "SAME_DAY": 1
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -18,8 +19,7 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "FAILING": 1,
-    "PASSING": 24
+    "PASSING": 25
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -33,27 +33,27 @@
           "workflow": "ci.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/ai-qa-automation",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-25T23:47:24Z",
-          "freshness": "AGED",
-          "head_sha": "f01fd97551a22afd632e7097225cef849d6a9616",
+          "completed_at_utc": "2026-09-26T11:23:56Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "7bf2b745d2a2ff6d1dc6014d84df0820ea366113",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "FAILING",
-          "run_id": 36202090785,
-          "run_number": 2539,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/36202090785",
+          "result": "PASSING",
+          "run_id": 36238427973,
+          "run_number": 2588,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/36238427973",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "f01fd97551a22afd632e7097225cef849d6a9616",
+      "subject_revision": "7bf2b745d2a2ff6d1dc6014d84df0820ea366113",
       "title": "AI QA CONTROL PLANE"
     },
     {
