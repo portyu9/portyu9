@@ -184,8 +184,8 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
         "spotlight-link-sync",
         spotlight,
         spotlight_text.replace(
-            "      group: spotlight-link-sync-planning\n      cancel-in-progress: true\n",
-            "      group: spotlight-link-sync-planning\n      cancel-in-progress: false\n",
+            "      group: spotlight-link-sync-planning-${{ github.event_name == 'push' && 'main-lineage' || github.run_id }}\n      cancel-in-progress: true\n",
+            "      group: spotlight-link-sync-planning-${{ github.event_name == 'push' && 'main-lineage' || github.run_id }}\n      cancel-in-progress: false\n",
             1,
         ),
         "differs from planning IR group/cancellation policy",
