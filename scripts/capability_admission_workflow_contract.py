@@ -9,7 +9,9 @@ import pr_closing_directive_guard
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
+CLOSING_GUARD = ROOT / "scripts/pr_closing_directive_guard.py"
 EXPECTED_GIT_BLOB = "c4f14c33744b63f074255257ab9a91bafacd1c0a"
+EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
 
@@ -779,10 +781,19 @@ def validate_text(text: str) -> None:
 def validate() -> None:
     require(WORKFLOW.is_file() and not WORKFLOW.is_symlink(),
             "trusted capability admission workflow is missing or aliased")
+    require(CLOSING_GUARD.is_file() and not CLOSING_GUARD.is_symlink(),
+            "trusted PR closing-directive guard is missing or aliased")
     data = WORKFLOW.read_bytes()
     observed = git_blob_sha(data)
     require(observed == EXPECTED_GIT_BLOB,
             f"trusted capability admission workflow bytes changed: expected={EXPECTED_GIT_BLOB} observed={observed}")
+    guard_data = CLOSING_GUARD.read_bytes()
+    guard_observed = git_blob_sha(guard_data)
+    require(
+        guard_observed == EXPECTED_CLOSING_GUARD_GIT_BLOB,
+        "trusted PR closing-directive guard bytes changed: "
+        f"expected={EXPECTED_CLOSING_GUARD_GIT_BLOB} observed={guard_observed}",
+    )
     validate_text(data.decode("utf-8"))
 
 
