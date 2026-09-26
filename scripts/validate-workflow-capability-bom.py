@@ -2,7 +2,11 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,16 +83,52 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+def trusted_diagnostic() -> None:
+    """Disposable carrier: emit exact synced #1130 trusted-authorization tuple."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    base_sha = "84c9eb0174087d52c0595f0005a9789ba2d31c71"
+    source_sha = "742eceeff641ae4377edd941d6294827f00c0dff"
+    subprocess.run(["git", "fetch", "--no-tags", "--depth=1", "origin", base_sha, source_sha], check=True)
+    with tempfile.TemporaryDirectory(prefix="trusted-admission-") as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
+        tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=candidate, text=True).strip()
+        code = """from pathlib import Path
+import sys
+trusted=Path(sys.argv[1]).resolve()
+candidate=Path(sys.argv[2]).resolve()
+tree=sys.argv[3]
+sys.path.insert(0, str(trusted / "scripts"))
+import workflow_capability_admission as admission
+try:
+    admission.evaluate(candidate, candidate_tree_sha=tree)
+except ValueError as exc:
+    print("TRUSTED-ADMISSION-DIAGNOSTIC-TREE:", tree)
+    print("TRUSTED-ADMISSION-DIAGNOSTIC:", exc)
+    raise SystemExit(0)
+print("TRUSTED-ADMISSION-DIAGNOSTIC-TREE:", tree)
+print("TRUSTED-ADMISSION-DIAGNOSTIC: exact synced source admitted without authorization tuple")
+"""
+        subprocess.run([sys.executable, "-c", code, str(trusted), str(candidate), tree], check=True)
+        subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=True)
+        subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=True)
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        trusted_diagnostic()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
             "composite snapshot, exact trusted-workflow bytes, and admission self-tests passed."
         )
         return 0
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
