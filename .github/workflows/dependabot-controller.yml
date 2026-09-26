@@ -903,9 +903,14 @@ jobs:
           test "$APPROVAL_COMMENT_EXISTS" = "true" -o "$APPROVAL_COMMENT_EXISTS" = "false"
           if [ "$APPROVAL_COMMENT_EXISTS" = "false" ]; then
             printf -v APPROVAL_BODY '%s\n%s' "$APPROVAL_MARKER" "Automation-approved: all six protected exact-head gates are green for \`${HEAD_SHA}\` and an exact-base/head marker-bound APPROVED review by @portyu9 is verified. No manual workflow approval is required. Continuing with the governed expected-head merge."
-            gh api --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-              -f body="$APPROVAL_BODY" \
-              > "$RUNNER_TEMP/dependabot-approval-comment-created.json"
+            APPROVAL_COMMENT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -f body="$APPROVAL_BODY")"
+            APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Dependabot automation-approval comment returned unexpected status: ${APPROVAL_COMMENT_STATUS_LINE}" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" > "$RUNNER_TEMP/dependabot-approval-comment-created.json"
             python3 scripts/automation_approval_comment.py created \
               --comment-file "$RUNNER_TEMP/dependabot-approval-comment-created.json" \
               --repository "$TARGET_REPOSITORY" \
