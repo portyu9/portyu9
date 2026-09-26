@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from typing import Any
 
+import automation_github_read
+
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / ".github/automation-retry-policy-v1.json"
 WORKFLOWS = ROOT / ".github/workflows"
@@ -30,6 +32,7 @@ MUTATION = re.compile(
 EXPECTED_AUTOMATIC_RETRY_IDS = {
     "governed-bot-review-read-transient",
     "action-release-provenance-read-transient",
+    "canonical-github-api-read-transient",
 }
 EXPECTED_TERMINAL_IDS = {
     "profile-quality-live-generator-fallback",
@@ -280,10 +283,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 2 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly two classified automatic read retries")
+    require(len(entries) == 3 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly three classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 2, "automatic retry IDs must remain unique")
+    require(len(by_id) == 3, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
@@ -351,6 +354,37 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require(forbidden not in provenance,
                 f"Action provenance automatic retry source acquired mutation method: {forbidden}")
 
+    canonical_item = by_id["canonical-github-api-read-transient"]
+    require(canonical_item.get("source") == "scripts/automation_github_read.py",
+            "canonical GitHub read retry source changed")
+    require(canonical_item.get("endpointScope") == "repository-relative",
+            "canonical GitHub read endpoint scope changed")
+    require(canonical_item.get("maxResponseBytes") == 8_000_000,
+            "canonical GitHub read response-size bound changed")
+    automation_github_read.self_test()
+    canonical_source = (ROOT / canonical_item["source"]).read_text(encoding="utf-8")
+    for fragment in (
+        'API_ROOT = "https://api.github.com/"',
+        "ATTEMPTS = 3",
+        "TIMEOUT_SECONDS = 20",
+        "BACKOFF_SECONDS = (1.0, 2.0)",
+        "MAX_RETRY_AFTER_SECONDS = 5.0",
+        "MAX_RESPONSE_BYTES = 8_000_000",
+        "RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})",
+        "def retryable_http_error(exc: urllib.error.HTTPError) -> bool:",
+        'headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After"))',
+        "for attempt in range(ATTEMPTS):",
+        'method="GET"',
+        'require(credential is not None, "GH_TOKEN is required for governed GitHub API reads")',
+        'segments[0] == "repos"',
+        "strict_json(text)",
+    ):
+        require(fragment in canonical_source,
+                f"canonical governed GitHub read contract is missing: {fragment}")
+    for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
+        require(forbidden not in canonical_source,
+                f"canonical GitHub read source acquired mutation method: {forbidden}")
+
     witness = texts[".github/workflows/action-provenance-witness.yml"]
     live_step = named_step(
         witness,
@@ -361,6 +395,18 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             "Action provenance witness must authenticate classified public metadata reads")
     require("python3 scripts/validate-action-release-provenance.py" in live_step,
             "Action provenance witness live proof invocation changed")
+
+    producer_step = named_step(
+        witness,
+        "prepare",
+        "Bind exact trusted run identity and issuance",
+    )
+    require(producer_step.count("python3 scripts/automation_github_read.py") == 2,
+            "Action provenance witness producer must use exactly two governed GitHub read call sites")
+    require("gh api " not in producer_step,
+            "Action provenance witness producer regained direct gh api read transport")
+    require("GH_TOKEN: ${{ github.token }}" in producer_step,
+            "Action provenance witness producer governed reads lost run-scoped token binding")
 
 
 def validate(policy: dict[str, Any], texts: dict[str, str]) -> None:
@@ -425,7 +471,7 @@ def validate_repository(root: Path = ROOT) -> None:
 if __name__ == "__main__":
     validate_repository()
     print(
-        "Automation retry taxonomy validation passed: exactly two classified read-only GitHub retries are authorized; "
+        "Automation retry taxonomy validation passed: exactly three classified read-only GitHub retries are authorized; "
         "unclassified generator/ruleset and mutation failures remain terminal; all 17 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )

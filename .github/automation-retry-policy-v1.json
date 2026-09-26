@@ -48,6 +48,32 @@
       "retryAfterCapSeconds": 5,
       "mutationRetry": false,
       "rationale": "Retry only fresh authenticated read-only GitHub repository/release metadata observations after classified transport/platform transients; authorization, not-found, malformed payload, identity, policy, and mutation failures remain terminal."
+    },
+    {
+      "id": "canonical-github-api-read-transient",
+      "source": "scripts/automation_github_read.py",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "repository-relative",
+      "maxResponseBytes": 8000000,
+      "rationale": "Canonical authenticated repository-scoped read-only GET transport for governed automation. Each retry issues a fresh GET and accepts only strict UTF-8 duplicate-key-safe JSON; authorization, not-found, malformed payload, schema/policy failures and every mutation remain terminal."
     }
   ],
   "terminalOperations": [

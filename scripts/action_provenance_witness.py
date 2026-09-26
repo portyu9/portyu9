@@ -73,11 +73,14 @@ CLAIM = (
 POLICY_PATHS = (
     ".github/GOVERNANCE.md",
     ".github/action-lock.json",
+    ".github/automation-retry-policy-v1.json",
     ".github/attestation/action-provenance-witness-v1.schema.json",
     ".github/workflows/action-provenance-witness.yml",
     ".github/workflows/profile-quality.yml",
     "scripts/action_identity_lock.py",
     "scripts/action_provenance_witness.py",
+    "scripts/automation_github_read.py",
+    "scripts/automation_retry_policy.py",
     "scripts/dependabot_release.py",
     "scripts/validate-action-release-provenance.py",
     "scripts/validate-codeql-contract.py",
@@ -840,8 +843,18 @@ def _expect_failure(function: Any, expected: str) -> None:
 
 
 def validate_producer_run_workflow_contract(text: str) -> None:
+    current_fetch = (
+        'RUN="$(python3 scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"'
+    )
+    history_fetch = (
+        '            python3 scripts/automation_github_read.py \\\n'
+        '              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${WITNESS_HISTORY_ATTEMPT}" \\\n'
+        "              | jq -c '.' >> witness-prior-attempts.ndjson"
+    )
     fragments = (
-        'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"',
+        current_fetch,
+        history_fetch,
         '--argjson run_id "$GITHUB_RUN_ID"',
         '--argjson run_attempt "$GITHUB_RUN_ATTEMPT"',
         '--arg source_sha "$SOURCE_SHA"',
@@ -868,17 +881,22 @@ def validate_producer_run_workflow_contract(text: str) -> None:
         require(fragment in text,
                 f"Action provenance witness current producer-run schema is missing: {fragment}")
 
-    fetch = 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"'
     schema = '          jq -e \\\n            --argjson run_id "$GITHUB_RUN_ID"'
     first_consumer = '          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"'
-    require(text.count(fetch) == 1,
+    require(text.count(current_fetch) == 1,
             "Action provenance witness current producer-run endpoint count changed")
+    require(text.count(history_fetch) == 1,
+            "Action provenance witness prior-attempt endpoint count changed")
+    require(text.count("python3 scripts/automation_github_read.py") == 2,
+            "Action provenance witness must own exactly two governed GitHub read call sites")
+    require("gh api " not in text,
+            "Action provenance witness regained direct gh api transport outside governed read client")
     require(text.count(schema) == 1,
             "Action provenance witness current producer-run schema boundary count changed")
     require(text.count(first_consumer) == 1,
             "Action provenance witness first current-run consumer identity changed")
     require(
-        text.index(fetch) < text.index(schema) < text.index(first_consumer),
+        text.index(current_fetch) < text.index(schema) < text.index(first_consumer),
         "Action provenance witness must validate current producer-run evidence before field consumption",
     )
 
@@ -971,7 +989,10 @@ def self_test() -> None:
     else:
         raise ValueError("Action provenance witness type-coercion self-test accepted weakened current-run evidence")
 
-    fetch_line = '          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"\n'
+    fetch_line = (
+        '          RUN="$(python3 scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}")"\n'
+    )
     consumer_line = '          test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"\n'
     require(workflow_text.count(fetch_line) == 1 and workflow_text.count(consumer_line) == 1,
             "Action provenance witness current-run ordering fixture identity changed")
