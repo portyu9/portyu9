@@ -1210,6 +1210,22 @@ def self_test_controller_merge_success_response_contract(text: str) -> None:
         ),
         (
             text.replace(
+                '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+                '            echo "ERROR: Dependabot terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+                '            exit 1\n'
+                '          }\n'
+                '          sed \'1,/^[[:space:]]*$/d\' "$MERGE_HTTP_RESPONSE" > "$MERGE_BODY"\n',
+                '          sed \'1,/^[[:space:]]*$/d\' "$MERGE_HTTP_RESPONSE" > "$MERGE_BODY"\n'
+                '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+                '            echo "ERROR: Dependabot terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+                '            exit 1\n'
+                '          }\n',
+                1,
+            ),
+            "moved out of reviewed order",
+        ),
+        (
+            text.replace(
                 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main',
                 'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main',
                 1,
