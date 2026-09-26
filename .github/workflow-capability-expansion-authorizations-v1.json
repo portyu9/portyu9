@@ -673,6 +673,13 @@
       "rationale": "Authorize frozen #1122 hardening of the existing CodeQL Autofix, Dependabot, and Spotlight automation-approval issue-comment POSTs: capture gh api --include and require HTTP 201 before consuming the already-typed trusted-actor response. Semantic BOMs, endpoints, bodies, call counts, permissions, triggers, mutation classes, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets, retries, and bypass remain unchanged."
     },
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "58f9913accb5a9af0fb09855ed024730c634d8bf0e682a691bb602f97ce2e17c",
+      "id": "cap-governed-git-publication-http-status-v1",
+      "rationale": "Authorize exact synced #1130 transport hardening for existing Dependabot and Spotlight Git Data writes: require HTTP 201 for blob/tree/commit/ref creation and HTTP 200 for Dependabot ref update before typed body consumption. Endpoints, payloads, mutation cardinality, permissions, triggers, candidate/ref identities, ancestry, merge authority, required checks, retries, direct-main authority, rulesets, secrets/OIDC, and bypass remain unchanged."
+    },
+    {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "f7c4b2d408c729ef2cad41d9f7539b0b1231402095512d3a5a1c129a3128a107",
