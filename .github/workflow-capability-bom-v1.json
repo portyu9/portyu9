@@ -327,29 +327,7 @@
               "step": "Set up Python"
             }
           ],
-          "apiSurfaces": [
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Discover exact fresh signed Profile Generator Compatibility Witness"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Discover exact fresh signed Profile Generator Compatibility Witness"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Discover exact fresh signed Profile Generator Compatibility Witness"
-            }
-          ],
+          "apiSurfaces": [],
           "artifacts": [
             {
               "digest-mismatch": "error",
@@ -419,29 +397,7 @@
               "step": "Set up Python"
             }
           ],
-          "apiSurfaces": [
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Discover exact fresh signed Action provenance witness"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Discover exact fresh signed Action provenance witness"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Discover exact fresh signed Action provenance witness"
-            }
-          ],
+          "apiSurfaces": [],
           "artifacts": [
             {
               "digest-mismatch": "error",

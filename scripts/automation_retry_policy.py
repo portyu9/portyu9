@@ -421,6 +421,19 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in compatibility_producer_step,
             "Profile generator compatibility witness producer governed reads lost run-scoped token binding")
 
+    profile_quality = texts[".github/workflows/profile-quality.yml"]
+    for job_name, step_name, label in (
+        ("validate", "Discover exact fresh signed Action provenance witness", "Action provenance witness"),
+        ("integration", "Discover exact fresh signed Profile Generator Compatibility Witness", "Profile generator compatibility witness"),
+    ):
+        discovery_step = named_step(profile_quality, job_name, step_name)
+        require(discovery_step.count("python3 scripts/automation_github_read.py") == 3,
+                f"Profile Quality {label} discovery must use exactly three governed GitHub read call sites")
+        require("gh api " not in discovery_step,
+                f"Profile Quality {label} discovery regained direct gh api read transport")
+        require("GH_TOKEN: ${{ github.token }}" in discovery_step,
+                f"Profile Quality {label} discovery lost run-scoped token binding")
+
 
 def validate(policy: dict[str, Any], texts: dict[str, str]) -> None:
     require(isinstance(policy, dict) and set(policy) == {
@@ -474,6 +487,22 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         compatibility_transport_drift,
         "must use exactly two governed GitHub read call sites",
     )
+
+    for endpoint, label in (
+        ("actions/workflows/action-provenance-witness.yml/runs?branch=main&status=success&per_page=100", "Action provenance witness"),
+        ("actions/workflows/profile-generator-compatibility-witness.yml/runs?branch=main&status=success&per_page=100", "Profile generator compatibility witness"),
+    ):
+        consumer_transport_drift = dict(texts)
+        source = consumer_transport_drift[".github/workflows/profile-quality.yml"]
+        governed = f'python3 scripts/automation_github_read.py "repos/${{GITHUB_REPOSITORY}}/{endpoint}"'
+        direct = f'gh api "repos/${{GITHUB_REPOSITORY}}/{endpoint}"'
+        require(governed in source, f"retry-policy self-test fixture missing Profile Quality {label} governed read")
+        consumer_transport_drift[".github/workflows/profile-quality.yml"] = source.replace(governed, direct, 1)
+        expect_failure(
+            copy.deepcopy(policy),
+            consumer_transport_drift,
+            "must use exactly three governed GitHub read call sites",
+        )
 
     loop_drift = dict(texts)
     loop_drift[".github/workflows/bot-pr-user-approval.yml"] = loop_drift[
