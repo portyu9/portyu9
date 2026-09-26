@@ -1123,7 +1123,17 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         text.count("python3 scripts/dependabot_controller.py merge-success-response") == 1,
         "Dependabot controller must validate exactly one terminal merge success response",
     )
+    merge_fetch = 'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"'
+    merge_status = 'MERGE_STATUS_LINE="$(head -n 1 "$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    merge_guard = '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {'
+    merge_extract = 'sed \'1,/^[[:space:]]*$/d\' "$MERGE_HTTP_RESPONSE" > "$MERGE_BODY"'
     for fragment in (
+        merge_fetch,
+        'MERGE_HTTP_RESPONSE="$RUNNER_TEMP/dependabot-merge-http-response.txt"',
+        merge_extract,
+        merge_status,
+        merge_guard,
+        'Dependabot terminal merge returned unexpected status:',
         "if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then",
         'Dependabot merge API rejected exact-head merge:',
         'python3 scripts/dependabot_controller.py merge-success-response',
@@ -1139,6 +1149,16 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
         require(fragment in text, f"Dependabot terminal merge response contract is missing: {fragment}")
 
     require(
+        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"' not in text,
+        "Dependabot terminal merge must not discard HTTP transport status",
+    )
+    require(
+        text.index('if [ "$MERGE_STATUS" -ne 0 ]; then') < text.index(merge_status)
+        < text.index(merge_guard) < text.index("if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then"),
+        "Dependabot terminal merge must preserve API-failure diagnostics then prove HTTP 200 before success-body consumption",
+    )
+
+    require(
         'MERGE_SHA="$(jq -r .sha <<<"$MERGE")"' not in text,
         "Dependabot controller must not consume terminal merge SHA before typed success validation",
     )
@@ -1148,6 +1168,11 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
     )
 
     ordered = (
+        merge_fetch,
+        merge_extract,
+        'if [ "$MERGE_STATUS" -ne 0 ]; then',
+        merge_status,
+        merge_guard,
         "if [ \"$(jq -r '.merged // false' <<<\"$MERGE\")\" != \"true\" ]; then",
         'python3 scripts/dependabot_controller.py merge-success-response',
         'MERGE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-merge-success-normalized.json")"',
@@ -1166,6 +1191,22 @@ def validate_controller_merge_success_response_contract(text: str) -> None:
 def self_test_controller_merge_success_response_contract(text: str) -> None:
     validate_controller_merge_success_response_contract(text)
     mutations = (
+        (
+            text.replace(
+                'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+                'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+                1,
+            ),
+            "terminal merge response contract",
+        ),
+        (
+            text.replace(
+                '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "terminal merge response contract",
+        ),
         (
             text.replace(
                 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main',
