@@ -167,10 +167,11 @@ jobs:
               --out "$RUNNER_TEMP/codeql-autofix-main-ref-normalized.json"
             test "$(jq -r .sha "$RUNNER_TEMP/codeql-autofix-main-ref-normalized.json")" = "$expected_sha"
           }
+          AUTOFIX_CREATE_HTTP_RESPONSE="$RUNNER_TEMP/codeql-autofix-create-http-response.txt"
           set +e
-          gh api -X POST \
+          gh api --include --method POST \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix" \
-            > autofix-create.json 2> autofix-create.err
+            > "$AUTOFIX_CREATE_HTTP_RESPONSE" 2> autofix-create.err
           AUTOFIX_RC=$?
           set -e
 
@@ -200,10 +201,17 @@ jobs:
             if [ "$EVIDENCE_EXISTS" = "false" ]; then
               EVIDENCE_MARKER="$(jq -r .marker unsupported-evidence.json)"
               EVIDENCE_BODY="$(jq -r .body unsupported-evidence.json)"
-              gh api --method POST \
+              UNSUPPORTED_EVIDENCE_HTTP_RESPONSE="$RUNNER_TEMP/codeql-autofix-unsupported-evidence-http-response.txt"
+              gh api --include --method POST \
                 "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments" \
                 -f body="$EVIDENCE_BODY" \
-                > unsupported-evidence-created.json
+                > "$UNSUPPORTED_EVIDENCE_HTTP_RESPONSE"
+              UNSUPPORTED_EVIDENCE_STATUS_LINE="$(head -n 1 "$UNSUPPORTED_EVIDENCE_HTTP_RESPONSE" | tr -d '\r')"
+              [[ "$UNSUPPORTED_EVIDENCE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+                echo "ERROR: CodeQL Autofix unsupported-evidence comment returned unexpected status: ${UNSUPPORTED_EVIDENCE_STATUS_LINE}" >&2
+                exit 1
+              }
+              sed '1,/^[[:space:]]*$/d' "$UNSUPPORTED_EVIDENCE_HTTP_RESPONSE" > unsupported-evidence-created.json
               python3 scripts/codeql_autofix_controller.py unsupported-evidence-created \
                 --comment-file unsupported-evidence-created.json \
                 --expected-sha "$BASE_SHA" \
@@ -227,6 +235,13 @@ jobs:
             printf 'unsupported=true\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          AUTOFIX_CREATE_STATUS_LINE="$(head -n 1 "$AUTOFIX_CREATE_HTTP_RESPONSE" | tr -d '\r')"
+          [[ "$AUTOFIX_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+(200|202)([[:space:]]|$) ]] || {
+            echo "ERROR: CodeQL Autofix request returned unexpected success status: ${AUTOFIX_CREATE_STATUS_LINE}" >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' "$AUTOFIX_CREATE_HTTP_RESPONSE" > autofix-create.json
 
           gh api \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix" \
@@ -284,10 +299,17 @@ jobs:
             exit 1
           }
 
-          gh api -X POST "repos/${TARGET_REPOSITORY}/git/refs" \
+          CREATED_REF_HTTP_RESPONSE="$RUNNER_TEMP/codeql-autofix-created-ref-http-response.txt"
+          gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/refs" \
             -f ref="$TARGET_REF" \
             -f sha="$BASE_SHA" \
-            > created-ref.json
+            > "$CREATED_REF_HTTP_RESPONSE"
+          CREATED_REF_STATUS_LINE="$(head -n 1 "$CREATED_REF_HTTP_RESPONSE" | tr -d '\r')"
+          [[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+            echo "ERROR: CodeQL Autofix candidate ref creation returned unexpected status: ${CREATED_REF_STATUS_LINE}" >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' "$CREATED_REF_HTTP_RESPONSE" > created-ref.json
           python3 scripts/codeql_autofix_controller.py created-ref-response \
             --response-file created-ref.json \
             --branch "$BRANCH" \
@@ -296,11 +318,18 @@ jobs:
           test "$(jq -r .ref created-ref-normalized.json)" = "$TARGET_REF"
           test "$(jq -r .sha created-ref-normalized.json)" = "$BASE_SHA"
 
-          gh api -X POST \
+          AUTOFIX_COMMIT_HTTP_RESPONSE="$RUNNER_TEMP/codeql-autofix-commit-http-response.txt"
+          gh api --include --method POST \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix/commits" \
             -f target_ref="$TARGET_REF" \
             -f message="CodeQL Autofix alert #${ALERT_NUMBER}" \
-            > autofix-commit.json
+            > "$AUTOFIX_COMMIT_HTTP_RESPONSE"
+          AUTOFIX_COMMIT_STATUS_LINE="$(head -n 1 "$AUTOFIX_COMMIT_HTTP_RESPONSE" | tr -d '\r')"
+          [[ "$AUTOFIX_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+            echo "ERROR: CodeQL Autofix commit creation returned unexpected status: ${AUTOFIX_COMMIT_STATUS_LINE}" >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' "$AUTOFIX_COMMIT_HTTP_RESPONSE" > autofix-commit.json
           python3 scripts/codeql_autofix_controller.py commit \
             --response-file autofix-commit.json \
             --branch "$BRANCH" \
@@ -318,13 +347,20 @@ jobs:
 
           RULE_ID="$(jq -r .ruleId target.json)"
           PR_BODY="Trusted GitHub CodeQL Autofix for alert #${ALERT_NUMBER} (${RULE_ID}). Generated by ${RUN_ID}; protected checks and exact-head admission remain mandatory before protected merge can be attempted."
-          gh api -X POST "repos/${TARGET_REPOSITORY}/pulls" \
+          CREATED_PR_HTTP_RESPONSE="$RUNNER_TEMP/codeql-autofix-created-pr-http-response.txt"
+          gh api --include --method POST "repos/${TARGET_REPOSITORY}/pulls" \
             -f title="CodeQL Autofix alert #${ALERT_NUMBER}" \
             -f head="$BRANCH" \
             -f base="main" \
             -f body="$PR_BODY" \
             -F draft=false \
-            > created-pr.json
+            > "$CREATED_PR_HTTP_RESPONSE"
+          CREATED_PR_STATUS_LINE="$(head -n 1 "$CREATED_PR_HTTP_RESPONSE" | tr -d '\r')"
+          [[ "$CREATED_PR_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+            echo "ERROR: CodeQL Autofix remediation PR creation returned unexpected status: ${CREATED_PR_STATUS_LINE}" >&2
+            exit 1
+          }
+          sed '1,/^[[:space:]]*$/d' "$CREATED_PR_HTTP_RESPONSE" > created-pr.json
           python3 scripts/codeql_autofix_controller.py receipt \
             --run-id "$RUN_ID" \
             --run-attempt "$RUN_ATTEMPT" \
