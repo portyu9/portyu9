@@ -747,7 +747,7 @@
       "candidateBomSha256": "1f4877fc71584fc1157d65e9c9bc091166551a3a9c3c206c490c5f8fe693a014",
       "expansionSha256": "13aeef08d64f96e783b33ee37db951762dac9028bf413fd2bf9a17412183be30",
       "id": "cap-pr-closing-directive-guard-v1",
-      "rationale": "Authorize frozen #1157's exact fail-closed PR closing-directive guard: Capability Admission also runs on pull_request_target edited events, rejects incidental/noncanonical/multiple/cross-repository closing keywords, permits only one leading canonical Closes #<issue>, and uses the protected authenticated bounded/retrying GET helper solely to prove that same-repository target is not a pull request; exact optional 404 means absence and is not retried. No mutation replay, new write permission, secret/OIDC authority, required-check reduction, merge authority, direct-main write, ruleset change, or bypass is added."
+      "rationale": "Authorize frozen #1157: Capability Admission also runs on pull_request_target edited; reject incidental/noncanonical/multiple/cross-repo closers; allow only one leading Closes #<issue>; use the protected bounded/retrying GET only to prove the same-repo target is not a PR, with explicit non-retried 404-as-absence. No new mutation/write/secret/OIDC/check/merge/direct-main/ruleset/bypass authority."
     },
     {
       "baseBomSha256": "82945c362cc9c5aaf4df583b9a932d01fbf385671cca113919c98166bcef71b0",
