@@ -50,6 +50,18 @@ LEGACY_MERGE_SUCCESS_BLOCK = (
     '          MERGE_SHA="$(jq -r .sha <<<"$RESULT")"\n'
     '          test "$MERGE_SHA" != "null"\n'
 )
+MERGE_HTTP_STATUS_BLOCK = (
+    '          MERGE_HTTP_RESPONSE="$(gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
+    '          MERGE_STATUS_LINE="$(head -n 1 <<<"$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+    '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+    '            echo "ERROR: Spotlight terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+    '            exit 1\n'
+    '          }\n'
+    '          RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"\n'
+)
+LEGACY_MERGE_MUTATION = (
+    '          RESULT="$(gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge" --input merge.json)"\n'
+)
 
 LEGACY_PROFILE_DISPATCH = '''  dispatch:
     name: dispatch-spotlight-link-sync
@@ -231,6 +243,14 @@ def project_protected_workflow_evidence_to_legacy(sync: str) -> str:
     return sync[:start] + LEGACY_PROTECTED_WORKFLOW_EVIDENCE + sync[end:]
 
 
+def project_merge_http_status_to_legacy(sync: str) -> str:
+    require(sync.count(MERGE_HTTP_STATUS_BLOCK) == 1,
+            "Spotlight terminal merge-status projection cannot isolate exact HTTP wrapper")
+    require(LEGACY_MERGE_MUTATION not in sync,
+            "Spotlight terminal merge-status projection found both hardened and legacy mutations")
+    return sync.replace(MERGE_HTTP_STATUS_BLOCK, LEGACY_MERGE_MUTATION, 1)
+
+
 def project_merge_success_response_to_legacy(sync: str) -> str:
     require(sync.count(MERGE_SUCCESS_BLOCK) == 1,
             "Spotlight merge-success response projection cannot isolate the exact validated block")
@@ -241,16 +261,25 @@ def project_merge_success_response_to_legacy(sync: str) -> str:
 
 def validate_merge_success_response_overlay(sync: str) -> None:
     merge = core.job_block(sync, "merge", None)
+    require(merge.count(MERGE_HTTP_STATUS_BLOCK) == 1,
+            "Spotlight terminal merge HTTP-status block changed")
     require(merge.count(MERGE_SUCCESS_BLOCK) == 1,
             "Spotlight terminal merge-success response schema block changed")
+    require(
+        'RESULT="$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"' not in merge,
+        "Spotlight terminal merge must not consume a response-blind mutation",
+    )
     require(merge.count('<<<"$RESULT"') == 1,
             "Spotlight terminal merge may consume the raw merge response only through the canonical validator")
     require('test "$(jq -r .merged <<<"$RESULT")" = "true"' not in merge and
             'MERGE_SHA="$(jq -r .sha <<<"$RESULT")"' not in merge,
             "Spotlight terminal merge retained a direct unvalidated merge-response consumer")
 
-    mutation = merge.index('RESULT="$(gh api --method PUT ')
-    validation = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"')
+    mutation = merge.index('MERGE_HTTP_RESPONSE="$(gh api --include --method PUT ')
+    status = merge.index('MERGE_STATUS_LINE="$(head -n 1 <<<"$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"', mutation)
+    guard = merge.index('[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {', status)
+    extraction = merge.index('RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"', guard)
+    validation = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"', extraction)
     normalized_sha = merge.index('MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"')
     merged_pr = merge.index('MERGED_PR="$(gh api ')
     current_main_ref = merge.index(
@@ -267,7 +296,7 @@ def validate_merge_success_response_overlay(sync: str) -> None:
     )
     cleanup = merge.index('CANDIDATE_REFS="$(gh api ', current_main)
     require(
-        mutation < validation < normalized_sha < merged_pr
+        mutation < status < guard < extraction < validation < normalized_sha < merged_pr
         < current_main_ref < current_main_schema < current_main < cleanup,
         "Spotlight merge-success validation must precede post-merge proof, typed current-main acceptance, and cleanup",
     )
@@ -308,6 +337,51 @@ def self_test_merge_success_response_overlay(sync: str) -> None:
         ({"merged": True, "sha": "a" * 40, "message": None}, "message must be nonempty"),
     ):
         expect_merge_success_fixture_failure(payload, expected)
+
+    for weakened, expected in (
+        (
+            sync.replace(
+                'gh api --include --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+                'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+                1,
+            ),
+            "HTTP-status block changed",
+        ),
+        (
+            sync.replace(
+                '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+                '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+                1,
+            ),
+            "HTTP-status block changed",
+        ),
+        (
+            sync.replace(
+                MERGE_HTTP_STATUS_BLOCK,
+                MERGE_HTTP_STATUS_BLOCK.replace(
+                    '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+                    '            echo "ERROR: Spotlight terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+                    '            exit 1\n'
+                    '          }\n'
+                    '          RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"\n',
+                    '          RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"\n'
+                    '          [[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {\n'
+                    '            echo "ERROR: Spotlight terminal merge returned unexpected status: ${MERGE_STATUS_LINE}" >&2\n'
+                    '            exit 1\n'
+                    '          }\n',
+                ),
+                1,
+            ),
+            "HTTP-status block changed",
+        ),
+    ):
+        try:
+            validate_merge_success_response_overlay(weakened)
+        except ValueError as exc:
+            require(expected in str(exc),
+                    f"Spotlight merge-status self-test failed for wrong reason: {exc}")
+        else:
+            raise ValueError("Spotlight merge-status self-test accepted weakened transport validation")
 
     weakened = sync.replace(
         'MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"',
@@ -820,6 +894,7 @@ def project_item9(sync: str) -> str:
     require(legacy_age_guard not in sync,
             "Spotlight item-9 projection found both same-base and legacy age guards")
     sync = sync.replace(current_age_guard, legacy_age_guard, 1)
+    sync = project_merge_http_status_to_legacy(sync)
     sync = project_merge_success_response_to_legacy(sync)
     sync = project_strict_pull_review_schema_to_legacy(sync)
     sync = project_native_review_gate_to_item10_order(sync)
