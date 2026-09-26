@@ -317,7 +317,8 @@ def validate_controller_pr_response_contract(text: str) -> None:
     )
 
     reviewer_fetch = (
-        'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
+        'REQUESTED_REVIEWER_HTTP_RESPONSE="$(gh api --include --method POST '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
     )
     reviewer_schema = text.index(validator, text.index(reviewer_fetch))
     reviewer_consume = text.index(
@@ -447,6 +448,115 @@ def validate_controller_pr_response_contract(text: str) -> None:
         < validation_consume,
         "Dependabot validation pull-list must be typed before PR-number selection and full hydration",
     )
+
+
+
+def validate_controller_reviewer_request_status(text: str) -> None:
+    response = (
+        'REQUESTED_REVIEWER_HTTP_RESPONSE="$(gh api --include --method POST '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \\'
+    )
+    status = (
+        'REQUESTED_REVIEWER_STATUS_LINE="$(head -n 1 <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" '
+        '| tr -d \'\\r\')"'
+    )
+    guard = (
+        '[[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ '
+        '^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    )
+    body = (
+        'sed \'1,/^[[:space:]]*$/d\' <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" '
+        '> requested-reviewer.json'
+    )
+    schema = "python3 scripts/dependabot_controller.py pull-request-response"
+    consume = 'test "$(jq -r .portyu9Requested requested-reviewer-normalized.json)" = "true"'
+
+    require(text.count(response) == 1,
+            "Dependabot reviewer request must capture exactly one --include response")
+    require(text.count(status) == 1,
+            "Dependabot reviewer-request status extraction changed")
+    require(text.count(guard) == 1,
+            "Dependabot reviewer request must require exact HTTP 201")
+    require(
+        "Dependabot reviewer request returned unexpected status:" in text,
+        "Dependabot reviewer-request status failure must be explicit and fail closed",
+    )
+    require(text.count(body) == 1,
+            "Dependabot reviewer-request body extraction changed")
+    require(
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
+        not in text,
+        "Dependabot must not use a response-blind reviewer-request mutation",
+    )
+
+    response_pos = text.index(response)
+    status_pos = text.index(status, response_pos)
+    guard_pos = text.index(guard, response_pos)
+    body_pos = text.index(body, response_pos)
+    schema_pos = text.index(schema, body_pos)
+    consume_pos = text.index(consume, schema_pos)
+    require(
+        response_pos < status_pos < guard_pos < body_pos < schema_pos < consume_pos,
+        "Dependabot reviewer request must prove HTTP 201 before body/schema consumption",
+    )
+
+
+def self_test_controller_reviewer_request_status(text: str) -> None:
+    validate_controller_reviewer_request_status(text)
+
+    missing_include = text.replace(
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"',
+        1,
+    )
+    try:
+        validate_controller_reviewer_request_status(missing_include)
+    except ValueError as exc:
+        require(
+            "--include response" in str(exc),
+            f"Dependabot reviewer-request response self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot reviewer-request self-test accepted response-blind mutation")
+
+    wrong_status = text.replace(
+        '[[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_controller_reviewer_request_status(wrong_status)
+    except ValueError as exc:
+        require(
+            "exact HTTP 201" in str(exc),
+            f"Dependabot reviewer-request status self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot reviewer-request self-test accepted non-201 success class")
+
+    status_line = '            REQUESTED_REVIEWER_STATUS_LINE="$(head -n 1 <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+    guard_block = (
+        '            [[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Dependabot reviewer request returned unexpected status: ${REQUESTED_REVIEWER_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+    )
+    body_line = (
+        '            sed \'1,/^[[:space:]]*$/d\' <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" '
+        '> requested-reviewer.json\n'
+    )
+    ordered = status_line + guard_block + body_line
+    require(ordered in text, "Dependabot reviewer-request ordering fixture anchor changed")
+    reordered = text.replace(ordered, body_line + status_line + guard_block, 1)
+    try:
+        validate_controller_reviewer_request_status(reordered)
+    except ValueError as exc:
+        require(
+            "prove HTTP 201 before body/schema consumption" in str(exc),
+            f"Dependabot reviewer-request ordering self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot reviewer-request self-test accepted body extraction before status proof")
 
 
 def validate_controller_collection_contract(text: str) -> None:
@@ -1460,6 +1570,7 @@ def main() -> int:
         validate_controller_protected_workflow_evidence_contract(controller_text)
         self_test_controller_workflow_run_approval_status(controller_text)
         validate_controller_pr_response_contract(controller_text)
+        self_test_controller_reviewer_request_status(controller_text)
         validate_controller_collection_contract(controller_text)
         validate_controller_git_read_response_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
@@ -1475,7 +1586,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
