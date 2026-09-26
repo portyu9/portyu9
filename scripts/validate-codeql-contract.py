@@ -295,6 +295,115 @@ def self_test_autofix_constructive_response_schemas(good: str) -> None:
             fail(f"Autofix constructive-response self-test accepted forbidden mutation: {expected}")
 
 
+
+def validate_autofix_reviewer_request_status(text: str) -> None:
+    response = (
+        'REQUESTED_REVIEWER_HTTP_RESPONSE="$(gh api --include --method POST '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \\'
+    )
+    status = (
+        'REQUESTED_REVIEWER_STATUS_LINE="$(head -n 1 <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" '
+        '| tr -d \'\\r\')"'
+    )
+    guard = (
+        '[[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ '
+        '^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    )
+    body = (
+        'sed \'1,/^[[:space:]]*$/d\' <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" '
+        '> requested-reviewer.json'
+    )
+    schema = "python3 scripts/codeql_autofix_controller.py reviewer-request-response"
+    consume = 'test "$(jq -r .headSha requested-reviewer-normalized.json)" = "$HEAD_SHA"'
+
+    require(text.count(response) == 1,
+            "CodeQL Autofix reviewer request must capture exactly one --include response")
+    require(text.count(status) == 1,
+            "CodeQL Autofix reviewer-request status extraction changed")
+    require(text.count(guard) == 1,
+            "CodeQL Autofix reviewer request must require exact HTTP 201")
+    require(
+        "CodeQL Autofix reviewer request returned unexpected status:" in text,
+        "CodeQL Autofix reviewer-request status failure must be explicit and fail closed",
+    )
+    require(text.count(body) == 1,
+            "CodeQL Autofix reviewer-request body extraction changed")
+    require(
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
+        not in text,
+        "CodeQL Autofix must not use a response-blind reviewer-request mutation",
+    )
+
+    response_pos = text.index(response)
+    status_pos = text.index(status, response_pos)
+    guard_pos = text.index(guard, response_pos)
+    body_pos = text.index(body, response_pos)
+    schema_pos = text.index(schema, body_pos)
+    consume_pos = text.index(consume, schema_pos)
+    require(
+        response_pos < status_pos < guard_pos < body_pos < schema_pos < consume_pos,
+        "CodeQL Autofix reviewer request must prove HTTP 201 before body/schema consumption",
+    )
+
+
+def self_test_autofix_reviewer_request_status(text: str) -> None:
+    validate_autofix_reviewer_request_status(text)
+
+    missing_include = text.replace(
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"',
+        1,
+    )
+    try:
+        validate_autofix_reviewer_request_status(missing_include)
+    except ValueError as exc:
+        require(
+            "--include response" in str(exc),
+            f"Autofix reviewer-request response self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Autofix reviewer-request self-test accepted response-blind mutation")
+
+    wrong_status = text.replace(
+        '[[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_autofix_reviewer_request_status(wrong_status)
+    except ValueError as exc:
+        require(
+            "exact HTTP 201" in str(exc),
+            f"Autofix reviewer-request status self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Autofix reviewer-request self-test accepted non-201 success class")
+
+    status_line = '          REQUESTED_REVIEWER_STATUS_LINE="$(head -n 1 <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+    guard_block = (
+        '          [[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '            echo "ERROR: CodeQL Autofix reviewer request returned unexpected status: ${REQUESTED_REVIEWER_STATUS_LINE}" >&2\n'
+        '            exit 1\n'
+        '          }\n'
+    )
+    body_line = (
+        '          sed \'1,/^[[:space:]]*$/d\' <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" '
+        '> requested-reviewer.json\n'
+    )
+    ordered = status_line + guard_block + body_line
+    require(ordered in text, "Autofix reviewer-request ordering fixture anchor changed")
+    reordered = text.replace(ordered, body_line + status_line + guard_block, 1)
+    try:
+        validate_autofix_reviewer_request_status(reordered)
+    except ValueError as exc:
+        require(
+            "prove HTTP 201 before body/schema consumption" in str(exc),
+            f"Autofix reviewer-request ordering self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Autofix reviewer-request self-test accepted body extraction before status proof")
+
+
 def validate_autofix_read_singleton_evidence(text: str) -> None:
     read_validator = "python3 scripts/codeql_autofix_controller.py read-ref-response"
     workflow_validator = "python3 scripts/codeql_autofix_controller.py workflow-definition-response"
@@ -1182,6 +1291,7 @@ def main() -> int:
         self_test(codeql)
         autofix = AUTOFIX.read_text(encoding="utf-8")
         self_test_autofix_constructive_response_schemas(autofix)
+        self_test_autofix_reviewer_request_status(autofix)
         self_test_autofix_read_singleton_evidence(autofix)
         self_test_autofix_workflow_run_approval_status(autofix)
         self_test_autofix_continuation(autofix)
@@ -1196,7 +1306,7 @@ def main() -> int:
             "CodeQL governance validation passed: Python and GitHub Actions analysis cover PR/main/weekly/manual events "
             "with no path gaps, use security-extended queries, keep SARIF upload authority isolated, execute exactly three "
             "reviewed steps, use only reviewed SHA-pinned actions, and exercise fail-closed Autofix admission, discovery, "
-            "controller trust/provenance, typed constructive mutation responses, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, exact HTTP-201-validated protected-run approvals, unsupported-alert queue fixtures, "
+            "controller trust/provenance, typed constructive mutation responses with exact HTTP-201-validated reviewer requests, typed read-only ref/workflow-definition evidence, typed exact-head Autofix readiness check evidence, exact HTTP-201-validated protected-run approvals, unsupported-alert queue fixtures, "
             "durable deduplicated unsupported evidence, trusted-actor-bound approval-comment evidence, exact HTTP-204-validated repository dispatches and post-merge CodeQL workflow dispatch, and exact post-merge CodeQL continuation."
         )
         return 0

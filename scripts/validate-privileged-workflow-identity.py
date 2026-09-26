@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v103"
+VERSION = "governed-workflow-byte-identity-v104"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "09176420becea053799334de00c7dcb1b7dfdc2f",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "f0ce209b2bb44583c66430588faa004ad52da13b",
+    ".github/workflows/spotlight-link-sync.yml": "9e4e68cf7b976eb56bb7e27bd8880b6087aef868",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -968,7 +968,7 @@ def validate_spotlight_pr_response_evidence(
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
     )
     proposer_consume = 'test "$(jq -r .state <<<"$PR")" = "open"'
-    reviewer_mutation = 'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
+    reviewer_mutation = 'REQUESTED_REVIEWER_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
     reviewer_response_capture = 'REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"'
     reviewer_schema = (
         'validate_spotlight_reviewer_request_response "$REQUESTED_REVIEWER_RESPONSE" '
@@ -4048,6 +4048,70 @@ def validate_bot_review_creation_status_contract(bot_review: str) -> None:
 
 
 
+
+def validate_spotlight_reviewer_request_status(spotlight: str) -> None:
+    response = (
+        'REQUESTED_REVIEWER_HTTP_RESPONSE="$(gh api --include --method POST '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \\'
+    )
+    status = (
+        'REQUESTED_REVIEWER_STATUS_LINE="$(head -n 1 <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" '
+        '| tr -d \'\\r\')"'
+    )
+    guard = (
+        '[[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ '
+        '^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    )
+    body = (
+        'sed \'1,/^[[:space:]]*$/d\' <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" '
+        '> requested-reviewer.json'
+    )
+    capture = 'REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"'
+    schema = (
+        'validate_spotlight_reviewer_request_response "$REQUESTED_REVIEWER_RESPONSE" '
+        '"$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"'
+    )
+    consume = '<<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"'
+
+    require(
+        spotlight.count(response) == 1,
+        "Spotlight reviewer request must capture exactly one --include response",
+    )
+    require(
+        spotlight.count(status) == 1,
+        "Spotlight reviewer-request status extraction changed",
+    )
+    require(
+        spotlight.count(guard) == 1,
+        "Spotlight reviewer request must require exact HTTP 201",
+    )
+    require(
+        "Spotlight reviewer request returned unexpected status:" in spotlight,
+        "Spotlight reviewer-request status failure must be explicit and fail closed",
+    )
+    require(
+        spotlight.count(body) == 1,
+        "Spotlight reviewer-request body extraction changed",
+    )
+    require(
+        'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"'
+        not in spotlight,
+        "Spotlight must not use a response-blind reviewer-request mutation",
+    )
+
+    response_pos = spotlight.index(response)
+    status_pos = spotlight.index(status, response_pos)
+    guard_pos = spotlight.index(guard, response_pos)
+    body_pos = spotlight.index(body, response_pos)
+    capture_pos = spotlight.index(capture, body_pos)
+    schema_pos = spotlight.index(schema, capture_pos)
+    consume_pos = spotlight.index(consume, schema_pos)
+    require(
+        response_pos < status_pos < guard_pos < body_pos < capture_pos < schema_pos < consume_pos,
+        "Spotlight reviewer request must prove HTTP 201 before body/schema consumption",
+    )
+
+
 def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     capability_dispatch = (
         'CAPABILITY_DISPATCH_RESPONSE="$(gh api --include --method POST '
@@ -4167,6 +4231,67 @@ def self_test() -> None:
     validate_bot_review_dispatch_status_contract(bot_review)
     validate_bot_review_creation_status_contract(bot_review)
 
+    spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+    validate_spotlight_reviewer_request_status(spotlight)
+
+    reviewer_missing_include = spotlight.replace(
+        'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"',
+        'gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers"',
+        1,
+    )
+    try:
+        validate_spotlight_reviewer_request_status(reviewer_missing_include)
+    except ValueError as exc:
+        require(
+            "--include response" in str(exc),
+            f"Spotlight reviewer-request response self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Spotlight reviewer-request self-test accepted a response-blind mutation")
+
+    reviewer_wrong_status = spotlight.replace(
+        '[[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
+        '[[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_spotlight_reviewer_request_status(reviewer_wrong_status)
+    except ValueError as exc:
+        require(
+            "exact HTTP 201" in str(exc),
+            f"Spotlight reviewer-request status self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Spotlight reviewer-request self-test accepted non-201 success class")
+
+    reviewer_status_line = '            REQUESTED_REVIEWER_STATUS_LINE="$(head -n 1 <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
+    reviewer_guard_block = (
+        '            [[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Spotlight reviewer request returned unexpected status: ${REQUESTED_REVIEWER_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+    )
+    reviewer_body_line = (
+        '            sed \'1,/^[[:space:]]*$/d\' <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" '
+        '> requested-reviewer.json\n'
+    )
+    reviewer_ordered = reviewer_status_line + reviewer_guard_block + reviewer_body_line
+    require(reviewer_ordered in spotlight, "Spotlight reviewer-request ordering fixture anchor changed")
+    reviewer_reordered = spotlight.replace(
+        reviewer_ordered,
+        reviewer_body_line + reviewer_status_line + reviewer_guard_block,
+        1,
+    )
+    try:
+        validate_spotlight_reviewer_request_status(reviewer_reordered)
+    except ValueError as exc:
+        require(
+            "prove HTTP 201 before body/schema consumption" in str(exc),
+            f"Spotlight reviewer-request ordering self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Spotlight reviewer-request self-test accepted body extraction before status proof")
+
     missing_include = bot_review.replace(
         'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"',
         'gh api --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches"',
@@ -4283,7 +4408,6 @@ def self_test() -> None:
     else:
         raise ValueError("bot-review identity-schema self-test accepted type-coercing login evidence")
 
-    spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
     validate_spotlight_dispatch_status_contract(spotlight)
     validate_spotlight_workflow_run_approval_status(spotlight)
 
@@ -4835,6 +4959,7 @@ def main() -> int:
         dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
         autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        validate_spotlight_reviewer_request_status(spotlight)
         validate_spotlight_dispatch_status_contract(spotlight)
         validate_spotlight_workflow_run_approval_status(spotlight)
         capability = (ROOT / ".github/workflows/capability-admission.yml").read_text(encoding="utf-8")
@@ -4868,7 +4993,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
-            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering, exact workflow-dispatch HTTP 204 validation, and exact review-creation HTTP 200 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-204 admission/reviewer dispatch status validation and exact-201 protected-run approval validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
+            "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema ordering locked · bot-review credential/ref response schema ordering, exact workflow-dispatch HTTP 204 validation, and exact review-creation HTTP 200 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-201 reviewer-request, exact-204 admission/reviewer dispatch, and exact-201 protected-run approval status validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0

@@ -157,8 +157,14 @@ jobs:
           REQUESTED="$(jq -r 'if .portyu9Requested then 1 else 0 end' dependabot-pr-normalized.json)"
           [[ "$REQUESTED" =~ ^[0-9]+$ ]]
           if [ "$REQUESTED" = "0" ]; then
-            gh api --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
-              -f 'reviewers[]=portyu9' > requested-reviewer.json
+            REQUESTED_REVIEWER_HTTP_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \
+              -f 'reviewers[]=portyu9')"
+            REQUESTED_REVIEWER_STATUS_LINE="$(head -n 1 <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Dependabot reviewer request returned unexpected status: ${REQUESTED_REVIEWER_STATUS_LINE}" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" > requested-reviewer.json
             python3 scripts/dependabot_controller.py pull-request-response \
               --response requested-reviewer.json \
               --expected-number "$PR_NUMBER" \
