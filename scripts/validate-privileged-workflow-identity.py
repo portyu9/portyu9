@@ -2859,7 +2859,7 @@ def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
         created_pos,
     )
     merge_pos = autofix.index(
-        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
+        'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         actor_pos,
     )
     require(
@@ -3124,10 +3124,15 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'test "$WAKE_REF" = "refs/heads/main"',
         'test "$WAKE_ACTOR" = "github-actions[bot]"',
         "startsWith(github.ref, 'refs/heads/dependabot/github_actions/')",
+        'MERGE_HTTP_RESPONSE="$RUNNER_TEMP/dependabot-merge-http-response.txt"',
         'MERGE_BODY="$RUNNER_TEMP/dependabot-merge-response.json"',
         'MERGE_ERR="$RUNNER_TEMP/dependabot-merge-error.txt"',
+        'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
         'MERGE_STATUS=$?',
         'if [ "$MERGE_STATUS" -ne 0 ]; then',
+        'MERGE_STATUS_LINE="$(head -n 1 "$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"',
+        '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        'Dependabot terminal merge returned unexpected status:',
         'Dependabot merge API request failed: ${MERGE_MESSAGE}',
         'Dependabot merge API rejected exact-head merge: ${MERGE_MESSAGE}',
     ):
