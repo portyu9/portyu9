@@ -764,6 +764,13 @@
       "rationale": "Authorize #659's exact review-thread GraphQL schema hardening. The governed bot reviewer and CodeQL Autofix admission keep the same endpoints and authority but now reject GraphQL errors, incomplete pagination, malformed/non-object nodes, and non-boolean isResolved/hasNextPage primitives before review or merge authorization can proceed. The composite BOM is unchanged; no trigger, permission, secret, OIDC authority, mutation, protected-check reduction, merge capability, or bypass is added."
     },
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "7aa6cdbd260ba91d217b4e988cd9d0545dc13c4a1a44d3bfd22716f23b11cef1",
+      "id": "cap-ruleset-admin-mutation-response-status-v1",
+      "rationale": "Authorize frozen #1121 hardening of the existing Ruleset Administration App token POST and Protect Main PUT: require HTTP 201 before token-body consumption and HTTP 200 on nominal PUT success while preserving nonzero-write exact-successor readback. Semantic BOMs, endpoints, call counts, permissions, App scope, transition, retries, direct-main authority, OIDC/attestation, rulesets, required checks, and bypass remain unchanged."
+    },
+    {
       "baseBomSha256": "42994f014e4744279c9276eaa1c828c1aca8d75dd43525c782d0d52cb1ef2480",
       "candidateBomSha256": "42994f014e4744279c9276eaa1c828c1aca8d75dd43525c782d0d52cb1ef2480",
       "expansionSha256": "b7c2b68a358062badb9e06a941907f7f2da2621246c98f8de293d66f87697410",
