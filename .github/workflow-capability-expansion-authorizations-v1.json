@@ -64,6 +64,13 @@
       "rationale": "Authorize #829's exact bot-review retry-history evidence: the existing approval job uses its existing Actions authority for one bounded prior-attempt GET surface and binds contiguous terminal history plus current runId/runAttempt into the existing exact-base/head portyu9 APPROVED review. Review POST, permissions, triggers, secrets, veto/revocation semantics, required checks, rulesets and bypass authority remain unchanged."
     },
     {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
+      "expansionSha256": "05021d8f8318ddbcb177303dfcfe98f84f3bd0fc642b059f2681d5ec7d03d81e",
+      "id": "cap-canonical-github-read-client-v1",
+      "rationale": "Authorize exact #1144: add protected automation_github_read.py and extend automation_retry_policy.py for authenticated repository-scoped GET-only retries under transport-or-github-transient-v1; route the witness producer's two existing run-attempt reads through it, remove those direct gh-api BOM surfaces, and trigger witness refresh on helper/policy changes. No mutation replay, permission, secret, OIDC, attestation, merge, ruleset, or bypass authority is added."
+    },
+    {
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "expansionSha256": "7223e78b447530e2be88522a8f3bb0df00cc7f6036723aa87123854af530d491",
