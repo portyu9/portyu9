@@ -479,7 +479,7 @@
       },
       "concurrency": {
         "planning": {
-          "group": "spotlight-link-sync-planning",
+          "group": "spotlight-link-sync-planning-${{ github.event_name == 'push' && 'main-lineage' || github.run_id }}",
           "cancelInProgress": true,
           "queue": "single",
           "jobs": [
