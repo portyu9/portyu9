@@ -10,7 +10,7 @@ import pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "c4f14c33744b63f074255257ab9a91bafacd1c0a"
+EXPECTED_GIT_BLOB = "39839753deae3073ea7b8c3b7891c3eec9338212"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -44,7 +44,7 @@ def git_blob_sha(data: bytes) -> str:
 def validate_text(text: str) -> None:
     require(text.startswith("name: Capability admission\n\non:\n  pull_request_target:\n"),
             "trusted capability admission trigger identity changed")
-    for event_type in ("opened", "reopened", "synchronize", "ready_for_review"):
+    for event_type in ("opened", "reopened", "synchronize", "ready_for_review", "edited"):
         require(text.count(f"      - {event_type}\n") == 1,
                 f"trusted capability admission event type changed: {event_type}")
     require(
