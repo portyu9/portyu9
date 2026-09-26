@@ -215,7 +215,7 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
         '(.repository_selection | type == "string" and . == "selected") and',
         '(.permissions.administration | type == "string" and . == "write") and',
         '((.permissions | keys - ["administration", "metadata"]) | length == 0) and',
-        "-f 'permissions[administration]=write' > installation-token.json",
+        "-f 'permissions[administration]=write' > \"$INSTALLATION_TOKEN_HTTP_RESPONSE\"",
         '(.total_count | type == "number" and floor == . and . == 1) and',
         '(.repositories[0].id | type == "number" and floor == . and . == 1355082509) and',
     ):
