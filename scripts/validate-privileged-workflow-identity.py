@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v109"
+VERSION = "governed-workflow-byte-identity-v110"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "09176420becea053799334de00c7dcb1b7dfdc2f",
+    ".github/workflows/bot-pr-user-approval.yml": "8d0a18ea834a2403cd532e9a8b6d5aff568166b7",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "549c42e51635c0bfafc95255fb31ed663f0efd8e",
+    ".github/workflows/spotlight-link-sync.yml": "c1abf02e99d1c2e2a13382ccdd44a1d60110660d",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -3104,6 +3104,80 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
     return projected
 
 
+def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) -> None:
+    bot_block = (
+        "concurrency:\n"
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number || github.run_id }}\n"
+        "  cancel-in-progress: true\n"
+    )
+    require(
+        bot_review.count(bot_block) == 1,
+        "Bot PR reviewer must scope cancellation to associated PR wakes and unique non-PR/recovery runs",
+    )
+    require(
+        "concurrency:\n  group: bot-pr-user-approval\n  cancel-in-progress: true\n" not in bot_review,
+        "Bot PR reviewer regained repository-wide cancellation that pollutes current-main checks",
+    )
+
+    planning_block = (
+        "    concurrency:\n"
+        "      group: spotlight-link-sync-planning-${{ github.event_name == 'push' && 'main-lineage' || github.run_id }}\n"
+        "      cancel-in-progress: true\n"
+    )
+    require(
+        spotlight.count(planning_block) == 1,
+        "Spotlight planning must isolate recovery wakes while retaining newer-main push supersession",
+    )
+    require(
+        "    concurrency:\n      group: spotlight-link-sync-planning\n      cancel-in-progress: true\n"
+        not in spotlight,
+        "Spotlight planning regained one global cancellation bucket",
+    )
+    require(
+        spotlight.count(
+            "    concurrency:\n"
+            "      group: spotlight-link-sync-terminal\n"
+            "      cancel-in-progress: false\n"
+            "      queue: max\n"
+        ) == 9,
+        "Spotlight terminal jobs must remain non-cancellable and serialized",
+    )
+
+
+def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str) -> None:
+    validate_main_check_cancellation_isolation(bot_review, spotlight)
+
+    broad_bot = bot_review.replace(
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number || github.run_id }}\n",
+        "  group: bot-pr-user-approval\n",
+        1,
+    )
+    try:
+        validate_main_check_cancellation_isolation(broad_bot, spotlight)
+    except ValueError as exc:
+        require(
+            "scope cancellation" in str(exc) or "repository-wide cancellation" in str(exc),
+            f"Bot PR cancellation-isolation self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Bot PR cancellation-isolation self-test accepted global main wake cancellation")
+
+    broad_spotlight = spotlight.replace(
+        "      group: spotlight-link-sync-planning-${{ github.event_name == 'push' && 'main-lineage' || github.run_id }}\n",
+        "      group: spotlight-link-sync-planning\n",
+        1,
+    )
+    try:
+        validate_main_check_cancellation_isolation(bot_review, broad_spotlight)
+    except ValueError as exc:
+        require(
+            "isolate recovery wakes" in str(exc) or "global cancellation bucket" in str(exc),
+            f"Spotlight cancellation-isolation self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Spotlight cancellation-isolation self-test accepted global planning cancellation")
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
@@ -3157,7 +3231,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued.',
         'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
         'exit 1',
-        'group: bot-pr-user-approval',
+        "group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number || github.run_id }}",
         'cancel-in-progress: true',
         'Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE}).',
         'local head="$1" head_ref="$2" runs total count active_profile unexpected_active',
@@ -4433,11 +4507,12 @@ def self_test() -> None:
     self_test_spotlight_same_base_supersession()
 
     bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+    spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+    self_test_main_check_cancellation_isolation(bot_review, spotlight)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
     validate_bot_review_dispatch_status_contract(bot_review)
     validate_bot_review_creation_status_contract(bot_review)
 
-    spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
     validate_spotlight_reviewer_request_status(spotlight)
 
     reviewer_missing_include = spotlight.replace(
@@ -5160,11 +5235,12 @@ def main() -> int:
         validate_native_bot_review_gate(profile_quality, governed_bot_review_gate)
 
         bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+        spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        validate_main_check_cancellation_isolation(bot_review, spotlight)
         validate_bot_review_dispatch_status_contract(bot_review)
         validate_bot_review_creation_status_contract(bot_review)
         dependabot = (ROOT / ".github/workflows/dependabot-controller.yml").read_text(encoding="utf-8")
         autofix = (ROOT / ".github/workflows/codeql-autofix.yml").read_text(encoding="utf-8")
-        spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         validate_spotlight_reviewer_request_status(spotlight)
         validate_spotlight_dispatch_status_contract(spotlight)
         validate_spotlight_workflow_run_approval_status(spotlight)
