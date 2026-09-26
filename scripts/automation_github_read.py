@@ -118,7 +118,6 @@ def get_json_text(
     credential = os.environ.get("GH_TOKEN") if token is None else token
     require(credential is not None, "GH_TOKEN is required for governed GitHub API reads")
     url = urllib.parse.urljoin(API_ROOT, normalized)
-    open_request = opener if opener is not None else urllib.request.build_opener(NoRedirect()).open
 
     for attempt in range(ATTEMPTS):
         request = urllib.request.Request(
@@ -127,7 +126,14 @@ def get_json_text(
             headers=token_headers(credential),
         )
         try:
-            with open_request(request, timeout=TIMEOUT_SECONDS) as response:
+            if opener is None:
+                response_context = urllib.request.build_opener(NoRedirect()).open(
+                    request,
+                    timeout=TIMEOUT_SECONDS,
+                )
+            else:
+                response_context = opener(request, timeout=TIMEOUT_SECONDS)
+            with response_context as response:
                 require(response.status == 200, f"GitHub API GET returned unexpected HTTP {response.status}")
                 require(response.geturl() == url, "GitHub API GET was redirected")
                 raw = response.read(MAX_RESPONSE_BYTES + 1)
