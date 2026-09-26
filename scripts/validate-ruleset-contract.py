@@ -458,6 +458,188 @@ def validate_reconciler_admin_response_evidence(text: str) -> None:
 
 
 
+def validate_reconciler_admin_status_evidence(text: str) -> None:
+    """Require exact transport status before privileged admin response consumption."""
+    token_fetch = (
+        'GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" '
+        '--include --method POST'
+    )
+    token_status = (
+        'INSTALLATION_TOKEN_STATUS_LINE="$(head -n 1 "$INSTALLATION_TOKEN_HTTP_RESPONSE" '
+        '| tr -d \'\\r\')"'
+    )
+    token_guard = (
+        '[[ "$INSTALLATION_TOKEN_STATUS_LINE" =~ '
+        '^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    )
+    token_extract = (
+        'sed \'1,/^[[:space:]]*$/d\' "$INSTALLATION_TOKEN_HTTP_RESPONSE" '
+        '> installation-token.json'
+    )
+    for fragment, label in (
+        (token_fetch, "token mutation"),
+        (token_status, "token status extraction"),
+        (token_guard, "token HTTP 201 guard"),
+        (token_extract, "token body extraction"),
+    ):
+        require(
+            text.count(fragment) == 1,
+            f"Ruleset admin {label} contract changed",
+        )
+    require(
+        'GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --method POST'
+        not in text,
+        "Ruleset admin token creation must not discard HTTP transport status",
+    )
+    token_fetch_pos = text.index(token_fetch)
+    token_status_pos = text.index(token_status)
+    token_guard_pos = text.index(token_guard)
+    token_extract_pos = text.index(token_extract)
+    token_schema_pos = text.index(
+        'type == "object" and\n            (.token | type == "string"',
+        token_extract_pos,
+    )
+    require(
+        token_fetch_pos < token_status_pos < token_guard_pos < token_extract_pos < token_schema_pos,
+        "Ruleset admin token HTTP 201 proof must precede body extraction and schema consumption",
+    )
+
+    put_fetch = 'GH_TOKEN="$ADMIN_TOKEN" gh api --include --method PUT'
+    write_status = 'WRITE_STATUS="$?"'
+    success_branch = 'if [ "$WRITE_STATUS" -eq 0 ]; then'
+    put_status = (
+        'RULESET_PUT_STATUS_LINE="$(head -n 1 "$RULESET_PUT_HTTP_RESPONSE" | tr -d \'\\r\')"'
+    )
+    put_guard = (
+        '[[ "$RULESET_PUT_STATUS_LINE" =~ '
+        '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {'
+    )
+    put_extract = (
+        'sed \'1,/^[[:space:]]*$/d\' "$RULESET_PUT_HTTP_RESPONSE" '
+        '> ruleset-put-response.json'
+    )
+    readback = (
+        'GH_TOKEN="$ADMIN_TOKEN" gh api '
+        '"repos/portyu9/portyu9/rulesets/22148161" > live-after.json'
+    )
+    for fragment, label in (
+        (put_fetch, "ruleset mutation"),
+        (write_status, "ruleset command status"),
+        (success_branch, "ruleset success branch"),
+        (put_status, "ruleset HTTP status extraction"),
+        (put_guard, "ruleset HTTP 200 guard"),
+        (put_extract, "ruleset success-body extraction"),
+        (readback, "ruleset successor readback"),
+    ):
+        require(
+            text.count(fragment) == 1,
+            f"Ruleset admin {label} contract changed",
+        )
+    require(
+        'GH_TOKEN="$ADMIN_TOKEN" gh api --method PUT' not in text,
+        "Ruleset admin PUT must not discard HTTP transport status",
+    )
+    put_fetch_pos = text.index(put_fetch)
+    write_status_pos = text.index(write_status)
+    success_branch_pos = text.index(success_branch)
+    put_status_pos = text.index(put_status)
+    put_guard_pos = text.index(put_guard)
+    put_extract_pos = text.index(put_extract)
+    readback_pos = text.index(readback)
+    require(
+        put_fetch_pos < write_status_pos < success_branch_pos < put_status_pos
+        < put_guard_pos < put_extract_pos < readback_pos,
+        "Ruleset admin successful PUT must prove HTTP 200 before body extraction and successor readback",
+    )
+    require(
+        'if [ "$WRITE_STATUS" -ne 0 ]; then' not in text,
+        "Ruleset admin must preserve nonzero-write successor-readback ambiguity handling without retry",
+    )
+
+
+def self_test_reconciler_admin_status_evidence(text: str) -> None:
+    validate_reconciler_admin_status_evidence(text)
+    token_fetch = (
+        'GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" '
+        '--include --method POST'
+    )
+    token_guard = (
+        '[[ "$INSTALLATION_TOKEN_STATUS_LINE" =~ '
+        '^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    )
+    put_fetch = 'GH_TOKEN="$ADMIN_TOKEN" gh api --include --method PUT'
+    put_guard = (
+        '[[ "$RULESET_PUT_STATUS_LINE" =~ '
+        '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {'
+    )
+    mutations = (
+        (
+            text.replace(token_fetch, token_fetch.replace("--include ", ""), 1),
+            "token mutation contract changed",
+        ),
+        (
+            text.replace(
+                token_guard,
+                token_guard.replace("+201", "+200"),
+                1,
+            ),
+            "token HTTP 201 guard contract changed",
+        ),
+        (
+            text.replace(put_fetch, put_fetch.replace("--include ", ""), 1),
+            "ruleset mutation contract changed",
+        ),
+        (
+            text.replace(
+                put_guard,
+                put_guard.replace("+200", "+201"),
+                1,
+            ),
+            "ruleset HTTP 200 guard contract changed",
+        ),
+    )
+    for mutated, expected in mutations:
+        try:
+            validate_reconciler_admin_status_evidence(mutated)
+        except ValueError as exc:
+            require(
+                expected in str(exc),
+                f"Ruleset admin HTTP-status self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                f"Ruleset admin HTTP-status self-test accepted weakened transport proof: {expected}"
+            )
+
+    token_guard_block = (
+        '          [[ "$INSTALLATION_TOKEN_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
+        '            echo "ERROR: Ruleset Administration App token creation returned unexpected status: ${INSTALLATION_TOKEN_STATUS_LINE}" >&2\n'
+        '            exit 1\n'
+        '          }\n'
+        '          sed \'1,/^[[:space:]]*$/d\' "$INSTALLATION_TOKEN_HTTP_RESPONSE" > installation-token.json\n'
+    )
+    token_reordered = token_guard_block.replace(
+        '          [[ "$INSTALLATION_TOKEN_STATUS_LINE"',
+        '          sed \'1,/^[[:space:]]*$/d\' "$INSTALLATION_TOKEN_HTTP_RESPONSE" > installation-token.json\n'
+        '          [[ "$INSTALLATION_TOKEN_STATUS_LINE"',
+        1,
+    ).replace(
+        '          sed \'1,/^[[:space:]]*$/d\' "$INSTALLATION_TOKEN_HTTP_RESPONSE" > installation-token.json\n',
+        "",
+        1,
+    )
+    reordered = text.replace(token_guard_block, token_reordered, 1)
+    try:
+        validate_reconciler_admin_status_evidence(reordered)
+    except ValueError as exc:
+        require(
+            "must precede body extraction" in str(exc),
+            f"Ruleset admin token-order self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError("Ruleset admin HTTP-status self-test accepted token body before status proof")
+
+
 def validate_api_url(url: str) -> str:
     """Return a credential-safe GitHub ruleset URL or fail closed.
 
@@ -1059,6 +1241,8 @@ def main() -> int:
         validate_reconciler_wake_contract(reconciler)
         validate_reconciler_main_ref_evidence(reconciler)
         validate_reconciler_admin_response_evidence(reconciler)
+        validate_reconciler_admin_status_evidence(reconciler)
+        self_test_reconciler_admin_status_evidence(reconciler)
         sentinel = SENTINEL.read_text(encoding="utf-8")
         validate_sentinel_main_ref_evidence(sentinel)
         self_test(payload)
@@ -1069,7 +1253,7 @@ def main() -> int:
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
             f"seven required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity, "
-            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all five privileged reconciler main-ref reads plus the read-only drift-sentinel main-ref read are typed before SHA consumption, and observable drift fails closed."
+            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all five privileged reconciler main-ref reads plus the read-only drift-sentinel main-ref read are typed before SHA consumption, Administration token/ruleset writes prove exact HTTP 201/200 on nominal success, and observable drift fails closed."
         )
         if unobservable:
             print(
