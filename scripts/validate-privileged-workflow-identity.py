@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "8d0a18ea834a2403cd532e9a8b6d5aff568166b7",
     ".github/workflows/profile-quality.yml": "a7d8d1ba7086992ba6aa251e50d827ca67e0bda4",
     ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
-    ".github/workflows/spotlight-link-sync.yml": "c1abf02e99d1c2e2a13382ccdd44a1d60110660d",
+    ".github/workflows/spotlight-link-sync.yml": "94cd7a6e6452c36da7011f99433101acfdae7918",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -3125,8 +3125,8 @@ def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) 
         "      cancel-in-progress: true\n"
     )
     require(
-        spotlight.count(planning_block) == 1,
-        "Spotlight planning must isolate recovery wakes while retaining newer-main push supersession",
+        spotlight.count(planning_block) == 3,
+        "all three Spotlight planning-class jobs must isolate recovery wakes while retaining newer-main push supersession",
     )
     require(
         "    concurrency:\n      group: spotlight-link-sync-planning\n      cancel-in-progress: true\n"
