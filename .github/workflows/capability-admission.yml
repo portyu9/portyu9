@@ -118,6 +118,9 @@ jobs:
 
           case "$EVENT_NAME" in
             pull_request_target)
+              python3 scripts/pr_closing_directive_guard.py \
+                --event "$GITHUB_EVENT_PATH" \
+                --repository "$TARGET_REPOSITORY"
               PR="$(jq -c '.pull_request' "$GITHUB_EVENT_PATH")"
               HEAD_REPOSITORY="$(jq -r '.head.repo.full_name' <<<"$PR")"
               ;;
