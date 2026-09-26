@@ -3103,7 +3103,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     continue_pos = bot_review.index('              continue', recovery_wake_pos)
     require(marker_approved_pos < recovery_wake_pos < continue_pos,
             "Bot PR existing-marker recovery wake must occur before the reviewer skips the already-approved candidate")
-    review_mutation_pos = bot_review.index('REVIEW_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --method POST')
+    review_mutation_pos = bot_review.index('REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST')
     post_mutation_wake_pos = bot_review.rindex('wake_governed_lane_after_review "$LANE" "$HEAD_REF"')
     require(review_mutation_pos < post_mutation_wake_pos,
             "Bot PR new-review controller wake must occur only after the real-user exact-base/head approval mutation")
