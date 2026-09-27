@@ -87,6 +87,56 @@ def indentation(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
 
 
+def reject_unquoted_escaped_newline_literals(source: str, label: str) -> None:
+    """Reject literal backslash-n tokens outside same-line quoted shell data.
+
+    A literal backslash-n between shell commands is not a newline. Bash consumes the
+    backslash as an escape and joins the letter n to an adjacent token, so YAML-valid
+    source can become a syntactically valid but semantically corrupted command. Quoted
+    format/data strings keep their reviewed meaning. Multiline raw data must use actual
+    newlines rather than an unquoted backslash-n escape.
+    """
+    for line_number, line in enumerate(source.splitlines(), start=1):
+        quote: str | None = None
+        cursor = 0
+        while cursor < len(line):
+            char = line[cursor]
+
+            if quote == "'":
+                if char == "'":
+                    quote = None
+                cursor += 1
+                continue
+
+            if quote == '"':
+                if char == "\\" and cursor + 1 < len(line):
+                    cursor += 2
+                    continue
+                if char == '"':
+                    quote = None
+                cursor += 1
+                continue
+
+            if char in {"'", '"'}:
+                quote = char
+                cursor += 1
+                continue
+
+            if char == "#" and (cursor == 0 or line[cursor - 1].isspace()):
+                break
+
+            if char == "\\":
+                if cursor + 1 < len(line) and line[cursor + 1] == "n":
+                    raise ValueError(
+                        f"{label}:{line_number}: unquoted escaped-newline token \\\\n is forbidden; "
+                        "use an actual run-block newline for command separation or quote \\\\n when it is data"
+                    )
+                cursor += 2 if cursor + 1 < len(line) else 1
+                continue
+
+            cursor += 1
+
+
 def logical_shell_source(source: str, label: str) -> str:
     """Collapse reviewed shell line continuations without allowing command-token splicing."""
     require(
@@ -211,6 +261,10 @@ def validate_privileged_shell_source(
 def validate_text(text: str, label: str) -> int:
     blocks = extract_run_blocks(text, label)
     for block in blocks:
+        reject_unquoted_escaped_newline_literals(
+            block.source,
+            f"{label}:run@{block.line}",
+        )
         require(
             EXPRESSION not in block.source,
             f"{label}:{block.line}: GitHub expression interpolation is forbidden inside run shell source; pass dynamic data through env:/with:/if: instead",
@@ -301,7 +355,33 @@ def self_test() -> None:
     safe = """name: Safe\non:\n  pull_request:\njobs:\n  test:\n    runs-on: ubuntu-24.04\n    steps:\n      - env:\n          TITLE: ${{ github.event.pull_request.title }}\n        if: ${{ github.event_name == 'pull_request' }}\n        run: |\n          set -euo pipefail\n          printf '%s\\n' \"$TITLE\"\n      - run: python3 scripts/check.py --self-test\n"""
     require(validate_text(safe, "self-test.yml") == 2, "safe env-boundary fixture was not fully scanned")
 
+    quoted_newline_data = safe.replace(
+        "          printf '%s\\n' \"$TITLE\"",
+        "          printf \"%s\\n\" \"$TITLE\"\n          printf '%s\\n' $'one\\ntwo'",
+        1,
+    )
+    require(
+        validate_text(quoted_newline_data, "self-test-quoted-newline.yml") == 2,
+        "quoted newline-data fixture was not fully scanned",
+    )
+
     cases = (
+        (
+            safe.replace(
+                "          set -euo pipefail",
+                '          test "a" = "a"\\n          test "b" = "b"',
+                1,
+            ),
+            "unquoted escaped-newline token",
+        ),
+        (
+            safe.replace(
+                "          set -euo pipefail",
+                "          cat <<'EOF'\n          literal \\n payload\n          EOF",
+                1,
+            ),
+            "unquoted escaped-newline token",
+        ),
         (safe.replace('run: python3 scripts/check.py --self-test', 'run: echo "${{ github.event.pull_request.title }}"'), "expression interpolation"),
         (safe.replace('printf \'%s\\n\' \"$TITLE\"', 'printf \'%s\\n\' "${{ github.head_ref }}"'), "expression interpolation"),
         (safe.replace('run: |\n          set -euo pipefail', 'run: >-\n          echo "${{ matrix.command }}"'), "expression interpolation"),
@@ -386,7 +466,7 @@ def main() -> int:
         print(
             f"Workflow shell-safety validation passed: scanned {run_count} run blocks across {workflow_count} workflows; "
             f"{privileged_run_count} token-authorized run blocks retain literal command closure; "
-            "GitHub expressions remain outside shell source, dynamic data crosses explicit non-shell boundaries, and privileged jobs reject command aliases/alternate interpreters with Git isolated to the reviewed publisher and attestation verification isolated to the exact Spotlight terminal command."
+            "GitHub expressions remain outside shell source, unquoted literal escaped-newline tokens are rejected, dynamic data crosses explicit non-shell boundaries, and privileged jobs reject command aliases/alternate interpreters with Git isolated to the reviewed publisher and attestation verification isolated to the exact Spotlight terminal command."
         )
         return 0
     except (OSError, ValueError) as exc:
