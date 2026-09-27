@@ -58,10 +58,17 @@ def validate_lease_run_evidence(sync: str) -> None:
             "Spotlight mutation-lease mint identity changed")
     require("permissions:\n      actions: read\n      contents: read" in lease,
             "Spotlight mutation-lease mint must retain exact governed read authority")
-    require("ref: ${{ github.sha }}" in lease,
-            "Spotlight mutation-lease governed helper checkout lost trusted event-SHA binding")
+    require("ref: main" in lease,
+            "Spotlight mutation-lease governed helper checkout lost static trusted-main binding")
+    require("ref: ${{ github.sha }}" not in lease,
+            "Spotlight mutation-lease governed helper checkout regained dynamic event-SHA binding")
     require('test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in lease,
             "Spotlight mutation-lease governed helper checkout lost sealed-base equality")
+    require(
+        lease.index("- name: Verify exact governed read source identity")
+        < lease.index("- name: Set up Python"),
+        "Spotlight mutation-lease must prove exact source before authored Python setup/use",
+    )
     require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in lease,
             "Spotlight mutation-lease mint lost exact governed-read helper identity")
     require('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
