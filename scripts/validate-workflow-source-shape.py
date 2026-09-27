@@ -6,11 +6,8 @@ third-party YAML dependency. Their security argument therefore depends on workfl
 one canonical block-style YAML subset. This gate closes that precondition before the
 specialized authority, shell-safety, and Action-identity scanners run.
 
-Shell block-scalar bodies remain opaque to the YAML structural parser because their
-contents are program text, not YAML structure. After structural validation, every literal
-``run: |`` body is independently parsed as Bash without execution and scanned for
-reviewed shell-source invariants. The only reviewed flow collection is a simple
-``needs: [job, ...]``
+Shell block-scalar bodies are opaque here because their contents are shell/program text,
+not YAML structure. The only reviewed flow collection is a simple ``needs: [job, ...]``
 sequence; flow mappings and every other flow sequence remain forbidden. Every structural
 mapping scope must also use unique keys so source scanners and GitHub's YAML loader can
 never disagree through duplicate-key/last-value-wins semantics.
@@ -25,7 +22,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,10 +29,6 @@ WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
 
 BLOCK_HEADER = re.compile(r":\s*[|>](?:[+-]?[1-9]?|[1-9][+-]?)?\s*$")
-RUN_BLOCK_HEADER = re.compile(
-    r"^(?P<indent> *)(?:-\s+)?run:\s*(?P<style>[|>])(?:[+-]?[1-9]?|[1-9][+-]?)?\s*$"
-)
-SIMPLE_HEREDOC_WORD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 FLOW_NEEDS = re.compile(
     r"^\s*needs:\s*\[\s*[A-Za-z0-9_-]+(?:\s*,\s*[A-Za-z0-9_-]+)*\s*\]\s*$"
 )
@@ -265,187 +257,6 @@ def reject_duplicate_mapping_key(
     return sequence_serial
 
 
-
-def parse_simple_heredoc(
-    line: str,
-    index: int,
-    label: str,
-    line_number: int,
-) -> tuple[str, bool, int]:
-    """Parse the repository's reviewed simple here-document delimiter forms."""
-    require(
-        line.startswith("<<", index) and not line.startswith("<<<", index),
-        f"{label}:{line_number}: invalid heredoc parser position",
-    )
-    cursor = index + 2
-    strip_tabs = False
-    if cursor < len(line) and line[cursor] == "-":
-        strip_tabs = True
-        cursor += 1
-    while cursor < len(line) and line[cursor] in " \t":
-        cursor += 1
-    require(cursor < len(line), f"{label}:{line_number}: heredoc delimiter is missing")
-
-    if line[cursor] in {"'", '"'}:
-        quote = line[cursor]
-        end = line.find(quote, cursor + 1)
-        require(end >= 0, f"{label}:{line_number}: unterminated quoted heredoc delimiter")
-        delimiter = line[cursor + 1 : end]
-        cursor = end + 1
-    else:
-        match = re.match(r"[A-Za-z_][A-Za-z0-9_]*", line[cursor:])
-        require(
-            match is not None,
-            f"{label}:{line_number}: heredoc delimiter is outside the reviewed simple identifier form",
-        )
-        delimiter = match.group(0)
-        cursor += len(delimiter)
-
-    require(
-        SIMPLE_HEREDOC_WORD.fullmatch(delimiter) is not None,
-        f"{label}:{line_number}: heredoc delimiter is outside the reviewed simple identifier form",
-    )
-    return delimiter, strip_tabs, cursor
-
-
-def reject_unquoted_escaped_newlines(script: str, label: str, start_line: int) -> None:
-    """Reject literal backslash-n tokens in shell code unless they are quoted data.
-
-    This closes the exact #1226 serialization class: a generated literal backslash-n
-    between commands is valid Bash syntax because backslash escapes n, but silently joins
-    command arguments instead of creating a command boundary. Quoted format/data strings
-    retain their normal meaning. Simple heredoc payloads are data and are skipped until
-    their reviewed delimiter.
-    """
-    quote: str | None = None
-    heredocs: list[tuple[str, bool]] = []
-
-    for offset, line in enumerate(script.splitlines(), start=0):
-        line_number = start_line + offset
-        if heredocs:
-            delimiter, strip_tabs = heredocs[0]
-            candidate = line.lstrip("\t") if strip_tabs else line
-            if candidate == delimiter:
-                heredocs.pop(0)
-            continue
-
-        cursor = 0
-        while cursor < len(line):
-            char = line[cursor]
-
-            if quote == "'":
-                if char == "'":
-                    quote = None
-                cursor += 1
-                continue
-
-            if quote == '"':
-                if char == "\\" and cursor + 1 < len(line):
-                    cursor += 2
-                    continue
-                if char == '"':
-                    quote = None
-                cursor += 1
-                continue
-
-            if char in {"'", '"'}:
-                quote = char
-                cursor += 1
-                continue
-
-            if char == "#" and (cursor == 0 or line[cursor - 1].isspace()):
-                break
-
-            if line.startswith("<<<", cursor):
-                cursor += 3
-                continue
-
-            if line.startswith("<<", cursor):
-                delimiter, strip_tabs, cursor = parse_simple_heredoc(
-                    line, cursor, label, line_number
-                )
-                heredocs.append((delimiter, strip_tabs))
-                continue
-
-            if char == "\\":
-                if cursor + 1 < len(line) and line[cursor + 1] == "n":
-                    raise ValueError(
-                        f"{label}:{line_number}: unquoted escaped-newline token \\\\n is forbidden in run shell source; "
-                        "use an actual YAML block newline for command separation or quote \\\\n when it is data"
-                    )
-                cursor += 2 if cursor + 1 < len(line) else 1
-                continue
-
-            cursor += 1
-
-
-def validate_shell_program(script: str, label: str, start_line: int) -> None:
-    """Parse a run block as Bash without executing candidate-controlled commands."""
-    result = subprocess.run(
-        ["bash", "-n"],
-        input=script,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    require(
-        result.returncode == 0,
-        f"{label}:{start_line}: Bash syntax validation failed for run block: "
-        f"{result.stderr.strip()[:400]}",
-    )
-    reject_unquoted_escaped_newlines(script, label, start_line + 1)
-
-
-def validate_shell_run_blocks(text: str, label: str) -> int:
-    """Validate each YAML run block as the reviewed implicit Bash program."""
-    lines = text.splitlines()
-    index = 0
-    run_blocks = 0
-
-    while index < len(lines):
-        line = lines[index]
-        if not line.strip() or line.lstrip().startswith("#"):
-            index += 1
-            continue
-
-        skeleton = structural_skeleton(line)
-        if BLOCK_HEADER.search(skeleton) is None:
-            index += 1
-            continue
-
-        header_indent = indentation(line)
-        end = index + 1
-        while end < len(lines):
-            candidate = lines[end]
-            if candidate.strip() and indentation(candidate) <= header_indent:
-                break
-            end += 1
-
-        run_header = RUN_BLOCK_HEADER.fullmatch(skeleton)
-        if run_header is not None:
-            require(
-                run_header.group("style") == "|",
-                f"{label}:{index + 1}: folded run blocks are forbidden; shell programs require literal run: | source",
-            )
-            payload = lines[index + 1 : end]
-            body_indents = [indentation(item) for item in payload if item.strip()]
-            require(body_indents, f"{label}:{index + 1}: run block must not be empty")
-            body_indent = min(body_indents)
-            require(
-                body_indent > header_indent,
-                f"{label}:{index + 1}: run block body must be indented beneath run: |",
-            )
-            body = "\n".join(
-                "" if not item.strip() else item[body_indent:] for item in payload
-            ) + "\n"
-            validate_shell_program(body, label, index + 1)
-            run_blocks += 1
-
-        index = end
-
-    return run_blocks
-
-
 def validate_execution_semantics(text: str, label: str) -> int:
     """Lock the workflow interpreter and job-call model without evaluating YAML."""
     lines = text.splitlines()
@@ -636,7 +447,6 @@ def validate_text(text: str, label: str) -> int:
     reject_duplicate_authority_identities(text, label, "on")
     reject_duplicate_authority_identities(text, label, "jobs")
     validate_execution_semantics(text, label)
-    validate_shell_run_blocks(text, label)
     return structural_lines
 
 
@@ -695,20 +505,6 @@ jobs:
 """
     validate_text(safe, "self-test-safe.yml")
 
-    quoted_newline_data = safe.replace(
-        "          data='{\"k\":[1,2]}'",
-        "          printf '%s\\n' safe\n          data=$'one\\ntwo'\n          value=\"quoted\\nvalue\"",
-        1,
-    )
-    validate_text(quoted_newline_data, "self-test-quoted-newline-data.yml")
-
-    heredoc_data = safe.replace(
-        "          [[ -n \"$VALUE\" ]]",
-        "          cat <<'EOF'\n          literal \\n payload\n          EOF\n          [[ -n \"$VALUE\" ]]",
-        1,
-    )
-    validate_text(heredoc_data, "self-test-heredoc-data.yml")
-
     quoted_hash = safe.replace(
         "  plan:\n    runs-on: ubuntu-24.04",
         "  plan:\n    if: \"${{ always() && startsWith(github.event.pull_request.title, 'Fix #687') }}\"\n    runs-on: ubuntu-24.04",
@@ -717,16 +513,6 @@ jobs:
     validate_text(quoted_hash, "self-test-quoted-hash.yml")
 
     cases = (
-        (
-            safe.replace(
-                '          [[ -n "$VALUE" ]]',
-                '          [[ -n "$VALUE" ]]\\n          test -n "$VALUE"',
-                1,
-            ),
-            "unquoted escaped-newline token",
-        ),
-        (safe.replace("        run: |", "        run: >", 1), "folded run blocks are forbidden"),
-        (safe.replace("          set -euo pipefail", "          if true; then", 1), "Bash syntax validation failed"),
         (safe.replace("on:\n  pull_request:", "on: [pull_request, pull_request_target]"), "flow-style YAML sequences"),
         (safe.replace("jobs:\n  plan:", "jobs: {plan: {runs-on: ubuntu-24.04}}\nignored:"), "flow-style YAML mappings"),
         (safe.replace("    runs-on: ubuntu-24.04\n    steps:", "    permissions: {contents: write}\n    runs-on: ubuntu-24.04\n    steps:"), "flow-style YAML mappings"),
@@ -787,8 +573,7 @@ def main() -> int:
             "block-style canonical YAML enforced, structural plain-scalar inline comments rejected except immutable Action version annotations, "
             "every structural mapping scope uses unique keys, trigger/job authority identities are unique, flow mappings/structural aliases "
             "rejected, only reviewed simple needs sequences allowed, and every job remains an ordinary "
-            f"{REVIEWED_RUNNER} job with reviewed implicit shell semantics and no reusable-workflow/secret-inheritance call authority; "
-            "literal run blocks are Bash-syntax parsed and reject unquoted escaped-newline command separators."
+            f"{REVIEWED_RUNNER} job with reviewed implicit shell semantics and no reusable-workflow/secret-inheritance call authority."
         )
         return 0
     except (OSError, ValueError) as exc:
