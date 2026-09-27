@@ -554,6 +554,24 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in capability_source_step,
             "Capability Admission candidate-source governed reads lost run-scoped token binding")
 
+    capability_release_step = named_step(
+        capability_admission,
+        "admission",
+        "Verify delegated Dependabot release provenance",
+    )
+    require(capability_release_step.count("python3 scripts/automation_github_read.py") == 2,
+            "Capability Admission delegated release proof must use exactly two governed singleton JSON reads")
+    require("gh api " not in capability_release_step,
+            "Capability Admission delegated release proof regained direct gh api transport")
+    for forbidden in (
+        'gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > dependabot-release.json',
+    ):
+        require(forbidden not in capability_release_step,
+                f"Capability Admission delegated release proof regained direct singleton transport: {forbidden}")
+    require("GH_TOKEN: ${{ github.token }}" in capability_release_step,
+            "Capability Admission delegated release governed reads lost run-scoped token binding")
+
     capability_autofix_step = named_step(
         capability_admission,
         "admission",
@@ -787,6 +805,27 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         capability_source_transport_drift,
         "must use exactly four governed singleton JSON reads",
+    )
+
+    capability_release_transport_drift = dict(texts)
+    capability_release_source = capability_release_transport_drift[".github/workflows/capability-admission.yml"]
+    capability_release_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json'
+    )
+    require(capability_release_governed in capability_release_source,
+            "retry-policy self-test fixture missing Capability Admission delegated-release governed read")
+    capability_release_transport_drift[".github/workflows/capability-admission.yml"] = (
+        capability_release_source.replace(
+            capability_release_governed,
+            'gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        capability_release_transport_drift,
+        "must use exactly two governed singleton JSON reads",
     )
 
     capability_autofix_transport_drift = dict(texts)
