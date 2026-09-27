@@ -985,7 +985,7 @@
       "baseBomSha256": "178cbd63c0f391e8bb583e5021cc89e5c59f71f45f838a73639e72efd916b87a",
       "candidateBomSha256": "178cbd63c0f391e8bb583e5021cc89e5c59f71f45f838a73639e72efd916b87a",
       "expansionSha256": "cf3e1ddd9d3542919b91843614c7ecedc86a0d02c1e971439f8677b65f6e5505",
-      "rationale": "Authorize #1195's exact trusted-parser prerequisite for #1192: keep current Spotlight lease actions-read/direct singleton-read shape valid and admit only the explicit future actions-read + contents-read governed-read shape when source validation proves literal trusted-main checkout, exact sealed BASE_SHA equality, pinned helper identity, pre-authored-code source verification, one canonical singleton GET, and no direct singleton gh api transport. Semantic Workflow Capability is unchanged. No workflow, policy JSON, trigger, runtime permission, endpoint, mutation, secret/OIDC, required-check reduction, direct-main write, ruleset change, merge authority, or bypass is added."
+      "rationale": "Authorize #1195's trusted-parser prerequisite for #1192: keep current Spotlight actions-read/direct-read shape valid and admit only exact actions-read + contents-read governed-read with literal main checkout, sealed BASE_SHA, pinned helper, pre-Python source identity, one canonical GET, and no direct singleton gh api. Semantic Workflow Capability is unchanged; no workflow, policy JSON, trigger, runtime permission, mutation, secret/OIDC, required-check reduction, merge/ruleset authority, or bypass."
     },
     {
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
