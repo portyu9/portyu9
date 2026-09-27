@@ -56,10 +56,14 @@ def validate_lease_run_evidence(sync: str) -> None:
     lease = core.job_block(sync, "lease", "reconcile")
     require("name: mint-mutation-lease-read-only" in lease,
             "Spotlight mutation-lease mint identity changed")
-    require("permissions:\n      actions: read" in lease,
-            "Spotlight mutation-lease mint must retain read-only Actions authority")
+    require("permissions:\n      actions: read\n      contents: read" in lease,
+            "Spotlight mutation-lease mint must retain exact governed read authority")
+    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in lease,
+            "Spotlight mutation-lease mint lost exact governed-read helper identity")
+    require('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
+            "Spotlight mutation-lease mint regained direct GitHub singleton transport")
 
-    run_call_marker = 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
+    run_call_marker = 'RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
     run_schema_marker = (
         'jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
     )
