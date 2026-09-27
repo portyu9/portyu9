@@ -134,6 +134,13 @@
       "rationale": "Authorize #772's exact trusted Capability Admission PR-object schema hardening. The three existing PR GETs for CodeQL Autofix, delegated Dependabot, and Spotlight now require strict typed identity/state metadata before existing semantic decisions. Triggers, schedules, permissions, endpoints, evaluator, provenance, candidate execution, check publication, mutations and semantic Workflow Capability remain unchanged; no required-check reduction, direct-main write, ruleset change or bypass is added."
     },
     {
+      "baseBomSha256": "22167d404cd385460755c9043b56a40a6f2f6a6d2baf30afc32e85c05c5fb35c",
+      "candidateBomSha256": "c74aa9be3108cfb106d3057e811ab621ebe8d1a8d6ccb1a43259c1a1402c1152",
+      "expansionSha256": "066347d71dd3b4a3bddb41c4525dfce73a1c3705047dd50e77df06b9ddf613e7",
+      "id": "cap-capability-admission-prior-attempt-governed-read-v1",
+      "rationale": "Authorize #1222: route the existing Capability Admission delegated Dependabot prior-attempt history JSON GET through the accepted authenticated bounded GET-only helper while preserving the 20-attempt bound, break/sleep pacing, contiguous history proof, digest/external-id binding, exact endpoint, and sole raw POST /check-runs mutation. No permission, trigger, pagination/binary transport, mutation retry/replay, required-check reduction, direct-main write, ruleset authority, or bypass."
+    },
+    {
       "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
       "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
       "expansionSha256": "75352f9822826f1b40bf88544ad097b8d5b7318589ccb95d993dbff4b878f2e0",
