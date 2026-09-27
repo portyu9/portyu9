@@ -74,8 +74,14 @@ def validate_policy(workflow_id: str, workflow: dict[str, Any]) -> None:
                 f"{label} minimumRemainingSeconds must be a positive integer below TTL: {job_id}")
 
     lease_permissions = jobs[lease_job]["permissions"]
-    require(lease_permissions == {"actions": "read"},
-            f"{label} mint job must retain only Actions-read authority")
+    profile_governed_read = workflow_id == "profile-stats" and "dispatch_plan" in jobs
+    expected_lease_permissions = (
+        {"actions": "read", "contents": "read"}
+        if profile_governed_read
+        else {"actions": "read"}
+    )
+    require(lease_permissions == expected_lease_permissions,
+            f"{label} mint job must retain exact reviewed read authority")
     write_jobs = {
         job_id for job_id, job in jobs.items()
         if any(permission == "write" for permission in job["permissions"].values())
@@ -137,12 +143,18 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
 
     workflow_path = workflow["path"]
     expected_ref = f'EXPECTED_WORKFLOW_REF="${{GITHUB_REPOSITORY}}/{workflow_path}@refs/heads/main"'
+    profile_governed_read = workflow_id == "profile-stats" and "dispatch_plan" in workflow["jobs"]
+    run_read = (
+        'RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
+        if profile_governed_read
+        else 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
+    )
     for fragment in (
         "name: mint-mutation-lease-read-only",
         "permissions:\n      actions: read",
         "id: lease",
         f"LEASE_TTL_SECONDS={LEASE_TTL_SECONDS}",
-        'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"',
+        run_read,
         'test "$(jq -r .id <<<"$RUN")" = "$GITHUB_RUN_ID"',
         'test "$(jq -r .run_attempt <<<"$RUN")" = "$GITHUB_RUN_ATTEMPT"',
         'test "$(jq -r .head_sha <<<"$RUN")" = "$BASE_SHA"',
@@ -165,6 +177,16 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
         require(forbidden not in lease, f"{label} mint job acquired write authority: {forbidden}")
 
     if workflow_id == "profile-stats":
+        if profile_governed_read:
+            for fragment in (
+                "permissions:\n      actions: read\n      contents: read",
+                "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+                'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+            ):
+                require(fragment in lease, f"{label} governed-read bootstrap changed: {fragment}")
+            require('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
+                    f"{label} regained direct singleton GitHub transport")
         validate_profile_candidate_binding(text, label)
 
     for job_id in spec["boundJobs"]:
