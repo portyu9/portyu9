@@ -1666,9 +1666,26 @@ def self_test_native_governed_bot_review_overlay(sync: str) -> None:
 
 
 def validate_preparer_script_with_trusted_admission(text: str) -> None:
-    require("def gh_json(endpoint: str)" in text and '["gh", "api", endpoint]' in text,
-            "Spotlight MAC preparer must retain one GET-only GitHub API helper")
-    for forbidden in ("--method", "requests.", "urllib", "curl ", "wget "):
+    for fragment in (
+        "import automation_github_read",
+        "def gh_json(endpoint: str)",
+        "text = automation_github_read.get_json_text(endpoint)",
+        "return automation_github_read.strict_json(text)",
+    ):
+        require(
+            fragment in text,
+            f"Spotlight MAC preparer lost canonical governed GET delegation: {fragment}",
+        )
+    for forbidden in (
+        "--method",
+        "requests.",
+        "urllib",
+        "curl ",
+        "wget ",
+        "import subprocess",
+        "subprocess.run(",
+        '["gh", "api", endpoint]',
+    ):
         require(forbidden not in text,
                 f"Spotlight MAC preparer acquired alternate/mutating network surface: {forbidden}")
     for fragment in (

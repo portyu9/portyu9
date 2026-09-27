@@ -9,8 +9,9 @@ import json
 import os
 from pathlib import Path
 import re
-import subprocess
 import sys
+
+import automation_github_read
 import time
 from typing import Any
 
@@ -72,17 +73,9 @@ def env_value(name: str, pattern: re.Pattern[str] | None = None) -> str:
 
 def gh_json(endpoint: str) -> Any:
     require(not endpoint.startswith("-"), "GitHub API endpoint must be one read-only path")
-    completed = subprocess.run(
-        ["gh", "api", endpoint],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    try:
-        return json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"GitHub API returned invalid JSON for {endpoint}: {exc}") from exc
+    text = automation_github_read.get_json_text(endpoint)
+    require(text is not None, "governed GitHub API GET unexpectedly returned no payload")
+    return automation_github_read.strict_json(text)
 
 
 def positive(value: Any, label: str) -> int:
@@ -503,7 +496,7 @@ def main() -> int:
         args.output.write_text(json.dumps(state, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
         print(f"Spotlight merge authorization live state verified: {args.output}")
         return 0
-    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+    except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
 
