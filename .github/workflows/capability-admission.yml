@@ -55,7 +55,7 @@ jobs:
       - name: Verify exact governed read transport identity
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"\n          test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"
 
       - name: Bind exact candidate context
         id: candidate
@@ -206,7 +206,7 @@ jobs:
               }
               MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"
               [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
-              gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" > spotlight-open-pr-pages.json
+              python3 scripts/automation_github_paginated_read.py "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" > spotlight-open-pr-pages.json
               python3 scripts/workflow_capability_api_collection.py pull-requests \
                 --input spotlight-open-pr-pages.json \
                 --out spotlight-open-prs.json
@@ -654,7 +654,7 @@ jobs:
 
           if [ "$DEPENDABOT" = "true" ]; then
             test "$PR_NUMBER" -gt 0
-            gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json
+            python3 scripts/automation_github_paginated_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json
             python3 scripts/workflow_capability_api_collection.py files \
               --input dependabot-file-pages.json \
               --out dependabot-changed-paths.txt
