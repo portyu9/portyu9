@@ -699,10 +699,27 @@ def strip_adr_tail(workflow: str, label: str) -> str:
 
 
 def project_profile_item9(stats: str) -> str:
-    marker = "  dispatch:\n"
-    require(stats.count(marker) == 1,
-            "Profile Stats item-9 dispatcher projection cannot isolate dispatch job")
-    return stats[:stats.index(marker)] + LEGACY_PROFILE_DISPATCH
+    plan_marker = "  dispatch_plan:\n"
+    dispatch_marker = "  dispatch:\n"
+    require(stats.count(plan_marker) == 1 and stats.count(dispatch_marker) == 1,
+            "Profile Stats item-9 projection cannot isolate dispatch planning/writer jobs")
+    plan_start = stats.index(plan_marker)
+    dispatch_start = stats.index(dispatch_marker)
+    require(plan_start < dispatch_start,
+            "Profile Stats item-9 projection observed dispatcher before read-only planning")
+    plan = stats[plan_start:dispatch_start]
+    for fragment in (
+        "name: prepare-spotlight-dispatch-read-only",
+        "needs: [receipt_attest, lease, attest]",
+        "concurrency:\n      group: profile-stats-terminal\n      cancel-in-progress: false\n      queue: max",
+        "permissions:\n      actions: read\n      contents: read",
+    ):
+        require(fragment in plan,
+                f"Profile Stats item-9 projection dispatch-plan boundary changed: {fragment}")
+    for forbidden in ("actions: write", "contents: write", "pull-requests: write", "checks: write"):
+        require(forbidden not in plan,
+                f"Profile Stats item-9 projection dispatch plan acquired write authority: {forbidden}")
+    return stats[:plan_start] + LEGACY_PROFILE_DISPATCH
 
 
 def project_native_review_gate_to_item10_order(sync: str) -> str:
