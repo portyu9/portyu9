@@ -3,7 +3,7 @@
 
 The item-12 five-workflow snapshot remains a canonical historical partition. Later trusted
 workflow extensions are stored as one-workflow canonical snapshots. This module is the only
-assembly boundary: callers receive one ordinary thirteen-workflow BOM object whose semantic and
+assembly boundary: callers receive one ordinary fourteen-workflow BOM object whose semantic and
 canonical representation is compared with live trusted compilation.
 """
 from __future__ import annotations
@@ -24,6 +24,7 @@ PROFILE_GENERATOR_COMPATIBILITY_WITNESS_EXTENSION = ROOT / ".github/workflow-cap
 BOT_PR_USER_APPROVAL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-bot-pr-user-approval.json"
 RULESET_DRIFT_SENTINEL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-drift-sentinel.json"
 RULESET_RECONCILER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-reconciler.json"
+AIQA_OWNER_CERTIFIER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-aiqa-owner-protected-certifier.json"
 RULESET_RECONCILER_WORKFLOW = ROOT / ".github/workflows/ruleset-reconciler.yml"
 RULESET_RECONCILER_ADMIN_SECRETS = [
     "PORTYU9_RULESET_ADMIN_APP_ID",
@@ -75,6 +76,7 @@ def load_combined() -> dict[str, Any]:
     bot_pr_user_approval_extension = load_part(BOT_PR_USER_APPROVAL_EXTENSION, "Bot PR user approval BOM extension")
     ruleset_drift_sentinel_extension = load_part(RULESET_DRIFT_SENTINEL_EXTENSION, "Ruleset drift sentinel BOM extension")
     ruleset_reconciler_extension = load_part(RULESET_RECONCILER_EXTENSION, "Ruleset reconciler BOM extension")
+    aiqa_owner_certifier_extension = load_part(AIQA_OWNER_CERTIFIER_EXTENSION, "AI QA owner-protected certifier BOM extension")
     require(len(base["workflows"]) == 5, "base Workflow Capability BOM historical workflow count changed")
 
     one_workflow(
@@ -127,6 +129,12 @@ def load_combined() -> dict[str, Any]:
         path=".github/workflows/ruleset-reconciler.yml",
         label="Ruleset reconciler BOM extension",
     )
+    one_workflow(
+        aiqa_owner_certifier_extension,
+        identity="aiqa-owner-protected-certifier",
+        path=".github/workflows/aiqa-owner-protected-certifier.yml",
+        label="AI QA owner-protected certifier BOM extension",
+    )
 
     workflows = (
         list(base["workflows"])
@@ -138,6 +146,7 @@ def load_combined() -> dict[str, Any]:
         + list(bot_pr_user_approval_extension["workflows"])
         + list(ruleset_drift_sentinel_extension["workflows"])
         + list(ruleset_reconciler_extension["workflows"])
+        + list(aiqa_owner_certifier_extension["workflows"])
     )
     ids = [workflow.get("id") for workflow in workflows]
     paths = [workflow.get("path") for workflow in workflows]
@@ -239,10 +248,11 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
 def self_test() -> None:
     combined = load_combined()
     validate_ruleset_reconciler_safety(combined)
-    require(len(combined["workflows"]) == 13, "composite Workflow Capability BOM must contain thirteen workflows")
+    require(len(combined["workflows"]) == 14, "composite Workflow Capability BOM must contain fourteen workflows")
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
             ".github/workflows/action-provenance-witness.yml",
+            ".github/workflows/aiqa-owner-protected-certifier.yml",
             ".github/workflows/bot-pr-user-approval.yml",
             ".github/workflows/capability-admission.yml",
             ".github/workflows/codeql-autofix.yml",
@@ -258,6 +268,8 @@ def self_test() -> None:
         ],
         "composite Workflow Capability BOM ordering changed",
     )
+    require(any(workflow["id"] == "aiqa-owner-protected-certifier" for workflow in combined["workflows"]),
+            "composite Workflow Capability BOM lost AI QA owner-protected certifier workflow")
     require(any(workflow["id"] == "action-provenance-witness" for workflow in combined["workflows"]),
             "composite Workflow Capability BOM lost action provenance witness workflow")
     require(any(workflow["id"] == "codeql-autofix" for workflow in combined["workflows"]),
@@ -276,4 +288,4 @@ def self_test() -> None:
 
 if __name__ == "__main__":
     self_test()
-    print("Composite Workflow Capability BOM snapshot validation passed: 13 workflows.")
+    print("Composite Workflow Capability BOM snapshot validation passed: 14 workflows.")
