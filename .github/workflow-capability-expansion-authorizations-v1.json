@@ -92,6 +92,13 @@
       "rationale": "Authorize #1208 Capability Admission candidate-binding governed reads: move ten existing repository-scoped singleton JSON observations to the accepted authenticated bounded GET-only helper while preserving endpoints, typed schema/identity checks, static trusted-main execution, pagination separation, candidate reconstruction, and mutation semantics. No permission, trigger, mutation retry/replay, required-check reduction, ruleset authority, direct-main write, or bypass is added."
     },
     {
+      "baseBomSha256": "7fce005281de12dd80987d6b56ee996be6b12314a209538f72775d68caf32ab2",
+      "candidateBomSha256": "9bdb9d61de6849d37c51278e39d35a2f437344c9047c8325d132d86d598b1931",
+      "expansionSha256": "4981ef74b40595e60579bcc89e1508acc1ed106fe0cdabe7b08232f06d465744",
+      "id": "cap-capability-admission-candidate-source-governed-read-v1",
+      "rationale": "Authorize #1215: route four existing Capability Admission candidate-source JSON GET call sites (commit, recursive tree, selected TCB blob, Dependabot supplemental blob) through the accepted authenticated bounded GET-only helper. Preserve exact endpoints, typed SHA/tree/blob validation, recursive non-truncation, TCB materialization, and raw paginated PR-files collection. No permission, trigger, pagination, mutation replay, required-check reduction, direct-main write, ruleset authority, or bypass."
+    },
+    {
       "baseBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
       "candidateBomSha256": "61d6f6be64bd03a796a6995bc16efd0e347bd7dc5a120e8a0e8da94ccb6bd866",
       "expansionSha256": "8688f6d4890e4b1c73585e712c04ec91b2301157900b218983dee3bde8a9b0a4",
