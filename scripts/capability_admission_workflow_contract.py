@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "286a836d26b01bb7e61fa02df506c789439de52a"
+EXPECTED_GIT_BLOB = "f7cae8965c5b0ae836cb75b9e9a3b86402fd02f2"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -385,7 +385,28 @@ def validate_text(text: str) -> None:
         require(autofix_binding in text,
                 f"trusted capability admission Autofix proof changed: {autofix_binding}")
 
-    origin_call = 'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
+        autofix_step_start = text.index("      - name: Verify immutable Autofix controller provenance")
+    autofix_step_end = text.index("\n      - name:", autofix_step_start + 8)
+    autofix_step = text[autofix_step_start:autofix_step_end]
+    require(
+        autofix_step.count("python3 scripts/automation_github_read.py") == 2,
+        "trusted Capability Admission Autofix provenance must use exactly two governed singleton JSON reads",
+    )
+    binary_zip = 'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
+    require(
+        autofix_step.count("gh api ") == 1 and autofix_step.count(binary_zip) == 1,
+        "trusted Capability Admission Autofix provenance must retain exactly one raw binary artifact ZIP read",
+    )
+    for forbidden in (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json',
+    ):
+        require(
+            forbidden not in autofix_step,
+            f"trusted Capability Admission Autofix provenance regained direct singleton JSON transport: {forbidden}",
+        )
+
+origin_call = 'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
     origin_schema_marker = '--argjson run "$ORIGIN_RUN_ID"'
     origin_schema_end_marker = "' origin-run.json >/dev/null || {"
     origin_consume_marker = 'test "$(jq -r .id origin-run.json)" = "$ORIGIN_RUN_ID"'
@@ -1227,7 +1248,13 @@ def self_test() -> None:
         schema_marker=compare_schema_marker,
         consume_marker=compare_consume_marker,
     )
-    origin_call = 'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
+        expect_failure(
+        text,
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json',
+        "must use exactly two governed singleton JSON reads",
+    )
+origin_call = 'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
     origin_consume = 'test "$(jq -r .id origin-run.json)" = "$ORIGIN_RUN_ID"'
     expect_scoped_schema_failure(
         text,
