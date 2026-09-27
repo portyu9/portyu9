@@ -469,6 +469,26 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in dependabot_release_step,
             "Profile Quality Dependabot release proof governed reads lost run-scoped token binding")
 
+    ruleset_sentinel = texts[".github/workflows/ruleset-drift-sentinel.yml"]
+    ruleset_main_step = named_step(
+        ruleset_sentinel,
+        "detect",
+        "Require current trusted main",
+    )
+    require(ruleset_main_step.count("python3 scripts/automation_github_read.py") == 1,
+            "Ruleset drift sentinel must use exactly one governed GitHub singleton read")
+    require(
+        'gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main"' not in ruleset_main_step,
+        "Ruleset drift sentinel regained direct main-ref GitHub transport",
+    )
+    require("GH_TOKEN: ${{ github.token }}" in ruleset_main_step,
+            "Ruleset drift sentinel governed read lost run-scoped token binding")
+    require(
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in ruleset_main_step,
+        "Ruleset drift sentinel lost exact governed-read helper identity",
+    )
+
     profile_stats = texts[".github/workflows/profile-stats.yml"]
     lease_step = named_step(
         profile_stats,
@@ -581,6 +601,27 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
             consumer_transport_drift,
             "must use exactly three governed GitHub read call sites",
         )
+
+    ruleset_sentinel_transport_drift = dict(texts)
+    sentinel_source = ruleset_sentinel_transport_drift[".github/workflows/ruleset-drift-sentinel.yml"]
+    sentinel_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/git/ref/heads/main"'
+    )
+    require(sentinel_governed in sentinel_source,
+            "retry-policy self-test fixture missing Ruleset drift sentinel governed read")
+    ruleset_sentinel_transport_drift[".github/workflows/ruleset-drift-sentinel.yml"] = (
+        sentinel_source.replace(
+            sentinel_governed,
+            'gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main"',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        ruleset_sentinel_transport_drift,
+        "must use exactly one governed GitHub singleton read",
+    )
 
     profile_stats_transport_drift = dict(texts)
     stats_source = profile_stats_transport_drift[".github/workflows/profile-stats.yml"]

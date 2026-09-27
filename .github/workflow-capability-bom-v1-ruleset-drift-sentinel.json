@@ -17,15 +17,7 @@
               "step": "Checkout exact trusted main"
             }
           ],
-          "apiSurfaces": [
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Require current trusted main"
-            }
-          ],
+          "apiSurfaces": [],
           "artifacts": [],
           "id": "detect",
           "mutations": [],
