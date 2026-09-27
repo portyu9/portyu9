@@ -99,6 +99,10 @@ class PublicGitHub:
                 with context as response:
                     require(response.status == 200, f"GitHub GET returned HTTP {response.status}")
                     require(response.geturl() == url, "GitHub GET redirected unexpectedly")
+                    require(
+                        response.headers.get_content_type() == "application/json",
+                        "GitHub GET response content type is not application/json",
+                    )
                     raw = response.read(MAX_RESPONSE_BYTES + 1)
                     require(len(raw) <= MAX_RESPONSE_BYTES, "GitHub response exceeds ingestion bound")
                 try:
