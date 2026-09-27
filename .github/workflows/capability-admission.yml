@@ -767,7 +767,7 @@ jobs:
               if [ "$HISTORY_ATTEMPT" -ge "$GITHUB_RUN_ATTEMPT" ]; then
                 break
               fi
-              gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}" \
+              python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}" \
                 | jq -c '.' >> dependabot-prior-attempts.ndjson
               sleep 1
             done
