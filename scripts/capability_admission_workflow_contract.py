@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "8c6a08751f69d37f05d41ba859cfb723eb583ef0"
+EXPECTED_GIT_BLOB = "3027d4b326a2771d7eb127b8a2cee7246024b1be"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -124,6 +124,7 @@ def validate_text(text: str) -> None:
         'PR="$(jq -c \'.pull_request\' "$GITHUB_EVENT_PATH")"',
         'ACTION="$(jq -r \'.action // ""\' "$GITHUB_EVENT_PATH")"',
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
         'python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
@@ -139,12 +140,16 @@ def validate_text(text: str) -> None:
         "trusted Capability Admission candidate binding must use exactly ten governed singleton GitHub reads",
     )
     preserved_pagination = (
-        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
+        'python3 scripts/automation_github_paginated_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
     )
     require(
-        bind_step.count("gh api ") == 1 and bind_step.count(preserved_pagination) == 1,
-        "trusted Capability Admission candidate binding must retain exactly one bounded paginated raw GitHub collection",
+        bind_step.count("python3 scripts/automation_github_paginated_read.py") == 1
+        and bind_step.count(preserved_pagination) == 1,
+        "trusted Capability Admission candidate binding must use exactly one governed paginated GitHub collection",
     )
+    require("gh api " not in bind_step,
+            "trusted Capability Admission candidate binding regained direct gh api transport")
     for forbidden in (
         'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
         'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
@@ -534,13 +539,16 @@ def validate_text(text: str) -> None:
         "trusted Capability Admission candidate source must use exactly four governed singleton JSON reads",
     )
     candidate_source_paginated_files = (
-        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
+        'python3 scripts/automation_github_paginated_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
     )
     require(
-        candidate_source_step.count("gh api ") == 1
+        candidate_source_step.count("python3 scripts/automation_github_paginated_read.py") == 1
         and candidate_source_step.count(candidate_source_paginated_files) == 1,
-        "trusted Capability Admission candidate source must retain exactly one raw paginated PR-files collection",
+        "trusted Capability Admission candidate source must use exactly one governed paginated PR-files collection",
     )
+    require("gh api " not in candidate_source_step,
+            "trusted Capability Admission candidate source regained direct gh api transport")
     for forbidden in (
         'COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
         'TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"',
@@ -677,7 +685,7 @@ def validate_text(text: str) -> None:
         'PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"',
         'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
         '[[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]',
-        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json',
+        'python3 scripts/automation_github_paginated_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json',
         "python3 scripts/workflow_capability_api_collection.py files",
         "--input dependabot-file-pages.json",
         "--out dependabot-changed-paths.txt",
