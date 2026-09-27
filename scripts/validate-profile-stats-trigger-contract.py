@@ -330,7 +330,8 @@ def main() -> int:
         stage = job_block(workflow, "stage", "publish")
         publish = job_block(workflow, "publish", "receipt")
         receipt = job_block(workflow, "receipt", "receipt_attest")
-        receipt_attest = job_block(workflow, "receipt_attest", "dispatch")
+        receipt_attest = job_block(workflow, "receipt_attest", "dispatch_plan")
+        dispatch_plan = job_block(workflow, "dispatch_plan", "dispatch")
         dispatch = job_block(workflow, "dispatch", "decision_receipt")
         decision_receipt = job_block(workflow, "decision_receipt", "decision_receipt_attest")
         decision_receipt_attest = job_block(workflow, "decision_receipt_attest", None)
@@ -340,8 +341,11 @@ def main() -> int:
                 "read-only attestation preparation must remain downstream of main-guarded generation")
         require("needs: attest" in lease,
                 "read-only mutation lease mint must consume only reviewed attestation preparation")
-        require("permissions:\n      actions: read" in lease,
-                "mutation lease mint must remain Actions-read-only")
+        require("permissions:\n      actions: read\n      contents: read" in lease,
+                "mutation lease mint must remain Actions/contents read-only")
+        require(lease.count("python3 source/scripts/automation_github_read.py") == 1
+                and 'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
+                "mutation lease mint must retain one canonical GitHub singleton GET")
         require(exact_job_if(lease, "mutation lease mint") == ATTEST_DELTA_EXPR,
                 "mutation lease mint job-level if must be the exact scheduled-delta guard")
         require("needs: [attest, lease]" in attest_publish,
@@ -370,8 +374,24 @@ def main() -> int:
         require("contents: read" in receipt_attest and "id-token: write" in receipt_attest
                 and "attestations: write" in receipt_attest and "contents: write" not in receipt_attest,
                 "publication receipt signer authority changed")
-        require("needs: [receipt_attest, lease, attest]" in dispatch,
-                "terminal dispatch must remain downstream of the signed publication receipt and exact lease transaction")
+        require("name: prepare-spotlight-dispatch-read-only" in dispatch_plan
+                and "needs: [receipt_attest, lease, attest]" in dispatch_plan,
+                "read-only dispatch planning must remain downstream of the signed publication receipt and exact lease transaction")
+        require("permissions:\n      actions: read\n      contents: read" in dispatch_plan,
+                "dispatch planning must remain actions/contents read-only")
+        require(dispatch_plan.count("python3 source/scripts/automation_github_read.py") == 2
+                and "gh api " not in dispatch_plan,
+                "dispatch planning must retain two canonical singleton GETs and no direct gh api")
+        require("needs: [dispatch_plan, receipt_attest, lease, attest]" in dispatch,
+                "terminal dispatch must remain downstream of read-only planning, signed receipt, and exact lease transaction")
+        require("permissions:\n      actions: write" in dispatch
+                and "contents:" not in dispatch
+                and "actions/checkout@" not in dispatch
+                and "actions/setup-python@" not in dispatch
+                and "python3 " not in dispatch,
+                "terminal dispatch must retain actions-write-only authority with no authored read surface")
+        require(dispatch.count("gh api ") == 1 and dispatch.count("--method POST") == 1,
+                "terminal dispatch must retain exactly one non-retried workflow-dispatch POST")
         require("name: prepare-automation-decision-receipt-read-only" in decision_receipt
                 and "needs: [dispatch, lease]" in decision_receipt,
                 "Automation Decision Receipt preparation dependency changed")
@@ -403,8 +423,8 @@ def main() -> int:
         print(
             f"Profile stats trigger contract passed: {len(files)} exact trusted production inputs compile to "
             f"source epoch sha256:{digest}; push invalidation is workflow-or-epoch only, validation-only scripts do not trigger publication; "
-            "main/manual/schedule guards, read-only lease gating, publication receipt preparation/signing, terminal dispatch, "
-            "and Automation Decision Receipt preparation/signing ordering remain exact."
+            "main/manual/schedule guards, canonical read-only lease gating, publication receipt preparation/signing, "
+            "read-only dispatch planning, terminal dispatch, and Automation Decision Receipt preparation/signing ordering remain exact."
         )
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError, StopIteration, IndexError, SyntaxError) as exc:

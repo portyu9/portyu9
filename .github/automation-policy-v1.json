@@ -288,6 +288,7 @@
             "publish",
             "receipt",
             "receipt_attest",
+            "dispatch_plan",
             "dispatch",
             "decision_receipt",
             "decision_receipt_attest"
@@ -348,7 +349,8 @@
             "attest"
           ],
           "permissions": {
-            "actions": "read"
+            "actions": "read",
+            "contents": "read"
           }
         },
         "attest_publish": {
@@ -411,9 +413,22 @@
             "attestations": "write"
           }
         },
+        "dispatch_plan": {
+          "name": "prepare-spotlight-dispatch-read-only",
+          "needs": [
+            "receipt_attest",
+            "lease",
+            "attest"
+          ],
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          }
+        },
         "dispatch": {
           "name": "dispatch-spotlight-link-sync",
           "needs": [
+            "dispatch_plan",
             "receipt_attest",
             "lease",
             "attest"
@@ -869,6 +884,7 @@
           "to": "completed",
           "phase": "terminalize",
           "jobs": [
+            "dispatch_plan",
             "dispatch",
             "decision_receipt",
             "decision_receipt_attest"

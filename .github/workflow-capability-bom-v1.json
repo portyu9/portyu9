@@ -740,23 +740,9 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml",
-              "method": "GET",
-              "mutating": false,
-              "step": "Dispatch exact Spotlight reconciliation workflow"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches",
               "method": "POST",
               "mutating": true,
-              "step": "Dispatch exact Spotlight reconciliation workflow"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1",
-              "method": "GET",
-              "mutating": false,
               "step": "Dispatch exact Spotlight reconciliation workflow"
             }
           ],
@@ -772,6 +758,7 @@
           ],
           "name": "dispatch-spotlight-link-sync",
           "needs": [
+            "dispatch_plan",
             "receipt_attest",
             "lease",
             "attest"
@@ -782,6 +769,49 @@
           },
           "references": {
             "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted source for governed reads"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [],
+          "id": "dispatch_plan",
+          "mutations": [],
+          "name": "prepare-spotlight-dispatch-read-only",
+          "needs": [
+            "receipt_attest",
+            "lease",
+            "attest"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "references": {
+            "env": [
+              "PYTHON_VERSION"
+            ],
             "githubToken": [
               "github.token"
             ],
@@ -881,15 +911,23 @@
           }
         },
         {
-          "actions": [],
-          "apiSurfaces": [
+          "actions": [
             {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Mint exact short-lived mutation lease"
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted source for governed reads"
             },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
             {
               "client": "git",
               "mutating": false,
@@ -910,10 +948,13 @@
           ],
           "oidc": false,
           "permissions": {
-            "actions": "read"
+            "actions": "read",
+            "contents": "read"
           },
           "references": {
-            "env": [],
+            "env": [
+              "PYTHON_VERSION"
+            ],
             "githubToken": [
               "github.token"
             ],

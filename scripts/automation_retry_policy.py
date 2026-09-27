@@ -469,6 +469,49 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in dependabot_release_step,
             "Profile Quality Dependabot release proof governed reads lost run-scoped token binding")
 
+    profile_stats = texts[".github/workflows/profile-stats.yml"]
+    lease_step = named_step(
+        profile_stats,
+        "lease",
+        "Mint exact short-lived mutation lease",
+    )
+    require(lease_step.count("python3 source/scripts/automation_github_read.py") == 1,
+            "Profile Stats lease mint must use exactly one governed GitHub singleton read")
+    require(
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease_step,
+        "Profile Stats lease mint regained direct singleton GitHub transport",
+    )
+    require("GH_TOKEN: ${{ github.token }}" in lease_step,
+            "Profile Stats lease governed read lost run-scoped token binding")
+
+    dispatch_plan_step = named_step(
+        profile_stats,
+        "dispatch_plan",
+        "Plan exact Spotlight reconciliation dispatch",
+    )
+    require(dispatch_plan_step.count("python3 source/scripts/automation_github_read.py") == 2,
+            "Profile Stats dispatch plan must use exactly two governed GitHub singleton reads")
+    for forbidden in (
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml"',
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1"',
+    ):
+        require(forbidden not in dispatch_plan_step,
+                f"Profile Stats dispatch plan regained direct singleton GitHub transport: {forbidden}")
+    require("GH_TOKEN: ${{ github.token }}" in dispatch_plan_step,
+            "Profile Stats dispatch-plan governed reads lost run-scoped token binding")
+
+    dispatch_step = named_step(
+        profile_stats,
+        "dispatch",
+        "Dispatch exact Spotlight reconciliation workflow",
+    )
+    require("python3 source/scripts/automation_github_read.py" not in dispatch_step,
+            "Profile Stats write-only dispatcher must not execute governed read client")
+    require(dispatch_step.count("gh api ") == 1
+            and dispatch_step.count("--method POST") == 1
+            and "actions/workflows/spotlight-link-sync.yml/dispatches" in dispatch_step,
+            "Profile Stats dispatcher must retain exactly one non-retried workflow-dispatch POST")
+
 
 def validate(policy: dict[str, Any], texts: dict[str, str]) -> None:
     require(isinstance(policy, dict) and set(policy) == {
@@ -538,6 +581,44 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
             consumer_transport_drift,
             "must use exactly three governed GitHub read call sites",
         )
+
+    profile_stats_transport_drift = dict(texts)
+    stats_source = profile_stats_transport_drift[".github/workflows/profile-stats.yml"]
+    lease_governed = (
+        'python3 source/scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"'
+    )
+    require(lease_governed in stats_source,
+            "retry-policy self-test fixture missing Profile Stats lease governed read")
+    profile_stats_transport_drift[".github/workflows/profile-stats.yml"] = stats_source.replace(
+        lease_governed,
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"',
+        1,
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        profile_stats_transport_drift,
+        "must use exactly one governed GitHub singleton read",
+    )
+
+    profile_stats_plan_drift = dict(texts)
+    stats_source = profile_stats_plan_drift[".github/workflows/profile-stats.yml"]
+    plan_governed = (
+        'python3 source/scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml"'
+    )
+    require(plan_governed in stats_source,
+            "retry-policy self-test fixture missing Profile Stats dispatch-plan governed read")
+    profile_stats_plan_drift[".github/workflows/profile-stats.yml"] = stats_source.replace(
+        plan_governed,
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml"',
+        1,
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        profile_stats_plan_drift,
+        "must use exactly two governed GitHub singleton reads",
+    )
 
     dependabot_context_transport_drift = dict(texts)
     context_source = dependabot_context_transport_drift[".github/workflows/profile-quality.yml"]

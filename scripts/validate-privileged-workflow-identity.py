@@ -8,11 +8,11 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v112"
+VERSION = "governed-workflow-byte-identity-v113"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "8d0a18ea834a2403cd532e9a8b6d5aff568166b7",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
-    ".github/workflows/profile-stats.yml": "12c277482657ebf7d6cf7c48047bda3cf678346a",
+    ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
     ".github/workflows/spotlight-link-sync.yml": "94cd7a6e6452c36da7011f99433101acfdae7918",
 }
 
@@ -370,7 +370,12 @@ def validate_item11_receipts(profile: str, spotlight: str) -> None:
 
 
 def validate_leases(profile: str, spotlight: str) -> None:
-    v21.validate_ordered_presence(profile, v21.MUTATION_LEASE_SEQUENCE[:7],
+    profile_lease_sequence = (
+        *v21.MUTATION_LEASE_SEQUENCE[:3],
+        'RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"',
+        *v21.MUTATION_LEASE_SEQUENCE[4:7],
+    )
+    v21.validate_ordered_presence(profile, profile_lease_sequence,
                                   "Profile Stats mutation-lease mint contract")
     require(profile.count("- name: Verify exact short-lived mutation lease") == 5,
             "Profile Stats write jobs must each verify the exact lease")
@@ -379,7 +384,19 @@ def validate_leases(profile: str, spotlight: str) -> None:
             "Profile Stats write jobs must each reserve lease lifetime through hard timeout")
 
     profile_lease = job_block(profile, "lease", "attest_publish")
-    profile_run_call_marker = 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
+    require("permissions:\n      actions: read\n      contents: read" in profile_lease,
+            "Profile Stats lease must remain actions/contents read-only")
+    require(profile_lease.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
+            and profile_lease.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+            "Profile Stats lease trusted governed-read runtime surface changed")
+    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in profile_lease,
+            "Profile Stats lease lost exact governed-read helper identity")
+    require(profile_lease.count("python3 source/scripts/automation_github_read.py") == 1
+            and 'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in profile_lease,
+            "Profile Stats lease must use exactly one governed singleton GET and no direct transport")
+    profile_run_call_marker = (
+        'RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
+    )
     profile_run_schema_marker = (
         'jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
     )
@@ -4904,16 +4921,17 @@ def self_test() -> None:
 def validate_profile_stats_spotlight_dispatch_evidence(
     profile: str, *, run_self_test: bool = True
 ) -> None:
+    plan = job_block(profile, "dispatch_plan", "dispatch")
     dispatch = job_block(profile, "dispatch", "decision_receipt")
     workflow_fetch = (
-        'WORKFLOW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'WORKFLOW="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/'
         'spotlight-link-sync.yml")"'
     )
     workflow_schema = '(.state | type == "string" and . == "active") and'
     workflow_schema_end = "' <<<\"$WORKFLOW\" >/dev/null || {"
     workflow_consume = 'WORKFLOW_ID="$(jq -r .id <<<"$WORKFLOW")"'
     runs_fetch = (
-        'RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
+        'RUNS="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/'
         'spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1")"'
     )
     runs_schema = '--argjson workflow "$WORKFLOW_ID"'
@@ -4926,34 +4944,60 @@ def validate_profile_stats_spotlight_dispatch_evidence(
         'spotlight-link-sync.yml/dispatches"'
     )
 
+    require("name: prepare-spotlight-dispatch-read-only" in plan,
+            "Profile Stats Spotlight dispatch-plan identity changed")
+    require("needs: [receipt_attest, lease, attest]" in plan,
+            "Profile Stats Spotlight dispatch-plan dependency closure changed")
+    require("permissions:\n      actions: read\n      contents: read" in plan,
+            "Profile Stats Spotlight dispatch plan must remain actions/contents read-only")
+    require(plan.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
+            and plan.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+            "Profile Stats Spotlight dispatch-plan trusted runtime surface changed")
+    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in plan,
+            "Profile Stats Spotlight dispatch plan lost exact governed-read helper identity")
+    require(plan.count("python3 source/scripts/automation_github_read.py") == 2
+            and "gh api " not in plan,
+            "Profile Stats Spotlight dispatch plan must contain exactly two governed GETs and no direct gh api")
+    require("name: dispatch-spotlight-link-sync" in dispatch
+            and "needs: [dispatch_plan, receipt_attest, lease, attest]" in dispatch,
+            "Profile Stats write-only dispatcher dependency closure changed")
+    require("permissions:\n      actions: write" in dispatch,
+            "Profile Stats dispatcher must retain actions-write-only authority")
+    for forbidden in ("actions/checkout@", "actions/setup-python@", "python3 ", "contents:", "pull-requests:", "checks:"):
+        require(forbidden not in dispatch,
+                f"Profile Stats dispatcher acquired forbidden authored/read surface: {forbidden}")
+    require('PREVIOUS_RUN_HIGH_WATER: ${{ needs.dispatch_plan.outputs.previous_run_high_water }}' in dispatch,
+            "Profile Stats dispatcher lost exact read-plan high-water input")
+    require(dispatch.count("gh api ") == 1 and dispatch.count("--method POST") == 1
+            and dispatch.count(dispatch_post) == 1,
+            "Profile Stats dispatcher must retain exactly one workflow-dispatch POST")
+
     for marker in (
         workflow_fetch, workflow_schema, workflow_schema_end, workflow_consume,
         runs_fetch, runs_schema, runs_schema_end, runs_consume, high_water,
-        dispatch_post,
     ):
         require(
-            dispatch.count(marker) == 1,
+            plan.count(marker) == 1,
             f"Profile Stats Spotlight dispatch evidence anchor changed: {marker}",
         )
 
     positions = (
-        dispatch.index(workflow_fetch),
-        dispatch.index(workflow_schema),
-        dispatch.index(workflow_schema_end),
-        dispatch.index(workflow_consume),
-        dispatch.index(runs_fetch),
-        dispatch.index(runs_schema),
-        dispatch.index(runs_schema_end),
-        dispatch.index(runs_consume),
-        dispatch.index(dispatch_post),
+        plan.index(workflow_fetch),
+        plan.index(workflow_schema),
+        plan.index(workflow_schema_end),
+        plan.index(workflow_consume),
+        plan.index(runs_fetch),
+        plan.index(runs_schema),
+        plan.index(runs_schema_end),
+        plan.index(runs_consume),
     )
     require(
         list(positions) == sorted(positions) and len(set(positions)) == len(positions),
-        "Profile Stats Spotlight dispatch evidence must be typed before scalar consumption/write",
+        "Profile Stats Spotlight dispatch evidence must be typed before scalar/high-water consumption",
     )
 
-    workflow_block = dispatch[
-        dispatch.index(workflow_fetch):dispatch.index(workflow_schema_end)
+    workflow_block = plan[
+        plan.index(workflow_fetch):plan.index(workflow_schema_end)
     ]
     for fragment in (
         '(.id | positive_int) and',
@@ -4972,7 +5016,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
             f"Profile Stats Spotlight workflow singleton schema changed: {fragment}",
         )
 
-    runs_block = dispatch[dispatch.index(runs_schema):dispatch.index(runs_schema_end)]
+    runs_block = plan[plan.index(runs_schema):plan.index(runs_schema_end)]
     for fragment in (
         '($root.total_count | type == "number" and . == floor and . >= 0) and',
         '($root.workflow_runs | type == "array" and length <= 1) and',
@@ -5023,7 +5067,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
     )
 
     require(
-        dispatch.count(
+        plan.count(
             'actions/workflows/spotlight-link-sync.yml/runs?event=workflow_dispatch&branch=main&per_page=1'
         ) == 1
         and dispatch.count(
@@ -5276,7 +5320,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema plus exact HTTP-200/202/201 transport ordering locked · bot-review credential/ref response schema ordering, exact workflow-dispatch HTTP 204 validation, and exact review-creation HTTP 200 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-201 reviewer-request, exact-204 admission/reviewer dispatch, and exact-201 protected-run approval status validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run dispatch evidence is typed before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence uses the canonical retrying GET client and is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run evidence is isolated in a canonical-read-only plan before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:

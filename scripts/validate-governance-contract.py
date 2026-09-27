@@ -323,8 +323,41 @@ def validate_quality_native_gate(text: str) -> None:
 
 
 def validate_stats_item11(text: str) -> None:
-    require(text.count("runs-on: ubuntu-24.04") == 11,
-            "All eleven Profile Stats jobs must pin ubuntu-24.04")
+    require(text.count("runs-on: ubuntu-24.04") == 12,
+            "All twelve Profile Stats jobs must pin ubuntu-24.04")
+    lease = core.job_block(text, "lease", "attest_publish")
+    require("permissions:\n      actions: read\n      contents: read" in lease,
+            "Profile Stats lease governed-read authority changed")
+    require(lease.count(f"actions/checkout@{CHECKOUT_SHA}") == 1
+            and lease.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 1,
+            "Profile Stats lease governed-read runtime inventory changed")
+    require(lease.count("python3 source/scripts/automation_github_read.py") == 1
+            and 'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
+            "Profile Stats lease must retain one canonical singleton GET and no direct transport")
+
+    dispatch_plan = core.job_block(text, "dispatch_plan", "dispatch")
+    require("name: prepare-spotlight-dispatch-read-only" in dispatch_plan
+            and "needs: [receipt_attest, lease, attest]" in dispatch_plan,
+            "Profile Stats dispatch-plan identity/dependency changed")
+    require("permissions:\n      actions: read\n      contents: read" in dispatch_plan,
+            "Profile Stats dispatch plan must remain actions/contents read-only")
+    require(dispatch_plan.count(f"actions/checkout@{CHECKOUT_SHA}") == 1
+            and dispatch_plan.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 1,
+            "Profile Stats dispatch-plan trusted runtime inventory changed")
+    require(dispatch_plan.count("python3 source/scripts/automation_github_read.py") == 2
+            and "gh api " not in dispatch_plan,
+            "Profile Stats dispatch plan must retain two canonical GETs and no direct gh api")
+
+    dispatch = core.job_block(text, "dispatch", "decision_receipt")
+    require("needs: [dispatch_plan, receipt_attest, lease, attest]" in dispatch,
+            "Profile Stats write-only dispatcher dependency changed")
+    require("permissions:\n      actions: write" in dispatch,
+            "Profile Stats dispatcher authority changed")
+    for forbidden in ("contents:", "actions/checkout@", "actions/setup-python@", "python3 "):
+        require(forbidden not in dispatch,
+                f"Profile Stats dispatcher acquired forbidden authored/read surface: {forbidden}")
+    require(dispatch.count("gh api ") == 1 and dispatch.count("--method POST") == 1,
+            "Profile Stats dispatcher must retain exactly one terminal POST")
     preparer = core.job_block(text, "decision_receipt", "decision_receipt_attest")
     signer = core.job_block(text, "decision_receipt_attest", None)
     require("name: prepare-automation-decision-receipt-read-only" in preparer,
@@ -349,7 +382,18 @@ def validate_stats_item11(text: str) -> None:
     tail = text[text.index(marker):]
     require(tail.count("  decision_receipt_attest:\n") == 1,
             "Profile Stats ADR projection cannot isolate signer")
-    ORIGINAL_VALIDATE_STATS(text[:text.index(marker)])
+    projected = text[:text.index(marker)]
+    plan = core.job_block(projected, "dispatch_plan", "dispatch")
+    projected = projected.replace(plan, "", 1)
+    current_dispatch_needs = "    needs: [dispatch_plan, receipt_attest, lease, attest]\n"
+    require(projected.count(current_dispatch_needs) == 1,
+            "Profile Stats frozen-governance projection lost dispatch-plan dependency")
+    projected = projected.replace(
+        current_dispatch_needs,
+        "    needs: [receipt_attest, lease, attest]\n",
+        1,
+    )
+    ORIGINAL_VALIDATE_STATS(projected)
 
 
 def main() -> int:
