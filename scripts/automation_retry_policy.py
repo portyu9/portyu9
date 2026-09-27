@@ -504,6 +504,44 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in lease_step,
             "Profile Stats lease governed read lost run-scoped token binding")
 
+    spotlight = texts[".github/workflows/spotlight-link-sync.yml"]
+    spotlight_checkout_step = named_step(
+        spotlight,
+        "lease",
+        "Checkout exact trusted source for governed reads",
+    )
+    require("ref: main" in spotlight_checkout_step,
+            "Spotlight lease governed read lost static trusted-main checkout")
+    require("ref: ${{ github.sha }}" not in spotlight_checkout_step,
+            "Spotlight lease governed read regained dynamic event-SHA checkout")
+    spotlight_lease_step = named_step(
+        spotlight,
+        "lease",
+        "Mint exact short-lived mutation lease",
+    )
+    require(spotlight_lease_step.count("python3 source/scripts/automation_github_read.py") == 1,
+            "Spotlight lease mint must use exactly one governed GitHub singleton read")
+    require(
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in spotlight_lease_step,
+        "Spotlight lease mint regained direct singleton GitHub transport",
+    )
+    require("GH_TOKEN: ${{ github.token }}" in spotlight_lease_step,
+            "Spotlight lease governed read lost run-scoped token binding")
+    spotlight_identity_step = named_step(
+        spotlight,
+        "lease",
+        "Verify exact governed read source identity",
+    )
+    require(
+        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in spotlight_identity_step,
+        "Spotlight lease lost exact governed-read helper identity",
+    )
+    require(
+        'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in spotlight_identity_step,
+        "Spotlight lease lost sealed-base governed-read source identity",
+    )
+
     dispatch_plan_step = named_step(
         profile_stats,
         "dispatch_plan",
@@ -639,6 +677,25 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     expect_failure(
         copy.deepcopy(policy),
         profile_stats_transport_drift,
+        "must use exactly one governed GitHub singleton read",
+    )
+
+    spotlight_transport_drift = dict(texts)
+    spotlight_source = spotlight_transport_drift[".github/workflows/spotlight-link-sync.yml"]
+    spotlight_lease_governed = (
+        'python3 source/scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"'
+    )
+    require(spotlight_lease_governed in spotlight_source,
+            "retry-policy self-test fixture missing Spotlight lease governed read")
+    spotlight_transport_drift[".github/workflows/spotlight-link-sync.yml"] = spotlight_source.replace(
+        spotlight_lease_governed,
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"',
+        1,
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        spotlight_transport_drift,
         "must use exactly one governed GitHub singleton read",
     )
 

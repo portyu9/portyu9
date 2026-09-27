@@ -114,6 +114,7 @@ jobs:
       queue: max
     permissions:
       actions: read
+      contents: read
     outputs:
       lease_id: ${{ steps.lease.outputs.lease_id }}
       issued_at: ${{ steps.lease.outputs.issued_at }}
@@ -122,6 +123,29 @@ jobs:
       candidate_id: ${{ steps.lease.outputs.candidate_id }}
 
     steps:
+      - name: Checkout exact trusted source for governed reads
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: source
+          persist-credentials: false
+
+      - name: Verify exact governed read source identity
+        env:
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
       - name: Mint exact short-lived mutation lease
         id: lease
         env:
@@ -144,7 +168,7 @@ jobs:
           test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
           [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$GITHUB_WORKFLOW_SHA" = "$BASE_SHA"
-          RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"
+          RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"
           jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT" \
             --arg head "$BASE_SHA" --arg event "$GITHUB_EVENT_NAME" \
             --arg repo "$GITHUB_REPOSITORY" --argjson repo_id "$GITHUB_REPOSITORY_ID" '
