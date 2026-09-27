@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "policyId": "aiqa-owner-protected-authorizations-v1",
+  "targetRepository": "portyu9/ai-qa-automation",
+  "ruleset": {
+    "id": 21201916,
+    "name": "Protect Main",
+    "requiredContext": "Trusted PR Gate",
+    "requiredIntegrationId": 4766700,
+    "trustedBotLogin": "trusted-pr-gate[bot]",
+    "trustedBotId": 322661847
+  },
+  "authorizations": {
+    "aiqa-291-bootstrap-v1": {
+      "issue": "portyu9/ai-qa-automation#293",
+      "prNumber": 291,
+      "ownerLogin": "portyu9",
+      "ownerId": 35150859,
+      "headRef": "fix/event-driven-dependency-qualification",
+      "baseSha": "7bf2b745d2a2ff6d1dc6014d84df0820ea366113",
+      "headSha": "441cd405eda55ae1998037e05875a75ab2a404c5",
+      "mergeSha": "784af66070f33ad53043afae1cdb4ad31bca3aef",
+      "treeSha": "6d23f0a0dfb491ab7b75de54e1e54f0bbada8746",
+      "changedPaths": [
+        ".github/scripts/dependency_governance.py",
+        ".github/scripts/dependency_promotion.py",
+        ".github/scripts/dependency_recovery.py",
+        ".github/scripts/dependency_trusted_gate.py",
+        ".github/scripts/protected_security_remediation.py",
+        ".github/workflows/dependency-governance.yml",
+        ".github/workflows/protected-security-remediation.yml",
+        ".github/workflows/trusted-pr-auto.yml",
+        "docs/TRUSTED_PR_CONTROL_PLANE.md",
+        "scripts/auto_trusted_bot_admission.py",
+        "scripts/auto_trusted_preflight.py",
+        "scripts/ci_contract_trusted_auto.py",
+        "scripts/verify_build_authority.py",
+        "scripts/verify_ci_contract.py",
+        "scripts/verify_fork_cloud_authority.py",
+        "scripts/verify_supply_chain.py",
+        "tests/unit/test_auto_trusted_preflight.py",
+        "tests/unit/test_build_authority.py",
+        "tests/unit/test_ci_trusted_auto_contract.py",
+        "tests/unit/test_ci_workflow_contract.py",
+        "tests/unit/test_dependency_promotion_lock_replay.py",
+        "tests/unit/test_dependency_recovery_control.py",
+        "tests/unit/test_dependency_trusted_gate.py",
+        "tests/unit/test_fork_cloud_authority.py",
+        "tests/unit/test_protected_security_remediation.py",
+        "tests/unit/test_supply_chain_integrity.py"
+      ],
+      "evidenceRuns": [
+        {
+          "id": 36344365191,
+          "workflowId": 339754724,
+          "name": "CI — ƳƤ AI QA Automation Framework",
+          "path": ".github/workflows/ci.yml",
+          "event": "pull_request",
+          "runAttempt": 1,
+          "jobs": {
+            "Supply Chain / Wheel + SBOM + Container": "success",
+            "Security Gates": "success",
+            "Quality / Python 3.14.7": "success",
+            "34-Case Deterministic Control Evaluation": "success",
+            "Quality / Python 3.11.16": "success",
+            "Playwright Reference SUT": "success",
+            "Required PR Gate": "success",
+            "Publish Exact-Subject Required PR Gate": "skipped"
+          }
+        },
+        {
+          "id": 36344365180,
+          "workflowId": 359681647,
+          "name": "CodeQL",
+          "path": ".github/workflows/codeql.yml",
+          "event": "pull_request",
+          "runAttempt": 1,
+          "jobs": {
+            "CodeQL": "success",
+            "Exact-Subject CodeQL Analysis": "skipped",
+            "Publish Exact-Subject CodeQL": "skipped"
+          }
+        },
+        {
+          "id": 36344365542,
+          "workflowId": 359681650,
+          "name": "dependency-governance",
+          "path": ".github/workflows/dependency-governance.yml",
+          "event": "pull_request",
+          "runAttempt": 1,
+          "jobs": {
+            "governance-self-test": "success",
+            "govern-dependabot": "skipped",
+            "trusted-status-synchronization": "skipped",
+            "merge-exact-trusted-dependency-promotion": "skipped"
+          }
+        }
+      ]
+    }
+  }
+}
