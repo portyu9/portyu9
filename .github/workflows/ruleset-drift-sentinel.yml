@@ -30,11 +30,13 @@ jobs:
 
       - name: Require current trusted main
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
           EXPECTED_MAIN_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          LIVE_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          LIVE_MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
           LIVE_MAIN_SHA="$(jq -er '
             if type != "object" then
               error("Ruleset sentinel main ref response must be an object")
