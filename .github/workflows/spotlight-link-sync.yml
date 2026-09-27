@@ -126,17 +126,9 @@ jobs:
       - name: Checkout exact trusted source for governed reads
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }}
+          ref: main
           path: source
           persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Verify resolved Python runtime
-        run: python3 source/scripts/verify-python-runtime.py
 
       - name: Verify exact governed read source identity
         env:
@@ -145,6 +137,14 @@ jobs:
           set -euo pipefail
           test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"
           test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
 
       - name: Mint exact short-lived mutation lease
         id: lease
