@@ -806,6 +806,13 @@
       "rationale": "Authorize frozen #1000's protected-TCB ADR liveness repair: preserve the leased base and exact high-water/bot/workflow/repository bindings; accept a later downstream main head only when typed Git compare evidence proves identical/ahead ancestry with exact merge base and behind_by=0. Composite Workflow Capability is unchanged; no trigger, permission, secret, mutation, merge/ruleset authority, required-check reduction, direct-main write, or bypass is added."
     },
     {
+      "id": "cap-profile-stats-dispatch-plan-parser-v1",
+      "baseBomSha256": "777d972509bc55cecd154eca0013d01dfaddfc18be4c5f6cb5d899f3545a9286",
+      "candidateBomSha256": "777d972509bc55cecd154eca0013d01dfaddfc18be4c5f6cb5d899f3545a9286",
+      "expansionSha256": "8cd8c2b2ef469fbca6a1c92a21fdc97448d00611754869c333acc3d2ad55f370",
+      "rationale": "Authorize #1183's exact trusted-parser prerequisite for #1181: accept current Profile Stats unchanged and one explicit future dispatch_plan shape with exact read-only planner authority and conditional lease contents-read/canonical-GET bootstrap. Semantic Workflow Capability is unchanged. No workflow, policy JSON, trigger, endpoint, mutation, runtime permission, secret/OIDC, required-check reduction, direct-main write, ruleset change, merge authority, or bypass is added."
+    },
+    {
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "expansionSha256": "ecd46d0ed5524e089af775b01534b695c3b9b5f7bd3dd2fe2ec6e57d6b72f858",
