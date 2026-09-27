@@ -872,10 +872,10 @@ def expect_collection_failure(collection: Any, expected: str) -> None:
 
 
 def validate_sentinel_main_ref_evidence(text: str, *, run_self_test: bool = True) -> None:
-    capture = 'LIVE_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'
+    capture = 'LIVE_MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'
     normalize = 'LIVE_MAIN_SHA="$(jq -er \''
     consume = 'test "$LIVE_MAIN_SHA" = "$EXPECTED_MAIN_SHA"'
-    endpoint = 'gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main"'
+    endpoint = 'python3 scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/git/ref/heads/main"'
     legacy = 'gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq \' .object.sha\''
 
     for marker in (capture, normalize, consume):
@@ -888,8 +888,16 @@ def validate_sentinel_main_ref_evidence(text: str, *, run_self_test: bool = True
         "Ruleset sentinel must retain exactly one reviewed main-ref GET",
     )
     require(
-        'gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq' not in text,
-        "Ruleset sentinel regressed to direct scalar main-ref consumption",
+        'gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main"' not in text,
+        "Ruleset sentinel regressed to direct main-ref GitHub transport",
+    )
+    require(
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in text,
+        "Ruleset sentinel governed main-ref read lost exact helper identity",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in text,
+        "Ruleset sentinel governed main-ref read lost run-scoped token binding",
     )
     require(
         "permissions:\n  contents: read" in text
