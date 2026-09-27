@@ -52,6 +52,11 @@ jobs:
       - name: Verify resolved Python runtime
         run: python3 scripts/verify-python-runtime.py
 
+      - name: Verify exact governed read transport identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+
       - name: Bind exact candidate context
         id: candidate
         env:
@@ -140,7 +145,7 @@ jobs:
                   [[ "$EXPECTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-                  PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+                  PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
                   validate_api_pr_object "$PR" "$PR_NUMBER" || {
                     echo "ERROR: malformed CodeQL Autofix capability-admission PR evidence for #${PR_NUMBER}." >&2
                     exit 1
@@ -164,7 +169,7 @@ jobs:
                   [[ "$EXPECTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
                   [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-                  gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"
+                  python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"
                   PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"
                   validate_api_pr_object "$PR" "$PR_NUMBER" || {
                     echo "ERROR: malformed delegated Dependabot capability-admission PR evidence for #${PR_NUMBER}." >&2
@@ -194,7 +199,7 @@ jobs:
               else
                 SPOTLIGHT_MODE="scheduled"
               fi
-              MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+              MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
               validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" || {
                 echo "ERROR: malformed Capability Admission main-ref discovery evidence." >&2
                 exit 1
@@ -232,7 +237,7 @@ jobs:
               DISCOVERED_PR="$(jq -c '.[0]' <<<"$MATCHES")"
               PR_NUMBER="$(jq -r .number <<<"$DISCOVERED_PR")"
               [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-              PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+              PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
               validate_api_pr_object "$PR" "$PR_NUMBER" || {
                 echo "ERROR: malformed Spotlight capability-admission PR evidence for #${PR_NUMBER}." >&2
                 exit 1
@@ -266,7 +271,7 @@ jobs:
           [[ "$HEAD_REF" =~ ^[A-Za-z0-9._/-]+$ ]]
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
-          MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA" || {
             echo "ERROR: malformed or stale Capability Admission main-ref evidence." >&2
             exit 1
@@ -289,14 +294,14 @@ jobs:
           if [ "$SPOTLIGHT" = "true" ]; then
             test "$HEAD_REPOSITORY" = "$TARGET_REPOSITORY"
             [[ "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
-            HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+            HEAD_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
             validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {
               echo "ERROR: malformed or mismatched Capability Admission Spotlight candidate-ref evidence." >&2
               exit 1
             }
             test "$(jq -r .object.sha <<<"$HEAD_REF_RESPONSE")" = "$HEAD_SHA"
 
-            CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+            CANDIDATE_COMMIT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
             jq -e --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \
               --arg name "github-actions[bot]" \
               --arg email "41898282+github-actions[bot]@users.noreply.github.com" '
@@ -327,7 +332,7 @@ jobs:
             test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "41898282+github-actions[bot]@users.noreply.github.com"
             test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
 
-            COMPARE="$(gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
+            COMPARE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
             jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" '
               (type == "object") and
               (.status | type == "string" and . == "ahead") and
@@ -363,7 +368,7 @@ jobs:
             test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
             test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
 
-            GENERATED_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated")"
+            GENERATED_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/generated")"
             validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" || {
               echo "ERROR: malformed Capability Admission generated-ref evidence." >&2
               exit 1
@@ -372,7 +377,7 @@ jobs:
             [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
             README_BLOB_SHA="$(jq -r '.files[0].sha' <<<"$COMPARE")"
             [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-            README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"
+            README_CONTENTS_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"
             validate_readme_contents_object "$README_CONTENTS_RESPONSE" "$README_BLOB_SHA" || {
               echo "ERROR: malformed or mismatched Capability Admission Spotlight README evidence." >&2
               exit 1

@@ -491,6 +491,46 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in dependabot_release_step,
             "Profile Quality Dependabot release proof governed reads lost run-scoped token binding")
 
+    capability_admission = texts[".github/workflows/capability-admission.yml"]
+    capability_identity_step = named_step(
+        capability_admission,
+        "admission",
+        "Verify exact governed read transport identity",
+    )
+    require(
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in capability_identity_step,
+        "Capability Admission candidate binding lost exact governed-read helper identity",
+    )
+
+    capability_bind_step = named_step(
+        capability_admission,
+        "admission",
+        "Bind exact candidate context",
+    )
+    require(capability_bind_step.count("python3 scripts/automation_github_read.py") == 10,
+            "Capability Admission candidate binding must use exactly ten governed singleton GitHub reads")
+    capability_paginated_prs = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
+    )
+    require(capability_bind_step.count("gh api ") == 1
+            and capability_bind_step.count(capability_paginated_prs) == 1,
+            "Capability Admission candidate binding must retain exactly one bounded paginated raw GitHub collection")
+    require("GH_TOKEN: ${{ github.token }}" in capability_bind_step,
+            "Capability Admission candidate binding governed reads lost run-scoped token binding")
+    for forbidden in (
+        'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+        'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+        'CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        'COMPARE="$(gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"',
+        'GENERATED_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated")"',
+        'README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
+    ):
+        require(forbidden not in capability_bind_step,
+                f"Capability Admission candidate binding regained direct singleton transport: {forbidden}")
+
     ruleset_sentinel = texts[".github/workflows/ruleset-drift-sentinel.yml"]
     ruleset_main_step = named_step(
         ruleset_sentinel,
@@ -661,6 +701,27 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
             consumer_transport_drift,
             "must use exactly three governed GitHub read call sites",
         )
+
+    capability_transport_drift = dict(texts)
+    capability_source = capability_transport_drift[".github/workflows/capability-admission.yml"]
+    capability_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+    )
+    require(capability_governed in capability_source,
+            "retry-policy self-test fixture missing Capability Admission governed read")
+    capability_transport_drift[".github/workflows/capability-admission.yml"] = (
+        capability_source.replace(
+            capability_governed,
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        capability_transport_drift,
+        "must use exactly ten governed singleton GitHub reads",
+    )
 
     ruleset_sentinel_transport_drift = dict(texts)
     sentinel_source = ruleset_sentinel_transport_drift[".github/workflows/ruleset-drift-sentinel.yml"]

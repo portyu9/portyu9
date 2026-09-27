@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "c13065c7202ed3582e43e838613a15decb33e533"
+EXPECTED_GIT_BLOB = "286a836d26b01bb7e61fa02df506c789439de52a"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -96,6 +96,7 @@ def validate_text(text: str) -> None:
     checkout_pos = text.index("- name: Checkout static trusted main")
     setup_pos = text.index("- name: Set up Python")
     runtime_pos = text.index("- name: Verify resolved Python runtime")
+    governed_identity_pos = text.index("- name: Verify exact governed read transport identity")
     bind_pos = text.index("- name: Bind exact candidate context")
     spotlight_parser_pos = text.find(
         "python3 scripts/workflow_capability_api_collection.py pull-requests",
@@ -104,7 +105,7 @@ def validate_text(text: str) -> None:
     exact_base_pos = text.index("- name: Verify exact trusted base checkout", bind_pos)
     if spotlight_parser_pos >= 0:
         require(
-            checkout_pos < setup_pos < runtime_pos < bind_pos < spotlight_parser_pos < exact_base_pos,
+            checkout_pos < setup_pos < runtime_pos < governed_identity_pos < bind_pos < spotlight_parser_pos < exact_base_pos,
             "trusted capability admission bootstrap ordering regressed",
         )
     require("ref: ${{ github.event.pull_request.head.sha }}" not in text and
@@ -122,13 +123,42 @@ def validate_text(text: str) -> None:
         "TARGET_REPOSITORY: ${{ github.repository }}",
         'PR="$(jq -c \'.pull_request\' "$GITHUB_EVENT_PATH")"',
         'ACTION="$(jq -r \'.action // ""\' "$GITHUB_EVENT_PATH")"',
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
-        'gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
         'gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
         'python3 scripts/workflow_capability_tcb.py select',
         'TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"',
     ):
         require(binding in text, f"trusted capability admission identity binding changed: {binding}")
+
+    bind_end = text.index("- name: Verify exact trusted base checkout", bind_pos)
+    bind_step = text[bind_pos:bind_end]
+    require(
+        bind_step.count("python3 scripts/automation_github_read.py") == 10,
+        "trusted Capability Admission candidate binding must use exactly ten governed singleton GitHub reads",
+    )
+    preserved_pagination = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
+    )
+    require(
+        bind_step.count("gh api ") == 1 and bind_step.count(preserved_pagination) == 1,
+        "trusted Capability Admission candidate binding must retain exactly one bounded paginated raw GitHub collection",
+    )
+    for forbidden in (
+        'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+        'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+        'CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        'COMPARE="$(gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"',
+        'GENERATED_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated")"',
+        'README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
+    ):
+        require(
+            forbidden not in bind_step,
+            f"trusted Capability Admission candidate binding regained direct singleton transport: {forbidden}",
+        )
 
     closing_guard = (
         "python3 scripts/automation_pr_closing_directive_guard.py \\\n"
@@ -177,7 +207,7 @@ def validate_text(text: str) -> None:
     )
 
     codeql_lane = text.index("codeql-autofix-admission)")
-    codeql_fetch = text.index('PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"', codeql_lane)
+    codeql_fetch = text.index('PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"', codeql_lane)
     codeql_schema = text.index(schema_call, codeql_fetch)
     codeql_consumer = text.index('test "$(jq -r .state <<<"$PR")" = "open"', codeql_schema)
     require(
@@ -187,7 +217,7 @@ def validate_text(text: str) -> None:
 
     dependabot_lane = text.index("dependabot-admission)")
     dependabot_fetch = text.index(
-        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
         dependabot_lane,
     )
     dependabot_assign = text.index('PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"', dependabot_fetch)
@@ -199,7 +229,7 @@ def validate_text(text: str) -> None:
     )
 
     spotlight_lane = text.index("workflow_dispatch|schedule)")
-    spotlight_fetch = text.index('PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"', spotlight_lane)
+    spotlight_fetch = text.index('PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"', spotlight_lane)
     spotlight_schema = text.index(schema_call, spotlight_fetch)
     spotlight_consumer = text.index('test "$(jq -r .number <<<"$PR")" = "$PR_NUMBER"', spotlight_schema)
     require(
@@ -245,7 +275,7 @@ def validate_text(text: str) -> None:
 
     discovery_lane = text.index("workflow_dispatch|schedule)")
     discovery_ref_call = text.index(
-        'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+        'MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
         discovery_lane,
     )
     discovery_ref_schema = text.index(
@@ -257,7 +287,7 @@ def validate_text(text: str) -> None:
         discovery_ref_call,
     )
     common_ref_call = text.index(
-        'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+        'MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
         discovery_ref_call + 1,
     )
     common_ref_schema = text.index(
@@ -269,7 +299,7 @@ def validate_text(text: str) -> None:
         common_ref_call,
     )
     head_ref_call = text.index(
-        'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+        'HEAD_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
         common_ref_consume,
     )
     head_ref_schema = text.index(
@@ -281,7 +311,7 @@ def validate_text(text: str) -> None:
         head_ref_call,
     )
     generated_ref_call = text.index(
-        'GENERATED_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/generated")"',
+        'GENERATED_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/generated")"',
         head_ref_consume,
     )
     generated_ref_schema = text.index(
@@ -301,7 +331,7 @@ def validate_text(text: str) -> None:
     )
 
     readme_call = text.index(
-        'README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
+        'README_CONTENTS_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
         generated_ref_consume,
     )
     readme_schema = text.index(
@@ -545,7 +575,7 @@ def validate_text(text: str) -> None:
     for dependabot_binding in (
         "dependabot-admission)",
         'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"',
-        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
         'PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"',
         'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
         '[[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]',
@@ -591,7 +621,7 @@ def validate_text(text: str) -> None:
         'test("^automation/spotlight-links/[0-9a-f]{64}$")',
         'test "$MATCH_COUNT" -le 1',
         'DISCOVERED_PR="$(jq -c \'.[0]\' <<<"$MATCHES")"',
-        'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
+        'PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
         'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
         'test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"',
         'test "$(jq -r .total_commits <<<"$COMPARE")" = "1"',
@@ -604,11 +634,11 @@ def validate_text(text: str) -> None:
         require(spotlight_binding in text,
                 f"trusted capability admission Spotlight proof changed: {spotlight_binding}")
 
-    candidate_call = 'CANDIDATE_COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    candidate_call = 'CANDIDATE_COMMIT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"'
     candidate_schema_marker = 'jq -e --arg head "$HEAD_SHA" --arg base "$BASE_SHA" \\'
     candidate_schema_end_marker = "' <<<\"$CANDIDATE_COMMIT\" >/dev/null || {"
     candidate_consume_marker = 'test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"'
-    compare_call = 'COMPARE="$(gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"'
+    compare_call = 'COMPARE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"'
     compare_schema_marker = 'jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \''
     compare_schema_end_marker = "' <<<\"$COMPARE\" >/dev/null || {"
     compare_consume_marker = 'test "$(jq -r .status <<<"$COMPARE")" = "ahead"'
@@ -1016,6 +1046,12 @@ def self_test() -> None:
     )
     expect_failure(
         text,
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        "must use exactly ten governed singleton GitHub reads",
+    )
+    expect_failure(
+        text,
         'gh api --include --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
         'gh api --method POST "repos/${TARGET_REPOSITORY}/check-runs"',
         "candidate-check publisher",
@@ -1085,14 +1121,14 @@ def self_test() -> None:
     )
     expect_runtime_schema_reorder_failure(
         text,
-        call_marker='HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+        call_marker='HEAD_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
         schema_marker='validate_git_ref_object "$HEAD_REF_RESPONSE" "refs/heads/${HEAD_REF}" "$HEAD_SHA" || {',
         consume_marker='test "$(jq -r .object.sha <<<"$HEAD_REF_RESPONSE")" = "$HEAD_SHA"',
         expected="Git-ref schemas must precede scalar consumption",
     )
     expect_runtime_schema_reorder_failure(
         text,
-        call_marker='README_CONTENTS_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
+        call_marker='README_CONTENTS_RESPONSE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"',
         schema_marker='validate_readme_contents_object "$README_CONTENTS_RESPONSE" "$README_BLOB_SHA" || {',
         consume_marker='test "$(jq -r .path <<<"$README_CONTENTS_RESPONSE")" = "README.md"',
         expected="README Contents schema must precede scalar consumption",
