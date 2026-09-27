@@ -1006,7 +1006,7 @@
       "candidateBomSha256": "dc1d9fa0ea3ecad443d275c6dbb4ba43b1c54725a8edd0dc29ae53b6ab8b8b80",
       "expansionSha256": "f05139a892e0c6f81bcf8afa4ce17fc497bafeb74fd18fea91875c101e7c0c60",
       "id": "cap-spotlight-merge-authorization-governed-read-v1",
-      "rationale": "Authorize #1204 Spotlight merge-authorization governed-read migration: the protected decision source delegates its existing repository-scoped read-only observations to the accepted authenticated bounded GET-only helper while preserving exact endpoints, schema/identity checks, retry-history proof, deterministic output, and read/write phase separation. Semantic Workflow Capability is unchanged; no workflow byte, permission, trigger, mutation retry/replay, secret/OIDC, required-check reduction, merge/ruleset authority, direct-main write, or bypass is added."
+      "rationale": "Authorize #1204 Spotlight merge-authorization governed-read migration: route existing read-only repository observations through the accepted authenticated bounded GET helper while preserving endpoints, schema/identity checks, retry-history proof, deterministic output, and read/write separation. Workflow capability is unchanged; no workflow, permission, trigger, mutation replay, secret/OIDC, required-check reduction, merge/ruleset authority, direct-main write, or bypass is added."
     },
     {
       "baseBomSha256": "023edf4092ba15ff8e9777fe5501e64ab622e4bba1afa7fa7dac596bf64434a7",
