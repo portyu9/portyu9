@@ -531,6 +531,29 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require(forbidden not in capability_bind_step,
                 f"Capability Admission candidate binding regained direct singleton transport: {forbidden}")
 
+    capability_source_step = named_step(
+        capability_admission,
+        "admission",
+        "Fetch exact candidate capability source as data",
+    )
+    require(capability_source_step.count("python3 scripts/automation_github_read.py") == 4,
+            "Capability Admission candidate source must use exactly four governed singleton JSON reads")
+    capability_source_paginated_files = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
+    )
+    require(capability_source_step.count("gh api ") == 1
+            and capability_source_step.count(capability_source_paginated_files) == 1,
+            "Capability Admission candidate source must retain exactly one bounded paginated raw GitHub collection")
+    for forbidden in (
+        'COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        'TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"',
+        'BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"',
+    ):
+        require(forbidden not in capability_source_step,
+                f"Capability Admission candidate source regained direct singleton transport: {forbidden}")
+    require("GH_TOKEN: ${{ github.token }}" in capability_source_step,
+            "Capability Admission candidate-source governed reads lost run-scoped token binding")
+
     capability_autofix_step = named_step(
         capability_admission,
         "admission",
@@ -743,6 +766,27 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         capability_transport_drift,
         "must use exactly ten governed singleton GitHub reads",
+    )
+
+    capability_source_transport_drift = dict(texts)
+    capability_candidate_source = capability_source_transport_drift[".github/workflows/capability-admission.yml"]
+    capability_source_governed = (
+        'COMMIT="$(python3 scripts/automation_github_read.py '
+        '"repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    )
+    require(capability_source_governed in capability_candidate_source,
+            "retry-policy self-test fixture missing Capability Admission candidate-source governed read")
+    capability_source_transport_drift[".github/workflows/capability-admission.yml"] = (
+        capability_candidate_source.replace(
+            capability_source_governed,
+            'COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        capability_source_transport_drift,
+        "must use exactly four governed singleton JSON reads",
     )
 
     capability_autofix_transport_drift = dict(texts)

@@ -588,7 +588,7 @@ jobs:
           rm -rf candidate-capability-source
           mkdir -p candidate-capability-source/.github/workflows candidate-capability-source/scripts
 
-          COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          COMMIT="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"
           validate_candidate_commit_response "$COMMIT" "$HEAD_SHA" || {
             echo "ERROR: malformed or mismatched Capability Admission candidate Git commit evidence." >&2
             exit 1
@@ -598,7 +598,7 @@ jobs:
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
           printf '%s\n' "$TREE_SHA" > candidate-capability-source/.candidate-tree-sha
 
-          TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
+          TREE="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
           validate_candidate_tree_response "$TREE" "$TREE_SHA" || {
             echo "ERROR: malformed or ambiguous Capability Admission candidate Git tree evidence." >&2
             exit 1
@@ -637,7 +637,7 @@ jobs:
             BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
             [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-            BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            BLOB="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"
             validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {
               echo "ERROR: malformed or mismatched Capability Admission candidate Git blob evidence." >&2
               exit 1
@@ -665,7 +665,7 @@ jobs:
               test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
               BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
               [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-              BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+              BLOB="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"
               validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {
                 echo "ERROR: malformed or mismatched Capability Admission Dependabot supplemental Git blob evidence." >&2
                 exit 1
