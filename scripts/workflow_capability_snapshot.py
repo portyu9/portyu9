@@ -360,7 +360,6 @@ def validate_aiqa_owner_certifier_safety(combined: dict[str, Any]) -> None:
         'test "$GITHUB_SHA" = "$EXPECTED_CONTROL_SHA"',
         'test "$(git rev-parse HEAD)" = "$EXPECTED_CONTROL_SHA"',
         "python3 scripts/aiqa_owner_protected_certifier.py --self-test",
-        "--verify-live",
         "(.app_id == 4766700) and",
         '(.account | type == "object" and .id == 35150859 and .login == "portyu9") and',
         'request_json="$(jq -cn \'{repositories:["ai-qa-automation"],permissions:{contents:"read",pull_requests:"read",statuses:"write"}}\')"',
@@ -373,6 +372,10 @@ def validate_aiqa_owner_certifier_safety(combined: dict[str, Any]) -> None:
             source.count(fragment) == 1,
             f"AI QA owner certifier reviewed invariant changed: {fragment}",
         )
+    require(
+        source.count("--verify-live") == 2,
+        "AI QA owner certifier must perform pre-mint and terminal live revalidation",
+    )
     require(
         source.index("Revalidate exact authorized target before credential mint")
         < source.index("Mint target-scoped dedicated Trusted PR Gate token")
