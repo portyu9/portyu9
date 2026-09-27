@@ -1,0 +1,104 @@
+{
+  "automationPolicyId": "automation-policy-v1",
+  "bomId": "workflow-capability-bom-v1",
+  "repository": "portyu9/portyu9",
+  "schemaVersion": 1,
+  "workflows": [
+    {
+      "id": "aiqa-owner-protected-certifier",
+      "jobs": [
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact certifier revision"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "app/installations/${installation_id}/access_tokens",
+              "method": "POST",
+              "mutating": true,
+              "step": "Mint target-scoped dedicated Trusted PR Gate token"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/ai-qa-automation/installation",
+              "method": "GET",
+              "mutating": false,
+              "step": "Mint target-scoped dedicated Trusted PR Gate token"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/portyu9/ai-qa-automation/statuses/${head_sha}",
+              "method": "POST",
+              "mutating": true,
+              "step": "Publish one-shot independent Trusted PR Gate success"
+            }
+          ],
+          "artifacts": [],
+          "id": "certify",
+          "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Mint target-scoped dedicated Trusted PR Gate token",
+              "target": "app/installations/${installation_id}/access_tokens"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Publish one-shot independent Trusted PR Gate success",
+              "target": "repos/portyu9/ai-qa-automation/statuses/${head_sha}"
+            }
+          ],
+          "name": "aiqa-owner-protected-certifier",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [
+              "AIQA_TRUSTED_GATE_APP_PRIVATE_KEY"
+            ],
+            "vars": [
+              "AIQA_OWNER_CERTIFIER_CONTROL_SHA"
+            ]
+          }
+        }
+      ],
+      "name": "AI QA owner-protected certifier",
+      "path": ".github/workflows/aiqa-owner-protected-certifier.yml",
+      "references": {
+        "env": [],
+        "githubToken": [],
+        "secrets": [
+          "AIQA_TRUSTED_GATE_APP_PRIVATE_KEY"
+        ],
+        "vars": [
+          "AIQA_OWNER_CERTIFIER_CONTROL_SHA"
+        ]
+      },
+      "triggers": {
+        "workflow_dispatch": {}
+      },
+      "workflowPermissions": {
+        "contents": "read"
+      }
+    }
+  ]
+}
