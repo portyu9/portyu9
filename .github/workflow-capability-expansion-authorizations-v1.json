@@ -799,6 +799,13 @@
       "rationale": "Authorize frozen #1167's exact Profile Quality signed-witness consumer migration: route six existing authenticated discovery GETs through the accepted canonical bounded read-only retry client while preserving endpoint/call counts, selectors, artifact/attestation verification, fallback semantics, permissions, and mutation non-retry. No new endpoint, permission, trigger, secret/OIDC, mutation, merge authority, required-check reduction, ruleset change, direct-main write, or bypass."
     },
     {
+      "id": "cap-profile-stats-canonical-singleton-reads-v1",
+      "baseBomSha256": "777d972509bc55cecd154eca0013d01dfaddfc18be4c5f6cb5d899f3545a9286",
+      "candidateBomSha256": "0a76207be034051de76c489349272f2ed470c4ebb6de4d6dc8ee4f49297421a4",
+      "expansionSha256": "eef2355ae7269577b1f71b603219cfcec1de139fc864db5843fa3ddeabeecdb4",
+      "rationale": "Authorize frozen #1181's exact Profile Stats singleton-read hardening: lease current-run GET plus read-only dispatch_plan route three authenticated singleton GETs through the accepted canonical GET-only retry client, while dispatch keeps one non-retried Actions POST. Includes exact validator/projection/self-test compatibility bytes. No new trigger, write permission, secret/OIDC, mutation endpoint/count, merge authority, required-check reduction, ruleset change, direct-main write, or bypass."
+    },
+    {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "candidateBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "expansionSha256": "cc3ed97e8469fdb96632323d2977bd04ae5ee5c0759f80b1fea2a0ed7d88f7fa",
