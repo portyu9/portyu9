@@ -90,10 +90,16 @@ jobs:
           jq -e '
             (type == "object") and
             (.token | type == "string" and length > 0) and
+            (.repository_selection == "selected") and
+            (.repositories | type == "array" and length == 1) and
+            (.repositories[0].id == 1341984495) and
+            (.repositories[0].full_name == "portyu9/ai-qa-automation") and
             (.permissions | type == "object") and
             (.permissions.contents == "read") and
             (.permissions.pull_requests == "read") and
-            (.permissions.statuses == "write")
+            (.permissions.statuses == "write") and
+            ((.permissions | keys - ["contents", "metadata", "pull_requests", "statuses"]) | length == 0) and
+            ((.permissions.metadata // "read") == "read")
           ' <<<"$token_json" >/dev/null
           token="$(jq -r .token <<<"$token_json")"
           echo "::add-mask::$token"
