@@ -647,8 +647,7 @@ def validate_text(text: str) -> None:
     )
 
     publisher_step_start = text.index("      - name: Publish exact candidate trusted admission check")
-    publisher_step_end = text.index("\n      - name:", publisher_step_start + 8)
-    publisher_step = text[publisher_step_start:publisher_step_end]
+    publisher_step = text[publisher_step_start:]
     require(
         publisher_step.count("python3 scripts/automation_github_read.py") == 1,
         "trusted Capability Admission prior-attempt proof must use exactly one governed singleton JSON read call site",
