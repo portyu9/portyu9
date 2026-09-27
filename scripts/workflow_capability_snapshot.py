@@ -26,6 +26,8 @@ RULESET_DRIFT_SENTINEL_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ru
 RULESET_RECONCILER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-ruleset-reconciler.json"
 AIQA_OWNER_CERTIFIER_EXTENSION = ROOT / ".github/workflow-capability-bom-v1-aiqa-owner-protected-certifier.json"
 RULESET_RECONCILER_WORKFLOW = ROOT / ".github/workflows/ruleset-reconciler.yml"
+AIQA_OWNER_CERTIFIER_WORKFLOW = ROOT / ".github/workflows/aiqa-owner-protected-certifier.yml"
+AIQA_OWNER_CERTIFIER_MANIFEST = ROOT / ".github/aiqa-owner-protected-authorizations-v1.json"
 RULESET_RECONCILER_ADMIN_SECRETS = [
     "PORTYU9_RULESET_ADMIN_APP_ID",
     "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
@@ -245,9 +247,177 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
                 f"ruleset reconciler transaction guard changed: {fragment}")
 
 
+def validate_aiqa_owner_certifier_safety(combined: dict[str, Any]) -> None:
+    matches = [
+        workflow
+        for workflow in combined["workflows"]
+        if workflow.get("id") == "aiqa-owner-protected-certifier"
+    ]
+    require(
+        len(matches) == 1,
+        "composite Workflow Capability BOM must contain exactly one AI QA owner certifier",
+    )
+    workflow = matches[0]
+    require(
+        workflow["triggers"] == {"workflow_dispatch": {}},
+        "AI QA owner certifier trigger authority changed",
+    )
+    require(
+        workflow["workflowPermissions"] == {"contents": "read"},
+        "AI QA owner certifier native workflow permissions changed",
+    )
+    require(
+        workflow["references"] == {
+            "env": [],
+            "githubToken": [],
+            "secrets": ["AIQA_TRUSTED_GATE_APP_PRIVATE_KEY"],
+            "vars": ["AIQA_OWNER_CERTIFIER_CONTROL_SHA"],
+        },
+        "AI QA owner certifier workflow reference inventory changed",
+    )
+    jobs = workflow["jobs"]
+    require(
+        len(jobs) == 1 and jobs[0]["id"] == "certify",
+        "AI QA owner certifier must remain exactly one terminal job",
+    )
+    certify = jobs[0]
+    require(
+        certify["permissions"] == {"contents": "read"} and certify["oidc"] is False,
+        "AI QA owner certifier native job authority changed",
+    )
+    require(
+        certify["references"] == workflow["references"],
+        "AI QA owner certifier job reference inventory changed",
+    )
+    require(
+        certify["artifacts"] == [],
+        "AI QA owner certifier must not publish or consume workflow artifacts",
+    )
+    require(
+        certify["mutations"] == [
+            {
+                "class": "github-api-post",
+                "method": "POST",
+                "step": "Mint target-scoped dedicated Trusted PR Gate token",
+                "target": "app/installations/${installation_id}/access_tokens",
+            },
+            {
+                "class": "github-api-post",
+                "method": "POST",
+                "step": "Publish one-shot independent Trusted PR Gate success",
+                "target": "repos/portyu9/ai-qa-automation/statuses/${head_sha}",
+            },
+        ],
+        "AI QA owner certifier mutation inventory changed",
+    )
+    require(
+        certify["apiSurfaces"] == [
+            {
+                "client": "gh-api",
+                "endpoint": "app/installations/${installation_id}/access_tokens",
+                "method": "POST",
+                "mutating": True,
+                "step": "Mint target-scoped dedicated Trusted PR Gate token",
+            },
+            {
+                "client": "gh-api",
+                "endpoint": "repos/portyu9/ai-qa-automation/installation",
+                "method": "GET",
+                "mutating": False,
+                "step": "Mint target-scoped dedicated Trusted PR Gate token",
+            },
+            {
+                "client": "gh-api",
+                "endpoint": "repos/portyu9/ai-qa-automation/statuses/${head_sha}",
+                "method": "POST",
+                "mutating": True,
+                "step": "Publish one-shot independent Trusted PR Gate success",
+            },
+        ],
+        "AI QA owner certifier GitHub API surface changed",
+    )
+    source = AIQA_OWNER_CERTIFIER_WORKFLOW.read_text(encoding="utf-8")
+    manifest = AIQA_OWNER_CERTIFIER_MANIFEST.read_text(encoding="utf-8")
+    require(
+        source.count("    environment: aiqa-owner-protected-certifier\n") == 1,
+        "AI QA owner certifier environment binding changed",
+    )
+    require(
+        source.count(
+            "concurrency:\n"
+            "  group: aiqa-owner-protected-certifier-v1\n"
+            "  cancel-in-progress: false\n"
+        )
+        == 1,
+        "AI QA owner certifier lost non-cancellable global serialization",
+    )
+    for fragment in (
+        'test "$GITHUB_REPOSITORY" = "portyu9/portyu9"',
+        'test "$GITHUB_EVENT_NAME" = "workflow_dispatch"',
+        'test "$GITHUB_REF" = "refs/heads/aiqa-owner-protected-certifier-v1"',
+        'test "$GITHUB_ACTOR" = "portyu9"',
+        'test "$GITHUB_TRIGGERING_ACTOR" = "portyu9"',
+        'test "$GITHUB_SHA" = "$EXPECTED_CONTROL_SHA"',
+        'test "$(git rev-parse HEAD)" = "$EXPECTED_CONTROL_SHA"',
+        "python3 scripts/aiqa_owner_protected_certifier.py --self-test",
+        "--verify-live",
+        "(.app_id == 4766700) and",
+        '(.account | type == "object" and .id == 35150859 and .login == "portyu9") and',
+        'request_json="$(jq -cn \'{repositories:["ai-qa-automation"],permissions:{contents:"read",pull_requests:"read",statuses:"write"}}\')"',
+        'test "$(jq -r .authorizationId "$receipt")" = "aiqa-291-bootstrap-v1"',
+        'test "$pr_number" = "291"',
+        'context:"Trusted PR Gate"',
+        'description:"Independent owner-protected exact-subject validation passed"',
+    ):
+        require(
+            source.count(fragment) == 1,
+            f"AI QA owner certifier reviewed invariant changed: {fragment}",
+        )
+    require(
+        source.index("Revalidate exact authorized target before credential mint")
+        < source.index("Mint target-scoped dedicated Trusted PR Gate token")
+        < source.index("Terminally revalidate exact authorized target")
+        < source.index("Publish one-shot independent Trusted PR Gate success"),
+        "AI QA owner certifier preflight/mint/terminal publication order changed",
+    )
+    terminal_step = source.index("      - name: Publish one-shot independent Trusted PR Gate success")
+    require(
+        "      - name:" not in source[terminal_step + 1 :],
+        "AI QA owner certifier gained post-publication workflow steps",
+    )
+    for forbidden in (
+        "pull_request_target:",
+        "repository_dispatch:",
+        "schedule:",
+        "push:",
+        "pull_request:",
+        "github.token",
+        "AWS_",
+        "aws ",
+        "curl ",
+        "wget ",
+        "statuses: write",
+        "contents: write",
+        "pull-requests: write",
+        "checks: write",
+        "actions: write",
+    ):
+        require(
+            forbidden not in source,
+            f"AI QA owner certifier gained forbidden authority surface: {forbidden}",
+        )
+    require(
+        manifest.count('"aiqa-291-bootstrap-v1"') == 1
+        and manifest.count('"prNumber": 291') == 1
+        and manifest.count('"requiredIntegrationId": 4766700') == 1,
+        "AI QA owner certifier manifest lost exact one-shot authorization identity",
+    )
+
+
 def self_test() -> None:
     combined = load_combined()
     validate_ruleset_reconciler_safety(combined)
+    validate_aiqa_owner_certifier_safety(combined)
     require(len(combined["workflows"]) == 14, "composite Workflow Capability BOM must contain fourteen workflows")
     require(
         [workflow["path"] for workflow in combined["workflows"]] == [
