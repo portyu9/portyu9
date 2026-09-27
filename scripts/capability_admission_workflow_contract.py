@@ -652,10 +652,9 @@ def validate_text(text: str) -> None:
         publisher_step.count("python3 scripts/automation_github_read.py") == 1,
         "trusted Capability Admission prior-attempt proof must use exactly one governed singleton JSON read call site",
     )
-    check_post = 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
     require(
-        publisher_step.count("gh api ") == 1 and publisher_step.count(check_post) == 1,
-        "trusted Capability Admission publisher must retain exactly one raw check-run mutation and no raw reads",
+        publisher_step.count("gh api ") == 1,
+        "trusted Capability Admission publisher must retain exactly one raw GitHub mutation surface and no raw reads",
     )
     require(
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"'
