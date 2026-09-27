@@ -312,23 +312,24 @@ def self_test(policy: dict[str, Any]) -> None:
 
     forward_dispatch_plan = copy.deepcopy(policy)
     forward_profile = forward_dispatch_plan["workflows"]["profile-stats"]
-    forward_profile["jobs"]["lease"]["permissions"] = {"actions": "read", "contents": "read"}
-    forward_profile["jobs"]["dispatch_plan"] = {
-        "name": "prepare-spotlight-dispatch-read-only",
-        "needs": ["receipt_attest", "lease", "attest"],
-        "permissions": {"actions": "read", "contents": "read"},
-    }
-    forward_profile["jobs"]["dispatch"]["needs"] = [
-        "dispatch_plan", "receipt_attest", "lease", "attest"
-    ]
-    terminal_jobs = forward_profile["concurrency"]["terminal"]["jobs"]
-    require(terminal_jobs.count("dispatch") == 1 and "dispatch_plan" not in terminal_jobs,
-            "automation policy forward parser self-test terminal fixture drifted")
-    terminal_jobs.insert(terminal_jobs.index("dispatch"), "dispatch_plan")
-    terminal_transition = forward_dispatch_plan["transactionMachines"]["profile-stats"]["transitions"][-1]
-    require(terminal_transition["jobs"] == ["dispatch", "decision_receipt", "decision_receipt_attest"],
-            "automation policy forward parser self-test transition fixture drifted")
-    terminal_transition["jobs"].insert(0, "dispatch_plan")
+    if "dispatch_plan" not in forward_profile["jobs"]:
+        forward_profile["jobs"]["lease"]["permissions"] = {"actions": "read", "contents": "read"}
+        forward_profile["jobs"]["dispatch_plan"] = {
+            "name": "prepare-spotlight-dispatch-read-only",
+            "needs": ["receipt_attest", "lease", "attest"],
+            "permissions": {"actions": "read", "contents": "read"},
+        }
+        forward_profile["jobs"]["dispatch"]["needs"] = [
+            "dispatch_plan", "receipt_attest", "lease", "attest"
+        ]
+        terminal_jobs = forward_profile["concurrency"]["terminal"]["jobs"]
+        require(terminal_jobs.count("dispatch") == 1 and "dispatch_plan" not in terminal_jobs,
+                "automation policy forward parser self-test legacy terminal fixture drifted")
+        terminal_jobs.insert(terminal_jobs.index("dispatch"), "dispatch_plan")
+        terminal_transition = forward_dispatch_plan["transactionMachines"]["profile-stats"]["transitions"][-1]
+        require(terminal_transition["jobs"] == ["dispatch", "decision_receipt", "decision_receipt_attest"],
+                "automation policy forward parser self-test legacy transition fixture drifted")
+        terminal_transition["jobs"].insert(0, "dispatch_plan")
     validate_policy(forward_dispatch_plan)
 
     forward_plan_write = copy.deepcopy(forward_dispatch_plan)
