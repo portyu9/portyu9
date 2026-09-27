@@ -75,7 +75,7 @@
       "candidateBomSha256": "7fce005281de12dd80987d6b56ee996be6b12314a209538f72775d68caf32ab2",
       "expansionSha256": "452c77723142e75fcd218b2c10bb0697312e2cd5944e14fce8cf5e421518bef3",
       "id": "cap-capability-admission-autofix-provenance-governed-read-v1",
-      "rationale": "Authorize #1212 Capability Admission Autofix provenance governed reads: route the existing run-artifact list and exact receipt-producing run-attempt JSON observations through the accepted authenticated bounded GET-only helper while preserving the artifact ZIP as the sole raw binary read, exact receipt/origin identity checks, token binding, endpoints, permissions, ordering, and mutation semantics. No pagination conversion, permission, trigger, mutation retry/replay, required-check reduction, ruleset authority, direct-main write, or bypass is added."
+      "rationale": "Authorize #1212: route the two existing Capability Admission Autofix provenance JSON GETs (artifact list and receipt-producing run attempt) through the accepted authenticated bounded GET-only helper. Keep the artifact ZIP as the sole raw binary read and preserve all endpoints, receipt/origin identity checks, permissions, ordering, and mutations. No mutation replay, required-check reduction, direct-main write, ruleset authority, or bypass."
     },
     {
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
