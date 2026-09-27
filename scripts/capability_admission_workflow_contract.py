@@ -1046,8 +1046,8 @@ def self_test() -> None:
     )
     expect_failure(
         text,
-        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"',
-        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
         "must use exactly ten governed singleton GitHub reads",
     )
     expect_failure(
