@@ -120,6 +120,13 @@
       "rationale": "Authorize frozen #1105 hardening of the existing Capability Admission POST /check-runs: capture gh api --include and require HTTP 201 before extracting the already-typed created-check response. Semantic BOMs are unchanged; endpoint, payload, call count, check identity, permissions, triggers, secrets/OIDC, merge authority, required checks, direct-main authority, rulesets and bypass are unchanged."
     },
     {
+      "baseBomSha256": "9bdb9d61de6849d37c51278e39d35a2f437344c9047c8325d132d86d598b1931",
+      "candidateBomSha256": "22167d404cd385460755c9043b56a40a6f2f6a6d2baf30afc32e85c05c5fb35c",
+      "expansionSha256": "c6b92d3568591662305ce7c82a0037be98f3f7b9fa33432eec30d14a5b9857e2",
+      "id": "cap-capability-admission-dependabot-release-governed-read-v1",
+      "rationale": "Authorize #1219: route two existing Capability Admission delegated Dependabot release JSON GETs through the accepted authenticated bounded GET-only helper while preserving endpoints, git-tag reproof, release/tag/SHA validation, delegated admission semantics, and run-scoped token authority. No permission, trigger, pagination, binary/history transport, mutation replay, required-check reduction, direct-main write, ruleset authority, or bypass."
+    },
+    {
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "expansionSha256": "836cb046c54d6a8011b30017a02c150efe65edb8b745d28467fb6e8dd7a97232",
