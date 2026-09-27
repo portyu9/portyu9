@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "f7cae8965c5b0ae836cb75b9e9a3b86402fd02f2"
+EXPECTED_GIT_BLOB = "d57542ac380834d906e031939ee71c86e7235cc7"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -526,10 +526,39 @@ def validate_text(text: str) -> None:
             f"trusted capability admission candidate Git blob response schema changed: {schema_fragment}",
         )
 
-    source_commit_call = '          COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"'
+    candidate_source_step_start = text.index("      - name: Fetch exact candidate capability source as data")
+    candidate_source_step_end = text.index("\n      - name:", candidate_source_step_start + 8)
+    candidate_source_step = text[candidate_source_step_start:candidate_source_step_end]
+    require(
+        candidate_source_step.count("python3 scripts/automation_github_read.py") == 4,
+        "trusted Capability Admission candidate source must use exactly four governed singleton JSON reads",
+    )
+    candidate_source_paginated_files = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
+    )
+    require(
+        candidate_source_step.count("gh api ") == 1
+        and candidate_source_step.count(candidate_source_paginated_files) == 1,
+        "trusted Capability Admission candidate source must retain exactly one raw paginated PR-files collection",
+    )
+    for forbidden in (
+        'COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        'TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"',
+        'BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"',
+    ):
+        require(
+            forbidden not in candidate_source_step,
+            f"trusted Capability Admission candidate source regained direct singleton JSON transport: {forbidden}",
+        )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in candidate_source_step,
+        "trusted Capability Admission candidate-source governed reads lost run-scoped token binding",
+    )
+
+    source_commit_call = '          COMMIT="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"'
     source_commit_validate = '          validate_candidate_commit_response "$COMMIT" "$HEAD_SHA" || {'
     source_commit_consume = '          test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"'
-    source_tree_call = '          TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"'
+    source_tree_call = '          TREE="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"'
     source_tree_validate = '          validate_candidate_tree_response "$TREE" "$TREE_SHA" || {'
     source_tree_consume = '          test "$(jq -r .truncated <<<"$TREE")" = "false"'
     for marker, label in (
@@ -558,7 +587,7 @@ def validate_text(text: str) -> None:
     dependabot_source = '          if [ "$DEPENDABOT" = "true" ]; then'
     selected_loop_pos = text.index(selected_loop, source_tree_consume_pos)
     dependabot_source_pos = text.index(dependabot_source, selected_loop_pos)
-    primary_blob_call = '            BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"'
+    primary_blob_call = '            BLOB="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"'
     primary_blob_validate = '            validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {'
     primary_blob_consume = '            test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"'
     primary_blob_decode = '            jq -r .content <<<"$BLOB" | tr -d \'\\n\' | base64 --decode > "candidate-capability-source/$PATH_VALUE"'
@@ -571,7 +600,7 @@ def validate_text(text: str) -> None:
         "trusted capability admission candidate blob schema must precede scalar/content consumption",
     )
 
-    supplemental_blob_call = '              BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"'
+    supplemental_blob_call = '              BLOB="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"'
     supplemental_blob_validate = '              validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {'
     supplemental_blob_consume = '              test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"'
     supplemental_blob_decode = '              jq -r .content <<<"$BLOB" | tr -d \'\\n\' | base64 --decode > "candidate-capability-source/$PATH_VALUE"'
@@ -1281,6 +1310,13 @@ def self_test() -> None:
         expected="Autofix origin-run response schema",
     )
 
+    expect_failure(
+        text,
+        'COMMIT="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        'COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        "must use exactly four governed singleton JSON reads",
+    )
+
     commit_validator = '          validate_candidate_commit_response() {'
     tree_validator = '          validate_candidate_tree_response() {'
     blob_validator = '          validate_candidate_blob_response() {'
@@ -1328,7 +1364,7 @@ def self_test() -> None:
 
     expect_validator_reorder_failure(
         text,
-        call_marker='          COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+        call_marker='          COMMIT="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
         validator_marker='          validate_candidate_commit_response "$COMMIT" "$HEAD_SHA" || {',
         consume_marker='          test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"',
         validator_end_marker='            exit 1\n          }\n',
@@ -1336,7 +1372,7 @@ def self_test() -> None:
     )
     expect_validator_reorder_failure(
         text,
-        call_marker='          TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"',
+        call_marker='          TREE="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"',
         validator_marker='          validate_candidate_tree_response "$TREE" "$TREE_SHA" || {',
         consume_marker='          test "$(jq -r .truncated <<<"$TREE")" = "false"',
         validator_end_marker='            exit 1\n          }\n',
@@ -1344,7 +1380,7 @@ def self_test() -> None:
     )
     expect_validator_reorder_failure(
         text,
-        call_marker='            BLOB="$(gh api "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"',
+        call_marker='            BLOB="$(python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}")"',
         validator_marker='            validate_candidate_blob_response "$BLOB" "$BLOB_SHA" || {',
         consume_marker='            test "$(jq -r .sha <<<"$BLOB")" = "$BLOB_SHA"',
         validator_end_marker='              exit 1\n            }\n',
