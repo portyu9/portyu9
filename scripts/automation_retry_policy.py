@@ -16,6 +16,7 @@ WORKFLOWS = ROOT / ".github/workflows"
 PINNED_GENERATOR = "shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0"
 GOVERNED_REVIEW_GATE = ROOT / "scripts/governed_bot_review_gate.py"
 ACTION_RELEASE_PROVENANCE = ROOT / "scripts/validate-action-release-provenance.py"
+SPOTLIGHT_MERGE_AUTHORIZATION = ROOT / "scripts/prepare-spotlight-merge-authorization.py"
 
 SEQ_LOOP = re.compile(
     r"^\s*for\s+(?P<variable>[A-Za-z_][A-Za-z0-9_]*)\s+in\s+\$\(seq\s+1\s+(?P<maximum>[1-9][0-9]*)\);\s*do\s*$"
@@ -384,6 +385,27 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
         require(forbidden not in canonical_source,
                 f"canonical GitHub read source acquired mutation method: {forbidden}")
+
+    spotlight_merge_authorization = SPOTLIGHT_MERGE_AUTHORIZATION.read_text(encoding="utf-8")
+    for fragment in (
+        "import automation_github_read",
+        "def gh_json(endpoint: str) -> Any:",
+        "text = automation_github_read.get_json_text(endpoint)",
+        "return automation_github_read.strict_json(text)",
+    ):
+        require(
+            fragment in spotlight_merge_authorization,
+            f"Spotlight merge authorization governed-read delegation is missing: {fragment}",
+        )
+    for forbidden in (
+        "import subprocess",
+        "subprocess.run(",
+        '["gh", "api", endpoint]',
+    ):
+        require(
+            forbidden not in spotlight_merge_authorization,
+            f"Spotlight merge authorization regained direct GitHub transport: {forbidden}",
+        )
 
     witness = texts[".github/workflows/action-provenance-witness.yml"]
     live_step = named_step(
