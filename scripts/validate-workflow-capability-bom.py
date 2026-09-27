@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+import aiqa_owner_protected_certifier
 import capability_admission_workflow_contract
 import trusted_workflow_capability
 import workflow_capability_admission
@@ -47,6 +48,7 @@ def first_difference(expected: Any, observed: Any, path: str = "$") -> str | Non
 
 def validate_snapshot() -> tuple[int, int]:
     snapshot = workflow_capability_snapshot.load_combined()
+    aiqa_owner_protected_certifier.self_test()
 
     compiler.self_test()
     capability_diff.self_test()
@@ -74,7 +76,7 @@ def validate_snapshot() -> tuple[int, int]:
 
     workflows = compiled["workflows"]
     jobs = sum(len(workflow["jobs"]) for workflow in workflows)
-    require(len(workflows) == 13, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
+    require(len(workflows) == 14, f"Workflow Capability BOM workflow count changed: {len(workflows)}")
     require(jobs > 0, "Workflow Capability BOM contains no jobs")
     return len(workflows), jobs
 
