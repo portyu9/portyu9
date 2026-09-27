@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "8d0a18ea834a2403cd532e9a8b6d5aff568166b7",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
     ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
-    ".github/workflows/spotlight-link-sync.yml": "7dc41e0237798f318d4df55b048d00a6aa729de9",
+    ".github/workflows/spotlight-link-sync.yml": "03d129321a7d5ca0c86a98d5d2e913869af46ac2",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -469,10 +469,17 @@ def validate_leases(profile: str, spotlight: str) -> None:
     lease = job_block(spotlight, "lease", "reconcile")
     require("permissions:\n      actions: read\n      contents: read" in lease,
             "Spotlight mutation-lease mint must retain exact governed read authority")
-    require("ref: ${{ github.sha }}" in lease,
-            "Spotlight mutation-lease governed helper checkout lost trusted event-SHA binding")
+    require("ref: main" in lease,
+            "Spotlight mutation-lease governed helper checkout lost static trusted-main binding")
+    require("ref: ${{ github.sha }}" not in lease,
+            "Spotlight mutation-lease governed helper checkout regained dynamic event-SHA binding")
     require('test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in lease,
             "Spotlight mutation-lease governed helper checkout lost sealed-base equality")
+    require(
+        lease.index("- name: Verify exact governed read source identity")
+        < lease.index("- name: Set up Python"),
+        "Spotlight mutation-lease must prove exact source before authored Python setup/use",
+    )
     require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in lease,
             "Spotlight mutation-lease mint lost exact governed-read helper identity")
     require(lease.count("python3 source/scripts/automation_github_read.py") == 1
