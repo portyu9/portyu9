@@ -531,6 +531,28 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require(forbidden not in capability_bind_step,
                 f"Capability Admission candidate binding regained direct singleton transport: {forbidden}")
 
+    capability_autofix_step = named_step(
+        capability_admission,
+        "admission",
+        "Verify immutable Autofix controller provenance",
+    )
+    require(capability_autofix_step.count("python3 scripts/automation_github_read.py") == 2,
+            "Capability Admission Autofix provenance must use exactly two governed singleton JSON reads")
+    capability_autofix_zip = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
+    )
+    require(capability_autofix_step.count("gh api ") == 1
+            and capability_autofix_step.count(capability_autofix_zip) == 1,
+            "Capability Admission Autofix provenance must retain exactly one raw binary artifact ZIP read")
+    for forbidden in (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json',
+    ):
+        require(forbidden not in capability_autofix_step,
+                f"Capability Admission Autofix provenance regained direct singleton JSON transport: {forbidden}")
+    require("GH_TOKEN: ${{ github.token }}" in capability_autofix_step,
+            "Capability Admission Autofix provenance governed reads lost run-scoped token binding")
+
     ruleset_sentinel = texts[".github/workflows/ruleset-drift-sentinel.yml"]
     ruleset_main_step = named_step(
         ruleset_sentinel,
@@ -721,6 +743,27 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         capability_transport_drift,
         "must use exactly ten governed singleton GitHub reads",
+    )
+
+    capability_autofix_transport_drift = dict(texts)
+    capability_autofix_source = capability_autofix_transport_drift[".github/workflows/capability-admission.yml"]
+    capability_autofix_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
+    )
+    require(capability_autofix_governed in capability_autofix_source,
+            "retry-policy self-test fixture missing Capability Admission Autofix governed read")
+    capability_autofix_transport_drift[".github/workflows/capability-admission.yml"] = (
+        capability_autofix_source.replace(
+            capability_autofix_governed,
+            'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        capability_autofix_transport_drift,
+        "must use exactly two governed singleton JSON reads",
     )
 
     ruleset_sentinel_transport_drift = dict(texts)

@@ -429,7 +429,7 @@ jobs:
           test "$ORIGIN_RUN_ID" -gt 0
           test "$ALERT_NUMBER" -gt 0
 
-          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json
           python3 scripts/codeql_autofix_controller.py artifact \
             --artifacts-file artifacts.json \
             --run-id "$ORIGIN_RUN_ID" \
@@ -458,7 +458,7 @@ jobs:
           RECEIPT_ATTEMPT="$(jq -r .runAttempt verified-receipt.json)"
           [[ "$RECEIPT_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
 
-          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json
           RECEIPT_EVENT="$(jq -r .event verified-receipt.json)"
           test -n "$RECEIPT_EVENT"
           jq -e \

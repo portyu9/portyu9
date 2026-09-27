@@ -83,20 +83,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Verify immutable Autofix controller provenance"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Verify immutable Autofix controller provenance"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/check-runs",
               "method": "POST",
               "mutating": true,
