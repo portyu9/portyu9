@@ -347,8 +347,16 @@ def self_test(policy: dict[str, Any]) -> None:
     expect_policy_failure(receipt_write, "receipt preparer authority changed")
 
     dispatch_bypass = copy.deepcopy(policy)
-    dispatch_bypass["workflows"]["profile-stats"]["jobs"]["dispatch"]["needs"] = ["publish", "lease", "attest"]
-    expect_policy_failure(dispatch_bypass, "downstream of publication receipt attestation")
+    if "dispatch_plan" in dispatch_bypass["workflows"]["profile-stats"]["jobs"]:
+        dispatch_bypass["workflows"]["profile-stats"]["jobs"]["dispatch"]["needs"] = [
+            "receipt_attest", "lease", "attest"
+        ]
+        expect_policy_failure(dispatch_bypass, "downstream of reviewed read-only planning")
+    else:
+        dispatch_bypass["workflows"]["profile-stats"]["jobs"]["dispatch"]["needs"] = [
+            "publish", "lease", "attest"
+        ]
+        expect_policy_failure(dispatch_bypass, "downstream of publication receipt attestation")
 
     adr_preparer_write = copy.deepcopy(policy)
     adr_preparer_write["workflows"]["profile-stats"]["jobs"]["decision_receipt"]["permissions"]["contents"] = "write"
