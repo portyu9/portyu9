@@ -518,10 +518,19 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     )
     require("GH_TOKEN: ${{ github.token }}" in spotlight_lease_step,
             "Spotlight lease governed read lost run-scoped token binding")
+    spotlight_identity_step = named_step(
+        spotlight,
+        "lease",
+        "Verify exact governed read source identity",
+    )
     require(
         'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
-        in spotlight_lease_step,
+        in spotlight_identity_step,
         "Spotlight lease lost exact governed-read helper identity",
+    )
+    require(
+        'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in spotlight_identity_step,
+        "Spotlight lease lost sealed-base governed-read source identity",
     )
 
     dispatch_plan_step = named_step(
