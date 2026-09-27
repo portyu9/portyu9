@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+import automation_github_paginated_read
 import automation_github_read
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -386,6 +387,34 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require(forbidden not in canonical_source,
                 f"canonical GitHub read source acquired mutation method: {forbidden}")
 
+    automation_github_paginated_read.self_test()
+    pagination_source = (ROOT / "scripts/automation_github_paginated_read.py").read_text(encoding="utf-8")
+    for fragment in (
+        "import automation_github_read",
+        "PAGE_SIZE = 100",
+        "MAX_PAGES = 30",
+        "SENTINEL_PAGE = MAX_PAGES + 1",
+        "automation_github_read.normalize_endpoint(value)",
+        "reader: Callable[[str], str | None] = automation_github_read.get_json_text",
+        "for page_number in range(1, SENTINEL_PAGE + 1):",
+        "automation_github_read.strict_json(text)",
+        'f"paginated GitHub collection exceeds the {MAX_PAGES}-page bound"',
+    ):
+        require(fragment in pagination_source,
+                f"governed pagination composition is missing: {fragment}")
+    for forbidden in (
+        "import urllib.request",
+        "urllib.request.Request(",
+        "subprocess.",
+        "gh api",
+        'method="POST"',
+        'method="PUT"',
+        'method="PATCH"',
+        'method="DELETE"',
+    ):
+        require(forbidden not in pagination_source,
+                f"governed pagination must delegate transport without mutation/direct API access: {forbidden}")
+
     spotlight_merge_authorization = SPOTLIGHT_MERGE_AUTHORIZATION.read_text(encoding="utf-8")
     for fragment in (
         "import automation_github_read",
@@ -502,6 +531,11 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         in capability_identity_step,
         "Capability Admission candidate binding lost exact governed-read helper identity",
     )
+    require(
+        'test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"'
+        in capability_identity_step,
+        "Capability Admission lost exact governed paginated-read helper identity",
+    )
 
     capability_bind_step = named_step(
         capability_admission,
@@ -511,11 +545,14 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require(capability_bind_step.count("python3 scripts/automation_github_read.py") == 10,
             "Capability Admission candidate binding must use exactly ten governed singleton GitHub reads")
     capability_paginated_prs = (
-        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
+        'python3 scripts/automation_github_paginated_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
     )
-    require(capability_bind_step.count("gh api ") == 1
+    require(capability_bind_step.count("python3 scripts/automation_github_paginated_read.py") == 1
             and capability_bind_step.count(capability_paginated_prs) == 1,
-            "Capability Admission candidate binding must retain exactly one bounded paginated raw GitHub collection")
+            "Capability Admission candidate binding must use exactly one governed paginated GitHub collection")
+    require("gh api " not in capability_bind_step,
+            "Capability Admission candidate binding regained direct gh api transport")
     require("GH_TOKEN: ${{ github.token }}" in capability_bind_step,
             "Capability Admission candidate binding governed reads lost run-scoped token binding")
     for forbidden in (
@@ -539,11 +576,14 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require(capability_source_step.count("python3 scripts/automation_github_read.py") == 4,
             "Capability Admission candidate source must use exactly four governed singleton JSON reads")
     capability_source_paginated_files = (
-        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
+        'python3 scripts/automation_github_paginated_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
     )
-    require(capability_source_step.count("gh api ") == 1
+    require(capability_source_step.count("python3 scripts/automation_github_paginated_read.py") == 1
             and capability_source_step.count(capability_source_paginated_files) == 1,
-            "Capability Admission candidate source must retain exactly one bounded paginated raw GitHub collection")
+            "Capability Admission candidate source must use exactly one governed paginated GitHub collection")
+    require("gh api " not in capability_source_step,
+            "Capability Admission candidate source regained direct gh api transport")
     for forbidden in (
         'COMMIT="$(gh api "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}")"',
         'TREE="$(gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"',
