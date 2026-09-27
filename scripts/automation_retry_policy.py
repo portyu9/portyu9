@@ -505,6 +505,15 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             "Profile Stats lease governed read lost run-scoped token binding")
 
     spotlight = texts[".github/workflows/spotlight-link-sync.yml"]
+    spotlight_checkout_step = named_step(
+        spotlight,
+        "lease",
+        "Checkout exact trusted source for governed reads",
+    )
+    require("ref: main" in spotlight_checkout_step,
+            "Spotlight lease governed read lost static trusted-main checkout")
+    require("ref: ${{ github.sha }}" not in spotlight_checkout_step,
+            "Spotlight lease governed read regained dynamic event-SHA checkout")
     spotlight_lease_step = named_step(
         spotlight,
         "lease",
