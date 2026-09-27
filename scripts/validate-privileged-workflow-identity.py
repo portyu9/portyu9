@@ -458,7 +458,12 @@ def validate_leases(profile: str, spotlight: str) -> None:
         require(fragment in profile_schema,
                 f"Profile Stats mutation-lease run evidence contract is missing: {fragment}")
 
-    v21.validate_ordered_presence(spotlight, v21.MUTATION_LEASE_SEQUENCE,
+    spotlight_v21_lease = spotlight.replace(
+        'RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"',
+        'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"',
+        1,
+    )
+    v21.validate_ordered_presence(spotlight_v21_lease, v21.MUTATION_LEASE_SEQUENCE,
                                   "Spotlight mutation-lease contract")
 
     lease = job_block(spotlight, "lease", "reconcile")
