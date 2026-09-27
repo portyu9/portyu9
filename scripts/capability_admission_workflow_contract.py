@@ -126,7 +126,7 @@ def validate_text(text: str) -> None:
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
-        'gh api "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
+        'python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
         'python3 scripts/workflow_capability_tcb.py select',
         'TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"',
     ):
