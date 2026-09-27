@@ -183,11 +183,16 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
         require(forbidden not in lease, f"{label} mint job acquired write authority: {forbidden}")
 
     if governed_read:
+        expected_checkout_ref = (
+            "ref: ${{ github.sha }}"
+            if workflow_id == "profile-stats"
+            else "ref: main"
+        )
         for fragment in (
             "permissions:\n      actions: read\n      contents: read",
             "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
             "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
-            "ref: ${{ github.sha }}",
+            expected_checkout_ref,
             'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         ):
             require(fragment in lease, f"{label} governed-read bootstrap changed: {fragment}")
@@ -198,6 +203,13 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
         )
         require(expected_source_head in lease,
                 f"{label} governed-read checkout lost exact trusted source identity")
+        if workflow_id == "spotlight-link-sync":
+            require("ref: ${{ github.sha }}" not in lease,
+                    f"{label} governed-read checkout regained dynamic event-SHA ref")
+            identity_marker = "- name: Verify exact governed read source identity"
+            setup_marker = "- name: Set up Python"
+            require(lease.index(identity_marker) < lease.index(setup_marker),
+                    f"{label} must prove exact trusted source before authored Python setup/use")
         require('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
                 f"{label} regained direct singleton GitHub transport")
 
