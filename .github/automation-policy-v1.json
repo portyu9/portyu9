@@ -567,7 +567,8 @@
             "plan"
           ],
           "permissions": {
-            "actions": "read"
+            "actions": "read",
+            "contents": "read"
           }
         },
         "reconcile": {
