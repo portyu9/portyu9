@@ -988,6 +988,13 @@
       "rationale": "Authorize #1195 parser prerequisite for #1192: keep current Spotlight actions-read/direct-read valid and admit only exact actions-read + contents-read governed-read with literal main checkout, sealed BASE_SHA, pinned helper, pre-Python source identity, one canonical GET, and no direct singleton gh api. Semantic Workflow Capability unchanged; no workflow, policy JSON, trigger, runtime permission, mutation, secret/OIDC, required-check reduction, merge/ruleset authority, or bypass."
     },
     {
+      "id": "cap-spotlight-lease-governed-read-v1",
+      "baseBomSha256": "178cbd63c0f391e8bb583e5021cc89e5c59f71f45f838a73639e72efd916b87a",
+      "candidateBomSha256": "dc1d9fa0ea3ecad443d275c6dbb4ba43b1c54725a8edd0dc29ae53b6ab8b8b80",
+      "expansionSha256": "751adffa20cb757a1050223b742c263ccc4cc8bd5aba4a428baaaec68afe354e",
+      "rationale": "Authorize #1192 Spotlight lease governed-read migration: add contents:read only to the lease mint so it can checkout literal trusted main, prove HEAD equals sealed BASE_SHA and the exact helper blob before Python use, then replace the single direct current-run gh api GET with the bounded authenticated GET-only client. No write permission, trigger, endpoint, mutation retry/replay, secret/OIDC, required-check reduction, merge/ruleset authority, direct-main write, or bypass is added."
+    },
+    {
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
       "expansionSha256": "671ca7710df1e6190b8dc5256a58ffb6b9f68d158e63aeb0c08a9bd08cba96bf",
