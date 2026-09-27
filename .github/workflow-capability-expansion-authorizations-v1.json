@@ -981,6 +981,13 @@
       "rationale": "Authorize only the trusted parser extension that preserves every existing static concurrency group rule and recognizes one exact additional group string solely for spotlight-link-sync planning: push events share main-lineage while non-push recovery events are run-scoped. This prerequisite changes no workflow, Automation Policy value, permission, trigger, mutation, lease, required check, or merge/review authority."
     },
     {
+      "id": "cap-spotlight-lease-governed-read-parser-v1",
+      "baseBomSha256": "178cbd63c0f391e8bb583e5021cc89e5c59f71f45f838a73639e72efd916b87a",
+      "candidateBomSha256": "178cbd63c0f391e8bb583e5021cc89e5c59f71f45f838a73639e72efd916b87a",
+      "expansionSha256": "cf3e1ddd9d3542919b91843614c7ecedc86a0d02c1e971439f8677b65f6e5505",
+      "rationale": "Authorize #1195 parser prerequisite for #1192: keep current Spotlight actions-read/direct-read valid and admit only exact actions-read + contents-read governed-read with literal main checkout, sealed BASE_SHA, pinned helper, pre-Python source identity, one canonical GET, and no direct singleton gh api. Semantic Workflow Capability unchanged; no workflow, policy JSON, trigger, runtime permission, mutation, secret/OIDC, required-check reduction, merge/ruleset authority, or bypass."
+    },
+    {
       "baseBomSha256": "78def4593438025a4a668b08f999b35b0e6c7f4cb6fdec76fce9563aee1544fd",
       "candidateBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
       "expansionSha256": "671ca7710df1e6190b8dc5256a58ffb6b9f68d158e63aeb0c08a9bd08cba96bf",
