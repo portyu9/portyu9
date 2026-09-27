@@ -385,7 +385,7 @@ def validate_text(text: str) -> None:
         require(autofix_binding in text,
                 f"trusted capability admission Autofix proof changed: {autofix_binding}")
 
-        autofix_step_start = text.index("      - name: Verify immutable Autofix controller provenance")
+    autofix_step_start = text.index("      - name: Verify immutable Autofix controller provenance")
     autofix_step_end = text.index("\n      - name:", autofix_step_start + 8)
     autofix_step = text[autofix_step_start:autofix_step_end]
     require(
@@ -406,7 +406,7 @@ def validate_text(text: str) -> None:
             f"trusted Capability Admission Autofix provenance regained direct singleton JSON transport: {forbidden}",
         )
 
-origin_call = 'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
+    origin_call = 'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
     origin_schema_marker = '--argjson run "$ORIGIN_RUN_ID"'
     origin_schema_end_marker = "' origin-run.json >/dev/null || {"
     origin_consume_marker = 'test "$(jq -r .id origin-run.json)" = "$ORIGIN_RUN_ID"'
@@ -1248,13 +1248,13 @@ def self_test() -> None:
         schema_marker=compare_schema_marker,
         consume_marker=compare_consume_marker,
     )
-        expect_failure(
+    expect_failure(
         text,
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json',
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json',
         "must use exactly two governed singleton JSON reads",
     )
-origin_call = 'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
+    origin_call = 'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
     origin_consume = 'test "$(jq -r .id origin-run.json)" = "$ORIGIN_RUN_ID"'
     expect_scoped_schema_failure(
         text,
