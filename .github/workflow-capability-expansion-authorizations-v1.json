@@ -131,7 +131,7 @@
       "candidateBomSha256": "15302736defe3a3c7d20893bb15c2b7cc39e7be2c9f947860317b9ceac3a9f98",
       "expansionSha256": "f78aa0c3fffa53f4978700a75d3b3a0dfe76abc23d2e3e336615d7dcd562bec2",
       "id": "cap-capability-admission-paginated-governed-read-v1",
-      "rationale": "Authorize #1226: route exactly the existing Capability Admission open-main pull-request and Dependabot pull-request-files paginated JSON collections through the protected bounded pagination client, with every page delegated to the unchanged accepted authenticated GET-only classifier; preserve per_page=100, caller-owned page rejection, the accepted 30-page evidence bound plus page-31 overflow sentinel, existing strict collection parsing, exact endpoints/query semantics, and all downstream identity/path checks. No binary transport conversion, permission/trigger expansion, mutation retry/replay, required-check reduction, direct-main write, merge/ruleset authority, or bypass."
+      "rationale": "Authorize #1226: replace two existing Capability Admission paginated JSON reads with protected bounded pagination. Every page delegates to the unchanged accepted GET-only classifier. Preserve per_page=100, internal page numbering, 30-page bound plus page-31 overflow sentinel, strict collection parsing, endpoints, and downstream checks. No binary conversion, permission/trigger expansion, mutation retry/replay, required-check reduction, direct-main write, ruleset/merge authority, or bypass."
     },
     {
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
