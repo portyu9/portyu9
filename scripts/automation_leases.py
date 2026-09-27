@@ -75,9 +75,13 @@ def validate_policy(workflow_id: str, workflow: dict[str, Any]) -> None:
 
     lease_permissions = jobs[lease_job]["permissions"]
     profile_governed_read = workflow_id == "profile-stats" and "dispatch_plan" in jobs
+    spotlight_governed_read = (
+        workflow_id == "spotlight-link-sync"
+        and lease_permissions == {"actions": "read", "contents": "read"}
+    )
     expected_lease_permissions = (
         {"actions": "read", "contents": "read"}
-        if profile_governed_read
+        if profile_governed_read or spotlight_governed_read
         else {"actions": "read"}
     )
     require(lease_permissions == expected_lease_permissions,
@@ -143,10 +147,16 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
 
     workflow_path = workflow["path"]
     expected_ref = f'EXPECTED_WORKFLOW_REF="${{GITHUB_REPOSITORY}}/{workflow_path}@refs/heads/main"'
+    lease_permissions = workflow["jobs"][lease_job_id]["permissions"]
     profile_governed_read = workflow_id == "profile-stats" and "dispatch_plan" in workflow["jobs"]
+    spotlight_governed_read = (
+        workflow_id == "spotlight-link-sync"
+        and lease_permissions == {"actions": "read", "contents": "read"}
+    )
+    governed_read = profile_governed_read or spotlight_governed_read
     run_read = (
         'RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
-        if profile_governed_read
+        if governed_read
         else 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
     )
     for fragment in (
@@ -176,17 +186,40 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
     for forbidden in ("contents: write", "pull-requests: write", "actions: write", "checks: write"):
         require(forbidden not in lease, f"{label} mint job acquired write authority: {forbidden}")
 
+    if governed_read:
+        expected_checkout_ref = (
+            "ref: ${{ github.sha }}"
+            if workflow_id == "profile-stats"
+            else "ref: main"
+        )
+        for fragment in (
+            "permissions:\n      actions: read\n      contents: read",
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
+            expected_checkout_ref,
+            'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        ):
+            require(fragment in lease, f"{label} governed-read bootstrap changed: {fragment}")
+        expected_source_head = (
+            'test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"'
+            if workflow_id == "profile-stats"
+            else 'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"'
+        )
+        require(expected_source_head in lease,
+                f"{label} governed-read checkout lost exact trusted source identity")
+        if workflow_id == "spotlight-link-sync":
+            require("ref: ${{ github.sha }}" not in lease,
+                    f"{label} governed-read checkout regained dynamic event-SHA ref")
+            identity_marker = "- name: Verify exact governed read source identity"
+            setup_marker = "- name: Set up Python"
+            require(identity_marker in lease and setup_marker in lease,
+                    f"{label} governed-read bootstrap lost identity/setup markers")
+            require(lease.index(identity_marker) < lease.index(setup_marker),
+                    f"{label} must prove exact trusted source before authored Python setup/use")
+        require('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
+                f"{label} regained direct singleton GitHub transport")
+
     if workflow_id == "profile-stats":
-        if profile_governed_read:
-            for fragment in (
-                "permissions:\n      actions: read\n      contents: read",
-                "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-                "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
-                'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
-            ):
-                require(fragment in lease, f"{label} governed-read bootstrap changed: {fragment}")
-            require('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
-                    f"{label} regained direct singleton GitHub transport")
         validate_profile_candidate_binding(text, label)
 
     for job_id in spec["boundJobs"]:
@@ -262,6 +295,14 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
     spotlight["lease"]["boundJobs"].remove("merge")
     expect_policy_failure("spotlight-link-sync", spotlight, "minimumRemainingSeconds must cover exactly boundJobs")
 
+    spotlight_future = copy.deepcopy(policy["workflows"]["spotlight-link-sync"])
+    spotlight_future["jobs"]["lease"]["permissions"] = {"actions": "read", "contents": "read"}
+    validate_policy("spotlight-link-sync", spotlight_future)
+
+    spotlight_write = copy.deepcopy(policy["workflows"]["spotlight-link-sync"])
+    spotlight_write["jobs"]["lease"]["permissions"] = {"actions": "read", "contents": "write"}
+    expect_policy_failure("spotlight-link-sync", spotlight_write, "exact reviewed read authority")
+
     missing_reserve = copy.deepcopy(policy["workflows"]["profile-stats"])
     del missing_reserve["lease"]["minimumRemainingSeconds"]["dispatch"]
     expect_policy_failure("profile-stats", missing_reserve, "minimumRemainingSeconds must cover exactly boundJobs")
@@ -303,6 +344,51 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
     under_timeout = copy.deepcopy(policy["workflows"]["spotlight-link-sync"])
     under_timeout["lease"]["minimumRemainingSeconds"]["approve"] = 719
     spotlight_source = (root / policy["workflows"]["spotlight-link-sync"]["path"]).read_text(encoding="utf-8")
+    future_bootstrap = """      - name: Checkout exact trusted source for governed reads
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: source
+          persist-credentials: false
+
+      - name: Verify exact governed read source identity
+        env:
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
+"""
+    future_source = spotlight_source.replace(
+        "    permissions:\n      actions: read\n    outputs:\n      lease_id:",
+        "    permissions:\n      actions: read\n      contents: read\n    outputs:\n      lease_id:",
+        1,
+    ).replace(
+        "    steps:\n      - name: Mint exact short-lived mutation lease\n",
+        "    steps:\n" + future_bootstrap + "      - name: Mint exact short-lived mutation lease\n",
+        1,
+    ).replace(
+        'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"',
+        'RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"',
+        1,
+    )
+    validate_workflow_source("spotlight-link-sync", spotlight_future, future_source)
+    expect_source_failure(
+        "spotlight-link-sync",
+        spotlight_future,
+        future_source.replace("          ref: main\n          path: source",
+                              "          ref: ${{ github.sha }}\n          path: source", 1),
+        "governed-read bootstrap changed: ref: main",
+    )
     expect_source_failure(
         "spotlight-link-sync",
         under_timeout,
