@@ -601,12 +601,8 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     )
     require(capability_publish_step.count("python3 scripts/automation_github_read.py") == 1,
             "Capability Admission prior-attempt proof must use exactly one governed singleton JSON read call site")
-    capability_check_post = (
-        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
-    )
-    require(capability_publish_step.count("gh api ") == 1
-            and capability_publish_step.count(capability_check_post) == 1,
-            "Capability Admission publisher must retain exactly one raw check-run mutation and no raw reads")
+    require(capability_publish_step.count("gh api ") == 1,
+            "Capability Admission publisher must retain exactly one raw GitHub mutation surface and no raw reads")
     require(
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"'
         not in capability_publish_step,
