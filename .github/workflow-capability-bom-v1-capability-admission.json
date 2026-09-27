@@ -27,20 +27,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${DEPENDENCY_REPOSITORY}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Verify delegated Dependabot release provenance"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Verify delegated Dependabot release provenance"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip",
               "method": "GET",
               "mutating": false,
