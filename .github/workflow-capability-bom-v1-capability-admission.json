@@ -41,34 +41,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Fetch exact candidate capability source as data"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${HEAD_REPOSITORY}/git/blobs/${BLOB_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Fetch exact candidate capability source as data"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${HEAD_REPOSITORY}/git/commits/${HEAD_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Fetch exact candidate capability source as data"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1",
-              "method": "GET",
-              "mutating": false,
-              "step": "Fetch exact candidate capability source as data"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip",
               "method": "GET",
               "mutating": false,
