@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "ee44be446f145a1359fe5fca92ec8cdb74355805"
+EXPECTED_GIT_BLOB = "8c6a08751f69d37f05d41ba859cfb723eb583ef0"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -646,6 +646,32 @@ def validate_text(text: str) -> None:
         "trusted Capability Admission delegated release governed reads lost run-scoped token binding",
     )
 
+    publisher_step_start = text.index("      - name: Publish exact candidate trusted admission check")
+    publisher_step_end = text.index("\n      - name:", publisher_step_start + 8)
+    publisher_step = text[publisher_step_start:publisher_step_end]
+    require(
+        publisher_step.count("python3 scripts/automation_github_read.py") == 1,
+        "trusted Capability Admission prior-attempt proof must use exactly one governed singleton JSON read call site",
+    )
+    check_post = 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/check-runs"'
+    require(
+        publisher_step.count("gh api ") == 1 and publisher_step.count(check_post) == 1,
+        "trusted Capability Admission publisher must retain exactly one raw check-run mutation and no raw reads",
+    )
+    require(
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"'
+        not in publisher_step,
+        "trusted Capability Admission prior-attempt proof regained direct singleton transport",
+    )
+    require(
+        "for HISTORY_ATTEMPT in $(seq 1 20); do" in publisher_step and "sleep 1" in publisher_step,
+        "trusted Capability Admission prior-attempt bounded observation semantics changed",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in publisher_step,
+        "trusted Capability Admission prior-attempt governed read lost run-scoped token binding",
+    )
+
     for dependabot_binding in (
         "dependabot-admission)",
         'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"',
@@ -672,7 +698,7 @@ def validate_text(text: str) -> None:
         '[[ "$GITHUB_RUN_ID" =~ ^[1-9][0-9]*$ ]]',
         '[[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]',
         'for HISTORY_ATTEMPT in $(seq 1 20); do',
-        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"',
         "python3 scripts/dependabot_admission_proof.py build",
         '--summary-out dependabot-admission-proof-summary.json',
         '--meta-out dependabot-admission-proof-meta.json',
@@ -1492,6 +1518,12 @@ def self_test() -> None:
         'python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
         'gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
         "must use exactly two governed singleton JSON reads",
+    )
+    expect_failure(
+        text,
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"',
+        "must use exactly one governed singleton JSON read call site",
     )
     expect_failure(text, 'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
                    'test -n "$DEPENDENCY_REPOSITORY"', "delegated Dependabot proof")
