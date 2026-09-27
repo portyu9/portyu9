@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "8d0a18ea834a2403cd532e9a8b6d5aff568166b7",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
     ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
-    ".github/workflows/spotlight-link-sync.yml": "94cd7a6e6452c36da7011f99433101acfdae7918",
+    ".github/workflows/spotlight-link-sync.yml": "14e6c514bcc97d6b5f885acb49eacf6b04340590",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -462,7 +462,14 @@ def validate_leases(profile: str, spotlight: str) -> None:
                                   "Spotlight mutation-lease contract")
 
     lease = job_block(spotlight, "lease", "reconcile")
-    run_call_marker = 'RUN="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
+    require("permissions:\n      actions: read\n      contents: read" in lease,
+            "Spotlight mutation-lease mint must retain exact governed read authority")
+    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in lease,
+            "Spotlight mutation-lease mint lost exact governed-read helper identity")
+    require(lease.count("python3 source/scripts/automation_github_read.py") == 1
+            and 'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
+            "Spotlight mutation-lease mint must use exactly one governed GitHub singleton read")
+    run_call_marker = 'RUN="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}")"'
     run_schema_marker = (
         'jq -e --argjson run "$GITHUB_RUN_ID" --argjson attempt "$GITHUB_RUN_ATTEMPT"'
     )
