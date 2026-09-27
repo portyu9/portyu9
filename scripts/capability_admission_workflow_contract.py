@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "d57542ac380834d906e031939ee71c86e7235cc7"
+EXPECTED_GIT_BLOB = "ee44be446f145a1359fe5fca92ec8cdb74355805"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -622,6 +622,30 @@ def validate_text(text: str) -> None:
         require(error_fragment in text,
                 f"trusted capability admission candidate-source schema must fail visibly: {error_fragment}")
 
+    delegated_release_step_start = text.index("      - name: Verify delegated Dependabot release provenance")
+    delegated_release_step_end = text.index("\n      - name:", delegated_release_step_start + 8)
+    delegated_release_step = text[delegated_release_step_start:delegated_release_step_end]
+    require(
+        delegated_release_step.count("python3 scripts/automation_github_read.py") == 2,
+        "trusted Capability Admission delegated release proof must use exactly two governed singleton JSON reads",
+    )
+    require(
+        "gh api " not in delegated_release_step,
+        "trusted Capability Admission delegated release proof regained direct gh api transport",
+    )
+    for forbidden in (
+        'gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > dependabot-release.json',
+    ):
+        require(
+            forbidden not in delegated_release_step,
+            f"trusted Capability Admission delegated release proof regained direct singleton transport: {forbidden}",
+        )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in delegated_release_step,
+        "trusted Capability Admission delegated release governed reads lost run-scoped token binding",
+    )
+
     for dependabot_binding in (
         "dependabot-admission)",
         'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"',
@@ -638,8 +662,8 @@ def validate_text(text: str) -> None:
         'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
         "python3 scripts/dependabot_release.py",
-        'gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
-        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > dependabot-release.json',
+        'python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
+        'python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > dependabot-release.json',
         '--repository-json dependabot-release-repository.json',
         '--release-json dependabot-release.json',
         'test "$(jq -r .sha dependabot-release-identity.json)" = "$CANDIDATE_SHA"',
@@ -1462,6 +1486,12 @@ def self_test() -> None:
         'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"',
         'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "dependabot[bot]"',
         "delegated Dependabot proof",
+    )
+    expect_failure(
+        text,
+        'python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
+        "must use exactly two governed singleton JSON reads",
     )
     expect_failure(text, 'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
                    'test -n "$DEPENDENCY_REPOSITORY"', "delegated Dependabot proof")

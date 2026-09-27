@@ -699,8 +699,8 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
             "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > dependabot-release-refs.txt
-          gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json
-          gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > dependabot-release.json
+          python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json
+          python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > dependabot-release.json
           python3 scripts/dependabot_release.py \
             --refs dependabot-release-refs.txt \
             --repository-json dependabot-release-repository.json \
