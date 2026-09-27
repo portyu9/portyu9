@@ -594,6 +594,26 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in capability_autofix_step,
             "Capability Admission Autofix provenance governed reads lost run-scoped token binding")
 
+    capability_publish_step = named_step(
+        capability_admission,
+        "admission",
+        "Publish exact candidate trusted admission check",
+    )
+    require(capability_publish_step.count("python3 scripts/automation_github_read.py") == 1,
+            "Capability Admission prior-attempt proof must use exactly one governed singleton JSON read call site")
+    require(capability_publish_step.count("gh api ") == 1,
+            "Capability Admission publisher must retain exactly one raw GitHub mutation surface and no raw reads")
+    require(
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"'
+        not in capability_publish_step,
+        "Capability Admission prior-attempt proof regained direct singleton transport",
+    )
+    require("for HISTORY_ATTEMPT in $(seq 1 20); do" in capability_publish_step
+            and "sleep 1" in capability_publish_step,
+            "Capability Admission prior-attempt bounded observation semantics changed")
+    require("GH_TOKEN: ${{ github.token }}" in capability_publish_step,
+            "Capability Admission prior-attempt governed read lost run-scoped token binding")
+
     ruleset_sentinel = texts[".github/workflows/ruleset-drift-sentinel.yml"]
     ruleset_main_step = named_step(
         ruleset_sentinel,
@@ -847,6 +867,27 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         capability_autofix_transport_drift,
         "must use exactly two governed singleton JSON reads",
+    )
+
+    capability_history_transport_drift = dict(texts)
+    capability_history_source = capability_history_transport_drift[".github/workflows/capability-admission.yml"]
+    capability_history_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"'
+    )
+    require(capability_history_governed in capability_history_source,
+            "retry-policy self-test fixture missing Capability Admission prior-attempt governed read")
+    capability_history_transport_drift[".github/workflows/capability-admission.yml"] = (
+        capability_history_source.replace(
+            capability_history_governed,
+            'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}"',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        capability_history_transport_drift,
+        "must use exactly one governed singleton JSON read call site",
     )
 
     ruleset_sentinel_transport_drift = dict(texts)
