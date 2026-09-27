@@ -799,10 +799,10 @@
       "rationale": "Authorize frozen #1167's exact Profile Quality signed-witness consumer migration: route six existing authenticated discovery GETs through the accepted canonical bounded read-only retry client while preserving endpoint/call counts, selectors, artifact/attestation verification, fallback semantics, permissions, and mutation non-retry. No new endpoint, permission, trigger, secret/OIDC, mutation, merge authority, required-check reduction, ruleset change, direct-main write, or bypass."
     },
     {
-      "id": "cap-profile-stats-canonical-singleton-reads-v1",
       "baseBomSha256": "777d972509bc55cecd154eca0013d01dfaddfc18be4c5f6cb5d899f3545a9286",
       "candidateBomSha256": "0a76207be034051de76c489349272f2ed470c4ebb6de4d6dc8ee4f49297421a4",
       "expansionSha256": "eef2355ae7269577b1f71b603219cfcec1de139fc864db5843fa3ddeabeecdb4",
+      "id": "cap-profile-stats-canonical-singleton-reads-v1",
       "rationale": "Authorize frozen #1181's exact Profile Stats singleton-read hardening: lease current-run GET plus read-only dispatch_plan route three authenticated singleton GETs through the accepted canonical GET-only retry client, while dispatch keeps one non-retried Actions POST. Includes exact validator/projection/self-test compatibility bytes. No new trigger, write permission, secret/OIDC, mutation endpoint/count, merge authority, required-check reduction, ruleset change, direct-main write, or bypass."
     },
     {
@@ -813,10 +813,10 @@
       "rationale": "Authorize frozen #1000's protected-TCB ADR liveness repair: preserve the leased base and exact high-water/bot/workflow/repository bindings; accept a later downstream main head only when typed Git compare evidence proves identical/ahead ancestry with exact merge base and behind_by=0. Composite Workflow Capability is unchanged; no trigger, permission, secret, mutation, merge/ruleset authority, required-check reduction, direct-main write, or bypass is added."
     },
     {
-      "id": "cap-profile-stats-dispatch-plan-parser-v1",
       "baseBomSha256": "777d972509bc55cecd154eca0013d01dfaddfc18be4c5f6cb5d899f3545a9286",
       "candidateBomSha256": "777d972509bc55cecd154eca0013d01dfaddfc18be4c5f6cb5d899f3545a9286",
       "expansionSha256": "8cd8c2b2ef469fbca6a1c92a21fdc97448d00611754869c333acc3d2ad55f370",
+      "id": "cap-profile-stats-dispatch-plan-parser-v1",
       "rationale": "Authorize #1183's exact trusted-parser prerequisite for #1181: accept current Profile Stats unchanged and one explicit future dispatch_plan shape with exact read-only planner authority and conditional lease contents-read/canonical-GET bootstrap. Semantic Workflow Capability is unchanged. No workflow, policy JSON, trigger, endpoint, mutation, runtime permission, secret/OIDC, required-check reduction, direct-main write, ruleset change, merge authority, or bypass is added."
     },
     {
@@ -860,6 +860,13 @@
       "expansionSha256": "ee6c874e5be7faca0d1edd04b0ed5bd08a77975a85b83b1fff9a49b55d107555",
       "id": "cap-ruleset-app-jwt-bearer-auth",
       "rationale": "Authorize #664's exact Ruleset reconciler App-JWT transport hardening. The two existing App JWT calls keep the same endpoints, methods, secrets, selected-repository Administration scope, token narrowing, ruleset write/readback, receipt, attestation, and no-bypass behavior, but now set the documented Authorization: Bearer scheme explicitly. Composite BOM is unchanged; no trigger, permission, OIDC authority, mutation surface, check reduction, merge capability, or bypass is added."
+    },
+    {
+      "baseBomSha256": "0a76207be034051de76c489349272f2ed470c4ebb6de4d6dc8ee4f49297421a4",
+      "candidateBomSha256": "178cbd63c0f391e8bb583e5021cc89e5c59f71f45f838a73639e72efd916b87a",
+      "expansionSha256": "be483d0e1cd8ee9fa8229d9bb296665cd16cd9769445273d42bfa50b8610a533",
+      "id": "cap-ruleset-drift-sentinel-read-transient-v1",
+      "rationale": "Authorize frozen #1190's exact protected retry-policy regression guard while the Ruleset Drift Sentinel runtime capability narrows by removing its direct gh-api main-ref surface in favor of the already accepted canonical authenticated GET client. Permissions, triggers, endpoint identity, typed main-ref schema, live ruleset validation, mutations, secrets/OIDC, required checks, merge authority, ruleset write authority, direct-main writes, and bypass remain unchanged."
     },
     {
       "baseBomSha256": "9e16845b486ef11310d35d934f75cffa348dc42c136a68111fa5ded904116f01",
