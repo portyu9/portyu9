@@ -127,6 +127,13 @@
       "rationale": "Authorize #1219: route two existing Capability Admission delegated Dependabot release JSON GETs through the accepted authenticated bounded GET-only helper while preserving endpoints, git-tag reproof, release/tag/SHA validation, delegated admission semantics, and run-scoped token authority. No permission, trigger, pagination, binary/history transport, mutation replay, required-check reduction, direct-main write, ruleset authority, or bypass."
     },
     {
+      "baseBomSha256": "c74aa9be3108cfb106d3057e811ab621ebe8d1a8d6ccb1a43259c1a1402c1152",
+      "candidateBomSha256": "15302736defe3a3c7d20893bb15c2b7cc39e7be2c9f947860317b9ceac3a9f98",
+      "expansionSha256": "f78aa0c3fffa53f4978700a75d3b3a0dfe76abc23d2e3e336615d7dcd562bec2",
+      "id": "cap-capability-admission-paginated-governed-read-v1",
+      "rationale": "Authorize #1226: route exactly the existing Capability Admission open-main pull-request and Dependabot pull-request-files paginated JSON collections through the protected bounded pagination client, with every page delegated to the unchanged accepted authenticated GET-only classifier; preserve per_page=100, caller-owned page rejection, the accepted 30-page evidence bound plus page-31 overflow sentinel, existing strict collection parsing, exact endpoints/query semantics, and all downstream identity/path checks. No binary transport conversion, permission/trigger expansion, mutation retry/replay, required-check reduction, direct-main write, merge/ruleset authority, or bypass."
+    },
+    {
       "baseBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "expansionSha256": "836cb046c54d6a8011b30017a02c150efe65edb8b745d28467fb6e8dd7a97232",
