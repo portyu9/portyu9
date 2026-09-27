@@ -808,6 +808,24 @@
           }
         }
       }
+    },
+    "aiqa-owner-protected-certifier": {
+      "path": ".github/workflows/aiqa-owner-protected-certifier.yml",
+      "triggers": [
+        "workflow_dispatch"
+      ],
+      "permissions": {
+        "contents": "read"
+      },
+      "jobs": {
+        "certify": {
+          "name": "aiqa-owner-protected-certifier",
+          "needs": [],
+          "permissions": {
+            "contents": "read"
+          }
+        }
+      }
     }
   },
   "transactionMachines": {
