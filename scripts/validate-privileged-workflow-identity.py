@@ -16,8 +16,8 @@ EXPECTED = {
     ".github/workflows/spotlight-link-sync.yml": "99db9db6b8a93130359116edc4edb7683140baa1",
 }
 
-TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
-ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
+TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
+ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
 SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB = "be08b177e329343ff547b66c742e221d9cf9afed"
 
 OLD_MERGE_IF = (
@@ -1881,7 +1881,7 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         "- name: Run exact accepted-base governed bot review gate",
         "GH_TOKEN: ${{ github.token }}",
         "GITHUB_TOKEN: ${{ github.token }}",
-        "EXPECTED_GATE_BLOB: e42c1a8c3204d9a83ac837bbd04743fe3907b41c",
+        "EXPECTED_GATE_BLOB: 5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3",
         'gh api -H "Accept: application/vnd.github.raw+json" "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}" > "$TRUSTED_GATE"',
         'GATE_BLOB="$( { printf \'blob %s\\0\' "$GATE_SIZE"; cat "$TRUSTED_GATE"; } | sha1sum | cut -d\' \' -f1 )"',
         'test "$GATE_BLOB" = "$EXPECTED_GATE_BLOB"',
