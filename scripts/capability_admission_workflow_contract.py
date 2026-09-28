@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "3027d4b326a2771d7eb127b8a2cee7246024b1be"
+EXPECTED_GIT_BLOB = "af91b8efdeca1996c7d7487d56d43d52145f2a90"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -132,6 +132,21 @@ def validate_text(text: str) -> None:
         'TREE_SHA="$(cat candidate-capability-source/.candidate-tree-sha)"',
     ):
         require(binding in text, f"trusted capability admission identity binding changed: {binding}")
+
+    identity_pos = text.index("- name: Verify exact governed read transport identity")
+    identity_end = text.index("- name: Bind exact candidate context", identity_pos)
+    identity_step = text[identity_pos:identity_end]
+    expected_identity_run = (
+        '- name: Verify exact governed read transport identity\n'
+        '        run: |\n'
+        '          set -euo pipefail\n'
+        '          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"\n'
+        '          test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"\n'
+    )
+    require(expected_identity_run in identity_step,
+            "trusted Capability Admission governed-read identity commands must remain distinct shell lines")
+    require("\\n          test " not in identity_step,
+            "trusted Capability Admission governed-read identity block contains an escaped newline literal")
 
     bind_end = text.index("- name: Verify exact trusted base checkout", bind_pos)
     bind_step = text[bind_pos:bind_end]
