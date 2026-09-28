@@ -1,0 +1,132 @@
+name: AI QA owner-protected certifier
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aiqa-owner-protected-certifier-v1
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    name: aiqa-owner-protected-certifier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: aiqa-owner-protected-certifier
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact certifier revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify independently pinned certifier revision
+        env:
+          EXPECTED_CONTROL_SHA: ${{ vars.AIQA_OWNER_CERTIFIER_CONTROL_SHA }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/aiqa-owner-protected-certifier-v1"
+          test "$GITHUB_ACTOR" = "portyu9"
+          test "$GITHUB_TRIGGERING_ACTOR" = "portyu9"
+          [[ "$EXPECTED_CONTROL_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_CONTROL_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CONTROL_SHA"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.15"
+
+      - name: Exercise certifier fail-closed policy
+        run: python3 scripts/aiqa_owner_protected_certifier.py --self-test
+
+      - name: Revalidate exact authorized target before credential mint
+        run: >-
+          python3 scripts/aiqa_owner_protected_certifier.py
+          --verify-live
+          --out "$RUNNER_TEMP/aiqa-owner-certification-preflight.json"
+
+      - name: Mint target-scoped dedicated Trusted PR Gate token
+        id: trusted_app
+        env:
+          TRUSTED_GATE_APP_PRIVATE_KEY: ${{ secrets.AIQA_TRUSTED_GATE_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$TRUSTED_GATE_APP_PRIVATE_KEY"
+          b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
+          now="$(date +%s)"
+          issued_at="$((now - 60))"
+          expires_at="$((now + 540))"
+          header="$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | b64url)"
+          payload="$(printf '{"iat":%s,"exp":%s,"iss":"%s"}' "$issued_at" "$expires_at" 'Iv23liSVMkqvsGcw1qct' | b64url)"
+          unsigned="$header.$payload"
+          key_file="$RUNNER_TEMP/aiqa-trusted-gate-app-key.pem"
+          umask 077
+          printf '%s' "$TRUSTED_GATE_APP_PRIVATE_KEY" > "$key_file"
+          trap 'rm -f "$key_file"' EXIT
+          signature="$(printf '%s' "$unsigned" | openssl dgst -sha256 -sign "$key_file" -binary | b64url)"
+          jwt="$unsigned.$signature"
+          rm -f "$key_file"
+          trap - EXIT
+          installation_json="$(GH_TOKEN="$jwt" gh api 'repos/portyu9/ai-qa-automation/installation')"
+          jq -e '
+            (type == "object") and
+            (.id | type == "number" and floor == . and . > 0) and
+            (.app_id == 4766700) and
+            (.account | type == "object" and .id == 35150859 and .login == "portyu9") and
+            (.repository_selection == "selected")
+          ' <<<"$installation_json" >/dev/null
+          installation_id="$(jq -r .id <<<"$installation_json")"
+          request_json="$(jq -cn '{repositories:["ai-qa-automation"],permissions:{contents:"read",pull_requests:"read",statuses:"write"}}')"
+          token_json="$(GH_TOKEN="$jwt" gh api --method POST "app/installations/${installation_id}/access_tokens" --input - <<<"$request_json")"
+          jq -e '
+            (type == "object") and
+            (.token | type == "string" and length > 0) and
+            (.repository_selection == "selected") and
+            (.repositories | type == "array" and length == 1) and
+            (.repositories[0].id == 1341984495) and
+            (.repositories[0].full_name == "portyu9/ai-qa-automation") and
+            (.permissions | type == "object") and
+            (.permissions.contents == "read") and
+            (.permissions.pull_requests == "read") and
+            (.permissions.statuses == "write") and
+            ((.permissions | keys - ["contents", "metadata", "pull_requests", "statuses"]) | length == 0) and
+            ((.permissions.metadata // "read") == "read")
+          ' <<<"$token_json" >/dev/null
+          token="$(jq -r .token <<<"$token_json")"
+          echo "::add-mask::$token"
+          printf 'token=%s\n' "$token" >> "$GITHUB_OUTPUT"
+
+      - name: Terminally revalidate exact authorized target
+        run: >-
+          python3 scripts/aiqa_owner_protected_certifier.py
+          --verify-live
+          --out "$RUNNER_TEMP/aiqa-owner-certification-terminal.json"
+
+      - name: Publish one-shot independent Trusted PR Gate success
+        env:
+          TRUSTED_APP_TOKEN: ${{ steps.trusted_app.outputs.token }}
+        run: |
+          set -euo pipefail
+          receipt="$RUNNER_TEMP/aiqa-owner-certification-terminal.json"
+          test "$(jq -r .result "$receipt")" = "PASS"
+          test "$(jq -r .authorizationId "$receipt")" = "aiqa-291-bootstrap-v1"
+          head_sha="$(jq -r .headSha "$receipt")"
+          base_sha="$(jq -r .baseSha "$receipt")"
+          merge_sha="$(jq -r .mergeSha "$receipt")"
+          pr_number="$(jq -r .prNumber "$receipt")"
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$merge_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$pr_number" = "291"
+          target_url="https://github.com/portyu9/portyu9/actions/runs/${GITHUB_RUN_ID}?authorization=aiqa-291-bootstrap-v1&pr=${pr_number}&base=${base_sha}&head=${head_sha}&merge=${merge_sha}"
+          payload="$(jq -cn --arg url "$target_url" '{state:"success",context:"Trusted PR Gate",description:"Independent owner-protected exact-subject validation passed",target_url:$url}')"
+          GH_TOKEN="$TRUSTED_APP_TOKEN" gh api --method POST "repos/portyu9/ai-qa-automation/statuses/${head_sha}" --input - <<<"$payload"
