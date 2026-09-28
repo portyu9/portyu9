@@ -136,13 +136,13 @@ SPOTLIGHT_CAPABILITY_DISPATCH_STATUS = """          CAPABILITY_DISPATCH_RESPONSE
 SPOTLIGHT_CAPABILITY_DISPATCH_LEGACY = """          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches" \\
             -f ref=main >/dev/null
 """
-SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH = """          REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/dispatches" \\
-            -f event_type=spotlight-review-wake \\
-            -f "client_payload[prNumber]=${PR_NUMBER}" \\
-            -f "client_payload[baseSha]=${BASE_SHA}" \\
-            -f "client_payload[headSha]=${HEAD_SHA}" \\
-            -f "client_payload[headRef]=${CANDIDATE_BRANCH}" \\
-            -f "client_payload[lane]=spotlight")"
+SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH = """          REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\
+            -f ref=main \\
+            -f "inputs[prNumber]=${PR_NUMBER}" \\
+            -f "inputs[baseSha]=${BASE_SHA}" \\
+            -f "inputs[headSha]=${HEAD_SHA}" \\
+            -f "inputs[headRef]=${CANDIDATE_BRANCH}" \\
+            -f "inputs[lane]=spotlight")"
           REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d '\\r')"
           [[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
             echo "ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}" >&2
@@ -700,14 +700,13 @@ def project_item9_sync_with_marker(sync: str) -> str:
         SPOTLIGHT_CAPABILITY_DISPATCH_LEGACY,
         1,
     )
-    reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
     reviewer_marker = 'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.'
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
     convergence_anchor = '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do\n'
-    core.require(reviewer_dispatch not in sync and reviewer_marker not in sync,
-            "Spotlight must not dispatch a main/global pre-convergence reviewer wake")
+    core.require(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAKE not in sync and reviewer_marker not in sync,
+            "Spotlight must not regain the retired main/global reviewer scan wake")
     core.require(sync.count(SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH) == 1,
-            "Spotlight exact candidate reviewer repository-dispatch contract changed")
+            "Spotlight exact candidate reviewer workflow-dispatch contract changed")
     reviewer_pos = sync.index(SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH)
     core.require(sync.count(capability_dispatch) == 1 and sync.count(convergence_anchor) == 1,
             "Spotlight candidate-headed reviewer ordering anchors changed")
