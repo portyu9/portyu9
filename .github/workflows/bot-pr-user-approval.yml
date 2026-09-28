@@ -9,27 +9,6 @@ on:
     types:
       - completed
   workflow_dispatch:
-    inputs:
-      prNumber:
-        description: Exact current-main Spotlight PR number
-        required: true
-        type: string
-      baseSha:
-        description: Exact current main SHA bound to the Spotlight PR
-        required: true
-        type: string
-      headSha:
-        description: Exact immutable Spotlight candidate head SHA
-        required: true
-        type: string
-      headRef:
-        description: Exact immutable Spotlight candidate branch
-        required: true
-        type: string
-      lane:
-        description: Governed reviewer lane
-        required: true
-        type: string
 
 permissions:
   actions: write
@@ -38,7 +17,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.headSha }}
+  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'spotlight-dispatch' }}
   cancel-in-progress: true
 
 jobs:
@@ -53,8 +32,7 @@ jobs:
             startsWith(github.event.workflow_run.head_branch, 'automation/spotlight-links/'))) ||
           (github.event_name == 'workflow_dispatch' &&
            github.actor == 'github-actions[bot]' &&
-           github.ref == 'refs/heads/main' &&
-           inputs.lane == 'spotlight') }}
+           github.ref == 'refs/heads/main') }}
     name: exact-head-portyu9-review
     runs-on: ubuntu-24.04
     timeout-minutes: 6
@@ -72,11 +50,8 @@ jobs:
           REVIEW_TOKEN: ${{ secrets.PORTYU9_BOT_REVIEW_TOKEN }}
           TARGET_REPOSITORY: ${{ github.repository }}
           WAKE_EVENT_NAME: ${{ github.event_name }}
-          WAKE_PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.prNumber || '' }}
-          WAKE_BASE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.baseSha || '' }}
-          WAKE_HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.headSha || '' }}
-          WAKE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || inputs.headRef || '' }}
-          WAKE_LANE: ${{ github.event_name == 'workflow_dispatch' && inputs.lane || '' }}
+          WAKE_HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
+          WAKE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || '' }}
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
@@ -87,11 +62,9 @@ jobs:
               test "$WAKE_HEAD_REF" != "main"
               ;;
             workflow_dispatch)
-              [[ "$WAKE_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-              [[ "$WAKE_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
-              [[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
-              [[ "$WAKE_HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
-              test "$WAKE_LANE" = "spotlight"
+              # Deliberate trusted-main wake carries no candidate payload. Candidate identity
+              # is independently discovered and must resolve to exactly one canonical
+              # current-main Spotlight PR before any review mutation can occur.
               ;;
             *)
               echo "ERROR: unsupported governed reviewer wake event: ${WAKE_EVENT_NAME}" >&2
@@ -134,13 +107,7 @@ jobs:
           }
           MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"
           [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
-          if [ "$WAKE_EVENT_NAME" = "workflow_dispatch" ]; then
-            test "$WAKE_BASE_SHA" = "$MAIN_SHA"
-            DISPATCH_PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${WAKE_PR_NUMBER}")"
-            PR_PAGES="$(jq -cn --argjson pr "$DISPATCH_PR" '[[$pr]]')"
-          else
-            PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
-          fi
+          PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
           jq -e '
             (type == "array") and (length >= 1) and (length <= 30) and
             (all(.[]; (type == "array") and (length <= 100))) and
@@ -168,7 +135,7 @@ jobs:
             echo "ERROR: malformed or incomplete paginated open-PR evidence." >&2
             exit 1
           }
-          CANDIDATES="$(jq -c --arg repo "$TARGET_REPOSITORY" --arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --argjson wake_pr "${WAKE_PR_NUMBER:-0}" --arg wake_base "$WAKE_BASE_SHA" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF" '
+          CANDIDATES="$(jq -c --arg repo "$TARGET_REPOSITORY" --arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF" '
             [.[][] | select(
               .state == "open" and
               .draft == false and
@@ -177,12 +144,10 @@ jobs:
               .head.repo.full_name == $repo and
               (
                 if $wake_mode == "workflow_dispatch" then
-                  .number == $wake_pr and
-                  .base.sha == $wake_base and
-                  .head.sha == $wake_head and
-                  .head.ref == $wake_ref and
                   .user.login == "github-actions[bot]" and
-                  (.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$"))
+                  (.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$")) and
+                  .title == "chore: sync rotating Spotlight links" and
+                  .body == "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force."
                 else
                   .head.sha == $wake_head and
                   .head.ref == $wake_ref and
