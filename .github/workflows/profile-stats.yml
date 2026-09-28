@@ -229,9 +229,9 @@ jobs:
           retention-days: 1
 
   lease:
-    if: needs.generate.outputs.evidence_state == 'READY' && (github.event_name != 'schedule' || needs.attest.outputs.changed == 'true')
+    if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
     name: mint-mutation-lease-read-only
-    needs: [generate, attest]
+    needs: attest
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     concurrency:
@@ -342,9 +342,9 @@ jobs:
           echo "candidate_id=$CANDIDATE_ID" >> "$GITHUB_OUTPUT"
 
   attest_publish:
-    if: needs.generate.outputs.evidence_state == 'READY' && (github.event_name != 'schedule' || needs.attest.outputs.changed == 'true')
+    if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
     name: attest-write-only
-    needs: [generate, attest, lease]
+    needs: [attest, lease]
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     concurrency:
@@ -443,7 +443,7 @@ jobs:
           show-summary: true
 
   stage:
-    if: needs.generate.outputs.evidence_state == 'READY' && (github.event_name != 'schedule' || needs.attest.outputs.changed == 'true')
+    if: github.event_name != 'schedule' || needs.attest.outputs.changed == 'true'
     name: stage-publication-read-only
     needs: [generate, attest, lease, attest_publish]
     runs-on: ubuntu-24.04
@@ -572,9 +572,9 @@ jobs:
           retention-days: 1
 
   publish:
-    if: needs.generate.outputs.evidence_state == 'READY' && needs.stage.outputs.changed == 'true'
+    if: needs.stage.outputs.changed == 'true'
     name: publish-write-only
-    needs: [generate, stage, lease, attest]
+    needs: [stage, lease, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     concurrency:
@@ -712,9 +712,8 @@ jobs:
           echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
   receipt:
-    if: needs.generate.outputs.evidence_state == 'READY'
     name: prepare-publication-receipt-read-only
-    needs: [generate, publish, stage, lease, attest]
+    needs: [publish, stage, lease, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     concurrency:
@@ -814,9 +813,8 @@ jobs:
           retention-days: 1
 
   receipt_attest:
-    if: needs.generate.outputs.evidence_state == 'READY'
     name: attest-publication-receipt-write-only
-    needs: [generate, receipt, lease, attest]
+    needs: [receipt, lease, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     concurrency:
@@ -887,9 +885,8 @@ jobs:
           show-summary: true
 
   dispatch_plan:
-    if: needs.generate.outputs.evidence_state == 'READY'
     name: prepare-spotlight-dispatch-read-only
-    needs: [generate, receipt_attest, lease, attest]
+    needs: [receipt_attest, lease, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     concurrency:
@@ -1019,9 +1016,8 @@ jobs:
           echo "previous_run_high_water=$PREVIOUS_RUN_HIGH_WATER" >> "$GITHUB_OUTPUT"
 
   dispatch:
-    if: needs.generate.outputs.evidence_state == 'READY'
     name: dispatch-spotlight-link-sync
-    needs: [generate, dispatch_plan, receipt_attest, lease, attest]
+    needs: [dispatch_plan, receipt_attest, lease, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     concurrency:
@@ -1085,9 +1081,8 @@ jobs:
           echo "accepted_status=204" >> "$GITHUB_OUTPUT"
 
   decision_receipt:
-    if: needs.generate.outputs.evidence_state == 'READY'
     name: prepare-automation-decision-receipt-read-only
-    needs: [generate, dispatch, lease]
+    needs: [dispatch, lease]
     runs-on: ubuntu-24.04
     timeout-minutes: 4
     concurrency:
@@ -1157,9 +1152,8 @@ jobs:
           retention-days: 1
 
   decision_receipt_attest:
-    if: needs.generate.outputs.evidence_state == 'READY'
     name: attest-automation-decision-receipt-write-only
-    needs: [generate, decision_receipt, lease, attest]
+    needs: [decision_receipt, lease, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     concurrency:
