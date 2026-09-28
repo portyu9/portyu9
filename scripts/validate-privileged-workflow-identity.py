@@ -10,7 +10,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v120"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "54a9828eb765f8e35ab80e7b6b49158f53d2ef10",
+    ".github/workflows/bot-pr-user-approval.yml": "1807ee560771cecafe8d8e0dada9e070862c4adf",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
     ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
     ".github/workflows/spotlight-link-sync.yml": "a81afb26b46c77a9d6cd73bba2ccf2325ece57d2",
@@ -3279,6 +3279,9 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "github.event.workflow_run.event == 'pull_request'",
         "github.event.workflow_run.head_branch != 'main'",
         "github.event.workflow_run.head_repository.full_name == github.repository",
+        "startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/')",
+        "startsWith(github.event.workflow_run.head_branch, 'codeql-autofix/alert-')",
+        "startsWith(github.event.workflow_run.head_branch, 'automation/spotlight-links/')",
         "github.event_name == 'repository_dispatch'",
         "github.event.action == 'spotlight-review-wake'",
         "github.event.sender.login == 'github-actions[bot]'",
