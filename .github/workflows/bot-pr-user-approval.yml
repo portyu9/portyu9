@@ -132,11 +132,12 @@ jobs:
             echo "ERROR: malformed or incomplete paginated open-PR evidence." >&2
             exit 1
           }
-          CANDIDATES="$(jq -c --arg repo "$TARGET_REPOSITORY" --arg wake_mode "$WAKE_EVENT_NAME" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF" '
+          CANDIDATES="$(jq -c --arg repo "$TARGET_REPOSITORY" --arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF" '
             [.[][] | select(
               .state == "open" and
               .draft == false and
               .base.ref == "main" and
+              .base.sha == $main and
               .head.repo.full_name == $repo and
               (
                 if $wake_mode == "workflow_dispatch" then
@@ -164,7 +165,14 @@ jobs:
           ' <<<"$PR_PAGES")"
           CANDIDATE_COUNT="$(jq 'length' <<<"$CANDIDATES")"
           [[ "$CANDIDATE_COUNT" =~ ^[0-9]+$ ]]
-          test "$CANDIDATE_COUNT" -le 1
+          if [ "$WAKE_EVENT_NAME" = "workflow_dispatch" ]; then
+            test "$CANDIDATE_COUNT" = "1" || {
+              echo "ERROR: trusted-main Spotlight reviewer wake requires exactly one current-main candidate; observed ${CANDIDATE_COUNT}." >&2
+              exit 1
+            }
+          else
+            test "$CANDIDATE_COUNT" -le 1
+          fi
 
           validate_governed_pr_object() {
             local pr="$1" number="$2"
