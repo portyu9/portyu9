@@ -203,7 +203,8 @@
             "CodeQL",
             "Dependency review"
           ]
-        }
+        },
+        "workflow_dispatch": {}
       },
       "workflowPermissions": {
         "actions": "write",
