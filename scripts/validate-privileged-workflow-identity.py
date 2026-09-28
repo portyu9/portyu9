@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v119"
+VERSION = "governed-workflow-byte-identity-v120"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "54a9828eb765f8e35ab80e7b6b49158f53d2ef10",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
@@ -4520,6 +4520,13 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     capability_guard = (
         '[[ "$CAPABILITY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
     )
+    reviewer_dispatch = (
+        'REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST '
+        '"repos/${GITHUB_REPOSITORY}/dispatches" \\'
+    )
+    reviewer_guard = (
+        '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+    )
     require(
         spotlight.count(capability_dispatch) == 1,
         "Spotlight Capability Admission dispatch must capture exactly one --include response",
@@ -4528,18 +4535,33 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
         spotlight.count(capability_guard) == 1,
         "Spotlight Capability Admission dispatch must require exact HTTP 204 status",
     )
+    require(
+        spotlight.count(reviewer_dispatch) == 1,
+        "Spotlight reviewer wake must capture exactly one typed repository-dispatch response",
+    )
+    require(
+        spotlight.count(reviewer_guard) == 1,
+        "Spotlight reviewer wake must require exact HTTP 204 status",
+    )
     for fragment in (
         'CAPABILITY_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CAPABILITY_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
         'ERROR: Spotlight Capability Admission dispatch returned unexpected status: ${CAPABILITY_DISPATCH_STATUS_LINE}',
+        '-f event_type=spotlight-review-wake',
+        '-f "client_payload[prNumber]=${PR_NUMBER}"',
+        '-f "client_payload[baseSha]=${BASE_SHA}"',
+        '-f "client_payload[headSha]=${HEAD_SHA}"',
+        '-f "client_payload[headRef]=${CANDIDATE_BRANCH}"',
+        '-f "client_payload[lane]=spotlight"',
+        'REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+        'ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}',
+        'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.',
     ):
         require(fragment in spotlight, f"Spotlight dispatch response-status contract is missing: {fragment}")
     for retired in (
         'actions/workflows/bot-pr-user-approval.yml/dispatches',
-        'REVIEW_DISPATCH_RESPONSE=',
-        'REVIEW_DISPATCH_STATUS_LINE=',
         'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.',
     ):
-        require(retired not in spotlight, f"Spotlight must not regain retired main/global reviewer dispatch: {retired}")
+        require(retired not in spotlight, f"Spotlight must not regain retired generic reviewer dispatch: {retired}")
     require(
         'capability-admission.yml/dispatches" \\\n            -f ref=main >/dev/null' not in spotlight,
         "Spotlight must not discard privileged Capability Admission dispatch responses",
@@ -4548,10 +4570,20 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     capability_success = spotlight.index(
         'Dispatched event-driven Spotlight admission proof from trusted main;'
     )
+    reviewer_status = spotlight.index(reviewer_guard)
+    reviewer_success = spotlight.index(
+        'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.'
+    )
     convergence = spotlight.index('          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do')
     require(
-        spotlight.index(capability_dispatch) < capability_status < capability_success < convergence,
-        "Spotlight Capability Admission dispatch must prove HTTP 204 before success marker and convergence",
+        spotlight.index(capability_dispatch)
+        < capability_status
+        < capability_success
+        < spotlight.index(reviewer_dispatch)
+        < reviewer_status
+        < reviewer_success
+        < convergence,
+        "Spotlight must prove admission and exact reviewer wake HTTP 204 statuses before convergence",
     )
 
 
