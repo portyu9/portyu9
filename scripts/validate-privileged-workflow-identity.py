@@ -2197,7 +2197,7 @@ def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
         "Bot PR reviewer must lock the documented six-state check/workflow-run status set",
     )
     require(
-        approve.count('select(.status != "completed")') == 1,
+        approve.count('select(.status != "completed")') == 2,
         "Bot PR reviewer must classify validated non-completed workflow runs as active",
     )
     require(
