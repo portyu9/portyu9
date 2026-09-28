@@ -137,12 +137,7 @@ SPOTLIGHT_CAPABILITY_DISPATCH_LEGACY = """          gh api --method POST "repos/
             -f ref=main >/dev/null
 """
 SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH = """          REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\
-            -f ref=main \\
-            -f "inputs[prNumber]=${PR_NUMBER}" \\
-            -f "inputs[baseSha]=${BASE_SHA}" \\
-            -f "inputs[headSha]=${HEAD_SHA}" \\
-            -f "inputs[headRef]=${CANDIDATE_BRANCH}" \\
-            -f "inputs[lane]=spotlight")"
+            -f ref=main)"
           REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d '\\r')"
           [[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
             echo "ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}" >&2
