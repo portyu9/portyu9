@@ -201,11 +201,7 @@
         "vars": []
       },
       "triggers": {
-        "repository_dispatch": {
-          "types": [
-            "spotlight-review-wake"
-          ]
-        },
+        "workflow_dispatch": {},
         "workflow_run": {
           "types": [
             "completed"
