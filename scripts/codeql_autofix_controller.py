@@ -21,6 +21,7 @@ import codeql_autofix_discovery as discovery
 REPOSITORY = contract.REPOSITORY
 DEFAULT_BRANCH = contract.DEFAULT_BRANCH
 DEFAULT_REF = f"refs/heads/{DEFAULT_BRANCH}"
+GITHUB_ACTIONS_APP_ID = 15368
 GHAS_APP_ID = 57789
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 BRANCH_RE = re.compile(r"^codeql-autofix/alert-(?P<alert>[1-9][0-9]*)/run-(?P<run>[1-9][0-9]*)$")
@@ -1193,6 +1194,66 @@ def validate_check_run_readiness(
     return {"state": "failure", "count": 1, **check}
 
 
+
+def validate_readiness_snapshot(value: Any, head_sha: str) -> dict[str, Any]:
+    """Validate one complete bounded exact-head check snapshot and derive both readiness states."""
+    head_sha = sha(head_sha, "readiness snapshot head SHA")
+    require(isinstance(value, Mapping), "readiness snapshot response must be an object")
+    total = value.get("total_count")
+    require(type(total) is int and 0 <= total <= 100,
+            "readiness snapshot total_count must be an integer in [0,100]")
+    runs = value.get("check_runs")
+    require(isinstance(runs, list) and len(runs) <= 100,
+            "readiness snapshot check_runs must be an array bounded to 100 items")
+    require(total == len(runs),
+            "readiness snapshot total_count does not match returned array length")
+
+    seen_ids: set[int] = set()
+    for raw in runs:
+        require(isinstance(raw, Mapping), "readiness snapshot contains a non-object check-run")
+        check_id = positive_int(raw.get("id"), "readiness snapshot check-run id")
+        require(check_id not in seen_ids, "readiness snapshot check-run ids must be unique")
+        seen_ids.add(check_id)
+        name = raw.get("name")
+        require(isinstance(name, str) and bool(name),
+                "readiness snapshot check-run name must be a non-empty string")
+        require(sha(raw.get("head_sha"), "readiness snapshot check-run head SHA") == head_sha,
+                "readiness snapshot check-run head SHA differs from the exact candidate")
+        app = raw.get("app")
+        require(isinstance(app, Mapping), "readiness snapshot check-run lacks app identity")
+        positive_int(app.get("id"), "readiness snapshot check-run app id")
+        status = raw.get("status")
+        require(isinstance(status, str) and status in CODEQL_RUN_STATUSES,
+                "readiness snapshot check-run status is outside the reviewed status set")
+        conclusion = raw.get("conclusion")
+        if status == "completed":
+            require(isinstance(conclusion, str) and bool(conclusion),
+                    "completed readiness snapshot check-run conclusion must be a non-empty string")
+        else:
+            require(conclusion is None,
+                    "nonterminal readiness snapshot check-run conclusion must be null")
+
+    def selected(check_name: str, app_id: int) -> dict[str, Any]:
+        matches = [
+            raw for raw in runs
+            if raw.get("name") == check_name
+            and isinstance(raw.get("app"), Mapping)
+            and raw["app"].get("id") == app_id
+        ]
+        return validate_check_run_readiness(
+            {"total_count": len(matches), "check_runs": matches},
+            head_sha,
+            check_name,
+            app_id,
+        )
+
+    return {
+        "trusted": selected("trusted-capability-admission", GITHUB_ACTIONS_APP_ID),
+        "ghas": selected("CodeQL", GHAS_APP_ID),
+        "snapshotCount": total,
+    }
+
+
 def security_evidence(ghas_response: Any, pr_alert_pages: Any, alert_number: int, head_sha: str) -> dict[str, Any]:
     alert_number = positive_int(alert_number, "security alert number")
     head_sha = sha(head_sha, "security head SHA")
@@ -1938,6 +1999,64 @@ def self_test() -> None:
             require(False,
                     f"readiness check-run self-test accepted forbidden mutation expected to trigger: {expected}")
 
+    trusted_row = readiness_fixture(check_id=21)["check_runs"][0]
+    ghas_row = readiness_fixture(
+        check_id=22, name="CodeQL", observed_app=GHAS_APP_ID
+    )["check_runs"][0]
+    unrelated_row = readiness_fixture(
+        check_id=23, name="dependency-review", observed_app=GITHUB_ACTIONS_APP_ID
+    )["check_runs"][0]
+    readiness_snapshot = {
+        "total_count": 3,
+        "check_runs": [trusted_row, ghas_row, unrelated_row],
+    }
+    snapshot_result = validate_readiness_snapshot(readiness_snapshot, head)
+    require(
+        snapshot_result["trusted"]["state"] == "success"
+        and snapshot_result["ghas"]["state"] == "success"
+        and snapshot_result["snapshotCount"] == 3,
+        "readiness snapshot positive fixture changed",
+    )
+    ambiguous_snapshot = {
+        "total_count": 3,
+        "check_runs": [
+            trusted_row,
+            {**trusted_row, "id": 24},
+            ghas_row,
+        ],
+    }
+    require(
+        validate_readiness_snapshot(ambiguous_snapshot, head)["trusted"]["state"] == "ambiguous",
+        "readiness snapshot exact-selector ambiguity fixture changed",
+    )
+    snapshot_mutations = (
+        ([], "must be an object"),
+        ({"total_count": True, "check_runs": []}, "integer in [0,100]"),
+        ({"total_count": 101, "check_runs": []}, "integer in [0,100]"),
+        ({"total_count": 1, "check_runs": []}, "does not match returned array length"),
+        ({"total_count": 1, "check_runs": [None]}, "non-object check-run"),
+        ({"total_count": 1, "check_runs": [{**trusted_row, "id": True}]}, "must be a positive integer"),
+        ({
+            "total_count": 2,
+            "check_runs": [trusted_row, {**trusted_row}],
+        }, "ids must be unique"),
+        ({"total_count": 1, "check_runs": [{**trusted_row, "name": ""}]}, "name must be a non-empty string"),
+        ({"total_count": 1, "check_runs": [{**trusted_row, "head_sha": "c" * 40}]}, "differs from the exact candidate"),
+        ({"total_count": 1, "check_runs": [{**trusted_row, "app": {"id": "15368"}}]}, "must be a positive integer"),
+        ({"total_count": 1, "check_runs": [{**trusted_row, "status": "unknown", "conclusion": None}]}, "outside the reviewed status set"),
+        ({"total_count": 1, "check_runs": [{**trusted_row, "status": "queued", "conclusion": "success"}]}, "must be null"),
+        ({"total_count": 1, "check_runs": [{**trusted_row, "status": "completed", "conclusion": None}]}, "must be a non-empty string"),
+    )
+    for mutated, expected in snapshot_mutations:
+        try:
+            validate_readiness_snapshot(mutated, head)
+        except ControllerError as exc:
+            require(expected in str(exc),
+                    f"readiness snapshot self-test failed for the wrong reason: {exc}")
+        else:
+            require(False,
+                    f"readiness snapshot self-test accepted forbidden mutation expected to trigger: {expected}")
+
     ref_branch = "codeql-autofix/alert-4/run-123"
     expected_ref = f"refs/heads/{ref_branch}"
     require(
@@ -2369,6 +2488,11 @@ def main() -> int:
     p.add_argument("--app-id", type=int, required=True)
     p.add_argument("--out", required=True)
 
+    p = sub.add_parser("readiness-snapshot")
+    p.add_argument("--response-file", required=True)
+    p.add_argument("--head-sha", required=True)
+    p.add_argument("--out", required=True)
+
     p = sub.add_parser("merge-success-response")
     p.add_argument("--response-file", required=True)
     p.add_argument("--out", required=True)
@@ -2486,6 +2610,10 @@ def main() -> int:
     elif args.command == "readiness-check":
         dump(args.out, validate_check_run_readiness(
             load(args.response_file), args.head_sha, args.name, args.app_id
+        ))
+    elif args.command == "readiness-snapshot":
+        dump(args.out, validate_readiness_snapshot(
+            load(args.response_file), args.head_sha
         ))
     elif args.command == "merge-success-response":
         dump(args.out, validate_merge_success_response(load(args.response_file)))

@@ -568,15 +568,14 @@ jobs:
           TRUSTED_READY=false
           GHAS_READY=false
           for ATTEMPT in $(seq 1 60); do
-            gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100" \
-              > trusted-readiness-response.json
-            python3 scripts/codeql_autofix_controller.py readiness-check \
-              --response-file trusted-readiness-response.json \
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \
+              > readiness-snapshot-response.json
+            python3 scripts/codeql_autofix_controller.py readiness-snapshot \
+              --response-file readiness-snapshot-response.json \
               --head-sha "$HEAD_SHA" \
-              --name trusted-capability-admission \
-              --app-id 15368 \
-              --out trusted-readiness.json
-            TRUSTED_STATE="$(jq -r .state trusted-readiness.json)"
+              --out readiness-snapshot.json
+            TRUSTED_STATE="$(jq -r .trusted.state readiness-snapshot.json)"
             case "$TRUSTED_STATE" in
               success)
                 TRUSTED_READY=true
@@ -597,15 +596,7 @@ jobs:
                 ;;
             esac
 
-            gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \
-              > ghas-readiness-response.json
-            python3 scripts/codeql_autofix_controller.py readiness-check \
-              --response-file ghas-readiness-response.json \
-              --head-sha "$HEAD_SHA" \
-              --name CodeQL \
-              --app-id 57789 \
-              --out ghas-readiness.json
-            GHAS_STATE="$(jq -r .state ghas-readiness.json)"
+            GHAS_STATE="$(jq -r .ghas.state readiness-snapshot.json)"
             case "$GHAS_STATE" in
               success)
                 GHAS_READY=true
