@@ -8,28 +8,9 @@ on:
       - Dependency review
     types:
       - completed
-  workflow_dispatch:
-    inputs:
-      prNumber:
-        description: Exact Spotlight pull request number
-        required: true
-        type: string
-      baseSha:
-        description: Exact current-main base SHA
-        required: true
-        type: string
-      headSha:
-        description: Exact immutable Spotlight candidate head SHA
-        required: true
-        type: string
-      headRef:
-        description: Exact immutable Spotlight candidate branch
-        required: true
-        type: string
-      lane:
-        description: Governed bot lane
-        required: true
-        type: string
+  repository_dispatch:
+    types:
+      - spotlight-review-wake
 
 permissions:
   actions: write
@@ -38,7 +19,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.headSha }}
+  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.client_payload.headSha }}
   cancel-in-progress: true
 
 jobs:
@@ -48,10 +29,11 @@ jobs:
            github.event.workflow_run.event == 'pull_request' &&
            github.event.workflow_run.head_branch != 'main' &&
            github.event.workflow_run.head_repository.full_name == github.repository) ||
-          (github.event_name == 'workflow_dispatch' &&
+          (github.event_name == 'repository_dispatch' &&
+           github.event.action == 'spotlight-review-wake' &&
            github.actor == 'github-actions[bot]' &&
            github.ref == 'refs/heads/main' &&
-           github.event.inputs.lane == 'spotlight') }}
+           github.event.client_payload.lane == 'spotlight') }}
     name: exact-head-portyu9-review
     runs-on: ubuntu-24.04
     timeout-minutes: 6
@@ -69,11 +51,11 @@ jobs:
           REVIEW_TOKEN: ${{ secrets.PORTYU9_BOT_REVIEW_TOKEN }}
           TARGET_REPOSITORY: ${{ github.repository }}
           WAKE_EVENT_NAME: ${{ github.event_name }}
-          WAKE_PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.prNumber || '' }}
-          WAKE_BASE_SHA: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.baseSha || '' }}
-          WAKE_HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.headSha || '' }}
-          WAKE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.event.inputs.headRef || '' }}
-          WAKE_LANE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.lane || '' }}
+          WAKE_PR_NUMBER: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.prNumber || '' }}
+          WAKE_BASE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.baseSha || '' }}
+          WAKE_HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.client_payload.headSha || '' }}
+          WAKE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.event.client_payload.headRef || '' }}
+          WAKE_LANE: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.lane || '' }}
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
@@ -83,7 +65,7 @@ jobs:
               test -n "$WAKE_HEAD_REF"
               test "$WAKE_HEAD_REF" != "main"
               ;;
-            workflow_dispatch)
+            repository_dispatch)
               [[ "$WAKE_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
               [[ "$WAKE_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
               [[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -131,7 +113,7 @@ jobs:
           }
           MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"
           [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
-          if [ "$WAKE_EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$WAKE_EVENT_NAME" = "repository_dispatch" ]; then
             test "$WAKE_BASE_SHA" = "$MAIN_SHA"
             DISPATCH_PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${WAKE_PR_NUMBER}")"
             PR_PAGES="$(jq -cn --argjson pr "$DISPATCH_PR" '[[$pr]]')"
@@ -173,7 +155,7 @@ jobs:
               .base.sha == $main and
               .head.repo.full_name == $repo and
               (
-                if $wake_mode == "workflow_dispatch" then
+                if $wake_mode == "repository_dispatch" then
                   .number == $wake_pr and
                   .base.sha == $wake_base and
                   .head.sha == $wake_head and
@@ -202,7 +184,7 @@ jobs:
           ' <<<"$PR_PAGES")"
           CANDIDATE_COUNT="$(jq 'length' <<<"$CANDIDATES")"
           [[ "$CANDIDATE_COUNT" =~ ^[0-9]+$ ]]
-          if [ "$WAKE_EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$WAKE_EVENT_NAME" = "repository_dispatch" ]; then
             test "$CANDIDATE_COUNT" = "1" || {
               echo "ERROR: trusted-main Spotlight reviewer wake requires exactly one current-main candidate; observed ${CANDIDATE_COUNT}." >&2
               exit 1
