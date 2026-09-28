@@ -3147,12 +3147,12 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
 def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) -> None:
     bot_block = (
         "concurrency:\n"
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number || github.run_id }}\n"
+        "  group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}\n"
         "  cancel-in-progress: true\n"
     )
     require(
         bot_review.count(bot_block) == 1,
-        "Bot PR reviewer must scope cancellation to associated PR wakes and unique non-PR/recovery runs",
+        "Bot PR reviewer must scope cancellation to the immutable candidate head",
     )
     require(
         "concurrency:\n  group: bot-pr-user-approval\n  cancel-in-progress: true\n" not in bot_review,
@@ -3188,7 +3188,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
     validate_main_check_cancellation_isolation(bot_review, spotlight)
 
     broad_bot = bot_review.replace(
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number || github.run_id }}\n",
+        "  group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}\n",
         "  group: bot-pr-user-approval\n",
         1,
     )
@@ -3271,7 +3271,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued.',
         'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
         'exit 1',
-        "group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number || github.run_id }}",
+        "group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}",
         'cancel-in-progress: true',
         'Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE}).',
         'local head="$1" head_ref="$2" runs total count active_profile unexpected_active',
