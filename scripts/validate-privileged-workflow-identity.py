@@ -3646,12 +3646,12 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
     reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
     convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do'
     require(
-        reviewer_dispatch not in spotlight,
-        "Spotlight must not dispatch the retired main/global reviewer workflow",
+        spotlight.count(reviewer_dispatch) == 1,
+        "Spotlight must dispatch exactly one fixed exact-candidate reviewer workflow",
     )
     require(
-        spotlight.index(capability_dispatch) < spotlight.index(convergence_start),
-        "Spotlight admission dispatch must occur before candidate-headed protected-workflow convergence",
+        spotlight.index(capability_dispatch) < spotlight.index(reviewer_dispatch) < spotlight.index(convergence_start),
+        "Spotlight admission and exact-candidate reviewer dispatch must precede protected-workflow convergence",
     )
     require('grep -Fxc "$APPROVAL_BODY"' not in spotlight,
             "Spotlight approval comment verification must compare the complete multiline body atomically")
