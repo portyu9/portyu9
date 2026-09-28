@@ -3147,7 +3147,7 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
 def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) -> None:
     bot_block = (
         "concurrency:\n"
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.headSha }}\n"
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'spotlight-dispatch' }}\n"
         "  cancel-in-progress: true\n"
     )
     require(
@@ -3192,7 +3192,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
     validate_main_check_cancellation_isolation(bot_review, spotlight)
 
     broad_bot = bot_review.replace(
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.headSha }}\n",
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'spotlight-dispatch' }}\n",
         "  group: bot-pr-user-approval\n",
         1,
     )
@@ -3275,7 +3275,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued.',
         'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
         'exit 1',
-        "group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.headSha }}",
+        "group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'spotlight-dispatch' }}",
         "github.event.workflow_run.event == 'pull_request'",
         "github.event.workflow_run.head_branch != 'main'",
         "github.event.workflow_run.head_repository.full_name == github.repository",
@@ -3285,33 +3285,18 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "github.event_name == 'workflow_dispatch'",
         "github.actor == 'github-actions[bot]'",
         "github.ref == 'refs/heads/main'",
-        "inputs.lane == 'spotlight'",
-        '      prNumber:',
         'WAKE_EVENT_NAME: ${{ github.event_name }}',
-        'WAKE_PR_NUMBER: ${{ github.event_name == \'workflow_dispatch\' && inputs.prNumber || \'\' }}',
-        'WAKE_BASE_SHA: ${{ github.event_name == \'workflow_dispatch\' && inputs.baseSha || \'\' }}',
-        'WAKE_HEAD_SHA: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_sha || inputs.headSha || \'\' }}',
-        'WAKE_HEAD_REF: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_branch || inputs.headRef || \'\' }}',
-        'WAKE_LANE: ${{ github.event_name == \'workflow_dispatch\' && inputs.lane || \'\' }}',
+        'WAKE_HEAD_SHA: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_sha || \'\' }}',
+        'WAKE_HEAD_REF: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_branch || \'\' }}',
         'case "$WAKE_EVENT_NAME" in',
         'workflow_dispatch)',
-        '[[ "$WAKE_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]',
-        '[[ "$WAKE_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]',
-        '[[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]',
-        '[[ "$WAKE_HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]',
-        'test "$WAKE_LANE" = "spotlight"',
-        'test "$WAKE_BASE_SHA" = "$MAIN_SHA"',
-        'DISPATCH_PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${WAKE_PR_NUMBER}")"',
-        'PR_PAGES="$(jq -cn --argjson pr "$DISPATCH_PR" \'[[$pr]]\')"',
-        '--arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --argjson wake_pr "${WAKE_PR_NUMBER:-0}" --arg wake_base "$WAKE_BASE_SHA" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF"',
+        '--arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF"',
         '.base.sha == $main and',
         'if $wake_mode == "workflow_dispatch" then',
-        '.number == $wake_pr and',
-        '.base.sha == $wake_base and',
-        '.head.sha == $wake_head and',
-        '.head.ref == $wake_ref and',
         '.user.login == "github-actions[bot]" and',
-        '(.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$"))',
+        '(.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$")) and',
+        '.title == "chore: sync rotating Spotlight links" and',
+        '.body == "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force."',
         '.head.sha == $wake_head and',
         '.head.ref == $wake_ref and',
         '--arg event "$WAKE_EVENT_NAME"',
@@ -3354,32 +3339,13 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'ERROR: malformed or incomplete paginated open-PR evidence.',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
-    typed_dispatch = """  workflow_dispatch:
-    inputs:
-      prNumber:
-        description: Exact current-main Spotlight PR number
-        required: true
-        type: string
-      baseSha:
-        description: Exact current main SHA bound to the Spotlight PR
-        required: true
-        type: string
-      headSha:
-        description: Exact immutable Spotlight candidate head SHA
-        required: true
-        type: string
-      headRef:
-        description: Exact immutable Spotlight candidate branch
-        required: true
-        type: string
-      lane:
-        description: Governed reviewer lane
-        required: true
-        type: string
-"""
     require(
-        bot_review.count(typed_dispatch) == 1,
-        "Bot PR reviewer must expose exactly one typed exact-candidate workflow_dispatch entry",
+        bot_review.count("  workflow_dispatch:\n") == 1,
+        "Bot PR reviewer must expose exactly one fixed workflow_dispatch entry",
+    )
+    require(
+        "    inputs:\n" not in bot_review and "inputs." not in bot_review,
+        "Bot PR reviewer fixed dispatch must not regain routed candidate inputs",
     )
     require(
         "  repository_dispatch:\n" not in bot_review
@@ -3391,16 +3357,11 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "github.event_name == 'workflow_dispatch'" in bot_review
         and "github.actor == 'github-actions[bot]'" in bot_review
         and "github.ref == 'refs/heads/main'" in bot_review
-        and "inputs.lane == 'spotlight'" in bot_review
         and 'if $wake_mode == "workflow_dispatch" then' in bot_review
-        and 'DISPATCH_PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${WAKE_PR_NUMBER}")"' in bot_review,
-        "Bot PR reviewer dispatch entry must remain bot/main/Spotlight-only and exact-candidate-bound",
+        and '.title == "chore: sync rotating Spotlight links"' in bot_review
+        and 'trusted-main Spotlight reviewer wake requires exactly one current-main candidate' in bot_review,
+        "Bot PR reviewer fixed dispatch must remain bot/main-only with fail-closed canonical Spotlight singleton discovery",
     )
-    for exact_input in ("inputs.headSha", "inputs.headRef", "inputs.baseSha", "inputs.prNumber", "inputs.lane"):
-        require(
-            exact_input in bot_review,
-            f"Bot PR reviewer dispatch is missing exact candidate input binding: {exact_input}",
-        )
     for retired in (
         "      - Capability admission\n",
         "      - CodeQL Autofix controller\n",
@@ -4570,11 +4531,6 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
         'CAPABILITY_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CAPABILITY_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
         'ERROR: Spotlight Capability Admission dispatch returned unexpected status: ${CAPABILITY_DISPATCH_STATUS_LINE}',
         '-f ref=main',
-        '-f "inputs[prNumber]=${PR_NUMBER}"',
-        '-f "inputs[baseSha]=${BASE_SHA}"',
-        '-f "inputs[headSha]=${HEAD_SHA}"',
-        '-f "inputs[headRef]=${CANDIDATE_BRANCH}"',
-        '-f "inputs[lane]=spotlight"',
         'REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
         'ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}',
         'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.',
@@ -4584,6 +4540,7 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
         'repos/${GITHUB_REPOSITORY}/dispatches',
         'event_type=spotlight-review-wake',
         'client_payload[',
+        'inputs[',
         'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.',
     ):
         require(retired not in spotlight, f"Spotlight must not regain retired generic reviewer dispatch: {retired}")
