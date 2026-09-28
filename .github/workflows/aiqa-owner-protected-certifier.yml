@@ -55,10 +55,7 @@ jobs:
         run: python3 scripts/aiqa_owner_protected_certifier.py --self-test
 
       - name: Revalidate exact authorized target before credential mint
-        run: >-
-          python3 scripts/aiqa_owner_protected_certifier.py
-          --verify-live
-          --out "$RUNNER_TEMP/aiqa-owner-certification-preflight.json"
+        run: python3 scripts/aiqa_owner_protected_certifier.py --verify-live --out "$RUNNER_TEMP/aiqa-owner-certification-preflight.json"
 
       - name: Mint target-scoped dedicated Trusted PR Gate token
         id: trusted_app
@@ -112,10 +109,7 @@ jobs:
           printf 'token=%s\n' "$token" >> "$GITHUB_OUTPUT"
 
       - name: Terminally revalidate exact authorized target
-        run: >-
-          python3 scripts/aiqa_owner_protected_certifier.py
-          --verify-live
-          --out "$RUNNER_TEMP/aiqa-owner-certification-terminal.json"
+        run: python3 scripts/aiqa_owner_protected_certifier.py --verify-live --out "$RUNNER_TEMP/aiqa-owner-certification-terminal.json"
 
       - name: Publish one-shot independent Trusted PR Gate success
         env:
