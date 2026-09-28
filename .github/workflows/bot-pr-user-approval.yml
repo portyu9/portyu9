@@ -309,8 +309,8 @@ jobs:
             [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid workflow-run count for ${head}." >&2; return 1; }
             [ "$total" = "$count" ] || { echo "ERROR: incomplete workflow-run response for ${head}." >&2; return 1; }
 
-            # Profile Quality intentionally remains active while trusted-governed-bot-review
-            # waits for this exact reviewer. Exempt only that one canonical PR workflow run;
+            # The exact Profile Quality run may still be active while this event-driven reviewer
+            # observes prerequisite checks. Exempt only that one canonical PR workflow run;
             # every other exact-head run must be quiescent before the review mutation.
             active_profile="$(jq --arg head "$head" --arg head_ref "$head_ref" --arg repo "$TARGET_REPOSITORY" '[
               .workflow_runs[] |
@@ -349,34 +349,6 @@ jobs:
               echo "Governed bot head ${head} is not ready: ${unexpected_active} non-Profile-Quality workflow run(s) remain active."
               return 2
             fi
-          }
-
-          wait_for_spotlight_readiness() {
-            local head="$1" head_ref="$2" lane="$3" attempt ready_status
-            test "$lane" = "spotlight"
-            for attempt in $(seq 1 48); do
-              if check_required_contexts "$head" "$lane"; then
-                if check_quiescent_runs "$head" "$head_ref"; then
-                  echo "Spotlight reviewer readiness converged for ${head} on bounded attempt ${attempt}/48."
-                  return 0
-                else
-                  ready_status=$?
-                fi
-              else
-                ready_status=$?
-              fi
-              if [ "$ready_status" -ne 2 ]; then
-                return "$ready_status"
-              fi
-              if [ "$attempt" -lt 48 ]; then
-                if [ "$attempt" = "1" ] || [ $((attempt % 12)) -eq 0 ]; then
-                  echo "Spotlight reviewer bounded-wait: exact-head checks/quiescence are not ready yet (attempt ${attempt}/48)."
-                fi
-                sleep 5
-              fi
-            done
-            echo "Spotlight reviewer readiness did not converge inside the bounded 48-attempt window."
-            return 2
           }
 
           prepare_review_retry_history() {
@@ -529,19 +501,6 @@ jobs:
               continue
             fi
 
-            if [ "$LANE" = "spotlight" ]; then
-              if wait_for_spotlight_readiness "$HEAD_SHA" "$HEAD_REF" "$LANE"; then
-                :
-              else
-                READY_STATUS=$?
-                if [ "$READY_STATUS" -eq 2 ]; then
-                  echo "Skipping governed bot PR #${PR_NUMBER}: Spotlight readiness did not converge inside the bounded reviewer window."
-                  continue
-                fi
-                exit "$READY_STATUS"
-              fi
-            fi
-
             THREADS="$(gh api graphql               -F owner=portyu9               -F repo=portyu9               -F number="$PR_NUMBER"               -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}')"
             jq -e '
               (.errors == null) and
@@ -560,29 +519,26 @@ jobs:
             ' <<<"$THREADS" >/dev/null
             test "$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$THREADS")" = "0"
 
-            if [ "$LANE" != "spotlight" ]; then
-              if check_required_contexts "$HEAD_SHA" "$LANE"; then
-                :
-              else
-                READY_STATUS=$?
-                if [ "$READY_STATUS" -eq 2 ]; then
-                  echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks are not ready yet."
-                  continue
-                fi
-                exit "$READY_STATUS"
+            if check_required_contexts "$HEAD_SHA" "$LANE"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks are not ready yet."
+                continue
               fi
-              if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
-                :
-              else
-                READY_STATUS=$?
-                if [ "$READY_STATUS" -eq 2 ]; then
-                  echo "Skipping governed bot PR #${PR_NUMBER}: exact head is not quiescent yet."
-                  continue
-                fi
-                exit "$READY_STATUS"
-              fi
+              exit "$READY_STATUS"
             fi
-
+            if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: exact head is not quiescent yet."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
             REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"
             REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
             jq -e '
