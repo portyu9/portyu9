@@ -171,9 +171,9 @@ def policy_loop_identity(item: dict[str, Any]) -> tuple[Any, ...]:
 def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) -> None:
     declared = policy.get("boundedObservation")
     require(isinstance(declared, list), "retry policy boundedObservation must be an array")
-    require(len(declared) == 17, "retry policy must classify exactly the current 17 bounded seq loops")
+    require(len(declared) == 15, "retry policy must classify exactly the current 15 bounded seq loops")
     ids = [item.get("id") for item in declared if isinstance(item, dict)]
-    require(len(ids) == len(set(ids)) == 17 and all(isinstance(value, str) and value for value in ids),
+    require(len(ids) == len(set(ids)) == 15 and all(isinstance(value, str) and value for value in ids),
             "retry policy bounded observation IDs must be unique nonempty strings")
 
     observed = observed_bounded_loops(texts)
@@ -1045,7 +1045,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     loop_drift = dict(texts)
     loop_drift[".github/workflows/bot-pr-user-approval.yml"] = loop_drift[
         ".github/workflows/bot-pr-user-approval.yml"
-    ].replace("for attempt in $(seq 1 48); do", "for attempt in $(seq 1 49); do", 1)
+    ].replace("for HISTORY_ATTEMPT in $(seq 1 20); do", "for HISTORY_ATTEMPT in $(seq 1 21); do", 1)
     expect_failure(copy.deepcopy(policy), loop_drift, "not declared")
 
     autofix_drift = dict(texts)
@@ -1066,6 +1066,6 @@ if __name__ == "__main__":
     validate_repository()
     print(
         "Automation retry taxonomy validation passed: exactly three classified read-only GitHub retries are authorized; "
-        "unclassified generator/ruleset and mutation failures remain terminal; all 17 bounded seq loops are declared "
+        "unclassified generator/ruleset and mutation failures remain terminal; all 15 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )
