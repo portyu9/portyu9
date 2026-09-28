@@ -3271,15 +3271,30 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued.',
         'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
         'exit 1',
-        "group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}",
+        "group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.run_id }}",
         "github.event.workflow_run.event == 'pull_request'",
         "github.event.workflow_run.head_branch != 'main'",
         "github.event.workflow_run.head_repository.full_name == github.repository",
-        'WAKE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}',
-        'WAKE_HEAD_REF: ${{ github.event.workflow_run.head_branch }}',
-        '--arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF"',
+        "github.event_name == 'workflow_dispatch'",
+        "github.actor == 'github-actions[bot]'",
+        "github.ref == 'refs/heads/main'",
+        'WAKE_EVENT_NAME: ${{ github.event_name }}',
+        'WAKE_HEAD_SHA: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_sha || \'\' }}',
+        'WAKE_HEAD_REF: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_branch || \'\' }}',
+        'case "$WAKE_EVENT_NAME" in',
+        'workflow_dispatch)',
+        'test -z "$WAKE_HEAD_SHA"',
+        'test -z "$WAKE_HEAD_REF"',
+        '--arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF"',
+        '.base.sha == $main and',
+        'if $wake_mode == "workflow_dispatch" then',
+        '.user.login == "github-actions[bot]" and',
+        '(.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$"))',
         '.head.sha == $wake_head and',
         '.head.ref == $wake_ref and',
+        'if [ "$WAKE_EVENT_NAME" = "workflow_dispatch" ]; then',
+        'test "$CANDIDATE_COUNT" = "1" || {',
+        'trusted-main Spotlight reviewer wake requires exactly one current-main candidate',
         'test "$CANDIDATE_COUNT" -le 1',
         'cancel-in-progress: true',
         'Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE}).',
@@ -3315,7 +3330,16 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'ERROR: malformed or incomplete paginated open-PR evidence.',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
-    require("workflow_dispatch:" not in bot_review, "Bot PR reviewer must not regain generic workflow_dispatch entry")
+    require(
+        bot_review.count("  workflow_dispatch:\n") == 1,
+        "Bot PR reviewer must expose exactly one trusted-main recovery dispatch entry",
+    )
+    require(
+        "github.actor == 'github-actions[bot]'" in bot_review
+        and "github.ref == 'refs/heads/main'" in bot_review
+        and 'if $wake_mode == "workflow_dispatch" then' in bot_review,
+        "Bot PR reviewer dispatch entry must remain bot/main/Spotlight-only",
+    )
     for retired in (
         "      - Capability admission\n",
         "      - CodeQL Autofix controller\n",
