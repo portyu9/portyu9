@@ -747,7 +747,7 @@
       "candidateBomSha256": "c177f8eb8785d76a6995d605ab87f9c3635dce22b92f5cd0177a42a3fb9f30ed",
       "expansionSha256": "78967e7cb2b2364e87bde31d14d11eab1c9bde10765dce2e76135eb1e6fe2383",
       "id": "cap-governed-review-candidate-convergence-v1",
-      "rationale": "Authorize frozen #1255 head 56fa3e2f5d0273dd3cac4d3957fd1a4f230f7657 after accepted-main diagnostic #1256 measured its exact protected-TCB transition (candidate TCB cbe9b97cdf4514d4dbf78c73b8d824466c7df51988584888f24d6e2466308975). The only expansion is the canonical Workflow Capability BOM trusted-control-source byte transition required to record the reduced authority. Behavioral capability strictly contracts: remove generic reviewer workflow_dispatch, remove four main/controller reviewer wake sources, and remove Spotlight's reviewer-dispatch API surface and mutation. Exact marker/manual-veto semantics, required checks, permissions, secrets/OIDC, merge authority, rulesets, direct-main authority and mutation non-retry remain unchanged."
+      "rationale": "Authorize frozen #1255 after accepted-main diagnostic #1256 measured the exact tuple. The only expansion is the canonical Workflow Capability BOM trusted-control-source byte transition needed to encode reduced authority. The candidate removes generic reviewer dispatch, four main/controller wake sources, and Spotlight reviewer-dispatch API/mutation while preserving marker/veto semantics, required checks, permissions, merge/ruleset authority, and no mutation retry."
     },
     {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
