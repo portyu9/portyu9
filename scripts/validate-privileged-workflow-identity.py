@@ -5018,7 +5018,7 @@ def validate_profile_quality_portfolio_liveness_boundary(
         "Profile Stats downstream READY gate coverage changed",
     )
     require(
-        '--spotlight-dir spotlight-ready \\\n            --offline' not in profile_stats,
+        "--offline" not in profile_stats,
         "Profile Stats publication must not downgrade Portfolio/Spotlight generation to offline mode",
     )
     require(
@@ -5074,8 +5074,8 @@ def validate_profile_quality_portfolio_liveness_boundary(
             )
 
         weakened_stats = profile_stats.replace(
-            '            --spotlight-dir spotlight-ready',
-            '            --spotlight-dir spotlight-ready \\\n            --offline',
+            '            "${LIVE_ARGS[@]}"',
+            '            "${LIVE_ARGS[@]}" \\\n            --offline',
             1,
         )
         try:
