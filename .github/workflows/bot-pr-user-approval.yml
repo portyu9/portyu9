@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
+  actions: read
   checks: read
   contents: read
   pull-requests: read
@@ -38,13 +38,22 @@ jobs:
     timeout-minutes: 6
     environment: portyu9-review-identity
     permissions:
-      actions: write
+      actions: read
       checks: read
       contents: read
       pull-requests: read
+    outputs:
+      reviewed: ${{ steps.review.outputs.reviewed }}
+      pr_number: ${{ steps.review.outputs.pr_number }}
+      base_sha: ${{ steps.review.outputs.base_sha }}
+      head_sha: ${{ steps.review.outputs.head_sha }}
+      head_ref: ${{ steps.review.outputs.head_ref }}
+      lane: ${{ steps.review.outputs.lane }}
+      review_submitted_at: ${{ steps.review.outputs.review_submitted_at }}
 
     steps:
       - name: Approve only exact green governed bot PRs as portyu9
+        id: review
         env:
           GH_TOKEN: ${{ github.token }}
           REVIEW_TOKEN: ${{ secrets.PORTYU9_BOT_REVIEW_TOKEN }}
@@ -54,6 +63,13 @@ jobs:
           WAKE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || '' }}
         run: |
           set -euo pipefail
+          echo "reviewed=false" >> "$GITHUB_OUTPUT"
+          echo "pr_number=" >> "$GITHUB_OUTPUT"
+          echo "base_sha=" >> "$GITHUB_OUTPUT"
+          echo "head_sha=" >> "$GITHUB_OUTPUT"
+          echo "head_ref=" >> "$GITHUB_OUTPUT"
+          echo "lane=" >> "$GITHUB_OUTPUT"
+          echo "review_submitted_at=" >> "$GITHUB_OUTPUT"
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
           case "$WAKE_EVENT_NAME" in
             workflow_run)
@@ -410,6 +426,444 @@ jobs:
             ' "$RUNNER_TEMP/bot-review-prior-attempts.json" >/dev/null
           }
 
+          emit_reviewed_candidate() {
+            local pr_number="$1" base_sha="$2" head_sha="$3" head_ref="$4" lane="$5" submitted_at="$6"
+            echo "reviewed=true" >> "$GITHUB_OUTPUT"
+            echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+            echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+            echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+            echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+            echo "lane=$lane" >> "$GITHUB_OUTPUT"
+            echo "review_submitted_at=$submitted_at" >> "$GITHUB_OUTPUT"
+          }
+
+          prepare_review_retry_history
+
+          while IFS= read -r CANDIDATE; do
+            [ -n "$CANDIDATE" ] || continue
+            PR_NUMBER="$(jq -r .number <<<"$CANDIDATE")"
+            [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+
+            PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            validate_governed_pr_object "$PR" "$PR_NUMBER" || {
+              echo "ERROR: malformed governed bot PR evidence for #${PR_NUMBER}." >&2
+              exit 1
+            }
+            test "$(jq -r .state <<<"$PR")" = "open"
+            test "$(jq -r .draft <<<"$PR")" = "false"
+            test "$(jq -r .base.ref <<<"$PR")" = "main"
+            if [ "$(jq -r .base.sha <<<"$PR")" != "$MAIN_SHA" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: base is stale relative to current main."
+              continue
+            fi
+            test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
+
+            HEAD_SHA="$(jq -r .head.sha <<<"$PR")"
+            HEAD_REF="$(jq -r .head.ref <<<"$PR")"
+            AUTHOR="$(jq -r .user.login <<<"$PR")"
+            [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+            LANE=""
+            case "$AUTHOR" in
+              'dependabot[bot]')
+                [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+                LANE="dependabot"
+                ;;
+              'github-actions[bot]')
+                if [[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]; then
+                  LANE="codeql-autofix"
+                elif [[ "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]; then
+                  LANE="spotlight"
+                else
+                  echo "ERROR: governed bot branch grammar changed for PR #${PR_NUMBER}" >&2
+                  exit 1
+                fi
+                ;;
+              *)
+                echo "ERROR: governed bot author changed for PR #${PR_NUMBER}" >&2
+                exit 1
+                ;;
+            esac
+
+            CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+            validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "main" || {
+              echo "ERROR: malformed governed reviewer current-main ref evidence." >&2
+              exit 1
+            }
+            if [ "$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")" != "$MAIN_SHA" ]; then
+              echo "Current main moved during bot-review evaluation; ending this pass without approval."
+              exit 0
+            fi
+            CURRENT_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+            validate_git_ref_object "$CURRENT_HEAD_REF_RESPONSE" "$HEAD_REF" || {
+              echo "ERROR: malformed governed reviewer current-head ref evidence for #${PR_NUMBER}." >&2
+              exit 1
+            }
+            if [ "$(jq -r .object.sha <<<"$CURRENT_HEAD_REF_RESPONSE")" != "$HEAD_SHA" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: head moved during review evaluation."
+              continue
+            fi
+
+            THREADS="$(gh api graphql               -F owner=portyu9               -F repo=portyu9               -F number="$PR_NUMBER"               -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}')"
+            jq -e '
+              (.errors == null) and
+              (.data | type == "object") and
+              (.data.repository | type == "object") and
+              (.data.repository.pullRequest | type == "object") and
+              (.data.repository.pullRequest.reviewThreads | type == "object") and
+              (.data.repository.pullRequest.reviewThreads.pageInfo | type == "object") and
+              (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | type == "boolean") and
+              (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false) and
+              (.data.repository.pullRequest.reviewThreads.nodes | type == "array") and
+              all(
+                .data.repository.pullRequest.reviewThreads.nodes[];
+                (type == "object") and (.isResolved | type == "boolean")
+              )
+            ' <<<"$THREADS" >/dev/null
+            test "$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$THREADS")" = "0"
+
+            if check_required_contexts "$HEAD_SHA" "$LANE"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks are not ready yet."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
+            if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: exact head is not quiescent yet."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
+            REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"
+            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+            jq -e '
+              (type == "array") and (length >= 1) and (length <= 20) and
+              (all(.[]; type == "array" and length <= 100)) and
+              (all(.[0:-1][]; length == 100)) and
+              (all(.[][];
+                type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                (.user | type == "object" and (.login | type == "string" and length > 0)) and
+                (.state | type == "string" and
+                  (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+                has("commit_id") and
+                (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
+                has("body") and
+                (.body == null or (.body | type == "string"))
+              )) and
+              (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
+            ' <<<"$REVIEW_PAGES" >/dev/null || {
+              echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
+              exit 1
+            }
+            REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+            MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
+            [[ "$MARKER_REVIEW_COUNT" =~ ^[0-9]+$ ]]
+            test "$MARKER_REVIEW_COUNT" -le 1 || {
+              echo "ERROR: governed bot PR #${PR_NUMBER} has multiple marker-bound portyu9 reviews for the exact head." >&2
+              exit 1
+            }
+            if [ "$LATEST_MANUAL_DECISIVE_STATE" = "CHANGES_REQUESTED" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: a later manual exact-head CHANGES_REQUESTED veto by portyu9 is active."
+              continue
+            fi
+            if [ "$MARKER_REVIEW_COUNT" = "1" ]; then
+              MARKER_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].state' <<<"$REVIEWS")"
+              if [ "$MARKER_STATE" = "APPROVED" ]; then
+                MARKER_SUBMITTED_AT="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].submitted_at // ""' <<<"$REVIEWS")"
+                jq -e -n --arg ts "$MARKER_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
+                  echo "ERROR: exact marker-bound approval has invalid submitted_at evidence." >&2
+                  exit 1
+                }
+                echo "PR #${PR_NUMBER} already has an exact-base/head marker-bound portyu9 approval."
+                emit_reviewed_candidate "$PR_NUMBER" "$MAIN_SHA" "$HEAD_SHA" "$HEAD_REF" "$LANE" "$MARKER_SUBMITTED_AT"
+                echo "Emitted exact reviewed-candidate evidence for no-secret convergence of governed bot PR #${PR_NUMBER} (${LANE})."
+              else
+                echo "Skipping governed bot PR #${PR_NUMBER}: the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued."
+              fi
+              continue
+            fi
+
+            PR_NOW="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            validate_governed_pr_object "$PR_NOW" "$PR_NUMBER" || {
+              echo "ERROR: malformed governed bot PR race evidence for #${PR_NUMBER}." >&2
+              exit 1
+            }
+            if [ "$(jq -r .state <<<"$PR_NOW")" != "open" ] ||
+               [ "$(jq -r .draft <<<"$PR_NOW")" != "false" ] ||
+               [ "$(jq -r .base.sha <<<"$PR_NOW")" != "$MAIN_SHA" ] ||
+               [ "$(jq -r .head.sha <<<"$PR_NOW")" != "$HEAD_SHA" ] ||
+               [ "$(jq -r .head.ref <<<"$PR_NOW")" != "$HEAD_REF" ] ||
+               [ "$(jq -r .head.repo.full_name <<<"$PR_NOW")" != "$TARGET_REPOSITORY" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: exact PR identity changed before approval."
+              continue
+            fi
+            FINAL_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+            validate_git_ref_object "$FINAL_MAIN_REF_RESPONSE" "main" || {
+              echo "ERROR: malformed governed reviewer final-main ref evidence." >&2
+              exit 1
+            }
+            if [ "$(jq -r .object.sha <<<"$FINAL_MAIN_REF_RESPONSE")" != "$MAIN_SHA" ]; then
+              echo "Current main moved before final bot-review authorization; ending this pass without approval."
+              exit 0
+            fi
+            FINAL_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+            validate_git_ref_object "$FINAL_HEAD_REF_RESPONSE" "$HEAD_REF" || {
+              echo "ERROR: malformed governed reviewer final-head ref evidence for #${PR_NUMBER}." >&2
+              exit 1
+            }
+            if [ "$(jq -r .object.sha <<<"$FINAL_HEAD_REF_RESPONSE")" != "$HEAD_SHA" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: head ref changed before approval."
+              continue
+            fi
+            if check_required_contexts "$HEAD_SHA" "$LANE"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks changed back to not-ready before approval."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
+            if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: exact head became active again before approval."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
+
+            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+
+            jq -e '
+              (type == "array") and (length >= 1) and (length <= 20) and
+              (all(.[]; type == "array" and length <= 100)) and
+              (all(.[0:-1][]; length == 100)) and
+              (all(.[][];
+                type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                (.user | type == "object" and (.login | type == "string" and length > 0)) and
+                (.state | type == "string" and
+                  (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+                has("commit_id") and
+                (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
+                has("body") and
+                (.body == null or (.body | type == "string"))
+              )) and
+              (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
+            ' <<<"$REVIEW_PAGES" >/dev/null || {
+
+              echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
+
+              exit 1
+
+            }
+
+            REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+            RACE_MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+            RACE_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
+            [[ "$RACE_MARKER_REVIEW_COUNT" =~ ^[0-9]+$ ]]
+            if [ "$RACE_MARKER_REVIEW_COUNT" -gt 0 ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: a marker-bound portyu9 review appeared before the review mutation."
+              continue
+            fi
+            if [ "$RACE_MANUAL_DECISIVE_STATE" = "CHANGES_REQUESTED" ]; then
+              echo "Skipping governed bot PR #${PR_NUMBER}: a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation."
+              continue
+            fi
+
+            REVIEW_PROVENANCE="$(jq -cS -n \
+              --arg repository "$TARGET_REPOSITORY" \
+              --arg workflowName "Bot PR user approval" \
+              --arg workflowPath ".github/workflows/bot-pr-user-approval.yml" \
+              --arg event "$WAKE_EVENT_NAME" \
+              --arg sourceSha "$GITHUB_SHA" \
+              --argjson runId "$GITHUB_RUN_ID" \
+              --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
+              --arg baseSha "$MAIN_SHA" \
+              --arg headSha "$HEAD_SHA" \
+              --arg lane "$LANE" \
+              --argjson prNumber "$PR_NUMBER" \
+              --slurpfile retryHistory "$RUNNER_TEMP/bot-review-prior-attempts.json" '
+                {
+                  schemaVersion:1,
+                  kind:"portyu9-bot-review-provenance",
+                  repository:$repository,
+                  workflow:{
+                    name:$workflowName,
+                    path:$workflowPath,
+                    event:$event,
+                    sourceSha:$sourceSha,
+                    runId:$runId,
+                    runAttempt:$runAttempt
+                  },
+                  retryHistory:$retryHistory[0],
+                  authorization:{
+                    prNumber:$prNumber,
+                    lane:$lane,
+                    baseSha:$baseSha,
+                    headSha:$headSha
+                  }
+                }
+              ')"
+            REVIEW_PROVENANCE_SHA256="$(printf '%s' "$REVIEW_PROVENANCE" | sha256sum | cut -d' ' -f1)"
+            [[ "$REVIEW_PROVENANCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            REVIEW_PROVENANCE_MARKER="<!-- portyu9-bot-review-provenance:v1 sha256=${REVIEW_PROVENANCE_SHA256} -->"
+            printf -v BODY '%s\n%s\n%s\n%s' \
+              "$REVIEW_MARKER" \
+              "$REVIEW_PROVENANCE_MARKER" \
+              "$REVIEW_PROVENANCE" \
+              "Automated exact-base/head approval by portyu9 after all lane-required protected gates completed successfully for base \`${MAIN_SHA}\` and head \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
+            jq -n --arg body "$BODY" --arg commit "$HEAD_SHA"               '{event:"APPROVE",body:$body,commit_id:$commit}' > review-request.json
+            REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
+            REVIEW_STATUS_LINE="$(head -n 1 <<<"$REVIEW_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$REVIEW_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
+              echo "ERROR: governed bot review creation returned unexpected status: ${REVIEW_STATUS_LINE}" >&2
+              exit 1
+            }
+            REVIEW_RESPONSE="$(sed '1,/^[[:space:]]*$/d' <<<"$REVIEW_HTTP_RESPONSE")"
+            test "$REVIEW_RESPONSE" != "$REVIEW_HTTP_RESPONSE"
+            jq -e --arg head "$HEAD_SHA" --arg body "$BODY" '
+              (type == "object") and
+              (.id | ((type == "number") and . == floor and . > 0)) and
+              (.user | type == "object" and (.login == "portyu9")) and
+              (.state == "APPROVED") and
+              (.commit_id | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.submitted_at | type == "string" and length > 0) and
+              (.body | type == "string" and . == $body)
+            ' <<<"$REVIEW_RESPONSE" >/dev/null || {
+              echo "ERROR: malformed or mismatched governed bot review response for PR #${PR_NUMBER}." >&2
+              exit 1
+            }
+            MARKER_SUBMITTED_AT="$(jq -r .submitted_at <<<"$REVIEW_RESPONSE")"
+            jq -e -n --arg ts "$MARKER_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
+              echo "ERROR: newly-created marker approval has invalid submitted_at evidence." >&2
+              exit 1
+            }
+            echo "Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
+            emit_reviewed_candidate "$PR_NUMBER" "$MAIN_SHA" "$HEAD_SHA" "$HEAD_REF" "$LANE" "$MARKER_SUBMITTED_AT"
+            echo "Emitted exact reviewed-candidate evidence for no-secret convergence of governed bot PR #${PR_NUMBER} (${LANE})."
+          done < <(jq -c '.[]' <<<"$CANDIDATES")
+
+  converge:
+    if: ${{ needs.approve.result == 'success' && needs.approve.outputs.reviewed == 'true' }}
+    name: exact-head-review-convergence
+    needs: approve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      actions: write
+      checks: read
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Re-enter exact reviewed candidate without owner secret
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.approve.outputs.pr_number }}
+          BASE_SHA: ${{ needs.approve.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.approve.outputs.head_sha }}
+          HEAD_REF: ${{ needs.approve.outputs.head_ref }}
+          LANE: ${{ needs.approve.outputs.lane }}
+          REVIEW_SUBMITTED_AT: ${{ needs.approve.outputs.review_submitted_at }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test -n "$HEAD_REF"
+          jq -e -n --arg ts "$REVIEW_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null
+          case "$LANE" in
+            dependabot|codeql-autofix|spotlight) ;;
+            *) echo "ERROR: unknown governed convergence lane: $LANE" >&2; exit 1 ;;
+          esac
+
+          MAIN_REF="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          jq -e --arg base "$BASE_SHA" '
+            (type == "object") and
+            (.ref == "refs/heads/main") and
+            (.object | type == "object" and .type == "commit" and .sha == $base)
+          ' <<<"$MAIN_REF" >/dev/null || {
+            echo "ERROR: governed convergence main ref moved or changed shape." >&2
+            exit 1
+          }
+
+          HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+          jq -e --arg ref "refs/heads/${HEAD_REF}" --arg head "$HEAD_SHA" '
+            (type == "object") and
+            (.ref == $ref) and
+            (.object | type == "object" and .type == "commit" and .sha == $head)
+          ' <<<"$HEAD_REF_RESPONSE" >/dev/null || {
+            echo "ERROR: governed convergence candidate ref moved or changed shape." >&2
+            exit 1
+          }
+
+          PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          jq -e             --argjson pr "$PR_NUMBER"             --arg base "$BASE_SHA"             --arg head "$HEAD_SHA"             --arg head_ref "$HEAD_REF"             --arg repo "$TARGET_REPOSITORY" '
+              (type == "object") and
+              (.number == $pr) and
+              (.state == "open") and
+              (.draft == false) and
+              (.base.ref == "main") and
+              (.base.sha == $base) and
+              (.head.sha == $head) and
+              (.head.ref == $head_ref) and
+              (.head.repo.full_name == $repo)
+            ' <<<"$PR" >/dev/null || {
+            echo "ERROR: governed convergence PR identity changed." >&2
+            exit 1
+          }
+
+          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
+          REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          jq -e '
+            (type == "array") and (length >= 1) and (length <= 20) and
+            (all(.[]; type == "array" and length <= 100)) and
+            (all(.[0:-1][]; length == 100)) and
+            (all(.[][];
+              type == "object" and
+              (.id | type == "number" and . == floor and . > 0) and
+              (.user | type == "object" and (.login | type == "string" and length > 0)) and
+              (.state | type == "string" and
+                (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+              has("commit_id") and
+              (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
+              (.submitted_at == null or (.submitted_at | type == "string" and length > 0)) and
+              has("body") and
+              (.body == null or (.body | type == "string"))
+            )) and
+            (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
+          ' <<<"$REVIEW_PAGES" >/dev/null || {
+            echo "ERROR: malformed or incomplete convergence review evidence." >&2
+            exit 1
+          }
+          REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+          MARKER_REVIEWS="$(jq -c --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER"             '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))]'             <<<"$REVIEWS")"
+          test "$(jq 'length' <<<"$MARKER_REVIEWS")" = "1"
+          MARKER_REVIEW="$(jq -c '.[0]' <<<"$MARKER_REVIEWS")"
+          test "$(jq -r .state <<<"$MARKER_REVIEW")" = "APPROVED"
+          test "$(jq -r '.submitted_at // ""' <<<"$MARKER_REVIEW")" = "$REVIEW_SUBMITTED_AT"
+          LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER"             '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end'             <<<"$REVIEWS")"
+          test "$LATEST_MANUAL_DECISIVE_STATE" != "CHANGES_REQUESTED" || {
+            echo "ERROR: manual exact-head CHANGES_REQUESTED veto appeared before convergence." >&2
+            exit 1
+          }
+
           rerun_governed_review_gate_if_needed() {
             local head="$1" head_ref="$2" review_submitted_at="$3"
             local checks count gate_id gate_status gate_conclusion gate_suite gate_details
@@ -616,322 +1070,6 @@ jobs:
             }
           }
 
-          prepare_review_retry_history
 
-          while IFS= read -r CANDIDATE; do
-            [ -n "$CANDIDATE" ] || continue
-            PR_NUMBER="$(jq -r .number <<<"$CANDIDATE")"
-            [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-
-            PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-            validate_governed_pr_object "$PR" "$PR_NUMBER" || {
-              echo "ERROR: malformed governed bot PR evidence for #${PR_NUMBER}." >&2
-              exit 1
-            }
-            test "$(jq -r .state <<<"$PR")" = "open"
-            test "$(jq -r .draft <<<"$PR")" = "false"
-            test "$(jq -r .base.ref <<<"$PR")" = "main"
-            if [ "$(jq -r .base.sha <<<"$PR")" != "$MAIN_SHA" ]; then
-              echo "Skipping governed bot PR #${PR_NUMBER}: base is stale relative to current main."
-              continue
-            fi
-            test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
-
-            HEAD_SHA="$(jq -r .head.sha <<<"$PR")"
-            HEAD_REF="$(jq -r .head.ref <<<"$PR")"
-            AUTHOR="$(jq -r .user.login <<<"$PR")"
-            [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
-            LANE=""
-            case "$AUTHOR" in
-              'dependabot[bot]')
-                [[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
-                LANE="dependabot"
-                ;;
-              'github-actions[bot]')
-                if [[ "$HEAD_REF" =~ ^codeql-autofix/alert-[1-9][0-9]*/run-[1-9][0-9]*$ ]]; then
-                  LANE="codeql-autofix"
-                elif [[ "$HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]; then
-                  LANE="spotlight"
-                else
-                  echo "ERROR: governed bot branch grammar changed for PR #${PR_NUMBER}" >&2
-                  exit 1
-                fi
-                ;;
-              *)
-                echo "ERROR: governed bot author changed for PR #${PR_NUMBER}" >&2
-                exit 1
-                ;;
-            esac
-
-            CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-            validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "main" || {
-              echo "ERROR: malformed governed reviewer current-main ref evidence." >&2
-              exit 1
-            }
-            if [ "$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")" != "$MAIN_SHA" ]; then
-              echo "Current main moved during bot-review evaluation; ending this pass without approval."
-              exit 0
-            fi
-            CURRENT_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
-            validate_git_ref_object "$CURRENT_HEAD_REF_RESPONSE" "$HEAD_REF" || {
-              echo "ERROR: malformed governed reviewer current-head ref evidence for #${PR_NUMBER}." >&2
-              exit 1
-            }
-            if [ "$(jq -r .object.sha <<<"$CURRENT_HEAD_REF_RESPONSE")" != "$HEAD_SHA" ]; then
-              echo "Skipping governed bot PR #${PR_NUMBER}: head moved during review evaluation."
-              continue
-            fi
-
-            THREADS="$(gh api graphql               -F owner=portyu9               -F repo=portyu9               -F number="$PR_NUMBER"               -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}')"
-            jq -e '
-              (.errors == null) and
-              (.data | type == "object") and
-              (.data.repository | type == "object") and
-              (.data.repository.pullRequest | type == "object") and
-              (.data.repository.pullRequest.reviewThreads | type == "object") and
-              (.data.repository.pullRequest.reviewThreads.pageInfo | type == "object") and
-              (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | type == "boolean") and
-              (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false) and
-              (.data.repository.pullRequest.reviewThreads.nodes | type == "array") and
-              all(
-                .data.repository.pullRequest.reviewThreads.nodes[];
-                (type == "object") and (.isResolved | type == "boolean")
-              )
-            ' <<<"$THREADS" >/dev/null
-            test "$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$THREADS")" = "0"
-
-            if check_required_contexts "$HEAD_SHA" "$LANE"; then
-              :
-            else
-              READY_STATUS=$?
-              if [ "$READY_STATUS" -eq 2 ]; then
-                echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks are not ready yet."
-                continue
-              fi
-              exit "$READY_STATUS"
-            fi
-            if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
-              :
-            else
-              READY_STATUS=$?
-              if [ "$READY_STATUS" -eq 2 ]; then
-                echo "Skipping governed bot PR #${PR_NUMBER}: exact head is not quiescent yet."
-                continue
-              fi
-              exit "$READY_STATUS"
-            fi
-            REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"
-            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-            jq -e '
-              (type == "array") and (length >= 1) and (length <= 20) and
-              (all(.[]; type == "array" and length <= 100)) and
-              (all(.[0:-1][]; length == 100)) and
-              (all(.[][];
-                type == "object" and
-                (.id | type == "number" and . == floor and . > 0) and
-                (.user | type == "object" and (.login | type == "string" and length > 0)) and
-                (.state | type == "string" and
-                  (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
-                has("commit_id") and
-                (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
-                has("body") and
-                (.body == null or (.body | type == "string"))
-              )) and
-              (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
-            ' <<<"$REVIEW_PAGES" >/dev/null || {
-              echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
-              exit 1
-            }
-            REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
-            MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
-            LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
-            [[ "$MARKER_REVIEW_COUNT" =~ ^[0-9]+$ ]]
-            test "$MARKER_REVIEW_COUNT" -le 1 || {
-              echo "ERROR: governed bot PR #${PR_NUMBER} has multiple marker-bound portyu9 reviews for the exact head." >&2
-              exit 1
-            }
-            if [ "$LATEST_MANUAL_DECISIVE_STATE" = "CHANGES_REQUESTED" ]; then
-              echo "Skipping governed bot PR #${PR_NUMBER}: a later manual exact-head CHANGES_REQUESTED veto by portyu9 is active."
-              continue
-            fi
-            if [ "$MARKER_REVIEW_COUNT" = "1" ]; then
-              MARKER_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].state' <<<"$REVIEWS")"
-              if [ "$MARKER_STATE" = "APPROVED" ]; then
-                MARKER_SUBMITTED_AT="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].submitted_at // ""' <<<"$REVIEWS")"
-                jq -e -n --arg ts "$MARKER_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
-                  echo "ERROR: exact marker-bound approval has invalid submitted_at evidence." >&2
-                  exit 1
-                }
-                echo "PR #${PR_NUMBER} already has an exact-base/head marker-bound portyu9 approval."
-                wake_governed_lane_after_review "$LANE" "$HEAD_REF" "$HEAD_SHA" "$MARKER_SUBMITTED_AT"
-                echo "Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
-              else
-                echo "Skipping governed bot PR #${PR_NUMBER}: the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued."
-              fi
-              continue
-            fi
-
-            PR_NOW="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-            validate_governed_pr_object "$PR_NOW" "$PR_NUMBER" || {
-              echo "ERROR: malformed governed bot PR race evidence for #${PR_NUMBER}." >&2
-              exit 1
-            }
-            if [ "$(jq -r .state <<<"$PR_NOW")" != "open" ] ||
-               [ "$(jq -r .draft <<<"$PR_NOW")" != "false" ] ||
-               [ "$(jq -r .base.sha <<<"$PR_NOW")" != "$MAIN_SHA" ] ||
-               [ "$(jq -r .head.sha <<<"$PR_NOW")" != "$HEAD_SHA" ] ||
-               [ "$(jq -r .head.ref <<<"$PR_NOW")" != "$HEAD_REF" ] ||
-               [ "$(jq -r .head.repo.full_name <<<"$PR_NOW")" != "$TARGET_REPOSITORY" ]; then
-              echo "Skipping governed bot PR #${PR_NUMBER}: exact PR identity changed before approval."
-              continue
-            fi
-            FINAL_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-            validate_git_ref_object "$FINAL_MAIN_REF_RESPONSE" "main" || {
-              echo "ERROR: malformed governed reviewer final-main ref evidence." >&2
-              exit 1
-            }
-            if [ "$(jq -r .object.sha <<<"$FINAL_MAIN_REF_RESPONSE")" != "$MAIN_SHA" ]; then
-              echo "Current main moved before final bot-review authorization; ending this pass without approval."
-              exit 0
-            fi
-            FINAL_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
-            validate_git_ref_object "$FINAL_HEAD_REF_RESPONSE" "$HEAD_REF" || {
-              echo "ERROR: malformed governed reviewer final-head ref evidence for #${PR_NUMBER}." >&2
-              exit 1
-            }
-            if [ "$(jq -r .object.sha <<<"$FINAL_HEAD_REF_RESPONSE")" != "$HEAD_SHA" ]; then
-              echo "Skipping governed bot PR #${PR_NUMBER}: head ref changed before approval."
-              continue
-            fi
-            if check_required_contexts "$HEAD_SHA" "$LANE"; then
-              :
-            else
-              READY_STATUS=$?
-              if [ "$READY_STATUS" -eq 2 ]; then
-                echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks changed back to not-ready before approval."
-                continue
-              fi
-              exit "$READY_STATUS"
-            fi
-            if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
-              :
-            else
-              READY_STATUS=$?
-              if [ "$READY_STATUS" -eq 2 ]; then
-                echo "Skipping governed bot PR #${PR_NUMBER}: exact head became active again before approval."
-                continue
-              fi
-              exit "$READY_STATUS"
-            fi
-
-            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-
-            jq -e '
-              (type == "array") and (length >= 1) and (length <= 20) and
-              (all(.[]; type == "array" and length <= 100)) and
-              (all(.[0:-1][]; length == 100)) and
-              (all(.[][];
-                type == "object" and
-                (.id | type == "number" and . == floor and . > 0) and
-                (.user | type == "object" and (.login | type == "string" and length > 0)) and
-                (.state | type == "string" and
-                  (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
-                has("commit_id") and
-                (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
-                has("body") and
-                (.body == null or (.body | type == "string"))
-              )) and
-              (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
-            ' <<<"$REVIEW_PAGES" >/dev/null || {
-
-              echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
-
-              exit 1
-
-            }
-
-            REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
-            RACE_MARKER_REVIEW_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
-            RACE_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end' <<<"$REVIEWS")"
-            [[ "$RACE_MARKER_REVIEW_COUNT" =~ ^[0-9]+$ ]]
-            if [ "$RACE_MARKER_REVIEW_COUNT" -gt 0 ]; then
-              echo "Skipping governed bot PR #${PR_NUMBER}: a marker-bound portyu9 review appeared before the review mutation."
-              continue
-            fi
-            if [ "$RACE_MANUAL_DECISIVE_STATE" = "CHANGES_REQUESTED" ]; then
-              echo "Skipping governed bot PR #${PR_NUMBER}: a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation."
-              continue
-            fi
-
-            REVIEW_PROVENANCE="$(jq -cS -n \
-              --arg repository "$TARGET_REPOSITORY" \
-              --arg workflowName "Bot PR user approval" \
-              --arg workflowPath ".github/workflows/bot-pr-user-approval.yml" \
-              --arg event "$WAKE_EVENT_NAME" \
-              --arg sourceSha "$GITHUB_SHA" \
-              --argjson runId "$GITHUB_RUN_ID" \
-              --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
-              --arg baseSha "$MAIN_SHA" \
-              --arg headSha "$HEAD_SHA" \
-              --arg lane "$LANE" \
-              --argjson prNumber "$PR_NUMBER" \
-              --slurpfile retryHistory "$RUNNER_TEMP/bot-review-prior-attempts.json" '
-                {
-                  schemaVersion:1,
-                  kind:"portyu9-bot-review-provenance",
-                  repository:$repository,
-                  workflow:{
-                    name:$workflowName,
-                    path:$workflowPath,
-                    event:$event,
-                    sourceSha:$sourceSha,
-                    runId:$runId,
-                    runAttempt:$runAttempt
-                  },
-                  retryHistory:$retryHistory[0],
-                  authorization:{
-                    prNumber:$prNumber,
-                    lane:$lane,
-                    baseSha:$baseSha,
-                    headSha:$headSha
-                  }
-                }
-              ')"
-            REVIEW_PROVENANCE_SHA256="$(printf '%s' "$REVIEW_PROVENANCE" | sha256sum | cut -d' ' -f1)"
-            [[ "$REVIEW_PROVENANCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
-            REVIEW_PROVENANCE_MARKER="<!-- portyu9-bot-review-provenance:v1 sha256=${REVIEW_PROVENANCE_SHA256} -->"
-            printf -v BODY '%s\n%s\n%s\n%s' \
-              "$REVIEW_MARKER" \
-              "$REVIEW_PROVENANCE_MARKER" \
-              "$REVIEW_PROVENANCE" \
-              "Automated exact-base/head approval by portyu9 after all lane-required protected gates completed successfully for base \`${MAIN_SHA}\` and head \`${HEAD_SHA}\`. Repository bot automation may continue its governed merge path."
-            jq -n --arg body "$BODY" --arg commit "$HEAD_SHA"               '{event:"APPROVE",body:$body,commit_id:$commit}' > review-request.json
-            REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews"               --input review-request.json)"
-            REVIEW_STATUS_LINE="$(head -n 1 <<<"$REVIEW_HTTP_RESPONSE" | tr -d '\r')"
-            [[ "$REVIEW_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {
-              echo "ERROR: governed bot review creation returned unexpected status: ${REVIEW_STATUS_LINE}" >&2
-              exit 1
-            }
-            REVIEW_RESPONSE="$(sed '1,/^[[:space:]]*$/d' <<<"$REVIEW_HTTP_RESPONSE")"
-            test "$REVIEW_RESPONSE" != "$REVIEW_HTTP_RESPONSE"
-            jq -e --arg head "$HEAD_SHA" --arg body "$BODY" '
-              (type == "object") and
-              (.id | ((type == "number") and . == floor and . > 0)) and
-              (.user | type == "object" and (.login == "portyu9")) and
-              (.state == "APPROVED") and
-              (.commit_id | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
-              (.submitted_at | type == "string" and length > 0) and
-              (.body | type == "string" and . == $body)
-            ' <<<"$REVIEW_RESPONSE" >/dev/null || {
-              echo "ERROR: malformed or mismatched governed bot review response for PR #${PR_NUMBER}." >&2
-              exit 1
-            }
-            MARKER_SUBMITTED_AT="$(jq -r .submitted_at <<<"$REVIEW_RESPONSE")"
-            jq -e -n --arg ts "$MARKER_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
-              echo "ERROR: newly-created marker approval has invalid submitted_at evidence." >&2
-              exit 1
-            }
-            echo "Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
-            wake_governed_lane_after_review "$LANE" "$HEAD_REF" "$HEAD_SHA" "$MARKER_SUBMITTED_AT"
-            echo "Dispatched event-driven post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
-          done < <(jq -c '.[]' <<<"$CANDIDATES")
+          wake_governed_lane_after_review "$LANE" "$HEAD_REF" "$HEAD_SHA" "$REVIEW_SUBMITTED_AT"
+          echo "Completed exact reviewed-candidate convergence without exposing the owner review token to Actions-write."
