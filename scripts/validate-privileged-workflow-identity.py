@@ -3018,22 +3018,22 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
 
 
 
-def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
-    approve = job_block(bot_review, "approve", "converge")
-    converge = job_block(bot_review, "converge", None)
 
-    validate_bot_review_single_object_evidence_schema(approve)
-    validate_bot_review_identity_ref_evidence_schema(approve)
+def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
+    validate_bot_review_single_object_evidence_schema(bot_review)
+    validate_bot_review_identity_ref_evidence_schema(bot_review)
     validate_bot_review_run_check_evidence_schema(bot_review)
     validate_dependabot_readiness_run_check_evidence_schema(dependabot)
     validate_dependabot_protected_workflow_evidence_schema(dependabot)
-    validate_pull_review_evidence_schema(approve, "Bot PR reviewer", 2)
+    validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
     validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
     spotlight_review_projection = project_spotlight_approval_list_helper_to_legacy(spotlight)
-    validate_pull_review_evidence_schema(spotlight_review_projection, "Spotlight authorization/terminal merge", 2)
+    validate_pull_review_evidence_schema(
+        spotlight_review_projection, "Spotlight authorization/terminal merge", 2
+    )
 
-    for fragment in (
+    common_fragments = (
         'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
         'spotlight|dependabot|codeql-autofix)',
         'required+=(trusted-capability-admission)',
@@ -3042,7 +3042,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'LANE="spotlight"',
         'Skipping governed bot PR #${PR_NUMBER}: base is stale relative to current main.',
         'check_required_contexts "$HEAD_SHA" "$LANE"',
-        'all lane-required protected gates completed successfully',
+        'check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"',
         'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"',
         'for HISTORY_ATTEMPT in $(seq 1 20); do',
         'actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}',
@@ -3056,10 +3056,6 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         '--arg marker "$REVIEW_MARKER"',
         'contains($marker)',
         'exact-base/head marker-bound portyu9 approval',
-        'return 2',
-        'lane-required checks are not ready yet.',
-        'exact head is not quiescent yet.',
-        'completed unsuccessfully on ${head}.',
         '::error::PORTYU9_BOT_REVIEW_TOKEN is required in the portyu9-review-identity environment',
         'MARKER_REVIEW_COUNT=',
         'LATEST_MANUAL_DECISIVE_STATE=',
@@ -3088,28 +3084,18 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         '.title == "chore: sync rotating Spotlight links" and',
         'trusted-main Spotlight reviewer wake requires exactly one current-main candidate',
         'cancel-in-progress: true',
-        'local head="$1" head_ref="$2" runs total count active_profile unexpected_active',
-        '.name == "Profile quality" and',
-        '.path == ".github/workflows/profile-quality.yml" and',
-        '.event == "pull_request" and',
-        '.head_sha == $head and',
-        '.head_branch == $head_ref and',
-        '.repository.full_name == $repo and',
-        '.head_repository.full_name == $repo',
-        '[ "$active_profile" -le 1 ] || {',
-        'multiple canonical active Profile Quality runs exist for ${head}.',
-        'non-Profile-Quality workflow run(s) remain active.',
         '(.errors == null) and',
         '(.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false) and',
         'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"',
         'ERROR: malformed or incomplete paginated open-PR evidence.',
-        'emit_reviewed_candidate() {',
-        'echo "reviewed=true" >> "$GITHUB_OUTPUT"',
-        'echo "review_submitted_at=$submitted_at" >> "$GITHUB_OUTPUT"',
-    ):
+    )
+    for fragment in common_fragments:
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
 
-    require(bot_review.count("  workflow_dispatch:\n") == 1, "Bot PR reviewer must expose exactly one fixed workflow_dispatch entry")
+    require(
+        bot_review.count("  workflow_dispatch:\n") == 1,
+        "Bot PR reviewer must expose exactly one fixed workflow_dispatch entry",
+    )
     require(
         "    inputs:\n" not in bot_review and "inputs." not in bot_review,
         "Bot PR reviewer fixed dispatch must not regain routed candidate inputs",
@@ -3128,86 +3114,122 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     ):
         require(retired not in bot_review, f"Bot PR reviewer must not regain main/global wake source: {retired.strip()}")
 
-    for retired in (
-        'wait_for_spotlight_readiness() {',
-        'for attempt in $(seq 1 48); do',
-        'Spotlight reviewer readiness converged for ${head} on bounded attempt',
-        'Spotlight reviewer bounded-wait:',
-        'Spotlight reviewer readiness did not converge inside the bounded 48-attempt window.',
+    check_snapshot = 'checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&filter=latest&per_page=100")"'
+    require(
+        bot_review.count(check_snapshot) == 1,
+        "Bot PR reviewer must derive all lane prerequisites from one exact-head GitHub-Actions snapshot per observation",
+    )
+    for fragment in (
+        '(.total_count == (.check_runs | length))',
+        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
+        '[.check_runs[] | select(.name == $name)] | length',
+        '[.check_runs[] | select(.name == $name and .status != "completed")] | length',
+        '[.check_runs[] | select(.name == $name and .status == "completed" and .conclusion != "success")] | length',
     ):
-        require(retired not in approve, f"Bot PR reviewer must not regain bounded readiness polling: {retired}")
+        require(fragment in bot_review, f"Bot PR exact-head prerequisite snapshot contract is missing: {fragment}")
+    require(
+        'check_name=${name}' not in bot_review,
+        "Bot PR reviewer regressed to one GitHub API read per required check context",
+    )
+    require(
+        'wait_for_spotlight_readiness' not in bot_review
+        and 'for attempt in $(seq 1 48)' not in bot_review
+        and 'bounded 48-attempt window' not in bot_review,
+        "Bot PR reviewer must remain event-driven and must not restore the 48x readiness poll",
+    )
+    require(
+        bot_review.count('check_required_contexts "$HEAD_SHA" "$LANE"') == 2,
+        "Bot PR reviewer must perform one initial and one final exact-head prerequisite re-proof",
+    )
+    require(
+        bot_review.count('check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"') == 2,
+        "Bot PR reviewer must perform one initial and one final exact-head quiescence re-proof",
+    )
 
+    approve = job_block(bot_review, "approve", "converge")
+    converge = job_block(bot_review, "converge", None)
+    require("environment: portyu9-review-identity" in approve,
+            "Owner review credential must remain isolated in the reviewed environment")
+    require("PORTYU9_BOT_REVIEW_TOKEN" in approve,
+            "Owner-secret approval job lost the reviewed credential reference")
+    require("actions: read" in approve and "actions: write" not in approve,
+            "Owner-secret approval job must not hold Actions write authority")
+    require("PORTYU9_BOT_REVIEW_TOKEN" not in converge and "REVIEW_TOKEN" not in converge,
+            "No-secret convergence job must not receive the owner review credential")
+    require("actions: write" in converge and "actions: read" not in converge,
+            "No-secret convergence job must exclusively own Actions write authority")
     require(
-        approve.count('check_required_contexts "$HEAD_SHA" "$LANE"') == 2,
-        "Bot PR user approval must re-prove the lane-specific gate set before and immediately before review mutation",
+        "name: exact-head-review-convergence" in converge
+        and "needs: approve" in converge
+        and "needs.approve.outputs.reviewed == 'true'" in converge,
+        "No-secret convergence job must be gated on exact reviewed-candidate evidence",
     )
-    require(
-        approve.count('check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"') == 2,
-        "Bot PR user approval must re-prove exact-head quiescence before and immediately before review mutation",
-    )
+    for output in (
+        "reviewed:", "pr_number:", "base_sha:", "head_sha:", "head_ref:", "lane:", "review_submitted_at:",
+    ):
+        require(output in approve, f"Owner-secret review job lost convergence output: {output}")
     require(
         approve.count('emit_reviewed_candidate "$PR_NUMBER" "$MAIN_SHA" "$HEAD_SHA" "$HEAD_REF" "$LANE" "$MARKER_SUBMITTED_AT"') == 2,
-        "Bot PR reviewer must emit exact reviewed-candidate evidence for both existing and newly-created marker approvals",
+        "Owner-secret review job must emit one exact candidate for an existing marker and one after a new marker",
     )
-    require('wake_governed_lane_after_review' not in approve, "Owner-secret review job must not retain post-review Actions-write mutations")
+    require("wake_governed_lane_after_review" not in approve,
+            "Owner-secret review job must not perform Actions-write convergence mutations")
+
+    review_post = 'REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST'
+    require(review_post in approve and review_post not in converge,
+            "Real-user review mutation must remain isolated to the owner-secret job")
     require(
-        'test "$(jq -r .base.sha <<<"$PR")" = "$MAIN_SHA"' not in approve,
-        "Bot PR user approval must skip stale-base candidates instead of globally failing the reviewer pass",
-    )
-    require(
-        '::notice::PORTYU9_BOT_REVIEW_TOKEN is not configured' not in approve,
-        "Bot PR user approval must fail closed when the real-user credential is absent",
+        approve.index(review_post) < approve.rindex('emit_reviewed_candidate "$PR_NUMBER" "$MAIN_SHA"'),
+        "Newly-created exact review must be validated before reviewed-candidate evidence is emitted",
     )
 
-    require(
-        bot_review.count("actions: read") == 2 and bot_review.count("actions: write") == 1,
-        "Bot PR reviewer must keep Actions write authority isolated to the no-secret convergence job",
-    )
-    require("contents: write" not in bot_review, "Bot PR user approval must not acquire repository-contents write authority")
-    require(
-        "environment: portyu9-review-identity" in approve and "actions: write" not in approve,
-        "Owner-secret review job must be Actions-read-only",
-    )
-
-    for fragment in (
-        "if: ${{ needs.approve.result == 'success' && needs.approve.outputs.reviewed == 'true' }}",
-        "name: exact-head-review-convergence",
-        "needs: approve",
-        "actions: write",
-        'PR_NUMBER: ${{ needs.approve.outputs.pr_number }}',
-        'BASE_SHA: ${{ needs.approve.outputs.base_sha }}',
-        'HEAD_SHA: ${{ needs.approve.outputs.head_sha }}',
-        'HEAD_REF: ${{ needs.approve.outputs.head_ref }}',
-        'LANE: ${{ needs.approve.outputs.lane }}',
-        'REVIEW_SUBMITTED_AT: ${{ needs.approve.outputs.review_submitted_at }}',
-        'rerun_governed_review_gate_if_needed() {',
-        'actions/jobs/${gate_job_id}/rerun',
-        'Observed a new exact governed-review check after ambiguous rerun transport; refusing duplicate POST.',
-        'wake_governed_lane_after_review "$LANE" "$HEAD_REF" "$HEAD_SHA" "$REVIEW_SUBMITTED_AT"',
-        'Spotlight governed-review convergence is driven by the exact gate-job rerun; no workflow-wide recovery dispatch is needed.',
-        'Completed exact reviewed-candidate convergence without exposing the owner review token to Actions-write.',
-    ):
-        require(fragment in converge, f"Bot PR no-secret convergence contract is missing: {fragment}")
-    require(
-        "secrets." not in converge and "REVIEW_TOKEN" not in converge and "environment:" not in converge,
-        "Bot PR no-secret convergence job acquired owner-secret authority",
-    )
-
-    for fragment in (
-        'REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"',
-        'ERROR: malformed or incomplete convergence review evidence.',
+    convergence_fragments = (
+        'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"',
         'test "$(jq \'length\' <<<"$MARKER_REVIEWS")" = "1"',
         'test "$(jq -r .state <<<"$MARKER_REVIEW")" = "APPROVED"',
-        'test "$(jq -r \'.submitted_at // ""\' <<<"$MARKER_REVIEW")" = "$REVIEW_SUBMITTED_AT"',
         'manual exact-head CHANGES_REQUESTED veto appeared before convergence.',
-    ):
-        require(fragment in converge, f"Bot PR convergence review re-proof is missing: {fragment}")
-
-    require('repos/${TARGET_REPOSITORY}/dispatches' not in bot_review, "Bot PR reviewer must not gain generic repository-dispatch authority")
-    require(
-        'repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches' not in bot_review,
-        "Spotlight reviewer must not reintroduce a whole-workflow recovery dispatch",
+        'rerun_governed_review_gate_if_needed() {',
+        'check_name=trusted-governed-bot-review&filter=latest&per_page=100',
+        '.name == "trusted-governed-bot-review"',
+        '.name == "Profile quality"',
+        '.path == ".github/workflows/profile-quality.yml"',
+        '.event == "pull_request"',
+        '.head_sha == $head',
+        '.head_branch == $head_ref',
+        '.check_suite_id == $suite',
+        '.workflow_name == "Profile quality"',
+        '.run_attempt | type == "number" and . == floor and . > 0',
+        'test "$job_attempt" = "$run_attempt"',
+        'Governed review gate job ${gate_job_id} started after the exact approval existed; refusing another autonomous rerun.',
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}/rerun"',
+        'governed review gate job rerun returned unexpected status:',
+        'Re-ran exact pre-approval governed review gate job ${gate_job_id} once after exact marker approval.',
+        'ambiguous gate-rerun mutation could not be reconciled by exact check observation.',
+        'Observed a new exact governed-review check after ambiguous rerun transport; refusing duplicate POST.',
+        'refusing duplicate POST.',
+        'repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches',
+        'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
+        'Spotlight governed-review convergence is driven by the exact gate-job rerun; no workflow-wide recovery dispatch is needed.',
+        'wake_governed_lane_after_review "$LANE" "$HEAD_REF" "$HEAD_SHA" "$REVIEW_SUBMITTED_AT"',
+        'Completed exact reviewed-candidate convergence without exposing the owner review token to Actions-write.',
     )
+    for fragment in convergence_fragments:
+        require(fragment in converge, f"No-secret governed-review convergence contract is missing: {fragment}")
+    require(
+        converge.count('gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}/rerun"') == 1,
+        "Exact governed-review gate rerun mutation must have one non-retrying call site",
+    )
+    require(
+        converge.count('repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches') == 1
+        and converge.count('repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches') == 1,
+        "No-secret convergence must retain exactly one lane-controller wake per non-Spotlight lane",
+    )
+    require('repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches' not in converge,
+            "Spotlight convergence must not restore redundant workflow-wide recovery dispatch")
+    require('repos/${TARGET_REPOSITORY}/dispatches' not in bot_review,
+            "Bot PR reviewer must not gain generic repository-dispatch authority")
+    require("contents: write" not in bot_review,
+            "Bot PR reviewer must not acquire repository-contents write authority")
 
     for fragment in (
         "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
@@ -3215,16 +3237,8 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'test "$WAKE_ACTOR" = "github-actions[bot]"',
         "startsWith(github.ref, 'refs/heads/dependabot/github_actions/')",
         'MERGE_HTTP_RESPONSE="$RUNNER_TEMP/dependabot-merge-http-response.txt"',
-        'MERGE_BODY="$RUNNER_TEMP/dependabot-merge-response.json"',
-        'MERGE_ERR="$RUNNER_TEMP/dependabot-merge-error.txt"',
         'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
-        'MERGE_STATUS=$?',
-        'if [ "$MERGE_STATUS" -ne 0 ]; then',
-        'MERGE_STATUS_LINE="$(head -n 1 "$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"',
-        '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
         'Dependabot terminal merge returned unexpected status:',
-        'Dependabot merge API request failed: ${MERGE_MESSAGE}',
-        'Dependabot merge API rejected exact-head merge: ${MERGE_MESSAGE}',
     ):
         require(fragment in dependabot, f"Dependabot trusted post-review dispatch contract is missing: {fragment}")
 
