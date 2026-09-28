@@ -713,21 +713,22 @@
       }
     },
     "bot-pr-user-approval": {
-      "path": ".github/workflows/bot-pr-user-approval.yml",
-      "triggers": [
-        "workflow_dispatch",
-        "workflow_run"
-      ],
-      "permissions": {
-        "actions": "write",
-        "checks": "read",
-        "contents": "read",
-        "pull-requests": "read"
-      },
       "jobs": {
         "approve": {
           "name": "exact-head-portyu9-review",
           "needs": [],
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          }
+        },
+        "converge": {
+          "name": "exact-head-review-convergence",
+          "needs": [
+            "approve"
+          ],
           "permissions": {
             "actions": "write",
             "checks": "read",
@@ -735,7 +736,18 @@
             "pull-requests": "read"
           }
         }
-      }
+      },
+      "path": ".github/workflows/bot-pr-user-approval.yml",
+      "permissions": {
+        "actions": "read",
+        "checks": "read",
+        "contents": "read",
+        "pull-requests": "read"
+      },
+      "triggers": [
+        "workflow_dispatch",
+        "workflow_run"
+      ]
     },
     "ruleset-reconciler": {
       "path": ".github/workflows/ruleset-reconciler.yml",
