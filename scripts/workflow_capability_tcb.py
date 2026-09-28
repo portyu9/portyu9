@@ -20,6 +20,10 @@ SHA40 = re.compile(r"^[0-9a-f]{40}$")
 PROTECTED_EXACT = {
     ".github/workflow-capability-bom-v1.json",
     ".github/aiqa-owner-protected-authorizations-v1.json",
+    ".github/control-plane-recovery-v1.json",
+    ".github/attestation/control-plane-recovery-receipt-v1.schema.json",
+    ".github/workflow-capability-bom-v1-control-plane-recovery.json",
+    ".github/workflows/control-plane-recovery.yml",
     ".github/workflow-capability-bom-v1-aiqa-owner-protected-certifier.json",
     ".github/workflows/aiqa-owner-protected-certifier.yml",
     ".github/workflow-capability-bom-v1-capability-admission.json",
@@ -32,6 +36,7 @@ PROTECTED_EXACT = {
     ".github/workflows/capability-admission.yml",
     ".github/workflows/dependabot-controller.yml",
     "scripts/aiqa_owner_protected_certifier.py",
+    "scripts/ruleset_recovery_contract.py",
     "scripts/profile_stats_decision_receipt.py",
     "scripts/ruleset_transition_contract.py",
     "scripts/spotlight_decision_receipt.py",
@@ -165,6 +170,17 @@ def self_test() -> None:
         require(
             is_protected_path(path),
             f"TCB self-test lost AI QA owner-certifier trusted source: {path}",
+        )
+    for path in (
+        ".github/control-plane-recovery-v1.json",
+        ".github/attestation/control-plane-recovery-receipt-v1.schema.json",
+        ".github/workflow-capability-bom-v1-control-plane-recovery.json",
+        ".github/workflows/control-plane-recovery.yml",
+        "scripts/ruleset_recovery_contract.py",
+    ):
+        require(
+            is_protected_path(path),
+            f"TCB self-test lost control-plane recovery trusted source: {path}",
         )
     require(is_protected_path(".github/workflow-capability-bom-v1-codeql-autofix.json"),
             "TCB self-test lost CodeQL Autofix BOM extension")
