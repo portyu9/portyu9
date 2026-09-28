@@ -323,6 +323,13 @@
       "rationale": "Authorize #890's exact CodeQL Autofix readiness evidence hardening. Existing check-run GETs, triggers, permissions, dispatches and merge authority remain unchanged; trusted-admission and GHAS responses must pass a typed bounded collection/item schema before readiness state is consumed. No new endpoint, mutation, secret, OIDC, candidate execution, retry budget, direct-main write, required-check reduction, ruleset change or bypass."
     },
     {
+      "baseBomSha256": "8d20f26fa6d3a673ffd8d7afdf4e80f34a256b0311cc03ad3d6ed6a9611c8f12",
+      "candidateBomSha256": "1aea89d5f98edc6a7b4e66ca1b669719f3035c407081d90d0989be2d91dcdf81",
+      "expansionSha256": "9b74b8ee1e98b7d964d994e69226d5b58046d585b324df22eeef1071ecbc059c",
+      "id": "cap-codeql-autofix-readiness-snapshot-v1",
+      "rationale": "Authorize frozen #1286 measured by closed #1287: replace two per-iteration filtered CodeQL Autofix readiness GETs with one complete exact-head snapshot through the canonical transient-safe read client, then derive the same trusted-admission and GHAS states via typed selectors. Semantic change is only removal of those two read surfaces; protected source changes are the snapshot and pure parser. No trigger, permission, mutation, secret/OIDC, merge/ruleset authority, check reduction, or bypass."
+    },
+    {
       "baseBomSha256": "2a29528c2279ba12604e286e5304d8ef6480eb37f91b333351b47415dee881cc",
       "candidateBomSha256": "dc9249bc85f73d5774cc80660b06767975467828034e2ab2123bf01c19d75162",
       "expansionSha256": "4fac041d6e416f9b27fd34ade2257460638ced9c9b1b2b5e968635b70ccb4e46",
