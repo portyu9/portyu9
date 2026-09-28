@@ -95,7 +95,7 @@ jobs:
 
       - name: Validate deterministic Portfolio Evidence Ledger and Spotlight projection
         run: |
-          set -euo pipefail
+          set -euo pipefail\n          test -n "$VALUE"
           tmp="$(mktemp -d)"
           mkdir -p "$tmp/ledger" "$tmp/spotlight"
           python3 scripts/generate-portfolio-evidence-ledger.py "$tmp/ledger" --date 2026-09-04 --offline
