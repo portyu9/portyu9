@@ -4755,7 +4755,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
 
     require("name: prepare-spotlight-dispatch-read-only" in plan,
             "Profile Stats Spotlight dispatch-plan identity changed")
-    require("needs: [receipt_attest, lease, attest]" in plan,
+    require("needs: [generate, receipt_attest, lease, attest]" in plan,
             "Profile Stats Spotlight dispatch-plan dependency closure changed")
     require("permissions:\n      actions: read\n      contents: read" in plan,
             "Profile Stats Spotlight dispatch plan must remain actions/contents read-only")
@@ -4768,7 +4768,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
             and "gh api " not in plan,
             "Profile Stats Spotlight dispatch plan must contain exactly two governed GETs and no direct gh api")
     require("name: dispatch-spotlight-link-sync" in dispatch
-            and "needs: [dispatch_plan, receipt_attest, lease, attest]" in dispatch,
+            and "needs: [generate, dispatch_plan, receipt_attest, lease, attest]" in dispatch,
             "Profile Stats write-only dispatcher dependency closure changed")
     require("permissions:\n      actions: write" in dispatch,
             "Profile Stats dispatcher must retain actions-write-only authority")
