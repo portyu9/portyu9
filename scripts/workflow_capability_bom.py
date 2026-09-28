@@ -119,9 +119,6 @@ def parse_trigger_details(text: str, label: str) -> dict[str, Any]:
     result: dict[str, Any] = {}
     current_event: str | None = None
     current_key: str | None = None
-    in_workflow_dispatch_inputs = False
-    current_workflow_dispatch_input: str | None = None
-    workflow_dispatch_inputs: dict[str, dict[str, str]] = {}
     for line_number, line in enumerate(lines[starts[0] + 1:], start=starts[0] + 2):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
@@ -135,20 +132,9 @@ def parse_trigger_details(text: str, label: str) -> dict[str, Any]:
             require(current_event not in result, f"{label}:{line_number}: duplicate trigger event")
             result[current_event] = {}
             current_key = None
-            in_workflow_dispatch_inputs = False
-            current_workflow_dispatch_input = None
             continue
         require(current_event is not None, f"{label}:{line_number}: trigger detail precedes event")
         if indent == 4:
-            if current_event == "workflow_dispatch" and line == "    inputs:":
-                require(not in_workflow_dispatch_inputs,
-                        f"{label}:{line_number}: duplicate workflow_dispatch inputs block")
-                in_workflow_dispatch_inputs = True
-                current_workflow_dispatch_input = None
-                current_key = None
-                continue
-            in_workflow_dispatch_inputs = False
-            current_workflow_dispatch_input = None
             cron = re.fullmatch(r"    - cron:\s*(.+?)\s*", line)
             if cron:
                 require(current_event == "schedule", f"{label}:{line_number}: cron outside schedule")
@@ -167,15 +153,6 @@ def parse_trigger_details(text: str, label: str) -> dict[str, Any]:
                 result[current_event][current_key] = []
             continue
         if indent == 6:
-            if in_workflow_dispatch_inputs:
-                input_decl = re.fullmatch(r"      ([A-Za-z0-9_-]+):\s*", line)
-                require(input_decl is not None,
-                        f"{label}:{line_number}: unsupported workflow_dispatch input declaration")
-                current_workflow_dispatch_input = input_decl.group(1)
-                require(current_workflow_dispatch_input not in workflow_dispatch_inputs,
-                        f"{label}:{line_number}: duplicate workflow_dispatch input: {current_workflow_dispatch_input}")
-                workflow_dispatch_inputs[current_workflow_dispatch_input] = {}
-                continue
             item = re.fullmatch(r"      -\s+(.+?)\s*", line)
             require(item is not None and current_key is not None,
                     f"{label}:{line_number}: unsupported trigger list syntax")
@@ -183,28 +160,7 @@ def parse_trigger_details(text: str, label: str) -> dict[str, Any]:
             require(isinstance(value, list), f"{label}:{line_number}: trigger list parent is not a list")
             value.append(unquote(item.group(1)))
             continue
-        if indent == 8 and in_workflow_dispatch_inputs:
-            require(current_workflow_dispatch_input is not None,
-                    f"{label}:{line_number}: workflow_dispatch input detail precedes input declaration")
-            input_detail = re.fullmatch(r"        ([A-Za-z0-9_-]+):\s*(.+?)\s*", line)
-            require(input_detail is not None,
-                    f"{label}:{line_number}: unsupported workflow_dispatch input detail")
-            detail_key, detail_value = input_detail.groups()
-            require(detail_key in {"description", "required", "type"},
-                    f"{label}:{line_number}: unsupported workflow_dispatch input key: {detail_key}")
-            details = workflow_dispatch_inputs[current_workflow_dispatch_input]
-            require(detail_key not in details,
-                    f"{label}:{line_number}: duplicate workflow_dispatch input key: {detail_key}")
-            details[detail_key] = unquote(detail_value)
-            continue
         raise ValueError(f"{label}:{line_number}: unsupported trigger capability syntax")
-    for input_name, details in workflow_dispatch_inputs.items():
-        if "required" in details:
-            require(details["required"] in {"true", "false"},
-                    f"{label}: workflow_dispatch input required flag is invalid: {input_name}")
-        if "type" in details:
-            require(details["type"] in {"boolean", "choice", "environment", "number", "string"},
-                    f"{label}: workflow_dispatch input type is invalid: {input_name}")
     require(result, f"{label}: empty trigger detail set")
     return {key: result[key] for key in sorted(result)}
 
@@ -702,12 +658,7 @@ def self_test() -> None:
         "  push:\n"
         "    branches:\n"
         "      - main\n"
-        "  workflow_dispatch:\n"
-        "    inputs:\n"
-        "      headSha:\n"
-        "        description: Exact candidate head\n"
-        "        required: true\n"
-        "        type: string\n\n"
+        "  workflow_dispatch:\n\n"
     )
     parsed = parse_trigger_details(fixture, "fixture.yml")
     require(parsed == {"push": {"branches": ["main"]}, "workflow_dispatch": {}},
