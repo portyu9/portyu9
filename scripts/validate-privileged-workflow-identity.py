@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v116"
+VERSION = "governed-workflow-byte-identity-v117"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "0ec9999f60ff68be77667dd47480164d620fc8a2",
+    ".github/workflows/bot-pr-user-approval.yml": "a926ec285a522e5f860077b97616a479cf6883d9",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
     ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
-    ".github/workflows/spotlight-link-sync.yml": "91d745a1d95f72d4afa8043d61af35715f2e1431",
+    ".github/workflows/spotlight-link-sync.yml": "c4eeaf43abd18b3854e2969f9b370198e187e073",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -3147,7 +3147,7 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
 def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) -> None:
     bot_block = (
         "concurrency:\n"
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.run_id }}\n"
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.headSha }}\n"
         "  cancel-in-progress: true\n"
     )
     require(
@@ -3157,6 +3157,10 @@ def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) 
     require(
         "concurrency:\n  group: bot-pr-user-approval\n  cancel-in-progress: true\n" not in bot_review,
         "Bot PR reviewer regained repository-wide cancellation that pollutes current-main checks",
+    )
+    require(
+        "github.run_id" not in bot_review.split("jobs:", 1)[0],
+        "Bot PR reviewer dispatch cancellation must never fall back to a run-unique key",
     )
 
     planning_block = (
@@ -3188,7 +3192,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
     validate_main_check_cancellation_isolation(bot_review, spotlight)
 
     broad_bot = bot_review.replace(
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.run_id }}\n",
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.headSha }}\n",
         "  group: bot-pr-user-approval\n",
         1,
     )
@@ -3196,7 +3200,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
         validate_main_check_cancellation_isolation(broad_bot, spotlight)
     except ValueError as exc:
         require(
-            "scope cancellation" in str(exc) or "repository-wide cancellation" in str(exc),
+            "immutable candidate head" in str(exc) or "repository-wide cancellation" in str(exc),
             f"Bot PR cancellation-isolation self-test failed for wrong reason: {exc}",
         )
     else:
@@ -3271,27 +3275,48 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued.',
         'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
         'exit 1',
-        "group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.run_id }}",
+        "group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.headSha }}",
         "github.event.workflow_run.event == 'pull_request'",
         "github.event.workflow_run.head_branch != 'main'",
         "github.event.workflow_run.head_repository.full_name == github.repository",
         "github.event_name == 'workflow_dispatch'",
         "github.actor == 'github-actions[bot]'",
         "github.ref == 'refs/heads/main'",
+        "github.event.inputs.lane == 'spotlight'",
+        '      prNumber:',
+        '      baseSha:',
+        '      headSha:',
+        '      headRef:',
+        '      lane:',
         'WAKE_EVENT_NAME: ${{ github.event_name }}',
-        'WAKE_HEAD_SHA: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_sha || \'\' }}',
-        'WAKE_HEAD_REF: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_branch || \'\' }}',
+        'WAKE_PR_NUMBER: ${{ github.event_name == \'workflow_dispatch\' && github.event.inputs.prNumber || \'\' }}',
+        'WAKE_BASE_SHA: ${{ github.event_name == \'workflow_dispatch\' && github.event.inputs.baseSha || \'\' }}',
+        'WAKE_HEAD_SHA: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_sha || github.event.inputs.headSha || \'\' }}',
+        'WAKE_HEAD_REF: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_branch || github.event.inputs.headRef || \'\' }}',
+        'WAKE_LANE: ${{ github.event_name == \'workflow_dispatch\' && github.event.inputs.lane || \'\' }}',
         'case "$WAKE_EVENT_NAME" in',
         'workflow_dispatch)',
-        'test -z "$WAKE_HEAD_SHA"',
-        'test -z "$WAKE_HEAD_REF"',
-        '--arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF"',
+        '[[ "$WAKE_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]',
+        '[[ "$WAKE_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        '[[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        '[[ "$WAKE_HEAD_REF" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]',
+        'test "$WAKE_LANE" = "spotlight"',
+        'test "$WAKE_BASE_SHA" = "$MAIN_SHA"',
+        'DISPATCH_PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${WAKE_PR_NUMBER}")"',
+        'PR_PAGES="$(jq -cn --argjson pr "$DISPATCH_PR" \'[[$pr]]\')"',
+        '--arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --argjson wake_pr "${WAKE_PR_NUMBER:-0}" --arg wake_base "$WAKE_BASE_SHA" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF"',
         '.base.sha == $main and',
         'if $wake_mode == "workflow_dispatch" then',
+        '.number == $wake_pr and',
+        '.base.sha == $wake_base and',
+        '.head.sha == $wake_head and',
+        '.head.ref == $wake_ref and',
         '.user.login == "github-actions[bot]" and',
         '(.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$"))',
         '.head.sha == $wake_head and',
         '.head.ref == $wake_ref and',
+        '--arg event "$WAKE_EVENT_NAME"',
+        '.event == $event and',
         'if [ "$WAKE_EVENT_NAME" = "workflow_dispatch" ]; then',
         'test "$CANDIDATE_COUNT" = "1" || {',
         'trusted-main Spotlight reviewer wake requires exactly one current-main candidate',
@@ -3337,8 +3362,17 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     require(
         "github.actor == 'github-actions[bot]'" in bot_review
         and "github.ref == 'refs/heads/main'" in bot_review
-        and 'if $wake_mode == "workflow_dispatch" then' in bot_review,
-        "Bot PR reviewer dispatch entry must remain bot/main/Spotlight-only",
+        and "github.event.inputs.lane == 'spotlight'" in bot_review
+        and 'if $wake_mode == "workflow_dispatch" then' in bot_review
+        and 'DISPATCH_PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${WAKE_PR_NUMBER}")"' in bot_review,
+        "Bot PR reviewer dispatch entry must remain bot/main/Spotlight-only and exact-candidate-bound",
+    )
+    require(
+        'github.event.inputs.headSha' in bot_review
+        and 'github.event.inputs.headRef' in bot_review
+        and 'github.event.inputs.baseSha' in bot_review
+        and 'github.event.inputs.prNumber' in bot_review,
+        "Bot PR reviewer dispatch must be fully bound to exact candidate identity inputs",
     )
     for retired in (
         "      - Capability admission\n",
