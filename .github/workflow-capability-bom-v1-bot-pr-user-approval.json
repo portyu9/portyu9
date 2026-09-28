@@ -194,6 +194,11 @@
         "vars": []
       },
       "triggers": {
+        "repository_dispatch": {
+          "types": [
+            "spotlight-review-wake"
+          ]
+        },
         "workflow_run": {
           "types": [
             "completed"
@@ -203,8 +208,7 @@
             "CodeQL",
             "Dependency review"
           ]
-        },
-        "workflow_dispatch": {}
+        }
       },
       "workflowPermissions": {
         "actions": "write",
