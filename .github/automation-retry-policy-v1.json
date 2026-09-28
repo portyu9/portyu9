@@ -107,20 +107,6 @@
   ],
   "boundedObservation": [
     {
-      "id": "approval-spotlight-readiness",
-      "workflow": ".github/workflows/bot-pr-user-approval.yml",
-      "job": "approve",
-      "step": "Approve only exact green governed bot PRs as portyu9",
-      "ordinal": 1,
-      "variable": "attempt",
-      "maxIterations": 48,
-      "sleepSeconds": 5,
-      "class": "bounded-observation",
-      "operationRetry": false,
-      "purpose": "Wait for exact-head governed Spotlight readiness; no mutation is repeated.",
-      "mutationMode": "none"
-    },
-    {
       "id": "autofix-check-run-discovery",
       "workflow": ".github/workflows/codeql-autofix.yml",
       "job": "controller",
@@ -261,20 +247,6 @@
       "mutationMode": "guarded-once-per-run-id"
     },
     {
-      "id": "spotlight-review-convergence",
-      "workflow": ".github/workflows/spotlight-link-sync.yml",
-      "job": "approve",
-      "step": "Approve and wait for only the exact README-only automation checks",
-      "ordinal": 2,
-      "variable": "REVIEW_ATTEMPT",
-      "maxIterations": 24,
-      "sleepSeconds": 5,
-      "class": "bounded-observation",
-      "operationRetry": false,
-      "purpose": "Wait for one exact marker-bound portyu9 review after review-independent gates are green.",
-      "mutationMode": "none"
-    },
-    {
       "id": "autofix-controller-prior-attempt-history",
       "workflow": ".github/workflows/codeql-autofix.yml",
       "job": "controller",
@@ -335,7 +307,7 @@
       "workflow": ".github/workflows/bot-pr-user-approval.yml",
       "job": "approve",
       "step": "Approve only exact green governed bot PRs as portyu9",
-      "ordinal": 2,
+      "ordinal": 1,
       "variable": "HISTORY_ATTEMPT",
       "maxIterations": 20,
       "sleepSeconds": 1,
