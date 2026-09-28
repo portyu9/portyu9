@@ -136,6 +136,21 @@ SPOTLIGHT_CAPABILITY_DISPATCH_STATUS = """          CAPABILITY_DISPATCH_RESPONSE
 SPOTLIGHT_CAPABILITY_DISPATCH_LEGACY = """          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches" \\
             -f ref=main >/dev/null
 """
+SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH = """          REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/dispatches" \\
+            -f event_type=spotlight-review-wake \\
+            -f "client_payload[prNumber]=${PR_NUMBER}" \\
+            -f "client_payload[baseSha]=${BASE_SHA}" \\
+            -f "client_payload[headSha]=${HEAD_SHA}" \\
+            -f "client_payload[headRef]=${CANDIDATE_BRANCH}" \\
+            -f "client_payload[lane]=spotlight")"
+          REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d '\\r')"
+          [[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+            echo "ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}" >&2
+            exit 1
+          }
+          echo "Dispatched bounded singleton Spotlight reviewer evaluation from trusted main."
+
+"""
 SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAKE = """          REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\
             -f ref=main)"
           REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d '\\r')"
@@ -691,12 +706,16 @@ def project_item9_sync_with_marker(sync: str) -> str:
     convergence_anchor = '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do\n'
     core.require(reviewer_dispatch not in sync and reviewer_marker not in sync,
             "Spotlight must not dispatch a main/global pre-convergence reviewer wake")
+    core.require(sync.count(SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH) == 1,
+            "Spotlight exact candidate reviewer repository-dispatch contract changed")
+    reviewer_pos = sync.index(SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH)
     core.require(sync.count(capability_dispatch) == 1 and sync.count(convergence_anchor) == 1,
             "Spotlight candidate-headed reviewer ordering anchors changed")
     core.require(
-        sync.index(capability_dispatch) < sync.index(convergence_anchor),
-        "Spotlight admission dispatch must stay before protected workflow convergence",
+        sync.index(capability_dispatch) < reviewer_pos < sync.index(convergence_anchor),
+        "Spotlight candidate reviewer wake must stay after admission dispatch and before protected workflow convergence",
     )
+    sync = sync.replace(SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH, "", 1)
 
     sync = project_ancestry_reconcile_to_same_base(sync)
     sync = project_native_review_gate_to_legacy_order(sync)
