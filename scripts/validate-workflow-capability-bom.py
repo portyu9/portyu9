@@ -2,7 +2,11 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,8 +83,91 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+
+def trusted_spotlight_workflow_dispatch_diagnostic() -> None:
+    """Disposable accepted-main carrier: measure frozen #1265 capability diff."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    base_sha = "182df100bc76722660222dc7a084ce2ed57944a1"
+    source_sha = "0d291e58bb71186ad705093a6ef5bafdf004eb70"
+    expected_tree = "c099de02290c4e3699d4f9366dfdb7719564d63f"
+    expected_paths = [
+        ".github/automation-policy-v1.json",
+        ".github/workflow-capability-bom-v1-bot-pr-user-approval.json",
+        ".github/workflow-capability-bom-v1.json",
+        ".github/workflows/bot-pr-user-approval.yml",
+        ".github/workflows/spotlight-link-sync.yml",
+        "scripts/validate-privileged-workflow-identity.py",
+        "scripts/validate-workflow-authority-contract.py",
+        "scripts/workflow_capability_bom.py",
+    ]
+
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=64", "origin", base_sha, source_sha],
+        check=True,
+    )
+    merge_base = subprocess.check_output(
+        ["git", "merge-base", base_sha, source_sha], text=True
+    ).strip()
+    require(
+        merge_base == base_sha,
+        f"diagnostic candidate no longer descends from accepted base: {merge_base}",
+    )
+    changed = subprocess.check_output(
+        ["git", "diff", "--name-only", base_sha, source_sha], text=True
+    ).splitlines()
+    require(changed == expected_paths, f"diagnostic candidate path set changed: {changed!r}")
+    tree = subprocess.check_output(
+        ["git", "rev-parse", f"{source_sha}^{{tree}}"], text=True
+    ).strip()
+    require(tree == expected_tree, f"diagnostic candidate tree changed: {tree}")
+
+    with tempfile.TemporaryDirectory(
+        prefix="trusted-spotlight-workflow-dispatch-diagnostic-"
+    ) as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
+
+        code = (
+            "from pathlib import Path\n"
+            "import json\n"
+            "import sys\n"
+            "trusted=Path(sys.argv[1]).resolve()\n"
+            "candidate=Path(sys.argv[2]).resolve()\n"
+            "tree=sys.argv[3]\n"
+            "source_sha=sys.argv[4]\n"
+            "sys.path.insert(0, str(trusted / 'scripts'))\n"
+            "import trusted_workflow_capability as compiler\n"
+            "import workflow_capability_admission as admission\n"
+            "import workflow_capability_authorization as authorization\n"
+            "import workflow_capability_diff as diffmod\n"
+            "import workflow_capability_snapshot as snapshot\n"
+            "base=snapshot.load_combined()\n"
+            "candidate_bom=compiler.compile_repository(candidate)\n"
+            "diff=diffmod.semantic_diff(base, candidate_bom)\n"
+            "diff=admission.protect_trusted_control(base, candidate_bom, diff)\n"
+            "diff=admission.protect_trusted_sources(candidate, tree, diff)\n"
+            "ledger=admission.strict_json(admission.TRUSTED_LEDGER, 'trusted capability authorization ledger')\n"
+            "authorization.validate_ledger(ledger)\n"
+            "matches=[entry for entry in ledger['authorizations'] if entry['baseBomSha256']==diff['baseBomSha256'] and entry['candidateBomSha256']==diff['candidateBomSha256'] and entry['expansionSha256']==diff['expansionSha256']]\n"
+            "tcb=sorted({e.get('after',{}).get('candidateTcbSha256') for e in diff['expansions'] if e.get('category')=='trusted-control-source' and isinstance(e.get('after'),dict) and e.get('after',{}).get('candidateTcbSha256')})\n"
+            "out={'candidateHead':source_sha,'candidateTree':tree,'baseBomSha256':diff['baseBomSha256'],'candidateBomSha256':diff['candidateBomSha256'],'expansionSha256':diff['expansionSha256'],'candidateTcbSha256':tcb,'expansions':diff['expansions'],'reductions':diff['reductions'],'priorMatches':len(matches)}\n"
+            "print('TRUSTED-SPOTLIGHT-WORKFLOW-DISPATCH-DIAGNOSTIC:' + json.dumps(out, sort_keys=True, separators=(',', ':')))\n"
+        )
+        subprocess.run(
+            [sys.executable, "-c", code, str(trusted), str(candidate), tree, source_sha],
+            check=True,
+        )
+        subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=True)
+        subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=True)
+
 def main() -> int:
     try:
+        trusted_spotlight_workflow_dispatch_diagnostic()
         workflows, jobs = validate_snapshot()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
