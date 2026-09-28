@@ -1289,19 +1289,6 @@ jobs:
           }
           echo "Dispatched event-driven Spotlight admission proof from trusted main; Capability Admission independently binds the unique current-main candidate."
 
-          # Break the native-review cycle deterministically from this trusted-main parent.
-          # Dispatch only the fixed reviewer workflow using the already-reviewed Actions-write
-          # authority. The reviewer trusts no routed candidate payload: it independently requires
-          # exactly one canonical current-main Spotlight PR before any review mutation.
-          REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
-            -f ref=main)"
-          REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d '\r')"
-          [[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
-            echo "ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}" >&2
-            exit 1
-          }
-          echo "Dispatched bounded singleton Spotlight reviewer evaluation from trusted main."
-
           gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \
             > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"
           CODEQL_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/codeql.yml" --arg name "CodeQL" '
@@ -1357,6 +1344,7 @@ jobs:
             '[{"name":"CodeQL","workflow_id":$codeql},{"name":"Dependency review","workflow_id":$dependency},{"name":"Profile quality","workflow_id":$profile}] | sort_by(.name)')"
 
           APPROVAL_REQUESTED_RUN_IDS=""
+          REVIEW_DISPATCHED=false
           for attempt in $(seq 1 60); do
             gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
               > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"
@@ -1448,6 +1436,8 @@ jobs:
               OBSERVED_IDENTITIES="$(jq -c '[.[] | {name,workflow_id:.workflowId}] | sort_by(.name)' <<<"$RUNS")"
               test "$OBSERVED_IDENTITIES" = "$EXPECTED_IDENTITIES" || { echo "Canonical Spotlight-link workflow-run identities changed." >&2; exit 1; }
               ALL_SUCCESS=true
+              CODEQL_SUCCESS=false
+              DEPENDENCY_SUCCESS=false
               for NAME in "CodeQL" "Dependency review" "Profile quality"; do
                 case "$NAME" in
                   "CodeQL") EXPECTED_ID="$CODEQL_WORKFLOW_ID" ;;
@@ -1493,20 +1483,99 @@ jobs:
                   esac
                   ALL_SUCCESS=false
                 elif [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
-                  :
+                  case "$NAME" in
+                    "CodeQL") CODEQL_SUCCESS=true ;;
+                    "Dependency review") DEPENDENCY_SUCCESS=true ;;
+                    "Profile quality") : ;;
+                    *) exit 1 ;;
+                  esac
                 elif [ "$STATUS" = "completed" ]; then
-                  echo "Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION)." >&2
-                  exit 1
+                  if [ "$NAME" = "Profile quality" ]; then
+                    # The accepted-base governed-review gate is intentionally allowed to fail
+                    # once before the marker approval exists. The fixed reviewer will re-enter
+                    # only that exact failed job after the six review-independent contexts are green.
+                    ALL_SUCCESS=false
+                  else
+                    echo "Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION)." >&2
+                    exit 1
+                  fi
                 else
                   ALL_SUCCESS=false
                 fi
               done
+
+              if [ "$REVIEW_DISPATCHED" = "false" ] &&
+                 [ "$CODEQL_SUCCESS" = "true" ] &&
+                 [ "$DEPENDENCY_SUCCESS" = "true" ]; then
+                REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"
+                jq -e --arg head "$HEAD_SHA" '
+                  (type == "object") and
+                  (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+                  (.check_runs | type == "array" and length == .total_count and length <= 100) and
+                  (all(.check_runs[];
+                    type == "object" and
+                    (.id | type == "number" and . == floor and . > 0) and
+                    (.name | type == "string" and length > 0) and
+                    (.head_sha == $head) and
+                    (.app | type == "object" and .id == 15368) and
+                    (.status | type == "string" and
+                      (. == "queued" or . == "in_progress" or . == "requested" or
+                       (. == "waiting" or . == "pending" or . == "completed"))) and
+                    (if .status == "completed"
+                     then (.conclusion | type == "string" and length > 0)
+                     else .conclusion == null end)
+                  )) and
+                  (([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))
+                ' <<<"$REVIEW_CHECKS" >/dev/null || {
+                  echo "ERROR: malformed Spotlight exact-head reviewer-readiness snapshot." >&2
+                  exit 1
+                }
+
+                REVIEW_READY=true
+                for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do
+                  CONTEXT_COUNT="$(jq --arg name "$CONTEXT" '[.check_runs[] | select(.name == $name)] | length' <<<"$REVIEW_CHECKS")"
+                  [[ "$CONTEXT_COUNT" =~ ^[0-9]+$ ]]
+                  if [ "$CONTEXT_COUNT" = "0" ]; then
+                    REVIEW_READY=false
+                    continue
+                  fi
+                  test "$CONTEXT_COUNT" = "1" || {
+                    echo "ERROR: Spotlight reviewer prerequisite $CONTEXT is not singleton." >&2
+                    exit 1
+                  }
+                  CONTEXT_STATUS="$(jq -r --arg name "$CONTEXT" '[.check_runs[] | select(.name == $name)][0].status' <<<"$REVIEW_CHECKS")"
+                  CONTEXT_CONCLUSION="$(jq -r --arg name "$CONTEXT" '[.check_runs[] | select(.name == $name)][0].conclusion // ""' <<<"$REVIEW_CHECKS")"
+                  if [ "$CONTEXT_STATUS" != "completed" ]; then
+                    REVIEW_READY=false
+                  elif [ "$CONTEXT_CONCLUSION" != "success" ]; then
+                    echo "ERROR: Spotlight reviewer prerequisite $CONTEXT completed unsuccessfully ($CONTEXT_CONCLUSION)." >&2
+                    exit 1
+                  fi
+                done
+
+                if [ "$REVIEW_READY" = "true" ]; then
+                  # State-driven wake: Capability Admission and every other review-independent
+                  # protected context are exact-head green before the fixed reviewer is dispatched.
+                  # The mutation is attempted once and is never transport-retried.
+                  REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
+                    -f ref=main)"
+                  REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d '\r')"
+                  [[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+                    echo "ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}" >&2
+                    exit 1
+                  }
+                  REVIEW_DISPATCHED=true
+                  echo "Dispatched bounded singleton Spotlight reviewer evaluation from trusted main."
+                  echo "Reviewer dispatch occurred only after six exact-head prerequisites were green."
+                fi
+              fi
             fi
             if [ "$ALL_SUCCESS" = "true" ]; then break; fi
             test "$attempt" -lt 60
             sleep 10
           done
           test "$ALL_SUCCESS" = "true"
+          test "$REVIEW_DISPATCHED" = "true"
 
           PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
           jq -e '(type == "array") and (length == 1)' <<<"$PRS" >/dev/null
@@ -1599,41 +1668,31 @@ jobs:
           fi
 
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
-          PORTYU9_APPROVAL_COUNT=0
-          for REVIEW_ATTEMPT in $(seq 1 24); do
-            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
-            jq -e '
-              (type == "array") and (length >= 1) and (length <= 20) and
-              (all(.[]; type == "array" and length <= 100)) and
-              (all(.[0:-1][]; length == 100)) and
-              (all(.[][];
-                type == "object" and
-                (.id | type == "number" and . == floor and . > 0) and
-                (.user | type == "object" and (.login | type == "string" and length > 0)) and
-                (.state | type == "string" and
-                  (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
-                has("commit_id") and
-                (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
-                has("body") and
-                (.body == null or (.body | type == "string"))
-              )) and
-              (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
-            ' <<<"$REVIEW_PAGES" >/dev/null || {
-              echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
-              exit 1
-            }
-            REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
-            PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
-            [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]
-            if [ "$PORTYU9_APPROVAL_COUNT" -ge 1 ]; then
-              break
-            fi
-            if [ "$REVIEW_ATTEMPT" -lt 24 ]; then
-              sleep 5
-            fi
-          done
-          test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {
-            echo "ERROR: exact-base/head portyu9 review did not materialize after the pre-convergence dispatch." >&2
+          REVIEW_PAGES="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          jq -e '
+            (type == "array") and (length >= 1) and (length <= 20) and
+            (all(.[]; type == "array" and length <= 100)) and
+            (all(.[0:-1][]; length == 100)) and
+            (all(.[][];
+              type == "object" and
+              (.id | type == "number" and . == floor and . > 0) and
+              (.user | type == "object" and (.login | type == "string" and length > 0)) and
+              (.state | type == "string" and
+                (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+              has("commit_id") and
+              (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
+              has("body") and
+              (.body == null or (.body | type == "string"))
+            )) and
+            (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
+          ' <<<"$REVIEW_PAGES" >/dev/null || {
+            echo "ERROR: malformed or incomplete paginated pull-review evidence." >&2
+            exit 1
+          }
+          REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .state == "APPROVED" and .commit_id == $head and ((.body // "") | contains($marker)))] | length' <<<"$REVIEWS")"
+          test "$PORTYU9_APPROVAL_COUNT" = "1" || {
+            echo "ERROR: exact-base/head portyu9 approval is not singleton after all protected workflows converged." >&2
             exit 1
           }
           MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"

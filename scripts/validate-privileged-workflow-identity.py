@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v122"
+VERSION = "governed-workflow-byte-identity-v123"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "1de05f0d4e3ce1bcc9775cd653f529c8d1f6793a",
+    ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
     ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
-    ".github/workflows/spotlight-link-sync.yml": "99db9db6b8a93130359116edc4edb7683140baa1",
+    ".github/workflows/spotlight-link-sync.yml": "50c08154b53711b339a76bd976f822a59959d1ad",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -2164,71 +2164,59 @@ def validate_bot_review_identity_ref_evidence_schema(bot_review: str) -> None:
         )
 
 
+
 def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
+    approve = job_block(bot_review, "approve", "converge")
+    check_fetch = (
+        'checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/'
+        'check-runs?app_id=15368&filter=latest&per_page=100")"'
+    )
     for fragment in (
+        check_fetch,
         '(.check_runs | type == "array" and length <= 100) and',
-        '(.name == $name) and',
-        '(.app | type == "object" and (.id == 15368)) and',
+        '(.name | type == "string" and length > 0) and',
+        '(.app | type == "object" and .id == 15368) and',
         '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
-        'ERROR: malformed or incomplete required-check evidence for ${name} on ${head}.',
+        'ERROR: malformed or incomplete exact-head GitHub Actions check snapshot for ${head}.',
+        'count="$(jq --arg name "$name" \'[.check_runs[] | select(.name == $name)] | length\' <<<"$checks")"',
+        'required check ${name} is not singleton in the exact-head snapshot.',
         '(.workflow_runs | type == "array" and length <= 100) and',
         '(.head_repository | type == "object" and',
         '(([.workflow_runs[] | .id] | length) == ([.workflow_runs[] | .id] | unique | length))',
         'ERROR: malformed or incomplete workflow-run quiescence evidence for ${head}.',
     ):
-        require(
-            fragment in bot_review,
-            f"Bot PR reviewer run/check schema contract is missing: {fragment}",
-        )
+        require(fragment in approve, f"Bot PR reviewer run/check schema contract is missing: {fragment}")
+
     require(
-        bot_review.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 2,
+        approve.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 2,
         "Bot PR reviewer must strictly validate both bounded REST collection totals",
     )
     require(
-        bot_review.count(
-            '. == "queued" or . == "in_progress" or . == "requested" or'
-        ) == 2
-        and bot_review.count(
-            '. == "waiting" or . == "pending" or . == "completed"'
-        ) == 2,
-        "Bot PR reviewer must lock the documented six-state check/workflow-run status set at both evidence boundaries",
+        approve.count('. == "queued" or . == "in_progress" or . == "requested" or') == 2
+        and approve.count('. == "waiting" or . == "pending" or . == "completed"') == 2,
+        "Bot PR reviewer must lock the documented six-state check/workflow-run status set",
     )
     require(
-        bot_review.count('select(.status != "completed")') == 3,
-        "Bot PR reviewer must classify every validated non-completed check/run as active",
-    )
-    old_partial_active = (
-        'select(.status == "queued" or .status == "in_progress" or '
-        '.status == "waiting" or .status == "pending")'
+        approve.count('select(.status != "completed")') == 2,
+        "Bot PR reviewer must classify validated non-completed workflow runs as active",
     )
     require(
-        old_partial_active not in bot_review,
-        "Bot PR reviewer must not let requested/unknown workflow-run status disappear from quiescence",
+        'check_name=${name}' not in approve,
+        "Bot PR reviewer regressed to one check-run request per required context",
     )
-    require(
-        bot_review.count("malformed or incomplete required-check evidence") == 1
-        and bot_review.count("malformed or incomplete workflow-run quiescence evidence") == 1,
-        "Bot PR reviewer must retain exactly one fail-closed schema boundary for each run/check collection",
-    )
-
-    check_fetch = 'checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=${name}&filter=latest&per_page=100")"'
     check_schema = '(.check_runs | type == "array" and length <= 100) and'
-    check_ready = 'if [ "$count" = "0" ]; then'
+    check_ready = 'for name in "${required[@]}"; do'
     require(
-        bot_review.index(check_fetch) < bot_review.index(check_schema) < bot_review.index(check_ready),
-        "Bot PR reviewer must validate required-check evidence before readiness decisions",
+        approve.index(check_fetch) < approve.index(check_schema) < approve.index(check_ready),
+        "Bot PR reviewer must validate one complete exact-head check snapshot before readiness decisions",
     )
-
     run_fetch = 'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")"'
     run_schema = '(.workflow_runs | type == "array" and length <= 100) and'
     active_profile = 'active_profile="$(jq --arg head "$head"'
     require(
-        bot_review.index(run_fetch) < bot_review.index(run_schema) < bot_review.index(active_profile),
+        approve.index(run_fetch) < approve.index(run_schema) < approve.index(active_profile),
         "Bot PR reviewer must validate workflow-run evidence before quiescence filtering",
     )
-
-
-
 
 def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> None:
     for fragment in (
@@ -2948,6 +2936,25 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
         "validate_spotlight_pull_list_item() {" not in projected,
         "Spotlight approval-list compatibility projection left helper definition bytes behind",
     )
+
+    readiness_start_marker = '                REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"\n'
+    readiness_end_marker = '                  echo "Reviewer dispatch occurred only after six exact-head prerequisites were green."\n'
+    require(
+        projected.count(readiness_start_marker) == 1
+        and projected.count(readiness_end_marker) == 1,
+        "Spotlight review-readiness compatibility projection anchors changed",
+    )
+    readiness_start = projected.index(readiness_start_marker)
+    readiness_end = projected.index(readiness_end_marker, readiness_start) + len(readiness_end_marker)
+    require(
+        readiness_start < readiness_end,
+        "Spotlight review-readiness compatibility projection ordering changed",
+    )
+    projected = projected[:readiness_start] + projected[readiness_end:]
+    require(
+        "Spotlight exact-head reviewer-readiness snapshot." not in projected,
+        "Spotlight review-readiness compatibility projection left readiness schema bytes behind",
+    )
     return projected
 
 
@@ -3029,22 +3036,50 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
         raise ValueError("Spotlight cancellation-isolation self-test accepted global planning cancellation")
 
 
+
+
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
     validate_bot_review_run_check_evidence_schema(bot_review)
     validate_dependabot_readiness_run_check_evidence_schema(dependabot)
     validate_dependabot_protected_workflow_evidence_schema(dependabot)
-    validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
+    owner_review_job = job_block(bot_review, "approve", "converge")
+    require(
+        owner_review_job.count('/reviews?per_page=100') == 2
+        and owner_review_job.count('REVIEW_PAGES="$(gh api --paginate --slurp') == 2
+        and owner_review_job.count('REVIEWS="$(jq -c \'[.[][]]\' <<<"$REVIEW_PAGES")"') == 2
+        and owner_review_job.count('ERROR: malformed or incomplete paginated pull-review evidence.') == 2,
+        "Bot PR owner-review path must retain exactly two complete paginated review observations",
+    )
+    for fragment in (
+        '(type == "array") and (length >= 1) and (length <= 20)',
+        '(all(.[]; type == "array" and length <= 100))',
+        '(all(.[0:-1][]; length == 100))',
+        '(.user | type == "object" and (.login | type == "string" and length > 0))',
+        '(.state | type == "string" and',
+        'has("commit_id") and',
+        '(.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$")))',
+        'has("body") and',
+        '(.body == null or (.body | type == "string"))',
+        '(([.[][] | .id] | length) == ([.[][] | .id] | unique | length))',
+    ):
+        require(
+            owner_review_job.count(fragment) >= 2,
+            f"Bot PR owner-review strict schema contract is missing at one of two observations: {fragment}",
+        )
+    require(
+        'REVIEWS="$(gh api --paginate --slurp' not in owner_review_job,
+        "Bot PR owner-review path must validate paginated evidence before flattening",
+    )
     validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
-    spotlight_review_projection = project_spotlight_approval_list_helper_to_legacy(
-        spotlight
-    )
+    spotlight_review_projection = project_spotlight_approval_list_helper_to_legacy(spotlight)
     validate_pull_review_evidence_schema(
         spotlight_review_projection, "Spotlight authorization/terminal merge", 2
     )
-    for fragment in (
+
+    common_fragments = (
         'local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)',
         'spotlight|dependabot|codeql-autofix)',
         'required+=(trusted-capability-admission)',
@@ -3053,7 +3088,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'LANE="spotlight"',
         'Skipping governed bot PR #${PR_NUMBER}: base is stale relative to current main.',
         'check_required_contexts "$HEAD_SHA" "$LANE"',
-        'all lane-required protected gates completed successfully',
+        'check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"',
         'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"',
         'for HISTORY_ATTEMPT in $(seq 1 20); do',
         'actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}',
@@ -3067,10 +3102,6 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         '--arg marker "$REVIEW_MARKER"',
         'contains($marker)',
         'exact-base/head marker-bound portyu9 approval',
-        'return 2',
-        'lane-required checks are not ready yet.',
-        'exact head is not quiescent yet.',
-        'completed unsuccessfully on ${head}.',
         '::error::PORTYU9_BOT_REVIEW_TOKEN is required in the portyu9-review-identity environment',
         'MARKER_REVIEW_COUNT=',
         'LATEST_MANUAL_DECISIVE_STATE=',
@@ -3080,7 +3111,6 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'a later manual exact-head CHANGES_REQUESTED veto by portyu9 is active.',
         'the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued.',
         'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
-        'exit 1',
         "group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'spotlight-dispatch' }}",
         "github.event.workflow_run.event == 'pull_request'",
         "github.event.workflow_run.head_branch != 'main'",
@@ -3094,57 +3124,20 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'WAKE_EVENT_NAME: ${{ github.event_name }}',
         'WAKE_HEAD_SHA: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_sha || \'\' }}',
         'WAKE_HEAD_REF: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_branch || \'\' }}',
-        'case "$WAKE_EVENT_NAME" in',
-        'workflow_dispatch)',
-        '--arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF"',
-        '.base.sha == $main and',
         'if $wake_mode == "workflow_dispatch" then',
         '.user.login == "github-actions[bot]" and',
         '(.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$")) and',
         '.title == "chore: sync rotating Spotlight links" and',
-        '.body == "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force."',
-        '.head.sha == $wake_head and',
-        '.head.ref == $wake_ref and',
-        '--arg event "$WAKE_EVENT_NAME"',
-        '.event == $event and',
-        'if [ "$WAKE_EVENT_NAME" = "workflow_dispatch" ]; then',
-        'test "$CANDIDATE_COUNT" = "1" || {',
         'trusted-main Spotlight reviewer wake requires exactly one current-main candidate',
-        'test "$CANDIDATE_COUNT" -le 1',
         'cancel-in-progress: true',
-        'Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE}).',
-        'local head="$1" head_ref="$2" runs total count active_profile unexpected_active',
-        '.name == "Profile quality" and',
-        '.path == ".github/workflows/profile-quality.yml" and',
-        '.event == "pull_request" and',
-        '.head_sha == $head and',
-        '.head_branch == $head_ref and',
-        '.repository.full_name == $repo and',
-        '.head_repository.full_name == $repo',
-        '[ "$active_profile" -le 1 ] || {',
-        'multiple canonical active Profile Quality runs exist for ${head}.',
-        'non-Profile-Quality workflow run(s) remain active.',
         '(.errors == null) and',
-        '(.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage | type == "boolean") and',
         '(.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false) and',
-        '(.data.repository.pullRequest.reviewThreads.nodes | type == "array") and',
-        '(type == "object") and (.isResolved | type == "boolean")',
         'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"',
-        '(type == "array") and (length >= 1) and (length <= 30) and',
-        '(all(.[]; (type == "array") and (length <= 100))) and',
-        '(all(.[0:-1][]; (length == 100))) and',
-        '(.number | type == "number" and . == floor and . > 0) and',
-        '(.state == "open") and',
-        '(.draft | type == "boolean") and',
-        '(.ref == "main") and',
-        '(.sha | type == "string" and test("^[0-9a-f]{40}$"))',
-        '(.full_name | type == "string" and length > 0)',
-        '(([.[][] | .number] | length) == ([.[][] | .number] | unique | length))',
-        '(has("body")) and',
-        '(.body == null or ((.body | type) == "string"))',
         'ERROR: malformed or incomplete paginated open-PR evidence.',
-    ):
+    )
+    for fragment in common_fragments:
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
+
     require(
         bot_review.count("  workflow_dispatch:\n") == 1,
         "Bot PR reviewer must expose exactly one fixed workflow_dispatch entry",
@@ -3159,15 +3152,6 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         and "github.event.client_payload" not in bot_review,
         "Bot PR reviewer must not regain generic repository-dispatch routing",
     )
-    require(
-        "github.event_name == 'workflow_dispatch'" in bot_review
-        and "github.actor == 'github-actions[bot]'" in bot_review
-        and "github.ref == 'refs/heads/main'" in bot_review
-        and 'if $wake_mode == "workflow_dispatch" then' in bot_review
-        and '.title == "chore: sync rotating Spotlight links"' in bot_review
-        and 'trusted-main Spotlight reviewer wake requires exactly one current-main candidate' in bot_review,
-        "Bot PR reviewer fixed dispatch must remain bot/main-only with fail-closed canonical Spotlight singleton discovery",
-    )
     for retired in (
         "      - Capability admission\n",
         "      - CodeQL Autofix controller\n",
@@ -3175,136 +3159,132 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "      - Dependabot controller\n",
     ):
         require(retired not in bot_review, f"Bot PR reviewer must not regain main/global wake source: {retired.strip()}")
-    for fragment in (
-        'wait_for_spotlight_readiness() {',
-        'for attempt in $(seq 1 48); do',
-        'check_required_contexts "$head" "$lane"',
-        'check_quiescent_runs "$head" "$head_ref"',
-        'Spotlight reviewer readiness converged for ${head} on bounded attempt ${attempt}/48.',
-        'Spotlight reviewer bounded-wait: exact-head checks/quiescence are not ready yet',
-        'Spotlight reviewer readiness did not converge inside the bounded 48-attempt window.',
-        'if [ "$LANE" = "spotlight" ]; then',
-        'wait_for_spotlight_readiness "$HEAD_SHA" "$HEAD_REF" "$LANE"',
-        'Spotlight readiness did not converge inside the bounded reviewer window.',
-    ):
-        require(fragment in bot_review, f"Bot PR Spotlight bounded-review liveness contract is missing: {fragment}")
-    spotlight_wait_pos = bot_review.index('wait_for_spotlight_readiness "$HEAD_SHA" "$HEAD_REF" "$LANE"')
-    thread_read_pos = bot_review.index('THREADS="$(gh api graphql', spotlight_wait_pos)
-    marker_read_pos = bot_review.index('REVIEW_MARKER="<!-- portyu9-bot-review:v2', thread_read_pos)
-    require(
-        spotlight_wait_pos < thread_read_pos < marker_read_pos,
-        "Bot PR reviewer must converge Spotlight readiness before fresh review-thread and review-state evidence",
-    )
-    nonspot_guard_pos = bot_review.index('if [ "$LANE" != "spotlight" ]; then', thread_read_pos)
-    nonspot_readiness_pos = bot_review.index('check_required_contexts "$HEAD_SHA" "$LANE"', nonspot_guard_pos)
-    require(
-        thread_read_pos < nonspot_guard_pos < nonspot_readiness_pos < marker_read_pos,
-        "Non-Spotlight lanes must retain fresh thread evidence before their original one-shot readiness checks",
-    )
 
-    open_pr_fetch = 'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"'
+    check_snapshot = 'checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&filter=latest&per_page=100")"'
     require(
-        bot_review.count(open_pr_fetch) == 1,
-        "Bot PR reviewer open-main PR discovery endpoint count changed",
+        bot_review.count(check_snapshot) == 1,
+        "Bot PR reviewer must derive all lane prerequisites from one exact-head GitHub-Actions snapshot per observation",
     )
-    open_pr_schema = '(type == "array") and (length >= 1) and (length <= 30) and'
-    candidate_filter = 'CANDIDATES="$(jq -c --arg repo "$TARGET_REPOSITORY"'
+    for fragment in (
+        '(.total_count == (.check_runs | length))',
+        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
+        '[.check_runs[] | select(.name == $name)] | length',
+        '[.check_runs[] | select(.name == $name and .status != "completed")] | length',
+        '[.check_runs[] | select(.name == $name and .status == "completed" and .conclusion != "success")] | length',
+    ):
+        require(fragment in bot_review, f"Bot PR exact-head prerequisite snapshot contract is missing: {fragment}")
     require(
-        bot_review.index(open_pr_fetch) < bot_review.index(open_pr_schema) < bot_review.index(candidate_filter),
-        "Bot PR reviewer must validate the complete open-PR collection before governed candidate filtering",
+        'check_name=${name}' not in bot_review,
+        "Bot PR reviewer regressed to one GitHub API read per required check context",
     )
     require(
-        bot_review.count("malformed or incomplete paginated open-PR evidence") == 1,
-        "Bot PR reviewer must have exactly one fail-closed open-PR collection schema boundary",
-    )
-    require(
-        'for name in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do'
-        not in bot_review,
-        "Bot PR user approval regressed to one global six-check set instead of lane-specific gates",
+        'wait_for_spotlight_readiness' not in bot_review
+        and 'for attempt in $(seq 1 48)' not in bot_review
+        and 'bounded 48-attempt window' not in bot_review,
+        "Bot PR reviewer must remain event-driven and must not restore the 48x readiness poll",
     )
     require(
         bot_review.count('check_required_contexts "$HEAD_SHA" "$LANE"') == 2,
-        "Bot PR user approval must re-prove the lane-specific gate set before and immediately before review mutation",
+        "Bot PR reviewer must perform one initial and one final exact-head prerequisite re-proof",
     )
     require(
         bot_review.count('check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"') == 2,
-        "Bot PR user approval must re-prove exact-head quiescence with immutable head-ref binding before and immediately before review mutation",
-    )
-    require(
-        'if check_quiescent_runs "$HEAD_SHA"; then' not in bot_review,
-        "Bot PR quiescence proof must bind the exact governed head ref instead of head SHA alone",
-    )
-    require(
-        'active="$(jq \'[.workflow_runs[] | select(.status == "queued"' not in bot_review,
-        "Bot PR reviewer must not globally wait on the review-dependent Profile Quality run",
-    )
-    require(
-        bot_review.count('wake_governed_lane_after_review "$LANE" "$HEAD_REF"') == 2,
-        "Bot PR reviewer must wake once on an already-valid marker review and once after a newly-created review",
-    )
-    require(
-        'test "$(jq -r .base.sha <<<"$PR")" = "$MAIN_SHA"' not in bot_review,
-        "Bot PR user approval must skip stale-base candidates instead of globally failing the reviewer pass",
-    )
-    require(
-        '.state == "APPROVED" and .commit_id == $head)] | length' not in bot_review,
-        "Bot PR user approval must not treat GitHub commit_id alone as immutable exact-head proof",
-    )
-    require(
-        '::notice::PORTYU9_BOT_REVIEW_TOKEN is not configured' not in bot_review
-        and 'no user review was submitted.\n            exit 0' not in bot_review,
-        "Bot PR user approval must fail closed instead of reporting success when the real-user credential is absent",
+        "Bot PR reviewer must perform one initial and one final exact-head quiescence re-proof",
     )
 
+    approve = job_block(bot_review, "approve", "converge")
+    converge = job_block(bot_review, "converge", None)
+    require("environment: portyu9-review-identity" in approve,
+            "Owner review credential must remain isolated in the reviewed environment")
+    require("PORTYU9_BOT_REVIEW_TOKEN" in approve,
+            "Owner-secret approval job lost the reviewed credential reference")
+    require("actions: read" in approve and "actions: write" not in approve,
+            "Owner-secret approval job must not hold Actions write authority")
+    require("PORTYU9_BOT_REVIEW_TOKEN" not in converge and "REVIEW_TOKEN" not in converge,
+            "No-secret convergence job must not receive the owner review credential")
+    require("actions: write" in converge and "actions: read" not in converge,
+            "No-secret convergence job must exclusively own Actions write authority")
     require(
-        bot_review.count("actions: write") == 2 and "actions: read" not in bot_review,
-        "Bot PR user approval must retain Actions-only wake authority at workflow and job scope",
+        "name: exact-head-review-convergence" in converge
+        and "needs: approve" in converge
+        and "needs.approve.outputs.reviewed == 'true'" in converge,
+        "No-secret convergence job must be gated on exact reviewed-candidate evidence",
     )
-    require("contents: write" not in bot_review,
-            "Bot PR user approval must not acquire repository-contents write authority")
-    for fragment in (
-        'wake_governed_lane_after_review "$LANE" "$HEAD_REF"',
+    for output in (
+        "reviewed:", "pr_number:", "base_sha:", "head_sha:", "head_ref:", "lane:", "review_submitted_at:",
+    ):
+        require(output in approve, f"Owner-secret review job lost convergence output: {output}")
+    require(
+        approve.count('emit_reviewed_candidate "$PR_NUMBER" "$MAIN_SHA" "$HEAD_SHA" "$HEAD_REF" "$LANE" "$MARKER_SUBMITTED_AT"') == 2,
+        "Owner-secret review job must emit one exact candidate for an existing marker and one after a new marker",
+    )
+    require("wake_governed_lane_after_review" not in approve,
+            "Owner-secret review job must not perform Actions-write convergence mutations")
+
+    review_post = 'REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST'
+    require(review_post in approve and review_post not in converge,
+            "Real-user review mutation must remain isolated to the owner-secret job")
+    require(
+        approve.index(review_post) < approve.rindex('emit_reviewed_candidate "$PR_NUMBER" "$MAIN_SHA"'),
+        "Newly-created exact review must be validated before reviewed-candidate evidence is emitted",
+    )
+
+    convergence_fragments = (
+        'REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"',
+        'test "$(jq \'length\' <<<"$MARKER_REVIEWS")" = "1"',
+        'test "$(jq -r .state <<<"$MARKER_REVIEW")" = "APPROVED"',
+        'manual exact-head CHANGES_REQUESTED veto appeared before convergence.',
+        'rerun_governed_review_gate_if_needed() {',
+        'check_name=trusted-governed-bot-review&filter=latest&per_page=100',
+        '.name == "trusted-governed-bot-review"',
+        '.name == "Profile quality"',
+        '.path == ".github/workflows/profile-quality.yml"',
+        '.event == "pull_request"',
+        '.head_sha == $head',
+        '.head_branch == $head_ref',
+        '.check_suite_id == $suite',
+        '.workflow_name == "Profile quality"',
+        '.run_attempt | type == "number" and . == floor and . > 0',
+        'test "$job_attempt" = "$run_attempt"',
+        'Governed review gate job ${gate_job_id} started after the exact approval existed; refusing another autonomous rerun.',
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}/rerun"',
+        'governed review gate job rerun returned unexpected status:',
+        'Re-ran exact pre-approval governed review gate job ${gate_job_id} once after exact marker approval.',
+        'ambiguous gate-rerun mutation could not be reconciled by exact check observation.',
+        'Observed a new exact governed-review check after ambiguous rerun transport; refusing duplicate POST.',
+        'refusing duplicate POST.',
         'repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches',
         'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches',
-        'Spotlight parent workflow bounded-waits for the exact review; no post-review recovery wake is required.',
-        'Dispatched event-driven post-review convergence wake',
-    ):
-        require(fragment in bot_review, f"Bot PR post-review event-driven wake contract is missing: {fragment}")
+        'Spotlight governed-review convergence is driven by the exact gate-job rerun; no workflow-wide recovery dispatch is needed.',
+        'wake_governed_lane_after_review "$LANE" "$HEAD_REF" "$HEAD_SHA" "$REVIEW_SUBMITTED_AT"',
+        'Completed exact reviewed-candidate convergence without exposing the owner review token to Actions-write.',
+    )
+    for fragment in convergence_fragments:
+        require(fragment in converge, f"No-secret governed-review convergence contract is missing: {fragment}")
+    require(
+        converge.count('gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}/rerun"') == 1,
+        "Exact governed-review gate rerun mutation must have one non-retrying call site",
+    )
+    require(
+        converge.count('repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches') == 1
+        and converge.count('repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches') == 1,
+        "No-secret convergence must retain exactly one lane-controller wake per non-Spotlight lane",
+    )
+    require('repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches' not in converge,
+            "Spotlight convergence must not restore redundant workflow-wide recovery dispatch")
     require('repos/${TARGET_REPOSITORY}/dispatches' not in bot_review,
             "Bot PR reviewer must not gain generic repository-dispatch authority")
-    require(
-        'repos/${TARGET_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches' not in bot_review,
-        "Spotlight reviewer must not reintroduce the redundant post-review recovery wake",
-    )
-    marker_approved_pos = bot_review.index('if [ "$MARKER_STATE" = "APPROVED" ]; then')
-    recovery_wake_pos = bot_review.index('wake_governed_lane_after_review "$LANE" "$HEAD_REF"', marker_approved_pos)
-    continue_pos = bot_review.index('              continue', recovery_wake_pos)
-    require(marker_approved_pos < recovery_wake_pos < continue_pos,
-            "Bot PR existing-marker recovery wake must occur before the reviewer skips the already-approved candidate")
-    review_mutation_pos = bot_review.index('REVIEW_HTTP_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api --include --method POST')
-    post_mutation_wake_pos = bot_review.rindex('wake_governed_lane_after_review "$LANE" "$HEAD_REF"')
-    require(review_mutation_pos < post_mutation_wake_pos,
-            "Bot PR new-review controller wake must occur only after the real-user exact-base/head approval mutation")
-    require(
-        'repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main' in bot_review,
-        "Dependabot post-review wake must dispatch the trusted controller on main",
-    )
+    require("contents: write" not in bot_review,
+            "Bot PR reviewer must not acquire repository-contents write authority")
+
     for fragment in (
         "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
         'test "$WAKE_REF" = "refs/heads/main"',
         'test "$WAKE_ACTOR" = "github-actions[bot]"',
         "startsWith(github.ref, 'refs/heads/dependabot/github_actions/')",
         'MERGE_HTTP_RESPONSE="$RUNNER_TEMP/dependabot-merge-http-response.txt"',
-        'MERGE_BODY="$RUNNER_TEMP/dependabot-merge-response.json"',
-        'MERGE_ERR="$RUNNER_TEMP/dependabot-merge-error.txt"',
         'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"',
-        'MERGE_STATUS=$?',
-        'if [ "$MERGE_STATUS" -ne 0 ]; then',
-        'MERGE_STATUS_LINE="$(head -n 1 "$MERGE_HTTP_RESPONSE" | tr -d \'\\r\')"',
-        '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
         'Dependabot terminal merge returned unexpected status:',
-        'Dependabot merge API request failed: ${MERGE_MESSAGE}',
-        'Dependabot merge API rejected exact-head merge: ${MERGE_MESSAGE}',
     ):
         require(fragment in dependabot, f"Dependabot trusted post-review dispatch contract is missing: {fragment}")
 
@@ -3337,7 +3317,6 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
             ' merge is vetoed.',
         ):
             require(fragment in workflow, f"{label} manual portyu9 veto contract is missing: {fragment}")
-
 
 def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
     capability_fragments = (
@@ -3372,8 +3351,11 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"',
         'CERTIFIED_TRUSTED_DETAILS_URL="$(jq -r \'.trustedAdmission.checkRun.detailsUrl\' "$CERTIFICATE")"',
         'test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"',
-        'for REVIEW_ATTEMPT in $(seq 1 24); do',
-        'exact-base/head portyu9 review did not materialize after the pre-convergence dispatch.',
+        'REVIEW_DISPATCHED=false',
+        'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
+        'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.',
+        'Reviewer dispatch occurred only after six exact-head prerequisites were green.',
+        'test "$REVIEW_DISPATCHED" = "true"',
         'Observed exact-base/head marker-bound portyu9 approval before merge authorization.',
         'Spotlight terminal stage: trusted-admission-live-reproof-verified',
         'error("Spotlight automation-approval comment pages must be a bounded slurped page array")',
@@ -3411,14 +3393,20 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
 
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
     reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
-    convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do'
+    convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do'
+    readiness_loop = 'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do'
+    review_observation = 'Observed exact-base/head marker-bound portyu9 approval before merge authorization.'
     require(
         spotlight.count(reviewer_dispatch) == 1,
         "Spotlight must dispatch exactly one fixed exact-candidate reviewer workflow",
     )
     require(
-        spotlight.index(capability_dispatch) < spotlight.index(reviewer_dispatch) < spotlight.index(convergence_start),
-        "Spotlight admission and exact-candidate reviewer dispatch must precede protected-workflow convergence",
+        spotlight.index(capability_dispatch)
+        < spotlight.index(convergence_start)
+        < spotlight.index(readiness_loop, spotlight.index(convergence_start))
+        < spotlight.index(reviewer_dispatch, spotlight.index(convergence_start))
+        < spotlight.index(review_observation),
+        "Spotlight must dispatch the reviewer from exact prerequisite state during protected-workflow convergence",
     )
     require('grep -Fxc "$APPROVAL_BODY"' not in spotlight,
             "Spotlight approval comment verification must compare the complete multiline body atomically")
@@ -4137,7 +4125,11 @@ def self_test_spotlight_same_base_supersession() -> None:
 
 
 
+
 def validate_bot_review_dispatch_status_contract(bot_review: str) -> None:
+    approve = job_block(bot_review, "approve", "converge")
+    converge = job_block(bot_review, "converge", None)
+
     dependabot_dispatch = (
         'wake_response="$(gh api --include --method POST '
         '"repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main)"'
@@ -4146,41 +4138,60 @@ def validate_bot_review_dispatch_status_contract(bot_review: str) -> None:
         'wake_response="$(gh api --include --method POST '
         '"repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main)"'
     )
-    status_guard = (
-        '[[ "$wake_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
-    )
-    for label, fragment in (
-        ("Dependabot", dependabot_dispatch),
-        ("CodeQL", codeql_dispatch),
-    ):
+    status_guard = '[[ "$wake_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+    for label, fragment in (("Dependabot", dependabot_dispatch), ("CodeQL", codeql_dispatch)):
         require(
-            bot_review.count(fragment) == 1,
-            f"Bot PR reviewer {label} recovery dispatch must capture one --include response for status validation",
+            converge.count(fragment) == 1,
+            f"Bot PR reviewer {label} convergence dispatch must capture one --include response",
         )
     require(
-        bot_review.count(status_guard) == 1,
-        "Bot PR reviewer recovery dispatches must share one exact HTTP 204 status guard",
+        converge.count(status_guard) == 1,
+        "Bot PR reviewer convergence dispatches must share one exact HTTP 204 status guard",
     )
     require(
-        'recovery dispatch returned unexpected status: ${wake_status_line}' in bot_review,
-        "Bot PR reviewer recovery dispatch status failure must be explicit and fail closed",
+        'recovery dispatch returned unexpected status: ${wake_status_line}' in converge,
+        "Bot PR reviewer convergence dispatch status failure must be explicit and fail closed",
+    )
+
+    rerun_post = (
+        'gh api --include --method POST '
+        '"repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}/rerun"'
+    )
+    rerun_guard = '[[ "$rerun_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    require(
+        converge.count(rerun_post) == 1,
+        "Bot PR reviewer must issue at most one exact governed-review gate-job rerun POST",
+    )
+    require(
+        converge.count(rerun_guard) == 1,
+        "Bot PR reviewer gate-job rerun must require exact HTTP 201 on a definite success response",
+    )
+    for fragment in (
+        'rerun_governed_review_gate_if_needed() {',
+        'set +e',
+        'rerun_status=$?',
+        'set -e',
+        'sleep 1',
+        'ambiguous gate-rerun mutation could not be reconciled by exact check observation.',
+        'Observed a new exact governed-review check after ambiguous rerun transport; refusing duplicate POST.',
+        'governed review gate rerun transport failed and exact observation did not prove acceptance; refusing duplicate POST.',
+        'Spotlight governed-review convergence is driven by the exact gate-job rerun; no workflow-wide recovery dispatch is needed.',
+    ):
+        require(fragment in converge, f"Bot PR reviewer convergence mutation-ambiguity contract is missing: {fragment}")
+
+    require(
+        'wake_governed_lane_after_review' not in approve,
+        "Owner-secret review job must not retain Actions-write convergence mutations",
+    )
+    require(
+        "secrets." not in converge and "REVIEW_TOKEN" not in converge and "environment:" not in converge,
+        "Actions-write convergence job must not receive the owner review credential/environment",
     )
     for forbidden in (
         'dependabot-controller.yml/dispatches" -f ref=main >/dev/null',
         'codeql.yml/dispatches" -f ref=main >/dev/null',
     ):
-        require(
-            forbidden not in bot_review,
-            f"Bot PR reviewer must not discard privileged workflow-dispatch responses: {forbidden}",
-        )
-    status_pos = bot_review.index(status_guard)
-    require(
-        bot_review.index(dependabot_dispatch) < status_pos
-        and bot_review.index(codeql_dispatch) < status_pos,
-        "Bot PR reviewer must validate the dispatch status only after the selected lane mutation returns",
-    )
-
-
+        require(forbidden not in converge, f"Bot PR reviewer must not discard privileged workflow-dispatch responses: {forbidden}")
 
 def validate_bot_review_creation_status_contract(bot_review: str) -> None:
     response = (
@@ -4239,21 +4250,19 @@ def validate_bot_review_creation_status_contract(bot_review: str) -> None:
 
 
 
+
 def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     capability_dispatch = (
         'CAPABILITY_DISPATCH_RESPONSE="$(gh api --include --method POST '
         '"repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches" \\'
     )
-    capability_guard = (
-        '[[ "$CAPABILITY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
-    )
+    capability_guard = '[[ "$CAPABILITY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
     reviewer_dispatch = (
         'REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST '
         '"repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\'
     )
-    reviewer_guard = (
-        '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
-    )
+    reviewer_guard = '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+
     require(
         spotlight.count(capability_dispatch) == 1,
         "Spotlight Capability Admission dispatch must capture exactly one --include response",
@@ -4270,15 +4279,22 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
         spotlight.count(reviewer_guard) == 1,
         "Spotlight reviewer wake must require exact HTTP 204 status",
     )
+
     for fragment in (
         'CAPABILITY_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CAPABILITY_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
         'ERROR: Spotlight Capability Admission dispatch returned unexpected status: ${CAPABILITY_DISPATCH_STATUS_LINE}',
-        '-f ref=main',
+        'REVIEW_DISPATCHED=false',
+        'REVIEW_READY=true',
+        'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
         'REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
         'ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}',
+        'REVIEW_DISPATCHED=true',
         'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.',
+        'Reviewer dispatch occurred only after six exact-head prerequisites were green.',
+        'test "$REVIEW_DISPATCHED" = "true"',
     ):
         require(fragment in spotlight, f"Spotlight dispatch response-status contract is missing: {fragment}")
+
     for retired in (
         'repos/${GITHUB_REPOSITORY}/dispatches',
         'event_type=spotlight-review-wake',
@@ -4286,31 +4302,44 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
         'inputs[',
         'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.',
     ):
-        require(retired not in spotlight, f"Spotlight must not regain retired generic reviewer dispatch: {retired}")
+        require(retired not in spotlight, f"Spotlight must not regain retired reviewer dispatch behavior: {retired}")
+
     require(
         'capability-admission.yml/dispatches" \\\n            -f ref=main >/dev/null' not in spotlight,
         "Spotlight must not discard privileged Capability Admission dispatch responses",
     )
     capability_status = spotlight.index(capability_guard)
-    capability_success = spotlight.index(
-        'Dispatched event-driven Spotlight admission proof from trusted main;'
+    capability_success = spotlight.index('Dispatched event-driven Spotlight admission proof from trusted main;')
+    convergence = spotlight.index(
+        '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do'
     )
-    reviewer_status = spotlight.index(reviewer_guard)
+    readiness = spotlight.index(
+        'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
+        convergence,
+    )
+    reviewer_status = spotlight.index(reviewer_guard, readiness)
     reviewer_success = spotlight.index(
-        'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.'
+        'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.',
+        reviewer_status,
     )
-    convergence = spotlight.index('          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do')
+    readiness_success = spotlight.index(
+        'Reviewer dispatch occurred only after six exact-head prerequisites were green.',
+        reviewer_success,
+    )
+    terminal_proof = spotlight.index('test "$REVIEW_DISPATCHED" = "true"', readiness_success)
     require(
         spotlight.index(capability_dispatch)
         < capability_status
         < capability_success
-        < spotlight.index(reviewer_dispatch)
+        < convergence
+        < readiness
+        < spotlight.index(reviewer_dispatch, readiness)
         < reviewer_status
         < reviewer_success
-        < convergence,
-        "Spotlight must prove admission and exact reviewer wake HTTP 204 statuses before convergence",
+        < readiness_success
+        < terminal_proof,
+        "Spotlight must gate reviewer dispatch on exact six-context readiness and prove HTTP 204 before terminal convergence",
     )
-
 
 def validate_spotlight_workflow_run_approval_status(spotlight: str) -> None:
     endpoint = 'repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve'

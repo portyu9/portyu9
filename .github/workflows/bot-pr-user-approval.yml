@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
+  actions: read
   checks: read
   contents: read
   pull-requests: read
@@ -38,13 +38,22 @@ jobs:
     timeout-minutes: 6
     environment: portyu9-review-identity
     permissions:
-      actions: write
+      actions: read
       checks: read
       contents: read
       pull-requests: read
+    outputs:
+      reviewed: ${{ steps.review.outputs.reviewed }}
+      pr_number: ${{ steps.review.outputs.pr_number }}
+      base_sha: ${{ steps.review.outputs.base_sha }}
+      head_sha: ${{ steps.review.outputs.head_sha }}
+      head_ref: ${{ steps.review.outputs.head_ref }}
+      lane: ${{ steps.review.outputs.lane }}
+      review_submitted_at: ${{ steps.review.outputs.review_submitted_at }}
 
     steps:
       - name: Approve only exact green governed bot PRs as portyu9
+        id: review
         env:
           GH_TOKEN: ${{ github.token }}
           REVIEW_TOKEN: ${{ secrets.PORTYU9_BOT_REVIEW_TOKEN }}
@@ -54,6 +63,13 @@ jobs:
           WAKE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || '' }}
         run: |
           set -euo pipefail
+          echo "reviewed=false" >> "$GITHUB_OUTPUT"
+          echo "pr_number=" >> "$GITHUB_OUTPUT"
+          echo "base_sha=" >> "$GITHUB_OUTPUT"
+          echo "head_sha=" >> "$GITHUB_OUTPUT"
+          echo "head_ref=" >> "$GITHUB_OUTPUT"
+          echo "lane=" >> "$GITHUB_OUTPUT"
+          echo "review_submitted_at=" >> "$GITHUB_OUTPUT"
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
           case "$WAKE_EVENT_NAME" in
             workflow_run)
@@ -199,7 +215,7 @@ jobs:
           }
 
           check_required_contexts() {
-            local head="$1" lane="$2" name checks total count active failed
+            local head="$1" lane="$2" checks total count name active failed
             local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)
             case "$lane" in
               spotlight|dependabot|codeql-autofix)
@@ -210,55 +226,59 @@ jobs:
                 return 1
                 ;;
             esac
+
+            checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&filter=latest&per_page=100")" || {
+              echo "ERROR: failed to fetch exact-head GitHub Actions check snapshot for ${head}." >&2
+              return 1
+            }
+            jq -e --arg head "$head" '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+              (.check_runs | type == "array" and length <= 100) and
+              (.total_count == (.check_runs | length)) and
+              (all(.check_runs[];
+                type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                (.name | type == "string" and length > 0) and
+                (.head_sha == $head) and
+                (.app | type == "object" and .id == 15368) and
+                (.status | type == "string" and
+                  (. == "queued" or . == "in_progress" or . == "requested" or
+                   . == "waiting" or . == "pending" or . == "completed")) and
+                (if .status == "completed"
+                 then (.conclusion | type == "string" and length > 0)
+                 else .conclusion == null
+                 end)
+              )) and
+              (([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))
+            ' <<<"$checks" >/dev/null || {
+              echo "ERROR: malformed or incomplete exact-head GitHub Actions check snapshot for ${head}." >&2
+              return 1
+            }
+            total="$(jq -r '.total_count // empty' <<<"$checks")"
+            count="$(jq '.check_runs | length' <<<"$checks")"
+            [[ "$total" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid exact-head check total." >&2; return 1; }
+            [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid exact-head check count." >&2; return 1; }
+            [ "$total" = "$count" ] || { echo "ERROR: incomplete exact-head check snapshot." >&2; return 1; }
+
             for name in "${required[@]}"; do
-              checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=${name}&filter=latest&per_page=100")" || {
-                echo "ERROR: failed to fetch required check context ${name} for ${head}." >&2
-                return 1
-              }
-              jq -e --arg head "$head" --arg name "$name" '
-                (type == "object") and
-                (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
-                (.check_runs | type == "array" and length <= 100) and
-                (.total_count == (.check_runs | length)) and
-                (all(.check_runs[];
-                  type == "object" and
-                  (.id | (type == "number") and . == floor and . > 0) and
-                  (.name == $name) and
-                  (.head_sha == $head) and
-                  (.app | type == "object" and (.id == 15368)) and
-                  (.status | type == "string" and
-                    (. == "queued" or . == "in_progress" or . == "requested" or
-                     . == "waiting" or . == "pending" or . == "completed")) and
-                  (if .status == "completed"
-                   then (.conclusion | type == "string" and length > 0)
-                   else .conclusion == null
-                   end)
-                )) and
-                (([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))
-              ' <<<"$checks" >/dev/null || {
-                echo "ERROR: malformed or incomplete required-check evidence for ${name} on ${head}." >&2
-                return 1
-              }
-              total="$(jq -r '.total_count // empty' <<<"$checks")"
-              count="$(jq '.check_runs | length' <<<"$checks")"
-              [[ "$total" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid required-check total for ${name}." >&2; return 1; }
+              count="$(jq --arg name "$name" '[.check_runs[] | select(.name == $name)] | length' <<<"$checks")"
               [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid required-check count for ${name}." >&2; return 1; }
-              [ "$total" = "$count" ] || { echo "ERROR: incomplete required-check response for ${name}." >&2; return 1; }
               if [ "$count" = "0" ]; then
                 echo "Governed bot head ${head} is not ready: required check ${name} has not materialized yet."
                 return 2
               fi
-              jq -e --arg head "$head" 'all(.check_runs[]; .head_sha == $head and .app.id == 15368)' <<<"$checks" >/dev/null || {
-                echo "ERROR: required check identity changed for ${name} on ${head}." >&2
+              [ "$count" = "1" ] || {
+                echo "ERROR: required check ${name} is not singleton in the exact-head snapshot." >&2
                 return 1
               }
-              active="$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks")"
+              active="$(jq --arg name "$name" '[.check_runs[] | select(.name == $name and .status != "completed")] | length' <<<"$checks")"
               [[ "$active" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid active required-check count for ${name}." >&2; return 1; }
               if [ "$active" -gt 0 ]; then
                 echo "Governed bot head ${head} is not ready: required check ${name} is still active."
                 return 2
               fi
-              failed="$(jq '[.check_runs[] | select(.status == "completed" and .conclusion != "success")] | length' <<<"$checks")"
+              failed="$(jq --arg name "$name" '[.check_runs[] | select(.name == $name and .status == "completed" and .conclusion != "success")] | length' <<<"$checks")"
               [[ "$failed" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid failed required-check count for ${name}." >&2; return 1; }
               if [ "$failed" -gt 0 ]; then
                 echo "ERROR: required check ${name} completed unsuccessfully on ${head}." >&2
@@ -305,8 +325,8 @@ jobs:
             [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid workflow-run count for ${head}." >&2; return 1; }
             [ "$total" = "$count" ] || { echo "ERROR: incomplete workflow-run response for ${head}." >&2; return 1; }
 
-            # Profile Quality intentionally remains active while trusted-governed-bot-review
-            # waits for this exact reviewer. Exempt only that one canonical PR workflow run;
+            # The exact Profile Quality run may still be active while this event-driven reviewer
+            # observes prerequisite checks. Exempt only that one canonical PR workflow run;
             # every other exact-head run must be quiescent before the review mutation.
             active_profile="$(jq --arg head "$head" --arg head_ref "$head_ref" --arg repo "$TARGET_REPOSITORY" '[
               .workflow_runs[] |
@@ -345,34 +365,6 @@ jobs:
               echo "Governed bot head ${head} is not ready: ${unexpected_active} non-Profile-Quality workflow run(s) remain active."
               return 2
             fi
-          }
-
-          wait_for_spotlight_readiness() {
-            local head="$1" head_ref="$2" lane="$3" attempt ready_status
-            test "$lane" = "spotlight"
-            for attempt in $(seq 1 48); do
-              if check_required_contexts "$head" "$lane"; then
-                if check_quiescent_runs "$head" "$head_ref"; then
-                  echo "Spotlight reviewer readiness converged for ${head} on bounded attempt ${attempt}/48."
-                  return 0
-                else
-                  ready_status=$?
-                fi
-              else
-                ready_status=$?
-              fi
-              if [ "$ready_status" -ne 2 ]; then
-                return "$ready_status"
-              fi
-              if [ "$attempt" -lt 48 ]; then
-                if [ "$attempt" = "1" ] || [ $((attempt % 12)) -eq 0 ]; then
-                  echo "Spotlight reviewer bounded-wait: exact-head checks/quiescence are not ready yet (attempt ${attempt}/48)."
-                fi
-                sleep 5
-              fi
-            done
-            echo "Spotlight reviewer readiness did not converge inside the bounded 48-attempt window."
-            return 2
           }
 
           prepare_review_retry_history() {
@@ -434,29 +426,15 @@ jobs:
             ' "$RUNNER_TEMP/bot-review-prior-attempts.json" >/dev/null
           }
 
-          wake_governed_lane_after_review() {
-            local lane="$1" head_ref="$2" wake_response wake_status_line
-            case "$lane" in
-              dependabot)
-                wake_response="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main)"
-                ;;
-              codeql-autofix)
-                wake_response="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main)"
-                ;;
-              spotlight)
-                echo "Spotlight parent workflow bounded-waits for the exact review; no post-review recovery wake is required."
-                return 0
-                ;;
-              *)
-                echo "ERROR: cannot wake unknown governed bot lane: $lane" >&2
-                return 1
-                ;;
-            esac
-            wake_status_line="$(head -n 1 <<<"$wake_response" | tr -d '\r')"
-            [[ "$wake_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
-              echo "ERROR: governed ${lane} recovery dispatch returned unexpected status: ${wake_status_line}" >&2
-              return 1
-            }
+          emit_reviewed_candidate() {
+            local pr_number="$1" base_sha="$2" head_sha="$3" head_ref="$4" lane="$5" submitted_at="$6"
+            echo "reviewed=true" >> "$GITHUB_OUTPUT"
+            echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+            echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+            echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+            echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+            echo "lane=$lane" >> "$GITHUB_OUTPUT"
+            echo "review_submitted_at=$submitted_at" >> "$GITHUB_OUTPUT"
           }
 
           prepare_review_retry_history
@@ -525,19 +503,6 @@ jobs:
               continue
             fi
 
-            if [ "$LANE" = "spotlight" ]; then
-              if wait_for_spotlight_readiness "$HEAD_SHA" "$HEAD_REF" "$LANE"; then
-                :
-              else
-                READY_STATUS=$?
-                if [ "$READY_STATUS" -eq 2 ]; then
-                  echo "Skipping governed bot PR #${PR_NUMBER}: Spotlight readiness did not converge inside the bounded reviewer window."
-                  continue
-                fi
-                exit "$READY_STATUS"
-              fi
-            fi
-
             THREADS="$(gh api graphql               -F owner=portyu9               -F repo=portyu9               -F number="$PR_NUMBER"               -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}')"
             jq -e '
               (.errors == null) and
@@ -556,29 +521,26 @@ jobs:
             ' <<<"$THREADS" >/dev/null
             test "$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$THREADS")" = "0"
 
-            if [ "$LANE" != "spotlight" ]; then
-              if check_required_contexts "$HEAD_SHA" "$LANE"; then
-                :
-              else
-                READY_STATUS=$?
-                if [ "$READY_STATUS" -eq 2 ]; then
-                  echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks are not ready yet."
-                  continue
-                fi
-                exit "$READY_STATUS"
+            if check_required_contexts "$HEAD_SHA" "$LANE"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: lane-required checks are not ready yet."
+                continue
               fi
-              if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
-                :
-              else
-                READY_STATUS=$?
-                if [ "$READY_STATUS" -eq 2 ]; then
-                  echo "Skipping governed bot PR #${PR_NUMBER}: exact head is not quiescent yet."
-                  continue
-                fi
-                exit "$READY_STATUS"
-              fi
+              exit "$READY_STATUS"
             fi
-
+            if check_quiescent_runs "$HEAD_SHA" "$HEAD_REF"; then
+              :
+            else
+              READY_STATUS=$?
+              if [ "$READY_STATUS" -eq 2 ]; then
+                echo "Skipping governed bot PR #${PR_NUMBER}: exact head is not quiescent yet."
+                continue
+              fi
+              exit "$READY_STATUS"
+            fi
             REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"
             REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
             jq -e '
@@ -616,9 +578,14 @@ jobs:
             if [ "$MARKER_REVIEW_COUNT" = "1" ]; then
               MARKER_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].state' <<<"$REVIEWS")"
               if [ "$MARKER_STATE" = "APPROVED" ]; then
+                MARKER_SUBMITTED_AT="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].submitted_at // ""' <<<"$REVIEWS")"
+                jq -e -n --arg ts "$MARKER_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
+                  echo "ERROR: exact marker-bound approval has invalid submitted_at evidence." >&2
+                  exit 1
+                }
                 echo "PR #${PR_NUMBER} already has an exact-base/head marker-bound portyu9 approval."
-                wake_governed_lane_after_review "$LANE" "$HEAD_REF"
-                echo "Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
+                emit_reviewed_candidate "$PR_NUMBER" "$MAIN_SHA" "$HEAD_SHA" "$HEAD_REF" "$LANE" "$MARKER_SUBMITTED_AT"
+                echo "Emitted exact reviewed-candidate evidence for no-secret convergence of governed bot PR #${PR_NUMBER} (${LANE})."
               else
                 echo "Skipping governed bot PR #${PR_NUMBER}: the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued."
               fi
@@ -774,12 +741,335 @@ jobs:
               (.user | type == "object" and (.login == "portyu9")) and
               (.state == "APPROVED") and
               (.commit_id | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.submitted_at | type == "string" and length > 0) and
               (.body | type == "string" and . == $body)
             ' <<<"$REVIEW_RESPONSE" >/dev/null || {
               echo "ERROR: malformed or mismatched governed bot review response for PR #${PR_NUMBER}." >&2
               exit 1
             }
+            MARKER_SUBMITTED_AT="$(jq -r .submitted_at <<<"$REVIEW_RESPONSE")"
+            jq -e -n --arg ts "$MARKER_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
+              echo "ERROR: newly-created marker approval has invalid submitted_at evidence." >&2
+              exit 1
+            }
             echo "Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
-            wake_governed_lane_after_review "$LANE" "$HEAD_REF"
-            echo "Dispatched event-driven post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
+            emit_reviewed_candidate "$PR_NUMBER" "$MAIN_SHA" "$HEAD_SHA" "$HEAD_REF" "$LANE" "$MARKER_SUBMITTED_AT"
+            echo "Emitted exact reviewed-candidate evidence for no-secret convergence of governed bot PR #${PR_NUMBER} (${LANE})."
           done < <(jq -c '.[]' <<<"$CANDIDATES")
+
+  converge:
+    if: ${{ needs.approve.result == 'success' && needs.approve.outputs.reviewed == 'true' }}
+    name: exact-head-review-convergence
+    needs: approve
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      actions: write
+      checks: read
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Re-enter exact reviewed candidate without owner secret
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.approve.outputs.pr_number }}
+          BASE_SHA: ${{ needs.approve.outputs.base_sha }}
+          HEAD_SHA: ${{ needs.approve.outputs.head_sha }}
+          HEAD_REF: ${{ needs.approve.outputs.head_ref }}
+          LANE: ${{ needs.approve.outputs.lane }}
+          REVIEW_SUBMITTED_AT: ${{ needs.approve.outputs.review_submitted_at }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test -n "$HEAD_REF"
+          jq -e -n --arg ts "$REVIEW_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null
+          case "$LANE" in
+            dependabot|codeql-autofix|spotlight) ;;
+            *) echo "ERROR: unknown governed convergence lane: $LANE" >&2; exit 1 ;;
+          esac
+
+          MAIN_REF="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          jq -e --arg base "$BASE_SHA" '
+            (type == "object") and
+            (.ref == "refs/heads/main") and
+            (.object | type == "object" and .type == "commit" and .sha == $base)
+          ' <<<"$MAIN_REF" >/dev/null || {
+            echo "ERROR: governed convergence main ref moved or changed shape." >&2
+            exit 1
+          }
+
+          HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+          jq -e --arg ref "refs/heads/${HEAD_REF}" --arg head "$HEAD_SHA" '
+            (type == "object") and
+            (.ref == $ref) and
+            (.object | type == "object" and .type == "commit" and .sha == $head)
+          ' <<<"$HEAD_REF_RESPONSE" >/dev/null || {
+            echo "ERROR: governed convergence candidate ref moved or changed shape." >&2
+            exit 1
+          }
+
+          PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          jq -e             --argjson pr "$PR_NUMBER"             --arg base "$BASE_SHA"             --arg head "$HEAD_SHA"             --arg head_ref "$HEAD_REF"             --arg repo "$TARGET_REPOSITORY" '
+              (type == "object") and
+              (.number == $pr) and
+              (.state == "open") and
+              (.draft == false) and
+              (.base.ref == "main") and
+              (.base.sha == $base) and
+              (.head.sha == $head) and
+              (.head.ref == $head_ref) and
+              (.head.repo.full_name == $repo)
+            ' <<<"$PR" >/dev/null || {
+            echo "ERROR: governed convergence PR identity changed." >&2
+            exit 1
+          }
+
+          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
+          REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          jq -e '
+            (type == "array") and (length >= 1) and (length <= 20) and
+            (all(.[]; type == "array" and length <= 100)) and
+            (all(.[0:-1][]; length == 100)) and
+            (all(.[][];
+              type == "object" and
+              (.id | type == "number" and . == floor and . > 0) and
+              (.user | type == "object" and (.login | type == "string" and length > 0)) and
+              (.state | type == "string" and
+                (. == "APPROVED" or . == "CHANGES_REQUESTED" or . == "COMMENTED" or . == "DISMISSED" or . == "PENDING")) and
+              has("commit_id") and
+              (.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$"))) and
+              (.submitted_at == null or (.submitted_at | type == "string" and length > 0)) and
+              has("body") and
+              (.body == null or (.body | type == "string"))
+            )) and
+            (([.[][] | .id] | length) == ([.[][] | .id] | unique | length))
+          ' <<<"$REVIEW_PAGES" >/dev/null || {
+            echo "ERROR: malformed or incomplete convergence review evidence." >&2
+            exit 1
+          }
+          REVIEWS="$(jq -c '[.[][]]' <<<"$REVIEW_PAGES")"
+          MARKER_REVIEWS="$(jq -c --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER"             '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))]'             <<<"$REVIEWS")"
+          test "$(jq 'length' <<<"$MARKER_REVIEWS")" = "1"
+          MARKER_REVIEW="$(jq -c '.[0]' <<<"$MARKER_REVIEWS")"
+          test "$(jq -r .state <<<"$MARKER_REVIEW")" = "APPROVED"
+          test "$(jq -r '.submitted_at // ""' <<<"$MARKER_REVIEW")" = "$REVIEW_SUBMITTED_AT"
+          LATEST_MANUAL_DECISIVE_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER"             '[.[] | select(.user.login == "portyu9" and .commit_id == $head and (.state == "APPROVED" or .state == "CHANGES_REQUESTED") and (((.body // "") | contains($marker)) | not))] | sort_by(.id) | if length == 0 then "" else .[-1].state end'             <<<"$REVIEWS")"
+          test "$LATEST_MANUAL_DECISIVE_STATE" != "CHANGES_REQUESTED" || {
+            echo "ERROR: manual exact-head CHANGES_REQUESTED veto appeared before convergence." >&2
+            exit 1
+          }
+
+          rerun_governed_review_gate_if_needed() {
+            local head="$1" head_ref="$2" review_submitted_at="$3"
+            local checks count gate_id gate_status gate_conclusion gate_suite gate_details
+            local gate_run_id gate_job_id run job run_attempt job_attempt job_started
+            local rerun_response rerun_status rerun_status_line observed observed_id observed_status observed_conclusion
+
+            jq -e -n --arg ts "$review_submitted_at" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
+              echo "ERROR: exact marker-bound review has malformed submitted_at evidence." >&2
+              return 1
+            }
+
+            checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100")" || {
+              echo "ERROR: failed to fetch exact governed-review gate check for ${head}." >&2
+              return 1
+            }
+            jq -e --arg head "$head" '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 1) and
+              (.check_runs | type == "array" and length <= 1) and
+              (.total_count == (.check_runs | length)) and
+              (all(.check_runs[];
+                type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                .name == "trusted-governed-bot-review" and
+                .head_sha == $head and
+                (.app | type == "object" and .id == 15368) and
+                (.check_suite | type == "object" and (.id | type == "number" and . == floor and . > 0)) and
+                (.details_url | type == "string" and length > 0) and
+                (.status | type == "string" and
+                  (. == "queued" or . == "in_progress" or . == "requested" or
+                   . == "waiting" or . == "pending" or . == "completed")) and
+                (if .status == "completed"
+                 then (.conclusion | type == "string" and length > 0)
+                 else .conclusion == null
+                 end)
+              ))
+            ' <<<"$checks" >/dev/null || {
+              echo "ERROR: malformed or ambiguous governed-review gate check evidence for ${head}." >&2
+              return 1
+            }
+            count="$(jq -r .total_count <<<"$checks")"
+            if [ "$count" = "0" ]; then
+              echo "Governed review gate has not materialized yet for ${head}; no rerun mutation is eligible."
+              return 0
+            fi
+
+            gate_id="$(jq -r '.check_runs[0].id' <<<"$checks")"
+            gate_status="$(jq -r '.check_runs[0].status' <<<"$checks")"
+            gate_conclusion="$(jq -r '.check_runs[0].conclusion // ""' <<<"$checks")"
+            gate_suite="$(jq -r '.check_runs[0].check_suite.id' <<<"$checks")"
+            gate_details="$(jq -r '.check_runs[0].details_url' <<<"$checks")"
+            [[ "$gate_id" =~ ^[1-9][0-9]*$ ]]
+            [[ "$gate_suite" =~ ^[1-9][0-9]*$ ]]
+            if [ "$gate_status" != "completed" ]; then
+              echo "Governed review gate ${gate_id} is still ${gate_status}; no rerun mutation is eligible."
+              return 0
+            fi
+            if [ "$gate_conclusion" = "success" ]; then
+              echo "Governed review gate ${gate_id} is already successful; no rerun mutation is needed."
+              return 0
+            fi
+
+            if [[ "$gate_details" =~ ^https://github.com/portyu9/portyu9/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)$ ]]; then
+              gate_run_id="${BASH_REMATCH[1]}"
+              gate_job_id="${BASH_REMATCH[2]}"
+            else
+              echo "ERROR: governed review gate details URL is not an exact portyu9 Actions run/job URL." >&2
+              return 1
+            fi
+            test "$gate_job_id" = "$gate_id" || {
+              echo "ERROR: governed review gate check/job identity mismatch." >&2
+              return 1
+            }
+
+            run="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${gate_run_id}")" || {
+              echo "ERROR: failed to fetch governed review gate parent run ${gate_run_id}." >&2
+              return 1
+            }
+            jq -e --argjson run "$gate_run_id" --argjson suite "$gate_suite" --arg head "$head" --arg head_ref "$head_ref" --arg repo "$TARGET_REPOSITORY" '
+              (type == "object") and
+              (.id == $run) and
+              (.name == "Profile quality") and
+              (.path == ".github/workflows/profile-quality.yml") and
+              (.event == "pull_request") and
+              (.head_sha == $head) and
+              (.head_branch == $head_ref) and
+              (.repository | type == "object" and .full_name == $repo) and
+              (.head_repository | type == "object" and .full_name == $repo) and
+              (.check_suite_id == $suite) and
+              (.run_attempt | type == "number" and . == floor and . > 0) and
+              (.status == "completed") and
+              (.conclusion | type == "string" and length > 0)
+            ' <<<"$run" >/dev/null || {
+              echo "ERROR: governed review gate parent run identity is malformed or mismatched." >&2
+              return 1
+            }
+
+            job="$(gh api "repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}")" || {
+              echo "ERROR: failed to fetch governed review gate job ${gate_job_id}." >&2
+              return 1
+            }
+            jq -e --argjson job "$gate_job_id" --argjson run "$gate_run_id" --arg head "$head" --arg conclusion "$gate_conclusion" --arg repo "$TARGET_REPOSITORY" '
+              (type == "object") and
+              (.id == $job) and
+              (.run_id == $run) and
+              (.head_sha == $head) and
+              (.name == "trusted-governed-bot-review") and
+              (.workflow_name == "Profile quality") and
+              (.run_attempt | type == "number" and . == floor and . > 0) and
+              (.check_run_url == ("https://api.github.com/repos/" + $repo + "/check-runs/" + ($job | tostring))) and
+              (.status == "completed") and
+              (.conclusion == $conclusion) and
+              (.started_at | type == "string" and length > 0) and
+              (.completed_at | type == "string" and length > 0)
+            ' <<<"$job" >/dev/null || {
+              echo "ERROR: governed review gate job identity is malformed or mismatched." >&2
+              return 1
+            }
+            run_attempt="$(jq -r .run_attempt <<<"$run")"
+            job_attempt="$(jq -r .run_attempt <<<"$job")"
+            test "$job_attempt" = "$run_attempt" || {
+              echo "ERROR: governed review gate run/job attempt mismatch." >&2
+              return 1
+            }
+            job_started="$(jq -r .started_at <<<"$job")"
+            if ! jq -e -n --arg started "$job_started" --arg submitted "$review_submitted_at" '($started | fromdateiso8601) < ($submitted | fromdateiso8601)' >/dev/null; then
+              echo "Governed review gate job ${gate_job_id} started after the exact approval existed; refusing another autonomous rerun."
+              return 0
+            fi
+
+            rerun_response="$RUNNER_TEMP/governed-review-gate-rerun-http-response.txt"
+            set +e
+            gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}/rerun" >"$rerun_response" 2>"$RUNNER_TEMP/governed-review-gate-rerun-error.txt"
+            rerun_status=$?
+            set -e
+            if [ "$rerun_status" -eq 0 ]; then
+              rerun_status_line="$(head -n 1 "$rerun_response" | tr -d '\r')"
+              [[ "$rerun_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+                echo "ERROR: governed review gate job rerun returned unexpected status: ${rerun_status_line}" >&2
+                return 1
+              }
+              echo "Re-ran exact pre-approval governed review gate job ${gate_job_id} once after exact marker approval."
+              return 0
+            fi
+
+            sleep 1
+            observed="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100")" || {
+              echo "ERROR: ambiguous gate-rerun mutation could not be reconciled by exact check observation." >&2
+              return 1
+            }
+            jq -e --arg head "$head" '
+              (type == "object") and
+              (.total_count == 1) and
+              (.check_runs | type == "array" and length == 1) and
+              (.check_runs[0] | type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                .name == "trusted-governed-bot-review" and
+                .head_sha == $head and
+                (.app | type == "object" and .id == 15368) and
+                (.status | type == "string") and
+                (if .status == "completed" then .conclusion == "success" else .conclusion == null end))
+            ' <<<"$observed" >/dev/null || {
+              echo "ERROR: ambiguous gate-rerun mutation did not produce valid exact-head observation." >&2
+              return 1
+            }
+            observed_id="$(jq -r '.check_runs[0].id' <<<"$observed")"
+            observed_status="$(jq -r '.check_runs[0].status' <<<"$observed")"
+            observed_conclusion="$(jq -r '.check_runs[0].conclusion // ""' <<<"$observed")"
+            if [ "$observed_id" != "$gate_id" ] &&
+               { [ "$observed_status" != "completed" ] || [ "$observed_conclusion" = "success" ]; }; then
+              echo "Observed a new exact governed-review check after ambiguous rerun transport; refusing duplicate POST."
+              return 0
+            fi
+            echo "ERROR: governed review gate rerun transport failed and exact observation did not prove acceptance; refusing duplicate POST." >&2
+            return 1
+          }
+
+          wake_governed_lane_after_review() {
+            local lane="$1" head_ref="$2" head="$3" review_submitted_at="$4"
+            local wake_response wake_status_line
+
+            rerun_governed_review_gate_if_needed "$head" "$head_ref" "$review_submitted_at"
+
+            case "$lane" in
+              dependabot)
+                wake_response="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main)"
+                ;;
+              codeql-autofix)
+                wake_response="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main)"
+                ;;
+              spotlight)
+                echo "Spotlight governed-review convergence is driven by the exact gate-job rerun; no workflow-wide recovery dispatch is needed."
+                return 0
+                ;;
+              *)
+                echo "ERROR: cannot wake unknown governed bot lane: $lane" >&2
+                return 1
+                ;;
+            esac
+            wake_status_line="$(head -n 1 <<<"$wake_response" | tr -d '\r')"
+            [[ "$wake_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+              echo "ERROR: governed ${lane} recovery dispatch returned unexpected status: ${wake_status_line}" >&2
+              return 1
+            }
+          }
+
+
+          wake_governed_lane_after_review "$LANE" "$HEAD_REF" "$HEAD_SHA" "$REVIEW_SUBMITTED_AT"
+          echo "Completed exact reviewed-candidate convergence without exposing the owner review token to Actions-write."
