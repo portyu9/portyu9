@@ -10,10 +10,10 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v118"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "5d688dbc7e6c40be3d390456c8a4ac6d3e27bb0d,
+    ".github/workflows/bot-pr-user-approval.yml": "5d688dbc7e6c40be3d390456c8a4ac6d3e27bb0d",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
     ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
-    ".github/workflows/spotlight-link-sync.yml": "a81afb26b46c77a9d6cd73bba2ccf2325ece57d2,
+    ".github/workflows/spotlight-link-sync.yml": "a81afb26b46c77a9d6cd73bba2ccf2325ece57d2",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -3286,11 +3286,11 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "github.event.client_payload.lane == 'spotlight'",
         '      - spotlight-review-wake',
         'WAKE_EVENT_NAME: ${{ github.event_name }}',
-        'WAKE_PR_NUMBER: ${{ github.event_name == \'workflow_dispatch\' && github.event.client_payload.prNumber || \'\' }}',
-        'WAKE_BASE_SHA: ${{ github.event_name == \'workflow_dispatch\' && github.event.client_payload.baseSha || \'\' }}',
+        'WAKE_PR_NUMBER: ${{ github.event_name == \'repository_dispatch\' && github.event.client_payload.prNumber || \'\' }}',
+        'WAKE_BASE_SHA: ${{ github.event_name == \'repository_dispatch\' && github.event.client_payload.baseSha || \'\' }}',
         'WAKE_HEAD_SHA: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_sha || github.event.client_payload.headSha || \'\' }}',
         'WAKE_HEAD_REF: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_branch || github.event.client_payload.headRef || \'\' }}',
-        'WAKE_LANE: ${{ github.event_name == \'workflow_dispatch\' && github.event.client_payload.lane || \'\' }}',
+        'WAKE_LANE: ${{ github.event_name == \'repository_dispatch\' && github.event.client_payload.lane || \'\' }}',
         'case "$WAKE_EVENT_NAME" in',
         'repository_dispatch)',
         '[[ "$WAKE_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]',
@@ -3500,7 +3500,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "Dependabot post-review wake must dispatch the trusted controller on main",
     )
     for fragment in (
-        "github.event_name == 'repository_dispatch' && github.ref == 'refs/heads/main'",
+        "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'",
         'test "$WAKE_REF" = "refs/heads/main"',
         'test "$WAKE_ACTOR" = "github-actions[bot]"',
         "startsWith(github.ref, 'refs/heads/dependabot/github_actions/')",
