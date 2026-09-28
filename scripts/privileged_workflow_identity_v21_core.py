@@ -69,8 +69,9 @@ PROFILE_STATS_RECEIPT_SEQUENCE = (
     'source_sha: ${{ steps.publish.outputs.source_sha }}',
     'echo "published_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"',
     "  receipt:\n"
+    "    if: needs.generate.outputs.evidence_state == 'READY'\n"
     "    name: prepare-publication-receipt-read-only\n"
-    "    needs: [publish, stage, lease, attest]",
+    "    needs: [generate, publish, stage, lease, attest]",
     "    permissions:\n      contents: read\n    outputs:\n      published_sha: ${{ steps.receipt.outputs.published_sha }}",
     'ref: generated',
     'name: profile-evidence-attestation-predicate',
@@ -85,8 +86,9 @@ PROFILE_STATS_RECEIPT_SEQUENCE = (
     'python3 source/scripts/build-generated-publication-receipt.py',
     'name: generated-publication-receipt-predicate',
     "  receipt_attest:\n"
+    "    if: needs.generate.outputs.evidence_state == 'READY'\n"
     "    name: attest-publication-receipt-write-only\n"
-    "    needs: [receipt, lease, attest]",
+    "    needs: [generate, receipt, lease, attest]",
     "    permissions:\n      contents: read\n      id-token: write\n      attestations: write",
     'name: generated-publication-receipt-predicate',
     'EXPECTED_PREDICATE_SHA256: ${{ needs.receipt.outputs.predicate_sha256 }}',
@@ -95,7 +97,7 @@ PROFILE_STATS_RECEIPT_SEQUENCE = (
     'subject-digest: sha256:${{ needs.receipt.outputs.git_object_sha256 }}',
     'predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json',
     'predicate-path: receipt-attestation-input/generated-publication-receipt.json',
-    'needs: [receipt_attest, lease, attest]',
+    'needs: [generate, receipt_attest, lease, attest]',
 )
 
 SPOTLIGHT_RECONCILIATION_SEQUENCE = (
