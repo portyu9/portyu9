@@ -3272,6 +3272,15 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
         'exit 1',
         "group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}",
+        "github.event.workflow_run.event == 'pull_request'",
+        "github.event.workflow_run.head_branch != 'main'",
+        "github.event.workflow_run.head_repository.full_name == github.repository",
+        'WAKE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}',
+        'WAKE_HEAD_REF: ${{ github.event.workflow_run.head_branch }}',
+        '--arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF"',
+        '.head.sha == $wake_head and',
+        '.head.ref == $wake_ref and',
+        'test "$CANDIDATE_COUNT" -le 1',
         'cancel-in-progress: true',
         'Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE}).',
         'local head="$1" head_ref="$2" runs total count active_profile unexpected_active',
@@ -3306,6 +3315,14 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'ERROR: malformed or incomplete paginated open-PR evidence.',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
+    require("workflow_dispatch:" not in bot_review, "Bot PR reviewer must not regain generic workflow_dispatch entry")
+    for retired in (
+        "      - Capability admission\n",
+        "      - CodeQL Autofix controller\n",
+        "      - Spotlight link sync\n",
+        "      - Dependabot controller\n",
+    ):
+        require(retired not in bot_review, f"Bot PR reviewer must not regain main/global wake source: {retired.strip()}")
     for fragment in (
         'wait_for_spotlight_readiness() {',
         'for attempt in $(seq 1 48); do',
