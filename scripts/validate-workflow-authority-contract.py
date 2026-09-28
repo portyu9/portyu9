@@ -689,13 +689,13 @@ def project_item9_sync_with_marker(sync: str) -> str:
     reviewer_marker = 'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.'
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
     convergence_anchor = '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do\n'
-    core.require(sync.count(reviewer_dispatch) == 1 and sync.count(reviewer_marker) == 1,
-            "Spotlight must contain exactly one pre-convergence reviewer wake")
+    core.require(reviewer_dispatch not in sync and reviewer_marker not in sync,
+            "Spotlight must not dispatch a main/global pre-convergence reviewer wake")
     core.require(sync.count(capability_dispatch) == 1 and sync.count(convergence_anchor) == 1,
-            "Spotlight pre-convergence reviewer ordering anchors changed")
+            "Spotlight candidate-headed reviewer ordering anchors changed")
     core.require(
-        sync.index(capability_dispatch) < sync.index(reviewer_dispatch) < sync.index(convergence_anchor),
-        "Spotlight reviewer wake must stay after trusted admission dispatch and before whole-workflow convergence",
+        sync.index(capability_dispatch) < sync.index(convergence_anchor),
+        "Spotlight admission dispatch must stay before protected workflow convergence",
     )
 
     sync = project_ancestry_reconcile_to_same_base(sync)
@@ -848,9 +848,6 @@ def project_item9_sync_with_marker(sync: str) -> str:
     if projected.count(SPOTLIGHT_APPROVAL_AUDIT) != 1:
         raise ValueError("Spotlight item-9 approval-audit projection anchor changed")
     projected = projected.replace(SPOTLIGHT_APPROVAL_AUDIT, "", 1)
-    if projected.count(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAKE) != 1:
-        raise ValueError("Spotlight item-9 pre-convergence review-wake projection anchor changed")
-    projected = projected.replace(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAKE, "", 1)
     if projected.count(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAIT) != 1:
         raise ValueError("Spotlight item-9 pre-convergence review-wait projection anchor changed")
     projected = projected.replace(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAIT, "", 1)
