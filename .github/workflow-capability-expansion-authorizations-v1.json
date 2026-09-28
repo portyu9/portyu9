@@ -1125,7 +1125,7 @@
       "candidateBomSha256": "8d20f26fa6d3a673ffd8d7afdf4e80f34a256b0311cc03ad3d6ed6a9611c8f12",
       "expansionSha256": "6b4d0c33f822e6be13ea7ace95a78318b99c97a2cc5818a48e0e8ea9ee5c5c3b",
       "id": "cap-trusted-workflow-shell-source-v1",
-      "rationale": "Authorize frozen #1282 measured by closed disposable #1283: move the already-accepted #1240 serialized-shell-separator semantics into new protected scripts/workflow_capability_shell_source.py and make accepted-main trusted_workflow_capability.py invoke that pure inert-text guard before semantic capability compilation. Semantic Workflow Capability is unchanged; the exact expansion is only the existing trusted compiler source transition plus the new protected helper. No workflow trigger, permission, endpoint, mutation, secret/OIDC, required-check reduction, direct-main write, merge/ruleset authority, candidate execution, network/process authority, or bypass is added."
+      "rationale": "Authorize frozen #1282 measured by closed #1283: move accepted #1240 serialized-shell-separator semantics into protected workflow_capability_shell_source.py and invoke that pure inert-text guard from trusted_workflow_capability.py before semantic compilation. Semantic Workflow Capability is unchanged; only the trusted compiler source and new helper expand. No trigger, permission, endpoint, mutation, secret/OIDC, check reduction, candidate execution, merge/ruleset authority, or bypass."
     },
     {
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
