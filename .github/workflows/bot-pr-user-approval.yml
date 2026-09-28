@@ -199,7 +199,7 @@ jobs:
           }
 
           check_required_contexts() {
-            local head="$1" lane="$2" name checks total count active failed
+            local head="$1" lane="$2" checks total count name active failed
             local -a required=(validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review)
             case "$lane" in
               spotlight|dependabot|codeql-autofix)
@@ -210,58 +210,62 @@ jobs:
                 return 1
                 ;;
             esac
-            for name in "${required[@]}"; do
-              checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=${name}&filter=latest&per_page=100")" || {
-                echo "ERROR: failed to fetch required check context ${name} for ${head}." >&2
-                return 1
-              }
-              jq -e --arg head "$head" --arg name "$name" '
-                (type == "object") and
-                (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
-                (.check_runs | type == "array" and length <= 100) and
-                (.total_count == (.check_runs | length)) and
-                (all(.check_runs[];
-                  type == "object" and
-                  (.id | (type == "number") and . == floor and . > 0) and
-                  (.name == $name) and
-                  (.head_sha == $head) and
-                  (.app | type == "object" and (.id == 15368)) and
-                  (.status | type == "string" and
-                    (. == "queued" or . == "in_progress" or . == "requested" or
-                     . == "waiting" or . == "pending" or . == "completed")) and
-                  (if .status == "completed"
-                   then (.conclusion | type == "string" and length > 0)
-                   else .conclusion == null
-                   end)
-                )) and
-                (([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))
-              ' <<<"$checks" >/dev/null || {
-                echo "ERROR: malformed or incomplete required-check evidence for ${name} on ${head}." >&2
-                return 1
-              }
-              total="$(jq -r '.total_count // empty' <<<"$checks")"
-              count="$(jq '.check_runs | length' <<<"$checks")"
-              [[ "$total" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid required-check total for ${name}." >&2; return 1; }
-              [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid required-check count for ${name}." >&2; return 1; }
-              [ "$total" = "$count" ] || { echo "ERROR: incomplete required-check response for ${name}." >&2; return 1; }
+
+            checks="$(gh api "repos/\${TARGET_REPOSITORY}/commits/\${head}/check-runs?app_id=15368&filter=latest&per_page=100")" || {
+              echo "ERROR: failed to fetch exact-head GitHub Actions check snapshot for \${head}." >&2
+              return 1
+            }
+            jq -e --arg head "$head" '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+              (.check_runs | type == "array" and length <= 100) and
+              (.total_count == (.check_runs | length)) and
+              (all(.check_runs[];
+                type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                (.name | type == "string" and length > 0) and
+                (.head_sha == $head) and
+                (.app | type == "object" and .id == 15368) and
+                (.status | type == "string" and
+                  (. == "queued" or . == "in_progress" or . == "requested" or
+                   . == "waiting" or . == "pending" or . == "completed")) and
+                (if .status == "completed"
+                 then (.conclusion | type == "string" and length > 0)
+                 else .conclusion == null
+                 end)
+              )) and
+              (([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))
+            ' <<<"$checks" >/dev/null || {
+              echo "ERROR: malformed or incomplete exact-head GitHub Actions check snapshot for \${head}." >&2
+              return 1
+            }
+            total="$(jq -r '.total_count // empty' <<<"$checks")"
+            count="$(jq '.check_runs | length' <<<"$checks")"
+            [[ "$total" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid exact-head check total." >&2; return 1; }
+            [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid exact-head check count." >&2; return 1; }
+            [ "$total" = "$count" ] || { echo "ERROR: incomplete exact-head check snapshot." >&2; return 1; }
+
+            for name in "\${required[@]}"; do
+              count="$(jq --arg name "$name" '[.check_runs[] | select(.name == $name)] | length' <<<"$checks")"
+              [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid required-check count for \${name}." >&2; return 1; }
               if [ "$count" = "0" ]; then
-                echo "Governed bot head ${head} is not ready: required check ${name} has not materialized yet."
+                echo "Governed bot head \${head} is not ready: required check \${name} has not materialized yet."
                 return 2
               fi
-              jq -e --arg head "$head" 'all(.check_runs[]; .head_sha == $head and .app.id == 15368)' <<<"$checks" >/dev/null || {
-                echo "ERROR: required check identity changed for ${name} on ${head}." >&2
+              [ "$count" = "1" ] || {
+                echo "ERROR: required check \${name} is not singleton in the exact-head snapshot." >&2
                 return 1
               }
-              active="$(jq '[.check_runs[] | select(.status != "completed")] | length' <<<"$checks")"
-              [[ "$active" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid active required-check count for ${name}." >&2; return 1; }
+              active="$(jq --arg name "$name" '[.check_runs[] | select(.name == $name and .status != "completed")] | length' <<<"$checks")"
+              [[ "$active" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid active required-check count for \${name}." >&2; return 1; }
               if [ "$active" -gt 0 ]; then
-                echo "Governed bot head ${head} is not ready: required check ${name} is still active."
+                echo "Governed bot head \${head} is not ready: required check \${name} is still active."
                 return 2
               fi
-              failed="$(jq '[.check_runs[] | select(.status == "completed" and .conclusion != "success")] | length' <<<"$checks")"
-              [[ "$failed" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid failed required-check count for ${name}." >&2; return 1; }
+              failed="$(jq --arg name "$name" '[.check_runs[] | select(.name == $name and .status == "completed" and .conclusion != "success")] | length' <<<"$checks")"
+              [[ "$failed" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid failed required-check count for \${name}." >&2; return 1; }
               if [ "$failed" -gt 0 ]; then
-                echo "ERROR: required check ${name} completed unsuccessfully on ${head}." >&2
+                echo "ERROR: required check \${name} completed unsuccessfully on \${head}." >&2
                 return 1
               fi
             done
