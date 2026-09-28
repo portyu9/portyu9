@@ -31,7 +31,7 @@ jobs:
            github.event.workflow_run.head_repository.full_name == github.repository) ||
           (github.event_name == 'repository_dispatch' &&
            github.event.action == 'spotlight-review-wake' &&
-           github.actor == 'github-actions[bot]' &&
+           github.event.sender.login == 'github-actions[bot]' &&
            github.ref == 'refs/heads/main' &&
            github.event.client_payload.lane == 'spotlight') }}
     name: exact-head-portyu9-review
