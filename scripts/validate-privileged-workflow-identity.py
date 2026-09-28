@@ -3351,8 +3351,11 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"',
         'CERTIFIED_TRUSTED_DETAILS_URL="$(jq -r \'.trustedAdmission.checkRun.detailsUrl\' "$CERTIFICATE")"',
         'test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"',
-        'for REVIEW_ATTEMPT in $(seq 1 24); do',
-        'exact-base/head portyu9 review did not materialize after the pre-convergence dispatch.',
+        'REVIEW_DISPATCHED=false',
+        'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
+        'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.',
+        'Reviewer dispatch occurred only after six exact-head prerequisites were green.',
+        'test "$REVIEW_DISPATCHED" = "true"',
         'Observed exact-base/head marker-bound portyu9 approval before merge authorization.',
         'Spotlight terminal stage: trusted-admission-live-reproof-verified',
         'error("Spotlight automation-approval comment pages must be a bounded slurped page array")',
@@ -3390,14 +3393,20 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
 
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
     reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
-    convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do'
+    convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do'
+    readiness_loop = 'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do'
+    review_observation = 'Observed exact-base/head marker-bound portyu9 approval before merge authorization.'
     require(
         spotlight.count(reviewer_dispatch) == 1,
         "Spotlight must dispatch exactly one fixed exact-candidate reviewer workflow",
     )
     require(
-        spotlight.index(capability_dispatch) < spotlight.index(reviewer_dispatch) < spotlight.index(convergence_start),
-        "Spotlight admission and exact-candidate reviewer dispatch must precede protected-workflow convergence",
+        spotlight.index(capability_dispatch)
+        < spotlight.index(convergence_start)
+        < spotlight.index(readiness_loop, spotlight.index(convergence_start))
+        < spotlight.index(reviewer_dispatch, spotlight.index(convergence_start))
+        < spotlight.index(review_observation),
+        "Spotlight must dispatch the reviewer from exact prerequisite state during protected-workflow convergence",
     )
     require('grep -Fxc "$APPROVAL_BODY"' not in spotlight,
             "Spotlight approval comment verification must compare the complete multiline body atomically")
