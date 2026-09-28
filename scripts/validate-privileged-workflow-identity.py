@@ -3147,7 +3147,7 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
 def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) -> None:
     bot_block = (
         "concurrency:\n"
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.client_payload.headSha }}\n"
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.headSha }}\n"
         "  cancel-in-progress: true\n"
     )
     require(
@@ -3192,7 +3192,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
     validate_main_check_cancellation_isolation(bot_review, spotlight)
 
     broad_bot = bot_review.replace(
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.client_payload.headSha }}\n",
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || inputs.headSha }}\n",
         "  group: bot-pr-user-approval\n",
         1,
     )
