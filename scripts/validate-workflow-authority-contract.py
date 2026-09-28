@@ -778,6 +778,119 @@ def project_spotlight_state_conditioned_reviewer_to_predecessor(sync: str) -> st
     return sync
 
 
+def project_state_driven_spotlight_reviewer_to_legacy(sync: str) -> str:
+    """Project #1276's state-driven reviewer wake back to the pre-#1276 item-9 shape."""
+    init = '          REVIEW_DISPATCHED=false\n'
+    terminal = '          test "$REVIEW_DISPATCHED" = "true"\n'
+    state_start = (
+        '              if [ "$REVIEW_DISPATCHED" = "false" ] &&\n'
+        '                 [ "$CODEQL_SUCCESS" = "true" ] &&\n'
+        '                 [ "$DEPENDENCY_SUCCESS" = "true" ]; then\n'
+    )
+    state_end = (
+        '              fi\n'
+        '            fi\n'
+        '            if [ "$ALL_SUCCESS" = "true" ]; then break; fi\n'
+    )
+    core.require(
+        sync.count(init) == 1 and sync.count(terminal) == 1,
+        "Spotlight state-driven reviewer dispatch guard anchors changed",
+    )
+    core.require(
+        sync.count(state_start) == 1 and sync.count(state_end) == 1,
+        "Spotlight state-driven reviewer block boundary changed",
+    )
+    start = sync.index(state_start)
+    end_anchor = sync.index(state_end, start)
+    block_end = end_anchor + len('              fi\n')
+    block = sync[start:block_end]
+    for fragment in (
+        'REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"',
+        '(.check_runs | type == "array" and length == .total_count and length <= 100) and',
+        '(.head_sha == $head) and',
+        '(.app | type == "object" and .id == 15368) and',
+        'REVIEW_READY=true',
+        'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
+        'test "$CONTEXT_COUNT" = "1"',
+        'if [ "$CONTEXT_STATUS" != "completed" ]; then',
+        'elif [ "$CONTEXT_CONCLUSION" != "success" ]; then',
+        'if [ "$REVIEW_READY" = "true" ]; then',
+        'REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches"',
+        '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+        'REVIEW_DISPATCHED=true',
+        'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.',
+        'Reviewer dispatch occurred only after six exact-head prerequisites were green.',
+    ):
+        core.require(
+            fragment in block,
+            f"Spotlight state-driven reviewer contract is missing: {fragment}",
+        )
+    core.require(
+        block.index('REVIEW_READY=true')
+        < block.index('if [ "$REVIEW_READY" = "true" ]; then')
+        < block.index('actions/workflows/bot-pr-user-approval.yml/dispatches')
+        < block.index('REVIEW_DISPATCHED=true'),
+        "Spotlight state-driven reviewer dispatch ordering changed",
+    )
+
+    sync = sync[:start] + sync[block_end:]
+    for old, new, label in (
+        (
+            '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do\n',
+            '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do\n',
+            "review-dispatch initialization",
+        ),
+        (
+            '              ALL_SUCCESS=true\n              CODEQL_SUCCESS=false\n              DEPENDENCY_SUCCESS=false\n',
+            '              ALL_SUCCESS=true\n',
+            "review-independent success state",
+        ),
+        (
+            '                elif [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then\n'
+            '                  case "$NAME" in\n'
+            '                    "CodeQL") CODEQL_SUCCESS=true ;;\n'
+            '                    "Dependency review") DEPENDENCY_SUCCESS=true ;;\n'
+            '                    "Profile quality") : ;;\n'
+            '                    *) exit 1 ;;\n'
+            '                  esac\n',
+            '                elif [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then\n'
+            '                  :\n',
+            "review-independent workflow success classification",
+        ),
+        (
+            '                elif [ "$STATUS" = "completed" ]; then\n'
+            '                  if [ "$NAME" = "Profile quality" ]; then\n'
+            '                    # The accepted-base governed-review gate is intentionally allowed to fail\n'
+            '                    # once before the marker approval exists. The fixed reviewer will re-enter\n'
+            '                    # only that exact failed job after the six review-independent contexts are green.\n'
+            '                    ALL_SUCCESS=false\n'
+            '                  else\n'
+            '                    echo "Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION)." >&2\n'
+            '                    exit 1\n'
+            '                  fi\n',
+            '                elif [ "$STATUS" = "completed" ]; then\n'
+            '                  echo "Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION)." >&2\n'
+            '                  exit 1\n',
+            "pre-review Profile Quality failure classification",
+        ),
+        (
+            '          test "$ALL_SUCCESS" = "true"\n          test "$REVIEW_DISPATCHED" = "true"\n',
+            '          test "$ALL_SUCCESS" = "true"\n',
+            "review-dispatch terminal proof",
+        ),
+    ):
+        core.require(sync.count(old) == 1, f"Spotlight {label} projection anchor changed")
+        sync = sync.replace(old, new, 1)
+
+    core.require(
+        "REVIEW_DISPATCHED" not in sync
+        and "REVIEW_READY" not in sync
+        and "REVIEW_CHECKS" not in sync,
+        "Spotlight state-driven reviewer projection left #1276-only state behind",
+    )
+    return sync
+
+
 def project_item9_sync_with_marker(sync: str) -> str:
     sync = project_spotlight_state_conditioned_reviewer_to_predecessor(sync)
     sync = project_spotlight_terminal_merge_status_to_legacy(sync)
@@ -800,19 +913,23 @@ def project_item9_sync_with_marker(sync: str) -> str:
     )
     reviewer_marker = 'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.'
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
-    convergence_anchor = '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do\n'
+    state_driven_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
+    convergence_anchor = '          APPROVAL_REQUESTED_RUN_IDS=""\n          REVIEW_DISPATCHED=false\n          for attempt in $(seq 1 60); do\n'
     core.require(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAKE not in sync and reviewer_marker not in sync,
             "Spotlight must not regain the retired main/global reviewer scan wake")
-    core.require(sync.count(SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH) == 1,
-            "Spotlight exact candidate reviewer workflow-dispatch contract changed")
-    reviewer_pos = sync.index(SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH)
-    core.require(sync.count(capability_dispatch) == 1 and sync.count(convergence_anchor) == 1,
-            "Spotlight candidate-headed reviewer ordering anchors changed")
     core.require(
-        sync.index(capability_dispatch) < reviewer_pos < sync.index(convergence_anchor),
-        "Spotlight candidate reviewer wake must stay after admission dispatch and before protected workflow convergence",
+        sync.count(capability_dispatch) == 1
+        and sync.count(state_driven_dispatch) == 1
+        and sync.count(convergence_anchor) == 1,
+        "Spotlight state-driven exact-candidate reviewer dispatch contract changed",
     )
-    sync = sync.replace(SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH, "", 1)
+    core.require(
+        sync.index(capability_dispatch)
+        < sync.index(convergence_anchor)
+        < sync.index(state_driven_dispatch, sync.index(convergence_anchor)),
+        "Spotlight reviewer wake must stay after admission dispatch and inside protected workflow convergence",
+    )
+    sync = project_state_driven_spotlight_reviewer_to_legacy(sync)
 
     sync = project_ancestry_reconcile_to_same_base(sync)
     sync = project_native_review_gate_to_legacy_order(sync)
@@ -961,9 +1078,45 @@ def project_item9_sync_with_marker(sync: str) -> str:
     if projected.count(SPOTLIGHT_APPROVAL_AUDIT) != 1:
         raise ValueError("Spotlight item-9 approval-audit projection anchor changed")
     projected = projected.replace(SPOTLIGHT_APPROVAL_AUDIT, "", 1)
-    if projected.count(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAIT) != 1:
-        raise ValueError("Spotlight item-9 pre-convergence review-wait projection anchor changed")
-    projected = projected.replace(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAIT, "", 1)
+    if projected.count(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAIT) == 1:
+        projected = projected.replace(SPOTLIGHT_PRE_CONVERGENCE_REVIEW_WAIT, "", 1)
+    else:
+        singleton_error = (
+            '            echo "ERROR: exact-base/head portyu9 approval is not singleton after all protected workflows converged." >&2\n'
+        )
+        singleton_start_marker = (
+            '          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"\n'
+        )
+        singleton_end_marker = (
+            '          echo "Observed exact-base/head marker-bound portyu9 approval before merge authorization."\n\n'
+        )
+        core.require(
+            projected.count(singleton_error) == 1
+            and projected.count(singleton_end_marker) == 1,
+            "Spotlight item-9 single-pass review observation projection anchor changed",
+        )
+        error_pos = projected.index(singleton_error)
+        start = projected.rfind(singleton_start_marker, 0, error_pos)
+        core.require(start >= 0, "Spotlight item-9 single-pass review observation start changed")
+        end = projected.index(singleton_end_marker, error_pos) + len(singleton_end_marker)
+        single_pass = projected[start:end]
+        for fragment in (
+            'REVIEW_PAGES="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"',
+            'test "$PORTYU9_APPROVAL_COUNT" = "1" || {',
+            'test "$(jq -r .state <<<"$PR_AFTER_REVIEW")" = "open"',
+            'test "$(jq -r .base.sha <<<"$PR_AFTER_REVIEW")" = "$BASE_SHA"',
+            'test "$(jq -r .head.sha <<<"$PR_AFTER_REVIEW")" = "$HEAD_SHA"',
+        ):
+            core.require(
+                fragment in single_pass,
+                f"Spotlight item-9 single-pass review observation contract is missing: {fragment}",
+            )
+        core.require(
+            "for REVIEW_ATTEMPT in $(seq 1 24); do" not in single_pass
+            and "sleep 5" not in single_pass,
+            "Spotlight single-pass review observation regained bounded polling",
+        )
+        projected = projected[:start] + projected[end:]
     if projected.count(SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF) != 1:
         raise ValueError("Spotlight item-9 marker-bound review projection anchor changed")
     projected = projected.replace(SPOTLIGHT_EXACT_HEAD_REVIEW_PROOF, "", 1)
