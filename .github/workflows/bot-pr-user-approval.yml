@@ -410,6 +410,183 @@ jobs:
             ' "$RUNNER_TEMP/bot-review-prior-attempts.json" >/dev/null
           }
 
+          rerun_governed_review_gate_if_needed() {
+            local head="$1" head_ref="$2" review_submitted_at="$3"
+            local checks count gate_id gate_status gate_conclusion gate_suite gate_details
+            local gate_run_id gate_job_id run job run_attempt job_attempt job_started
+            local rerun_response rerun_status rerun_status_line observed observed_id observed_status observed_conclusion
+
+            jq -e -n --arg ts "$review_submitted_at" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
+              echo "ERROR: exact marker-bound review has malformed submitted_at evidence." >&2
+              return 1
+            }
+
+            checks="$(gh api "repos/\${TARGET_REPOSITORY}/commits/\${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100")" || {
+              echo "ERROR: failed to fetch exact governed-review gate check for \${head}." >&2
+              return 1
+            }
+            jq -e --arg head "$head" '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 1) and
+              (.check_runs | type == "array" and length <= 1) and
+              (.total_count == (.check_runs | length)) and
+              (all(.check_runs[];
+                type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                .name == "trusted-governed-bot-review" and
+                .head_sha == $head and
+                (.app | type == "object" and .id == 15368) and
+                (.check_suite | type == "object" and (.id | type == "number" and . == floor and . > 0)) and
+                (.details_url | type == "string" and length > 0) and
+                (.status | type == "string" and
+                  (. == "queued" or . == "in_progress" or . == "requested" or
+                   . == "waiting" or . == "pending" or . == "completed")) and
+                (if .status == "completed"
+                 then (.conclusion | type == "string" and length > 0)
+                 else .conclusion == null
+                 end)
+              ))
+            ' <<<"$checks" >/dev/null || {
+              echo "ERROR: malformed or ambiguous governed-review gate check evidence for \${head}." >&2
+              return 1
+            }
+            count="$(jq -r .total_count <<<"$checks")"
+            if [ "$count" = "0" ]; then
+              echo "Governed review gate has not materialized yet for \${head}; no rerun mutation is eligible."
+              return 0
+            fi
+
+            gate_id="$(jq -r '.check_runs[0].id' <<<"$checks")"
+            gate_status="$(jq -r '.check_runs[0].status' <<<"$checks")"
+            gate_conclusion="$(jq -r '.check_runs[0].conclusion // ""' <<<"$checks")"
+            gate_suite="$(jq -r '.check_runs[0].check_suite.id' <<<"$checks")"
+            gate_details="$(jq -r '.check_runs[0].details_url' <<<"$checks")"
+            [[ "$gate_id" =~ ^[1-9][0-9]*$ ]]
+            [[ "$gate_suite" =~ ^[1-9][0-9]*$ ]]
+            if [ "$gate_status" != "completed" ]; then
+              echo "Governed review gate \${gate_id} is still \${gate_status}; no rerun mutation is eligible."
+              return 0
+            fi
+            if [ "$gate_conclusion" = "success" ]; then
+              echo "Governed review gate \${gate_id} is already successful; no rerun mutation is needed."
+              return 0
+            fi
+
+            if [[ "$gate_details" =~ ^https://github.com/portyu9/portyu9/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)$ ]]; then
+              gate_run_id="\${BASH_REMATCH[1]}"
+              gate_job_id="\${BASH_REMATCH[2]}"
+            else
+              echo "ERROR: governed review gate details URL is not an exact portyu9 Actions run/job URL." >&2
+              return 1
+            fi
+            test "$gate_job_id" = "$gate_id" || {
+              echo "ERROR: governed review gate check/job identity mismatch." >&2
+              return 1
+            }
+
+            run="$(gh api "repos/\${TARGET_REPOSITORY}/actions/runs/\${gate_run_id}")" || {
+              echo "ERROR: failed to fetch governed review gate parent run \${gate_run_id}." >&2
+              return 1
+            }
+            jq -e --argjson run "$gate_run_id" --argjson suite "$gate_suite" --arg head "$head" --arg head_ref "$head_ref" --arg repo "$TARGET_REPOSITORY" '
+              (type == "object") and
+              (.id == $run) and
+              (.name == "Profile quality") and
+              (.path == ".github/workflows/profile-quality.yml") and
+              (.event == "pull_request") and
+              (.head_sha == $head) and
+              (.head_branch == $head_ref) and
+              (.repository | type == "object" and .full_name == $repo) and
+              (.head_repository | type == "object" and .full_name == $repo) and
+              (.check_suite_id == $suite) and
+              (.run_attempt | type == "number" and . == floor and . > 0) and
+              (.status == "completed") and
+              (.conclusion | type == "string" and length > 0)
+            ' <<<"$run" >/dev/null || {
+              echo "ERROR: governed review gate parent run identity is malformed or mismatched." >&2
+              return 1
+            }
+
+            job="$(gh api "repos/\${TARGET_REPOSITORY}/actions/jobs/\${gate_job_id}")" || {
+              echo "ERROR: failed to fetch governed review gate job \${gate_job_id}." >&2
+              return 1
+            }
+            jq -e --argjson job "$gate_job_id" --argjson run "$gate_run_id" --arg head "$head" --arg conclusion "$gate_conclusion" --arg repo "$TARGET_REPOSITORY" '
+              (type == "object") and
+              (.id == $job) and
+              (.run_id == $run) and
+              (.head_sha == $head) and
+              (.name == "trusted-governed-bot-review") and
+              (.workflow_name == "Profile quality") and
+              (.run_attempt | type == "number" and . == floor and . > 0) and
+              (.check_run_url == ("https://api.github.com/repos/" + $repo + "/check-runs/" + ($job | tostring))) and
+              (.status == "completed") and
+              (.conclusion == $conclusion) and
+              (.started_at | type == "string" and length > 0) and
+              (.completed_at | type == "string" and length > 0)
+            ' <<<"$job" >/dev/null || {
+              echo "ERROR: governed review gate job identity is malformed or mismatched." >&2
+              return 1
+            }
+            run_attempt="$(jq -r .run_attempt <<<"$run")"
+            job_attempt="$(jq -r .run_attempt <<<"$job")"
+            test "$job_attempt" = "$run_attempt" || {
+              echo "ERROR: governed review gate run/job attempt mismatch." >&2
+              return 1
+            }
+            job_started="$(jq -r .started_at <<<"$job")"
+            if ! jq -e -n --arg started "$job_started" --arg submitted "$review_submitted_at" '($started | fromdateiso8601) < ($submitted | fromdateiso8601)' >/dev/null; then
+              echo "Governed review gate job \${gate_job_id} started after the exact approval existed; refusing another autonomous rerun."
+              return 0
+            fi
+
+            rerun_response="$RUNNER_TEMP/governed-review-gate-rerun-http-response.txt"
+            set +e
+            gh api --include --method POST "repos/\${TARGET_REPOSITORY}/actions/jobs/\${gate_job_id}/rerun" >"$rerun_response" 2>"$RUNNER_TEMP/governed-review-gate-rerun-error.txt"
+            rerun_status=$?
+            set -e
+            if [ "$rerun_status" -eq 0 ]; then
+              rerun_status_line="$(head -n 1 "$rerun_response" | tr -d '\r')"
+              [[ "$rerun_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+                echo "ERROR: governed review gate job rerun returned unexpected status: \${rerun_status_line}" >&2
+                return 1
+              }
+              echo "Re-ran exact pre-approval governed review gate job \${gate_job_id} once after exact marker approval."
+              return 0
+            fi
+
+            sleep 1
+            observed="$(gh api "repos/\${TARGET_REPOSITORY}/commits/\${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100")" || {
+              echo "ERROR: ambiguous gate-rerun mutation could not be reconciled by exact check observation." >&2
+              return 1
+            }
+            jq -e --arg head "$head" '
+              (type == "object") and
+              (.total_count == 1) and
+              (.check_runs | type == "array" and length == 1) and
+              (.check_runs[0] | type == "object" and
+                (.id | type == "number" and . == floor and . > 0) and
+                .name == "trusted-governed-bot-review" and
+                .head_sha == $head and
+                (.app | type == "object" and .id == 15368) and
+                (.status | type == "string") and
+                (if .status == "completed" then .conclusion == "success" else .conclusion == null end))
+            ' <<<"$observed" >/dev/null || {
+              echo "ERROR: ambiguous gate-rerun mutation did not produce valid exact-head observation." >&2
+              return 1
+            }
+            observed_id="$(jq -r '.check_runs[0].id' <<<"$observed")"
+            observed_status="$(jq -r '.check_runs[0].status' <<<"$observed")"
+            observed_conclusion="$(jq -r '.check_runs[0].conclusion // ""' <<<"$observed")"
+            if [ "$observed_id" != "$gate_id" ] &&
+               { [ "$observed_status" != "completed" ] || [ "$observed_conclusion" = "success" ]; }; then
+              echo "Observed a new exact governed-review check after ambiguous rerun transport; refusing duplicate POST."
+              return 0
+            fi
+            echo "ERROR: governed review gate rerun transport failed and exact observation did not prove acceptance; refusing duplicate POST." >&2
+            return 1
+          }
+
           wake_governed_lane_after_review() {
             local lane="$1" head_ref="$2" wake_response wake_status_line
             case "$lane" in
