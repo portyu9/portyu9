@@ -1565,7 +1565,8 @@ jobs:
                     exit 1
                   }
                   REVIEW_DISPATCHED=true
-                  echo "Dispatched singleton Spotlight reviewer only after six exact-head prerequisites were green."
+                  echo "Dispatched bounded singleton Spotlight reviewer evaluation from trusted main."
+                  echo "Reviewer dispatch occurred only after six exact-head prerequisites were green."
                 fi
               fi
             fi
