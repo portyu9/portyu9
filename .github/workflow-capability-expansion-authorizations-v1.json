@@ -1076,7 +1076,7 @@
       "candidateBomSha256": "9f4aebe896933f854ecc81a5f06312c9fe89301e3077d1096be5dd4a69a7a74b",
       "expansionSha256": "4cd56e9b8196c2a945a06968a93c5c66767b20b822d75cc9d97e5072a8cfd731",
       "id": "cap-spotlight-reviewer-candidate-dispatch-v1",
-      "rationale": "Authorize #1260's exact candidate-bound Spotlight reviewer recovery surface measured by closed diagnostic #1261: one typed trusted-main repository_dispatch wake carrying exact PR/base/head/ref/lane identity, one exact dispatched-PR read in the reviewer, and the corresponding Spotlight dispatch POST/API surface. The successor #1260 head only narrows workflow_run protected-environment entry and updates its validator pin; the canonical capability BOMs and protected TCB expansion bytes are unchanged. Exact current-main/head/PR/check/quiescence/review/manual-veto reproof remains fail-closed; no generic workflow_dispatch, global reviewer wake source, required-check reduction, ruleset/merge bypass, direct-main write, AWS authority, or blind mutation retry is authorized."
+      "rationale": "Authorize #1260 exact candidate-bound Spotlight reviewer recovery measured by closed #1261: typed trusted-main repository_dispatch wake with exact PR/base/head/ref/lane, one exact dispatched-PR read, and the matching Spotlight dispatch POST/API surface. Current #1260 successor only narrows workflow_run job entry and updates its validator pin; BOM/TCB bytes are unchanged. No global wake, required-check reduction, merge bypass, direct-main write, or blind mutation retry."
     },
     {
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
