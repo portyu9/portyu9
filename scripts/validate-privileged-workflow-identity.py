@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v115"
+VERSION = "governed-workflow-byte-identity-v116"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "16839c2f16187f509836cfb0080890e949b197f1",
+    ".github/workflows/bot-pr-user-approval.yml": "0ec9999f60ff68be77667dd47480164d620fc8a2",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
     ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
-    ".github/workflows/spotlight-link-sync.yml": "f5040b2ee01fdbf70078ec0fd707cb905593d26a",
+    ".github/workflows/spotlight-link-sync.yml": "91d745a1d95f72d4afa8043d61af35715f2e1431",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -3147,12 +3147,12 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
 def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) -> None:
     bot_block = (
         "concurrency:\n"
-        "  group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}\n"
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.run_id }}\n"
         "  cancel-in-progress: true\n"
     )
     require(
         bot_review.count(bot_block) == 1,
-        "Bot PR reviewer must scope cancellation to the immutable candidate head",
+        "Bot PR reviewer must scope workflow-run cancellation to the immutable candidate head and isolate trusted dispatch wakes",
     )
     require(
         "concurrency:\n  group: bot-pr-user-approval\n  cancel-in-progress: true\n" not in bot_review,
@@ -3188,7 +3188,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
     validate_main_check_cancellation_isolation(bot_review, spotlight)
 
     broad_bot = bot_review.replace(
-        "  group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}\n",
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.run_id }}\n",
         "  group: bot-pr-user-approval\n",
         1,
     )
