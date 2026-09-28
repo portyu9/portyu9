@@ -3025,7 +3025,34 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     validate_bot_review_run_check_evidence_schema(bot_review)
     validate_dependabot_readiness_run_check_evidence_schema(dependabot)
     validate_dependabot_protected_workflow_evidence_schema(dependabot)
-    validate_pull_review_evidence_schema(bot_review, "Bot PR reviewer", 2)
+    owner_review_job = job_block(bot_review, "approve", "converge")
+    require(
+        owner_review_job.count('/reviews?per_page=100') == 2
+        and owner_review_job.count('REVIEW_PAGES="$(gh api --paginate --slurp') == 2
+        and owner_review_job.count('REVIEWS="$(jq -c \'[.[][]]\' <<<"$REVIEW_PAGES")"') == 2
+        and owner_review_job.count('ERROR: malformed or incomplete paginated pull-review evidence.') == 2,
+        "Bot PR owner-review path must retain exactly two complete paginated review observations",
+    )
+    for fragment in (
+        '(type == "array") and (length >= 1) and (length <= 20)',
+        '(all(.[]; type == "array" and length <= 100))',
+        '(all(.[0:-1][]; length == 100))',
+        '(.user | type == "object" and (.login | type == "string" and length > 0))',
+        '(.state | type == "string" and',
+        'has("commit_id") and',
+        '(.commit_id == null or (.commit_id | type == "string" and test("^[0-9a-f]{40}$")))',
+        'has("body") and',
+        '(.body == null or (.body | type == "string"))',
+        '(([.[][] | .id] | length) == ([.[][] | .id] | unique | length))',
+    ):
+        require(
+            owner_review_job.count(fragment) >= 2,
+            f"Bot PR owner-review strict schema contract is missing at one of two observations: {fragment}",
+        )
+    require(
+        'REVIEWS="$(gh api --paginate --slurp' not in owner_review_job,
+        "Bot PR owner-review path must validate paginated evidence before flattening",
+    )
     validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
     spotlight_review_projection = project_spotlight_approval_list_helper_to_legacy(spotlight)
