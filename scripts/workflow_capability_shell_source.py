@@ -827,10 +827,11 @@ jobs:
         "trusted shell-source self-test did not observe exactly one run block",
     )
     poisoned_workflow = safe_workflow.replace(
-        "printf '%s\\\\n' ok",
-        'test "$LEFT" = "$RIGHT" \\\\n          test "$NEXT" = "$VALUE"',
+        r"printf '%s\n' ok",
+        r'test "$LEFT" = "$RIGHT" \n          test "$NEXT" = "$VALUE"',
         1,
     )
+    require(poisoned_workflow != safe_workflow, "trusted workflow-text poison fixture anchor changed")
     try:
         validate_workflow_text(poisoned_workflow, "workflow-shell-source-poison-self-test")
     except ValueError as exc:
