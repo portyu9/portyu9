@@ -36,6 +36,13 @@
       "rationale": "Authorize #693's exact Action release-identity hardening: lock repository ID, release ID, direct tag-ref object/type, and peeled commit SHA, plus strict public read-only repository/release reproof in Profile Quality and delegated Dependabot. Exact pinning, candidate-data isolation, protected checks, exact-head merge, and fail-closed behavior remain; no write permission, mutation, secret, OIDC authority, check reduction, direct-main write, or bypass is added."
     },
     {
+      "baseBomSha256": "15302736defe3a3c7d20893bb15c2b7cc39e7be2c9f947860317b9ceac3a9f98",
+      "candidateBomSha256": "15302736defe3a3c7d20893bb15c2b7cc39e7be2c9f947860317b9ceac3a9f98",
+      "expansionSha256": "63cfaa462209e8539303e9db66ae5569fae5ea32a3ea8b8ec4340aa45eb24f27",
+      "id": "cap-aiqa-owner-certifier-tcb-prep-v1",
+      "rationale": "Authorize #1230's exact one-file trusted TCB selector preparation measured on accepted post-recovery main. Capability Admission will protect the reviewed future AI QA owner-certifier manifest, BOM shard, workflow, and verifier script. Semantic Workflow Capability is unchanged; no permission, trigger, secret, mutation, required-check reduction, ruleset/merge authority, direct-main write, AWS authority, or bypass is added."
+    },
+    {
       "baseBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
       "candidateBomSha256": "cf57c64e11d6322af0c8e234fba72098ae02bcc5c29706e40800c4d0a8b38adc",
       "expansionSha256": "fefcf2b1e852a99e422a8c98947e93dd5d462c9049cec547e514e73782968dc2",
