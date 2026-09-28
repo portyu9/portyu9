@@ -876,6 +876,10 @@ def validate_spotlight_pr_response_evidence(
     propose = job_block(spotlight, "propose", "approve")
     approve = job_block(spotlight, "approve", "authorize")
     helper_marker = "          validate_spotlight_open_pr_object() {"
+    require(
+        propose.count(helper_marker) == 1 and approve.count(helper_marker) == 1,
+        "Spotlight proposer/approval PR response helper count changed",
+    )
     pull_list_helper_marker = "          validate_spotlight_pull_list_item() {"
     require(
         propose.count(pull_list_helper_marker) == 0
