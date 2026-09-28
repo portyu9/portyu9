@@ -300,28 +300,6 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
             '          test "$(jq \'length\' <<<"$PRS")" = "1"\n'
             '          test "$(jq -r \'.[0].number\' <<<"$PRS")" = "$PR_NUMBER"\n',
         ),
-        (
-            '            REQUESTED_REVIEWER_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \\\n'
-            '              -f \'reviewers[]=portyu9\')"\n'
-            '            REQUESTED_REVIEWER_STATUS_LINE="$(head -n 1 <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
-            '            [[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
-            '              echo "ERROR: Spotlight reviewer request returned unexpected status: ${REQUESTED_REVIEWER_STATUS_LINE}" >&2\n'
-            '              exit 1\n'
-            '            }\n'
-            '            sed \'1,/^[[:space:]]*$/d\' <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" > requested-reviewer.json\n',
-            '            gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \\\n'
-            '              -f \'reviewers[]=portyu9\' > requested-reviewer.json\n',
-        ),
-        (
-            '          REQUESTED="$(jq \'[.requested_reviewers[] | select(.login == "portyu9")] | length\' <<<"$PR")"\n',
-            '          REQUESTED="$(jq \'[.requested_reviewers[]? | select(.login == "portyu9")] | length\' <<<"$PR")"\n',
-        ),
-        (
-            '            REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"\n'
-            '            validate_spotlight_reviewer_request_response "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n'
-            '            test "$(jq \'[.requested_reviewers[] | select(.login == "portyu9")] | length\' <<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"\n',
-            '            test "$(jq \'[.requested_reviewers[]? | select(.login == "portyu9")] | length\' requested-reviewer.json)" = "1"\n',
-        ),
     )
     for hardened, legacy in overlays:
         require(
@@ -331,7 +309,6 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
         sync = sync.replace(hardened, legacy, 1)
     require(
         "validate_spotlight_open_pr_object" not in sync
-        and "validate_spotlight_reviewer_request_response" not in sync
         and "validate_spotlight_pull_list_item" not in sync,
         "Spotlight PR-response projection left modern runtime schema bytes in the frozen item-9 view",
     )
