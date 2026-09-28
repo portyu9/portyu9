@@ -1390,7 +1390,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/dispatches",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches",
               "method": "POST",
               "mutating": true,
               "step": "Approve and wait for only the exact README-only automation checks"
@@ -1477,10 +1477,10 @@
           "id": "approve",
           "mutations": [
             {
-              "class": "github-api-post",
+              "class": "workflow-dispatch",
               "method": "POST",
               "step": "Approve and wait for only the exact README-only automation checks",
-              "target": "repos/${GITHUB_REPOSITORY}/dispatches"
+              "target": "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches"
             },
             {
               "class": "issue-or-pr-metadata",
