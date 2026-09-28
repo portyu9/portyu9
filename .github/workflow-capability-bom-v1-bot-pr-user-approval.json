@@ -194,7 +194,6 @@
         "vars": []
       },
       "triggers": {
-        "workflow_dispatch": {},
         "workflow_run": {
           "types": [
             "completed"
@@ -202,11 +201,7 @@
           "workflows": [
             "Profile quality",
             "CodeQL",
-            "Dependency review",
-            "Capability admission",
-            "CodeQL Autofix controller",
-            "Spotlight link sync",
-            "Dependabot controller"
+            "Dependency review"
           ]
         }
       },

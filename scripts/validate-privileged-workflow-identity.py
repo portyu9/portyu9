@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v114"
+VERSION = "governed-workflow-byte-identity-v115"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "8d0a18ea834a2403cd532e9a8b6d5aff568166b7",
+    ".github/workflows/bot-pr-user-approval.yml": "16839c2f16187f509836cfb0080890e949b197f1",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
     ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
-    ".github/workflows/spotlight-link-sync.yml": "03d129321a7d5ca0c86a98d5d2e913869af46ac2",
+    ".github/workflows/spotlight-link-sync.yml": "f5040b2ee01fdbf70078ec0fd707cb905593d26a",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -3147,12 +3147,12 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
 def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) -> None:
     bot_block = (
         "concurrency:\n"
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number || github.run_id }}\n"
+        "  group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}\n"
         "  cancel-in-progress: true\n"
     )
     require(
         bot_review.count(bot_block) == 1,
-        "Bot PR reviewer must scope cancellation to associated PR wakes and unique non-PR/recovery runs",
+        "Bot PR reviewer must scope cancellation to the immutable candidate head",
     )
     require(
         "concurrency:\n  group: bot-pr-user-approval\n  cancel-in-progress: true\n" not in bot_review,
@@ -3188,7 +3188,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
     validate_main_check_cancellation_isolation(bot_review, spotlight)
 
     broad_bot = bot_review.replace(
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number || github.run_id }}\n",
+        "  group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}\n",
         "  group: bot-pr-user-approval\n",
         1,
     )
@@ -3271,7 +3271,16 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued.',
         'a manual exact-head CHANGES_REQUESTED veto appeared before the review mutation.',
         'exit 1',
-        "group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.pull_requests[0].number || github.run_id }}",
+        "group: bot-pr-user-approval-${{ github.event.workflow_run.head_sha }}",
+        "github.event.workflow_run.event == 'pull_request'",
+        "github.event.workflow_run.head_branch != 'main'",
+        "github.event.workflow_run.head_repository.full_name == github.repository",
+        'WAKE_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}',
+        'WAKE_HEAD_REF: ${{ github.event.workflow_run.head_branch }}',
+        '--arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF"',
+        '.head.sha == $wake_head and',
+        '.head.ref == $wake_ref and',
+        'test "$CANDIDATE_COUNT" -le 1',
         'cancel-in-progress: true',
         'Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE}).',
         'local head="$1" head_ref="$2" runs total count active_profile unexpected_active',
@@ -3306,6 +3315,14 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'ERROR: malformed or incomplete paginated open-PR evidence.',
     ):
         require(fragment in bot_review, f"Bot PR user approval liveness/proof contract is missing: {fragment}")
+    require("workflow_dispatch:" not in bot_review, "Bot PR reviewer must not regain generic workflow_dispatch entry")
+    for retired in (
+        "      - Capability admission\n",
+        "      - CodeQL Autofix controller\n",
+        "      - Spotlight link sync\n",
+        "      - Dependabot controller\n",
+    ):
+        require(retired not in bot_review, f"Bot PR reviewer must not regain main/global wake source: {retired.strip()}")
     for fragment in (
         'wait_for_spotlight_readiness() {',
         'for attempt in $(seq 1 48); do',
@@ -3503,8 +3520,6 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"',
         'CERTIFIED_TRUSTED_DETAILS_URL="$(jq -r \'.trustedAdmission.checkRun.detailsUrl\' "$CERTIFICATE")"',
         'test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"',
-        'actions/workflows/bot-pr-user-approval.yml/dispatches',
-        'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.',
         'for REVIEW_ATTEMPT in $(seq 1 24); do',
         'exact-base/head portyu9 review did not materialize after the pre-convergence dispatch.',
         'Observed exact-base/head marker-bound portyu9 approval before merge authorization.',
@@ -3545,11 +3560,13 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
     capability_dispatch = 'actions/workflows/capability-admission.yml/dispatches'
     reviewer_dispatch = 'actions/workflows/bot-pr-user-approval.yml/dispatches'
     convergence_start = '          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do'
-    require(spotlight.count(reviewer_dispatch) == 1,
-            "Spotlight must dispatch exactly one trusted reviewer pass per approve run")
     require(
-        spotlight.index(capability_dispatch) < spotlight.index(reviewer_dispatch) < spotlight.index(convergence_start),
-        "Spotlight trusted reviewer dispatch must occur after admission dispatch and before whole-workflow convergence",
+        reviewer_dispatch not in spotlight,
+        "Spotlight must not dispatch the retired main/global reviewer workflow",
+    )
+    require(
+        spotlight.index(capability_dispatch) < spotlight.index(convergence_start),
+        "Spotlight admission dispatch must occur before candidate-headed protected-workflow convergence",
     )
     require('grep -Fxc "$APPROVAL_BODY"' not in spotlight,
             "Spotlight approval comment verification must compare the complete multiline body atomically")
@@ -4438,62 +4455,42 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
         'CAPABILITY_DISPATCH_RESPONSE="$(gh api --include --method POST '
         '"repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches" \\'
     )
-    reviewer_dispatch = (
-        'REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST '
-        '"repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\'
-    )
     capability_guard = (
         '[[ "$CAPABILITY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
     )
-    reviewer_guard = (
-        '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+    require(
+        spotlight.count(capability_dispatch) == 1,
+        "Spotlight Capability Admission dispatch must capture exactly one --include response",
     )
-    for label, fragment in (
-        ("Capability Admission", capability_dispatch),
-        ("governed reviewer", reviewer_dispatch),
-    ):
-        require(
-            spotlight.count(fragment) == 1,
-            f"Spotlight {label} dispatch must capture exactly one --include response",
-        )
-    for label, guard in (
-        ("Capability Admission", capability_guard),
-        ("governed reviewer", reviewer_guard),
-    ):
-        require(
-            spotlight.count(guard) == 1,
-            f"Spotlight {label} dispatch must require exact HTTP 204 status",
-        )
+    require(
+        spotlight.count(capability_guard) == 1,
+        "Spotlight Capability Admission dispatch must require exact HTTP 204 status",
+    )
     for fragment in (
         'CAPABILITY_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CAPABILITY_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
-        'REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
         'ERROR: Spotlight Capability Admission dispatch returned unexpected status: ${CAPABILITY_DISPATCH_STATUS_LINE}',
-        'ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}',
     ):
         require(fragment in spotlight, f"Spotlight dispatch response-status contract is missing: {fragment}")
-    for forbidden in (
-        'capability-admission.yml/dispatches" \\\n            -f ref=main >/dev/null',
-        'bot-pr-user-approval.yml/dispatches" \\\n            -f ref=main >/dev/null',
+    for retired in (
+        'actions/workflows/bot-pr-user-approval.yml/dispatches',
+        'REVIEW_DISPATCH_RESPONSE=',
+        'REVIEW_DISPATCH_STATUS_LINE=',
+        'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.',
     ):
-        require(
-            forbidden not in spotlight,
-            f"Spotlight must not discard privileged workflow-dispatch responses: {forbidden}",
-        )
+        require(retired not in spotlight, f"Spotlight must not regain retired main/global reviewer dispatch: {retired}")
+    require(
+        'capability-admission.yml/dispatches" \\\n            -f ref=main >/dev/null' not in spotlight,
+        "Spotlight must not discard privileged Capability Admission dispatch responses",
+    )
     capability_status = spotlight.index(capability_guard)
     capability_success = spotlight.index(
         'Dispatched event-driven Spotlight admission proof from trusted main;'
     )
-    reviewer_status = spotlight.index(reviewer_guard)
-    reviewer_success = spotlight.index(
-        'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.'
-    )
     convergence = spotlight.index('          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do')
     require(
-        spotlight.index(capability_dispatch) < capability_status < capability_success
-        < spotlight.index(reviewer_dispatch) < reviewer_status < reviewer_success < convergence,
-        "Spotlight dispatches must prove HTTP 204 before success markers and convergence waits",
+        spotlight.index(capability_dispatch) < capability_status < capability_success < convergence,
+        "Spotlight Capability Admission dispatch must prove HTTP 204 before success marker and convergence",
     )
-
 
 
 def validate_spotlight_workflow_run_approval_status(spotlight: str) -> None:
