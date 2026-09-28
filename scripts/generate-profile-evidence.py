@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 MANIFEST = SCRIPTS / "profile-evidence-generation-v1.json"
 VERSION = "profile-evidence-generation-v1"
+LIVE_NOT_READY_EXIT = 75
 EXPECTED_STAGE_CONTRACT = (
     (
         "signal-field-pipeline",
@@ -196,6 +197,28 @@ def command_plan(
     return tuple(plan)
 
 
+def live_not_ready_structural_args(
+    stage_id: str,
+    command_args: tuple[str, ...],
+    *,
+    offline: bool,
+    allow_live_not_ready_noop: bool,
+) -> tuple[str, ...] | None:
+    """Return the exact structural revalidation argv for one reviewed live-not-ready boundary."""
+    if not allow_live_not_ready_noop or offline or stage_id != "portfolio-ledger-validate":
+        return None
+    require(
+        command_args.count("--require-live") == 1,
+        "Portfolio live-not-ready classification requires exactly one --require-live flag",
+    )
+    structural = tuple(value for value in command_args if value != "--require-live")
+    require(
+        len(structural) + 1 == len(command_args) and "--require-live" not in structural,
+        "Portfolio live-not-ready structural fallback changed validation authority",
+    )
+    return structural
+
+
 def paths_overlap(left: Path, right: Path) -> bool:
     """Return whether either resolved path contains the other."""
     return left == right or left in right.parents or right in left.parents
@@ -318,6 +341,36 @@ def self_test() -> None:
     require("--require-live" in plan_live[2][2] and "--require-live" not in plan_offline[2][2], "Ledger validation mode separation changed")
     require("--require-live" in plan_live[4][2] and "--require-live" not in plan_offline[4][2], "Spotlight validation mode separation changed")
     require("2026-09-04" in plan_live[1][2] and "2026-09-04" in plan_live[3][2], "generation date is not bound across Ledger and Spotlight")
+    structural = live_not_ready_structural_args(
+        "portfolio-ledger-validate",
+        plan_live[2][2],
+        offline=False,
+        allow_live_not_ready_noop=True,
+    )
+    require(
+        structural == tuple(value for value in plan_live[2][2] if value != "--require-live"),
+        "live-not-ready structural fallback did not remove only the live assertion",
+    )
+    require(
+        live_not_ready_structural_args(
+            "engineering-spotlight-validate",
+            plan_live[4][2],
+            offline=False,
+            allow_live_not_ready_noop=True,
+        )
+        is None,
+        "live-not-ready fallback broadened beyond Portfolio validation",
+    )
+    require(
+        live_not_ready_structural_args(
+            "portfolio-ledger-validate",
+            plan_offline[2][2],
+            offline=True,
+            allow_live_not_ready_noop=True,
+        )
+        is None,
+        "offline generation must never use live-not-ready fallback",
+    )
 
     encoded = json.dumps(payload)
     script_drift = json.loads(encoded)
@@ -443,6 +496,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--spotlight-dir", type=Path)
     parser.add_argument("--date", help="UTC date as YYYY-MM-DD; defaults to current UTC date")
     parser.add_argument("--offline", action="store_true", help="Use synthetic Ledger evidence; Signal Field input must still be pre-generated")
+    parser.add_argument(
+        "--allow-live-not-ready-noop",
+        action="store_true",
+        help="Return exit 75 only when exact live Portfolio validation fails but the same generated Ledger passes structural validation",
+    )
     parser.add_argument("--self-test", action="store_true", help="Validate the generation manifest and command plans without executing stages")
     return parser.parse_args()
 
@@ -451,13 +509,25 @@ def main() -> int:
     args = parse_args()
     try:
         if args.self_test:
-            require(args.signal_field_dir is None and args.portfolio_ledger_dir is None and args.spotlight_dir is None and args.date is None and not args.offline, "--self-test cannot be combined with generation arguments")
+            require(
+                args.signal_field_dir is None
+                and args.portfolio_ledger_dir is None
+                and args.spotlight_dir is None
+                and args.date is None
+                and not args.offline
+                and not args.allow_live_not_ready_noop,
+                "--self-test cannot be combined with generation arguments",
+            )
             self_test()
             return 0
 
         require(args.signal_field_dir is not None, "--signal-field-dir is required")
         require(args.portfolio_ledger_dir is not None, "--portfolio-ledger-dir is required")
         require(args.spotlight_dir is not None, "--spotlight-dir is required")
+        require(
+            not (args.offline and args.allow_live_not_ready_noop),
+            "--allow-live-not-ready-noop is valid only for strict-live generation",
+        )
         day = dt.date.fromisoformat(args.date) if args.date else dt.datetime.now(dt.timezone.utc).date()
         workspace = Path.cwd().resolve()
         signal, ledger, spotlight = validate_paths(
@@ -493,7 +563,28 @@ def main() -> int:
         )
         for index, (stage_id, script, command_args) in enumerate(plan, start=1):
             print(f"[profile-evidence-generation {index:02d}/{len(plan):02d}] {stage_id}: {script.name}", flush=True)
-            subprocess.run([sys.executable, str(script), *command_args], check=True)
+            try:
+                subprocess.run([sys.executable, str(script), *command_args], check=True)
+            except subprocess.CalledProcessError:
+                structural_args = live_not_ready_structural_args(
+                    stage_id,
+                    command_args,
+                    offline=args.offline,
+                    allow_live_not_ready_noop=args.allow_live_not_ready_noop,
+                )
+                if structural_args is not None:
+                    structural = subprocess.run(
+                        [sys.executable, str(script), *structural_args],
+                        check=False,
+                    )
+                    if structural.returncode == 0:
+                        print(
+                            "PROFILE_EVIDENCE_LIVE_NOT_READY: exact live Portfolio validation is not ready; "
+                            "the same generated Ledger passed structural validation, so no evidence may be published",
+                            flush=True,
+                        )
+                        return LIVE_NOT_READY_EXIT
+                raise
         print(f"Profile evidence generation complete: {VERSION} · {len(plan)} exact ordered authored stages · {mode}")
         return 0
     except (OSError, ValueError, TypeError, json.JSONDecodeError, subprocess.CalledProcessError) as exc:

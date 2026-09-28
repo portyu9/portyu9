@@ -8,11 +8,11 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v123"
+VERSION = "governed-workflow-byte-identity-v124"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
-    ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
+    ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
     ".github/workflows/spotlight-link-sync.yml": "50c08154b53711b339a76bd976f822a59959d1ad",
 }
 
@@ -4980,18 +4980,46 @@ def validate_profile_quality_portfolio_liveness_boundary(
             f"Profile Quality integration must not duplicate canonical boundary sequencing: {duplicated}",
         )
 
+    stats_generate = job_block(profile_stats, "generate", "attest")
+    stats_attest = job_block(profile_stats, "attest", "lease")
     live_generation_anchor = (
         'python3 source/scripts/generate-profile-evidence.py \\\n'
         '            --signal-field-dir "$READY_DIR" \\\n'
         '            --portfolio-ledger-dir portfolio-ledger-ready \\\n'
-        '            --spotlight-dir spotlight-ready'
+        '            --spotlight-dir spotlight-ready \\\n'
+        '            "${LIVE_ARGS[@]}"'
     )
     require(
         live_generation_anchor in profile_stats,
         "Profile Stats must retain canonical live Portfolio/Spotlight evidence generation",
     )
+    for fragment in (
+        'evidence_state: ${{ steps.evidence.outputs.evidence_state }}',
+        'if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then',
+        'LIVE_ARGS+=(--allow-live-not-ready-noop)',
+        'elif [ "$STATUS" -eq 75 ] && [ "$GITHUB_EVENT_NAME" = "schedule" ]; then',
+        'echo "evidence_state=READY" >> "$GITHUB_OUTPUT"',
+        'echo "evidence_state=LIVE_NOT_READY" >> "$GITHUB_OUTPUT"',
+    ):
+        require(
+            fragment in stats_generate,
+            f"Profile Stats typed live-not-ready generation contract changed: {fragment}",
+        )
     require(
-        '--spotlight-dir spotlight-ready \\\n            --offline' not in profile_stats,
+        stats_generate.count("--allow-live-not-ready-noop") == 1,
+        "Profile Stats scheduled live-not-ready classifier must have exactly one opt-in flag",
+    )
+    require(
+        stats_generate.count("if: steps.evidence.outputs.evidence_state == 'READY'") == 3,
+        "Profile Stats must gate exactly the three generated evidence artifact uploads on READY",
+    )
+    require(
+        "if: needs.generate.outputs.evidence_state == 'READY'" in stats_attest
+        and profile_stats.count("needs.generate.outputs.evidence_state == 'READY'") == 1,
+        "Profile Stats must gate the existing downstream DAG exactly once at attestation entry",
+    )
+    require(
+        "--offline" not in profile_stats,
         "Profile Stats publication must not downgrade Portfolio/Spotlight generation to offline mode",
     )
     require(
@@ -5047,8 +5075,8 @@ def validate_profile_quality_portfolio_liveness_boundary(
             )
 
         weakened_stats = profile_stats.replace(
-            '            --spotlight-dir spotlight-ready',
-            '            --spotlight-dir spotlight-ready \\\n            --offline',
+            '            "${LIVE_ARGS[@]}"',
+            '            "${LIVE_ARGS[@]}" \\\n            --offline',
             1,
         )
         try:

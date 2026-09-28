@@ -29,6 +29,8 @@ jobs:
       cancel-in-progress: true
     permissions:
       contents: read
+    outputs:
+      evidence_state: ${{ steps.evidence.outputs.evidence_state }}
 
     steps:
       - name: Checkout trusted source
@@ -54,18 +56,38 @@ jobs:
           profile: signal-field
 
       - name: Generate canonical profile evidence
+        id: evidence
         env:
           READY_DIR: ${{ steps.stats.outputs.ready-dir }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_USERNAME: portyu9
         run: |
           set -euo pipefail
+          LIVE_ARGS=()
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            LIVE_ARGS+=(--allow-live-not-ready-noop)
+          fi
+
+          set +e
           python3 source/scripts/generate-profile-evidence.py \
             --signal-field-dir "$READY_DIR" \
             --portfolio-ledger-dir portfolio-ledger-ready \
-            --spotlight-dir spotlight-ready
+            --spotlight-dir spotlight-ready \
+            "${LIVE_ARGS[@]}"
+          STATUS=$?
+          set -e
+
+          if [ "$STATUS" -eq 0 ]; then
+            echo "evidence_state=READY" >> "$GITHUB_OUTPUT"
+          elif [ "$STATUS" -eq 75 ] && [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            echo "evidence_state=LIVE_NOT_READY" >> "$GITHUB_OUTPUT"
+            echo "Profile evidence is structurally valid but strict-live Portfolio evidence is not ready; scheduled publication is a typed no-op."
+          else
+            exit "$STATUS"
+          fi
 
       - name: Upload immutable validated Signal Field
+        if: steps.evidence.outputs.evidence_state == 'READY'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: signal-field-svg
@@ -74,6 +96,7 @@ jobs:
           retention-days: 1
 
       - name: Upload immutable validated Portfolio Evidence Ledger
+        if: steps.evidence.outputs.evidence_state == 'READY'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: portfolio-evidence-ledger
@@ -82,6 +105,7 @@ jobs:
           retention-days: 1
 
       - name: Upload immutable validated Engineering Spotlight
+        if: steps.evidence.outputs.evidence_state == 'READY'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: engineering-spotlight-svg
@@ -90,6 +114,7 @@ jobs:
           retention-days: 1
 
   attest:
+    if: needs.generate.outputs.evidence_state == 'READY'
     name: prepare-attestation-read-only
     needs: generate
     runs-on: ubuntu-24.04
