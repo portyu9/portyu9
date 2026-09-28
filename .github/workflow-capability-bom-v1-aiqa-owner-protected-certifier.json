@@ -70,7 +70,9 @@
             "contents": "read"
           },
           "references": {
-            "env": [],
+            "env": [
+              "PYTHON_VERSION"
+            ],
             "githubToken": [],
             "secrets": [
               "AIQA_TRUSTED_GATE_APP_PRIVATE_KEY"
@@ -84,7 +86,9 @@
       "name": "AI QA owner-protected certifier",
       "path": ".github/workflows/aiqa-owner-protected-certifier.yml",
       "references": {
-        "env": [],
+        "env": [
+          "PYTHON_VERSION"
+        ],
         "githubToken": [],
         "secrets": [
           "AIQA_TRUSTED_GATE_APP_PRIVATE_KEY"
