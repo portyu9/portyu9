@@ -243,8 +243,8 @@
       "sleepSeconds": 10,
       "class": "bounded-observation",
       "operationRetry": false,
-      "purpose": "Wait for exact protected workflow/check state and approved-run convergence.",
-      "mutationMode": "guarded-once-per-run-id"
+      "purpose": "Wait for exact protected workflow/check state; approve each action_required run at most once and dispatch the reviewer at most once only after the six exact-head review-independent prerequisites are green.",
+      "mutationMode": "guarded-once-per-run-id-plus-state-conditioned-review-dispatch"
     },
     {
       "id": "autofix-controller-prior-attempt-history",
