@@ -1270,32 +1270,23 @@ def validate_autofix_readiness_evidence(text: str) -> None:
     end = text.index(end_marker, start)
     readiness = text[start:end]
 
-    trusted_fetch = (
-        'repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?'
-        'app_id=15368&check_name=trusted-capability-admission&filter=latest&per_page=100'
+    snapshot_endpoint = (
+        'repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100'
     )
-    ghas_fetch = (
-        'repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?'
-        'app_id=57789&check_name=CodeQL&filter=latest&per_page=100'
-    )
-    require(readiness.count(trusted_fetch) == 1 and readiness.count(ghas_fetch) == 1,
-            "CodeQL Autofix readiness check-run endpoints changed")
+    governed_fetch = "python3 scripts/automation_github_read.py"
+    snapshot_validator = "python3 scripts/codeql_autofix_controller.py readiness-snapshot"
     require(
-        readiness.count("python3 scripts/codeql_autofix_controller.py readiness-check") == 2,
-        "CodeQL Autofix must validate both readiness check-run responses before consumption",
+        readiness.count(snapshot_endpoint) == 1
+        and readiness.count(governed_fetch) == 1
+        and readiness.count(snapshot_validator) == 1,
+        "CodeQL Autofix readiness must use one governed complete exact-head check snapshot",
     )
     for fragment in (
-        "--response-file trusted-readiness-response.json",
+        "--response-file readiness-snapshot-response.json",
         '--head-sha "$HEAD_SHA"',
-        "--name trusted-capability-admission",
-        "--app-id 15368",
-        "--out trusted-readiness.json",
-        'TRUSTED_STATE="$(jq -r .state trusted-readiness.json)"',
-        "--response-file ghas-readiness-response.json",
-        "--name CodeQL",
-        "--app-id 57789",
-        "--out ghas-readiness.json",
-        'GHAS_STATE="$(jq -r .state ghas-readiness.json)"',
+        "--out readiness-snapshot.json",
+        'TRUSTED_STATE="$(jq -r .trusted.state readiness-snapshot.json)"',
+        'GHAS_STATE="$(jq -r .ghas.state readiness-snapshot.json)"',
         'case "$TRUSTED_STATE" in',
         'case "$GHAS_STATE" in',
         'test "$TRUSTED_READY" = "true"',
@@ -1304,32 +1295,30 @@ def validate_autofix_readiness_evidence(text: str) -> None:
         require(fragment in readiness, f"CodeQL Autofix readiness evidence contract is missing: {fragment}")
 
     for forbidden in (
-        'TRUSTED_COUNT="$(jq -r .total_count <<<"$TRUSTED")"',
-        '.check_runs[0] | .name == "trusted-capability-admission"',
-        '"$(jq -r .total_count <<<"$GHAS")" = "1"',
-        ".check_runs[0] | .head_sha == $head",
+        'check-runs?app_id=15368&check_name=trusted-capability-admission',
+        'check-runs?app_id=57789&check_name=CodeQL',
+        "python3 scripts/codeql_autofix_controller.py readiness-check",
+        "trusted-readiness-response.json",
+        "ghas-readiness-response.json",
+        'TRUSTED_COUNT="$(jq -r .total_count',
+        ".check_runs[0]",
+        'gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs',
     ):
         require(forbidden not in readiness,
-                f"CodeQL Autofix regressed to raw readiness response consumption: {forbidden}")
+                f"CodeQL Autofix regressed to repeated/raw readiness evidence: {forbidden}")
 
-    trusted_fetch_pos = readiness.index(trusted_fetch)
-    trusted_validate_pos = readiness.index(
-        "python3 scripts/codeql_autofix_controller.py readiness-check", trusted_fetch_pos
-    )
+    fetch_pos = readiness.index(governed_fetch)
+    endpoint_pos = readiness.index(snapshot_endpoint, fetch_pos)
+    validate_pos = readiness.index(snapshot_validator, endpoint_pos)
     trusted_consume_pos = readiness.index(
-        'TRUSTED_STATE="$(jq -r .state trusted-readiness.json)"', trusted_validate_pos
-    )
-    ghas_fetch_pos = readiness.index(ghas_fetch, trusted_consume_pos)
-    ghas_validate_pos = readiness.index(
-        "python3 scripts/codeql_autofix_controller.py readiness-check", ghas_fetch_pos
+        'TRUSTED_STATE="$(jq -r .trusted.state readiness-snapshot.json)"', validate_pos
     )
     ghas_consume_pos = readiness.index(
-        'GHAS_STATE="$(jq -r .state ghas-readiness.json)"', ghas_validate_pos
+        'GHAS_STATE="$(jq -r .ghas.state readiness-snapshot.json)"', trusted_consume_pos
     )
     require(
-        trusted_fetch_pos < trusted_validate_pos < trusted_consume_pos
-        < ghas_fetch_pos < ghas_validate_pos < ghas_consume_pos,
-        "CodeQL Autofix readiness responses must be validated before state consumption",
+        fetch_pos < endpoint_pos < validate_pos < trusted_consume_pos < ghas_consume_pos,
+        "CodeQL Autofix readiness snapshot must be fetched once, fully validated, then consumed",
     )
 
 
