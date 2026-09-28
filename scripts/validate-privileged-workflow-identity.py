@@ -3520,8 +3520,6 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"',
         'CERTIFIED_TRUSTED_DETAILS_URL="$(jq -r \'.trustedAdmission.checkRun.detailsUrl\' "$CERTIFICATE")"',
         'test "$(jq -r .details_url <<<"$TRUSTED_CHECK")" = "$CERTIFIED_TRUSTED_DETAILS_URL"',
-        'actions/workflows/bot-pr-user-approval.yml/dispatches',
-        'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.',
         'for REVIEW_ATTEMPT in $(seq 1 24); do',
         'exact-base/head portyu9 review did not materialize after the pre-convergence dispatch.',
         'Observed exact-base/head marker-bound portyu9 approval before merge authorization.',
@@ -4455,62 +4453,42 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
         'CAPABILITY_DISPATCH_RESPONSE="$(gh api --include --method POST '
         '"repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches" \\'
     )
-    reviewer_dispatch = (
-        'REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST '
-        '"repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\'
-    )
     capability_guard = (
         '[[ "$CAPABILITY_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
     )
-    reviewer_guard = (
-        '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+    require(
+        spotlight.count(capability_dispatch) == 1,
+        "Spotlight Capability Admission dispatch must capture exactly one --include response",
     )
-    for label, fragment in (
-        ("Capability Admission", capability_dispatch),
-        ("governed reviewer", reviewer_dispatch),
-    ):
-        require(
-            spotlight.count(fragment) == 1,
-            f"Spotlight {label} dispatch must capture exactly one --include response",
-        )
-    for label, guard in (
-        ("Capability Admission", capability_guard),
-        ("governed reviewer", reviewer_guard),
-    ):
-        require(
-            spotlight.count(guard) == 1,
-            f"Spotlight {label} dispatch must require exact HTTP 204 status",
-        )
+    require(
+        spotlight.count(capability_guard) == 1,
+        "Spotlight Capability Admission dispatch must require exact HTTP 204 status",
+    )
     for fragment in (
         'CAPABILITY_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CAPABILITY_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
-        'REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
         'ERROR: Spotlight Capability Admission dispatch returned unexpected status: ${CAPABILITY_DISPATCH_STATUS_LINE}',
-        'ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}',
     ):
         require(fragment in spotlight, f"Spotlight dispatch response-status contract is missing: {fragment}")
-    for forbidden in (
-        'capability-admission.yml/dispatches" \\\n            -f ref=main >/dev/null',
-        'bot-pr-user-approval.yml/dispatches" \\\n            -f ref=main >/dev/null',
+    for retired in (
+        'actions/workflows/bot-pr-user-approval.yml/dispatches',
+        'REVIEW_DISPATCH_RESPONSE=',
+        'REVIEW_DISPATCH_STATUS_LINE=',
+        'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.',
     ):
-        require(
-            forbidden not in spotlight,
-            f"Spotlight must not discard privileged workflow-dispatch responses: {forbidden}",
-        )
+        require(retired not in spotlight, f"Spotlight must not regain retired main/global reviewer dispatch: {retired}")
+    require(
+        'capability-admission.yml/dispatches" \\\n            -f ref=main >/dev/null' not in spotlight,
+        "Spotlight must not discard privileged Capability Admission dispatch responses",
+    )
     capability_status = spotlight.index(capability_guard)
     capability_success = spotlight.index(
         'Dispatched event-driven Spotlight admission proof from trusted main;'
     )
-    reviewer_status = spotlight.index(reviewer_guard)
-    reviewer_success = spotlight.index(
-        'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.'
-    )
     convergence = spotlight.index('          APPROVAL_REQUESTED_RUN_IDS=""\n          for attempt in $(seq 1 60); do')
     require(
-        spotlight.index(capability_dispatch) < capability_status < capability_success
-        < spotlight.index(reviewer_dispatch) < reviewer_status < reviewer_success < convergence,
-        "Spotlight dispatches must prove HTTP 204 before success markers and convergence waits",
+        spotlight.index(capability_dispatch) < capability_status < capability_success < convergence,
+        "Spotlight Capability Admission dispatch must prove HTTP 204 before success marker and convergence",
     )
-
 
 
 def validate_spotlight_workflow_run_approval_status(spotlight: str) -> None:
