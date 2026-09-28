@@ -211,6 +211,61 @@ def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) 
             ):
                 require(fragment in block,
                         f"guarded observation lost once-per-run approval dedupe: {rule.get('id')}")
+        elif mode == "guarded-once-per-run-id-plus-state-conditioned-review-dispatch":
+            approval_mutations = [
+                row for row in mutations
+                if "/actions/runs/" in row and "/approve" in row and "--method POST" in row
+            ]
+            reviewer_dispatch_mutations = [
+                row for row in mutations
+                if "/actions/workflows/bot-pr-user-approval.yml/dispatches" in row
+                and "--method POST" in row
+            ]
+            require(
+                len(mutations) == 2
+                and len(approval_mutations) == 1
+                and len(reviewer_dispatch_mutations) == 1,
+                f"mixed guarded observation mutation surface changed: {rule.get('id')}",
+            )
+            block = loop["block"]
+            owner = named_step(texts[loop["workflow"]], loop["job"], loop["step"])
+            require(
+                'APPROVAL_REQUESTED_RUN_IDS=""' in owner,
+                f"mixed guarded observation lost once-per-run approval dedupe initialization: {rule.get('id')}",
+            )
+            for fragment in (
+                'case " $APPROVAL_REQUESTED_RUN_IDS " in',
+                'APPROVAL_REQUESTED_RUN_IDS="',
+            ):
+                require(
+                    fragment in block,
+                    f"mixed guarded observation lost once-per-run approval dedupe: {rule.get('id')}",
+                )
+            require(
+                'REVIEW_DISPATCHED=false' in owner,
+                f"mixed guarded observation lost reviewer-dispatch dedupe initialization: {rule.get('id')}",
+            )
+            for fragment in (
+                'if [ "$REVIEW_DISPATCHED" = "false" ] &&',
+                '[ "$CODEQL_SUCCESS" = "true" ] &&',
+                '[ "$DEPENDENCY_SUCCESS" = "true" ]; then',
+                'REVIEW_READY=true',
+                'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
+                'if [ "$REVIEW_READY" = "true" ]; then',
+                'REVIEW_DISPATCHED=true',
+                'test "$REVIEW_DISPATCHED" = "true"',
+            ):
+                require(
+                    fragment in owner,
+                    f"mixed guarded observation lost state-conditioned reviewer-dispatch guard: {rule.get('id')}: {fragment}",
+                )
+            require(
+                block.index('if [ "$REVIEW_DISPATCHED" = "false" ] &&')
+                < block.index('if [ "$REVIEW_READY" = "true" ]; then')
+                < block.index('/actions/workflows/bot-pr-user-approval.yml/dispatches')
+                < block.index('REVIEW_DISPATCHED=true'),
+                f"mixed guarded observation reviewer-dispatch ordering changed: {rule.get('id')}",
+            )
         elif mode == "state-conditioned-single-pass":
             require(mutations and all("/approve" in row and "--method POST" in row for row in mutations),
                     f"single-pass observation mutation surface changed: {rule.get('id')}")
@@ -1047,6 +1102,21 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         ".github/workflows/bot-pr-user-approval.yml"
     ].replace("for HISTORY_ATTEMPT in $(seq 1 20); do", "for HISTORY_ATTEMPT in $(seq 1 21); do", 1)
     expect_failure(copy.deepcopy(policy), loop_drift, "not declared")
+
+    spotlight_dispatch_guard_drift = dict(texts)
+    spotlight_dispatch_source = spotlight_dispatch_guard_drift[".github/workflows/spotlight-link-sync.yml"]
+    require(
+        "          REVIEW_DISPATCHED=false\n" in spotlight_dispatch_source,
+        "retry-policy self-test fixture missing Spotlight reviewer-dispatch guard",
+    )
+    spotlight_dispatch_guard_drift[".github/workflows/spotlight-link-sync.yml"] = (
+        spotlight_dispatch_source.replace("          REVIEW_DISPATCHED=false\n", "", 1)
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        spotlight_dispatch_guard_drift,
+        "reviewer-dispatch dedupe initialization",
+    )
 
     autofix_drift = dict(texts)
     autofix_drift[".github/workflows/codeql-autofix.yml"] = autofix_drift[
