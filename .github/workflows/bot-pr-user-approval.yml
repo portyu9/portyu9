@@ -757,8 +757,13 @@ jobs:
             if [ "$MARKER_REVIEW_COUNT" = "1" ]; then
               MARKER_STATE="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].state' <<<"$REVIEWS")"
               if [ "$MARKER_STATE" = "APPROVED" ]; then
+                MARKER_SUBMITTED_AT="$(jq -r --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '[.[] | select(.user.login == "portyu9" and .commit_id == $head and ((.body // "") | contains($marker)))] | sort_by(.id) | .[-1].submitted_at // ""' <<<"$REVIEWS")"
+                jq -e -n --arg ts "$MARKER_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
+                  echo "ERROR: exact marker-bound approval has invalid submitted_at evidence." >&2
+                  exit 1
+                }
                 echo "PR #${PR_NUMBER} already has an exact-base/head marker-bound portyu9 approval."
-                wake_governed_lane_after_review "$LANE" "$HEAD_REF"
+                wake_governed_lane_after_review "$LANE" "$HEAD_REF" "$HEAD_SHA" "$MARKER_SUBMITTED_AT"
                 echo "Re-dispatched idempotent post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
               else
                 echo "Skipping governed bot PR #${PR_NUMBER}: the exact marker-bound portyu9 review was revoked or dismissed and will not be auto-reissued."
@@ -915,12 +920,18 @@ jobs:
               (.user | type == "object" and (.login == "portyu9")) and
               (.state == "APPROVED") and
               (.commit_id | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.submitted_at | type == "string" and length > 0) and
               (.body | type == "string" and . == $body)
             ' <<<"$REVIEW_RESPONSE" >/dev/null || {
               echo "ERROR: malformed or mismatched governed bot review response for PR #${PR_NUMBER}." >&2
               exit 1
             }
+            MARKER_SUBMITTED_AT="$(jq -r .submitted_at <<<"$REVIEW_RESPONSE")"
+            jq -e -n --arg ts "$MARKER_SUBMITTED_AT" '$ts | fromdateiso8601 | type == "number"' >/dev/null || {
+              echo "ERROR: newly-created marker approval has invalid submitted_at evidence." >&2
+              exit 1
+            }
             echo "Submitted exact-base/head marker-bound portyu9 approval for governed bot PR #${PR_NUMBER} at ${HEAD_SHA}."
-            wake_governed_lane_after_review "$LANE" "$HEAD_REF"
+            wake_governed_lane_after_review "$LANE" "$HEAD_REF" "$HEAD_SHA" "$MARKER_SUBMITTED_AT"
             echo "Dispatched event-driven post-review convergence wake for governed bot PR #${PR_NUMBER} (${LANE})."
           done < <(jq -c '.[]' <<<"$CANDIDATES")
