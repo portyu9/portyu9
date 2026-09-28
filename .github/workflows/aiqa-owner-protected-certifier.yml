@@ -10,6 +10,9 @@ concurrency:
   group: aiqa-owner-protected-certifier-v1
   cancel-in-progress: false
 
+env:
+  PYTHON_VERSION: "3.13.15"
+
 jobs:
   certify:
     name: aiqa-owner-protected-certifier
@@ -43,7 +46,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.13.15"
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 scripts/verify-python-runtime.py
 
       - name: Exercise certifier fail-closed policy
         run: python3 scripts/aiqa_owner_protected_certifier.py --self-test
