@@ -652,7 +652,134 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
     )
     return sync
 
+
+def project_spotlight_state_conditioned_reviewer_to_predecessor(sync: str) -> str:
+    """Project the event-driven reviewer wake back to its immediate predecessor topology."""
+    capability_success = (
+        '          echo "Dispatched event-driven Spotlight admission proof from trusted main; '
+        'Capability Admission independently binds the unique current-main candidate."\n\n'
+    )
+    predecessor_wake = (
+        "          # Break the native-review cycle deterministically from this trusted-main parent.\n"
+        "          # Dispatch only the fixed reviewer workflow using the already-reviewed Actions-write\n"
+        "          # authority. The reviewer trusts no routed candidate payload: it independently requires\n"
+        "          # exactly one canonical current-main Spotlight PR before any review mutation.\n"
+        + SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH
+    )
+    core.require(
+        sync.count(capability_success) == 1
+        and SPOTLIGHT_CANDIDATE_REVIEWER_DISPATCH not in sync,
+        "Spotlight state-conditioned reviewer predecessor projection anchor changed",
+    )
+    sync = sync.replace(
+        capability_success,
+        capability_success + predecessor_wake,
+        1,
+    )
+
+    new_loop_anchor = (
+        '          APPROVAL_REQUESTED_RUN_IDS=""\n'
+        '          REVIEW_DISPATCHED=false\n'
+        '          for attempt in $(seq 1 60); do\n'
+    )
+    predecessor_loop_anchor = (
+        '          APPROVAL_REQUESTED_RUN_IDS=""\n'
+        '          for attempt in $(seq 1 60); do\n'
+    )
+    core.require(
+        sync.count(new_loop_anchor) == 1
+        and predecessor_loop_anchor not in sync,
+        "Spotlight state-conditioned reviewer loop projection anchor changed",
+    )
+    sync = sync.replace(new_loop_anchor, predecessor_loop_anchor, 1)
+
+    success_hardened = (
+        '                elif [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then\n'
+        '                  case "$NAME" in\n'
+        '                    "CodeQL") CODEQL_SUCCESS=true ;;\n'
+        '                    "Dependency review") DEPENDENCY_SUCCESS=true ;;\n'
+        '                    "Profile quality") : ;;\n'
+        '                    *) exit 1 ;;\n'
+        '                  esac\n'
+    )
+    success_predecessor = (
+        '                elif [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then\n'
+        '                  :\n'
+    )
+    failure_hardened = (
+        '                elif [ "$STATUS" = "completed" ]; then\n'
+        '                  if [ "$NAME" = "Profile quality" ]; then\n'
+        '                    # The accepted-base governed-review gate is intentionally allowed to fail\n'
+        '                    # once before the marker approval exists. The fixed reviewer will re-enter\n'
+        '                    # only that exact failed job after the six review-independent contexts are green.\n'
+        '                    ALL_SUCCESS=false\n'
+        '                  else\n'
+        '                    echo "Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION)." >&2\n'
+        '                    exit 1\n'
+        '                  fi\n'
+    )
+    failure_predecessor = (
+        '                elif [ "$STATUS" = "completed" ]; then\n'
+        '                  echo "Canonical Spotlight-link PR workflow failed: $NAME ($CONCLUSION)." >&2\n'
+        '                  exit 1\n'
+    )
+    for hardened, predecessor, label in (
+        (success_hardened, success_predecessor, "successful protected-run state"),
+        (failure_hardened, failure_predecessor, "failed protected-run state"),
+    ):
+        core.require(
+            sync.count(hardened) == 1 and predecessor not in sync,
+            f"Spotlight state-conditioned reviewer {label} projection anchor changed",
+        )
+        sync = sync.replace(hardened, predecessor, 1)
+
+    extra_flags = (
+        '              CODEQL_SUCCESS=false\n'
+        '              DEPENDENCY_SUCCESS=false\n'
+    )
+    core.require(
+        sync.count(extra_flags) == 1,
+        "Spotlight state-conditioned reviewer readiness flags projection anchor changed",
+    )
+    sync = sync.replace(extra_flags, "", 1)
+
+    readiness_start = '              if [ "$REVIEW_DISPATCHED" = "false" ] &&\n'
+    convergence_tail = '            if [ "$ALL_SUCCESS" = "true" ]; then break; fi\n'
+    core.require(
+        sync.count(readiness_start) == 1 and sync.count(convergence_tail) == 1,
+        "Spotlight state-conditioned reviewer readiness projection anchors changed",
+    )
+    start = sync.index(readiness_start)
+    end = sync.index(convergence_tail, start)
+    core.require(
+        start < end
+        and 'actions/workflows/bot-pr-user-approval.yml/dispatches' in sync[start:end]
+        and 'Reviewer dispatch occurred only after six exact-head prerequisites were green.' in sync[start:end],
+        "Spotlight state-conditioned reviewer readiness projection range changed",
+    )
+    sync = sync[:start] + sync[end:]
+
+    terminal = '          test "$REVIEW_DISPATCHED" = "true"\n'
+    core.require(
+        sync.count(terminal) == 1,
+        "Spotlight state-conditioned reviewer terminal proof projection anchor changed",
+    )
+    sync = sync.replace(terminal, "", 1)
+    for forbidden in (
+        'REVIEW_DISPATCHED=false',
+        'CODEQL_SUCCESS=false',
+        'DEPENDENCY_SUCCESS=false',
+        'Reviewer dispatch occurred only after six exact-head prerequisites were green.',
+    ):
+        core.require(
+            forbidden not in sync,
+            f"Spotlight state-conditioned reviewer predecessor projection left modern byte: {forbidden}",
+        )
+    return sync
+
+
 def project_item9_sync_with_marker(sync: str) -> str:
+    sync = project_spotlight_state_conditioned_reviewer_to_predecessor(sync)
     sync = project_spotlight_terminal_merge_status_to_legacy(sync)
     sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
     sync = project_spotlight_readme_contents_to_legacy(sync)
