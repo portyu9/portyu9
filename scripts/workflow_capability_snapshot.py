@@ -268,7 +268,7 @@ def validate_aiqa_owner_certifier_safety(combined: dict[str, Any]) -> None:
     )
     require(
         workflow["references"] == {
-            "env": [],
+            "env": ["PYTHON_VERSION"],
             "githubToken": [],
             "secrets": ["AIQA_TRUSTED_GATE_APP_PRIVATE_KEY"],
             "vars": ["AIQA_OWNER_CERTIFIER_CONTROL_SHA"],
