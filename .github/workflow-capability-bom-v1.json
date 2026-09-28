@@ -1390,6 +1390,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}",
               "method": "GET",
               "mutating": false,
@@ -1469,6 +1476,12 @@
           "artifacts": [],
           "id": "approve",
           "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Approve and wait for only the exact README-only automation checks",
+              "target": "repos/${GITHUB_REPOSITORY}/dispatches"
+            },
             {
               "class": "issue-or-pr-metadata",
               "method": "POST",

@@ -715,6 +715,7 @@
     "bot-pr-user-approval": {
       "path": ".github/workflows/bot-pr-user-approval.yml",
       "triggers": [
+        "repository_dispatch",
         "workflow_run"
       ],
       "permissions": {
