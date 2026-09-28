@@ -745,7 +745,7 @@ def project_single_pass_approval_review_to_predecessor(sync: str) -> str:
         '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"\n'
     )
     singleton = '          test "$PORTYU9_APPROVAL_COUNT" = "1" || {\n'
-    next_marker = '          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"\n'
+    next_marker = '          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"\n'
     retired_loop = '          for REVIEW_ATTEMPT in $(seq 1 24); do\n'
     require(
         sync.count(review_marker) >= 2,
@@ -754,7 +754,11 @@ def project_single_pass_approval_review_to_predecessor(sync: str) -> str:
     approve_marker = sync.index(review_marker)
     start = sync.index(review_start, approve_marker)
     singleton_start = sync.index(singleton, start)
-    end = sync.index(next_marker, singleton_start)
+    end = sync.find(next_marker, singleton_start)
+    require(
+        end >= 0,
+        "Spotlight item-31 single-pass projection lost projected main-ref successor",
+    )
     single_pass = sync[start:end]
     for fragment in (
         'ERROR: malformed or incomplete paginated pull-review evidence.',
@@ -808,7 +812,8 @@ def project_single_pass_approval_review_to_predecessor(sync: str) -> str:
     projected = sync[:start] + predecessor + sync[end:]
     require(
         projected.count(retired_loop) == 1
-        and singleton not in projected[start:projected.index(next_marker, start)],
+        and (next_pos := projected.find(next_marker, start)) >= 0
+        and singleton not in projected[start:next_pos],
         "Spotlight item-31 predecessor approval-loop projection changed",
     )
     return projected
