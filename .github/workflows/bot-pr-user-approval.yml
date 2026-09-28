@@ -588,7 +588,11 @@ jobs:
           }
 
           wake_governed_lane_after_review() {
-            local lane="$1" head_ref="$2" wake_response wake_status_line
+            local lane="$1" head_ref="$2" head="$3" review_submitted_at="$4"
+            local wake_response wake_status_line
+
+            rerun_governed_review_gate_if_needed "$head" "$head_ref" "$review_submitted_at"
+
             case "$lane" in
               dependabot)
                 wake_response="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches" -f ref=main)"
@@ -597,7 +601,7 @@ jobs:
                 wake_response="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref=main)"
                 ;;
               spotlight)
-                echo "Spotlight parent workflow bounded-waits for the exact review; no post-review recovery wake is required."
+                echo "Spotlight governed-review convergence is driven by the exact gate-job rerun; no workflow-wide recovery dispatch is needed."
                 return 0
                 ;;
               *)
