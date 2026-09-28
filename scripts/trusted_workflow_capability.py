@@ -14,6 +14,7 @@ from typing import Any
 import automation_policy
 import workflow_authority_contract_core as authority
 import workflow_capability_bom as compiler
+import workflow_capability_shell_source as shell_source
 
 TRUSTED_ROOT = Path(__file__).resolve().parents[1]
 POLICY_RELATIVE = Path(".github/automation-policy-v1.json")
@@ -30,6 +31,12 @@ def validate_inventory(expected: list[str], observed: list[str], label: str) -> 
     require(observed == sorted(set(observed)), f"{label}: observed workflow inventory is not canonical/unique")
     require(observed == expected,
             f"{label}: workflow inventory changed: expected={expected} observed={observed}")
+
+
+def validate_workflow_source(filename: str, text: str, policy_spec: dict[str, Any]) -> int:
+    """Validate candidate workflow bytes with trusted structural and shell-source logic."""
+    authority.validate_workflow_text(filename, text, policy_spec)
+    return shell_source.validate_workflow_text(text, filename)
 
 
 def workflow_sources(root: Path, policy: dict[str, Any]) -> list[tuple[str, str, Path]]:
@@ -73,7 +80,7 @@ def compile_repository(root: Path) -> dict[str, Any]:
         text = path.read_text(encoding="utf-8")
         filename = path.name
         require(filename in policy_specs, f"candidate workflow missing from policy specs: {filename}")
-        authority.validate_workflow_text(filename, text, policy_specs[filename])
+        validate_workflow_source(filename, text, policy_specs[filename])
         names, needs = authority.parse_job_metadata(text, filename)
         permissions = authority.parse_permissions(text, filename)
         jobs = sorted(names)
@@ -129,6 +136,8 @@ def expect_failure(callback, fragment: str) -> None:
 
 
 def self_test() -> None:
+    shell_source.self_test()
+
     # On the trusted repository itself, alternate-tree orchestration must be byte-identical
     # to the item-12 canonical compiler. This proves there is one capability semantics layer.
     trusted = compile_repository(TRUSTED_ROOT)
@@ -156,6 +165,23 @@ def self_test() -> None:
             "self-test",
         ),
         "expected workflow inventory is not canonical/unique",
+    )
+
+    # Prove the accepted-main compiler rejects the original #1226 shell-source class
+    # after normal structural validation. Candidate validator Python is never imported.
+    policy = automation_policy.load_policy(TRUSTED_ROOT / POLICY_RELATIVE)
+    specs = authority.policy_specs(policy)
+    fixture_name = "profile-quality.yml"
+    fixture = (TRUSTED_ROOT / WORKFLOWS_RELATIVE / fixture_name).read_text(encoding="utf-8")
+    require("set -euo pipefail" in fixture, "trusted shell-source integration fixture anchor changed")
+    poisoned = fixture.replace(
+        "set -euo pipefail",
+        r'set -euo pipefail\n          test -n "$VALUE"',
+        1,
+    )
+    expect_failure(
+        lambda: validate_workflow_source(fixture_name, poisoned, specs[fixture_name]),
+        "serialized command separator",
     )
 
 
