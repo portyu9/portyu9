@@ -24,8 +24,6 @@ API_VERSION = "2022-11-28"
 PER_PAGE = 100
 MAX_REVIEW_PAGES = 20
 REVIEW_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"})
-POLL_ATTEMPTS = 216
-POLL_SECONDS = 5
 READ_ATTEMPTS = 3
 READ_TIMEOUT_SECONDS = 20
 READ_BACKOFF_SECONDS = (1.0, 2.0)
@@ -325,8 +323,37 @@ def run_gate() -> None:
 
     api = GitHubApi(env_string("GITHUB_TOKEN"))
 
-    for attempt in range(1, POLL_ATTEMPTS + 1):
-        pr, lane = bind_live_pr(
+    pr, lane = bind_live_pr(
+        api,
+        pr_number=pr_number,
+        event_author=event_author,
+        event_base_ref=event_base_ref,
+        event_base_sha=event_base_sha,
+        event_head_repository=event_head_repository,
+        event_head_ref=event_head_ref,
+        event_head_sha=event_head_sha,
+    )
+    if lane is None:
+        print(
+            f"trusted-governed-bot-review: not applicable to PR #{pr_number}; "
+            "live PR identity matches the immutable event binding."
+        )
+        return
+
+    validate_governed_topology(
+        api,
+        pr,
+        base_sha=event_base_sha,
+        head_ref=event_head_ref,
+        head_sha=event_head_sha,
+    )
+    reviews = api.all_reviews(pr_number)
+    decision = review_decision(reviews, event_base_sha, event_head_sha)
+
+    if decision == "approved":
+        # One final live topology + review re-read narrows the approval/merge race
+        # and prevents success from being emitted from a stale first snapshot.
+        final_pr, final_lane = bind_live_pr(
             api,
             pr_number=pr_number,
             event_author=event_author,
@@ -336,69 +363,30 @@ def run_gate() -> None:
             event_head_ref=event_head_ref,
             event_head_sha=event_head_sha,
         )
-        if lane is None:
-            print(
-                f"trusted-governed-bot-review: not applicable to PR #{pr_number}; "
-                "live PR identity matches the immutable event binding."
-            )
-            return
-
+        require(final_lane == lane, "governed bot lane changed during final review re-proof")
         validate_governed_topology(
             api,
-            pr,
+            final_pr,
             base_sha=event_base_sha,
             head_ref=event_head_ref,
             head_sha=event_head_sha,
         )
-        reviews = api.all_reviews(pr_number)
-        decision = review_decision(reviews, event_base_sha, event_head_sha)
+        require(
+            review_decision(api.all_reviews(pr_number), event_base_sha, event_head_sha) == "approved",
+            "governed bot review state changed during final review re-proof",
+        )
+        print(
+            f"trusted-governed-bot-review: exact {lane} PR #{pr_number} has exactly one "
+            "marker-bound APPROVED review and no active latest manual veto."
+        )
+        return
 
-        if decision == "approved":
-            # One final live topology + review re-read narrows the approval/merge race
-            # and prevents success from being emitted from a stale first snapshot.
-            final_pr, final_lane = bind_live_pr(
-                api,
-                pr_number=pr_number,
-                event_author=event_author,
-                event_base_ref=event_base_ref,
-                event_base_sha=event_base_sha,
-                event_head_repository=event_head_repository,
-                event_head_ref=event_head_ref,
-                event_head_sha=event_head_sha,
-            )
-            require(final_lane == lane, "governed bot lane changed during final review re-proof")
-            validate_governed_topology(
-                api,
-                final_pr,
-                base_sha=event_base_sha,
-                head_ref=event_head_ref,
-                head_sha=event_head_sha,
-            )
-            require(
-                review_decision(api.all_reviews(pr_number), event_base_sha, event_head_sha) == "approved",
-                "governed bot review state changed during final review re-proof",
-            )
-            print(
-                f"trusted-governed-bot-review: exact {lane} PR #{pr_number} has exactly one "
-                "marker-bound APPROVED review and no active latest manual veto."
-            )
-            return
+    if decision == "veto":
+        raise GateError("latest manual exact-head portyu9 review requests changes")
+    if decision == "revoked":
+        raise GateError("the exact marker-bound portyu9 review was dismissed or revoked")
 
-        if decision == "veto":
-            raise GateError("latest manual exact-head portyu9 review requests changes")
-        if decision == "revoked":
-            raise GateError("the exact marker-bound portyu9 review was dismissed or revoked")
-
-        if attempt == POLL_ATTEMPTS:
-            break
-        if attempt == 1 or attempt % 24 == 0:
-            print(
-                f"trusted-governed-bot-review: waiting for exact marker-bound approval "
-                f"for {lane} PR #{pr_number} (attempt {attempt}/{POLL_ATTEMPTS})."
-            )
-        time.sleep(POLL_SECONDS)
-
-    raise GateError("exact marker-bound portyu9 approval did not arrive inside the bounded native-gate window")
+    raise GateError("exact marker-bound portyu9 approval is not ready")
 
 
 def self_test() -> None:
