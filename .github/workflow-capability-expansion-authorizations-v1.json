@@ -750,6 +750,13 @@
       "rationale": "Authorize frozen #1255 after accepted-main diagnostic #1256 measured the exact tuple. The only expansion is the canonical Workflow Capability BOM trusted-control-source byte transition needed to encode reduced authority. The candidate removes generic reviewer dispatch, four main/controller wake sources, and Spotlight reviewer-dispatch API/mutation while preserving marker/veto semantics, required checks, permissions, merge/ruleset authority, and no mutation retry."
     },
     {
+      "baseBomSha256": "319eaeb096ffa788b86a754f134d9561433c347907dc5d35554a6033548c4472",
+      "candidateBomSha256": "8d20f26fa6d3a673ffd8d7afdf4e80f34a256b0311cc03ad3d6ed6a9611c8f12",
+      "expansionSha256": "5c5c1794a394a9173d73c1fe815465801269accda8267924b9a91f5391136c0c",
+      "id": "cap-governed-review-event-convergence-v1",
+      "rationale": "Authorize frozen #1276 measured by closed #1277: split owner-secret review from no-secret Actions-write convergence, replace repeated per-context reads with exact-head snapshots, and permit one state-conditioned rerun of only the canonical failed governed-review gate job. Existing exact identity, veto/revocation, required-check, ruleset, merge, and no-blind-retry guards remain; no bypass, direct-main write, secret/OIDC expansion, or check reduction."
+    },
+    {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "f7c4b2d408c729ef2cad41d9f7539b0b1231402095512d3a5a1c129a3128a107",
