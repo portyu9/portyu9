@@ -1341,6 +1341,13 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve",
               "method": "POST",
               "mutating": true,
@@ -1348,9 +1355,9 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
-              "method": "GET",
-              "mutating": false,
+              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches",
+              "method": "POST",
+              "mutating": true,
               "step": "Approve and wait for only the exact README-only automation checks"
             },
             {
@@ -1425,6 +1432,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "method": "GET",
+              "mutating": false,
+              "step": "Approve and wait for only the exact README-only automation checks"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments",
               "method": "POST",
               "mutating": true,
@@ -1432,7 +1446,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100",
+              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10",
               "method": "GET",
               "mutating": false,
               "step": "Approve and wait for only the exact README-only automation checks"
@@ -1457,13 +1471,6 @@
               "method": "GET",
               "mutating": false,
               "step": "Approve and wait for only the exact README-only automation checks"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve and wait for only the exact README-only automation checks"
             }
           ],
           "artifacts": [],
@@ -1474,6 +1481,12 @@
               "method": "POST",
               "step": "Approve and wait for only the exact README-only automation checks",
               "target": "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"
+            },
+            {
+              "class": "workflow-dispatch",
+              "method": "POST",
+              "step": "Approve and wait for only the exact README-only automation checks",
+              "target": "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches"
             },
             {
               "class": "workflow-dispatch",
