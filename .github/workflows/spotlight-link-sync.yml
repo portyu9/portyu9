@@ -1340,10 +1340,15 @@ jobs:
           echo "Dispatched event-driven Spotlight admission proof from trusted main; Capability Admission independently binds the unique current-main candidate."
 
           # Break the native-review cycle deterministically from this trusted-main parent.
-          # The reviewer workflow's dispatch path is Spotlight-only, github-actions[bot]-only,
-          # and independently revalidates a singleton current-main candidate before mutation.
+          # The reviewer wake carries the exact immutable Spotlight PR/base/head/ref identity,
+          # is candidate-head-concurrent, and independently revalidates the exact PR before mutation.
           REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \
-            -f ref=main)"
+            -f ref=main \
+            -f "inputs[prNumber]=${PR_NUMBER}" \
+            -f "inputs[baseSha]=${BASE_SHA}" \
+            -f "inputs[headSha]=${HEAD_SHA}" \
+            -f "inputs[headRef]=${CANDIDATE_BRANCH}" \
+            -f "inputs[lane]=spotlight")"
           REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d '\r')"
           [[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
             echo "ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}" >&2
