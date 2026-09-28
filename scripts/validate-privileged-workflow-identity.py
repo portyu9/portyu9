@@ -12,7 +12,7 @@ VERSION = "governed-workflow-byte-identity-v124"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
-    ".github/workflows/profile-stats.yml": "fe2d42abb77ea19e27780b26bbf2f1e07d5ba1a5",
+    ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
     ".github/workflows/spotlight-link-sync.yml": "50c08154b53711b339a76bd976f822a59959d1ad",
 }
 
@@ -298,7 +298,7 @@ def validate_item11_receipts(profile: str, spotlight: str) -> None:
     profile_signer = job_block(profile, "decision_receipt_attest", None)
     require("name: prepare-automation-decision-receipt-read-only" in profile_prepare,
             "Profile ADR preparer identity changed")
-    require("needs: [generate, dispatch, lease]" in profile_prepare,
+    require("needs: [dispatch, lease]" in profile_prepare,
             "Profile ADR preparer dependency closure changed")
     require("permissions:\n      contents: read\n      actions: read" in profile_prepare,
             "Profile ADR preparer must remain read-only")
@@ -308,7 +308,7 @@ def validate_item11_receipts(profile: str, spotlight: str) -> None:
 
     require("name: attest-automation-decision-receipt-write-only" in profile_signer,
             "Profile ADR signer identity changed")
-    require("needs: [generate, decision_receipt, lease, attest]" in profile_signer,
+    require("needs: [decision_receipt, lease, attest]" in profile_signer,
             "Profile ADR signer dependency closure changed")
     require("permissions:\n      contents: read\n      id-token: write\n      attestations: write" in profile_signer,
             "Profile ADR signer authority changed")
@@ -4755,7 +4755,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
 
     require("name: prepare-spotlight-dispatch-read-only" in plan,
             "Profile Stats Spotlight dispatch-plan identity changed")
-    require("needs: [generate, receipt_attest, lease, attest]" in plan,
+    require("needs: [receipt_attest, lease, attest]" in plan,
             "Profile Stats Spotlight dispatch-plan dependency closure changed")
     require("permissions:\n      actions: read\n      contents: read" in plan,
             "Profile Stats Spotlight dispatch plan must remain actions/contents read-only")
@@ -4768,7 +4768,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
             and "gh api " not in plan,
             "Profile Stats Spotlight dispatch plan must contain exactly two governed GETs and no direct gh api")
     require("name: dispatch-spotlight-link-sync" in dispatch
-            and "needs: [generate, dispatch_plan, receipt_attest, lease, attest]" in dispatch,
+            and "needs: [dispatch_plan, receipt_attest, lease, attest]" in dispatch,
             "Profile Stats write-only dispatcher dependency closure changed")
     require("permissions:\n      actions: write" in dispatch,
             "Profile Stats dispatcher must retain actions-write-only authority")
@@ -4981,6 +4981,7 @@ def validate_profile_quality_portfolio_liveness_boundary(
         )
 
     stats_generate = job_block(profile_stats, "generate", "attest")
+    stats_attest = job_block(profile_stats, "attest", "lease")
     live_generation_anchor = (
         'python3 source/scripts/generate-profile-evidence.py \\\n'
         '            --signal-field-dir "$READY_DIR" \\\n'
@@ -4999,11 +5000,10 @@ def validate_profile_quality_portfolio_liveness_boundary(
         'elif [ "$STATUS" -eq 75 ] && [ "$GITHUB_EVENT_NAME" = "schedule" ]; then',
         'echo "evidence_state=READY" >> "$GITHUB_OUTPUT"',
         'echo "evidence_state=LIVE_NOT_READY" >> "$GITHUB_OUTPUT"',
-        "if: needs.generate.outputs.evidence_state == 'READY'",
     ):
         require(
-            fragment in profile_stats,
-            f"Profile Stats typed live-not-ready contract changed: {fragment}",
+            fragment in stats_generate,
+            f"Profile Stats typed live-not-ready generation contract changed: {fragment}",
         )
     require(
         stats_generate.count("--allow-live-not-ready-noop") == 1,
@@ -5014,8 +5014,9 @@ def validate_profile_quality_portfolio_liveness_boundary(
         "Profile Stats must gate exactly the three generated evidence artifact uploads on READY",
     )
     require(
-        profile_stats.count("needs.generate.outputs.evidence_state == 'READY'") == 11,
-        "Profile Stats downstream READY gate coverage changed",
+        "if: needs.generate.outputs.evidence_state == 'READY'" in stats_attest
+        and profile_stats.count("needs.generate.outputs.evidence_state == 'READY'") == 1,
+        "Profile Stats must gate the existing downstream DAG exactly once at attestation entry",
     )
     require(
         "--offline" not in profile_stats,
