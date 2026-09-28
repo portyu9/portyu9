@@ -8,11 +8,11 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v123"
+VERSION = "governed-workflow-byte-identity-v124"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
-    ".github/workflows/profile-stats.yml": "40effafe211960207e106ced545c4b005285c664",
+    ".github/workflows/profile-stats.yml": "fe2d42abb77ea19e27780b26bbf2f1e07d5ba1a5",
     ".github/workflows/spotlight-link-sync.yml": "50c08154b53711b339a76bd976f822a59959d1ad",
 }
 
@@ -298,7 +298,7 @@ def validate_item11_receipts(profile: str, spotlight: str) -> None:
     profile_signer = job_block(profile, "decision_receipt_attest", None)
     require("name: prepare-automation-decision-receipt-read-only" in profile_prepare,
             "Profile ADR preparer identity changed")
-    require("needs: [dispatch, lease]" in profile_prepare,
+    require("needs: [generate, dispatch, lease]" in profile_prepare,
             "Profile ADR preparer dependency closure changed")
     require("permissions:\n      contents: read\n      actions: read" in profile_prepare,
             "Profile ADR preparer must remain read-only")
@@ -308,7 +308,7 @@ def validate_item11_receipts(profile: str, spotlight: str) -> None:
 
     require("name: attest-automation-decision-receipt-write-only" in profile_signer,
             "Profile ADR signer identity changed")
-    require("needs: [decision_receipt, lease, attest]" in profile_signer,
+    require("needs: [generate, decision_receipt, lease, attest]" in profile_signer,
             "Profile ADR signer dependency closure changed")
     require("permissions:\n      contents: read\n      id-token: write\n      attestations: write" in profile_signer,
             "Profile ADR signer authority changed")
@@ -4980,15 +4980,42 @@ def validate_profile_quality_portfolio_liveness_boundary(
             f"Profile Quality integration must not duplicate canonical boundary sequencing: {duplicated}",
         )
 
+    stats_generate = job_block(profile_stats, "generate", "attest")
     live_generation_anchor = (
         'python3 source/scripts/generate-profile-evidence.py \\\n'
         '            --signal-field-dir "$READY_DIR" \\\n'
         '            --portfolio-ledger-dir portfolio-ledger-ready \\\n'
-        '            --spotlight-dir spotlight-ready'
+        '            --spotlight-dir spotlight-ready \\\n'
+        '            "${LIVE_ARGS[@]}"'
     )
     require(
         live_generation_anchor in profile_stats,
         "Profile Stats must retain canonical live Portfolio/Spotlight evidence generation",
+    )
+    for fragment in (
+        'evidence_state: ${{ steps.evidence.outputs.evidence_state }}',
+        'if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then',
+        'LIVE_ARGS+=(--allow-live-not-ready-noop)',
+        'elif [ "$STATUS" -eq 75 ] && [ "$GITHUB_EVENT_NAME" = "schedule" ]; then',
+        'echo "evidence_state=READY" >> "$GITHUB_OUTPUT"',
+        'echo "evidence_state=LIVE_NOT_READY" >> "$GITHUB_OUTPUT"',
+        "if: needs.generate.outputs.evidence_state == 'READY'",
+    ):
+        require(
+            fragment in profile_stats,
+            f"Profile Stats typed live-not-ready contract changed: {fragment}",
+        )
+    require(
+        stats_generate.count("--allow-live-not-ready-noop") == 1,
+        "Profile Stats scheduled live-not-ready classifier must have exactly one opt-in flag",
+    )
+    require(
+        stats_generate.count("if: steps.evidence.outputs.evidence_state == 'READY'") == 3,
+        "Profile Stats must gate exactly the three generated evidence artifact uploads on READY",
+    )
+    require(
+        profile_stats.count("needs.generate.outputs.evidence_state == 'READY'") == 11,
+        "Profile Stats downstream READY gate coverage changed",
     )
     require(
         '--spotlight-dir spotlight-ready \\\n            --offline' not in profile_stats,
