@@ -2936,6 +2936,25 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
         "validate_spotlight_pull_list_item() {" not in projected,
         "Spotlight approval-list compatibility projection left helper definition bytes behind",
     )
+
+    readiness_start_marker = '                REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"\n'
+    readiness_end_marker = '                  echo "Reviewer dispatch occurred only after six exact-head prerequisites were green."\n'
+    require(
+        projected.count(readiness_start_marker) == 1
+        and projected.count(readiness_end_marker) == 1,
+        "Spotlight review-readiness compatibility projection anchors changed",
+    )
+    readiness_start = projected.index(readiness_start_marker)
+    readiness_end = projected.index(readiness_end_marker, readiness_start) + len(readiness_end_marker)
+    require(
+        readiness_start < readiness_end,
+        "Spotlight review-readiness compatibility projection ordering changed",
+    )
+    projected = projected[:readiness_start] + projected[readiness_end:]
+    require(
+        "Spotlight exact-head reviewer-readiness snapshot." not in projected,
+        "Spotlight review-readiness compatibility projection left readiness schema bytes behind",
+    )
     return projected
 
 
