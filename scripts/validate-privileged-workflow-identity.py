@@ -4545,7 +4545,7 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     )
     reviewer_dispatch = (
         'REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST '
-        '"repos/${GITHUB_REPOSITORY}/dispatches" \\'
+        '"repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches" \\'
     )
     reviewer_guard = (
         '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
@@ -4560,7 +4560,7 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     )
     require(
         spotlight.count(reviewer_dispatch) == 1,
-        "Spotlight reviewer wake must capture exactly one typed repository-dispatch response",
+        "Spotlight reviewer wake must capture exactly one fixed workflow-dispatch response",
     )
     require(
         spotlight.count(reviewer_guard) == 1,
@@ -4569,19 +4569,21 @@ def validate_spotlight_dispatch_status_contract(spotlight: str) -> None:
     for fragment in (
         'CAPABILITY_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$CAPABILITY_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
         'ERROR: Spotlight Capability Admission dispatch returned unexpected status: ${CAPABILITY_DISPATCH_STATUS_LINE}',
-        '-f event_type=spotlight-review-wake',
-        '-f "client_payload[prNumber]=${PR_NUMBER}"',
-        '-f "client_payload[baseSha]=${BASE_SHA}"',
-        '-f "client_payload[headSha]=${HEAD_SHA}"',
-        '-f "client_payload[headRef]=${CANDIDATE_BRANCH}"',
-        '-f "client_payload[lane]=spotlight"',
+        '-f ref=main',
+        '-f "inputs[prNumber]=${PR_NUMBER}"',
+        '-f "inputs[baseSha]=${BASE_SHA}"',
+        '-f "inputs[headSha]=${HEAD_SHA}"',
+        '-f "inputs[headRef]=${CANDIDATE_BRANCH}"',
+        '-f "inputs[lane]=spotlight"',
         'REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
         'ERROR: Spotlight governed-reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}',
         'Dispatched bounded singleton Spotlight reviewer evaluation from trusted main.',
     ):
         require(fragment in spotlight, f"Spotlight dispatch response-status contract is missing: {fragment}")
     for retired in (
-        'actions/workflows/bot-pr-user-approval.yml/dispatches',
+        'repos/${GITHUB_REPOSITORY}/dispatches',
+        'event_type=spotlight-review-wake',
+        'client_payload[',
         'Dispatched exact pre-convergence portyu9 review evaluation from trusted main.',
     ):
         require(retired not in spotlight, f"Spotlight must not regain retired generic reviewer dispatch: {retired}")
