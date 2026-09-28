@@ -346,6 +346,7 @@
         "lease": {
           "name": "mint-mutation-lease-read-only",
           "needs": [
+            "generate",
             "attest"
           ],
           "permissions": {
@@ -356,6 +357,7 @@
         "attest_publish": {
           "name": "attest-write-only",
           "needs": [
+            "generate",
             "attest",
             "lease"
           ],
@@ -380,6 +382,7 @@
         "publish": {
           "name": "publish-write-only",
           "needs": [
+            "generate",
             "stage",
             "lease",
             "attest"
@@ -391,6 +394,7 @@
         "receipt": {
           "name": "prepare-publication-receipt-read-only",
           "needs": [
+            "generate",
             "publish",
             "stage",
             "lease",
@@ -403,6 +407,7 @@
         "receipt_attest": {
           "name": "attest-publication-receipt-write-only",
           "needs": [
+            "generate",
             "receipt",
             "lease",
             "attest"
@@ -416,6 +421,7 @@
         "dispatch_plan": {
           "name": "prepare-spotlight-dispatch-read-only",
           "needs": [
+            "generate",
             "receipt_attest",
             "lease",
             "attest"
@@ -428,6 +434,7 @@
         "dispatch": {
           "name": "dispatch-spotlight-link-sync",
           "needs": [
+            "generate",
             "dispatch_plan",
             "receipt_attest",
             "lease",
@@ -440,6 +447,7 @@
         "decision_receipt": {
           "name": "prepare-automation-decision-receipt-read-only",
           "needs": [
+            "generate",
             "dispatch",
             "lease"
           ],
@@ -451,6 +459,7 @@
         "decision_receipt_attest": {
           "name": "attest-automation-decision-receipt-write-only",
           "needs": [
+            "generate",
             "decision_receipt",
             "lease",
             "attest"
