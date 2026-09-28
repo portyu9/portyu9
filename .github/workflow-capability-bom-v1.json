@@ -607,6 +607,7 @@
           ],
           "name": "attest-write-only",
           "needs": [
+            "generate",
             "attest",
             "lease"
           ],
@@ -662,6 +663,7 @@
           "mutations": [],
           "name": "prepare-automation-decision-receipt-read-only",
           "needs": [
+            "generate",
             "dispatch",
             "lease"
           ],
@@ -718,6 +720,7 @@
           ],
           "name": "attest-automation-decision-receipt-write-only",
           "needs": [
+            "generate",
             "decision_receipt",
             "lease",
             "attest"
@@ -758,6 +761,7 @@
           ],
           "name": "dispatch-spotlight-link-sync",
           "needs": [
+            "generate",
             "dispatch_plan",
             "receipt_attest",
             "lease",
@@ -799,6 +803,7 @@
           "mutations": [],
           "name": "prepare-spotlight-dispatch-read-only",
           "needs": [
+            "generate",
             "receipt_attest",
             "lease",
             "attest"
@@ -944,6 +949,7 @@
           "mutations": [],
           "name": "mint-mutation-lease-read-only",
           "needs": [
+            "generate",
             "attest"
           ],
           "oidc": false,
@@ -1033,6 +1039,7 @@
           ],
           "name": "publish-write-only",
           "needs": [
+            "generate",
             "stage",
             "lease",
             "attest"
@@ -1121,6 +1128,7 @@
           "mutations": [],
           "name": "prepare-publication-receipt-read-only",
           "needs": [
+            "generate",
             "publish",
             "stage",
             "lease",
@@ -1176,6 +1184,7 @@
           ],
           "name": "attest-publication-receipt-write-only",
           "needs": [
+            "generate",
             "receipt",
             "lease",
             "attest"
