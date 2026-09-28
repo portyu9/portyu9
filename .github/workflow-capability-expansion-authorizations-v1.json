@@ -1079,6 +1079,13 @@
       "rationale": "Authorize #1260 exact candidate-bound Spotlight reviewer recovery measured by closed #1261: typed trusted-main repository_dispatch wake with exact PR/base/head/ref/lane, one exact dispatched-PR read, and the matching Spotlight dispatch POST/API surface. Current #1260 successor only narrows workflow_run job entry and updates its validator pin; BOM/TCB bytes are unchanged. No global wake, required-check reduction, merge bypass, direct-main write, or blind mutation retry."
     },
     {
+      "baseBomSha256": "9f4aebe896933f854ecc81a5f06312c9fe89301e3077d1096be5dd4a69a7a74b",
+      "candidateBomSha256": "a00807e0773e7656ff34d38930257724bd209ea1013f4a625934bb9fc6b8b073",
+      "expansionSha256": "202136a206ebfe04b352861c3e6daac0c9e7e79f1573aa888e0fbb0254046e36",
+      "id": "cap-spotlight-reviewer-fixed-workflow-dispatch-v1",
+      "rationale": "Authorize frozen simplified #1265 measured by closed #1267: replace failing repository_dispatch with fixed bot-pr-user-approval workflow_dispatch using existing Actions write and ref=main only. The wake carries no candidate payload; reviewer independently requires one canonical current-main Spotlight PR and retains exact ref/check/thread/veto/race proofs. Removes generic dispatch and routed PR GET; adds no Contents write, secret/OIDC, check reduction, merge/bypass, retry, or compiler authority."
+    },
+    {
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
       "candidateBomSha256": "543d5e165624fea20171ac42c9a2a8826d430162b5209ca331d0477354b6641f",
       "expansionSha256": "618ca9922bf513f39e060cc44ba605ccf7f979d750e07e50e551f4e46f8d474b",
