@@ -19,6 +19,9 @@ CONTROL_WORKFLOW_ID = "capability-admission"
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 PROTECTED_EXACT = {
     ".github/workflow-capability-bom-v1.json",
+    ".github/aiqa-owner-protected-authorizations-v1.json",
+    ".github/workflow-capability-bom-v1-aiqa-owner-protected-certifier.json",
+    ".github/workflows/aiqa-owner-protected-certifier.yml",
     ".github/workflow-capability-bom-v1-capability-admission.json",
     ".github/workflow-capability-bom-v1-codeql-autofix.json",
     ".github/workflow-capability-bom-v1-dependabot-controller.json",
@@ -28,6 +31,7 @@ PROTECTED_EXACT = {
     ".github/workflows/ruleset-reconciler.yml",
     ".github/workflows/capability-admission.yml",
     ".github/workflows/dependabot-controller.yml",
+    "scripts/aiqa_owner_protected_certifier.py",
     "scripts/profile_stats_decision_receipt.py",
     "scripts/ruleset_transition_contract.py",
     "scripts/spotlight_decision_receipt.py",
@@ -152,6 +156,16 @@ def self_test() -> None:
             "TCB self-test lost admission module")
     require(is_protected_path("scripts/automation_policy.py"),
             "TCB self-test lost Automation Policy loader")
+    for path in (
+        ".github/aiqa-owner-protected-authorizations-v1.json",
+        ".github/workflow-capability-bom-v1-aiqa-owner-protected-certifier.json",
+        ".github/workflows/aiqa-owner-protected-certifier.yml",
+        "scripts/aiqa_owner_protected_certifier.py",
+    ):
+        require(
+            is_protected_path(path),
+            f"TCB self-test lost AI QA owner-certifier trusted source: {path}",
+        )
     require(is_protected_path(".github/workflow-capability-bom-v1-codeql-autofix.json"),
             "TCB self-test lost CodeQL Autofix BOM extension")
     require(is_protected_path(".github/workflow-capability-bom-v1-dependabot-controller.json"),
