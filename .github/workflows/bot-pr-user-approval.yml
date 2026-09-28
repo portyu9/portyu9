@@ -753,7 +753,7 @@ jobs:
               --arg repository "$TARGET_REPOSITORY" \
               --arg workflowName "Bot PR user approval" \
               --arg workflowPath ".github/workflows/bot-pr-user-approval.yml" \
-              --arg event "workflow_run" \
+              --arg event "$WAKE_EVENT_NAME" \
               --arg sourceSha "$GITHUB_SHA" \
               --argjson runId "$GITHUB_RUN_ID" \
               --argjson runAttempt "$GITHUB_RUN_ATTEMPT" \
