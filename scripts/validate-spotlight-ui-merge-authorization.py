@@ -736,6 +736,84 @@ def project_native_review_gate_to_item10_order(sync: str) -> str:
     return projected
 
 
+
+def project_single_pass_approval_review_to_predecessor(sync: str) -> str:
+    """Project #1276's single-pass approval observation back to the bounded predecessor."""
+    review_marker = '          REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"\n'
+    review_start = (
+        '          REVIEW_PAGES="$(gh api --paginate --slurp '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"\n'
+    )
+    singleton = '          test "$PORTYU9_APPROVAL_COUNT" = "1" || {\n'
+    next_marker = '          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"\n'
+    retired_loop = '          for REVIEW_ATTEMPT in $(seq 1 24); do\n'
+    require(
+        sync.count(review_marker) >= 2,
+        "Spotlight item-31 single-pass projection lost marker-bound review anchors",
+    )
+    approve_marker = sync.index(review_marker)
+    start = sync.index(review_start, approve_marker)
+    singleton_start = sync.index(singleton, start)
+    end = sync.index(next_marker, singleton_start)
+    single_pass = sync[start:end]
+    for fragment in (
+        'ERROR: malformed or incomplete paginated pull-review evidence.',
+        'has("commit_id") and',
+        'has("body") and',
+        '| unique |',
+        'REVIEWS="$(jq -c \'[.[][]]\' <<<"$REVIEW_PAGES")"',
+        'PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER"',
+        'test "$PORTYU9_APPROVAL_COUNT" = "1" || {',
+        'ERROR: exact-base/head portyu9 approval is not singleton after all protected workflows converged.',
+    ):
+        require(
+            fragment in single_pass,
+            f"Spotlight item-31 single-pass approval contract is missing: {fragment}",
+        )
+    require(
+        retired_loop not in sync
+        and "sleep 5" not in single_pass,
+        "Spotlight item-31 single-pass approval observation regained bounded polling",
+    )
+
+    strict_end_marker = (
+        '          PORTYU9_APPROVAL_COUNT="$(jq --arg head "$HEAD_SHA" --arg marker "$REVIEW_MARKER" '
+    )
+    count_start = single_pass.index(strict_end_marker)
+    count_end = single_pass.index("\n", count_start) + 1
+    strict_block = single_pass[:count_end]
+    trailing = single_pass[count_end:]
+    require(
+        trailing.startswith(singleton),
+        "Spotlight item-31 single-pass approval terminal proof moved",
+    )
+    indented = "".join("  " + line for line in strict_block.splitlines(keepends=True))
+    predecessor = (
+        '          PORTYU9_APPROVAL_COUNT=0\n'
+        '          for REVIEW_ATTEMPT in $(seq 1 24); do\n'
+        + indented
+        + '            [[ "$PORTYU9_APPROVAL_COUNT" =~ ^[0-9]+$ ]]\n'
+        '            if [ "$PORTYU9_APPROVAL_COUNT" -ge 1 ]; then\n'
+        '              break\n'
+        '            fi\n'
+        '            if [ "$REVIEW_ATTEMPT" -lt 24 ]; then\n'
+        '              sleep 5\n'
+        '            fi\n'
+        '          done\n'
+        '          test "$PORTYU9_APPROVAL_COUNT" -ge 1 || {\n'
+        '            echo "ERROR: exact-base/head portyu9 review did not materialize after the pre-convergence dispatch." >&2\n'
+        '            exit 1\n'
+        '          }\n'
+    )
+    projected = sync[:start] + predecessor + sync[end:]
+    require(
+        projected.count(retired_loop) == 1
+        and singleton not in projected[start:projected.index(next_marker, start)],
+        "Spotlight item-31 predecessor approval-loop projection changed",
+    )
+    return projected
+
+
 def project_strict_pull_review_schema_to_legacy(sync: str) -> str:
     """Project item-31 review-schema hardening away only for the frozen item-9 proof."""
     approve_loop = "          for REVIEW_ATTEMPT in $(seq 1 24); do\n"
@@ -1046,6 +1124,7 @@ def project_item9(sync: str) -> str:
     sync = project_approval_comment_http_status_to_legacy(sync)
     sync = project_merge_http_status_to_legacy(sync)
     sync = project_merge_success_response_to_legacy(sync)
+    sync = project_single_pass_approval_review_to_predecessor(sync)
     sync = project_strict_pull_review_schema_to_legacy(sync)
     sync = project_native_review_gate_to_item10_order(sync)
     legacy = ORIGINAL_PROJECT_ITEM9(sync)
