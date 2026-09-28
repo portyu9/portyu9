@@ -121,7 +121,6 @@ SPOTLIGHT_APPROVAL_COMMENT_LEGACY = (
     '              -f body="$APPROVAL_BODY" \\\n'
     '              > "$RUNNER_TEMP/spotlight-approval-comment-created.json"\n'
 )
-SPOTLIGHT_REVIEWER_STEWARDSHIP = "          REQUESTED=\"$(jq '[.requested_reviewers[]? | select(.login == \"portyu9\")] | length' <<<\"$PR\")\"\n          [[ \"$REQUESTED\" =~ ^[0-9]+$ ]]\n          if [ \"$REQUESTED\" = \"0\" ]; then\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers\" \\\n              -f 'reviewers[]=portyu9' > requested-reviewer.json\n            test \"$(jq '[.requested_reviewers[]? | select(.login == \"portyu9\")] | length' requested-reviewer.json)\" = \"1\"\n          fi\n"
 SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n      pull-requests: write\n"
 LEGACY_SPOTLIGHT_APPROVE_PERMISSIONS = "    permissions:\n      contents: read\n      actions: write\n"
 SPOTLIGHT_APPROVAL_AUDIT = "          PRS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10\")\"\n          test \"$(jq 'length' <<<\"$PRS\")\" = \"1\"\n          test \"$(jq -r '.[0].number' <<<\"$PRS\")\" = \"$PR_NUMBER\"\n          APPROVAL_MARKER=\"<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->\"\n          gh api --paginate --slurp \\\n            \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100\" \\\n            > \"$RUNNER_TEMP/spotlight-approval-comment-pages.json\"\n          jq -ce \\\n            --arg repo \"$GITHUB_REPOSITORY\" \\\n            --argjson pr \"$PR_NUMBER\" \\\n            --arg marker \"$APPROVAL_MARKER\" '\n              if type != \"array\" or length < 1 or length > 20 then\n                error(\"Spotlight automation-approval comment pages must be a bounded slurped page array\")\n              elif any(.[]; type != \"array\" or length > 100) then\n                error(\"Spotlight automation-approval comment page shape changed\")\n              elif (length > 1 and any(.[0:-1][]; length != 100)) then\n                error(\"Spotlight automation-approval comment pagination is incomplete\")\n              elif any(.[][];\n                (type != \"object\") or\n                ((.id | type) != \"number\") or ((.id | floor) != .id) or (.id <= 0) or\n                (.issue_url != (\"https://api.github.com/repos/\" + $repo + \"/issues/\" + ($pr | tostring))) or\n                (.url != (\"https://api.github.com/repos/\" + $repo + \"/issues/comments/\" + (.id | tostring))) or\n                ((.body | type) != \"string\") or\n                ((.user | type) != \"object\") or\n                ((.user.login | type) != \"string\") or\n                ((.user.login | length) == 0) or\n                ((.html_url | type) != \"string\") or\n                ((.html_url | length) == 0)\n              ) then\n                error(\"Spotlight automation-approval comment item schema changed\")\n              elif ([.[][] | .id] | group_by(.) | any(length > 1)) then\n                error(\"Spotlight automation-approval comment ids are not unique\")\n              else\n                [.[][] | {id,login:.user.login,body}] as $comments\n                | [$comments[] | select(.login == \"github-actions[bot]\" and (.body | contains($marker)))] as $matches\n                | if ($matches | length) > 1 then\n                    error(\"duplicate trusted Spotlight automation-approval comments exist\")\n                  else\n                    {\n                      exists:(($matches | length) == 1),\n                      commentId:(if ($matches | length) == 1 then $matches[0].id else null end),\n                      prNumber:$pr,\n                      repository:$repo,\n                      marker:$marker\n                    }\n                  end\n              end\n            ' \"$RUNNER_TEMP/spotlight-approval-comment-pages.json\" \\\n            > \"$RUNNER_TEMP/spotlight-approval-comment-evidence.json\"\n          APPROVAL_COMMENT_EXISTS=\"$(jq -r .exists \"$RUNNER_TEMP/spotlight-approval-comment-evidence.json\")\"\n          test \"$APPROVAL_COMMENT_EXISTS\" = \"true\" -o \"$APPROVAL_COMMENT_EXISTS\" = \"false\"\n          if [ \"$APPROVAL_COMMENT_EXISTS\" = \"false\" ]; then\n            printf -v APPROVAL_BODY '%s\\n%s' \"$APPROVAL_MARKER\" \"Automation-approved: the exact Spotlight head \\`${HEAD_SHA}\\` passed all three protected PR workflows. An exact-head APPROVED review by @portyu9 is required before terminal merge; no manual workflow approval is required. Continuing through the governed merge-authorization and attestation path.\"\n            gh api --method POST \"repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments\" \\\n              -f body=\"$APPROVAL_BODY\" \\\n              > \"$RUNNER_TEMP/spotlight-approval-comment-created.json\"\n            jq -ce \\\n              --arg repo \"$GITHUB_REPOSITORY\" \\\n              --argjson pr \"$PR_NUMBER\" \\\n              --arg body \"$APPROVAL_BODY\" '\n                if type != \"object\" then\n                  error(\"created Spotlight automation-approval comment must be an object\")\n                elif ((.id | type) != \"number\") or ((.id | floor) != .id) or (.id <= 0) then\n                  error(\"created Spotlight automation-approval comment id is invalid\")\n                elif .issue_url != (\"https://api.github.com/repos/\" + $repo + \"/issues/\" + ($pr | tostring)) then\n                  error(\"created Spotlight automation-approval comment issue URL mismatch\")\n                elif .url != (\"https://api.github.com/repos/\" + $repo + \"/issues/comments/\" + (.id | tostring)) then\n                  error(\"created Spotlight automation-approval comment URL mismatch\")\n                elif .body != $body then\n                  error(\"created Spotlight automation-approval comment body mismatch\")\n                elif ((.user | type) != \"object\") or .user.login != \"github-actions[bot]\" then\n                  error(\"created Spotlight automation-approval comment actor mismatch\")\n                elif ((.html_url | type) != \"string\") or ((.html_url | length) == 0) then\n                  error(\"created Spotlight automation-approval comment html_url is invalid\")\n                else\n                  {id:.id,prNumber:$pr,repository:$repo,actor:.user.login}\n                end\n              ' \"$RUNNER_TEMP/spotlight-approval-comment-created.json\" \\\n              > \"$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json\"\n            test \"$(jq -r .actor \"$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json\")\" = \"github-actions[bot]\"\n            test \"$(jq -r .prNumber \"$RUNNER_TEMP/spotlight-approval-comment-created-normalized.json\")\" = \"$PR_NUMBER\"\n          fi\n\n"
@@ -639,28 +638,6 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
             '          test "$(jq \'length\' <<<"$PRS")" = "1"\n'
             '          test "$(jq -r \'.[0].number\' <<<"$PRS")" = "$PR_NUMBER"\n',
         ),
-        (
-            '            REQUESTED_REVIEWER_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \\\n'
-            '              -f \'reviewers[]=portyu9\')"\n'
-            '            REQUESTED_REVIEWER_STATUS_LINE="$(head -n 1 <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" | tr -d \'\\r\')"\n'
-            '            [[ "$REQUESTED_REVIEWER_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {\n'
-            '              echo "ERROR: Spotlight reviewer request returned unexpected status: ${REQUESTED_REVIEWER_STATUS_LINE}" >&2\n'
-            '              exit 1\n'
-            '            }\n'
-            '            sed \'1,/^[[:space:]]*$/d\' <<<"$REQUESTED_REVIEWER_HTTP_RESPONSE" > requested-reviewer.json\n',
-            '            gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/requested_reviewers" \\\n'
-            '              -f \'reviewers[]=portyu9\' > requested-reviewer.json\n',
-        ),
-        (
-            '          REQUESTED="$(jq \'[.requested_reviewers[] | select(.login == "portyu9")] | length\' <<<"$PR")"\n',
-            '          REQUESTED="$(jq \'[.requested_reviewers[]? | select(.login == "portyu9")] | length\' <<<"$PR")"\n',
-        ),
-        (
-            '            REQUESTED_REVIEWER_RESPONSE="$(cat requested-reviewer.json)"\n'
-            '            validate_spotlight_reviewer_request_response "$REQUESTED_REVIEWER_RESPONSE" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"\n'
-            '            test "$(jq \'[.requested_reviewers[] | select(.login == "portyu9")] | length\' <<<"$REQUESTED_REVIEWER_RESPONSE")" = "1"\n',
-            '            test "$(jq \'[.requested_reviewers[]? | select(.login == "portyu9")] | length\' requested-reviewer.json)" = "1"\n',
-        ),
     )
     for hardened, legacy in overlays:
         core.require(
@@ -670,7 +647,6 @@ def project_spotlight_pr_response_evidence_to_legacy(sync: str) -> str:
         sync = sync.replace(hardened, legacy, 1)
     core.require(
         "validate_spotlight_open_pr_object" not in sync
-        and "validate_spotlight_reviewer_request_response" not in sync
         and "validate_spotlight_pull_list_item" not in sync,
         "Spotlight PR-response projection left modern runtime schema bytes in the historical item-9 view",
     )
@@ -850,9 +826,6 @@ def project_item9_sync_with_marker(sync: str) -> str:
         )
         sync_for_item9 = sync_for_item9.replace(hardened, legacy_api, 1)
     projected = ORIGINAL_PROJECT_ITEM9_SYNC(sync_for_item9)
-    if projected.count(SPOTLIGHT_REVIEWER_STEWARDSHIP) != 1:
-        raise ValueError("Spotlight item-9 reviewer-stewardship projection anchor changed")
-    projected = projected.replace(SPOTLIGHT_REVIEWER_STEWARDSHIP, "", 1)
     if projected.count(SPOTLIGHT_APPROVE_PERMISSIONS) != 1:
         raise ValueError("Spotlight item-9 approval-permission projection anchor changed")
     projected = projected.replace(
