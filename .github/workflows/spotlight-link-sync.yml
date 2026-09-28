@@ -1520,7 +1520,7 @@ jobs:
                     (.app | type == "object" and .id == 15368) and
                     (.status | type == "string" and
                       (. == "queued" or . == "in_progress" or . == "requested" or
-                       . == "waiting" or . == "pending" or . == "completed")) and
+                       (. == "waiting" or . == "pending" or . == "completed"))) and
                     (if .status == "completed"
                      then (.conclusion | type == "string" and length > 0)
                      else .conclusion == null end)
