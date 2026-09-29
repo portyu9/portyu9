@@ -2,7 +2,12 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,9 +84,99 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+
+def spotlight_paginated_read_measurement_diagnostic() -> None:
+    """Disposable carrier: invoke exact accepted-main production measurement for frozen #1318."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    base_sha = "8b05eac4f6c30bc7cc6c0cb82f60257d4bb78b1e"
+    source_sha = "745baf0f75cfddae66f5fce578ea94882d7f0627"
+    expected_tree = "b43f24839fcdf7af2065d0e1562797a4921a00c4"
+    expected_blobs = {
+        ".github/automation-retry-policy-v1.json": "c64860722b636a8ca3de4e044ec0671f0de6c79a",
+        ".github/workflows/spotlight-link-sync.yml": "f4dea5927f47b1b65ffc79e412599acec6433420",
+        "scripts/automation_retry_policy.py": "365f2527da3b7ce0aeca95e8609798a8100621a0",
+        "scripts/validate-privileged-workflow-identity.py": "2cd027c229a786a3a3a4b85ab6f7dc3f2f926fb3",
+        "scripts/validate-spotlight-ui-merge-authorization.py": "84c191aac95edd063160d6a31b27a3d5fafaba93",
+        "scripts/validate-workflow-authority-contract.py": "3155b3255a247d194a82e4f013ed957b00f0c377",
+    }
+
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=64", "origin", base_sha, source_sha],
+        check=True,
+    )
+    merge_base = subprocess.check_output(
+        ["git", "merge-base", base_sha, source_sha], text=True
+    ).strip()
+    require(
+        merge_base == base_sha,
+        f"diagnostic candidate no longer descends from exact accepted main: {merge_base}",
+    )
+    observed_paths = subprocess.check_output(
+        ["git", "diff", "--name-only", base_sha, source_sha], text=True
+    ).splitlines()
+    require(
+        observed_paths == sorted(expected_blobs),
+        f"diagnostic candidate path set changed: {observed_paths!r}",
+    )
+    for changed_path, expected_blob in expected_blobs.items():
+        observed_blob = subprocess.check_output(
+            ["git", "rev-parse", f"{source_sha}:{changed_path}"], text=True
+        ).strip()
+        require(
+            observed_blob == expected_blob,
+            f"diagnostic candidate blob changed for {changed_path}: {observed_blob}",
+        )
+    tree = subprocess.check_output(
+        ["git", "rev-parse", f"{source_sha}^{{tree}}"], text=True
+    ).strip()
+    require(tree == expected_tree, f"diagnostic candidate tree changed: {tree}")
+
+    with tempfile.TemporaryDirectory(prefix="spotlight-paginated-read-measurement-") as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(trusted / "scripts/workflow_capability_admission.py"),
+                str(candidate),
+                "--candidate-tree-sha",
+                tree,
+                "--measure",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        if result.stderr:
+            print(result.stderr, file=sys.stderr, end="")
+        require(
+            result.returncode == 0,
+            f"accepted-main production --measure failed: {result.returncode}",
+        )
+        payload = json.loads(result.stdout)
+        require(
+            isinstance(payload, dict)
+            and set(payload) == {"measurement"}
+            and isinstance(payload["measurement"], dict),
+            "production --measure output shape changed",
+        )
+        print(
+            "CAPABILITY-MEASUREMENT-DIAGNOSTIC:"
+            + json.dumps(payload, sort_keys=True, separators=(",", ":")),
+            flush=True,
+        )
+
+        subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=True)
+        subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=True)
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        spotlight_paginated_read_measurement_diagnostic()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
