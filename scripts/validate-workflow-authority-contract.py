@@ -824,12 +824,14 @@ def project_spotlight_approve_governed_reads_to_legacy(sync: str) -> str:
     return sync[:approve_start] + projected + sync[approve_end:]
 
 def project_item9_sync_with_marker(sync: str) -> str:
+    # First restore the accepted raw GET transport so every older semantic projector
+    # sees the exact byte shape it was written to validate.
+    sync = project_spotlight_approve_governed_reads_to_legacy(sync)
     sync = project_spotlight_terminal_merge_status_to_legacy(sync)
     sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
     sync = project_spotlight_readme_contents_to_legacy(sync)
     sync = project_spotlight_privileged_refs_to_legacy(sync)
     sync = project_spotlight_pr_response_evidence_to_legacy(sync)
-    sync = project_spotlight_approve_governed_reads_to_legacy(sync)
 
     budget_start = sync.index("  budget:\n")
     budget_end = sync.index("  quarantine:\n", budget_start)
