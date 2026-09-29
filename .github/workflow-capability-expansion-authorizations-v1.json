@@ -134,6 +134,13 @@
       "rationale": "Authorize #1219: route two existing Capability Admission delegated Dependabot release JSON GETs through the accepted authenticated bounded GET-only helper while preserving endpoints, git-tag reproof, release/tag/SHA validation, delegated admission semantics, and run-scoped token authority. No permission, trigger, pagination, binary/history transport, mutation replay, required-check reduction, direct-main write, ruleset authority, or bypass."
     },
     {
+      "baseBomSha256": "2aa9ce035e5cbc08922756a28180047e097a2b4d26f3448b5868338775bb624c",
+      "candidateBomSha256": "2aa9ce035e5cbc08922756a28180047e097a2b4d26f3448b5868338775bb624c",
+      "expansionSha256": "ea4932fc695b7a9ad4448414bf3ce6d1773e5b5a5edffcba576596d223398a27",
+      "id": "cap-capability-admission-exact-measurement-v1",
+      "rationale": "Authorize corrected frozen #1304 measured by closed #1306: centralize exact production admission measurement in the trusted capability-admission module, expose an explicit sanitized --measure tuple, and make evaluate consume that same measured diff before authorization. Semantic Workflow Capability is unchanged; exactly one protected trusted source changes. Ordinary rejection logs no candidate-derived tuple values. No trigger, permission, endpoint, mutation, secret/OIDC, required-check reduction, direct-main write, merge/ruleset authority, retry, or bypass is added."
+    },
+    {
       "baseBomSha256": "c74aa9be3108cfb106d3057e811ab621ebe8d1a8d6ccb1a43259c1a1402c1152",
       "candidateBomSha256": "15302736defe3a3c7d20893bb15c2b7cc39e7be2c9f947860317b9ceac3a9f98",
       "expansionSha256": "f78aa0c3fffa53f4978700a75d3b3a0dfe76abc23d2e3e336615d7dcd562bec2",
