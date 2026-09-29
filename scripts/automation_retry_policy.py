@@ -509,8 +509,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "protected-runs", "reviewer-checks", "open-pr-list", "main-final",
         "candidate-final", "pr-final",
     ):
-        require(spotlight_approve.count(f"{key})") == 1,
-                f"Spotlight privileged shell-read retry key changed: {key}")
+        require(spotlight_approve.count(f"                {key})\n") == 1,
+                f"Spotlight privileged shell-read retry case arm changed: {key}")
+        require(spotlight_approve.count(f"spotlight_singleton_get {key}") == 1,
+                f"Spotlight privileged shell-read retry invocation changed: {key}")
 
     automation_github_paginated_read.self_test()
     pagination_source = (ROOT / "scripts/automation_github_paginated_read.py").read_text(encoding="utf-8")
