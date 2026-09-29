@@ -105,7 +105,227 @@ jobs:
             ' <<<"$response" >/dev/null
           }
 
-          REVIEW_IDENTITY_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api user)"
+          bot_reviewer_get() {
+            local request="$1" page="${2:-}"
+            local attempt response exit_code line status status_count content_type
+            local rate_remaining retry_after body_started body retry delay requested
+            local LC_ALL=C
+
+            case "$request" in
+              open-prs-page)
+                [[ "$page" =~ ^([1-9]|[12][0-9]|30)$ ]] || { echo "ERROR: invalid governed reviewer open-PR page: ${page:-unset}" >&2; return 1; }
+                ;;
+              reviews-page)
+                [[ "$page" =~ ^([1-9]|1[0-9]|20)$ ]] || { echo "ERROR: invalid governed reviewer review page: ${page:-unset}" >&2; return 1; }
+                ;;
+              *)
+                test -z "$page" || {
+                  echo "ERROR: unexpected page argument for governed reviewer singleton GET: $request" >&2
+                  return 1
+                }
+                ;;
+            esac
+            for attempt in 1 2 3; do
+              response=""
+              set +e
+              case "$request" in
+                review-user)
+                  response="$(GH_TOKEN="$REVIEW_TOKEN" timeout 20s gh api --include user 2>&1)"
+                  ;;
+                main-ref)
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/git/ref/heads/main" 2>&1)"
+                  ;;
+                open-prs-page)
+                  response="$(timeout 20s gh api --include --method GET -F page="$page" "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" 2>&1)"
+                  ;;
+                required-checks)
+                  [[ "$head" =~ ^[0-9a-f]{40}$ ]] || { echo "ERROR: invalid governed reviewer check head." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&filter=latest&per_page=100" 2>&1)"
+                  ;;
+                quiescent-runs)
+                  [[ "$head" =~ ^[0-9a-f]{40}$ ]] || { echo "ERROR: invalid governed reviewer run head." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100" 2>&1)"
+                  ;;
+                prior-attempt)
+                  [[ "$HISTORY_ATTEMPT" =~ ^([1-9]|1[0-9]|20)$ ]] || { echo "ERROR: invalid governed reviewer prior attempt." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}" 2>&1)"
+                  ;;
+                pr)
+                  [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: invalid governed reviewer PR number." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" 2>&1)"
+                  ;;
+                head-ref)
+                  test -n "$HEAD_REF" || { echo "ERROR: missing governed reviewer head ref." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" 2>&1)"
+                  ;;
+                reviews-page)
+                  [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: invalid governed reviewer review PR number." >&2; return 1; }
+                  response="$(timeout 20s gh api --include --method GET -F page="$page" "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" 2>&1)"
+                  ;;
+                *)
+                  set -e
+                  echo "ERROR: unknown governed reviewer GET identity: $request" >&2
+                  return 1
+                  ;;
+              esac
+              exit_code=$?
+              set -e
+
+              status=""
+              status_count=0
+              content_type=""
+              rate_remaining=""
+              retry_after=""
+              body_started=false
+              body=""
+              while IFS= read -r line; do
+                line="${line%$'\r'}"
+                if [ "$body_started" = "false" ]; then
+                  if [[ "$line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3})([[:space:]]|$) ]]; then
+                    status="${BASH_REMATCH[1]}"
+                    status_count=$((status_count + 1))
+                  elif [ -z "$line" ]; then
+                    body_started=true
+                  else
+                    case "${line,,}" in
+                      content-type:*)
+                        content_type="${line#*:}"
+                        content_type="${content_type#"${content_type%%[![:space:]]*}"}"
+                        ;;
+                      x-ratelimit-remaining:*)
+                        rate_remaining="${line#*:}"
+                        rate_remaining="${rate_remaining#"${rate_remaining%%[![:space:]]*}"}"
+                        ;;
+                      retry-after:*)
+                        retry_after="${line#*:}"
+                        retry_after="${retry_after#"${retry_after%%[![:space:]]*}"}"
+                        ;;
+                    esac
+                  fi
+                else
+                  if [ -n "$body" ]; then
+                    body+=$'\n'
+                  fi
+                  body+="$line"
+                fi
+              done <<<"$response"
+
+              if [ "$exit_code" -eq 0 ]; then
+                test "$status_count" -eq 1 || {
+                  echo "ERROR: governed reviewer GET returned an ambiguous HTTP response: $request" >&2
+                  return 1
+                }
+                test "$status" = "200" || {
+                  echo "ERROR: governed reviewer GET returned unexpected HTTP $status: $request" >&2
+                  return 1
+                }
+                case "${content_type,,}" in
+                  application/json*) : ;;
+                  *)
+                    echo "ERROR: governed reviewer GET returned non-JSON content type: $request" >&2
+                    return 1
+                    ;;
+                esac
+                test "${#body}" -le 8000000 || {
+                  echo "ERROR: governed reviewer GET exceeded the 8000000-byte response bound: $request" >&2
+                  return 1
+                }
+                printf '%s\n' "$body"
+                return 0
+              fi
+
+              retry=false
+              if [ "$exit_code" -eq 124 ]; then
+                retry=true
+              elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then
+                retry=true
+              elif [ "$status_count" -eq 1 ]; then
+                case "$status" in
+                  408|429|500|502|503|504)
+                    retry=true
+                    ;;
+                  403)
+                    if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then
+                      retry=true
+                    fi
+                    ;;
+                esac
+              fi
+
+              if [ "$retry" != "true" ] || [ "$attempt" -ge 3 ]; then
+                echo "ERROR: governed reviewer GET failed terminally (exit=$exit_code http=${status:-none}): $request" >&2
+                return 1
+              fi
+
+              if [ "$attempt" -eq 1 ]; then
+                delay=1
+              else
+                delay=2
+              fi
+              if [[ "$retry_after" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+                requested="${retry_after%%.*}"
+                if [ "$requested" -ge 5 ]; then
+                  delay=5
+                else
+                  delay="$retry_after"
+                fi
+              fi
+              echo "RETRY: governed reviewer GET transient (exit=$exit_code http=${status:-none}); attempt $attempt/3, sleeping ${delay}s: $request" >&2
+              sleep "$delay"
+            done
+            return 1
+          }
+
+          bot_reviewer_paginated_get() {
+            local request="$1"
+            local page=1 max_pages body count first=true
+
+            case "$request" in
+              open-prs) max_pages=30 ;;
+              reviews) max_pages=20 ;;
+              *) echo "ERROR: unknown governed reviewer paginated GET identity: $request" >&2; return 1 ;;
+            esac
+            printf '['
+            while [ "$page" -le "$max_pages" ]; do
+              case "$request" in
+                open-prs)
+                  body="$(bot_reviewer_get open-prs-page "$page")"
+                  ;;
+                reviews)
+                  body="$(bot_reviewer_get reviews-page "$page")"
+                  ;;
+                *)
+                  echo "ERROR: unknown governed reviewer paginated GET identity: $request" >&2
+                  return 1
+                  ;;
+              esac
+              count="$(jq -er '
+                if type != "array" or length > 100 then
+                  error("governed reviewer paginated GET page shape changed")
+                else
+                  length
+                end
+              ' <<<"$body")"
+              if [ "$first" = "false" ]; then
+                printf ','
+              fi
+              printf '%s' "$body"
+              first=false
+
+              if [ "$count" -lt 100 ]; then
+                printf ']\n'
+                return 0
+              fi
+              if [ "$page" -ge "$max_pages" ]; then
+                echo "ERROR: governed reviewer paginated GET exceeds the ${max_pages}-page bound: $request" >&2
+                return 1
+              fi
+              page=$((page + 1))
+            done
+            return 1
+          }
+
+          REVIEW_IDENTITY_RESPONSE="$(bot_reviewer_get review-user)"
           jq -e '
             (type == "object") and
             (.login | type == "string" and . == "portyu9")
@@ -116,14 +336,14 @@ jobs:
           REVIEW_LOGIN="$(jq -r .login <<<"$REVIEW_IDENTITY_RESPONSE")"
           test "$REVIEW_LOGIN" = "portyu9"
 
-          MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(bot_reviewer_get main-ref)"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "main" || {
             echo "ERROR: malformed governed reviewer initial main-ref evidence." >&2
             exit 1
           }
           MAIN_SHA="$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")"
           [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
-          PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"
+          PR_PAGES="$(bot_reviewer_paginated_get open-prs)"
           jq -e '
             (type == "array") and (length >= 1) and (length <= 30) and
             (all(.[]; (type == "array") and (length <= 100))) and
@@ -227,7 +447,7 @@ jobs:
                 ;;
             esac
 
-            checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&filter=latest&per_page=100")" || {
+            checks="$(bot_reviewer_get required-checks)" || {
               echo "ERROR: failed to fetch exact-head GitHub Actions check snapshot for ${head}." >&2
               return 1
             }
@@ -289,7 +509,7 @@ jobs:
 
           check_quiescent_runs() {
             local head="$1" head_ref="$2" runs total count active_profile unexpected_active
-            runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")" || {
+            runs="$(bot_reviewer_get quiescent-runs)" || {
               echo "ERROR: failed to fetch workflow-run quiescence for ${head}." >&2
               return 1
             }
@@ -378,7 +598,7 @@ jobs:
               if [ "$HISTORY_ATTEMPT" -ge "$GITHUB_RUN_ATTEMPT" ]; then
                 break
               fi
-              attempt_run="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}")"
+              attempt_run="$(bot_reviewer_get prior-attempt)"
               jq -e \
                 --arg repo "$TARGET_REPOSITORY" \
                 --arg source "$GITHUB_SHA" \
@@ -444,7 +664,7 @@ jobs:
             PR_NUMBER="$(jq -r .number <<<"$CANDIDATE")"
             [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
 
-            PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            PR="$(bot_reviewer_get pr)"
             validate_governed_pr_object "$PR" "$PR_NUMBER" || {
               echo "ERROR: malformed governed bot PR evidence for #${PR_NUMBER}." >&2
               exit 1
@@ -484,7 +704,7 @@ jobs:
                 ;;
             esac
 
-            CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+            CURRENT_MAIN_REF_RESPONSE="$(bot_reviewer_get main-ref)"
             validate_git_ref_object "$CURRENT_MAIN_REF_RESPONSE" "main" || {
               echo "ERROR: malformed governed reviewer current-main ref evidence." >&2
               exit 1
@@ -493,7 +713,7 @@ jobs:
               echo "Current main moved during bot-review evaluation; ending this pass without approval."
               exit 0
             fi
-            CURRENT_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+            CURRENT_HEAD_REF_RESPONSE="$(bot_reviewer_get head-ref)"
             validate_git_ref_object "$CURRENT_HEAD_REF_RESPONSE" "$HEAD_REF" || {
               echo "ERROR: malformed governed reviewer current-head ref evidence for #${PR_NUMBER}." >&2
               exit 1
@@ -542,7 +762,7 @@ jobs:
               exit "$READY_STATUS"
             fi
             REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${MAIN_SHA} head=${HEAD_SHA} -->"
-            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+            REVIEW_PAGES="$(bot_reviewer_paginated_get reviews)"
             jq -e '
               (type == "array") and (length >= 1) and (length <= 20) and
               (all(.[]; type == "array" and length <= 100)) and
@@ -592,7 +812,7 @@ jobs:
               continue
             fi
 
-            PR_NOW="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            PR_NOW="$(bot_reviewer_get pr)"
             validate_governed_pr_object "$PR_NOW" "$PR_NUMBER" || {
               echo "ERROR: malformed governed bot PR race evidence for #${PR_NUMBER}." >&2
               exit 1
@@ -606,7 +826,7 @@ jobs:
               echo "Skipping governed bot PR #${PR_NUMBER}: exact PR identity changed before approval."
               continue
             fi
-            FINAL_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+            FINAL_MAIN_REF_RESPONSE="$(bot_reviewer_get main-ref)"
             validate_git_ref_object "$FINAL_MAIN_REF_RESPONSE" "main" || {
               echo "ERROR: malformed governed reviewer final-main ref evidence." >&2
               exit 1
@@ -615,7 +835,7 @@ jobs:
               echo "Current main moved before final bot-review authorization; ending this pass without approval."
               exit 0
             fi
-            FINAL_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+            FINAL_HEAD_REF_RESPONSE="$(bot_reviewer_get head-ref)"
             validate_git_ref_object "$FINAL_HEAD_REF_RESPONSE" "$HEAD_REF" || {
               echo "ERROR: malformed governed reviewer final-head ref evidence for #${PR_NUMBER}." >&2
               exit 1
@@ -645,7 +865,7 @@ jobs:
               exit "$READY_STATUS"
             fi
 
-            REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+            REVIEW_PAGES="$(bot_reviewer_paginated_get reviews)"
 
             jq -e '
               (type == "array") and (length >= 1) and (length <= 20) and
@@ -793,7 +1013,210 @@ jobs:
             *) echo "ERROR: unknown governed convergence lane: $LANE" >&2; exit 1 ;;
           esac
 
-          MAIN_REF="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          bot_convergence_get() {
+            local request="$1" page="${2:-}"
+            local attempt response exit_code line status status_count content_type
+            local rate_remaining retry_after body_started body retry delay requested
+            local LC_ALL=C
+
+            case "$request" in
+              reviews-page)
+                [[ "$page" =~ ^([1-9]|1[0-9]|20)$ ]] || { echo "ERROR: invalid governed convergence review page: ${page:-unset}" >&2; return 1; }
+                ;;
+              *)
+                test -z "$page" || {
+                  echo "ERROR: unexpected page argument for governed convergence singleton GET: $request" >&2
+                  return 1
+                }
+                ;;
+            esac
+            for attempt in 1 2 3; do
+              response=""
+              set +e
+              case "$request" in
+                main-ref)
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/git/ref/heads/main" 2>&1)"
+                  ;;
+                head-ref)
+                  test -n "$HEAD_REF" || { echo "ERROR: missing governed convergence head ref." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" 2>&1)"
+                  ;;
+                pr)
+                  [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: invalid governed convergence PR number." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" 2>&1)"
+                  ;;
+                reviews-page)
+                  [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: invalid governed convergence review PR number." >&2; return 1; }
+                  response="$(timeout 20s gh api --include --method GET -F page="$page" "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" 2>&1)"
+                  ;;
+                gate-checks)
+                  [[ "$head" =~ ^[0-9a-f]{40}$ ]] || { echo "ERROR: invalid governed convergence check head." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100" 2>&1)"
+                  ;;
+                gate-run)
+                  [[ "$gate_run_id" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: invalid governed convergence run id." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/actions/runs/${gate_run_id}" 2>&1)"
+                  ;;
+                gate-job)
+                  [[ "$gate_job_id" =~ ^[1-9][0-9]*$ ]] || { echo "ERROR: invalid governed convergence job id." >&2; return 1; }
+                  response="$(timeout 20s gh api --include "repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}" 2>&1)"
+                  ;;
+                *)
+                  set -e
+                  echo "ERROR: unknown governed convergence GET identity: $request" >&2
+                  return 1
+                  ;;
+              esac
+              exit_code=$?
+              set -e
+
+              status=""
+              status_count=0
+              content_type=""
+              rate_remaining=""
+              retry_after=""
+              body_started=false
+              body=""
+              while IFS= read -r line; do
+                line="${line%$'\r'}"
+                if [ "$body_started" = "false" ]; then
+                  if [[ "$line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3})([[:space:]]|$) ]]; then
+                    status="${BASH_REMATCH[1]}"
+                    status_count=$((status_count + 1))
+                  elif [ -z "$line" ]; then
+                    body_started=true
+                  else
+                    case "${line,,}" in
+                      content-type:*)
+                        content_type="${line#*:}"
+                        content_type="${content_type#"${content_type%%[![:space:]]*}"}"
+                        ;;
+                      x-ratelimit-remaining:*)
+                        rate_remaining="${line#*:}"
+                        rate_remaining="${rate_remaining#"${rate_remaining%%[![:space:]]*}"}"
+                        ;;
+                      retry-after:*)
+                        retry_after="${line#*:}"
+                        retry_after="${retry_after#"${retry_after%%[![:space:]]*}"}"
+                        ;;
+                    esac
+                  fi
+                else
+                  if [ -n "$body" ]; then
+                    body+=$'\n'
+                  fi
+                  body+="$line"
+                fi
+              done <<<"$response"
+
+              if [ "$exit_code" -eq 0 ]; then
+                test "$status_count" -eq 1 || {
+                  echo "ERROR: governed convergence GET returned an ambiguous HTTP response: $request" >&2
+                  return 1
+                }
+                test "$status" = "200" || {
+                  echo "ERROR: governed convergence GET returned unexpected HTTP $status: $request" >&2
+                  return 1
+                }
+                case "${content_type,,}" in
+                  application/json*) : ;;
+                  *)
+                    echo "ERROR: governed convergence GET returned non-JSON content type: $request" >&2
+                    return 1
+                    ;;
+                esac
+                test "${#body}" -le 8000000 || {
+                  echo "ERROR: governed convergence GET exceeded the 8000000-byte response bound: $request" >&2
+                  return 1
+                }
+                printf '%s\n' "$body"
+                return 0
+              fi
+
+              retry=false
+              if [ "$exit_code" -eq 124 ]; then
+                retry=true
+              elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then
+                retry=true
+              elif [ "$status_count" -eq 1 ]; then
+                case "$status" in
+                  408|429|500|502|503|504)
+                    retry=true
+                    ;;
+                  403)
+                    if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then
+                      retry=true
+                    fi
+                    ;;
+                esac
+              fi
+
+              if [ "$retry" != "true" ] || [ "$attempt" -ge 3 ]; then
+                echo "ERROR: governed convergence GET failed terminally (exit=$exit_code http=${status:-none}): $request" >&2
+                return 1
+              fi
+
+              if [ "$attempt" -eq 1 ]; then
+                delay=1
+              else
+                delay=2
+              fi
+              if [[ "$retry_after" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+                requested="${retry_after%%.*}"
+                if [ "$requested" -ge 5 ]; then
+                  delay=5
+                else
+                  delay="$retry_after"
+                fi
+              fi
+              echo "RETRY: governed convergence GET transient (exit=$exit_code http=${status:-none}); attempt $attempt/3, sleeping ${delay}s: $request" >&2
+              sleep "$delay"
+            done
+            return 1
+          }
+
+          bot_convergence_paginated_get() {
+            local request="$1"
+            local page=1 body count first=true
+
+            printf '['
+            while [ "$page" -le 20 ]; do
+              case "$request" in
+                reviews)
+                  body="$(bot_convergence_get reviews-page "$page")"
+                  ;;
+                *)
+                  echo "ERROR: unknown governed convergence paginated GET identity: $request" >&2
+                  return 1
+                  ;;
+              esac
+              count="$(jq -er '
+                if type != "array" or length > 100 then
+                  error("governed convergence paginated GET page shape changed")
+                else
+                  length
+                end
+              ' <<<"$body")"
+              if [ "$first" = "false" ]; then
+                printf ','
+              fi
+              printf '%s' "$body"
+              first=false
+
+              if [ "$count" -lt 100 ]; then
+                printf ']\n'
+                return 0
+              fi
+              if [ "$page" -ge 20 ]; then
+                echo "ERROR: governed convergence paginated GET exceeds the 20-page bound: $request" >&2
+                return 1
+              fi
+              page=$((page + 1))
+            done
+            return 1
+          }
+
+          MAIN_REF="$(bot_convergence_get main-ref)"
           jq -e --arg base "$BASE_SHA" '
             (type == "object") and
             (.ref == "refs/heads/main") and
@@ -803,7 +1226,7 @@ jobs:
             exit 1
           }
 
-          HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+          HEAD_REF_RESPONSE="$(bot_convergence_get head-ref)"
           jq -e --arg ref "refs/heads/${HEAD_REF}" --arg head "$HEAD_SHA" '
             (type == "object") and
             (.ref == $ref) and
@@ -813,7 +1236,7 @@ jobs:
             exit 1
           }
 
-          PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          PR="$(bot_convergence_get pr)"
           jq -e             --argjson pr "$PR_NUMBER"             --arg base "$BASE_SHA"             --arg head "$HEAD_SHA"             --arg head_ref "$HEAD_REF"             --arg repo "$TARGET_REPOSITORY" '
               (type == "object") and
               (.number == $pr) and
@@ -830,7 +1253,7 @@ jobs:
           }
 
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
-          REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          REVIEW_PAGES="$(bot_convergence_paginated_get reviews)"
           jq -e '
             (type == "array") and (length >= 1) and (length <= 20) and
             (all(.[]; type == "array" and length <= 100)) and
@@ -875,7 +1298,7 @@ jobs:
               return 1
             }
 
-            checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100")" || {
+            checks="$(bot_convergence_get gate-checks)" || {
               echo "ERROR: failed to fetch exact governed-review gate check for ${head}." >&2
               return 1
             }
@@ -938,7 +1361,7 @@ jobs:
               return 1
             }
 
-            run="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${gate_run_id}")" || {
+            run="$(bot_convergence_get gate-run)" || {
               echo "ERROR: failed to fetch governed review gate parent run ${gate_run_id}." >&2
               return 1
             }
@@ -961,7 +1384,7 @@ jobs:
               return 1
             }
 
-            job="$(gh api "repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}")" || {
+            job="$(bot_convergence_get gate-job)" || {
               echo "ERROR: failed to fetch governed review gate job ${gate_job_id}." >&2
               return 1
             }
@@ -1010,7 +1433,7 @@ jobs:
             fi
 
             sleep 1
-            observed="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100")" || {
+            observed="$(bot_convergence_get gate-checks)" || {
               echo "ERROR: ambiguous gate-rerun mutation could not be reconciled by exact check observation." >&2
               return 1
             }

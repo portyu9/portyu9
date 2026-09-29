@@ -33,6 +33,8 @@ MUTATION = re.compile(
 
 EXPECTED_AUTOMATIC_RETRY_IDS = {
     "governed-bot-review-read-transient",
+    "bot-pr-user-approval-shell-read-transient",
+    "bot-pr-review-convergence-shell-read-transient",
     "action-release-provenance-read-transient",
     "canonical-github-api-read-transient",
     "spotlight-approve-shell-read-transient",
@@ -344,10 +346,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 7 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly seven classified automatic read retries")
+    require(len(entries) == 9 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly nine classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 7, "automatic retry IDs must remain unique")
+    require(len(by_id) == 9, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
@@ -445,6 +447,174 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
         require(forbidden not in canonical_source,
                 f"canonical GitHub read source acquired mutation method: {forbidden}")
+
+    bot_review = texts[".github/workflows/bot-pr-user-approval.yml"]
+    reviewer_item = by_id["bot-pr-user-approval-shell-read-transient"]
+    require(
+        reviewer_item.get("source") == ".github/workflows/bot-pr-user-approval.yml"
+        and reviewer_item.get("workflow") == ".github/workflows/bot-pr-user-approval.yml"
+        and reviewer_item.get("job") == "approve"
+        and reviewer_item.get("step") == "Approve only exact green governed bot PRs as portyu9",
+        "governed reviewer shell-read retry identity changed",
+    )
+    require(
+        reviewer_item.get("endpointScope") == "enumerated-static-literal"
+        and reviewer_item.get("maxResponseBytes") == 8_000_000
+        and reviewer_item.get("maxPages") == 30
+        and reviewer_item.get("pageSize") == 100,
+        "governed reviewer shell-read retry bounds changed",
+    )
+    reviewer = named_step(
+        bot_review, "approve", "Approve only exact green governed bot PRs as portyu9"
+    )
+    for fragment in (
+        "bot_reviewer_get() {",
+        "for attempt in 1 2 3; do",
+        "timeout 20s gh api --include",
+        'if [ "$exit_code" -eq 124 ]; then',
+        'elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then',
+        "408|429|500|502|503|504)",
+        'if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then',
+        'if [ "$attempt" -eq 1 ]; then',
+        "delay=1",
+        "delay=2",
+        'if [ "$requested" -ge 5 ]; then',
+        "delay=5",
+        'test "$status_count" -eq 1 || {',
+        'test "$status" = "200" || {',
+        "application/json*) : ;;",
+        'test "${#body}" -le 8000000 || {',
+        "bot_reviewer_paginated_get() {",
+        "local page=1 max_pages body count first=true",
+        "open-prs) max_pages=30",
+        "reviews) max_pages=20",
+        'while [ "$page" -le "$max_pages" ]; do',
+        'error("governed reviewer paginated GET page shape changed")',
+        'if [ "$count" -lt 100 ]; then',
+        'if [ "$page" -ge "$max_pages" ]; then',
+    ):
+        require(fragment in reviewer,
+                f"governed reviewer shell-read retry contract is missing: {fragment}")
+    require(
+        reviewer.count("timeout 20s gh api --include") == 9
+        and reviewer.count('timeout 20s gh api --include --method GET -F page="$page"') == 2,
+        "governed reviewer enumerated GET retry case inventory changed",
+    )
+    require(
+        reviewer.count('GH_TOKEN="$REVIEW_TOKEN" timeout 20s gh api --include user') == 1,
+        "governed reviewer identity GET must use the reviewed owner token only inside the read kernel",
+    )
+    require(
+        reviewer.count("gh api --paginate --slurp") == 0
+        and reviewer.count('gh api "repos/') == 0
+        and reviewer.count("gh api user") == 0,
+        "governed reviewer regained raw ordinary REST GET transport",
+    )
+    require(
+        reviewer.count("gh api graphql") == 1
+        and "reviewThreads(first:100)" in reviewer
+        and "pageInfo{hasNextPage}" in reviewer,
+        "governed reviewer fixed GraphQL review-thread boundary changed",
+    )
+    require(
+        reviewer.count("gh api --include --method POST") == 1,
+        "governed reviewer mutation inventory changed while hardening GETs",
+    )
+    for forbidden in (
+        "timeout 20s gh api --include --method POST",
+        "timeout 20s gh api --include --method PUT",
+        "timeout 20s gh api --include --method PATCH",
+        "timeout 20s gh api --include --method DELETE",
+    ):
+        require(forbidden not in reviewer,
+                f"governed reviewer read retry acquired mutation replay surface: {forbidden}")
+    for key in (
+        "review-user", "main-ref", "open-prs-page", "required-checks", "quiescent-runs",
+        "prior-attempt", "pr", "head-ref", "reviews-page",
+    ):
+        require(reviewer.count(f"                {key})\n") == 1,
+                f"governed reviewer retry case arm changed: {key}")
+    require(
+        reviewer.count("bot_reviewer_paginated_get open-prs") == 1
+        and reviewer.count("bot_reviewer_paginated_get reviews") == 2
+        and reviewer.count('bot_reviewer_get open-prs-page "$page"') == 1
+        and reviewer.count('bot_reviewer_get reviews-page "$page"') == 1,
+        "governed reviewer paginated retry invocation inventory changed",
+    )
+
+    convergence_item = by_id["bot-pr-review-convergence-shell-read-transient"]
+    require(
+        convergence_item.get("source") == ".github/workflows/bot-pr-user-approval.yml"
+        and convergence_item.get("workflow") == ".github/workflows/bot-pr-user-approval.yml"
+        and convergence_item.get("job") == "converge"
+        and convergence_item.get("step") == "Re-enter exact reviewed candidate without owner secret",
+        "governed convergence shell-read retry identity changed",
+    )
+    require(
+        convergence_item.get("endpointScope") == "enumerated-static-literal"
+        and convergence_item.get("maxResponseBytes") == 8_000_000
+        and convergence_item.get("maxPages") == 20
+        and convergence_item.get("pageSize") == 100,
+        "governed convergence shell-read retry bounds changed",
+    )
+    convergence = named_step(
+        bot_review, "converge", "Re-enter exact reviewed candidate without owner secret"
+    )
+    for fragment in (
+        "bot_convergence_get() {",
+        "for attempt in 1 2 3; do",
+        "timeout 20s gh api --include",
+        'if [ "$exit_code" -eq 124 ]; then',
+        'elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then',
+        "408|429|500|502|503|504)",
+        'if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then',
+        'if [ "$attempt" -eq 1 ]; then',
+        "delay=1",
+        "delay=2",
+        'if [ "$requested" -ge 5 ]; then',
+        "delay=5",
+        'test "$status_count" -eq 1 || {',
+        'test "$status" = "200" || {',
+        "application/json*) : ;;",
+        'test "${#body}" -le 8000000 || {',
+        "bot_convergence_paginated_get() {",
+        "local page=1 body count first=true",
+        'while [ "$page" -le 20 ]; do',
+        'error("governed convergence paginated GET page shape changed")',
+    ):
+        require(fragment in convergence,
+                f"governed convergence shell-read retry contract is missing: {fragment}")
+    require(
+        convergence.count("timeout 20s gh api --include") == 7
+        and convergence.count('timeout 20s gh api --include --method GET -F page="$page"') == 1,
+        "governed convergence enumerated GET retry case inventory changed",
+    )
+    require(
+        convergence.count("gh api --paginate --slurp") == 0
+        and convergence.count('gh api "repos/') == 0,
+        "governed convergence regained raw ordinary REST GET transport",
+    )
+    require(
+        convergence.count("gh api --include --method POST") == 3,
+        "governed convergence mutation inventory changed while hardening GETs",
+    )
+    for forbidden in (
+        "timeout 20s gh api --include --method POST",
+        "timeout 20s gh api --include --method PUT",
+        "timeout 20s gh api --include --method PATCH",
+        "timeout 20s gh api --include --method DELETE",
+    ):
+        require(forbidden not in convergence,
+                f"governed convergence read retry acquired mutation replay surface: {forbidden}")
+    for key in ("main-ref", "head-ref", "pr", "reviews-page", "gate-checks", "gate-run", "gate-job"):
+        require(convergence.count(f"                {key})\n") == 1,
+                f"governed convergence retry case arm changed: {key}")
+    require(
+        convergence.count("bot_convergence_paginated_get reviews") == 1
+        and convergence.count('bot_convergence_get reviews-page "$page"') == 1
+        and convergence.count("bot_convergence_get gate-checks") == 2,
+        "governed convergence retry invocation inventory changed",
+    )
 
     spotlight_shell_item = by_id["spotlight-approve-shell-read-transient"]
     require(

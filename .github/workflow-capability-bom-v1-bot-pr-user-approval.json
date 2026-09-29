@@ -48,35 +48,7 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve only exact green governed bot PRs as portyu9"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve only exact green governed bot PRs as portyu9"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve only exact green governed bot PRs as portyu9"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve only exact green governed bot PRs as portyu9"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
               "method": "GET",
               "mutating": false,
               "step": "Approve only exact green governed bot PRs as portyu9"
@@ -93,13 +65,6 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews",
               "method": "POST",
               "mutating": true,
-              "step": "Approve only exact green governed bot PRs as portyu9"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100",
-              "method": "GET",
-              "mutating": false,
               "step": "Approve only exact green governed bot PRs as portyu9"
             },
             {
@@ -190,13 +155,6 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches",
               "method": "POST",
               "mutating": true,
-              "step": "Re-enter exact reviewed candidate without owner secret"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100",
-              "method": "GET",
-              "mutating": false,
               "step": "Re-enter exact reviewed candidate without owner secret"
             },
             {

@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v133"
+VERSION = "governed-workflow-byte-identity-v134"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
+    ".github/workflows/bot-pr-user-approval.yml": "ad10702c9ac0b516f99bd59335c26297f88d82c8",
     ".github/workflows/profile-quality.yml": "2a6cdbad9ebeb84bba38e2ac21e8d38652418f4a",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
     ".github/workflows/spotlight-link-sync.yml": "2f06d82bc43a436996a4c5d21f247d05fe7c3c74",
@@ -2141,6 +2141,100 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
 
 
 
+def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
+    """Project reviewer REST-GET retry transport to the accepted pre-hardening semantic shape."""
+    has_reviewer_kernel = "          bot_reviewer_get() {\n" in bot_review
+    has_convergence_kernel = "          bot_convergence_get() {\n" in bot_review
+    require(
+        has_reviewer_kernel == has_convergence_kernel,
+        "Bot reviewer shell-read projection found a partial retry-kernel topology",
+    )
+    if not has_reviewer_kernel:
+        return bot_review
+    approve_start = bot_review.index("  approve:\n")
+    converge_start = bot_review.index("  converge:\n", approve_start)
+    approve = bot_review[approve_start:converge_start]
+    helper_start_marker = "          bot_reviewer_get() {\n"
+    helper_end_marker = '          REVIEW_IDENTITY_RESPONSE="$(bot_reviewer_get review-user)"\n'
+    require(
+        approve.count(helper_start_marker) == 1 and approve.count(helper_end_marker) == 1,
+        "Bot reviewer shell-read projection anchors changed",
+    )
+    helper_start = approve.index(helper_start_marker)
+    helper_end = approve.index(helper_end_marker, helper_start)
+    approve = approve[:helper_start] + approve[helper_end:]
+
+    converge = bot_review[converge_start:]
+    convergence_helper_start = "          bot_convergence_get() {\n"
+    convergence_helper_end = '          MAIN_REF="$(bot_convergence_get main-ref)"\n'
+    require(
+        converge.count(convergence_helper_start) == 1 and converge.count(convergence_helper_end) == 1,
+        "Bot convergence shell-read projection anchors changed",
+    )
+    convergence_start = converge.index(convergence_helper_start)
+    convergence_end = converge.index(convergence_helper_end, convergence_start)
+    converge = converge[:convergence_start] + converge[convergence_end:]
+    projected = bot_review[:approve_start] + approve + converge
+
+    overlays = (
+        ('REVIEW_IDENTITY_RESPONSE="$(bot_reviewer_get review-user)"',
+         'REVIEW_IDENTITY_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api user)"', 1),
+        ('PR_PAGES="$(bot_reviewer_paginated_get open-prs)"',
+         'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"', 1),
+        ('checks="$(bot_reviewer_get required-checks)"',
+         'checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&filter=latest&per_page=100")"', 1),
+        ('runs="$(bot_reviewer_get quiescent-runs)"',
+         'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${head}&per_page=100")"', 1),
+        ('attempt_run="$(bot_reviewer_get prior-attempt)"',
+         'attempt_run="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${HISTORY_ATTEMPT}")"', 1),
+        ('PR="$(bot_reviewer_get pr)"',
+         'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"', 1),
+        ('CURRENT_MAIN_REF_RESPONSE="$(bot_reviewer_get main-ref)"',
+         'CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"', 1),
+        ('CURRENT_HEAD_REF_RESPONSE="$(bot_reviewer_get head-ref)"',
+         'CURRENT_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"', 1),
+        ('REVIEW_PAGES="$(bot_reviewer_paginated_get reviews)"',
+         'REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"', 2),
+        ('PR_NOW="$(bot_reviewer_get pr)"',
+         'PR_NOW="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"', 1),
+        ('FINAL_MAIN_REF_RESPONSE="$(bot_reviewer_get main-ref)"',
+         'FINAL_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"', 1),
+        ('FINAL_HEAD_REF_RESPONSE="$(bot_reviewer_get head-ref)"',
+         'FINAL_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"', 1),
+        ('MAIN_REF_RESPONSE="$(bot_reviewer_get main-ref)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"', 1),
+        ('MAIN_REF="$(bot_convergence_get main-ref)"',
+         'MAIN_REF="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"', 1),
+        ('HEAD_REF_RESPONSE="$(bot_convergence_get head-ref)"',
+         'HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"', 1),
+        ('PR="$(bot_convergence_get pr)"',
+         'PR="$(gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"', 1),
+        ('REVIEW_PAGES="$(bot_convergence_paginated_get reviews)"',
+         'REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"', 1),
+        ('checks="$(bot_convergence_get gate-checks)"',
+         'checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100")"', 1),
+        ('run="$(bot_convergence_get gate-run)"',
+         'run="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${gate_run_id}")"', 1),
+        ('job="$(bot_convergence_get gate-job)"',
+         'job="$(gh api "repos/${TARGET_REPOSITORY}/actions/jobs/${gate_job_id}")"', 1),
+        ('observed="$(bot_convergence_get gate-checks)"',
+         'observed="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/check-runs?app_id=15368&check_name=trusted-governed-bot-review&filter=latest&per_page=100")"', 1),
+    )
+    for hardened, legacy, expected_count in overlays:
+        require(
+            projected.count(hardened) == expected_count,
+            f"Bot reviewer shell-read projection topology changed: {hardened}",
+        )
+        projected = projected.replace(hardened, legacy, expected_count)
+    require(
+        "bot_reviewer_get" not in projected
+        and "bot_reviewer_paginated_get" not in projected
+        and "bot_convergence_get" not in projected
+        and "bot_convergence_paginated_get" not in projected,
+        "Bot reviewer shell-read projection left retry transport bytes behind",
+    )
+    return projected
+
 def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> None:
     gate = job_block(profile_quality, "governed_bot_review", None)
     for fragment in (
@@ -2290,6 +2384,7 @@ def validate_pull_review_evidence_schema(workflow: str, label: str, expected_rea
 
 
 def validate_bot_review_single_object_evidence_schema(bot_review: str) -> None:
+    bot_review = project_bot_reviewer_shell_reads_to_raw(bot_review)
     for fragment in (
         'validate_governed_pr_object() {',
         '--argjson number "$number"',
@@ -2354,6 +2449,7 @@ def validate_bot_review_single_object_evidence_schema(bot_review: str) -> None:
 
 
 def validate_bot_review_identity_ref_evidence_schema(bot_review: str) -> None:
+    bot_review = project_bot_reviewer_shell_reads_to_raw(bot_review)
     for fragment in (
         'validate_git_ref_object() {',
         'local response="$1" expected_branch="$2"',
@@ -2448,6 +2544,7 @@ def validate_bot_review_identity_ref_evidence_schema(bot_review: str) -> None:
 
 
 def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
+    bot_review = project_bot_reviewer_shell_reads_to_raw(bot_review)
     approve = job_block(bot_review, "approve", "converge")
     check_fetch = (
         'checks="$(gh api "repos/${TARGET_REPOSITORY}/commits/${head}/'
@@ -3403,6 +3500,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
 
 
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
+    bot_review = project_bot_reviewer_shell_reads_to_raw(bot_review)
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
     validate_bot_review_run_check_evidence_schema(bot_review)
