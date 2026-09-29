@@ -972,16 +972,15 @@ def validate_spotlight_readme_contents_evidence(
         "Spotlight privileged README evidence regressed to raw Contents scalar consumption",
     )
     require(
-        spotlight.count(
-            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main"'
-        ) == 1
-        and spotlight.count(
-            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}"'
-        ) == 1
+        spotlight.count("spotlight_propose_get main-readme") == 1
+        and spotlight.count("spotlight_propose_get candidate-readme") == 1
         and spotlight.count("spotlight_merge_get candidate-readme") == 1
         and spotlight.count(
+            'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" 2>&1)"'
+        ) == 1
+        and spotlight.count(
             'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" 2>&1)"'
-        ) == 1,
+        ) == 2,
         "Spotlight privileged README Contents endpoint/call-count contract changed",
     )
 
