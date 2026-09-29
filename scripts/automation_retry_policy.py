@@ -901,6 +901,43 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Spotlight lease lost sealed-base governed-read source identity",
     )
 
+    spotlight_budget_checkout_step = named_step(
+        spotlight,
+        "budget",
+        "Checkout exact trusted source for governed reads",
+    )
+    require("ref: main" in spotlight_budget_checkout_step,
+            "Spotlight budget governed read lost static trusted-main checkout")
+    require("ref: ${{ github.sha }}" not in spotlight_budget_checkout_step,
+            "Spotlight budget governed read regained dynamic event-SHA checkout")
+    spotlight_budget_step = named_step(
+        spotlight,
+        "budget",
+        "Admit exact source epoch within bounded mutation budget",
+    )
+    require(spotlight_budget_step.count("python3 source/scripts/automation_github_read.py") == 1,
+            "Spotlight budget must use exactly one governed GitHub singleton read")
+    require(
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100"' not in spotlight_budget_step,
+        "Spotlight budget regained direct singleton GitHub transport",
+    )
+    require("GH_TOKEN: ${{ github.token }}" in spotlight_budget_step,
+            "Spotlight budget governed read lost run-scoped token binding")
+    spotlight_budget_identity_step = named_step(
+        spotlight,
+        "budget",
+        "Verify exact governed read source identity",
+    )
+    require(
+        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in spotlight_budget_identity_step,
+        "Spotlight budget lost exact governed-read helper identity",
+    )
+    require(
+        'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in spotlight_budget_identity_step,
+        "Spotlight budget lost sealed-base governed-read source identity",
+    )
+
     dispatch_plan_step = named_step(
         profile_stats,
         "dispatch_plan",
@@ -1279,6 +1316,25 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         spotlight_transport_drift,
         "must use exactly one governed GitHub singleton read",
+    )
+
+    spotlight_budget_transport_drift = dict(texts)
+    spotlight_budget_source = spotlight_budget_transport_drift[".github/workflows/spotlight-link-sync.yml"]
+    spotlight_budget_governed = (
+        'python3 source/scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100"'
+    )
+    require(spotlight_budget_governed in spotlight_budget_source,
+            "retry-policy self-test fixture missing Spotlight budget governed read")
+    spotlight_budget_transport_drift[".github/workflows/spotlight-link-sync.yml"] = spotlight_budget_source.replace(
+        spotlight_budget_governed,
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100"',
+        1,
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        spotlight_budget_transport_drift,
+        "Spotlight budget must use exactly one governed GitHub singleton read",
     )
 
     profile_stats_plan_drift = dict(texts)
