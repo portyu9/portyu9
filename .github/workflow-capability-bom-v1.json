@@ -1645,16 +1645,23 @@
           }
         },
         {
-          "actions": [],
-          "apiSurfaces": [
+          "actions": [
             {
-              "client": "gh-api",
-              "endpoint": "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Admit exact source epoch within bounded mutation budget"
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted source for governed reads"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+              "repository": "actions/setup-python",
+              "step": "Set up Python"
             }
           ],
+          "apiSurfaces": [],
           "artifacts": [],
           "id": "budget",
           "mutations": [],
@@ -1664,10 +1671,13 @@
           ],
           "oidc": false,
           "permissions": {
-            "actions": "read"
+            "actions": "read",
+            "contents": "read"
           },
           "references": {
-            "env": [],
+            "env": [
+              "PYTHON_VERSION"
+            ],
             "githubToken": [
               "github.token"
             ],

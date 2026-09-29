@@ -580,11 +580,35 @@ jobs:
       cancel-in-progress: true
     permissions:
       actions: read
+      contents: read
     outputs:
       allowed: ${{ steps.admit.outputs.allowed }}
       attempt_count: ${{ steps.admit.outputs.attempt_count }}
 
     steps:
+      - name: Checkout exact trusted source for governed reads
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: source
+          persist-credentials: false
+
+      - name: Verify exact governed read source identity
+        env:
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
       - name: Admit exact source epoch within bounded mutation budget
         id: admit
         env:
@@ -599,7 +623,7 @@ jobs:
           [[ "$GITHUB_REPOSITORY_ID" =~ ^[1-9][0-9]*$ ]]
           ARTIFACT_NAME="spotlight-link-plan-${BASE_SHA}-${GENERATED_SHA}"
           MAX_ATTEMPTS=2
-          ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"
+          ARTIFACTS="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"
           jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID" \
             '
             (type == "object") and

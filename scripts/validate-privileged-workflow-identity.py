@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v127"
+VERSION = "governed-workflow-byte-identity-v128"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "2a6cdbad9ebeb84bba38e2ac21e8d38652418f4a",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
-    ".github/workflows/spotlight-link-sync.yml": "50c08154b53711b339a76bd976f822a59959d1ad",
+    ".github/workflows/spotlight-link-sync.yml": "b9356f4cd806909f23d9761250d609352a001e15",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -69,7 +69,33 @@ def job_block(text: str, job: str, next_job: str | None) -> str:
 
 def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
     budget = job_block(spotlight, "budget", "quarantine")
-    artifact_call = 'ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    require("permissions:\n      actions: read\n      contents: read" in budget,
+            "Spotlight mutation-budget must retain exact governed read authority")
+    require(
+        budget.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
+        and budget.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+        "Spotlight mutation-budget governed runtime surface changed",
+    )
+    require("ref: main" in budget and "ref: ${{ github.sha }}" not in budget,
+            "Spotlight mutation-budget governed helper checkout lost static trusted-main binding")
+    require('test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in budget,
+            "Spotlight mutation-budget governed helper checkout lost sealed-base equality")
+    require(
+        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in budget,
+        "Spotlight mutation-budget lost exact governed-read helper identity",
+    )
+    require(
+        budget.index("- name: Verify exact governed read source identity")
+        < budget.index("- name: Set up Python"),
+        "Spotlight mutation-budget must prove exact source before authored Python setup/use",
+    )
+    require(
+        budget.count("python3 source/scripts/automation_github_read.py") == 1
+        and 'gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100"' not in budget,
+        "Spotlight mutation-budget must use exactly one governed GitHub singleton read",
+    )
+    artifact_call = 'ARTIFACTS="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
     schema_marker = 'jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
     schema_end_marker = '\' <<<"$ARTIFACTS" >/dev/null || {'
     total_marker = 'TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"'
@@ -5234,7 +5260,7 @@ def main() -> int:
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
             "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema plus exact HTTP-200/202/201 transport ordering locked · bot-review credential/ref response schema ordering, exact workflow-dispatch HTTP 204 validation, and exact review-creation HTTP 200 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-201 reviewer-request, exact-204 admission/reviewer dispatch, and exact-201 protected-run approval status validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
-            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence uses the canonical retrying GET client and is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run evidence is isolated in a canonical-read-only plan before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
+            "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence uses the canonical retrying GET client and is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run evidence is isolated in a canonical-read-only plan before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget canonical retrying GET transport, trusted-main helper identity, artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )
         return 0
     except (OSError, ValueError) as exc:

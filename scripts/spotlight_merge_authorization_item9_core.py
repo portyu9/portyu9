@@ -126,7 +126,33 @@ def validate_lease_run_evidence(sync: str) -> None:
 
 def validate_budget_artifact_history_schema(sync: str) -> None:
     budget = core.job_block(sync, "budget", "quarantine")
-    artifact_call = 'ARTIFACTS="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    require("permissions:\n      actions: read\n      contents: read" in budget,
+            "Spotlight mutation-budget must retain exact governed read authority")
+    require(
+        budget.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
+        and budget.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+        "Spotlight mutation-budget governed runtime surface changed",
+    )
+    require("ref: main" in budget and "ref: ${{ github.sha }}" not in budget,
+            "Spotlight mutation-budget governed helper checkout lost static trusted-main binding")
+    require('test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in budget,
+            "Spotlight mutation-budget governed helper checkout lost sealed-base equality")
+    require(
+        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in budget,
+        "Spotlight mutation-budget lost exact governed-read helper identity",
+    )
+    require(
+        budget.index("- name: Verify exact governed read source identity")
+        < budget.index("- name: Set up Python"),
+        "Spotlight mutation-budget must prove exact source before authored Python setup/use",
+    )
+    require(
+        budget.count("python3 source/scripts/automation_github_read.py") == 1
+        and 'gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100"' not in budget,
+        "Spotlight mutation-budget must use exactly one governed GitHub singleton read",
+    )
+    artifact_call = 'ARTIFACTS="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
     schema_marker = 'jq -e --arg name "$ARTIFACT_NAME" --arg base "$BASE_SHA" --argjson repo "$GITHUB_REPOSITORY_ID"'
     schema_end_marker = '\' <<<"$ARTIFACTS" >/dev/null || {'
     total_marker = 'TOTAL="$(jq -r \'.total_count // empty\' <<<"$ARTIFACTS")"'
