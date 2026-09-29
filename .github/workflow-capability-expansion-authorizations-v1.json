@@ -1163,6 +1163,13 @@
       "rationale": "Authorize #611's exact post-success Spotlight cleanup across the trusted control-source boundary. Runtime authority is reduced by removing the redundant Spotlight post-review workflow dispatch; the ADR core also accepts push so successful push-triggered Spotlight merges can emit clean decision receipts. No new mutation endpoint, permission, secret, OIDC authority, required-check reduction, merge capability, or bypass is introduced."
     },
     {
+      "baseBomSha256": "eef8ae03025cb0baf732be0c49e4f3c5e4c3d7b502258a1bbc0761c1c6a89977",
+      "candidateBomSha256": "eef8ae03025cb0baf732be0c49e4f3c5e4c3d7b502258a1bbc0761c1c6a89977",
+      "expansionSha256": "824400b37f83e95057b9dba73ea31fdadc51e93f265ca97cada5af97bc92b977",
+      "id": "cap-spotlight-proposer-read-retry-v1",
+      "rationale": "Authorize frozen #1324 measured by closed #1325: route 10 existing Spotlight proposer GET reads through accepted bounded interpreter-free shell retry while preserving all five constructive POST mutations as raw single-shot operations outside retry. Semantic Workflow Capability is unchanged; only protected TCB bytes expand. Adds no permission, trigger, endpoint/method, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, mutation replay, or bypass."
+    },
+    {
       "baseBomSha256": "a00807e0773e7656ff34d38930257724bd209ea1013f4a625934bb9fc6b8b073",
       "candidateBomSha256": "319eaeb096ffa788b86a754f134d9561433c347907dc5d35554a6033548c4472",
       "expansionSha256": "9ae2b40d7c5c484e12a8f1425bbdb6ae150c04feecf8535aa6e6d98ce4a8dd93",
