@@ -1162,8 +1162,6 @@ def project_spotlight_approve_governed_reads_to_legacy(sync: str) -> str:
     return sync[:approve_start] + projected + sync[approve_end:]
 
 def project_item9(sync: str) -> str:
-    # Restore accepted raw GET bytes first; all older item-9 projectors key on them.
-    sync = project_spotlight_approve_governed_reads_to_legacy(sync)
     sync = project_git_publication_status_to_legacy(sync)
     sync = project_lifecycle_status_to_legacy(sync)
     sync = project_spotlight_pr_response_evidence_to_legacy(sync)
@@ -1880,7 +1878,10 @@ def main() -> int:
             require(path.is_file() and not path.is_symlink(),
                     f"Spotlight merge authorization input is missing or aliased: {path.relative_to(core.ROOT)}")
 
-        sync = strip_adr_tail(core.SYNC.read_text(encoding="utf-8"), "Spotlight")
+        sync_actual = strip_adr_tail(core.SYNC.read_text(encoding="utf-8"), "Spotlight")
+        # Validate and normalize only the reviewed approval GET transport overlay once.
+        # Every frozen semantic/item-9/item-10 validator below sees the exact accepted raw-GET shape.
+        sync = project_spotlight_approve_governed_reads_to_legacy(sync_actual)
         stats = project_profile_item9(strip_adr_tail(core.STATS.read_text(encoding="utf-8"), "Profile Stats"))
         policy = core.POLICY.read_text(encoding="utf-8")
         preparer = core.PREPARER.read_text(encoding="utf-8")
