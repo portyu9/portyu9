@@ -2,7 +2,11 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,9 +83,94 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+
+def ruleset_reconciler_repository_reads_diagnostic() -> None:
+    """Disposable accepted-main carrier: measure frozen #1295 Ruleset governed-read capability diff."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    base_sha = "36d0b70f83c9365c80674e0cf789da3462078ef4"
+    source_sha = "06ace47afd4240eb7f19979bf27a7b45b5d02d41"
+    expected_blobs = {
+        ".github/workflow-capability-bom-v1-ruleset-reconciler.json": "42cf59db3290ac5da6bda026d92ff8e1a5be169f",
+        ".github/workflows/ruleset-reconciler.yml": "722f8e624e4642df356ab72c7737dbfae8ab2758",
+        "scripts/automation_retry_policy.py": "3cf5c7643e16b30cc789b767c507020f4bcf094e",
+        "scripts/validate-ruleset-contract.py": "bcbe4eb6d4102705411c0ab14eaa00f7aa2b33ce",
+    }
+    expected_paths = sorted(expected_blobs)
+
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=32", "origin", base_sha, source_sha],
+        check=True,
+    )
+    merge_base = subprocess.check_output(
+        ["git", "merge-base", base_sha, source_sha], text=True
+    ).strip()
+    require(
+        merge_base == base_sha,
+        f"diagnostic candidate no longer descends from base: {merge_base}",
+    )
+    changed = subprocess.check_output(
+        ["git", "diff", "--name-only", base_sha, source_sha], text=True
+    ).splitlines()
+    require(changed == expected_paths, f"diagnostic candidate path set changed: {changed!r}")
+    for path, expected_blob in expected_blobs.items():
+        observed_blob = subprocess.check_output(
+            ["git", "rev-parse", f"{source_sha}:{path}"], text=True
+        ).strip()
+        require(
+            observed_blob == expected_blob,
+            f"diagnostic candidate blob changed for {path}: {observed_blob}",
+        )
+    tree = subprocess.check_output(
+        ["git", "rev-parse", f"{source_sha}^{{tree}}"], text=True
+    ).strip()
+
+    with tempfile.TemporaryDirectory(prefix="ruleset-repository-reads-diagnostic-") as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
+
+        code = (
+            "from pathlib import Path\n"
+            "import json\n"
+            "import sys\n"
+            "trusted=Path(sys.argv[1]).resolve()\n"
+            "candidate=Path(sys.argv[2]).resolve()\n"
+            "tree=sys.argv[3]\n"
+            "source_sha=sys.argv[4]\n"
+            "sys.path.insert(0, str(trusted / 'scripts'))\n"
+            "import trusted_workflow_capability as compiler\n"
+            "import workflow_capability_admission as admission\n"
+            "import workflow_capability_authorization as authorization\n"
+            "import workflow_capability_diff as diffmod\n"
+            "import workflow_capability_snapshot as snapshot\n"
+            "base=snapshot.load_combined()\n"
+            "candidate_bom=compiler.compile_repository(candidate)\n"
+            "diff=diffmod.semantic_diff(base, candidate_bom)\n"
+            "diff=admission.protect_trusted_control(base, candidate_bom, diff)\n"
+            "diff=admission.protect_trusted_sources(candidate, tree, diff)\n"
+            "ledger=admission.strict_json(admission.TRUSTED_LEDGER, 'trusted capability authorization ledger')\n"
+            "authorization.validate_ledger(ledger)\n"
+            "matches=[entry for entry in ledger['authorizations'] if entry['baseBomSha256']==diff['baseBomSha256'] and entry['candidateBomSha256']==diff['candidateBomSha256'] and entry['expansionSha256']==diff['expansionSha256']]\n"
+            "tcb=sorted({e.get('after',{}).get('candidateTcbSha256') for e in diff['expansions'] if e.get('category')=='trusted-control-source' and isinstance(e.get('after'),dict) and e.get('after',{}).get('candidateTcbSha256')})\n"
+            "out={'candidateHead':source_sha,'candidateTree':tree,'baseBomSha256':diff['baseBomSha256'],'candidateBomSha256':diff['candidateBomSha256'],'expansionSha256':diff['expansionSha256'],'candidateTcbSha256':tcb,'expansions':diff['expansions'],'reductions':diff['reductions'],'priorMatches':len(matches)}\n"
+            "print('RULESET-REPOSITORY-READS-DIAGNOSTIC:' + json.dumps(out, sort_keys=True, separators=(',', ':')))\n"
+        )
+        subprocess.run(
+            [sys.executable, "-c", code, str(trusted), str(candidate), tree, source_sha],
+            check=True,
+        )
+        subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=True)
+        subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=True)
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        ruleset_reconciler_repository_reads_diagnostic()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
