@@ -1852,7 +1852,7 @@ def validate_lifecycle_http_status_overlay(sync: str) -> None:
     )
     stale_delete_pos = reconcile.index(blocks[1], close_schema)
     stale_readback = reconcile.index(
-        'REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"',
+        'REMAINING_REFS="$(spotlight_reconcile_get remaining-refs)"',
         stale_delete_pos,
     )
     require(close_pos < close_schema < stale_delete_pos < stale_readback,
