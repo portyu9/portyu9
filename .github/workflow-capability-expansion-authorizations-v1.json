@@ -1009,6 +1009,13 @@
       "rationale": "Authorize #671's exact Ruleset reconciler private-key validation fix. The existing OpenSSL pkey check changes only the invalid -nout option to documented -noout before App-JWT signing. Composite Workflow Capability is unchanged; no trigger, permission, secret, endpoint, method, repository scope, ruleset mutation, receipt, attestation, protected-check reduction, merge capability, or bypass is added."
     },
     {
+      "baseBomSha256": "2ff2f89780ad4782d4ed6e87b416b11018c2f90ce5cc8f908c2d1efc4f94a9ed",
+      "candidateBomSha256": "36d0790286cd4a3ebd02d9df98687e9cfd656819f920426c38c1fdd41e222889",
+      "expansionSha256": "03e3968f652c10fcb98d78e776e1142fa4dbcb39123fe29469823ec4c36a6e8d",
+      "id": "cap-ruleset-reconciler-repository-governed-reads-v1",
+      "rationale": "Authorize frozen #1295 measured by closed #1296: route nine existing Ruleset Reconciler repository-scoped singleton JSON GET call sites through the accepted authenticated bounded GET-only helper, reducing six unique raw API capabilities while preserving all typed main-ref/ruleset evidence. Protected-source rebinding is limited to the Ruleset workflow, scoped Ruleset BOM, and retry-policy validator. The two non-repository App/installation reads and single-shot installation-token POST/ruleset PUT remain raw and unchanged. No trigger, permission, endpoint, mutation, mutation retry/replay, ruleset transition, required-check, secret/OIDC, direct-main, merge, or bypass authority is added."
+    },
+    {
       "baseBomSha256": "fa6b3f682f08ecbb2cb0adea615f2946ad9379daa73df4ffb7c5b3138f5150b0",
       "candidateBomSha256": "711591bbe3c64421f7976352f3d4c3ded7bba827e321f8a452afefcba94c25cb",
       "expansionSha256": "4cf93a4d1aea269a9dcdbd1cf6b2c428429d379ecab62821fc412b0681c09f94",
