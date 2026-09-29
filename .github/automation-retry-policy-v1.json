@@ -107,6 +107,35 @@
       "pageSize": 100
     },
     {
+      "id": "spotlight-reconcile-shell-read-transient",
+      "source": ".github/workflows/spotlight-link-sync.yml",
+      "workflow": ".github/workflows/spotlight-link-sync.yml",
+      "job": "reconcile",
+      "step": "Remove only stale validated automation candidates",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "enumerated-static-literal",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only the nine enumerated literal read-only GitHub API GET observations inside the interpreter-free privileged Spotlight reconciler; PR-close PATCH and stale-ref DELETE remain outside this retry kernel and single-shot."
+    },
+    {
       "id": "spotlight-propose-shell-read-transient",
       "source": ".github/workflows/spotlight-link-sync.yml",
       "workflow": ".github/workflows/spotlight-link-sync.yml",

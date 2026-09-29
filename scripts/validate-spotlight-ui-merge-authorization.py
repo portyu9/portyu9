@@ -384,7 +384,8 @@ def project_merge_success_response_to_legacy(sync: str) -> str:
 
 def validate_mac_with_merge_http_projection(sync: str) -> None:
     """Project transport-only wrappers before rerunning the frozen item-10 MAC proof."""
-    projected = project_spotlight_propose_shell_reads_to_raw(sync)
+    projected = project_spotlight_reconcile_shell_reads_to_raw(sync)
+    projected = project_spotlight_propose_shell_reads_to_raw(projected)
     projected = project_spotlight_merge_shell_reads_to_raw(projected)
     ORIGINAL_VALIDATE_MAC(
         project_merge_http_status_to_legacy(project_lifecycle_status_to_legacy(projected))
@@ -963,6 +964,53 @@ def project_ancestry_supersession_to_same_base(sync: str) -> str:
 
 
 
+def project_spotlight_reconcile_shell_reads_to_raw(sync: str) -> str:
+    """Project reconciler-only shell retry transport to the accepted raw-GET semantic shape."""
+    reconcile_start = sync.index("  reconcile:\n")
+    reconcile_end = sync.index("  budget:\n", reconcile_start)
+    reconcile = sync[reconcile_start:reconcile_end]
+    helper_start_marker = "          spotlight_reconcile_get() {\n"
+    helper_end_marker = "          STALE_CLEANUPS_JSON='[]'\n"
+    require(
+        reconcile.count(helper_start_marker) == 1 and reconcile.count(helper_end_marker) == 1,
+        "Spotlight reconciler shell-read projection anchors changed",
+    )
+    helper_start = reconcile.index(helper_start_marker)
+    helper_end = reconcile.index(helper_end_marker, helper_start)
+    projected = reconcile[:helper_start] + reconcile[helper_end:]
+    overlays = (
+        ('MAIN_REF_RESPONSE="$(spotlight_reconcile_get main-ref)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
+        ('GENERATED_REF_RESPONSE="$(spotlight_reconcile_get generated-ref)"',
+         'GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"'),
+        ('REFS="$(spotlight_reconcile_get candidate-refs)"',
+         'REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BOT_BRANCH_PREFIX}")"'),
+        ('CANDIDATE_COMMIT="$(spotlight_reconcile_get candidate-commit)"',
+         'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"'),
+        ('ANCESTRY_COMPARE="$(spotlight_reconcile_get ancestry-compare)"',
+         'ANCESTRY_COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${BASE_SHA}")"'),
+        ('COMPARE="$(spotlight_reconcile_get candidate-compare)"',
+         'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${PARENT_SHA}...${HEAD_SHA}")"'),
+        ('PRS="$(spotlight_reconcile_get open-prs)"',
+         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${BRANCH}&base=main&per_page=2")"'),
+        ('PR="$(spotlight_reconcile_get pr)"',
+         'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'),
+        ('REMAINING_REFS="$(spotlight_reconcile_get remaining-refs)"',
+         'REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"'),
+    )
+    for hardened, legacy in overlays:
+        require(
+            projected.count(hardened) == 1,
+            f"Spotlight reconciler shell-read projection topology changed: {hardened}",
+        )
+        projected = projected.replace(hardened, legacy, 1)
+    require(
+        "spotlight_reconcile_get" not in projected,
+        "Spotlight reconciler shell-read projection left retry transport bytes behind",
+    )
+    return sync[:reconcile_start] + projected + sync[reconcile_end:]
+
+
 def project_spotlight_propose_shell_reads_to_raw(sync: str) -> str:
     """Project proposer-only shell retry transport to the accepted raw-GET semantic shape."""
     propose_start = sync.index("  propose:\n")
@@ -1275,6 +1323,7 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 
 def project_item9(sync: str) -> str:
+    sync = project_spotlight_reconcile_shell_reads_to_raw(sync)
     sync = project_spotlight_propose_shell_reads_to_raw(sync)
     sync = project_spotlight_merge_shell_reads_to_raw(sync)
     sync = project_spotlight_approve_shell_singleton_reads_to_raw(sync)
@@ -1803,7 +1852,7 @@ def validate_lifecycle_http_status_overlay(sync: str) -> None:
     )
     stale_delete_pos = reconcile.index(blocks[1], close_schema)
     stale_readback = reconcile.index(
-        'REMAINING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${BRANCH}")"',
+        'REMAINING_REFS="$(spotlight_reconcile_get remaining-refs)"',
         stale_delete_pos,
     )
     require(close_pos < close_schema < stale_delete_pos < stale_readback,
