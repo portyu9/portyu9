@@ -1159,7 +1159,7 @@ def validate_spotlight_pr_response_evidence(
         for fragment in schema_fragments:
             require(fragment in job, f"Spotlight {label} PR response schema changed: {fragment}")
 
-    proposer_fetch = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    proposer_fetch = 'PR="$(spotlight_propose_get pr)"'
     proposer_schema = (
         'validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$SOURCE_SHA" '
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
