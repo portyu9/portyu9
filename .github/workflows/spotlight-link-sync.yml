@@ -1132,6 +1132,30 @@ jobs:
       approval_requests_json: ${{ steps.authorize.outputs.approval_requests_json }}
 
     steps:
+      - name: Checkout exact trusted source for governed reads
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: source
+          persist-credentials: false
+
+      - name: Verify exact governed read source identity
+        env:
+          BASE_SHA: ${{ needs.propose.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"
+          test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          test "$(git -C source rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Verify resolved Python runtime
+        run: python3 source/scripts/verify-python-runtime.py
+
       - name: Approve and wait for only the exact README-only automation checks
         id: authorize
         env:
@@ -1272,16 +1296,16 @@ jobs:
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
-          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
-          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          GENERATED_REF_RESPONSE="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
           validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
           test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
-          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          CANDIDATE_REF_RESPONSE="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
-          COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
+          COMPARE="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
           test "$(jq -r .status <<<"$COMPARE")" = "ahead"
           test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
           test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
@@ -1293,7 +1317,7 @@ jobs:
           test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
 
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          PR="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
           test "$(jq -r .user.login <<<"$PR")" = "$BOT_NAME"
           test "$(jq -r .state <<<"$PR")" = "open"
@@ -1313,7 +1337,7 @@ jobs:
           }
           echo "Dispatched event-driven Spotlight admission proof from trusted main; Capability Admission independently binds the unique current-main candidate."
 
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \
+          python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \
             > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"
           CODEQL_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/codeql.yml" --arg name "CodeQL" '
             if type != "object" then
@@ -1330,7 +1354,7 @@ jobs:
             end
           ' "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json")"
 
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" \
+          python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" \
             > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"
           DEPENDENCY_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/dependency-review.yml" --arg name "Dependency review" '
             if type != "object" then
@@ -1347,7 +1371,7 @@ jobs:
             end
           ' "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json")"
 
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" \
+          python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" \
             > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"
           PROFILE_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/profile-quality.yml" --arg name "Profile quality" '
             if type != "object" then
@@ -1370,7 +1394,7 @@ jobs:
           APPROVAL_REQUESTED_RUN_IDS=""
           REVIEW_DISPATCHED=false
           for attempt in $(seq 1 60); do
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
+            python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
               > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"
             jq -ce \
               --arg head "$HEAD_SHA" \
@@ -1531,7 +1555,7 @@ jobs:
               if [ "$REVIEW_DISPATCHED" = "false" ] &&
                  [ "$CODEQL_SUCCESS" = "true" ] &&
                  [ "$DEPENDENCY_SUCCESS" = "true" ]; then
-                REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"
+                REVIEW_CHECKS="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"
                 jq -e --arg head "$HEAD_SHA" '
                   (type == "object") and
                   (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
@@ -1601,13 +1625,13 @@ jobs:
           test "$ALL_SUCCESS" = "true"
           test "$REVIEW_DISPATCHED" = "true"
 
-          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
+          PRS="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
           jq -e '(type == "array") and (length == 1)' <<<"$PRS" >/dev/null
           APPROVAL_PR="$(jq -c '.[0]' <<<"$PRS")"
           validate_spotlight_pull_list_item "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
           test "$(jq -r .number <<<"$APPROVAL_PR")" = "$PR_NUMBER"
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
-          gh api --paginate --slurp \
+          python3 source/scripts/automation_github_paginated_read.py \
             "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
             > "$RUNNER_TEMP/spotlight-approval-comment-pages.json"
           jq -ce \
@@ -1692,7 +1716,7 @@ jobs:
           fi
 
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
-          REVIEW_PAGES="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          REVIEW_PAGES="$(python3 source/scripts/automation_github_paginated_read.py "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
           jq -e '
             (type == "array") and (length >= 1) and (length <= 20) and
             (all(.[]; type == "array" and length <= 100)) and
@@ -1719,13 +1743,13 @@ jobs:
             echo "ERROR: exact-base/head portyu9 approval is not singleton after all protected workflows converged." >&2
             exit 1
           }
-          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
-          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          CANDIDATE_REF_RESPONSE="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
-          PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          PR_AFTER_REVIEW="$(python3 source/scripts/automation_github_read.py "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           validate_spotlight_open_pr_object "$PR_AFTER_REVIEW" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
           test "$(jq -r .state <<<"$PR_AFTER_REVIEW")" = "open"
           test "$(jq -r .base.sha <<<"$PR_AFTER_REVIEW")" = "$BASE_SHA"
