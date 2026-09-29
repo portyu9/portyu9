@@ -4339,6 +4339,7 @@ def classify_spotlight_reconciliation_candidate(
 
 
 def validate_spotlight_same_base_supersession(spotlight: str) -> None:
+    spotlight = project_spotlight_reconcile_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_lifecycle_status_to_legacy(spotlight)
     reconcile = job_block(spotlight, "reconcile", "budget")
     expected_marker = ('            if [ -n "$EXPECTED_CANDIDATE_BRANCH" ] && '
