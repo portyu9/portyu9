@@ -246,6 +246,13 @@
       "rationale": "Authorize frozen #917's exact protected-TCB validation hardening for the existing CodeQL Autofix ref-create and reviewer-request write responses. Existing endpoints, methods, permissions, triggers, secrets, mutation targets/classes, merge authority, required checks, rulesets and bypass surfaces are unchanged; exact created-ref and PR/base/head/repository/reviewer identities must now validate before normalized consumption. The composite Workflow Capability BOM is unchanged."
     },
     {
+      "baseBomSha256": "d2ba8afc04df0054ca8db4bfb34504f76ac717c6e3e9302289fb6f5a14825821",
+      "candidateBomSha256": "ac29bb25fca4d5945a407c9d66b902514821c11843263ed32c16f32f93930fa0",
+      "expansionSha256": "0167221ec1e1c8af2933e1be9b6d917a849dda2bb92f9b89d7509d18835413f4",
+      "id": "cap-codeql-autofix-discovery-pagination-read-retry-v1",
+      "rationale": "Authorize frozen #1333 measured by closed #1334: route the two existing pre-mutation CodeQL alert/open-remediation-PR paginated GET collections through accepted bounded governed pagination while preserving exact queries and typed discover/locate consumers. Unsupported-evidence/later reads and all POST/PUT/review/comment/merge mutations remain unchanged and single-shot. Adds no permission, trigger, endpoint/query, mutation class/count, secret/OIDC, check reduction, direct-main/ruleset/merge authority, mutation replay, or bypass."
+    },
+    {
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "be152a873b8f49f6b29b782052a5abe4105efbc6f557f81849a66738f4657307",
