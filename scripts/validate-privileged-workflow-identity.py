@@ -1072,16 +1072,13 @@ def validate_spotlight_pr_response_evidence(
         "Spotlight proposer regained permissive requested-reviewer traversal",
     )
 
-    approval_fetch = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    approval_fetch = 'PR="$(spotlight_singleton_get pr-initial)"'
     approval_schema = (
         'validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$BASE_SHA" '
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
     )
     approval_consume = 'test "$(jq -r .user.login <<<"$PR")" = "$BOT_NAME"'
-    approval_collection_fetch = (
-        'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:'
-        '${CANDIDATE_BRANCH}&base=main&per_page=10")"'
-    )
+    approval_collection_fetch = 'PRS="$(spotlight_singleton_get open-pr-list)"'
     approval_collection_envelope = (
         'jq -e \'(type == "array") and (length == 1)\' <<<"$PRS" >/dev/null'
     )
@@ -1093,7 +1090,7 @@ def validate_spotlight_pr_response_evidence(
     approval_collection_consume = (
         'test "$(jq -r .number <<<"$APPROVAL_PR")" = "$PR_NUMBER"'
     )
-    post_review_fetch = 'PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    post_review_fetch = 'PR_AFTER_REVIEW="$(spotlight_singleton_get pr-final)"'
     post_review_schema = (
         'validate_spotlight_open_pr_object "$PR_AFTER_REVIEW" "$PR_NUMBER" "$BASE_SHA" '
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
