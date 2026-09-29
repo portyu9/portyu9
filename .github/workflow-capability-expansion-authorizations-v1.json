@@ -1100,6 +1100,13 @@
       "rationale": "Authorize frozen #913 to add one read-only Spotlight reconcile GET comparing a validated candidate parent to exact current main, solely to prove an old bot candidate base is an accepted ancestor before bypassing the 30-minute uncertainty floor. Existing typed candidate/README/PR/close/delete proofs remain mandatory; divergent, malformed, or unproven young candidates remain preserved. No permission, trigger, secret, mutation, merge/ruleset authority, required-check reduction, or bypass is added."
     },
     {
+      "baseBomSha256": "eef8ae03025cb0baf732be0c49e4f3c5e4c3d7b502258a1bbc0761c1c6a89977",
+      "candidateBomSha256": "eef8ae03025cb0baf732be0c49e4f3c5e4c3d7b502258a1bbc0761c1c6a89977",
+      "expansionSha256": "b3533b66dd4843e84b6bc0cccf560d88dab7ded7d243a245d1f3fd7255841731",
+      "id": "cap-spotlight-approve-shell-read-retry-v1",
+      "rationale": "Authorize frozen #1315 measured by closed #1316: preserve the interpreter-free privileged Spotlight approve boundary while routing exactly 14 enumerated literal singleton GET observations through bounded shell-native retry transport with three attempts, 20-second per-attempt timeout, deterministic backoff, capped Retry-After handling, transient-only retry classes, and an 8,000,000-byte JSON response bound. The two paginated reads remain unchanged and all four POST mutations remain raw single-shot. Semantic Workflow Capability is unchanged; only protected TCB bytes expand. No permission, trigger, endpoint identity/method, mutation retry/replay, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, or bypass is added."
+    },
+    {
       "baseBomSha256": "aace468e801a0fa6659c5b86c3458abbb736b9aa8c95d3ab58cbf99aa09b3c44",
       "candidateBomSha256": "eef8ae03025cb0baf732be0c49e4f3c5e4c3d7b502258a1bbc0761c1c6a89977",
       "expansionSha256": "ed4b8764d07cb9134788d20529a7dc572d12f59fd24c46cb2464837e1e04bc7a",
