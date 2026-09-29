@@ -647,6 +647,53 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
             f"CodeQL Autofix regressed to untyped singleton evidence consumption: {forbidden}",
         )
 
+    pagination_helper = "python3 scripts/automation_github_paginated_read.py"
+    pagination_contracts = (
+        (
+            '"repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100"',
+            "> alert-pages.json",
+            "python3 scripts/codeql_autofix_controller.py discover",
+            "alert discovery",
+        ),
+        (
+            '"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"',
+            "> open-pr-pages.json",
+            "python3 scripts/codeql_autofix_controller.py locate",
+            "remediation PR discovery",
+        ),
+    )
+    require(
+        text.count(pagination_helper) == 2,
+        "CodeQL Autofix must retain exactly two governed discovery pagination calls",
+    )
+    for endpoint, output_name, consumer, label in pagination_contracts:
+        fetch = (
+            pagination_helper
+            + " "
+            + "\\"
+            + "\n            "
+            + endpoint
+            + " "
+            + "\\"
+            + "\n            "
+            + output_name
+        )
+        direct = "gh api --paginate --slurp " + "\\" + "\n            " + endpoint
+        require(
+            text.count(fetch) == 1,
+            f"CodeQL Autofix {label} governed pagination topology changed",
+        )
+        require(
+            direct not in text,
+            f"CodeQL Autofix {label} regained direct pagination transport",
+        )
+        fetch_pos = text.index(fetch)
+        consume_pos = text.index(consumer, fetch_pos)
+        require(
+            fetch_pos < consume_pos,
+            f"CodeQL Autofix {label} evidence must be fetched before typed consumption",
+        )
+
     governed_fetch = "python3 scripts/automation_github_read.py"
     main_endpoint = '"repos/${TARGET_REPOSITORY}/git/ref/heads/main"'
     main_fetch = (

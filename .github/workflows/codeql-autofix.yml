@@ -103,7 +103,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$AFTER_ALERT" =~ ^[0-9]+$ ]]
-          gh api --paginate --slurp \
+          python3 scripts/automation_github_paginated_read.py \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100" \
             > alert-pages.json
           python3 scripts/codeql_autofix_controller.py discover \
@@ -131,7 +131,7 @@ jobs:
           ALERT_NUMBER: ${{ steps.target.outputs.alert_number }}
         run: |
           set -euo pipefail
-          gh api --paginate --slurp \
+          python3 scripts/automation_github_paginated_read.py \
             "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" \
             > open-pr-pages.json
           python3 scripts/codeql_autofix_controller.py locate \
