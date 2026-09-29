@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v131"
+VERSION = "governed-workflow-byte-identity-v132"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "2a6cdbad9ebeb84bba38e2ac21e8d38652418f4a",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
-    ".github/workflows/spotlight-link-sync.yml": "58a1635098c376fe652fd02aa38d00a4e6ff9287",
+    ".github/workflows/spotlight-link-sync.yml": "9bb64d26f8a093c26497d74e82e4f35d0668adee",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -150,6 +150,7 @@ def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
 
 
 def validate_item10_mac(spotlight: str) -> None:
+    spotlight = project_spotlight_propose_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_merge_shell_reads_to_raw(spotlight)
     authorize = job_block(spotlight, "authorize", "authorize_attest")
     signer = job_block(spotlight, "authorize_attest", "merge")
@@ -576,6 +577,55 @@ def validate_leases(profile: str, spotlight: str) -> None:
 
 
 
+def project_spotlight_propose_shell_reads_to_raw(sync: str) -> str:
+    """Project proposer-only shell retry transport to the accepted raw-GET semantic shape."""
+    propose_start = sync.index("  propose:\n")
+    propose_end = sync.index("  approve:\n", propose_start)
+    propose = sync[propose_start:propose_end]
+    helper_start_marker = "          spotlight_propose_get() {\n"
+    helper_end_marker = "          REF_CREATED=false\n"
+    require(
+        propose.count(helper_start_marker) == 1 and propose.count(helper_end_marker) == 1,
+        "Spotlight identity proposer shell-read projection anchors changed",
+    )
+    helper_start = propose.index(helper_start_marker)
+    helper_end = propose.index(helper_end_marker, helper_start)
+    projected = propose[:helper_start] + propose[helper_end:]
+    overlays = (
+        ('MAIN_REF_RESPONSE="$(spotlight_propose_get main-ref)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
+        ('MAIN_README_CONTENTS_RESPONSE="$(spotlight_propose_get main-readme)"',
+         'MAIN_README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main")"'),
+        ('MATCHING_REFS="$(spotlight_propose_get candidate-refs)"',
+         'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'),
+        ('BASE_COMMIT="$(spotlight_propose_get base-commit)"',
+         'BASE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}")"'),
+        ('CANDIDATE_COMMIT="$(spotlight_propose_get candidate-commit)"',
+         'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"'),
+        ('COMPARE="$(spotlight_propose_get compare)"',
+         'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"'),
+        ('README_CONTENTS_RESPONSE="$(spotlight_propose_get candidate-readme)"',
+         'README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"'),
+        ('CANDIDATE_REF_RESPONSE="$(spotlight_propose_get candidate-ref)"',
+         'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"'),
+        ('PRS="$(spotlight_propose_get open-prs)"',
+         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"'),
+        ('PR="$(spotlight_propose_get pr)"',
+         'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'),
+    )
+    for hardened, legacy in overlays:
+        require(
+            projected.count(hardened) == 1,
+            f"Spotlight identity proposer shell-read projection topology changed: {hardened}",
+        )
+        projected = projected.replace(hardened, legacy, 1)
+    require(
+        "spotlight_propose_get" not in projected,
+        "Spotlight identity proposer shell-read projection left retry transport bytes behind",
+    )
+    return sync[:propose_start] + projected + sync[propose_end:]
+
+
 def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
     """Project merge-only shell retry transport to the accepted raw-GET semantic shape."""
     merge_start = sync.index("  merge:\n")
@@ -820,10 +870,7 @@ def validate_spotlight_readme_contents_evidence(
 ) -> None:
     propose = job_block(spotlight, "propose", "approve")
     merge = job_block(spotlight, "merge", "decision_receipt")
-    proposal_candidate_fetch = (
-        "README_CONTENTS_RESPONSE=\"$(gh api "
-        "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\")\""
-    )
+    proposal_candidate_fetch = 'README_CONTENTS_RESPONSE="$(spotlight_propose_get candidate-readme)"'
     terminal_candidate_fetch = 'README_CONTENTS_RESPONSE="$(spotlight_merge_get candidate-readme)"'
     candidate_consume = "jq -er '.content' <<<\"$README_CONTENTS_RESPONSE\""
     candidate_digest = (
@@ -840,10 +887,7 @@ def validate_spotlight_readme_contents_evidence(
         '(.content | type == "string" and length > 0)',
     )
 
-    main_fetch = (
-        "MAIN_README_CONTENTS_RESPONSE=\"$(gh api "
-        "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main\")\""
-    )
+    main_fetch = 'MAIN_README_CONTENTS_RESPONSE="$(spotlight_propose_get main-readme)"'
     main_consume = "jq -er '.content' <<<\"$MAIN_README_CONTENTS_RESPONSE\""
     main_digest = (
         "test \"$(sha256sum current-readme.md | cut -d' ' -f1)\" "
@@ -928,16 +972,15 @@ def validate_spotlight_readme_contents_evidence(
         "Spotlight privileged README evidence regressed to raw Contents scalar consumption",
     )
     require(
-        spotlight.count(
-            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main"'
-        ) == 1
-        and spotlight.count(
-            'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}"'
-        ) == 1
+        spotlight.count("spotlight_propose_get main-readme") == 1
+        and spotlight.count("spotlight_propose_get candidate-readme") == 1
         and spotlight.count("spotlight_merge_get candidate-readme") == 1
         and spotlight.count(
+            'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" 2>&1)"'
+        ) == 1
+        and spotlight.count(
             'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" 2>&1)"'
-        ) == 1,
+        ) == 2,
         "Spotlight privileged README Contents endpoint/call-count contract changed",
     )
 
@@ -1116,7 +1159,7 @@ def validate_spotlight_pr_response_evidence(
         for fragment in schema_fragments:
             require(fragment in job, f"Spotlight {label} PR response schema changed: {fragment}")
 
-    proposer_fetch = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    proposer_fetch = 'PR="$(spotlight_propose_get pr)"'
     proposer_schema = (
         'validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$SOURCE_SHA" '
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
@@ -1447,6 +1490,7 @@ def project_spotlight_lifecycle_status_to_legacy(spotlight: str) -> str:
 
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
+    spotlight = project_spotlight_propose_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_merge_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_approve_shell_singleton_reads_to_raw(spotlight)
     spotlight = project_spotlight_lifecycle_status_to_legacy(spotlight)
@@ -2691,10 +2735,10 @@ def validate_spotlight_privileged_ref_evidence_schema(spotlight: str) -> None:
              'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"'),
         ),
         "propose": (
-            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+            ('MAIN_REF_RESPONSE="$(spotlight_propose_get main-ref)"',
              'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"',
              'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"'),
-            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+            ('CANDIDATE_REF_RESPONSE="$(spotlight_propose_get candidate-ref)"',
              'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
              'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
         ),

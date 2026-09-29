@@ -823,6 +823,160 @@ jobs:
               ' <<<"$payload" >/dev/null
           }
 
+          spotlight_propose_get() {
+            local request="$1"
+            local attempt response exit_code line status status_count content_type
+            local rate_remaining retry_after body_started body retry delay requested
+            local LC_ALL=C
+
+            for attempt in 1 2 3; do
+              response=""
+              set +e
+              case "$request" in
+                main-ref)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" 2>&1)"
+                  ;;
+                main-readme)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" 2>&1)"
+                  ;;
+                candidate-refs)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}" 2>&1)"
+                  ;;
+                base-commit)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}" 2>&1)"
+                  ;;
+                candidate-commit)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}" 2>&1)"
+                  ;;
+                compare)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}" 2>&1)"
+                  ;;
+                candidate-readme)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" 2>&1)"
+                  ;;
+                candidate-ref)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" 2>&1)"
+                  ;;
+                open-prs)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10" 2>&1)"
+                  ;;
+                pr)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" 2>&1)"
+                  ;;
+                *)
+                  set -e
+                  echo "ERROR: unknown Spotlight proposer GET identity: $request" >&2
+                  return 1
+                  ;;
+              esac
+              exit_code=$?
+              set -e
+
+              status=""
+              status_count=0
+              content_type=""
+              rate_remaining=""
+              retry_after=""
+              body_started=false
+              body=""
+              while IFS= read -r line; do
+                line="${line%$'\r'}"
+                if [ "$body_started" = "false" ]; then
+                  if [[ "$line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3})([[:space:]]|$) ]]; then
+                    status="${BASH_REMATCH[1]}"
+                    status_count=$((status_count + 1))
+                  elif [ -z "$line" ]; then
+                    body_started=true
+                  else
+                    case "${line,,}" in
+                      content-type:*)
+                        content_type="${line#*:}"
+                        content_type="${content_type#"${content_type%%[![:space:]]*}"}"
+                        ;;
+                      x-ratelimit-remaining:*)
+                        rate_remaining="${line#*:}"
+                        rate_remaining="${rate_remaining#"${rate_remaining%%[![:space:]]*}"}"
+                        ;;
+                      retry-after:*)
+                        retry_after="${line#*:}"
+                        retry_after="${retry_after#"${retry_after%%[![:space:]]*}"}"
+                        ;;
+                    esac
+                  fi
+                else
+                  if [ -n "$body" ]; then
+                    body+=$'\n'
+                  fi
+                  body+="$line"
+                fi
+              done <<<"$response"
+
+              if [ "$exit_code" -eq 0 ]; then
+                test "$status_count" -eq 1 || {
+                  echo "ERROR: Spotlight proposer GET returned an ambiguous HTTP response: $request" >&2
+                  return 1
+                }
+                test "$status" = "200" || {
+                  echo "ERROR: Spotlight proposer GET returned unexpected HTTP $status: $request" >&2
+                  return 1
+                }
+                case "${content_type,,}" in
+                  application/json*) : ;;
+                  *)
+                    echo "ERROR: Spotlight proposer GET returned non-JSON content type: $request" >&2
+                    return 1
+                    ;;
+                esac
+                test "${#body}" -le 8000000 || {
+                  echo "ERROR: Spotlight proposer GET exceeded the 8000000-byte response bound: $request" >&2
+                  return 1
+                }
+                printf '%s\n' "$body"
+                return 0
+              fi
+
+              retry=false
+              if [ "$exit_code" -eq 124 ]; then
+                retry=true
+              elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then
+                retry=true
+              elif [ "$status_count" -eq 1 ]; then
+                case "$status" in
+                  408|429|500|502|503|504)
+                    retry=true
+                    ;;
+                  403)
+                    if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then
+                      retry=true
+                    fi
+                    ;;
+                esac
+              fi
+
+              if [ "$retry" != "true" ] || [ "$attempt" -ge 3 ]; then
+                echo "ERROR: Spotlight proposer GET failed terminally (exit=$exit_code http=${status:-none}): $request" >&2
+                return 1
+              fi
+
+              if [ "$attempt" -eq 1 ]; then
+                delay=1
+              else
+                delay=2
+              fi
+              if [[ "$retry_after" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+                requested="${retry_after%%.*}"
+                if [ "$requested" -ge 5 ]; then
+                  delay=5
+                else
+                  delay="$retry_after"
+                fi
+              fi
+              echo "RETRY: Spotlight proposer GET transient (exit=$exit_code http=${status:-none}); attempt $attempt/3, sleeping ${delay}s: $request" >&2
+              sleep "$delay"
+            done
+            return 1
+          }
+
           REF_CREATED=false
           PR_CREATED=false
           echo "ref_created=false" >> "$GITHUB_OUTPUT"
@@ -864,10 +1018,10 @@ jobs:
           [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
 
-          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(spotlight_propose_get main-ref)"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
-          MAIN_README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main")"
+          MAIN_README_CONTENTS_RESPONSE="$(spotlight_propose_get main-readme)"
           jq -e '
             (type == "object") and
             (.type | type == "string" and . == "file") and
@@ -885,7 +1039,7 @@ jobs:
             | tr -d '\n' | base64 --decode > current-readme.md
           test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
 
-          MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
+          MATCHING_REFS="$(spotlight_propose_get candidate-refs)"
           jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
             (type == "array") and
             (length <= 1) and
@@ -916,7 +1070,7 @@ jobs:
             ' <<<"$BLOB" >/dev/null
             README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"
             [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-            BASE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}")"
+            BASE_COMMIT="$(spotlight_propose_get base-commit)"
             jq -e --arg source "$SOURCE_SHA" '
               (type == "object") and
               (.sha | type == "string" and . == $source) and
@@ -966,7 +1120,7 @@ jobs:
             [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           fi
 
-          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          CANDIDATE_COMMIT="$(spotlight_propose_get candidate-commit)"
           jq -e --arg head "$HEAD_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" '
             (type == "object") and
             (.sha | type == "string" and . == $head) and
@@ -985,7 +1139,7 @@ jobs:
           test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
           test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
           test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
-          COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"
+          COMPARE="$(spotlight_propose_get compare)"
           jq -e --arg source "$SOURCE_SHA" --arg head "$HEAD_SHA" '
             (type == "object") and
             (.status == "ahead") and
@@ -1016,7 +1170,7 @@ jobs:
           test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
           README_BLOB_SHA="$(jq -r '.files[0].sha' <<<"$COMPARE")"
           [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-          README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"
+          README_CONTENTS_RESPONSE="$(spotlight_propose_get candidate-readme)"
           jq -e --arg blob "$README_BLOB_SHA" '
             (type == "object") and
             (.type | type == "string" and . == "file") and
@@ -1056,11 +1210,11 @@ jobs:
             REF_CREATED=true
             echo "ref_created=true" >> "$GITHUB_OUTPUT"
           fi
-          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          CANDIDATE_REF_RESPONSE="$(spotlight_propose_get candidate-ref)"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
 
-          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
+          PRS="$(spotlight_propose_get open-prs)"
           COUNT="$(jq 'length' <<<"$PRS")"
           if [ "$COUNT" = "0" ]; then
             jq -n --arg title "chore: sync rotating Spotlight links" --arg head "$CANDIDATE_BRANCH" --arg base "main" \
@@ -1093,7 +1247,7 @@ jobs:
             PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
           fi
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          PR="$(spotlight_propose_get pr)"
           validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
           test "$(jq -r .state <<<"$PR")" = "open"
           test "$(jq -r .base.ref <<<"$PR")" = "main"

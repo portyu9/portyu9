@@ -107,6 +107,35 @@
       "pageSize": 100
     },
     {
+      "id": "spotlight-propose-shell-read-transient",
+      "source": ".github/workflows/spotlight-link-sync.yml",
+      "workflow": ".github/workflows/spotlight-link-sync.yml",
+      "job": "propose",
+      "step": "Create or reuse immutable README-only candidate",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "enumerated-static-literal",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only the ten enumerated literal read-only GitHub API GET observations inside the interpreter-free privileged Spotlight proposer; all five constructive POST mutations remain outside this retry kernel and single-shot."
+    },
+    {
       "id": "spotlight-merge-shell-read-transient",
       "source": ".github/workflows/spotlight-link-sync.yml",
       "workflow": ".github/workflows/spotlight-link-sync.yml",

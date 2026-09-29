@@ -36,6 +36,7 @@ EXPECTED_AUTOMATIC_RETRY_IDS = {
     "action-release-provenance-read-transient",
     "canonical-github-api-read-transient",
     "spotlight-approve-shell-read-transient",
+    "spotlight-propose-shell-read-transient",
     "spotlight-merge-shell-read-transient",
 }
 EXPECTED_TERMINAL_IDS = {
@@ -342,10 +343,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 5 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly five classified automatic read retries")
+    require(len(entries) == 6 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly six classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 5, "automatic retry IDs must remain unique")
+    require(len(by_id) == 6, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
@@ -545,6 +546,81 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for key in ("approval-comments-page", "owner-reviews-page"):
         require(spotlight_approve.count(f"                {key})\n") == 1,
                 f"Spotlight privileged page-read retry case arm changed: {key}")
+
+
+    spotlight_propose_item = by_id["spotlight-propose-shell-read-transient"]
+    require(
+        spotlight_propose_item.get("source") == ".github/workflows/spotlight-link-sync.yml"
+        and spotlight_propose_item.get("workflow") == ".github/workflows/spotlight-link-sync.yml"
+        and spotlight_propose_item.get("job") == "propose"
+        and spotlight_propose_item.get("step") == "Create or reuse immutable README-only candidate",
+        "Spotlight proposer shell-read retry identity changed",
+    )
+    require(
+        spotlight_propose_item.get("endpointScope") == "enumerated-static-literal"
+        and spotlight_propose_item.get("maxResponseBytes") == 8_000_000,
+        "Spotlight proposer shell-read retry bounds changed",
+    )
+    spotlight_propose = named_step(
+        spotlight,
+        "propose",
+        "Create or reuse immutable README-only candidate",
+    )
+    for fragment in (
+        "spotlight_propose_get() {",
+        "for attempt in 1 2 3; do",
+        "timeout 20s gh api --include",
+        'if [ "$exit_code" -eq 124 ]; then',
+        'elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then',
+        "408|429|500|502|503|504)",
+        'if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then',
+        'if [ "$attempt" -eq 1 ]; then',
+        "delay=1",
+        "delay=2",
+        'if [ "$requested" -ge 5 ]; then',
+        "delay=5",
+        'test "$status_count" -eq 1 || {',
+        'test "$status" = "200" || {',
+        "application/json*) : ;;",
+        'test "${#body}" -le 8000000 || {',
+    ):
+        require(fragment in spotlight_propose,
+                f"Spotlight proposer shell-read retry contract is missing: {fragment}")
+    require(
+        spotlight_propose.count('timeout 20s gh api --include "repos/') == 10,
+        "Spotlight proposer must retain exactly ten enumerated GET retry case arms",
+    )
+    require(
+        spotlight_propose.count("gh api --include --method POST") == 5
+        and spotlight_propose.count("gh api --include --method PUT") == 0
+        and spotlight_propose.count("gh api --include --method PATCH") == 0
+        and spotlight_propose.count("gh api --include --method DELETE") == 0,
+        "Spotlight proposer mutation inventory changed while hardening GETs",
+    )
+    require(
+        spotlight_propose.count('gh api "repos/') == 0,
+        "Spotlight proposer regained raw direct GitHub GET transport",
+    )
+    for forbidden in (
+        "python3 ",
+        "curl ",
+        "wget ",
+        "git ",
+        "timeout 20s gh api --include --method POST",
+        "timeout 20s gh api --include --method PUT",
+        "timeout 20s gh api --include --method PATCH",
+        "timeout 20s gh api --include --method DELETE",
+    ):
+        require(forbidden not in spotlight_propose,
+                f"Spotlight proposer shell-read retry acquired forbidden transport/mutation surface: {forbidden}")
+    for key in (
+        "main-ref", "main-readme", "candidate-refs", "base-commit", "candidate-commit",
+        "compare", "candidate-readme", "candidate-ref", "open-prs", "pr",
+    ):
+        require(spotlight_propose.count(f"                {key})\n") == 1,
+                f"Spotlight proposer shell-read retry case arm changed: {key}")
+        require(spotlight_propose.count(f"$(spotlight_propose_get {key})") == 1,
+                f"Spotlight proposer shell-read retry invocation changed: {key}")
 
 
     spotlight_merge_item = by_id["spotlight-merge-shell-read-transient"]
