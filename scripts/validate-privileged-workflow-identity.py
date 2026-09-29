@@ -870,10 +870,7 @@ def validate_spotlight_readme_contents_evidence(
 ) -> None:
     propose = job_block(spotlight, "propose", "approve")
     merge = job_block(spotlight, "merge", "decision_receipt")
-    proposal_candidate_fetch = (
-        "README_CONTENTS_RESPONSE=\"$(gh api "
-        "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\")\""
-    )
+    proposal_candidate_fetch = 'README_CONTENTS_RESPONSE="$(spotlight_propose_get candidate-readme)"'
     terminal_candidate_fetch = 'README_CONTENTS_RESPONSE="$(spotlight_merge_get candidate-readme)"'
     candidate_consume = "jq -er '.content' <<<\"$README_CONTENTS_RESPONSE\""
     candidate_digest = (
@@ -890,10 +887,7 @@ def validate_spotlight_readme_contents_evidence(
         '(.content | type == "string" and length > 0)',
     )
 
-    main_fetch = (
-        "MAIN_README_CONTENTS_RESPONSE=\"$(gh api "
-        "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main\")\""
-    )
+    main_fetch = 'MAIN_README_CONTENTS_RESPONSE="$(spotlight_propose_get main-readme)"'
     main_consume = "jq -er '.content' <<<\"$MAIN_README_CONTENTS_RESPONSE\""
     main_digest = (
         "test \"$(sha256sum current-readme.md | cut -d' ' -f1)\" "
