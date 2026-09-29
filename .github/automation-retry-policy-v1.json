@@ -26,6 +26,68 @@
       "rationale": "Retry only fresh read-only GitHub observations after classified transport/platform transients; authorization, not-found, malformed JSON, schema, policy, veto, and mutation failures remain terminal."
     },
     {
+      "id": "bot-pr-user-approval-shell-read-transient",
+      "source": ".github/workflows/bot-pr-user-approval.yml",
+      "workflow": ".github/workflows/bot-pr-user-approval.yml",
+      "job": "approve",
+      "step": "Approve only exact green governed bot PRs as portyu9",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "enumerated-static-literal",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only enumerated literal read-only GitHub REST GET observations inside the owner-secret governed reviewer, including review-token identity plus at most 30 validated 100-item open-PR pages and 20 validated 100-item review pages; the fixed GraphQL read and review-creation POST remain outside this REST-GET retry kernel, and every mutation remains single-shot.",
+      "maxPages": 30,
+      "pageSize": 100
+    },
+    {
+      "id": "bot-pr-review-convergence-shell-read-transient",
+      "source": ".github/workflows/bot-pr-user-approval.yml",
+      "workflow": ".github/workflows/bot-pr-user-approval.yml",
+      "job": "converge",
+      "step": "Re-enter exact reviewed candidate without owner secret",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "enumerated-static-literal",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only enumerated literal read-only GitHub REST GET observations inside no-secret governed review convergence, including at most 20 validated 100-item review pages; the exact failed-job rerun and lane wake workflow-dispatch POST mutations remain outside this retry kernel and single-shot.",
+      "maxPages": 20,
+      "pageSize": 100
+    },
+    {
       "id": "action-release-provenance-read-transient",
       "source": "scripts/validate-action-release-provenance.py",
       "operation": "read-only-github-api-get",
