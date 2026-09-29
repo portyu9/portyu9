@@ -960,6 +960,63 @@ def project_ancestry_supersession_to_same_base(sync: str) -> str:
     return sync
 
 
+def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
+    """Project approve-only singleton retry transport to the accepted item-9 raw-GET shape."""
+    approve_start = sync.index("  approve:\n")
+    approve_end = sync.index("  authorize:\n", approve_start)
+    approve = sync[approve_start:approve_end]
+    helper_start_marker = "          spotlight_singleton_get() {\n"
+    helper_end_marker = "          APPROVAL_REQUESTS_JSON='[]'\n"
+    require(
+        approve.count(helper_start_marker) == 1 and approve.count(helper_end_marker) == 1,
+        "Spotlight item-9 shell-read projection anchors changed",
+    )
+    helper_start = approve.index(helper_start_marker)
+    helper_end = approve.index(helper_end_marker, helper_start)
+    projected = approve[:helper_start] + approve[helper_end:]
+    overlays = (
+        ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
+        ('GENERATED_REF_RESPONSE="$(spotlight_singleton_get generated-initial)"',
+         'GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"'),
+        ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-initial)"',
+         'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"'),
+        ('COMPARE="$(spotlight_singleton_get compare-initial)"',
+         'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"'),
+        ('PR="$(spotlight_singleton_get pr-initial)"',
+         'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'),
+        ('          spotlight_singleton_get codeql-workflow \\\n            > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"',
+         '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \\\n            > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"'),
+        ('          spotlight_singleton_get dependency-workflow \\\n            > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"',
+         '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" \\\n            > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"'),
+        ('          spotlight_singleton_get profile-workflow \\\n            > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"',
+         '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" \\\n            > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"'),
+        ('            spotlight_singleton_get protected-runs \\\n              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"',
+         '            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \\\n              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"'),
+        ('REVIEW_CHECKS="$(spotlight_singleton_get reviewer-checks)"',
+         'REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"'),
+        ('PRS="$(spotlight_singleton_get open-pr-list)"',
+         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"'),
+        ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
+        ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"',
+         'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"'),
+        ('PR_AFTER_REVIEW="$(spotlight_singleton_get pr-final)"',
+         'PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'),
+    )
+    for hardened, legacy in overlays:
+        require(
+            projected.count(hardened) == 1,
+            f"Spotlight item-9 shell-read projection topology changed: {hardened}",
+        )
+        projected = projected.replace(hardened, legacy, 1)
+    require(
+        "spotlight_singleton_get" not in projected,
+        "Spotlight item-9 shell-read projection left retry transport bytes behind",
+    )
+    return sync[:approve_start] + projected + sync[approve_end:]
+
+
 def project_spotlight_privileged_refs_to_legacy(sync: str) -> str:
     helper = '''          validate_git_ref_object() {
             local payload="$1" expected_ref="$2" expected_sha="$3"
@@ -1108,6 +1165,7 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 
 def project_item9(sync: str) -> str:
+    sync = project_spotlight_approve_shell_singleton_reads_to_raw(sync)
     sync = project_git_publication_status_to_legacy(sync)
     sync = project_lifecycle_status_to_legacy(sync)
     sync = project_spotlight_pr_response_evidence_to_legacy(sync)
