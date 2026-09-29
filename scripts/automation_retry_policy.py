@@ -527,6 +527,38 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in compatibility_producer_step,
             "Profile generator compatibility witness producer governed reads lost run-scoped token binding")
 
+
+    dependabot_controller = texts[".github/workflows/dependabot-controller.yml"]
+    dependabot_release_pin = (
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
+        '"1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
+    for job_name, step_name, label in (
+        ("controller", "Prove bot identity, atomic pin closure, and public release provenance", "canonical release proof"),
+        ("validation_bind", "Independently re-prove deterministic reconciliation", "independent release reproof"),
+    ):
+        release_step = named_step(dependabot_controller, job_name, step_name)
+        require(
+            release_step.count("python3 scripts/automation_github_read.py") == 2,
+            f"Dependabot {label} must use exactly two governed singleton release reads",
+        )
+        require(
+            dependabot_release_pin in release_step,
+            f"Dependabot {label} lost exact governed-read helper identity",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in release_step,
+            f"Dependabot {label} governed reads lost run-scoped token binding",
+        )
+        for forbidden in (
+            'gh api "repos/${DEPENDENCY_REPOSITORY}"',
+            'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}"',
+        ):
+            require(
+                forbidden not in release_step,
+                f"Dependabot {label} regained direct singleton release transport: {forbidden}",
+            )
+
     profile_quality = texts[".github/workflows/profile-quality.yml"]
     for job_name, step_name, label in (
         ("validate", "Discover exact fresh signed Action provenance witness", "Action provenance witness"),
@@ -990,6 +1022,53 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         capability_source_transport_drift,
         "must use exactly four governed singleton JSON reads",
+    )
+
+
+    dependabot_release_transport_drift = dict(texts)
+    dependabot_release_source = dependabot_release_transport_drift[".github/workflows/dependabot-controller.yml"]
+    canonical_release_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${DEPENDENCY_REPOSITORY}" > release-repository.json'
+    )
+    require(
+        dependabot_release_source.count(canonical_release_governed) == 2,
+        "retry-policy self-test fixture missing Dependabot governed release repository reads",
+    )
+    dependabot_release_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_release_source.replace(
+            canonical_release_governed,
+            'gh api "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_release_transport_drift,
+        "Dependabot canonical release proof must use exactly two governed singleton release reads",
+    )
+
+    dependabot_delegated_release_transport_drift = dict(texts)
+    dependabot_delegated_source = dependabot_delegated_release_transport_drift[".github/workflows/dependabot-controller.yml"]
+    delegated_release_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json'
+    )
+    require(
+        dependabot_delegated_source.count(delegated_release_governed) == 2,
+        "retry-policy self-test fixture missing Dependabot governed release metadata reads",
+    )
+    last = dependabot_delegated_source.rfind(delegated_release_governed)
+    require(last >= 0, "retry-policy self-test could not locate delegated release read")
+    dependabot_delegated_release_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_delegated_source[:last]
+        + 'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json'
+        + dependabot_delegated_source[last + len(delegated_release_governed):]
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_delegated_release_transport_drift,
+        "Dependabot independent release reproof must use exactly two governed singleton release reads",
     )
 
     capability_release_transport_drift = dict(texts)

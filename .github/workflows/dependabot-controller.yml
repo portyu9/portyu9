@@ -321,10 +321,11 @@ jobs:
           [[ "$CANDIDATE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
+          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
             "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > release-refs.txt
-          gh api "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json
-          gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json
+          python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json
+          python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json
           python3 scripts/dependabot_release.py \
             --refs release-refs.txt \
             --repository-json release-repository.json \
@@ -1172,10 +1173,11 @@ jobs:
           CANDIDATE_SHA="$(jq -r .after.sha probe.json)"
           test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
             "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > release-refs.txt
-          gh api "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json
-          gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json
+          python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json
+          python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json
           python3 scripts/dependabot_release.py \
             --refs release-refs.txt \
             --repository-json release-repository.json \

@@ -27,20 +27,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${DEPENDENCY_REPOSITORY}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Prove bot identity, atomic pin closure, and public release provenance"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Prove bot identity, atomic pin closure, and public release provenance"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}",
               "method": "GET",
               "mutating": false,
@@ -666,20 +652,6 @@
             }
           ],
           "apiSurfaces": [
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${DEPENDENCY_REPOSITORY}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Independently re-prove deterministic reconciliation"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Independently re-prove deterministic reconciliation"
-            },
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100",
