@@ -772,6 +772,58 @@ def project_item9_sync_with_marker(sync: str) -> str:
     sync = project_spotlight_readme_contents_to_legacy(sync)
     sync = project_spotlight_privileged_refs_to_legacy(sync)
     sync = project_spotlight_pr_response_evidence_to_legacy(sync)
+
+    budget_start = sync.index("  budget:\n")
+    budget_end = sync.index("  quarantine:\n", budget_start)
+    budget = sync[budget_start:budget_end]
+    governed_permissions = (
+        "    permissions:\n"
+        "      actions: read\n"
+        "      contents: read\n"
+    )
+    legacy_permissions = "    permissions:\n      actions: read\n"
+    governed_read = (
+        'ARTIFACTS="$(python3 source/scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    )
+    legacy_read = (
+        'ARTIFACTS="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    )
+    core.require(budget.count(governed_permissions) == 1,
+                 "Spotlight mutation budget governed-read permissions changed")
+    core.require(
+        budget.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
+        and budget.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+        "Spotlight mutation budget governed runtime surface changed",
+    )
+    core.require("ref: main" in budget and "persist-credentials: false" in budget,
+                 "Spotlight mutation budget lost static credential-free trusted-main checkout")
+    core.require(
+        'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in budget
+        and 'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in budget,
+        "Spotlight mutation budget lost sealed-base/helper byte identity",
+    )
+    core.require(
+        budget.count(governed_read) == 1 and legacy_read not in budget,
+        "Spotlight mutation budget must use exactly one governed GET transport",
+    )
+    core.require("GH_TOKEN: ${{ github.token }}" in budget,
+                 "Spotlight mutation budget governed GET lost run-scoped token")
+    bootstrap_start = budget.index(
+        "      - name: Checkout exact trusted source for governed reads\n"
+    )
+    admit_start = budget.index(
+        "      - name: Admit exact source epoch within bounded mutation budget\n",
+        bootstrap_start,
+    )
+    projected_budget = budget[:bootstrap_start] + budget[admit_start:]
+    projected_budget = projected_budget.replace(
+        governed_permissions, legacy_permissions, 1
+    ).replace(
+        governed_read, legacy_read, 1
+    )
+    sync = sync[:budget_start] + projected_budget + sync[budget_end:]
     core.require(
         sync.count(SPOTLIGHT_CAPABILITY_DISPATCH_STATUS) == 1,
         "Spotlight item-9 capability-dispatch status projection anchor changed",
