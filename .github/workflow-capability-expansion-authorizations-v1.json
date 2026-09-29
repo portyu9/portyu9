@@ -883,6 +883,13 @@
       "rationale": "Authorize frozen #1173 to route seven existing authenticated PR-native Dependabot singleton GETs through the accepted bounded canonical GET-only retry client. Preserve the paginated pull-files collection, endpoint/call counts, typed PR/ref/content/release evidence, release identity, semantic admission, permissions and mutation non-retry. No trigger, permission, secret/OIDC, mutation, merge/check/ruleset authority, direct-main write or bypass is added."
     },
     {
+      "baseBomSha256": "9976c120af0e18762e82ef1a26041c9bde4b825c001f2cbe50b85398c1665da6",
+      "candidateBomSha256": "2aa9ce035e5cbc08922756a28180047e097a2b4d26f3448b5868338775bb624c",
+      "expansionSha256": "aca06cbcd0b00fc7f7256e72213e621aa0c1771388af80d813e9c9412416f281",
+      "id": "cap-profile-quality-dependabot-file-pages-governed-read-v1",
+      "rationale": "Authorize frozen #1300: route the single existing Profile Quality Dependabot changed-file pagination GET through the accepted bounded authenticated paginated read helper. Preserve the exact endpoint, token, array-of-pages evidence, full collection validation, downstream admission, permissions, triggers and mutations. Semantic Workflow Capability only shrinks; no write, secret/OIDC, ruleset, merge or bypass authority is added."
+    },
+    {
       "baseBomSha256": "064955edce467b646ff1f3404fb11d42a87d6f856dafb5d1dfa54e447f74eb31",
       "candidateBomSha256": "40fd5a6821802adc9ce1364b9da28a69159ed8a23aab2a57dc142fc104fbb8bb",
       "expansionSha256": "8780843ca5182884f16e8830f7428c134a60110661468c154eb0df1fc5890113",
