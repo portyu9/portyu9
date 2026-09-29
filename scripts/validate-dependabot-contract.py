@@ -1628,10 +1628,18 @@ def validate_release_resolution_parity_contract(text: str) -> None:
         "delegated Dependabot release reproof must bind exact GitHub token once",
     )
     resolver = "python3 scripts/dependabot_release.py"
+    helper_pin = (
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
+        '"1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
     ls_remote = 'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"'
-    repository_get = 'gh api "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json'
+    repository_get = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${DEPENDENCY_REPOSITORY}" > release-repository.json'
+    )
     release_get = (
-        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json'
+        'python3 scripts/automation_github_read.py '
+        '"repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json'
     )
     repository_arg = "--repository-json release-repository.json"
     release_arg = "--release-json release.json"
@@ -1642,6 +1650,7 @@ def validate_release_resolution_parity_contract(text: str) -> None:
     resolved_arg = "--resolved-release resolved-release.json"
 
     for fragment, expected_count in (
+        (helper_pin, 2),
         (ls_remote, 2),
         (repository_get, 2),
         (release_get, 2),
@@ -1661,6 +1670,8 @@ def validate_release_resolution_parity_contract(text: str) -> None:
     for forbidden in (
         "--resolved-release-sha",
         "resolved-release-sha.txt",
+        'gh api "repos/${DEPENDENCY_REPOSITORY}"',
+        'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}"',
     ):
         require(
             forbidden not in text,
@@ -1669,7 +1680,8 @@ def validate_release_resolution_parity_contract(text: str) -> None:
 
     cursor = -1
     for label in ("canonical controller", "delegated admission"):
-        ls_pos = text.index(ls_remote, cursor + 1)
+        pin_pos = text.index(helper_pin, cursor + 1)
+        ls_pos = text.index(ls_remote, pin_pos)
         repository_pos = text.index(repository_get, ls_pos)
         release_pos = text.index(release_get, repository_pos)
         resolver_pos = text.index(resolver, release_pos)
@@ -1681,7 +1693,7 @@ def validate_release_resolution_parity_contract(text: str) -> None:
         admit_pos = text.index(admit, verify_pos)
         resolved_arg_pos = text.index(resolved_arg, admit_pos)
         require(
-            ls_pos < repository_pos < release_pos < resolver_pos
+            pin_pos < ls_pos < repository_pos < release_pos < resolver_pos
             < repository_arg_pos < release_arg_pos < output_pos
             < consume_pos < verify_pos < admit_pos < resolved_arg_pos,
             f"Dependabot {label} release reproof ordering changed",
