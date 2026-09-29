@@ -138,7 +138,7 @@
       "candidateBomSha256": "2aa9ce035e5cbc08922756a28180047e097a2b4d26f3448b5868338775bb624c",
       "expansionSha256": "ea4932fc695b7a9ad4448414bf3ce6d1773e5b5a5edffcba576596d223398a27",
       "id": "cap-capability-admission-exact-measurement-v1",
-      "rationale": "Authorize corrected frozen #1304 measured by closed #1306: centralize exact production admission measurement in the trusted capability-admission module, expose an explicit sanitized --measure tuple, and make evaluate consume that same measured diff before authorization. Semantic Workflow Capability is unchanged; exactly one protected trusted source changes. Ordinary rejection logs no candidate-derived tuple values. No trigger, permission, endpoint, mutation, secret/OIDC, required-check reduction, direct-main write, merge/ruleset authority, retry, or bypass is added."
+      "rationale": "Authorize corrected frozen #1304 measured by closed #1306: centralize exact production admission measurement in trusted capability-admission code, expose explicit sanitized --measure output, and make evaluate consume that measured diff. Semantic Workflow Capability is unchanged; one protected trusted source changes. Ordinary rejection logs no candidate-derived tuple. No trigger, permission, endpoint, mutation, secret/OIDC, check reduction, merge/ruleset authority, retry, or bypass."
     },
     {
       "baseBomSha256": "c74aa9be3108cfb106d3057e811ab621ebe8d1a8d6ccb1a43259c1a1402c1152",
