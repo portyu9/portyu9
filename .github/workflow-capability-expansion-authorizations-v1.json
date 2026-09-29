@@ -631,6 +631,13 @@
       "rationale": "Authorize #765's exact Dependabot readiness evidence hardening. Existing read endpoints, permissions, protected contexts, dispatch target, and merge/review authority stay unchanged. Bounded run/check collections, strict identity/status/conclusion schemas, unique ids, and all-noncompleted activity now fail closed before readiness or redispatch. Semantic Workflow Capability is unchanged; no trigger, secret, mutation class, retry, ruleset, direct-main write, check reduction, or bypass is added."
     },
     {
+      "baseBomSha256": "36d0790286cd4a3ebd02d9df98687e9cfd656819f920426c38c1fdd41e222889",
+      "candidateBomSha256": "9976c120af0e18762e82ef1a26041c9bde4b825c001f2cbe50b85398c1665da6",
+      "expansionSha256": "a9aa30bd74e3ba8582d171af07053a634e31e6e3dbda29b1b739481f8508d00b",
+      "id": "cap-dependabot-release-provenance-governed-read-v1",
+      "rationale": "Authorize frozen #1298: route four existing Dependabot repository/release JSON GETs through the accepted authenticated bounded GET-only client in the canonical controller and independent validation binder. Preserve git tag proof, release resolution/parity, endpoints, tokens and mutations. Semantic Workflow Capability only shrinks; no permission, trigger, mutation replay, secret/OIDC, required-check, ruleset, merge or bypass authority is added."
+    },
+    {
       "baseBomSha256": "8918692fd200b297de976e99fe6e4c5fa70830ccc743be5e481f137004074163",
       "candidateBomSha256": "2ff2f89780ad4782d4ed6e87b416b11018c2f90ce5cc8f908c2d1efc4f94a9ed",
       "expansionSha256": "9c1720e2e9f3f3af07d2c4ee013267dffc26b6636bd032bd9b59187298443601",
