@@ -574,6 +574,61 @@ def validate_leases(profile: str, spotlight: str) -> None:
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
 
 
+def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> str:
+    """Project the reviewed approve-only shell retry transport to its prior raw-GET semantics."""
+    approve_start = spotlight.index("  approve:\n")
+    approve_end = spotlight.index("  authorize:\n", approve_start)
+    approve = spotlight[approve_start:approve_end]
+
+    helper_start_marker = "          spotlight_singleton_get() {\n"
+    helper_end_marker = "          APPROVAL_REQUESTS_JSON='[]'\n"
+    require(
+        approve.count(helper_start_marker) == 1 and approve.count(helper_end_marker) == 1,
+        "Spotlight approve shell-read projection anchors changed",
+    )
+    helper_start = approve.index(helper_start_marker)
+    helper_end = approve.index(helper_end_marker, helper_start)
+    projected = approve[:helper_start] + approve[helper_end:]
+
+    overlays = (
+        ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
+        ('GENERATED_REF_RESPONSE="$(spotlight_singleton_get generated-initial)"',
+         'GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"'),
+        ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-initial)"',
+         'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"'),
+        ('COMPARE="$(spotlight_singleton_get compare-initial)"',
+         'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"'),
+        ('PR="$(spotlight_singleton_get pr-initial)"',
+         'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'),
+        ('          spotlight_singleton_get codeql-workflow \\\n            > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"',
+         '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \\\n            > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"'),
+        ('          spotlight_singleton_get dependency-workflow \\\n            > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"',
+         '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" \\\n            > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"'),
+        ('          spotlight_singleton_get profile-workflow \\\n            > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"',
+         '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" \\\n            > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"'),
+        ('            spotlight_singleton_get protected-runs \\\n              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"',
+         '            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \\\n              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"'),
+        ('REVIEW_CHECKS="$(spotlight_singleton_get reviewer-checks)"',
+         'REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"'),
+        ('PRS="$(spotlight_singleton_get open-pr-list)"',
+         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"'),
+        ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
+        ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"',
+         'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"'),
+        ('PR_AFTER_REVIEW="$(spotlight_singleton_get pr-final)"',
+         'PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'),
+    )
+    for hardened, legacy in overlays:
+        require(projected.count(hardened) == 1,
+                f"Spotlight approve shell-read projection topology changed: {hardened}")
+        projected = projected.replace(hardened, legacy, 1)
+    require("spotlight_singleton_get" not in projected,
+            "Spotlight approve shell-read projection left retry transport bytes behind")
+    return spotlight[:approve_start] + projected + spotlight[approve_end:]
+
+
 def project_spotlight_privileged_refs_to_legacy(spotlight: str) -> str:
     helper = '''          validate_git_ref_object() {
             local payload="$1" expected_ref="$2" expected_sha="$3"
@@ -1329,6 +1384,7 @@ def project_spotlight_lifecycle_status_to_legacy(spotlight: str) -> str:
 
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
+    spotlight = project_spotlight_approve_shell_singleton_reads_to_raw(spotlight)
     spotlight = project_spotlight_lifecycle_status_to_legacy(spotlight)
     spotlight = project_spotlight_git_publication_status_to_legacy(spotlight)
     legacy = project_spotlight_privileged_refs_to_legacy(
@@ -2579,19 +2635,19 @@ def validate_spotlight_privileged_ref_evidence_schema(spotlight: str) -> None:
              'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
         ),
         "approve": (
-            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+            ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"',
              'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
              'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
-            ('GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+            ('GENERATED_REF_RESPONSE="$(spotlight_singleton_get generated-initial)"',
              'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
              'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"'),
-            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+            ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-initial)"',
              'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
              'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
-            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+            ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"',
              'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
              'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
-            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+            ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"',
              'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
              'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
         ),
