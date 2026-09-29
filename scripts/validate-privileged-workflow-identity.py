@@ -3150,6 +3150,21 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
         "Spotlight exact-head reviewer-readiness snapshot." not in projected,
         "Spotlight review-readiness compatibility projection left readiness schema bytes behind",
     )
+
+    paginated_review = 'REVIEW_PAGES="$(spotlight_paginated_get owner-reviews)"'
+    legacy_review = (
+        'REVIEW_PAGES="$(gh api --paginate --slurp '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"'
+    )
+    require(
+        projected.count(paginated_review) == 1,
+        "Spotlight review pagination compatibility projection anchor changed",
+    )
+    projected = projected.replace(paginated_review, legacy_review, 1)
+    require(
+        "spotlight_paginated_get owner-reviews" not in projected,
+        "Spotlight review pagination compatibility projection left retry transport behind",
+    )
     return projected
 
 
