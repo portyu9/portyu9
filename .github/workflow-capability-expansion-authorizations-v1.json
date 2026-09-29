@@ -806,6 +806,13 @@
       "rationale": "Authorize frozen #1111 hardening of the three existing governed reviewer-request POSTs in Dependabot, CodeQL Autofix, and Spotlight: capture gh api --include and require HTTP 201 before the existing typed response validation. Semantic BOMs are unchanged; endpoints, reviewer payload, call counts, permissions, triggers, mutation classes, review/merge authority, required checks, secrets/OIDC, direct-main authority, rulesets, and bypass remain unchanged."
     },
     {
+      "baseBomSha256": "eef8ae03025cb0baf732be0c49e4f3c5e4c3d7b502258a1bbc0761c1c6a89977",
+      "candidateBomSha256": "d2ba8afc04df0054ca8db4bfb34504f76ac717c6e3e9302289fb6f5a14825821",
+      "expansionSha256": "d2c5830b73b15a1ec96ebfb7f35f6936a4fae3a2e649b56b818033070dd7303c",
+      "id": "cap-governed-reviewer-rest-get-retry-v1",
+      "rationale": "Authorize frozen #1330 measured by closed #1331: route existing governed-reviewer and no-secret convergence REST GET observations through bounded interpreter-free retry, consolidating repeated identical GET call sites in the BOM. Fixed GraphQL review-thread read and review/rerun/dispatch POSTs remain outside retry and single-shot. No permission, trigger, new endpoint/method, secret/OIDC, check reduction, direct-main/ruleset/merge authority, mutation replay, or bypass."
+    },
+    {
       "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "expansionSha256": "08eeea7d27f4a7324e36ab1eaf90c5cce4c7d0b345bb56d8d953146f233222f2",
