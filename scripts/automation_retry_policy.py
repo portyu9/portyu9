@@ -619,7 +619,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     ):
         require(spotlight_propose.count(f"                {key})\n") == 1,
                 f"Spotlight proposer shell-read retry case arm changed: {key}")
-        require(spotlight_propose.count(f"spotlight_propose_get {key}") == 1,
+        require(spotlight_propose.count(f"$(spotlight_propose_get {key})") == 1,
                 f"Spotlight proposer shell-read retry invocation changed: {key}")
 
 
