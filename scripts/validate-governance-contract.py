@@ -247,13 +247,31 @@ def validate_quality_native_gate(text: str) -> None:
         "name: trusted-governed-bot-review",
         "runs-on: ubuntu-24.04",
         "permissions:\n      contents: read\n      pull-requests: read",
-        "scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}",
+        "- name: Checkout exact accepted-base governed review source",
+        "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+        "ref: ${{ github.event.pull_request.base.sha }}",
+        "path: trusted-review-base",
+        "persist-credentials: false",
+        "fetch-depth: 1",
+        'test "$(git -C "$GITHUB_WORKSPACE/trusted-review-base" rev-parse HEAD)" = "$EVENT_BASE_SHA"',
+        'TRUSTED_GATE="$GITHUB_WORKSPACE/trusted-review-base/scripts/governed_bot_review_gate.py"',
         "EXPECTED_GATE_BLOB: e42c1a8c3204d9a83ac837bbd04743fe3907b41c",
         'python3 "$TRUSTED_GATE" --self-test',
         'python3 "$TRUSTED_GATE"',
     ):
         require(fragment in gate, f"Profile Quality native review gate contract is missing: {fragment}")
-    for forbidden in ("actions/checkout@", "actions/setup-python@", "contents: write", "pull-requests: write"):
+    require(gate.count("uses: actions/checkout@") == 1,
+            "Profile Quality native review gate must use exactly one pinned accepted-base checkout")
+    require("gh api " not in gate and "contents/scripts/governed_bot_review_gate.py?ref=" not in gate,
+            "Profile Quality native review bootstrap regained a raw GitHub API read")
+    for forbidden in (
+        "actions/setup-python@",
+        "persist-credentials: true",
+        "ref: ${{ github.event.pull_request.head.sha }}",
+        "ref: ${{ github.sha }}",
+        "contents: write",
+        "pull-requests: write",
+    ):
         require(forbidden not in gate,
                 f"Profile Quality native review gate acquired forbidden authority/execution surface: {forbidden}")
 

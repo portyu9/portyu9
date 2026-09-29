@@ -763,6 +763,14 @@ jobs:
       pull-requests: read
 
     steps:
+      - name: Checkout exact accepted-base governed review source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-review-base
+          persist-credentials: false
+          fetch-depth: 1
+
       - name: Run exact accepted-base governed bot review gate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -783,8 +791,8 @@ jobs:
           test "$EVENT_BASE_REF" = "main"
           [[ "$EVENT_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$EVENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
-          TRUSTED_GATE="$RUNNER_TEMP/governed-bot-review-gate.py"
-          gh api -H "Accept: application/vnd.github.raw+json" "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}" > "$TRUSTED_GATE"
+          test "$(git -C "$GITHUB_WORKSPACE/trusted-review-base" rev-parse HEAD)" = "$EVENT_BASE_SHA"
+          TRUSTED_GATE="$GITHUB_WORKSPACE/trusted-review-base/scripts/governed_bot_review_gate.py"
           test -s "$TRUSTED_GATE"
           GATE_SIZE="$(wc -c < "$TRUSTED_GATE" | tr -d '[:space:]')"
           [[ "$GATE_SIZE" =~ ^[1-9][0-9]*$ ]]

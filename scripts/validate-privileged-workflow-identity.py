@@ -8,10 +8,10 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v126"
+VERSION = "governed-workflow-byte-identity-v127"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
-    ".github/workflows/profile-quality.yml": "0a682e8956a5a1efee1308728aeeb7134a8b4e98",
+    ".github/workflows/profile-quality.yml": "2a6cdbad9ebeb84bba38e2ac21e8d38652418f4a",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
     ".github/workflows/spotlight-link-sync.yml": "50c08154b53711b339a76bd976f822a59959d1ad",
 }
@@ -1878,23 +1878,33 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         "runs-on: ubuntu-24.04",
         "timeout-minutes: 20",
         "permissions:\n      contents: read\n      pull-requests: read",
+        "- name: Checkout exact accepted-base governed review source",
+        "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1",
+        "ref: ${{ github.event.pull_request.base.sha }}",
+        "path: trusted-review-base",
+        "persist-credentials: false",
+        "fetch-depth: 1",
         "- name: Run exact accepted-base governed bot review gate",
         "GH_TOKEN: ${{ github.token }}",
         "GITHUB_TOKEN: ${{ github.token }}",
         "EXPECTED_GATE_BLOB: e42c1a8c3204d9a83ac837bbd04743fe3907b41c",
-        'gh api -H "Accept: application/vnd.github.raw+json" "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}" > "$TRUSTED_GATE"',
+        'test "$(git -C "$GITHUB_WORKSPACE/trusted-review-base" rev-parse HEAD)" = "$EVENT_BASE_SHA"',
+        'TRUSTED_GATE="$GITHUB_WORKSPACE/trusted-review-base/scripts/governed_bot_review_gate.py"',
         'GATE_BLOB="$( { printf \'blob %s\\0\' "$GATE_SIZE"; cat "$TRUSTED_GATE"; } | sha1sum | cut -d\' \' -f1 )"',
         'test "$GATE_BLOB" = "$EXPECTED_GATE_BLOB"',
         'python3 "$TRUSTED_GATE" --self-test',
         'python3 "$TRUSTED_GATE"',
     ):
         require(fragment in gate, f"native governed-bot review gate contract is missing: {fragment}")
-    require(gate.count("gh api ") == 1,
-            "native governed-bot review gate must have exactly one GitHub API surface")
+    require(gate.count("gh api ") == 0,
+            "native governed-bot review bootstrap must not use a shell GitHub API read")
+    require(gate.count("uses: actions/checkout@") == 1,
+            "native governed-bot review bootstrap must use exactly one pinned checkout")
     for forbidden in (
-        "actions/checkout@",
         "actions/setup-python@",
-        "uses:",
+        "persist-credentials: true",
+        "ref: ${{ github.event.pull_request.head.sha }}",
+        "ref: ${{ github.sha }}",
         "--method POST",
         "--method PUT",
         "--method PATCH",
@@ -1902,6 +1912,7 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         "git push",
         "/pulls/${PR_NUMBER}/reviews",
         "/actions/workflows/",
+        "contents/scripts/governed_bot_review_gate.py?ref=",
     ):
         require(forbidden not in gate,
                 f"native governed-bot review gate acquired forbidden candidate or mutation surface: {forbidden}")
