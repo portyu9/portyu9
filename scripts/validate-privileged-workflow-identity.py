@@ -150,6 +150,7 @@ def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
 
 
 def validate_item10_mac(spotlight: str) -> None:
+    spotlight = project_spotlight_propose_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_merge_shell_reads_to_raw(spotlight)
     authorize = job_block(spotlight, "authorize", "authorize_attest")
     signer = job_block(spotlight, "authorize_attest", "merge")
@@ -574,6 +575,55 @@ def validate_leases(profile: str, spotlight: str) -> None:
     ):
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
 
+
+
+def project_spotlight_propose_shell_reads_to_raw(sync: str) -> str:
+    """Project proposer-only shell retry transport to the accepted raw-GET semantic shape."""
+    propose_start = sync.index("  propose:\n")
+    propose_end = sync.index("  approve:\n", propose_start)
+    propose = sync[propose_start:propose_end]
+    helper_start_marker = "          spotlight_propose_get() {\n"
+    helper_end_marker = "          REF_CREATED=false\n"
+    require(
+        propose.count(helper_start_marker) == 1 and propose.count(helper_end_marker) == 1,
+        "Spotlight identity proposer shell-read projection anchors changed",
+    )
+    helper_start = propose.index(helper_start_marker)
+    helper_end = propose.index(helper_end_marker, helper_start)
+    projected = propose[:helper_start] + propose[helper_end:]
+    overlays = (
+        ('MAIN_REF_RESPONSE="$(spotlight_propose_get main-ref)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
+        ('MAIN_README_CONTENTS_RESPONSE="$(spotlight_propose_get main-readme)"',
+         'MAIN_README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main")"'),
+        ('MATCHING_REFS="$(spotlight_propose_get candidate-refs)"',
+         'MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'),
+        ('BASE_COMMIT="$(spotlight_propose_get base-commit)"',
+         'BASE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}")"'),
+        ('CANDIDATE_COMMIT="$(spotlight_propose_get candidate-commit)"',
+         'CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"'),
+        ('COMPARE="$(spotlight_propose_get compare)"',
+         'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"'),
+        ('README_CONTENTS_RESPONSE="$(spotlight_propose_get candidate-readme)"',
+         'README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"'),
+        ('CANDIDATE_REF_RESPONSE="$(spotlight_propose_get candidate-ref)"',
+         'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"'),
+        ('PRS="$(spotlight_propose_get open-prs)"',
+         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"'),
+        ('PR="$(spotlight_propose_get pr)"',
+         'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'),
+    )
+    for hardened, legacy in overlays:
+        require(
+            projected.count(hardened) == 1,
+            f"Spotlight identity proposer shell-read projection topology changed: {hardened}",
+        )
+        projected = projected.replace(hardened, legacy, 1)
+    require(
+        "spotlight_propose_get" not in projected,
+        "Spotlight identity proposer shell-read projection left retry transport bytes behind",
+    )
+    return sync[:propose_start] + projected + sync[propose_end:]
 
 
 def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
@@ -1447,6 +1497,7 @@ def project_spotlight_lifecycle_status_to_legacy(spotlight: str) -> str:
 
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
+    spotlight = project_spotlight_propose_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_merge_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_approve_shell_singleton_reads_to_raw(spotlight)
     spotlight = project_spotlight_lifecycle_status_to_legacy(spotlight)
