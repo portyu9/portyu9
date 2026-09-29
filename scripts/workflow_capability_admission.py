@@ -25,6 +25,7 @@ import workflow_capability_tcb
 ROOT = Path(__file__).resolve().parents[1]
 TRUSTED_LEDGER = ROOT / ".github/workflow-capability-expansion-authorizations-v1.json"
 CONTROL_WORKFLOW_ID = "capability-admission"
+MEASUREMENT_ID = "workflow-capability-admission-measurement-v1"
 
 
 def require(condition: bool, message: str) -> None:
@@ -84,29 +85,96 @@ def protect_trusted_sources(
     return with_expansions(diff, additions)
 
 
+def measure(
+    candidate_root: Path,
+    *,
+    candidate_tree_sha: str | None = None,
+) -> dict[str, Any]:
+    """Compile the exact production admission diff without consulting authorization state."""
+    base = workflow_capability_snapshot.load_combined()
+    candidate = trusted_workflow_capability.compile_repository(candidate_root)
+    diff = workflow_capability_diff.semantic_diff(base, candidate)
+    diff = protect_trusted_control(base, candidate, diff)
+    return protect_trusted_sources(candidate_root, candidate_tree_sha, diff)
+
+
+def public_measurement(
+    diff_value: dict[str, Any],
+    *,
+    candidate_tree_sha: str | None,
+) -> dict[str, Any]:
+    """Return the safe immutable tuple needed to create an exact prior authorization."""
+    diff = workflow_capability_authorization.validate_diff(diff_value)
+    if candidate_tree_sha is not None:
+        require(
+            workflow_capability_tcb.SHA40.fullmatch(candidate_tree_sha) is not None,
+            "candidate tree SHA measurement binding is invalid",
+        )
+
+    candidate_tcb_sha256 = sorted({
+        item["after"]["candidateTcbSha256"]
+        for item in diff["expansions"]
+        if item.get("category") == "trusted-control-source"
+        and isinstance(item.get("after"), dict)
+        and isinstance(item["after"].get("candidateTcbSha256"), str)
+    })
+    require(
+        all(workflow_capability_authorization.SHA256.fullmatch(value) is not None
+            for value in candidate_tcb_sha256),
+        "trusted control-source measurement contains an invalid TCB SHA-256",
+    )
+    return {
+        "schemaVersion": 1,
+        "measurementId": MEASUREMENT_ID,
+        "candidateTreeSha": candidate_tree_sha,
+        "baseBomSha256": diff["baseBomSha256"],
+        "candidateBomSha256": diff["candidateBomSha256"],
+        "expansionSha256": diff["expansionSha256"],
+        "candidateTcbSha256": candidate_tcb_sha256,
+        "expansionCount": len(diff["expansions"]),
+        "reductionCount": len(diff["reductions"]),
+    }
+
+
+def authorize_measurement(diff: dict[str, Any]) -> dict[str, Any]:
+    ledger = strict_json(TRUSTED_LEDGER, "trusted capability authorization ledger")
+    workflow_capability_authorization.validate_ledger(ledger)
+    decision = workflow_capability_authorization.authorize(diff, ledger)
+    require(decision["allowed"] is True, "capability admission returned a non-allow decision")
+    return decision
+
+
 def evaluate(
     candidate_root: Path,
     *,
     candidate_tree_sha: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    base = workflow_capability_snapshot.load_combined()
-    ledger = strict_json(TRUSTED_LEDGER, "trusted capability authorization ledger")
-    workflow_capability_authorization.validate_ledger(ledger)
-
-    candidate = trusted_workflow_capability.compile_repository(candidate_root)
-    diff = workflow_capability_diff.semantic_diff(base, candidate)
-    diff = protect_trusted_control(base, candidate, diff)
-    diff = protect_trusted_sources(candidate_root, candidate_tree_sha, diff)
-    decision = workflow_capability_authorization.authorize(diff, ledger)
-    require(decision["allowed"] is True, "capability admission returned a non-allow decision")
-    return decision, diff
+    diff = measure(candidate_root, candidate_tree_sha=candidate_tree_sha)
+    return authorize_measurement(diff), diff
 
 
 def self_test() -> None:
     workflow_capability_snapshot.self_test()
     workflow_capability_tcb.self_test()
     base = workflow_capability_snapshot.load_combined()
+    measured = measure(ROOT)
     decision, diff = evaluate(ROOT)
+    require(
+        workflow_capability_bom.canonical_json(measured) == workflow_capability_bom.canonical_json(diff),
+        "trusted admission measure/evaluate paths diverged",
+    )
+    trusted_measurement = public_measurement(measured, candidate_tree_sha=None)
+    require(trusted_measurement == {
+        "schemaVersion": 1,
+        "measurementId": MEASUREMENT_ID,
+        "candidateTreeSha": None,
+        "baseBomSha256": diff["baseBomSha256"],
+        "candidateBomSha256": diff["candidateBomSha256"],
+        "expansionSha256": diff["expansionSha256"],
+        "candidateTcbSha256": [],
+        "expansionCount": 0,
+        "reductionCount": 0,
+    }, "trusted repository measurement output shape changed")
     require(not diff["hasExpansion"] and not diff["expansions"] and not diff["reductions"],
             "trusted repository self-comparison produced capability drift")
     require(decision == {
@@ -148,6 +216,13 @@ def self_test() -> None:
     }])
     require(source_probe["hasExpansion"] and source_probe["expansionSha256"] != diff["expansionSha256"],
             "trusted source expansion did not alter the exact authorization digest")
+    source_measurement = public_measurement(source_probe, candidate_tree_sha="1" * 40)
+    require(
+        source_measurement["candidateTcbSha256"] == ["b" * 64]
+        and source_measurement["candidateTreeSha"] == "1" * 40
+        and source_measurement["expansionCount"] == 1,
+        "trusted source measurement lost exact tree/TCB/count binding",
+    )
 
     trusted_github = ROOT / ".github"
     require(workflow_capability_snapshot.BASE_SNAPSHOT.parent == trusted_github,
@@ -173,6 +248,11 @@ def parser() -> argparse.ArgumentParser:
         help="Exact fetched candidate Git tree SHA transport proof; required when trusted control-source bytes differ",
     )
     value.add_argument("--self-test", action="store_true", help="Run trusted admission self-tests first")
+    value.add_argument(
+        "--measure",
+        action="store_true",
+        help="Emit only the safe exact production authorization measurement; do not authorize",
+    )
     return value
 
 
@@ -181,7 +261,13 @@ def main() -> int:
     try:
         if args.self_test:
             self_test()
-        decision, diff = evaluate(args.candidate_root, candidate_tree_sha=args.candidate_tree_sha)
+        diff = measure(args.candidate_root, candidate_tree_sha=args.candidate_tree_sha)
+        measurement = public_measurement(diff, candidate_tree_sha=args.candidate_tree_sha)
+        if args.measure:
+            print(workflow_capability_bom.canonical_json({"measurement": measurement}), end="")
+            return 0
+
+        decision = authorize_measurement(diff)
         public_result = {
             "decision": {"allowed": decision["allowed"]},
             "diff": {
@@ -192,7 +278,11 @@ def main() -> int:
         print(workflow_capability_bom.canonical_json(public_result), end="")
         return 0
     except (OSError, ValueError):
-        print("ERROR: trusted capability admission rejected candidate input", file=sys.stderr)
+        print(
+            "ERROR: trusted capability admission rejected candidate input; "
+            "use --measure for the sanitized exact authorization tuple",
+            file=sys.stderr,
+        )
         return 1
 
 
