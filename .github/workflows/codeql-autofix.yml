@@ -82,9 +82,7 @@ jobs:
           fi
 
           python3 scripts/automation_github_read.py \
-
             "repos/${TARGET_REPOSITORY}/git/ref/heads/main" \
-
             > main-ref.json
           python3 scripts/codeql_autofix_controller.py main \
             --ref-file main-ref.json \
