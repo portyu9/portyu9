@@ -766,12 +766,70 @@ def project_state_driven_spotlight_reviewer_to_legacy(sync: str) -> str:
     return sync
 
 
+
+def project_spotlight_approve_governed_reads_to_legacy(sync: str) -> str:
+    """Project only the reviewed approval GET transport overlay to its accepted semantic bytes."""
+    approve_start = sync.index("  approve:\n")
+    approve_end = sync.index("  authorize:\n", approve_start)
+    approve = sync[approve_start:approve_end]
+
+    checkout_marker = "      - name: Checkout exact trusted source for governed reads\n"
+    approve_step_marker = (
+        "      - name: Approve and wait for only the exact README-only automation checks\n"
+    )
+    core.require(
+        approve.count(checkout_marker) == 1 and approve.count(approve_step_marker) == 1,
+        "Spotlight approval governed-read bootstrap anchors changed",
+    )
+    core.require(
+        approve.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
+        and approve.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+        "Spotlight approval governed-read runtime surface changed",
+    )
+    core.require(
+        "ref: main" in approve
+        and "persist-credentials: false" in approve
+        and 'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in approve,
+        "Spotlight approval lost static credential-free sealed-base checkout",
+    )
+    core.require(
+        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in approve
+        and 'test "$(git -C source rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"'
+        in approve,
+        "Spotlight approval governed-read helper identity changed",
+    )
+
+    bootstrap_start = approve.index(checkout_marker)
+    approve_step_start = approve.index(approve_step_marker, bootstrap_start)
+    projected = approve[:bootstrap_start] + approve[approve_step_start:]
+    singleton = "python3 source/scripts/automation_github_read.py"
+    paginated = "python3 source/scripts/automation_github_paginated_read.py"
+    core.require(
+        projected.count(singleton) == 14 and projected.count(paginated) == 2,
+        "Spotlight approval governed-read call-site inventory changed",
+    )
+    core.require(
+        projected.count("gh api --include --method POST") == 4
+        and projected.count("gh api ") == 4,
+        "Spotlight approval single-shot mutation inventory changed",
+    )
+    projected = projected.replace(paginated, "gh api --paginate --slurp")
+    projected = projected.replace(singleton, "gh api")
+    core.require(
+        "python3 source/scripts/automation_github_read.py" not in projected
+        and "python3 source/scripts/automation_github_paginated_read.py" not in projected,
+        "Spotlight approval legacy projection left governed transport bytes behind",
+    )
+    return sync[:approve_start] + projected + sync[approve_end:]
+
 def project_item9_sync_with_marker(sync: str) -> str:
     sync = project_spotlight_terminal_merge_status_to_legacy(sync)
     sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
     sync = project_spotlight_readme_contents_to_legacy(sync)
     sync = project_spotlight_privileged_refs_to_legacy(sync)
     sync = project_spotlight_pr_response_evidence_to_legacy(sync)
+    sync = project_spotlight_approve_governed_reads_to_legacy(sync)
 
     budget_start = sync.index("  budget:\n")
     budget_end = sync.index("  quarantine:\n", budget_start)
