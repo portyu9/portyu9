@@ -453,7 +453,9 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     )
     require(
         spotlight_shell_item.get("endpointScope") == "enumerated-static-literal"
-        and spotlight_shell_item.get("maxResponseBytes") == 8_000_000,
+        and spotlight_shell_item.get("maxResponseBytes") == 8_000_000
+        and spotlight_shell_item.get("maxPages") == 20
+        and spotlight_shell_item.get("pageSize") == 100,
         "Spotlight privileged shell-read retry bounds changed",
     )
     spotlight = texts[".github/workflows/spotlight-link-sync.yml"]
@@ -479,6 +481,14 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         'test "$status" = "200" || {',
         "application/json*) : ;;",
         'test "${#body}" -le 8000000 || {',
+        "spotlight_paginated_get() {",
+        'local page=1 body count first=true',
+        'while [ "$page" -le 20 ]; do',
+        'error("Spotlight paginated GET page shape changed")',
+        'if [ "$count" -lt 100 ]; then',
+        'if [ "$page" -ge 20 ]; then',
+        'echo "ERROR: Spotlight paginated GET exceeds the 20-page bound: $request" >&2',
+        'page=$((page + 1))',
     ):
         require(fragment in spotlight_approve,
                 f"Spotlight privileged shell-read retry contract is missing: {fragment}")
@@ -487,19 +497,37 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Spotlight approval must retain exactly fourteen enumerated singleton GET retry case arms",
     )
     require(
-        spotlight_approve.count("gh api --paginate --slurp") == 2,
-        "Spotlight approval paginated read inventory changed in the singleton retry tranche",
+        spotlight_approve.count('timeout 20s gh api --include --method GET -F page="$page"') == 2
+        and spotlight_approve.count("timeout 20s gh api --include --method") == 2,
+        "Spotlight approval must retain exactly two enumerated paginated page GET retry case arms",
+    )
+    require(
+        spotlight_approve.count("gh api --paginate --slurp") == 0,
+        "Spotlight approval regained raw gh pagination transport",
+    )
+    require(
+        spotlight_approve.count("spotlight_paginated_get approval-comments") == 1
+        and spotlight_approve.count("spotlight_paginated_get owner-reviews") == 1,
+        "Spotlight approval paginated retry invocation inventory changed",
+    )
+    require(
+        spotlight_approve.count('spotlight_singleton_get approval-comments-page "$page"') == 1
+        and spotlight_approve.count('spotlight_singleton_get owner-reviews-page "$page"') == 1,
+        "Spotlight approval paginated retry must delegate each page to the singleton classifier",
     )
     require(
         spotlight_approve.count("gh api --include --method POST") == 4,
-        "Spotlight approval mutation inventory changed while hardening singleton GETs",
+        "Spotlight approval mutation inventory changed while hardening GETs",
     )
     for forbidden in (
         "python3 ",
         "curl ",
         "wget ",
         "git ",
-        "timeout 20s gh api --include --method",
+        "timeout 20s gh api --include --method POST",
+        "timeout 20s gh api --include --method PUT",
+        "timeout 20s gh api --include --method PATCH",
+        "timeout 20s gh api --include --method DELETE",
     ):
         require(forbidden not in spotlight_approve,
                 f"Spotlight privileged shell-read retry acquired forbidden transport/mutation surface: {forbidden}")
@@ -513,6 +541,9 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
                 f"Spotlight privileged shell-read retry case arm changed: {key}")
         require(spotlight_approve.count(f"spotlight_singleton_get {key}") == 1,
                 f"Spotlight privileged shell-read retry invocation changed: {key}")
+    for key in ("approval-comments-page", "owner-reviews-page"):
+        require(spotlight_approve.count(f"                {key})\n") == 1,
+                f"Spotlight privileged page-read retry case arm changed: {key}")
 
     automation_github_paginated_read.self_test()
     pagination_source = (ROOT / "scripts/automation_github_paginated_read.py").read_text(encoding="utf-8")
