@@ -910,7 +910,7 @@ def validate_run_provenance(approve: str) -> None:
 
 
 def legacy_mutation_budget_view(sync: str) -> str:
-    """Project lease and maintenance dependencies out for the frozen legacy budget proof."""
+    """Project separately validated modern overlays out for the frozen legacy budget proof."""
     replacements = (
         ("    needs: [plan, lease, reconcile, budget]\n", "    needs: [plan, budget]\n"),
         ("    needs: [plan, lease, reconcile, budget, propose]\n", "    needs: [plan, budget, propose]\n"),
@@ -921,6 +921,41 @@ def legacy_mutation_budget_view(sync: str) -> str:
         require(legacy.count(current) == 1,
                 f"Spotlight lease/reconciliation dependency projection is ambiguous: {current.strip()}")
         legacy = legacy.replace(current, old, 1)
+
+    budget_start = legacy.index("  budget:\n")
+    budget_end = legacy.index("  quarantine:\n", budget_start)
+    budget = legacy[budget_start:budget_end]
+    governed_permissions = (
+        "    permissions:\n"
+        "      actions: read\n"
+        "      contents: read\n"
+    )
+    legacy_permissions = "    permissions:\n      actions: read\n"
+    governed_read = (
+        'ARTIFACTS="$(python3 source/scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    )
+    legacy_read = (
+        'ARTIFACTS="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    )
+    checkout_step = "      - name: Checkout exact trusted source for governed reads\n"
+    admit_step = "      - name: Admit exact source epoch within bounded mutation budget\n"
+    require(budget.count(governed_permissions) == 1,
+            "Spotlight legacy budget projection cannot isolate governed read permissions")
+    require(budget.count(governed_read) == 1 and legacy_read not in budget,
+            "Spotlight legacy budget projection cannot isolate governed read transport")
+    require(budget.count(checkout_step) == 1 and budget.count(admit_step) == 1,
+            "Spotlight legacy budget projection cannot isolate governed read bootstrap")
+    bootstrap_start = budget.index(checkout_step)
+    admit_start = budget.index(admit_step, bootstrap_start)
+    projected_budget = budget[:bootstrap_start] + budget[admit_start:]
+    projected_budget = projected_budget.replace(
+        governed_permissions, legacy_permissions, 1
+    ).replace(
+        governed_read, legacy_read, 1
+    )
+    legacy = legacy[:budget_start] + projected_budget + legacy[budget_end:]
     return legacy
 
 
@@ -960,9 +995,8 @@ def validate(sync: str, stats: str, policy: str) -> None:
 
     validate_budget_artifact_history_schema(sync)
 
-    # Keep the pre-reconciliation/pre-lease mutation-budget validator byte-for-byte independent.
-    # Project only the separately validated lease + maintenance dependency edges out without
-    # changing any runtime predicates or API bytes.
+    # Keep the frozen mutation-budget validator byte-for-byte independent.
+    # Project only separately validated dependency and governed-read transport overlays out.
     core.validate_mutation_budget(legacy_mutation_budget_view(sync))
     approve = core.job_block(sync, "approve", "merge")
     merge = core.job_block(sync, "merge", None)
