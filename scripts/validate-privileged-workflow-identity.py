@@ -2742,10 +2742,10 @@ def validate_spotlight_privileged_ref_evidence_schema(spotlight: str) -> None:
              'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"'),
         ),
         "propose": (
-            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+            ('MAIN_REF_RESPONSE="$(spotlight_propose_get main-ref)"',
              'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"',
              'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"'),
-            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+            ('CANDIDATE_REF_RESPONSE="$(spotlight_propose_get candidate-ref)"',
              'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
              'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
         ),
