@@ -963,6 +963,38 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require(forbidden not in pagination_source,
                 f"governed pagination must delegate transport without mutation/direct API access: {forbidden}")
 
+
+    codeql_autofix = texts[".github/workflows/codeql-autofix.yml"]
+    for step_name, endpoint, output_name, label in (
+        (
+            "Discover one exact-main CodeQL alert",
+            '"repos/${TARGET_REPOSITORY}/code-scanning/alerts?state=open&tool_name=CodeQL&per_page=100"',
+            "> alert-pages.json",
+            "alert discovery",
+        ),
+        (
+            "Locate an existing remediation PR",
+            '"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"',
+            "> open-pr-pages.json",
+            "remediation PR discovery",
+        ),
+    ):
+        step = named_step(codeql_autofix, "controller", step_name)
+        require(
+            step.count("python3 scripts/automation_github_paginated_read.py") == 1
+            and endpoint in step
+            and output_name in step,
+            f"CodeQL Autofix {label} must use exactly one governed paginated GitHub collection",
+        )
+        require(
+            "gh api --paginate --slurp" not in step,
+            f"CodeQL Autofix {label} regained direct gh pagination transport",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in step,
+            f"CodeQL Autofix {label} governed pagination lost run-scoped token binding",
+        )
+
     spotlight_merge_authorization = SPOTLIGHT_MERGE_AUTHORIZATION.read_text(encoding="utf-8")
     for fragment in (
         "import automation_github_read",
