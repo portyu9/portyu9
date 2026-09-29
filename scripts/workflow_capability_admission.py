@@ -258,7 +258,6 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = parser().parse_args()
-    diff: dict[str, Any] | None = None
     try:
         if args.self_test:
             self_test()
@@ -279,17 +278,11 @@ def main() -> int:
         print(workflow_capability_bom.canonical_json(public_result), end="")
         return 0
     except (OSError, ValueError):
-        if diff is not None:
-            try:
-                measurement = public_measurement(diff, candidate_tree_sha=args.candidate_tree_sha)
-                print(
-                    "CAPABILITY-ADMISSION-MEASUREMENT:"
-                    + workflow_capability_bom.canonical_json(measurement).strip(),
-                    file=sys.stderr,
-                )
-            except (OSError, ValueError):
-                pass
-        print("ERROR: trusted capability admission rejected candidate input", file=sys.stderr)
+        print(
+            "ERROR: trusted capability admission rejected candidate input; "
+            "use --measure for the sanitized exact authorization tuple",
+            file=sys.stderr,
+        )
         return 1
 
 
