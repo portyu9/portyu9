@@ -2143,6 +2143,14 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
 
 def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
     """Project reviewer REST-GET retry transport to the accepted pre-hardening semantic shape."""
+    has_reviewer_kernel = "          bot_reviewer_get() {\n" in bot_review
+    has_convergence_kernel = "          bot_convergence_get() {\n" in bot_review
+    require(
+        has_reviewer_kernel == has_convergence_kernel,
+        "Bot reviewer shell-read projection found a partial retry-kernel topology",
+    )
+    if not has_reviewer_kernel:
+        return bot_review
     approve_start = bot_review.index("  approve:\n")
     converge_start = bot_review.index("  converge:\n", approve_start)
     approve = bot_review[approve_start:converge_start]
