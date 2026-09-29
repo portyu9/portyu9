@@ -823,8 +823,64 @@ jobs:
               ' <<<"$payload" >/dev/null
           }
 
-          REF_CREATED=false
-          PR_CREATED=false
+          spotlight_propose_get() {
+            local request="$1"
+            local attempt response exit_code line status status_count content_type
+            local rate_remaining retry_after body_started body retry delay requested
+            local LC_ALL=C
+
+            for attempt in 1 2 3; do
+              response=""
+              set +e
+              case "$request" in
+                main-ref)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" 2>&1)"
+                  ;;
+                main-readme)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main" 2>&1)"
+                  ;;
+                candidate-refs)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}" 2>&1)"
+                  ;;
+                base-commit)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}" 2>&1)"
+                  ;;
+                candidate-commit)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}" 2>&1)"
+                  ;;
+                compare)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}" 2>&1)"
+                  ;;
+                candidate-readme)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" 2>&1)"
+                  ;;
+                candidate-ref)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" 2>&1)"
+                  ;;
+                open-prs)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10" 2>&1)"
+                  ;;
+                pr)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" 2>&1)"
+                  ;;
+                *)
+                  set -e
+                  echo "ERROR: unknown Spotlight proposer GET identity: $request" >&2
+                  return 1
+                  ;;
+              esac
+              exit_code=$?
+              set -e
+
+              status=""
+              status_count=0
+              content_type=""
+              rate_remaining=""
+              retry_after=""
+              body_started=false
+              body=""
+              while IFS= read -r line; do
+                line="${line%          PR_CREATED=false
           echo "ref_created=false" >> "$GITHUB_OUTPUT"
           echo "pr_created=false" >> "$GITHUB_OUTPUT"
           # Verify exact short-lived mutation lease.
@@ -864,10 +920,10 @@ jobs:
           [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
 
-          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(spotlight_propose_get main-ref)"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
-          MAIN_README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main")"
+          MAIN_README_CONTENTS_RESPONSE="$(spotlight_propose_get main-readme)"
           jq -e '
             (type == "object") and
             (.type | type == "string" and . == "file") and
@@ -885,7 +941,7 @@ jobs:
             | tr -d '\n' | base64 --decode > current-readme.md
           test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
 
-          MATCHING_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"
+          MATCHING_REFS="$(spotlight_propose_get candidate-refs)"
           jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
             (type == "array") and
             (length <= 1) and
@@ -916,7 +972,7 @@ jobs:
             ' <<<"$BLOB" >/dev/null
             README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"
             [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-            BASE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${SOURCE_SHA}")"
+            BASE_COMMIT="$(spotlight_propose_get base-commit)"
             jq -e --arg source "$SOURCE_SHA" '
               (type == "object") and
               (.sha | type == "string" and . == $source) and
@@ -966,7 +1022,7 @@ jobs:
             [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           fi
 
-          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          CANDIDATE_COMMIT="$(spotlight_propose_get candidate-commit)"
           jq -e --arg head "$HEAD_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" '
             (type == "object") and
             (.sha | type == "string" and . == $head) and
@@ -985,7 +1041,7 @@ jobs:
           test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
           test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
           test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
-          COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${SOURCE_SHA}...${HEAD_SHA}")"
+          COMPARE="$(spotlight_propose_get compare)"
           jq -e --arg source "$SOURCE_SHA" --arg head "$HEAD_SHA" '
             (type == "object") and
             (.status == "ahead") and
@@ -1016,7 +1072,7 @@ jobs:
           test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
           README_BLOB_SHA="$(jq -r '.files[0].sha' <<<"$COMPARE")"
           [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-          README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}")"
+          README_CONTENTS_RESPONSE="$(spotlight_propose_get candidate-readme)"
           jq -e --arg blob "$README_BLOB_SHA" '
             (type == "object") and
             (.type | type == "string" and . == "file") and
@@ -1056,11 +1112,11 @@ jobs:
             REF_CREATED=true
             echo "ref_created=true" >> "$GITHUB_OUTPUT"
           fi
-          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          CANDIDATE_REF_RESPONSE="$(spotlight_propose_get candidate-ref)"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
 
-          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
+          PRS="$(spotlight_propose_get open-prs)"
           COUNT="$(jq 'length' <<<"$PRS")"
           if [ "$COUNT" = "0" ]; then
             jq -n --arg title "chore: sync rotating Spotlight links" --arg head "$CANDIDATE_BRANCH" --arg base "main" \
@@ -1093,7 +1149,673 @@ jobs:
             PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
           fi
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          PR="$(spotlight_propose_get pr)"
+          validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
+          test "$(jq -r .state <<<"$PR")" = "open"
+          test "$(jq -r .base.ref <<<"$PR")" = "main"
+          test "$(jq -r .head.ref <<<"$PR")" = "$CANDIDATE_BRANCH"
+          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
+          # Workflow-run approval and exact-head PR approval are separate gates. Do not request\n          # a human reviewer here: the trusted approve job releases only the exact action_required\n          # runs, then bot-pr-user-approval submits the governed exact-head portyu9 review.\n          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "candidate_branch=$CANDIDATE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "ref_created=$REF_CREATED" >> "$GITHUB_OUTPUT"
+          echo "pr_created=$PR_CREATED" >> "$GITHUB_OUTPUT"
+
+\r'}"
+                if [ "$body_started" = "false" ]; then
+                  if [[ "$line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3})([[:space:]]|$) ]]; then
+                    status="${BASH_REMATCH[1]}"
+                    status_count=$((status_count + 1))
+                  elif [ -z "$line" ]; then
+                    body_started=true
+                  else
+                    case "${line,,}" in
+                      content-type:*)
+                        content_type="${line#*:}"
+                        content_type="${content_type#"${content_type%%[![:space:]]*}"}"
+                        ;;
+                      x-ratelimit-remaining:*)
+                        rate_remaining="${line#*:}"
+                        rate_remaining="${rate_remaining#"${rate_remaining%%[![:space:]]*}"}"
+                        ;;
+                      retry-after:*)
+                        retry_after="${line#*:}"
+                        retry_after="${retry_after#"${retry_after%%[![:space:]]*}"}"
+                        ;;
+                    esac
+                  fi
+                else
+                  if [ -n "$body" ]; then
+                    body+=          PR_CREATED=false
+          echo "ref_created=false" >> "$GITHUB_OUTPUT"
+          echo "pr_created=false" >> "$GITHUB_OUTPUT"
+          # Verify exact short-lived mutation lease.
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=300
+          EXPECTED_BASE_SHA="$SOURCE_SHA"
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+
+          PLAN="spotlight-link-plan/plan.json"
+          PROPOSED="spotlight-link-plan/README.md"
+          test -s "$PLAN" && test -s "$PROPOSED"
+          test "$(jq -r .version "$PLAN")" = "spotlight-profile-links-v1"
+          test "$(jq -r .base_sha "$PLAN")" = "$SOURCE_SHA"
+          test "$(jq -r .generated_sha "$PLAN")" = "$GENERATED_SHA"
+          [[ "$README_SHA256_AFTER" =~ ^[0-9a-f]{64}$ ]]
+          test "$(jq -r .readme_sha256_after "$PLAN")" = "$README_SHA256_AFTER"
+          test "$(sha256sum "$PROPOSED" | cut -d' ' -f1)" = "$README_SHA256_AFTER"
+
+          CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$SOURCE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          CANDIDATE_BRANCH="${BOT_BRANCH_PREFIX}${CANDIDATE_ID}"
+          [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
+
+          MAIN_REF_RESPONSE="$(spotlight_propose_get main-ref)"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
+          MAIN_README_CONTENTS_RESPONSE="$(spotlight_propose_get main-readme)"
+          jq -e '
+            (type == "object") and
+            (.type | type == "string" and . == "file") and
+            (.name | type == "string" and . == "README.md") and
+            (.path | type == "string" and . == "README.md") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+            (.size | type == "number" and . == floor and . >= 0) and
+            (.encoding | type == "string" and . == "base64") and
+            (.content | type == "string" and length > 0)
+          ' <<<"$MAIN_README_CONTENTS_RESPONSE" >/dev/null || {
+            echo "ERROR: malformed Spotlight proposal current-main README Contents evidence." >&2
+            exit 1
+          }
+          jq -er '.content' <<<"$MAIN_README_CONTENTS_RESPONSE" \
+            | tr -d '\n' | base64 --decode > current-readme.md
+          test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
+
+          MATCHING_REFS="$(spotlight_propose_get candidate-refs)"
+          jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+            (type == "array") and
+            (length <= 1) and
+            (all(.[]; (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")))))
+          ' <<<"$MATCHING_REFS" >/dev/null
+          EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$MATCHING_REFS")"
+          test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"
+          if [ "$EXACT_REF_COUNT" = "1" ]; then
+            HEAD_SHA="$(jq -r --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)][0].object.sha' <<<"$MATCHING_REFS")"
+          else
+            CONTENT="$(base64 -w0 "$PROPOSED")"
+            jq -n --arg content "$CONTENT" '{content:$content,encoding:"base64"}' > blob.json
+            BLOB_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"
+            BLOB_STATUS_LINE="$(head -n 1 <<<"$BLOB_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git blob creation returned unexpected status: ${BLOB_STATUS_LINE}" >&2
+              exit 1
+            }
+            BLOB="$(sed '1,/^[[:space:]]*$/d' <<<"$BLOB_HTTP_RESPONSE")"
+            jq -e '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.url | type == "string" and length > 0)
+            ' <<<"$BLOB" >/dev/null
+            README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"
+            [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            BASE_COMMIT="$(spotlight_propose_get base-commit)"
+            jq -e --arg source "$SOURCE_SHA" '
+              (type == "object") and
+              (.sha | type == "string" and . == $source) and
+              (.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$")))
+            ' <<<"$BASE_COMMIT" >/dev/null
+            BASE_TREE_SHA="$(jq -r .tree.sha <<<"$BASE_COMMIT")"
+            [[ "$BASE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            jq -n --arg base_tree "$BASE_TREE_SHA" --arg blob "$README_BLOB_SHA" \
+              '{base_tree:$base_tree,tree:[{path:"README.md",mode:"100644",type:"blob",sha:$blob}]}' > tree.json
+            TREE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"
+            TREE_STATUS_LINE="$(head -n 1 <<<"$TREE_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git tree creation returned unexpected status: ${TREE_STATUS_LINE}" >&2
+              exit 1
+            }
+            TREE="$(sed '1,/^[[:space:]]*$/d' <<<"$TREE_HTTP_RESPONSE")"
+            jq -e '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.url | type == "string" and length > 0) and
+              (.tree | type == "array") and
+              (.truncated | type == "boolean")
+            ' <<<"$TREE" >/dev/null
+            CANDIDATE_TREE_SHA="$(jq -r .sha <<<"$TREE")"
+            [[ "$CANDIDATE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            test "$CANDIDATE_TREE_SHA" != "$BASE_TREE_SHA"
+            jq -n --arg message "chore: sync rotating Spotlight links" --arg tree "$CANDIDATE_TREE_SHA" \
+              --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \
+              '{message:$message,tree:$tree,parents:[$parent],author:{name:$name,email:$email},committer:{name:$name,email:$email}}' > commit.json
+            CANDIDATE_COMMIT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"
+            CANDIDATE_COMMIT_STATUS_LINE="$(head -n 1 <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git commit creation returned unexpected status: ${CANDIDATE_COMMIT_STATUS_LINE}" >&2
+              exit 1
+            }
+            CANDIDATE_COMMIT="$(sed '1,/^[[:space:]]*$/d' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"
+            jq -e --arg tree "$CANDIDATE_TREE_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.tree | type == "object" and .sha == $tree) and
+              (.parents | type == "array" and length == 1 and (.[0] | type == "object" and .sha == $parent)) and
+              (.author | type == "object" and .name == $name and .email == $email) and
+              (.committer | type == "object" and .name == $name and .email == $email) and
+              (.message == "chore: sync rotating Spotlight links")
+            ' <<<"$CANDIDATE_COMMIT" >/dev/null
+            HEAD_SHA="$(jq -r .sha <<<"$CANDIDATE_COMMIT")"
+            [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          fi
+
+          CANDIDATE_COMMIT="$(spotlight_propose_get candidate-commit)"
+          jq -e --arg head "$HEAD_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" '
+            (type == "object") and
+            (.sha | type == "string" and . == $head) and
+            (.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
+            (.parents | type == "array" and length == 1 and
+              (.[0] | type == "object" and .sha == $parent)) and
+            (.author | type == "object" and .name == $name and .email == $email) and
+            (.committer | type == "object" and .name == $name and .email == $email and
+              (.date | type == "string" and length > 0)) and
+            (.message == "chore: sync rotating Spotlight links")
+          ' <<<"$CANDIDATE_COMMIT" >/dev/null
+          test "$(jq '.parents | length' <<<"$CANDIDATE_COMMIT")" = "1"
+          test "$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")" = "$SOURCE_SHA"
+          test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+          test "$(jq -r .author.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+          test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+          test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+          test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
+          COMPARE="$(spotlight_propose_get compare)"
+          jq -e --arg source "$SOURCE_SHA" --arg head "$HEAD_SHA" '
+            (type == "object") and
+            (.status == "ahead") and
+            (.base_commit | type == "object" and .sha == $source) and
+            (.merge_base_commit | type == "object" and .sha == $source) and
+            (.ahead_by | type == "number" and . == floor and . == 1) and
+            (.behind_by | type == "number" and . == floor and . == 0) and
+            (.total_commits | type == "number" and . == floor and . == 1) and
+            (.commits | type == "array" and length == 1 and
+              (.[0] | type == "object" and .sha == $head)) and
+            (.files | type == "array" and length == 1 and
+              (.[0] | type == "object" and
+                (.filename | type == "string" and . == "README.md") and
+                (.status | type == "string" and . == "modified") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.additions | type == "number" and . == floor and . >= 0) and
+                (.deletions | type == "number" and . == floor and . >= 0) and
+                (.changes | type == "number" and . == floor and . >= 0)))
+          ' <<<"$COMPARE" >/dev/null
+          test "$(jq -r .status <<<"$COMPARE")" = "ahead"
+          test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$SOURCE_SHA"
+          test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$SOURCE_SHA"
+          test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"
+          test "$(jq -r .behind_by <<<"$COMPARE")" = "0"
+          test "$(jq -r .total_commits <<<"$COMPARE")" = "1"
+          test "$(jq '.files | length' <<<"$COMPARE")" = "1"
+          test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
+          test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
+          README_BLOB_SHA="$(jq -r '.files[0].sha' <<<"$COMPARE")"
+          [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          README_CONTENTS_RESPONSE="$(spotlight_propose_get candidate-readme)"
+          jq -e --arg blob "$README_BLOB_SHA" '
+            (type == "object") and
+            (.type | type == "string" and . == "file") and
+            (.name | type == "string" and . == "README.md") and
+            (.path | type == "string" and . == "README.md") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and
+            (.size | type == "number" and . == floor and . >= 0) and
+            (.encoding | type == "string" and . == "base64") and
+            (.content | type == "string" and length > 0)
+          ' <<<"$README_CONTENTS_RESPONSE" >/dev/null || {
+            echo "ERROR: malformed or mismatched Spotlight proposal README Contents evidence." >&2
+            exit 1
+          }
+          jq -er '.content' <<<"$README_CONTENTS_RESPONSE" \
+            | tr -d '\n' | base64 --decode > candidate-readme.md
+          test "$(sha256sum candidate-readme.md | cut -d' ' -f1)" = "$README_SHA256_AFTER"
+
+          if [ "$EXACT_REF_COUNT" = "0" ]; then
+            jq -n --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg sha "$HEAD_SHA" '{ref:$ref,sha:$sha}' > ref.json
+            CREATED_REF_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"
+            CREATED_REF_STATUS_LINE="$(head -n 1 <<<"$CREATED_REF_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git ref creation returned unexpected status: ${CREATED_REF_STATUS_LINE}" >&2
+              exit 1
+            }
+            CREATED_REF="$(sed '1,/^[[:space:]]*$/d' <<<"$CREATED_REF_HTTP_RESPONSE")"
+            jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and . == $head) and
+                (.url | type == "string" and length > 0))
+            ' <<<"$CREATED_REF" >/dev/null
+            test "$(jq -r .ref <<<"$CREATED_REF")" = "refs/heads/${CANDIDATE_BRANCH}"
+            test "$(jq -r .object.sha <<<"$CREATED_REF")" = "$HEAD_SHA"
+            REF_CREATED=true
+            echo "ref_created=true" >> "$GITHUB_OUTPUT"
+          fi
+          CANDIDATE_REF_RESPONSE="$(spotlight_propose_get candidate-ref)"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
+
+          PRS="$(spotlight_propose_get open-prs)"
+          COUNT="$(jq 'length' <<<"$PRS")"
+          if [ "$COUNT" = "0" ]; then
+            jq -n --arg title "chore: sync rotating Spotlight links" --arg head "$CANDIDATE_BRANCH" --arg base "main" \
+              --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." \
+              '{title:$title,head:$head,base:$base,body:$body,maintainer_can_modify:false}' > pr.json
+            PR_CREATE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json)"
+            PR_CREATE_STATUS_LINE="$(head -n 1 <<<"$PR_CREATE_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$PR_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight proposal PR creation returned unexpected status: ${PR_CREATE_STATUS_LINE}" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' <<<"$PR_CREATE_HTTP_RESPONSE" > pr-response.json
+            jq -e --arg title "chore: sync rotating Spotlight links" --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." --arg base "$SOURCE_SHA" --arg branch "$CANDIDATE_BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" '
+              ((type) == "object") and
+              (.number | type == "number" and . == floor and . > 0) and
+              (.user | type == "object" and .login == "github-actions[bot]") and
+              (.state == "open") and
+              (.draft | type == "boolean" and . == false) and
+              (.maintainer_can_modify | type == "boolean" and . == false) and
+              (.title == $title) and
+              (.body == $body) and
+              (.base | type == "object" and .ref == "main" and .sha == $base) and
+              (.head | type == "object" and .ref == $branch and .sha == $head and (.repo | type == "object" and .full_name == $repo))
+            ' pr-response.json >/dev/null
+            PR_NUMBER="$(jq -r .number pr-response.json)"
+            PR_CREATED=true
+            echo "pr_created=true" >> "$GITHUB_OUTPUT"
+          else
+            test "$COUNT" = "1"
+            PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
+          fi
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          PR="$(spotlight_propose_get pr)"
+          validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
+          test "$(jq -r .state <<<"$PR")" = "open"
+          test "$(jq -r .base.ref <<<"$PR")" = "main"
+          test "$(jq -r .head.ref <<<"$PR")" = "$CANDIDATE_BRANCH"
+          test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
+          test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
+          # Workflow-run approval and exact-head PR approval are separate gates. Do not request\n          # a human reviewer here: the trusted approve job releases only the exact action_required\n          # runs, then bot-pr-user-approval submits the governed exact-head portyu9 review.\n          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "candidate_branch=$CANDIDATE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "ref_created=$REF_CREATED" >> "$GITHUB_OUTPUT"
+          echo "pr_created=$PR_CREATED" >> "$GITHUB_OUTPUT"
+
+\n'
+                  fi
+                  body+="$line"
+                fi
+              done <<<"$response"
+
+              if [ "$exit_code" -eq 0 ]; then
+                test "$status_count" -eq 1 || {
+                  echo "ERROR: Spotlight proposer GET returned an ambiguous HTTP response: $request" >&2
+                  return 1
+                }
+                test "$status" = "200" || {
+                  echo "ERROR: Spotlight proposer GET returned unexpected HTTP $status: $request" >&2
+                  return 1
+                }
+                case "${content_type,,}" in
+                  application/json*) : ;;
+                  *)
+                    echo "ERROR: Spotlight proposer GET returned non-JSON content type: $request" >&2
+                    return 1
+                    ;;
+                esac
+                test "${#body}" -le 8000000 || {
+                  echo "ERROR: Spotlight proposer GET exceeded the 8000000-byte response bound: $request" >&2
+                  return 1
+                }
+                printf '%s\n' "$body"
+                return 0
+              fi
+
+              retry=false
+              if [ "$exit_code" -eq 124 ]; then
+                retry=true
+              elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then
+                retry=true
+              elif [ "$status_count" -eq 1 ]; then
+                case "$status" in
+                  408|429|500|502|503|504)
+                    retry=true
+                    ;;
+                  403)
+                    if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then
+                      retry=true
+                    fi
+                    ;;
+                esac
+              fi
+
+              if [ "$retry" != "true" ] || [ "$attempt" -ge 3 ]; then
+                echo "ERROR: Spotlight proposer GET failed terminally (exit=$exit_code http=${status:-none}): $request" >&2
+                return 1
+              fi
+
+              if [ "$attempt" -eq 1 ]; then
+                delay=1
+              else
+                delay=2
+              fi
+              if [[ "$retry_after" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+                requested="${retry_after%%.*}"
+                if [ "$requested" -ge 5 ]; then
+                  delay=5
+                else
+                  delay="$retry_after"
+                fi
+              fi
+              echo "RETRY: Spotlight proposer GET transient (exit=$exit_code http=${status:-none}); attempt $attempt/3, sleeping ${delay}s: $request" >&2
+              sleep "$delay"
+            done
+            return 1
+          }
+
+          REF_CREATED=false
+          PR_CREATED=false
+          echo "ref_created=false" >> "$GITHUB_OUTPUT"
+          echo "pr_created=false" >> "$GITHUB_OUTPUT"
+          # Verify exact short-lived mutation lease.
+          LEASE_TTL_SECONDS=1800
+          LEASE_MIN_REMAINING_SECONDS=300
+          EXPECTED_BASE_SHA="$SOURCE_SHA"
+          EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$EXPECTED_BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          test "$LEASE_BASE_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_CANDIDATE_ID" = "$EXPECTED_CANDIDATE_ID"
+          EXPECTED_WORKFLOW_REF="${GITHUB_REPOSITORY}/.github/workflows/spotlight-link-sync.yml@refs/heads/main"
+          test "$GITHUB_WORKFLOW_REF" = "$EXPECTED_WORKFLOW_REF"
+          [[ "$GITHUB_WORKFLOW_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_WORKFLOW_SHA" = "$EXPECTED_BASE_SHA"
+          test "$LEASE_EXPIRES_AT" -eq $((LEASE_ISSUED_AT + LEASE_TTL_SECONDS))
+          NOW_EPOCH="$(date -u +%s)"
+          test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
+          test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
+          test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
+          test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
+
+          PLAN="spotlight-link-plan/plan.json"
+          PROPOSED="spotlight-link-plan/README.md"
+          test -s "$PLAN" && test -s "$PROPOSED"
+          test "$(jq -r .version "$PLAN")" = "spotlight-profile-links-v1"
+          test "$(jq -r .base_sha "$PLAN")" = "$SOURCE_SHA"
+          test "$(jq -r .generated_sha "$PLAN")" = "$GENERATED_SHA"
+          [[ "$README_SHA256_AFTER" =~ ^[0-9a-f]{64}$ ]]
+          test "$(jq -r .readme_sha256_after "$PLAN")" = "$README_SHA256_AFTER"
+          test "$(sha256sum "$PROPOSED" | cut -d' ' -f1)" = "$README_SHA256_AFTER"
+
+          CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$SOURCE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
+          CANDIDATE_BRANCH="${BOT_BRANCH_PREFIX}${CANDIDATE_ID}"
+          [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
+
+          MAIN_REF_RESPONSE="$(spotlight_propose_get main-ref)"
+          validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
+          test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
+          MAIN_README_CONTENTS_RESPONSE="$(spotlight_propose_get main-readme)"
+          jq -e '
+            (type == "object") and
+            (.type | type == "string" and . == "file") and
+            (.name | type == "string" and . == "README.md") and
+            (.path | type == "string" and . == "README.md") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+            (.size | type == "number" and . == floor and . >= 0) and
+            (.encoding | type == "string" and . == "base64") and
+            (.content | type == "string" and length > 0)
+          ' <<<"$MAIN_README_CONTENTS_RESPONSE" >/dev/null || {
+            echo "ERROR: malformed Spotlight proposal current-main README Contents evidence." >&2
+            exit 1
+          }
+          jq -er '.content' <<<"$MAIN_README_CONTENTS_RESPONSE" \
+            | tr -d '\n' | base64 --decode > current-readme.md
+          test "$(sha256sum current-readme.md | cut -d' ' -f1)" = "$(jq -r .readme_sha256_before "$PLAN")"
+
+          MATCHING_REFS="$(spotlight_propose_get candidate-refs)"
+          jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" '
+            (type == "array") and
+            (length <= 1) and
+            (all(.[]; (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")))))
+          ' <<<"$MATCHING_REFS" >/dev/null
+          EXACT_REF_COUNT="$(jq --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)] | length' <<<"$MATCHING_REFS")"
+          test "$EXACT_REF_COUNT" = "0" || test "$EXACT_REF_COUNT" = "1"
+          if [ "$EXACT_REF_COUNT" = "1" ]; then
+            HEAD_SHA="$(jq -r --arg ref "refs/heads/${CANDIDATE_BRANCH}" '[.[] | select(.ref == $ref)][0].object.sha' <<<"$MATCHING_REFS")"
+          else
+            CONTENT="$(base64 -w0 "$PROPOSED")"
+            jq -n --arg content "$CONTENT" '{content:$content,encoding:"base64"}' > blob.json
+            BLOB_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input blob.json)"
+            BLOB_STATUS_LINE="$(head -n 1 <<<"$BLOB_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git blob creation returned unexpected status: ${BLOB_STATUS_LINE}" >&2
+              exit 1
+            }
+            BLOB="$(sed '1,/^[[:space:]]*$/d' <<<"$BLOB_HTTP_RESPONSE")"
+            jq -e '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.url | type == "string" and length > 0)
+            ' <<<"$BLOB" >/dev/null
+            README_BLOB_SHA="$(jq -r .sha <<<"$BLOB")"
+            [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            BASE_COMMIT="$(spotlight_propose_get base-commit)"
+            jq -e --arg source "$SOURCE_SHA" '
+              (type == "object") and
+              (.sha | type == "string" and . == $source) and
+              (.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$")))
+            ' <<<"$BASE_COMMIT" >/dev/null
+            BASE_TREE_SHA="$(jq -r .tree.sha <<<"$BASE_COMMIT")"
+            [[ "$BASE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            jq -n --arg base_tree "$BASE_TREE_SHA" --arg blob "$README_BLOB_SHA" \
+              '{base_tree:$base_tree,tree:[{path:"README.md",mode:"100644",type:"blob",sha:$blob}]}' > tree.json
+            TREE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/trees" --input tree.json)"
+            TREE_STATUS_LINE="$(head -n 1 <<<"$TREE_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$TREE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git tree creation returned unexpected status: ${TREE_STATUS_LINE}" >&2
+              exit 1
+            }
+            TREE="$(sed '1,/^[[:space:]]*$/d' <<<"$TREE_HTTP_RESPONSE")"
+            jq -e '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.url | type == "string" and length > 0) and
+              (.tree | type == "array") and
+              (.truncated | type == "boolean")
+            ' <<<"$TREE" >/dev/null
+            CANDIDATE_TREE_SHA="$(jq -r .sha <<<"$TREE")"
+            [[ "$CANDIDATE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            test "$CANDIDATE_TREE_SHA" != "$BASE_TREE_SHA"
+            jq -n --arg message "chore: sync rotating Spotlight links" --arg tree "$CANDIDATE_TREE_SHA" \
+              --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" \
+              '{message:$message,tree:$tree,parents:[$parent],author:{name:$name,email:$email},committer:{name:$name,email:$email}}' > commit.json
+            CANDIDATE_COMMIT_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/commits" --input commit.json)"
+            CANDIDATE_COMMIT_STATUS_LINE="$(head -n 1 <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$CANDIDATE_COMMIT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git commit creation returned unexpected status: ${CANDIDATE_COMMIT_STATUS_LINE}" >&2
+              exit 1
+            }
+            CANDIDATE_COMMIT="$(sed '1,/^[[:space:]]*$/d' <<<"$CANDIDATE_COMMIT_HTTP_RESPONSE")"
+            jq -e --arg tree "$CANDIDATE_TREE_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" '
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+              (.tree | type == "object" and .sha == $tree) and
+              (.parents | type == "array" and length == 1 and (.[0] | type == "object" and .sha == $parent)) and
+              (.author | type == "object" and .name == $name and .email == $email) and
+              (.committer | type == "object" and .name == $name and .email == $email) and
+              (.message == "chore: sync rotating Spotlight links")
+            ' <<<"$CANDIDATE_COMMIT" >/dev/null
+            HEAD_SHA="$(jq -r .sha <<<"$CANDIDATE_COMMIT")"
+            [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          fi
+
+          CANDIDATE_COMMIT="$(spotlight_propose_get candidate-commit)"
+          jq -e --arg head "$HEAD_SHA" --arg parent "$SOURCE_SHA" --arg name "$BOT_NAME" --arg email "$BOT_EMAIL" '
+            (type == "object") and
+            (.sha | type == "string" and . == $head) and
+            (.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
+            (.parents | type == "array" and length == 1 and
+              (.[0] | type == "object" and .sha == $parent)) and
+            (.author | type == "object" and .name == $name and .email == $email) and
+            (.committer | type == "object" and .name == $name and .email == $email and
+              (.date | type == "string" and length > 0)) and
+            (.message == "chore: sync rotating Spotlight links")
+          ' <<<"$CANDIDATE_COMMIT" >/dev/null
+          test "$(jq '.parents | length' <<<"$CANDIDATE_COMMIT")" = "1"
+          test "$(jq -r '.parents[0].sha' <<<"$CANDIDATE_COMMIT")" = "$SOURCE_SHA"
+          test "$(jq -r .author.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+          test "$(jq -r .author.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+          test "$(jq -r .committer.name <<<"$CANDIDATE_COMMIT")" = "$BOT_NAME"
+          test "$(jq -r .committer.email <<<"$CANDIDATE_COMMIT")" = "$BOT_EMAIL"
+          test "$(jq -r .message <<<"$CANDIDATE_COMMIT")" = "chore: sync rotating Spotlight links"
+          COMPARE="$(spotlight_propose_get compare)"
+          jq -e --arg source "$SOURCE_SHA" --arg head "$HEAD_SHA" '
+            (type == "object") and
+            (.status == "ahead") and
+            (.base_commit | type == "object" and .sha == $source) and
+            (.merge_base_commit | type == "object" and .sha == $source) and
+            (.ahead_by | type == "number" and . == floor and . == 1) and
+            (.behind_by | type == "number" and . == floor and . == 0) and
+            (.total_commits | type == "number" and . == floor and . == 1) and
+            (.commits | type == "array" and length == 1 and
+              (.[0] | type == "object" and .sha == $head)) and
+            (.files | type == "array" and length == 1 and
+              (.[0] | type == "object" and
+                (.filename | type == "string" and . == "README.md") and
+                (.status | type == "string" and . == "modified") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.additions | type == "number" and . == floor and . >= 0) and
+                (.deletions | type == "number" and . == floor and . >= 0) and
+                (.changes | type == "number" and . == floor and . >= 0)))
+          ' <<<"$COMPARE" >/dev/null
+          test "$(jq -r .status <<<"$COMPARE")" = "ahead"
+          test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$SOURCE_SHA"
+          test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$SOURCE_SHA"
+          test "$(jq -r .ahead_by <<<"$COMPARE")" = "1"
+          test "$(jq -r .behind_by <<<"$COMPARE")" = "0"
+          test "$(jq -r .total_commits <<<"$COMPARE")" = "1"
+          test "$(jq '.files | length' <<<"$COMPARE")" = "1"
+          test "$(jq -r '.files[0].filename' <<<"$COMPARE")" = "README.md"
+          test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
+          README_BLOB_SHA="$(jq -r '.files[0].sha' <<<"$COMPARE")"
+          [[ "$README_BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          README_CONTENTS_RESPONSE="$(spotlight_propose_get candidate-readme)"
+          jq -e --arg blob "$README_BLOB_SHA" '
+            (type == "object") and
+            (.type | type == "string" and . == "file") and
+            (.name | type == "string" and . == "README.md") and
+            (.path | type == "string" and . == "README.md") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $blob) and
+            (.size | type == "number" and . == floor and . >= 0) and
+            (.encoding | type == "string" and . == "base64") and
+            (.content | type == "string" and length > 0)
+          ' <<<"$README_CONTENTS_RESPONSE" >/dev/null || {
+            echo "ERROR: malformed or mismatched Spotlight proposal README Contents evidence." >&2
+            exit 1
+          }
+          jq -er '.content' <<<"$README_CONTENTS_RESPONSE" \
+            | tr -d '\n' | base64 --decode > candidate-readme.md
+          test "$(sha256sum candidate-readme.md | cut -d' ' -f1)" = "$README_SHA256_AFTER"
+
+          if [ "$EXACT_REF_COUNT" = "0" ]; then
+            jq -n --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg sha "$HEAD_SHA" '{ref:$ref,sha:$sha}' > ref.json
+            CREATED_REF_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/git/refs" --input ref.json)"
+            CREATED_REF_STATUS_LINE="$(head -n 1 <<<"$CREATED_REF_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$CREATED_REF_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight Git ref creation returned unexpected status: ${CREATED_REF_STATUS_LINE}" >&2
+              exit 1
+            }
+            CREATED_REF="$(sed '1,/^[[:space:]]*$/d' <<<"$CREATED_REF_HTTP_RESPONSE")"
+            jq -e --arg ref "refs/heads/${CANDIDATE_BRANCH}" --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and . == $head) and
+                (.url | type == "string" and length > 0))
+            ' <<<"$CREATED_REF" >/dev/null
+            test "$(jq -r .ref <<<"$CREATED_REF")" = "refs/heads/${CANDIDATE_BRANCH}"
+            test "$(jq -r .object.sha <<<"$CREATED_REF")" = "$HEAD_SHA"
+            REF_CREATED=true
+            echo "ref_created=true" >> "$GITHUB_OUTPUT"
+          fi
+          CANDIDATE_REF_RESPONSE="$(spotlight_propose_get candidate-ref)"
+          validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
+          test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
+
+          PRS="$(spotlight_propose_get open-prs)"
+          COUNT="$(jq 'length' <<<"$PRS")"
+          if [ "$COUNT" = "0" ]; then
+            jq -n --arg title "chore: sync rotating Spotlight links" --arg head "$CANDIDATE_BRANCH" --arg base "main" \
+              --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." \
+              '{title:$title,head:$head,base:$base,body:$body,maintainer_can_modify:false}' > pr.json
+            PR_CREATE_HTTP_RESPONSE="$(gh api --include --method POST "repos/${GITHUB_REPOSITORY}/pulls" --input pr.json)"
+            PR_CREATE_STATUS_LINE="$(head -n 1 <<<"$PR_CREATE_HTTP_RESPONSE" | tr -d '\r')"
+            [[ "$PR_CREATE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
+              echo "ERROR: Spotlight proposal PR creation returned unexpected status: ${PR_CREATE_STATUS_LINE}" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' <<<"$PR_CREATE_HTTP_RESPONSE" > pr-response.json
+            jq -e --arg title "chore: sync rotating Spotlight links" --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." --arg base "$SOURCE_SHA" --arg branch "$CANDIDATE_BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" '
+              ((type) == "object") and
+              (.number | type == "number" and . == floor and . > 0) and
+              (.user | type == "object" and .login == "github-actions[bot]") and
+              (.state == "open") and
+              (.draft | type == "boolean" and . == false) and
+              (.maintainer_can_modify | type == "boolean" and . == false) and
+              (.title == $title) and
+              (.body == $body) and
+              (.base | type == "object" and .ref == "main" and .sha == $base) and
+              (.head | type == "object" and .ref == $branch and .sha == $head and (.repo | type == "object" and .full_name == $repo))
+            ' pr-response.json >/dev/null
+            PR_NUMBER="$(jq -r .number pr-response.json)"
+            PR_CREATED=true
+            echo "pr_created=true" >> "$GITHUB_OUTPUT"
+          else
+            test "$COUNT" = "1"
+            PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
+          fi
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          PR="$(spotlight_propose_get pr)"
           validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$SOURCE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
           test "$(jq -r .state <<<"$PR")" = "open"
           test "$(jq -r .base.ref <<<"$PR")" = "main"
