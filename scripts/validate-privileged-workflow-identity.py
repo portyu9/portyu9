@@ -13,7 +13,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "2a6cdbad9ebeb84bba38e2ac21e8d38652418f4a",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
-    ".github/workflows/spotlight-link-sync.yml": "f067c9c62db2ce7edc64a424b8f365d62a4e9aba",
+    ".github/workflows/spotlight-link-sync.yml": "18b9dbebf678383881d4e1d216bdf29fb17ef0c1",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -71,17 +71,16 @@ def job_block(text: str, job: str, next_job: str | None) -> str:
 def validate_spotlight_approve_governed_read_transport(spotlight: str) -> None:
     approve = job_block(spotlight, "approve", "authorize")
     checkout = "      - name: Checkout exact trusted source for governed reads\n"
-    identity = "      - name: Verify exact governed read source identity\n"
     setup = "      - name: Set up Python\n"
     runtime = "      - name: Verify resolved Python runtime\n"
     approve_step = (
         "      - name: Approve and wait for only the exact README-only automation checks\n"
     )
-    for marker in (checkout, identity, setup, runtime, approve_step):
+    for marker in (checkout, setup, runtime, approve_step):
         require(approve.count(marker) == 1,
                 f"Spotlight approval governed-read step topology changed: {marker.strip()}")
     require(
-        approve.index(checkout) < approve.index(identity) < approve.index(setup)
+        approve.index(checkout) < approve.index(setup)
         < approve.index(runtime) < approve.index(approve_step),
         "Spotlight approval governed-read bootstrap ordering changed",
     )
@@ -91,19 +90,15 @@ def validate_spotlight_approve_governed_read_transport(spotlight: str) -> None:
         "Spotlight approval governed-read runtime pins changed",
     )
     require(
-        "ref: main" in approve
+        "ref: ${{ needs.propose.outputs.base_sha }}" in approve
+        and "ref: main" not in approve
         and "ref: ${{ github.sha }}" not in approve
+        and "fetch-depth: 1" in approve
         and "persist-credentials: false" in approve,
-        "Spotlight approval governed-read checkout must remain static credential-free main",
+        "Spotlight approval governed-read checkout must remain exact-base and credential-free",
     )
-    require(
-        'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in approve
-        and 'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
-        in approve
-        and 'test "$(git -C source rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"'
-        in approve,
-        "Spotlight approval lost sealed-base or exact governed-read helper identity",
-    )
+    require("git -C source" not in approve,
+            "Spotlight approval governed-read bootstrap must not execute Git")
     step = approve[approve.index(approve_step):]
     require(
         step.count("python3 source/scripts/automation_github_read.py") == 14

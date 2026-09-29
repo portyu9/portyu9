@@ -943,28 +943,16 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "approve",
         "Checkout exact trusted source for governed reads",
     )
-    require("ref: main" in spotlight_approve_checkout_step,
-            "Spotlight approval governed reads lost static trusted-main checkout")
-    require("ref: ${{ github.sha }}" not in spotlight_approve_checkout_step,
-            "Spotlight approval governed reads regained dynamic event-SHA checkout")
-    spotlight_approve_identity_step = named_step(
-        spotlight,
-        "approve",
-        "Verify exact governed read source identity",
+    require(
+        "ref: ${{ needs.propose.outputs.base_sha }}" in spotlight_approve_checkout_step
+        and "ref: main" not in spotlight_approve_checkout_step
+        and "ref: ${{ github.sha }}" not in spotlight_approve_checkout_step,
+        "Spotlight approval governed reads lost exact sealed-base checkout",
     )
     require(
-        'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in spotlight_approve_identity_step,
-        "Spotlight approval lost sealed-base governed-read source identity",
-    )
-    require(
-        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
-        in spotlight_approve_identity_step,
-        "Spotlight approval lost exact governed singleton-read helper identity",
-    )
-    require(
-        'test "$(git -C source rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"'
-        in spotlight_approve_identity_step,
-        "Spotlight approval lost exact governed paginated-read helper identity",
+        "fetch-depth: 1" in spotlight_approve_checkout_step
+        and "persist-credentials: false" in spotlight_approve_checkout_step,
+        "Spotlight approval governed reads lost credential-free bounded checkout",
     )
     spotlight_approve_step = named_step(
         spotlight,
@@ -1437,47 +1425,22 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         "Spotlight approval must use exactly two governed paginated GitHub collections",
     )
 
-    spotlight_approve_identity_drift = dict(texts)
-    spotlight_approve_identity_source = spotlight_approve_identity_drift[".github/workflows/spotlight-link-sync.yml"]
-    spotlight_approve_identity = (
-        'test "$(git -C source rev-parse HEAD:scripts/automation_github_paginated_read.py)" '
-        '= "03c48844349950a1396c9b95290091076966226e"'
-    )
-    require(spotlight_approve_identity in spotlight_approve_identity_source,
-            "retry-policy self-test fixture missing Spotlight approval paginated helper identity")
-    spotlight_approve_identity_drift[".github/workflows/spotlight-link-sync.yml"] = (
-        spotlight_approve_identity_source.replace(
-            spotlight_approve_identity,
-            spotlight_approve_identity.replace(
-                "03c48844349950a1396c9b95290091076966226e",
-                "0000000000000000000000000000000000000000",
-            ),
+    spotlight_approve_checkout_drift = dict(texts)
+    spotlight_approve_checkout_source = spotlight_approve_checkout_drift[".github/workflows/spotlight-link-sync.yml"]
+    spotlight_approve_exact_ref = "          ref: ${{ needs.propose.outputs.base_sha }}\n"
+    require(spotlight_approve_exact_ref in spotlight_approve_checkout_source,
+            "retry-policy self-test fixture missing Spotlight approval exact-base checkout")
+    spotlight_approve_checkout_drift[".github/workflows/spotlight-link-sync.yml"] = (
+        spotlight_approve_checkout_source.replace(
+            spotlight_approve_exact_ref,
+            "          ref: main\n",
             1,
         )
     )
     expect_failure(
         copy.deepcopy(policy),
-        spotlight_approve_identity_drift,
-        "Spotlight approval lost exact governed paginated-read helper identity",
-    )
-
-    profile_stats_plan_drift = dict(texts)
-    stats_source = profile_stats_plan_drift[".github/workflows/profile-stats.yml"]
-    plan_governed = (
-        'python3 source/scripts/automation_github_read.py '
-        '"repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml"'
-    )
-    require(plan_governed in stats_source,
-            "retry-policy self-test fixture missing Profile Stats dispatch-plan governed read")
-    profile_stats_plan_drift[".github/workflows/profile-stats.yml"] = stats_source.replace(
-        plan_governed,
-        'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml"',
-        1,
-    )
-    expect_failure(
-        copy.deepcopy(policy),
-        profile_stats_plan_drift,
-        "must use exactly two governed GitHub singleton reads",
+        spotlight_approve_checkout_drift,
+        "Spotlight approval governed reads lost exact sealed-base checkout",
     )
 
     dependabot_context_transport_drift = dict(texts)

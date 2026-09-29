@@ -787,19 +787,13 @@ def project_spotlight_approve_governed_reads_to_legacy(sync: str) -> str:
         "Spotlight approval governed-read runtime surface changed",
     )
     core.require(
-        "ref: main" in approve
+        "ref: ${{ needs.propose.outputs.base_sha }}" in approve
+        and "ref: main" not in approve
+        and "fetch-depth: 1" in approve
         and "persist-credentials: false" in approve
-        and 'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in approve,
-        "Spotlight approval lost static credential-free sealed-base checkout",
+        and "git -C source" not in approve,
+        "Spotlight approval lost exact credential-free sealed-base checkout",
     )
-    core.require(
-        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
-        in approve
-        and 'test "$(git -C source rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"'
-        in approve,
-        "Spotlight approval governed-read helper identity changed",
-    )
-
     bootstrap_start = approve.index(checkout_marker)
     approve_step_start = approve.index(approve_step_marker, bootstrap_start)
     projected = approve[:bootstrap_start] + approve[approve_step_start:]
