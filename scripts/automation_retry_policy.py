@@ -964,6 +964,33 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
                 f"governed pagination must delegate transport without mutation/direct API access: {forbidden}")
 
 
+    dependabot_controller = texts[".github/workflows/dependabot-controller.yml"]
+    dependabot_discovery_step = named_step(
+        dependabot_controller,
+        "controller",
+        "Bind current main and one native Dependabot candidate",
+    )
+    dependabot_discovery_endpoint = (
+        '"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
+    )
+    dependabot_discovery_direct = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
+    )
+    require(
+        dependabot_discovery_step.count("python3 scripts/automation_github_paginated_read.py") == 1
+        and dependabot_discovery_endpoint in dependabot_discovery_step
+        and "> open-pr-pages.json" in dependabot_discovery_step,
+        "Dependabot controller open-PR discovery must use exactly one governed paginated GitHub collection",
+    )
+    require(
+        dependabot_discovery_direct not in dependabot_discovery_step,
+        "Dependabot controller open-PR discovery regained direct pagination transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in dependabot_discovery_step,
+        "Dependabot controller open-PR discovery governed pagination lost run-scoped token binding",
+    )
+
     codeql_autofix = texts[".github/workflows/codeql-autofix.yml"]
     for step_name, endpoint, output_name, label in (
         (
@@ -1603,6 +1630,36 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         "must use exactly four governed singleton JSON reads",
     )
 
+
+    dependabot_discovery_transport_drift = dict(texts)
+    dependabot_discovery_source = dependabot_discovery_transport_drift[
+        ".github/workflows/dependabot-controller.yml"
+    ]
+    dependabot_discovery_governed = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" \\\n'
+        '            > open-pr-pages.json'
+    )
+    dependabot_discovery_direct = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" '
+        '> open-pr-pages.json'
+    )
+    require(
+        dependabot_discovery_governed in dependabot_discovery_source,
+        "retry-policy self-test fixture missing Dependabot controller governed open-PR discovery",
+    )
+    dependabot_discovery_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_discovery_source.replace(
+            dependabot_discovery_governed,
+            dependabot_discovery_direct,
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_discovery_transport_drift,
+        "Dependabot controller open-PR discovery must use exactly one governed paginated GitHub collection",
+    )
 
     dependabot_release_transport_drift = dict(texts)
     dependabot_release_source = dependabot_release_transport_drift[".github/workflows/dependabot-controller.yml"]

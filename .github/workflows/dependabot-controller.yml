@@ -120,7 +120,9 @@ jobs:
             exit 0
           fi
 
-          gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" > open-pr-pages.json
+          python3 scripts/automation_github_paginated_read.py \
+            "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" \
+            > open-pr-pages.json
           python3 scripts/workflow_capability_api_collection.py pull-requests \
             --input open-pr-pages.json \
             --out open-prs.json

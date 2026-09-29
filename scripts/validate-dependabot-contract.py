@@ -568,9 +568,43 @@ def validate_controller_collection_contract(text: str) -> None:
         text.count('python3 scripts/workflow_capability_api_collection.py files') == 2,
         "Dependabot controller must validate both paginated changed-file collections",
     )
+    pagination_helper = "python3 scripts/automation_github_paginated_read.py"
+    discovery_endpoint = '"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
+    discovery_fetch = (
+        pagination_helper
+        + " "
+        + "\\"
+        + "\n            "
+        + discovery_endpoint
+        + " "
+        + "\\"
+        + "\n            > open-pr-pages.json"
+    )
+    direct_discovery = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
+    )
     require(
-        text.count('repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100') == 1,
-        "Dependabot controller open-PR discovery endpoint count changed",
+        text.count(pagination_helper) == 1
+        and text.count(discovery_endpoint) == 1
+        and text.count(discovery_fetch) == 1,
+        "Dependabot controller open-PR discovery must use exactly one governed paginated GitHub collection",
+    )
+    require(
+        direct_discovery not in text,
+        "Dependabot controller open-PR discovery regained direct pagination transport",
+    )
+    discovery_fetch_pos = text.index(discovery_fetch)
+    discovery_consume_pos = text.index(
+        'python3 scripts/workflow_capability_api_collection.py pull-requests',
+        discovery_fetch_pos,
+    )
+    discovery_select_pos = text.index(
+        'MATCHES="$(jq -c \'[.[] | select(',
+        discovery_consume_pos,
+    )
+    require(
+        discovery_fetch_pos < discovery_consume_pos < discovery_select_pos,
+        "Dependabot controller must govern, validate, then select from open-PR discovery evidence",
     )
     require(
         text.count('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100') == 2,
