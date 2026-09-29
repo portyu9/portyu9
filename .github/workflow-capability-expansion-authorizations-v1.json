@@ -810,7 +810,7 @@
       "candidateBomSha256": "d2ba8afc04df0054ca8db4bfb34504f76ac717c6e3e9302289fb6f5a14825821",
       "expansionSha256": "d2c5830b73b15a1ec96ebfb7f35f6936a4fae3a2e649b56b818033070dd7303c",
       "id": "cap-governed-reviewer-rest-get-retry-v1",
-      "rationale": "Authorize frozen #1330 measured by closed #1331: route the governed reviewer and no-secret convergence jobs' existing REST GET observations through accepted bounded interpreter-free shell retry while consolidating repeated identical GET call sites in the canonical BOM. The fixed GraphQL review-thread read and all review, exact failed-job rerun, and lane-wake POST mutations remain outside retry and single-shot. Adds no permission, trigger, new endpoint/method, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, mutation replay, or bypass."
+      "rationale": "Authorize frozen #1330 measured by closed #1331: route existing governed-reviewer and no-secret convergence REST GET observations through bounded interpreter-free retry, consolidating repeated identical GET call sites in the BOM. Fixed GraphQL review-thread read and review/rerun/dispatch POSTs remain outside retry and single-shot. No permission, trigger, new endpoint/method, secret/OIDC, check reduction, direct-main/ruleset/merge authority, mutation replay, or bypass."
     },
     {
       "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
