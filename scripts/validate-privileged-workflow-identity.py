@@ -3568,9 +3568,9 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
             f"Spotlight protected workflow evidence regressed to raw scalar consumption: {forbidden}",
         )
     require(
-        approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml"') == 1
-        and approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml"') == 1
-        and approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml"') == 1
+        approve.count('gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml"') == 1
+        and approve.count('gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml"') == 1
+        and approve.count('gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml"') == 1
         and approve.count('repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100') == 1,
         "Spotlight protected workflow evidence endpoint inventory changed",
     )
