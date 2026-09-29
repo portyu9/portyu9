@@ -81,7 +81,9 @@ jobs:
             [[ "$AFTER_ALERT" =~ ^[1-9][0-9]*$ ]]
           fi
 
-          gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > main-ref.json
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/git/ref/heads/main" \
+            > main-ref.json
           python3 scripts/codeql_autofix_controller.py main \
             --ref-file main-ref.json \
             --expected-sha "$TRUSTED_SHA" \
@@ -159,7 +161,9 @@ jobs:
           set -euo pipefail
           assert_main_sha() {
             local expected_sha="$1"
-            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/codeql-autofix-main-ref.json"
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/git/ref/heads/main" \
+              > "$RUNNER_TEMP/codeql-autofix-main-ref.json"
             python3 scripts/codeql_autofix_controller.py read-ref-response \
               --response-file "$RUNNER_TEMP/codeql-autofix-main-ref.json" \
               --expected-ref "refs/heads/main" \
@@ -428,7 +432,9 @@ jobs:
           BRANCH="codeql-autofix/alert-${ALERT_NUMBER}/run-${RUN_ID}"
           assert_main_sha() {
             local expected_sha="$1"
-            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/codeql-autofix-main-ref.json"
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/git/ref/heads/main" \
+              > "$RUNNER_TEMP/codeql-autofix-main-ref.json"
             python3 scripts/codeql_autofix_controller.py read-ref-response \
               --response-file "$RUNNER_TEMP/codeql-autofix-main-ref.json" \
               --expected-ref "refs/heads/main" \
@@ -650,7 +656,9 @@ jobs:
           set -euo pipefail
           assert_main_sha() {
             local expected_sha="$1"
-            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/codeql-autofix-main-ref.json"
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/git/ref/heads/main" \
+              > "$RUNNER_TEMP/codeql-autofix-main-ref.json"
             python3 scripts/codeql_autofix_controller.py read-ref-response \
               --response-file "$RUNNER_TEMP/codeql-autofix-main-ref.json" \
               --expected-ref "refs/heads/main" \
@@ -700,7 +708,9 @@ jobs:
 
           HEAD_SHA="$EXPECTED_HEAD_SHA"
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
-          gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > admission-main-ref.json
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/git/ref/heads/main" \
+            > admission-main-ref.json
           gh api --paginate --slurp \
             "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \
             > check-pages-raw.json

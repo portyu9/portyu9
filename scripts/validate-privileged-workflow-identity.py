@@ -2678,6 +2678,7 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     )
     for forbidden in (
         'git/ref/heads/main" --jq .object.sha',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
         'git/ref/heads/${BRANCH}" --jq .object.sha',
         'actions/workflows/codeql.yml" --jq .id',
         'actions/workflows/dependency-review.yml" --jq .id',
@@ -2695,19 +2696,29 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             f"CodeQL Autofix regained untyped singleton evidence consumption: {forbidden}",
         )
 
+    governed_fetch = "python3 scripts/automation_github_read.py"
+    main_endpoint = '"repos/${TARGET_REPOSITORY}/git/ref/heads/main"'
     main_fetch = (
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" '
-        '> "$RUNNER_TEMP/codeql-autofix-main-ref.json"'
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + main_endpoint
+        + " "
+        + "\\"
+        + "\n              "
+        + '> "$RUNNER_TEMP/codeql-autofix-main-ref.json"'
     )
     main_consume = (
         'test "$(jq -r .sha "$RUNNER_TEMP/codeql-autofix-main-ref-normalized.json")" '
         '= "$expected_sha"'
     )
     require(
-        autofix.count(main_fetch) == 3
+        autofix.count(main_endpoint) == 5
+        and autofix.count(governed_fetch) == 6
+        and autofix.count(main_fetch) == 3
         and autofix.count('--expected-ref "refs/heads/main"') == 3
         and autofix.count(main_consume) == 3,
-        "CodeQL Autofix typed main-ref identity changed",
+        "CodeQL Autofix typed governed main-ref identity changed",
     )
     head_fetch = (
         'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" '

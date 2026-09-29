@@ -630,6 +630,7 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
 
     for forbidden in (
         'git/ref/heads/main" --jq .object.sha',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
         'git/ref/heads/${BRANCH}" --jq .object.sha',
         'actions/workflows/codeql.yml" --jq .id',
         'actions/workflows/dependency-review.yml" --jq .id',
@@ -646,9 +647,17 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
             f"CodeQL Autofix regressed to untyped singleton evidence consumption: {forbidden}",
         )
 
+    governed_fetch = "python3 scripts/automation_github_read.py"
+    main_endpoint = '"repos/${TARGET_REPOSITORY}/git/ref/heads/main"'
     main_fetch = (
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" '
-        '> "$RUNNER_TEMP/codeql-autofix-main-ref.json"'
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + main_endpoint
+        + " "
+        + "\\"
+        + "\n              "
+        + '> "$RUNNER_TEMP/codeql-autofix-main-ref.json"'
     )
     main_response = '--response-file "$RUNNER_TEMP/codeql-autofix-main-ref.json"'
     main_expected = '--expected-ref "refs/heads/main"'
@@ -657,19 +666,35 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         'test "$(jq -r .sha "$RUNNER_TEMP/codeql-autofix-main-ref-normalized.json")" '
         '= "$expected_sha"'
     )
-    require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref GET topology changed")
+    require(
+        text.count(main_endpoint) == 5,
+        "CodeQL Autofix must retain exactly five governed main-ref observations",
+    )
+    require(
+        text.count(governed_fetch) == 6,
+        "CodeQL Autofix governed GET topology changed",
+    )
+    require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref governed-read topology changed")
     require(text.count(main_response) == 3 and text.count(main_expected) == 3
             and text.count(main_out) == 3 and text.count(main_consume) == 3,
             "CodeQL Autofix main-ref typed helper contract changed")
 
+    for target in ("> main-ref.json", "> admission-main-ref.json"):
+        target_pos = text.index(target)
+        window = text[max(0, target_pos - 240):target_pos]
+        require(
+            governed_fetch in window and main_endpoint in window,
+            f"CodeQL Autofix main-ref observation is not governed before {target}",
+        )
+
     cursor = -1
     for _ in range(3):
         fetch_pos = text.find(main_fetch, cursor + 1)
-        require(fetch_pos > cursor, "CodeQL Autofix main-ref helper fetch disappeared")
+        require(fetch_pos > cursor, "CodeQL Autofix main-ref governed helper fetch disappeared")
         validate_pos = text.find(read_validator, fetch_pos)
         consume_pos = text.find(main_consume, validate_pos)
         require(fetch_pos < validate_pos < consume_pos,
-                "CodeQL Autofix main-ref response must be typed before SHA consumption")
+                "CodeQL Autofix governed main-ref response must be typed before SHA consumption")
         cursor = consume_pos
 
     head_fetch = (
