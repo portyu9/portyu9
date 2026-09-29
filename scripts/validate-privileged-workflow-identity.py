@@ -1892,7 +1892,39 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
     projected = projected_immutable.replace(NEW_MERGE_IF, OLD_MERGE_IF, 1)
     require(projected != projected_immutable,
             "Spotlight v21 mutation-budget projection could not isolate item-10 merge gating")
-    v21.validate_spotlight_mutation_budget(projected)
+
+    budget_governed_permissions = (
+        "    permissions:\n"
+        "      actions: read\n"
+        "      contents: read\n"
+        "    outputs:\n"
+        "      allowed: ${{ steps.admit.outputs.allowed }}"
+    )
+    budget_legacy_permissions = (
+        "    permissions:\n"
+        "      actions: read\n"
+        "    outputs:\n"
+        "      allowed: ${{ steps.admit.outputs.allowed }}"
+    )
+    budget_governed_read = (
+        'ARTIFACTS="$(python3 source/scripts/automation_github_read.py '
+        '"repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    )
+    budget_legacy_read = (
+        'ARTIFACTS="$(gh api '
+        '"repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=100")"'
+    )
+    require(projected.count(budget_governed_permissions) == 1,
+            "Spotlight v21 mutation-budget projection cannot isolate governed read permissions")
+    require(projected.count(budget_governed_read) == 1
+            and budget_legacy_read not in projected,
+            "Spotlight v21 mutation-budget projection cannot isolate governed read transport")
+    projected_budget = projected.replace(
+        budget_governed_permissions, budget_legacy_permissions, 1
+    ).replace(
+        budget_governed_read, budget_legacy_read, 1
+    )
+    v21.validate_spotlight_mutation_budget(projected_budget)
 
 
 
