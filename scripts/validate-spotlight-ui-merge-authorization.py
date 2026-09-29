@@ -1322,12 +1322,14 @@ def validate_protected_workflow_evidence_overlay(sync: str) -> None:
             f"Spotlight protected workflow evidence regressed to raw scalar consumption: {forbidden}",
         )
 
-    run_fetch = 'gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"'
+    run_raw_fetch = 'gh api --include "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"'
+    run_fetch = 'spotlight_singleton_get protected-runs'
     run_validate = 'error("Spotlight protected workflow-run response must be an object")'
     run_normalized = '> "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json"'
     run_consume = 'RUNS_TOTAL="$(jq -r .totalCount "$RUNNER_TEMP/spotlight-protected-workflow-runs-normalized.json")"'
     run_mutation = 'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve"'
     positions = [
+        approve.index(run_raw_fetch),
         approve.index(run_fetch),
         approve.index(run_validate),
         approve.index(run_normalized),
@@ -1336,7 +1338,7 @@ def validate_protected_workflow_evidence_overlay(sync: str) -> None:
     ]
     require(
         positions == sorted(positions),
-        "Spotlight protected workflow-run evidence moved out of fetch-validate-normalize-consume-mutate order",
+        "Spotlight protected workflow-run retry endpoint/call moved out of fetch-validate-normalize-consume-mutate order",
     )
 
 
