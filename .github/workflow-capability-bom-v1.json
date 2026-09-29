@@ -197,16 +197,16 @@
           }
         },
         {
-          "actions": [],
-          "apiSurfaces": [
+          "actions": [
             {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/contents/scripts/governed_bot_review_gate.py?ref=${EVENT_BASE_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Run exact accepted-base governed bot review gate"
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact accepted-base governed review source"
             }
           ],
+          "apiSurfaces": [],
           "artifacts": [],
           "id": "governed_bot_review",
           "mutations": [],
