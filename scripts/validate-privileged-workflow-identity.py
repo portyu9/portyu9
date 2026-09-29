@@ -2776,10 +2776,10 @@ def validate_spotlight_privileged_ref_evidence_schema(spotlight: str) -> None:
 
     contracts = {
         "reconcile": (
-            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+            ('MAIN_REF_RESPONSE="$(spotlight_reconcile_get main-ref)"',
              'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
              'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
-            ('GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+            ('GENERATED_REF_RESPONSE="$(spotlight_reconcile_get generated-ref)"',
              'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
              'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"'),
         ),
