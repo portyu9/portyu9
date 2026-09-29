@@ -36,6 +36,7 @@ EXPECTED_AUTOMATIC_RETRY_IDS = {
     "action-release-provenance-read-transient",
     "canonical-github-api-read-transient",
     "spotlight-approve-shell-read-transient",
+    "spotlight-merge-shell-read-transient",
 }
 EXPECTED_TERMINAL_IDS = {
     "profile-quality-live-generator-fallback",
@@ -341,10 +342,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 4 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly four classified automatic read retries")
+    require(len(entries) == 5 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly five classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 4, "automatic retry IDs must remain unique")
+    require(len(by_id) == 5, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
@@ -544,6 +545,73 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for key in ("approval-comments-page", "owner-reviews-page"):
         require(spotlight_approve.count(f"                {key})\n") == 1,
                 f"Spotlight privileged page-read retry case arm changed: {key}")
+
+
+    spotlight_merge_item = by_id["spotlight-merge-shell-read-transient"]
+    require(
+        spotlight_merge_item.get("source") == ".github/workflows/spotlight-link-sync.yml"
+        and spotlight_merge_item.get("workflow") == ".github/workflows/spotlight-link-sync.yml"
+        and spotlight_merge_item.get("job") == "merge"
+        and spotlight_merge_item.get("step") == "Merge exact approved head and clean up immutable candidate branch",
+        "Spotlight terminal shell-read retry identity changed",
+    )
+    require(
+        spotlight_merge_item.get("endpointScope") == "enumerated-static-literal"
+        and spotlight_merge_item.get("maxResponseBytes") == 8_000_000
+        and spotlight_merge_item.get("maxPages") == 20
+        and spotlight_merge_item.get("pageSize") == 100,
+        "Spotlight terminal shell-read retry bounds changed",
+    )
+    spotlight_merge = named_step(spotlight, "merge", "Merge exact approved head and clean up immutable candidate branch")
+    for fragment in (
+        "spotlight_merge_get() {", "for attempt in 1 2 3; do",
+        "timeout 20s gh api --include", 'if [ "$exit_code" -eq 124 ]; then',
+        'elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then',
+        "408|429|500|502|503|504)", 'if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then',
+        'if [ "$attempt" -eq 1 ]; then', "delay=1", "delay=2",
+        'if [ "$requested" -ge 5 ]; then', "delay=5", 'test "$status_count" -eq 1 || {',
+        'test "$status" = "200" || {', "application/json*) : ;;", 'test "${#body}" -le 8000000 || {',
+        "spotlight_merge_paginated_get() {", 'local page=1 body count first=true',
+        'while [ "$page" -le 20 ]; do', 'error("Spotlight terminal paginated GET page shape changed")',
+        'if [ "$count" -lt 100 ]; then', 'if [ "$page" -ge 20 ]; then',
+        'echo "ERROR: Spotlight terminal paginated GET exceeds the 20-page bound: $request" >&2',
+        'page=$((page + 1))',
+    ):
+        require(fragment in spotlight_merge, f"Spotlight terminal shell-read retry contract is missing: {fragment}")
+    require(spotlight_merge.count("gh api --paginate --slurp") == 0,
+            "Spotlight terminal merge regained raw gh pagination transport")
+    require(spotlight_merge.count("spotlight_merge_paginated_get owner-reviews") == 1
+            and spotlight_merge.count('spotlight_merge_get owner-reviews-page "$page"') == 1,
+            "Spotlight terminal owner-review pagination retry topology changed")
+    require(
+        spotlight_merge.count("gh api --include --method PUT") == 1
+        and spotlight_merge.count("gh api --include --method DELETE") == 1
+        and spotlight_merge.count("gh api --include --method POST") == 0
+        and spotlight_merge.count("gh api --include --method PATCH") == 0,
+        "Spotlight terminal mutation inventory changed while hardening GETs",
+    )
+    for forbidden in (
+        "python3 ", "curl ", "wget ", "git ",
+        "timeout 20s gh api --include --method POST",
+        "timeout 20s gh api --include --method PUT",
+        "timeout 20s gh api --include --method PATCH",
+        "timeout 20s gh api --include --method DELETE",
+    ):
+        require(forbidden not in spotlight_merge,
+                f"Spotlight terminal shell-read retry acquired forbidden transport/mutation surface: {forbidden}")
+    for key in (
+        "pr-initial", "main-initial", "generated-initial", "candidate-initial", "files",
+        "candidate-commit", "candidate-readme", "codeql-run", "dependency-run", "profile-run",
+        "trusted-workflow", "trusted-run", "trusted-check", "exact-head-checks", "main-premerge",
+        "generated-premerge", "candidate-premerge", "pr-postmerge", "main-postmerge",
+        "candidate-refs-postmerge", "candidate-refs-after-delete",
+    ):
+        require(spotlight_merge.count(f"                {key})\n") == 1,
+                f"Spotlight terminal shell-read retry case arm changed: {key}")
+        require(spotlight_merge.count(f"spotlight_merge_get {key}") == 1,
+                f"Spotlight terminal shell-read retry invocation changed: {key}")
+    require(spotlight_merge.count("                owner-reviews-page)\n") == 1,
+            "Spotlight terminal page-read retry case arm changed")
 
     automation_github_paginated_read.self_test()
     pagination_source = (ROOT / "scripts/automation_github_paginated_read.py").read_text(encoding="utf-8")

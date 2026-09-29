@@ -105,6 +105,37 @@
       "rationale": "Retry only enumerated literal read-only GitHub API GET observations inside the interpreter-free privileged Spotlight approval job, including at most 20 validated 100-item pages per governed history read; all POST mutations remain outside this retry kernel and single-shot.",
       "maxPages": 20,
       "pageSize": 100
+    },
+    {
+      "id": "spotlight-merge-shell-read-transient",
+      "source": ".github/workflows/spotlight-link-sync.yml",
+      "workflow": ".github/workflows/spotlight-link-sync.yml",
+      "job": "merge",
+      "step": "Merge exact approved head and clean up immutable candidate branch",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "enumerated-static-literal",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only enumerated literal read-only GitHub API GET observations inside the interpreter-free privileged Spotlight terminal merge job, including at most 20 validated 100-item owner-review pages; expected-head merge and candidate-ref deletion remain outside this retry kernel and single-shot.",
+      "maxPages": 20,
+      "pageSize": 100
     }
   ],
   "terminalOperations": [
