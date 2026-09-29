@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v124"
+VERSION = "governed-workflow-byte-identity-v125"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "0fbb9f2865496bc19129f7c590df35d373d185cb",
@@ -2219,12 +2219,87 @@ def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
     )
 
 def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> None:
+    check_start_marker = "          checks_ready() {\n"
+    check_end_marker = "\n\n          approve_exact_pr_workflows() {\n"
+    require(
+        dependabot.count(check_start_marker) == 1
+        and dependabot.count(check_end_marker) == 1,
+        "Dependabot readiness check-snapshot anchors changed",
+    )
+    check_start = dependabot.index(check_start_marker)
+    check_end = dependabot.index(check_end_marker, check_start)
+    checks = dependabot[check_start:check_end]
+
+    snapshot_endpoint = (
+        "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/"
+        "check-runs?app_id=15368&filter=latest&per_page=100"
+    )
+    governed_fetch = "python3 scripts/automation_github_read.py"
+    required_loop = (
+        "for NAME in validate-contracts integration-pinned-upstream dependency-review "
+        "trusted-capability-admission analyze-actions analyze-python; do"
+    )
     for fragment in (
+        governed_fetch,
+        snapshot_endpoint,
         '(.check_runs | type == "array" and length <= 100) and',
-        '(.name == $name) and',
+        '(.name | type == "string" and length > 0) and',
         '(.app | type == "object" and (.id == 15368)) and',
         '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
-        'ERROR: malformed or incomplete required-check evidence for ${NAME} on ${HEAD_SHA}.',
+        'ERROR: malformed or incomplete exact-head required-check snapshot for ${HEAD_SHA}.',
+        required_loop,
+        '''count="$(jq --arg name "$NAME" '[.check_runs[] | select(.name == $name)] | length' <<<"$checks")"''',
+        '[ "$count" -lt 1 ]',
+        'all(.check_runs[] | select(.name == $name);',
+        '.status == "completed" and .conclusion == "success"',
+    ):
+        require(
+            fragment in checks,
+            f"Dependabot readiness check-snapshot contract is missing: {fragment}",
+        )
+    require(
+        checks.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 1,
+        "Dependabot readiness must strictly validate one bounded complete check snapshot",
+    )
+    require(
+        checks.count('(.id | (type == "number") and . == floor and . > 0) and') == 1,
+        "Dependabot readiness must require positive integer ids in the complete check snapshot",
+    )
+    require(
+        checks.count('. == "queued" or . == "in_progress" or . == "requested" or') == 1
+        and checks.count('. == "waiting" or . == "pending" or . == "completed"') == 1,
+        "Dependabot readiness check snapshot must lock the documented six-state status set",
+    )
+    require(
+        checks.count(snapshot_endpoint) == 1
+        and checks.count(governed_fetch) == 1
+        and "check_name=${NAME}" not in checks,
+        "Dependabot readiness must use exactly one governed complete snapshot rather than per-context reads",
+    )
+    require(
+        checks.count("malformed or incomplete exact-head required-check snapshot") == 1
+        and 'echo "ERROR: malformed or incomplete exact-head required-check snapshot for ${HEAD_SHA}." >&2\n              exit 1' in checks,
+        "Dependabot malformed required-check snapshot evidence must terminate the transaction",
+    )
+
+    check_fetch = checks.index(governed_fetch)
+    check_schema = checks.index('(.check_runs | type == "array" and length <= 100) and', check_fetch)
+    check_ready = checks.index(required_loop, check_schema)
+    require(
+        check_fetch < check_schema < check_ready,
+        "Dependabot must validate one complete check snapshot before readiness decisions",
+    )
+
+    run_start_marker = "          workflow_dispatch_runs() {\n"
+    run_end_marker = "\n\n          delegated_admission_attempt_ready() {\n"
+    require(
+        dependabot.count(run_start_marker) == 1 and dependabot.count(run_end_marker) == 1,
+        "Dependabot workflow-dispatch quiescence anchors changed",
+    )
+    run_start = dependabot.index(run_start_marker)
+    run_end = dependabot.index(run_end_marker, run_start)
+    runs = dependabot[run_start:run_end]
+    for fragment in (
         '(.workflow_runs | type == "array" and length <= 100) and',
         '(.event == "workflow_dispatch") and',
         '(.head_sha == $head) and',
@@ -2235,26 +2310,20 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
         'ERROR: malformed or incomplete exact-head workflow-dispatch run evidence for ${HEAD_SHA}.',
     ):
         require(
-            fragment in dependabot,
-            f"Dependabot readiness run/check schema contract is missing: {fragment}",
+            fragment in runs,
+            f"Dependabot workflow-dispatch readiness schema contract is missing: {fragment}",
         )
     require(
-        dependabot.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 2,
-        "Dependabot readiness must strictly validate both bounded REST collection totals",
+        runs.count('(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and') == 1
+        and runs.count('(.id | (type == "number") and . == floor and . > 0) and') == 1,
+        "Dependabot workflow-dispatch quiescence must retain bounded total/id evidence",
     )
     require(
-        dependabot.count('(.id | (type == "number") and . == floor and . > 0) and') == 2,
-        "Dependabot readiness must require positive integer ids at both run/check evidence boundaries",
+        runs.count('. == "queued" or . == "in_progress" or . == "requested" or') == 1
+        and runs.count('. == "waiting" or . == "pending" or . == "completed"') == 1,
+        "Dependabot workflow-dispatch evidence must lock the documented six-state status set",
     )
-    require(
-        dependabot.count(
-            '. == "queued" or . == "in_progress" or . == "requested" or'
-        ) == 2
-        and dependabot.count(
-            '. == "waiting" or . == "pending" or . == "completed"'
-        ) == 2,
-        "Dependabot readiness must lock the documented six-state check/workflow-run status set at both evidence boundaries",
-    )
+
     old_partial_active = (
         'select(.status == "queued" or .status == "in_progress" or '
         '.status == "waiting" or .status == "pending")'
@@ -2266,19 +2335,6 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
     require(
         dependabot.count('select(.status != "completed")') >= 2,
         "Dependabot readiness and dispatch suppression must classify every validated non-completed run as active",
-    )
-    require(
-        dependabot.count("malformed or incomplete required-check evidence") == 1
-        and dependabot.count("malformed or incomplete exact-head workflow-dispatch run evidence") == 1,
-        "Dependabot readiness must retain exactly one fail-closed schema boundary for each run/check collection",
-    )
-
-    check_fetch = 'CHECKS="$(gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=${NAME}&filter=latest&per_page=100")"'
-    check_schema = '(.check_runs | type == "array" and length <= 100) and'
-    check_ready = 'count="$(jq -r .total_count <<<"$CHECKS")"'
-    require(
-        dependabot.index(check_fetch) < dependabot.index(check_schema) < dependabot.index(check_ready),
-        "Dependabot must validate required-check evidence before readiness decisions",
     )
 
     run_fetch = 'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")"'

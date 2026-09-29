@@ -586,6 +586,81 @@ def validate_controller_collection_contract(text: str) -> None:
     )
 
 
+def validate_controller_required_check_snapshot_contract(text: str) -> None:
+    start_marker = "          checks_ready() {\n"
+    end_marker = "\n\n          approve_exact_pr_workflows() {\n"
+    require(
+        text.count(start_marker) == 1 and text.count(end_marker) == 1,
+        "Dependabot required-check snapshot block anchors changed",
+    )
+    start = text.index(start_marker)
+    end = text.index(end_marker, start)
+    block = text[start:end]
+
+    snapshot_endpoint = (
+        "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/"
+        "check-runs?app_id=15368&filter=latest&per_page=100"
+    )
+    governed_fetch = "python3 scripts/automation_github_read.py"
+    require(
+        block.count(snapshot_endpoint) == 1 and block.count(governed_fetch) == 1,
+        "Dependabot checks_ready must use one governed complete exact-head GitHub-Actions snapshot",
+    )
+    require(
+        "check_name=${NAME}" not in block,
+        "Dependabot checks_ready regressed to one GitHub API read per required context",
+    )
+    required_names = (
+        "for NAME in validate-contracts integration-pinned-upstream dependency-review "
+        "trusted-capability-admission analyze-actions analyze-python; do"
+    )
+    for fragment in (
+        '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100)',
+        '(.total_count == (.check_runs | length))',
+        '(.name | type == "string" and length > 0)',
+        '(.head_sha == $head)',
+        '(.app | type == "object" and (.id == 15368))',
+        '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
+        required_names,
+        '''count="$(jq --arg name "$NAME" '[.check_runs[] | select(.name == $name)] | length' <<<"$checks")"''',
+        '[ "$count" -lt 1 ]',
+        'all(.check_runs[] | select(.name == $name);',
+        '.status == "completed" and .conclusion == "success"',
+        'echo "ERROR: malformed or incomplete exact-head required-check snapshot for ${HEAD_SHA}." >&2',
+        "exit 1",
+        'test "$ready" = "true"',
+    ):
+        require(
+            fragment in block,
+            f"Dependabot required-check snapshot contract is missing: {fragment}",
+        )
+
+    fetch_pos = block.index(governed_fetch)
+    endpoint_pos = block.index(snapshot_endpoint, fetch_pos)
+    envelope_pos = block.index('(.total_count == (.check_runs | length))', endpoint_pos)
+    loop_pos = block.index(required_names, envelope_pos)
+    require(
+        fetch_pos < endpoint_pos < envelope_pos < loop_pos,
+        "Dependabot required-check snapshot must be fetched once, fully typed, then consumed",
+    )
+
+    for forbidden in (
+        'gh api "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=',
+        'ready=false\n                continue',
+        'ERROR: malformed or incomplete required-check evidence for ${NAME}',
+    ):
+        require(
+            forbidden not in block,
+            f"Dependabot required-check snapshot regressed to softened/repeated evidence: {forbidden}",
+        )
+
+    require(
+        text.count("for ATTEMPT in $(seq 1 24); do") == 1
+        and 'for ATTEMPT in $(seq 1 24); do\n              sleep 15\n              assert_transaction\n              if checks_ready; then' in text,
+        "Dependabot 24x15s same-transaction convergence contract changed",
+    )
+
+
 def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
     start_marker = "          approve_exact_pr_workflows() {\n"
     end_marker = "\n\n          assert_transaction\n          approve_exact_pr_workflows\n"
@@ -1846,6 +1921,7 @@ def main() -> int:
         validate_controller_pr_response_contract(controller_text)
         self_test_controller_reviewer_request_status(controller_text)
         validate_controller_collection_contract(controller_text)
+        validate_controller_required_check_snapshot_contract(controller_text)
         validate_controller_git_read_response_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
         self_test_controller_git_mutation_status_contract(controller_text)
@@ -1861,7 +1937,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology with exact HTTP-201/200 transport proof, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor exact HTTP-201-validated automation-approval comment evidence, delegated CodeQL-only capability admission, exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology with exact HTTP-201/200 transport proof, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor exact HTTP-201-validated automation-approval comment evidence, delegated CodeQL-only capability admission, single-snapshot exact protected checks, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
