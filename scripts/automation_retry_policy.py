@@ -560,6 +560,21 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             )
 
     profile_quality = texts[".github/workflows/profile-quality.yml"]
+    dependabot_transport_identity_step = named_step(
+        profile_quality,
+        "dependabot_admission",
+        "Verify exact accepted-base governed read transport identity",
+    )
+    require(
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in dependabot_transport_identity_step,
+        "Profile Quality Dependabot lost exact governed singleton-read helper identity",
+    )
+    require(
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"'
+        in dependabot_transport_identity_step,
+        "Profile Quality Dependabot lost exact governed paginated-read helper identity",
+    )
     for job_name, step_name, label in (
         ("validate", "Discover exact fresh signed Action provenance witness", "Action provenance witness"),
         ("integration", "Discover exact fresh signed Profile Generator Compatibility Witness", "Profile generator compatibility witness"),
@@ -592,12 +607,14 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require(dependabot_release_step.count("python3 trusted-base/scripts/automation_github_read.py") == 2,
             "Profile Quality Dependabot release proof must use exactly two governed singleton GitHub read call sites")
     paginated_files = (
-        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/'
-        '${PR_NUMBER}/files?per_page=100"'
+        'python3 trusted-base/scripts/automation_github_paginated_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
     )
-    require(dependabot_release_step.count("gh api ") == 1
+    require(dependabot_release_step.count("python3 trusted-base/scripts/automation_github_paginated_read.py") == 1
             and dependabot_release_step.count(paginated_files) == 1,
-            "Profile Quality Dependabot release proof must retain exactly one bounded paginated gh api collection")
+            "Profile Quality Dependabot release proof must use exactly one governed paginated GitHub collection")
+    require("gh api " not in dependabot_release_step,
+            "Profile Quality Dependabot release proof regained direct gh api transport")
     for forbidden in (
         'gh api "repos/${DEPENDENCY_REPOSITORY}"',
         'gh api "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}"',
@@ -1315,6 +1332,51 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         dependabot_release_transport_drift,
         "must use exactly two governed singleton GitHub read call sites",
+    )
+
+    dependabot_pagination_transport_drift = dict(texts)
+    pagination_source = dependabot_pagination_transport_drift[".github/workflows/profile-quality.yml"]
+    pagination_governed = (
+        'python3 trusted-base/scripts/automation_github_paginated_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
+    )
+    pagination_direct = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/'
+        '${PR_NUMBER}/files?per_page=100"'
+    )
+    require(pagination_governed in pagination_source,
+            "retry-policy self-test fixture missing Dependabot governed paginated read")
+    dependabot_pagination_transport_drift[".github/workflows/profile-quality.yml"] = (
+        pagination_source.replace(pagination_governed, pagination_direct, 1)
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_pagination_transport_drift,
+        "must use exactly one governed paginated GitHub collection",
+    )
+
+    dependabot_pagination_identity_drift = dict(texts)
+    pagination_identity_source = dependabot_pagination_identity_drift[".github/workflows/profile-quality.yml"]
+    pagination_identity = (
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" '
+        '= "03c48844349950a1396c9b95290091076966226e"'
+    )
+    require(pagination_identity in pagination_identity_source,
+            "retry-policy self-test fixture missing Dependabot governed paginated helper identity")
+    dependabot_pagination_identity_drift[".github/workflows/profile-quality.yml"] = (
+        pagination_identity_source.replace(
+            pagination_identity,
+            pagination_identity.replace(
+                "03c48844349950a1396c9b95290091076966226e",
+                "0000000000000000000000000000000000000000",
+            ),
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_pagination_identity_drift,
+        "lost exact governed paginated-read helper identity",
     )
 
     loop_drift = dict(texts)

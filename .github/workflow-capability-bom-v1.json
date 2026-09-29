@@ -164,13 +164,6 @@
           ],
           "apiSurfaces": [
             {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Fetch exact candidate release evidence"
-            },
-            {
               "client": "git",
               "mutating": false,
               "operation": "ls-remote",
