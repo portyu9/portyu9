@@ -2171,8 +2171,6 @@ def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
     overlays = (
         ('REVIEW_IDENTITY_RESPONSE="$(bot_reviewer_get review-user)"',
          'REVIEW_IDENTITY_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api user)"', 1),
-        ('MAIN_REF_RESPONSE="$(bot_reviewer_get main-ref)"',
-         'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"', 1),
         ('PR_PAGES="$(bot_reviewer_paginated_get open-prs)"',
          'PR_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100")"', 1),
         ('checks="$(bot_reviewer_get required-checks)"',
@@ -2195,6 +2193,8 @@ def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
          'FINAL_MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"', 1),
         ('FINAL_HEAD_REF_RESPONSE="$(bot_reviewer_get head-ref)"',
          'FINAL_HEAD_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"', 1),
+        ('MAIN_REF_RESPONSE="$(bot_reviewer_get main-ref)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"', 1),
         ('MAIN_REF="$(bot_convergence_get main-ref)"',
          'MAIN_REF="$(gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"', 1),
         ('HEAD_REF_RESPONSE="$(bot_convergence_get head-ref)"',
