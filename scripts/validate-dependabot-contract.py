@@ -655,8 +655,8 @@ def validate_controller_required_check_snapshot_contract(text: str) -> None:
         )
 
     require(
-        text.count("for ATTEMPT in $(seq 1 24); do") >= 2
-        and 'sleep 15\n              assert_transaction\n              if checks_ready; then' in text,
+        text.count("for ATTEMPT in $(seq 1 24); do") == 1
+        and 'for ATTEMPT in $(seq 1 24); do\n              sleep 15\n              assert_transaction\n              if checks_ready; then' in text,
         "Dependabot 24x15s same-transaction convergence contract changed",
     )
 
