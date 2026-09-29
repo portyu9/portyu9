@@ -997,6 +997,10 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
          'REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"'),
         ('PRS="$(spotlight_singleton_get open-pr-list)"',
          'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"'),
+        ('          spotlight_paginated_get approval-comments \\\n            > "$RUNNER_TEMP/spotlight-approval-comment-pages.json"',
+         '          gh api --paginate --slurp \\\n            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \\\n            > "$RUNNER_TEMP/spotlight-approval-comment-pages.json"'),
+        ('REVIEW_PAGES="$(spotlight_paginated_get owner-reviews)"',
+         'REVIEW_PAGES="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"'),
         ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"',
          'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
         ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"',
@@ -1011,7 +1015,7 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
         )
         projected = projected.replace(hardened, legacy, 1)
     require(
-        "spotlight_singleton_get" not in projected,
+        "spotlight_singleton_get" not in projected and "spotlight_paginated_get" not in projected,
         "Spotlight item-9 shell-read projection left retry transport bytes behind",
     )
     return sync[:approve_start] + projected + sync[approve_end:]
@@ -1363,6 +1367,7 @@ def self_test_protected_workflow_evidence_overlay(sync: str) -> None:
 def validate_approval_comment_evidence_overlay(sync: str) -> None:
     approve = core.job_block(sync, "approve", "authorize")
     get_endpoint = 'repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
+    get_call = 'spotlight_paginated_get approval-comments'
     post_endpoint = 'repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments'
     post_mutation = 'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"'
     post_status = 'APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"'
@@ -1371,6 +1376,10 @@ def validate_approval_comment_evidence_overlay(sync: str) -> None:
     require(
         approve.count(get_endpoint) == 1,
         "Spotlight automation-approval comment read endpoint changed",
+    )
+    require(
+        approve.count(get_call) == 1,
+        "Spotlight automation-approval comment paginated read call changed",
     )
     require(
         approve.count(post_endpoint) == 2,
@@ -1433,7 +1442,8 @@ def validate_approval_comment_evidence_overlay(sync: str) -> None:
             f"Spotlight regressed to raw automation-approval comment evidence: {forbidden}",
         )
 
-    fetch_pos = approve.index(get_endpoint)
+    endpoint_pos = approve.index(get_endpoint)
+    fetch_pos = approve.index(get_call, endpoint_pos)
     validate_pos = approve.index(
         'error("Spotlight automation-approval comment pages must be a bounded slurped page array")',
         fetch_pos,

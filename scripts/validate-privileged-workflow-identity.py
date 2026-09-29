@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v129"
+VERSION = "governed-workflow-byte-identity-v130"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "2a6cdbad9ebeb84bba38e2ac21e8d38652418f4a",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
-    ".github/workflows/spotlight-link-sync.yml": "170549c4602460ac03d68b8d1f6e31a71a3d1993",
+    ".github/workflows/spotlight-link-sync.yml": "f4dea5927f47b1b65ffc79e412599acec6433420",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -613,6 +613,10 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> st
          'REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"'),
         ('PRS="$(spotlight_singleton_get open-pr-list)"',
          'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"'),
+        ('          spotlight_paginated_get approval-comments \\\n            > "$RUNNER_TEMP/spotlight-approval-comment-pages.json"',
+         '          gh api --paginate --slurp \\\n            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \\\n            > "$RUNNER_TEMP/spotlight-approval-comment-pages.json"'),
+        ('REVIEW_PAGES="$(spotlight_paginated_get owner-reviews)"',
+         'REVIEW_PAGES="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"'),
         ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"',
          'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
         ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"',
@@ -624,8 +628,10 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> st
         require(projected.count(hardened) == 1,
                 f"Spotlight approve shell-read projection topology changed: {hardened}")
         projected = projected.replace(hardened, legacy, 1)
-    require("spotlight_singleton_get" not in projected,
-            "Spotlight approve shell-read projection left retry transport bytes behind")
+    require(
+        "spotlight_singleton_get" not in projected and "spotlight_paginated_get" not in projected,
+        "Spotlight approve shell-read projection left retry transport bytes behind",
+    )
     return spotlight[:approve_start] + projected + spotlight[approve_end:]
 
 
@@ -3143,6 +3149,21 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
     require(
         "Spotlight exact-head reviewer-readiness snapshot." not in projected,
         "Spotlight review-readiness compatibility projection left readiness schema bytes behind",
+    )
+
+    paginated_review = 'REVIEW_PAGES="$(spotlight_paginated_get owner-reviews)"'
+    legacy_review = (
+        'REVIEW_PAGES="$(gh api --paginate --slurp '
+        '"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"'
+    )
+    require(
+        projected.count(paginated_review) == 1,
+        "Spotlight review pagination compatibility projection anchor changed",
+    )
+    projected = projected.replace(paginated_review, legacy_review, 1)
+    require(
+        "spotlight_paginated_get owner-reviews" not in projected,
+        "Spotlight review pagination compatibility projection left retry transport behind",
     )
     return projected
 

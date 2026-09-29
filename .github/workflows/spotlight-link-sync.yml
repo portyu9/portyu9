@@ -1246,10 +1246,25 @@ jobs:
           }
 
           spotlight_singleton_get() {
-            local request="$1"
+            local request="$1" page="${2:-}"
             local attempt response exit_code line status status_count content_type
             local rate_remaining retry_after body_started body retry delay requested
             local LC_ALL=C
+
+            case "$request" in
+              approval-comments-page|owner-reviews-page)
+                [[ "$page" =~ ^([1-9]|1[0-9]|20)$ ]] || {
+                  echo "ERROR: invalid Spotlight paginated GET page: ${page:-unset}" >&2
+                  return 1
+                }
+                ;;
+              *)
+                test -z "$page" || {
+                  echo "ERROR: unexpected page argument for Spotlight singleton GET: $request" >&2
+                  return 1
+                }
+                ;;
+            esac
 
             for attempt in 1 2 3; do
               response=""
@@ -1296,6 +1311,12 @@ jobs:
                   ;;
                 pr-final)
                   response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" 2>&1)"
+                  ;;
+                approval-comments-page)
+                  response="$(timeout 20s gh api --include --method GET -F page="$page" "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" 2>&1)"
+                  ;;
+                owner-reviews-page)
+                  response="$(timeout 20s gh api --include --method GET -F page="$page" "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" 2>&1)"
                   ;;
                 *)
                   set -e
@@ -1407,6 +1428,51 @@ jobs:
               fi
               echo "RETRY: Spotlight singleton GET transient (exit=$exit_code http=${status:-none}); attempt $attempt/3, sleeping ${delay}s: $request" >&2
               sleep "$delay"
+            done
+            return 1
+          }
+
+          spotlight_paginated_get() {
+            local request="$1"
+            local page=1 body count first=true
+
+            printf '['
+            while [ "$page" -le 20 ]; do
+              case "$request" in
+                approval-comments)
+                  body="$(spotlight_singleton_get approval-comments-page "$page")"
+                  ;;
+                owner-reviews)
+                  body="$(spotlight_singleton_get owner-reviews-page "$page")"
+                  ;;
+                *)
+                  echo "ERROR: unknown Spotlight paginated GET identity: $request" >&2
+                  return 1
+                  ;;
+              esac
+
+              count="$(jq -er '
+                if type != "array" or length > 100 then
+                  error("Spotlight paginated GET page shape changed")
+                else
+                  length
+                end
+              ' <<<"$body")"
+              if [ "$first" = "false" ]; then
+                printf ','
+              fi
+              printf '%s' "$body"
+              first=false
+
+              if [ "$count" -lt 100 ]; then
+                printf ']\n'
+                return 0
+              fi
+              if [ "$page" -ge 20 ]; then
+                echo "ERROR: Spotlight paginated GET exceeds the 20-page bound: $request" >&2
+                return 1
+              fi
+              page=$((page + 1))
             done
             return 1
           }
@@ -1773,8 +1839,7 @@ jobs:
           validate_spotlight_pull_list_item "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
           test "$(jq -r .number <<<"$APPROVAL_PR")" = "$PR_NUMBER"
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${HEAD_SHA} -->"
-          gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
+          spotlight_paginated_get approval-comments \
             > "$RUNNER_TEMP/spotlight-approval-comment-pages.json"
           jq -ce \
             --arg repo "$GITHUB_REPOSITORY" \
@@ -1858,7 +1923,7 @@ jobs:
           fi
 
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${BASE_SHA} head=${HEAD_SHA} -->"
-          REVIEW_PAGES="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          REVIEW_PAGES="$(spotlight_paginated_get owner-reviews)"
           jq -e '
             (type == "array") and (length >= 1) and (length <= 20) and
             (all(.[]; type == "array" and length <= 100)) and
