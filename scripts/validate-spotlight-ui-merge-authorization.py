@@ -1107,7 +1107,63 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
     return sync[:start] + legacy + sync[end:]
 
 
+
+def project_spotlight_approve_governed_reads_to_legacy(sync: str) -> str:
+    """Project only the approval GET transport overlay before frozen item-9 semantics."""
+    approve_start = sync.index("  approve:\n")
+    approve_end = sync.index("  authorize:\n", approve_start)
+    approve = sync[approve_start:approve_end]
+    checkout = "      - name: Checkout exact trusted source for governed reads\n"
+    approve_step = (
+        "      - name: Approve and wait for only the exact README-only automation checks\n"
+    )
+    require(
+        approve.count(checkout) == 1 and approve.count(approve_step) == 1,
+        "Spotlight item-9 approval governed-read bootstrap anchors changed",
+    )
+    require(
+        approve.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
+        and approve.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+        "Spotlight item-9 approval governed-read runtime surface changed",
+    )
+    require(
+        "ref: main" in approve
+        and "persist-credentials: false" in approve
+        and 'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in approve,
+        "Spotlight item-9 approval lost static credential-free sealed-base checkout",
+    )
+    require(
+        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in approve
+        and 'test "$(git -C source rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"'
+        in approve,
+        "Spotlight item-9 approval governed-read helper identity changed",
+    )
+    bootstrap_start = approve.index(checkout)
+    approve_step_start = approve.index(approve_step, bootstrap_start)
+    projected = approve[:bootstrap_start] + approve[approve_step_start:]
+    require(
+        projected.count("python3 source/scripts/automation_github_read.py") == 14
+        and projected.count("python3 source/scripts/automation_github_paginated_read.py") == 2,
+        "Spotlight item-9 approval governed-read call inventory changed",
+    )
+    require(
+        projected.count("gh api --include --method POST") == 4
+        and projected.count("gh api ") == 4,
+        "Spotlight item-9 approval single-shot mutation inventory changed",
+    )
+    projected = projected.replace(
+        "python3 source/scripts/automation_github_paginated_read.py",
+        "gh api --paginate --slurp",
+    ).replace(
+        "python3 source/scripts/automation_github_read.py",
+        "gh api",
+    )
+    return sync[:approve_start] + projected + sync[approve_end:]
+
 def project_item9(sync: str) -> str:
+    # Restore accepted raw GET bytes first; all older item-9 projectors key on them.
+    sync = project_spotlight_approve_governed_reads_to_legacy(sync)
     sync = project_git_publication_status_to_legacy(sync)
     sync = project_lifecycle_status_to_legacy(sync)
     sync = project_spotlight_pr_response_evidence_to_legacy(sync)
