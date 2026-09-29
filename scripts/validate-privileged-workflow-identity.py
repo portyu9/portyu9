@@ -820,10 +820,11 @@ def validate_spotlight_readme_contents_evidence(
 ) -> None:
     propose = job_block(spotlight, "propose", "approve")
     merge = job_block(spotlight, "merge", "decision_receipt")
-    candidate_fetch = (
+    proposal_candidate_fetch = (
         "README_CONTENTS_RESPONSE=\"$(gh api "
         "\"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\")\""
     )
+    terminal_candidate_fetch = 'README_CONTENTS_RESPONSE="$(spotlight_merge_get candidate-readme)"'
     candidate_consume = "jq -er '.content' <<<\"$README_CONTENTS_RESPONSE\""
     candidate_digest = (
         "test \"$(sha256sum candidate-readme.md | cut -d' ' -f1)\" "
@@ -881,17 +882,19 @@ def validate_spotlight_readme_contents_evidence(
         (
             "proposal candidate",
             propose,
+            proposal_candidate_fetch,
             "README_BLOB_SHA=\"$(jq -r '.files[0].sha' <<<\"$COMPARE\")\"",
             "malformed or mismatched Spotlight proposal README Contents evidence",
         ),
         (
             "terminal candidate",
             merge,
+            terminal_candidate_fetch,
             "README_BLOB_SHA=\"$(jq -r '.[0].sha' <<<\"$FILES\")\"",
             "malformed or mismatched Spotlight terminal README Contents evidence",
         ),
     )
-    for label, evidence, blob, error_text in specs:
+    for label, evidence, candidate_fetch, blob, error_text in specs:
         for marker in (blob, candidate_fetch, candidate_consume, candidate_digest, error_text):
             require(
                 evidence.count(marker) == 1,
@@ -930,7 +933,11 @@ def validate_spotlight_readme_contents_evidence(
         ) == 1
         and spotlight.count(
             'gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}"'
-        ) == 2,
+        ) == 1
+        and spotlight.count("spotlight_merge_get candidate-readme") == 1
+        and spotlight.count(
+            'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}" 2>&1)"'
+        ) == 1,
         "Spotlight privileged README Contents endpoint/call-count contract changed",
     )
 
@@ -3732,10 +3739,7 @@ def validate_spotlight_terminal_required_check_collection(
     spotlight: str, *, run_self_test: bool = True
 ) -> None:
     terminal = job_block(spotlight, "merge", "decision_receipt")
-    fetch = (
-        'CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' '
-        '"repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"'
-    )
+    fetch = 'CHECKS="$(spotlight_merge_get exact-head-checks)"'
     scalar_consume = 'CHECKS_TOTAL="$(jq -r \'.total_count // empty\' <<<"$CHECKS")"'
     observed_consume = 'OBSERVED_CHECKS="$(jq -c \'[.check_runs[] | select(.app.id == 15368'
     schema_start = 'jq -e --arg head "$HEAD_SHA" \''
@@ -3921,17 +3925,17 @@ def validate_spotlight_terminal_protected_run_evidence(
 
     specs = (
         (
-            'CODEQL_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}")"',
+            'CODEQL_RUN_RAW="$(spotlight_merge_get codeql-run)"',
             'CODEQL_RUN="$(normalize_protected_certificate_run "$CODEQL_RUN_RAW" "$CODEQL_RUN_ID" "$CODEQL_CHECK_SUITE_ID" "CodeQL" ".github/workflows/codeql.yml")"',
             "CodeQL",
         ),
         (
-            'DEPENDENCY_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}")"',
+            'DEPENDENCY_RUN_RAW="$(spotlight_merge_get dependency-run)"',
             'DEPENDENCY_RUN="$(normalize_protected_certificate_run "$DEPENDENCY_RUN_RAW" "$DEPENDENCY_RUN_ID" "$DEPENDENCY_CHECK_SUITE_ID" "Dependency review" ".github/workflows/dependency-review.yml")"',
             "Dependency review",
         ),
         (
-            'PROFILE_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}")"',
+            'PROFILE_RUN_RAW="$(spotlight_merge_get profile-run)"',
             'PROFILE_RUN="$(normalize_protected_certificate_run "$PROFILE_RUN_RAW" "$PROFILE_RUN_ID" "$PROFILE_CHECK_SUITE_ID" "Profile quality" ".github/workflows/profile-quality.yml")"',
             "Profile quality",
         ),
@@ -3948,9 +3952,18 @@ def validate_spotlight_terminal_protected_run_evidence(
         previous = normalize_pos
 
     require(
-        terminal.count('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}"') == 1
-        and terminal.count('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}"') == 1
-        and terminal.count('gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}"') == 1,
+        terminal.count("spotlight_merge_get codeql-run") == 1
+        and terminal.count("spotlight_merge_get dependency-run") == 1
+        and terminal.count("spotlight_merge_get profile-run") == 1
+        and terminal.count(
+            'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}" 2>&1)"'
+        ) == 1
+        and terminal.count(
+            'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}" 2>&1)"'
+        ) == 1
+        and terminal.count(
+            'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}" 2>&1)"'
+        ) == 1,
         "Spotlight terminal protected-run endpoint/call-count contract changed",
     )
     for forbidden in (
@@ -3999,23 +4012,14 @@ def validate_spotlight_terminal_trusted_admission_evidence(
     spotlight: str, *, run_self_test: bool = True
 ) -> None:
     terminal = job_block(spotlight, "merge", "decision_receipt")
-    workflow_fetch = (
-        'TRUSTED_WORKFLOW_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/'
-        'capability-admission.yml")"'
-    )
+    workflow_fetch = 'TRUSTED_WORKFLOW_RAW="$(spotlight_merge_get trusted-workflow)"'
     workflow_schema = 'error("Spotlight trusted-admission workflow definition must be an object")'
     workflow_consume = "TRUSTED_WORKFLOW_ID=\"$(jq -er '"
-    run_fetch = (
-        'TRUSTED_RUN_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/'
-        '${TRUSTED_RUN_ID}")"'
-    )
+    run_fetch = 'TRUSTED_RUN_RAW="$(spotlight_merge_get trusted-run)"'
     run_schema = 'error("Spotlight trusted-admission run must be an object")'
     run_normalized = "TRUSTED_RUN=\"$(jq -ce \\"
     run_consume = 'test "$(jq -r .workflow_id <<<"$TRUSTED_RUN")" = "$TRUSTED_WORKFLOW_ID"'
-    check_fetch = (
-        'TRUSTED_CHECK_RAW="$(gh api "repos/${GITHUB_REPOSITORY}/check-runs/'
-        '${TRUSTED_CHECK_RUN_ID}")"'
-    )
+    check_fetch = 'TRUSTED_CHECK_RAW="$(spotlight_merge_get trusted-check)"'
     check_schema = 'error("Spotlight trusted-admission check run must be an object")'
     check_normalized = "TRUSTED_CHECK=\"$(jq -ce \\"
     check_consume = 'test "$(jq -r .external_id <<<"$TRUSTED_CHECK")" = "$EXPECTED_TRUSTED_EXTERNAL_ID"'
@@ -4133,14 +4137,17 @@ def validate_spotlight_terminal_trusted_admission_evidence(
         )
 
     require(
-        terminal.count(
-            'gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml"'
+        terminal.count("spotlight_merge_get trusted-workflow") == 1
+        and terminal.count("spotlight_merge_get trusted-run") == 1
+        and terminal.count("spotlight_merge_get trusted-check") == 1
+        and terminal.count(
+            'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml" 2>&1)"'
         ) == 1
         and terminal.count(
-            'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}"'
+            'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}" 2>&1)"'
         ) == 1
         and terminal.count(
-            'gh api "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}"'
+            'response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}" 2>&1)"'
         ) == 1,
         "Spotlight terminal trusted-admission endpoint/call-count contract changed",
     )
