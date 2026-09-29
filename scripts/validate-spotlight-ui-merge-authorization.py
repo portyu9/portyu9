@@ -1233,32 +1233,38 @@ NATIVE_REVIEW_GATE_FRAGMENTS = (
 def validate_protected_workflow_evidence_overlay(sync: str) -> None:
     approve = core.job_block(sync, "approve", "authorize")
     workflow_paths = (
-        (".github/workflows/codeql.yml", "CodeQL", "spotlight-codeql-workflow-definition.json", "CODEQL_WORKFLOW_ID"),
-        (".github/workflows/dependency-review.yml", "Dependency review", "spotlight-dependency-workflow-definition.json", "DEPENDENCY_WORKFLOW_ID"),
-        (".github/workflows/profile-quality.yml", "Profile quality", "spotlight-profile-workflow-definition.json", "PROFILE_WORKFLOW_ID"),
+        (".github/workflows/codeql.yml", "CodeQL", "spotlight-codeql-workflow-definition.json", "CODEQL_WORKFLOW_ID", "codeql-workflow"),
+        (".github/workflows/dependency-review.yml", "Dependency review", "spotlight-dependency-workflow-definition.json", "DEPENDENCY_WORKFLOW_ID", "dependency-workflow"),
+        (".github/workflows/profile-quality.yml", "Profile quality", "spotlight-profile-workflow-definition.json", "PROFILE_WORKFLOW_ID", "profile-workflow"),
     )
     require(
         "python3 scripts/dependabot_controller.py" not in approve
         and "python3 scripts/automation_approval_comment.py" not in approve,
         "Spotlight protected workflow evidence must preserve the jq-only privileged approval firewall",
     )
-    for path_value, name, filename, variable in workflow_paths:
+    for path_value, name, filename, variable, request in workflow_paths:
         workflow_file = path_value.rsplit("/", 1)[1]
         endpoint = f'repos/${{GITHUB_REPOSITORY}}/actions/workflows/{workflow_file}'
-        fetch = f'gh api "{endpoint}"'
+        raw_fetch = f'gh api --include "{endpoint}"'
+        fetch = f"spotlight_singleton_get {request}"
         consume = f'{variable}="$(jq -er --arg path "{path_value}" --arg name "{name}" \''
-        require(approve.count(fetch) == 1, f"Spotlight protected workflow definition endpoint changed: {path_value}")
+        require(
+            approve.count(raw_fetch) == 1,
+            f"Spotlight protected workflow definition retry-kernel endpoint changed: {path_value}",
+        )
+        require(approve.count(fetch) == 1, f"Spotlight protected workflow definition retry call changed: {path_value}")
         require(approve.count(consume) == 1, f"Spotlight protected workflow definition validator changed: {path_value}")
         require(
             f'> "$RUNNER_TEMP/{filename}"' in approve,
             f"Spotlight protected workflow definition raw evidence file changed: {path_value}",
         )
-        fetch_pos = approve.index(fetch)
+        raw_fetch_pos = approve.index(raw_fetch)
+        fetch_pos = approve.index(fetch, raw_fetch_pos)
         validate_pos = approve.index(consume, fetch_pos)
         expected_pos = approve.index('EXPECTED_IDENTITIES="$(jq -cn', validate_pos)
         require(
-            fetch_pos < validate_pos < expected_pos,
-            "Spotlight protected workflow definition must be validated before identity consumption",
+            raw_fetch_pos < fetch_pos < validate_pos < expected_pos,
+            "Spotlight protected workflow definition retry endpoint/call must precede validation and identity consumption",
         )
 
     for fragment in (
