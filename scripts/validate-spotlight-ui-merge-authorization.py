@@ -384,8 +384,9 @@ def project_merge_success_response_to_legacy(sync: str) -> str:
 
 def validate_mac_with_merge_http_projection(sync: str) -> None:
     """Project transport-only wrappers before rerunning the frozen item-10 MAC proof."""
+    projected = project_spotlight_merge_shell_reads_to_raw(sync)
     ORIGINAL_VALIDATE_MAC(
-        project_merge_http_status_to_legacy(project_lifecycle_status_to_legacy(sync))
+        project_merge_http_status_to_legacy(project_lifecycle_status_to_legacy(projected))
     )
 
 
@@ -411,9 +412,9 @@ def validate_merge_success_response_overlay(sync: str) -> None:
     extraction = merge.index('RESULT="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_HTTP_RESPONSE")"', guard)
     validation = merge.index('VALIDATED_MERGE="$(jq -ce "$MERGE_SUCCESS_FILTER" <<<"$RESULT")"', extraction)
     normalized_sha = merge.index('MERGE_SHA="$(jq -r .sha <<<"$VALIDATED_MERGE")"')
-    merged_pr = merge.index('MERGED_PR="$(gh api ')
+    merged_pr = merge.index('MERGED_PR="$(spotlight_merge_get pr-postmerge)"')
     current_main_ref = merge.index(
-        'CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+        'CURRENT_MAIN_REF_RESPONSE="$(spotlight_merge_get main-postmerge)"',
         merged_pr,
     )
     current_main_schema = merge.index(
@@ -424,7 +425,7 @@ def validate_merge_success_response_overlay(sync: str) -> None:
         'CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
         current_main_schema,
     )
-    cleanup = merge.index('CANDIDATE_REFS="$(gh api ', current_main)
+    cleanup = merge.index('CANDIDATE_REFS="$(spotlight_merge_get candidate-refs-postmerge)"', current_main)
     require(
         mutation < status < guard < extraction < validation < normalized_sha < merged_pr
         < current_main_ref < current_main_schema < current_main < cleanup,
@@ -530,7 +531,7 @@ def self_test_merge_success_response_overlay(sync: str) -> None:
 def validate_terminal_object_schema_overlay(sync: str) -> None:
     merge = core.job_block(sync, "merge", None)
     fn_start = merge.index("          validate_terminal_pr_object() {\n")
-    pre_pr = merge.index('          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"')
+    pre_pr = merge.index('          PR="$(spotlight_merge_get pr-initial)"')
     fn = merge[fn_start:pre_pr]
     for fragment in (
         '(type == "object") and',
@@ -559,7 +560,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     ):
         require(fragment in merge, f"Spotlight terminal exact pre-merge PR identity is missing: {fragment}")
 
-    files_fetch = merge.index('          FILES="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100")"')
+    files_fetch = merge.index('          FILES="$(spotlight_merge_get files)"')
     files_schema = merge.index('            (type == "array") and', files_fetch)
     files_consume = merge.index('          test "$(jq \'length\' <<<"$FILES")" = "1"', files_schema)
     files_block = merge[files_fetch:files_consume]
@@ -576,7 +577,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     require(files_fetch < files_schema < files_consume,
             "Spotlight terminal file evidence is consumed before schema validation")
 
-    commit_fetch = merge.index('          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"')
+    commit_fetch = merge.index('          CANDIDATE_COMMIT="$(spotlight_merge_get candidate-commit)"')
     commit_schema = merge.index('          jq -e --arg head "$HEAD_SHA" \'', commit_fetch)
     commit_consume = merge.index('          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"', commit_schema)
     commit_block = merge[commit_fetch:commit_consume]
@@ -592,13 +593,13 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     require(commit_fetch < commit_schema < commit_consume,
             "Spotlight terminal commit evidence is consumed before schema validation")
 
-    merged_fetch = merge.index('          MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"')
+    merged_fetch = merge.index('          MERGED_PR="$(spotlight_merge_get pr-postmerge)"')
     merged_validate = merge.index('          validate_terminal_pr_object "$MERGED_PR"', merged_fetch)
     merged_identity = merge.index('          jq -e --argjson pr "$PR_NUMBER" --arg merge "$MERGE_SHA"', merged_validate)
     merged_consume = merge.index('          test "$(jq -r .user.login <<<"$MERGED_PR")"', merged_identity)
     merge_sha_bind = merge.index('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"', merged_consume)
     current_main_ref = merge.index(
-        '          CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+        '          CURRENT_MAIN_REF_RESPONSE="$(spotlight_merge_get main-postmerge)"',
         merge_sha_bind,
     )
     current_main_schema = merge.index(
@@ -609,7 +610,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
         '          CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
         current_main_schema,
     )
-    cleanup = merge.index('          CANDIDATE_REFS="$(gh api ', current_main)
+    cleanup = merge.index('          CANDIDATE_REFS="$(spotlight_merge_get candidate-refs-postmerge)"', current_main)
     identity_block = merge[merged_identity:merged_consume]
     for fragment in (
         '(.number == $pr) and',
@@ -960,6 +961,61 @@ def project_ancestry_supersession_to_same_base(sync: str) -> str:
     return sync
 
 
+
+def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
+    """Project merge-only shell retry transport to the accepted raw-GET semantic shape."""
+    merge_start = sync.index("  merge:\n")
+    merge_end = sync.find("  decision_receipt:\n", merge_start)
+    if merge_end < 0:
+        # Item-9 UI projection receives the workflow after the item-11 tail is stripped.
+        merge_end = len(sync)
+    merge = sync[merge_start:merge_end]
+    helper_start_marker = "          spotlight_merge_get() {\n"
+    helper_end_marker = "          # Verify exact short-lived mutation lease.\n"
+    require(
+        merge.count(helper_start_marker) == 1 and merge.count(helper_end_marker) == 1,
+        "Spotlight item-9 terminal shell-read projection anchors changed",
+    )
+    helper_start = merge.index(helper_start_marker)
+    helper_end = merge.index(helper_end_marker, helper_start)
+    projected = merge[:helper_start] + merge[helper_end:]
+    overlays = (
+        ("PR=\"$(spotlight_merge_get pr-initial)\"", "PR=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}\")\""),
+        ("MAIN_REF_RESPONSE=\"$(spotlight_merge_get main-initial)\"", "MAIN_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/main\")\""),
+        ("GENERATED_REF_RESPONSE=\"$(spotlight_merge_get generated-initial)\"", "GENERATED_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/generated\")\""),
+        ("CANDIDATE_REF_RESPONSE=\"$(spotlight_merge_get candidate-initial)\"", "CANDIDATE_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}\")\""),
+        ("FILES=\"$(spotlight_merge_get files)\"", "FILES=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100\")\""),
+        ("CANDIDATE_COMMIT=\"$(spotlight_merge_get candidate-commit)\"", "CANDIDATE_COMMIT=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}\")\""),
+        ("README_CONTENTS_RESPONSE=\"$(spotlight_merge_get candidate-readme)\"", "README_CONTENTS_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\")\""),
+        ("CODEQL_RUN_RAW=\"$(spotlight_merge_get codeql-run)\"", "CODEQL_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}\")\""),
+        ("DEPENDENCY_RUN_RAW=\"$(spotlight_merge_get dependency-run)\"", "DEPENDENCY_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}\")\""),
+        ("PROFILE_RUN_RAW=\"$(spotlight_merge_get profile-run)\"", "PROFILE_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}\")\""),
+        ("TRUSTED_WORKFLOW_RAW=\"$(spotlight_merge_get trusted-workflow)\"", "TRUSTED_WORKFLOW_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml\")\""),
+        ("TRUSTED_RUN_RAW=\"$(spotlight_merge_get trusted-run)\"", "TRUSTED_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}\")\""),
+        ("TRUSTED_CHECK_RAW=\"$(spotlight_merge_get trusted-check)\"", "TRUSTED_CHECK_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}\")\""),
+        ("REVIEW_PAGES=\"$(spotlight_merge_paginated_get owner-reviews)\"", "REVIEW_PAGES=\"$(gh api --paginate --slurp \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100\")\""),
+        ("CHECKS=\"$(spotlight_merge_get exact-head-checks)\"", "CHECKS=\"$(gh api -H 'Accept: application/vnd.github+json' \"repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100\")\""),
+        ("MAIN_REF_RESPONSE=\"$(spotlight_merge_get main-premerge)\"", "MAIN_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/main\")\""),
+        ("GENERATED_REF_RESPONSE=\"$(spotlight_merge_get generated-premerge)\"", "GENERATED_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/generated\")\""),
+        ("CANDIDATE_REF_RESPONSE=\"$(spotlight_merge_get candidate-premerge)\"", "CANDIDATE_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}\")\""),
+        ("MERGED_PR=\"$(spotlight_merge_get pr-postmerge)\"", "MERGED_PR=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}\")\""),
+        ("CURRENT_MAIN_REF_RESPONSE=\"$(spotlight_merge_get main-postmerge)\"", "CURRENT_MAIN_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/main\")\""),
+        ("CANDIDATE_REFS=\"$(spotlight_merge_get candidate-refs-postmerge)\"", "CANDIDATE_REFS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}\")\""),
+        ("AFTER_REFS=\"$(spotlight_merge_get candidate-refs-after-delete)\"", "AFTER_REFS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}\")\""),
+    )
+    for hardened, legacy in overlays:
+        require(
+            projected.count(hardened) == 1,
+            f"Spotlight item-9 terminal shell-read projection topology changed: {hardened}",
+        )
+        projected = projected.replace(hardened, legacy, 1)
+    require(
+        "spotlight_merge_get" not in projected and "spotlight_merge_paginated_get" not in projected,
+        "Spotlight item-9 terminal shell-read projection left retry transport bytes behind",
+    )
+    return sync[:merge_start] + projected + sync[merge_end:]
+
+
 def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
     """Project approve-only singleton retry transport to the accepted item-9 raw-GET shape."""
     approve_start = sync.index("  approve:\n")
@@ -1169,6 +1225,7 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 
 def project_item9(sync: str) -> str:
+    sync = project_spotlight_merge_shell_reads_to_raw(sync)
     sync = project_spotlight_approve_shell_singleton_reads_to_raw(sync)
     sync = project_git_publication_status_to_legacy(sync)
     sync = project_lifecycle_status_to_legacy(sync)
@@ -1711,7 +1768,7 @@ def validate_lifecycle_http_status_overlay(sync: str) -> None:
 
     terminal_delete_pos = merge.index(blocks[3])
     terminal_readback = merge.index(
-        'AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+        'AFTER_REFS="$(spotlight_merge_get candidate-refs-after-delete)"'
     )
     require(terminal_delete_pos < terminal_readback,
             "Spotlight terminal ref-delete HTTP 204 proof must precede absence readback")
@@ -1747,7 +1804,7 @@ def self_test_lifecycle_http_status_overlay(sync: str) -> None:
         raise ValueError("Spotlight lifecycle status self-test accepted non-201 PR creation")
 
     readback = (
-        '            AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"\n'
+        '            AFTER_REFS="$(spotlight_merge_get candidate-refs-after-delete)"\n'
     )
     ordered = LIFECYCLE_STATUS_BLOCKS[3][0] + readback
     require(ordered in sync,
@@ -1771,7 +1828,7 @@ def validate_native_governed_bot_review_overlay(sync: str) -> None:
     for fragment in NATIVE_REVIEW_GATE_FRAGMENTS:
         require(fragment in merge,
                 f"Spotlight post-review native governed-bot gate proof is missing: {fragment}")
-    check_read = 'CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"'
+    check_read = 'CHECKS="$(spotlight_merge_get exact-head-checks)"'
     require(merge.count(check_read) == 1,
             "Spotlight terminal merge must retain exactly one canonical generic check-run read")
     review = merge.index(

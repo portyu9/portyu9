@@ -443,6 +443,61 @@ def project_spotlight_readme_contents_to_legacy(sync: str) -> str:
     return projected
 
 
+
+def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
+    """Project merge-only shell retry transport to the accepted raw-GET semantic shape."""
+    merge_start = sync.index("  merge:\n")
+    merge_end = sync.find("  decision_receipt:\n", merge_start)
+    if merge_end < 0:
+        # Item-10/item-9 authority validation receives the workflow after the item-11 tail is stripped.
+        merge_end = len(sync)
+    merge = sync[merge_start:merge_end]
+    helper_start_marker = "          spotlight_merge_get() {\n"
+    helper_end_marker = "          # Verify exact short-lived mutation lease.\n"
+    core.require(
+        merge.count(helper_start_marker) == 1 and merge.count(helper_end_marker) == 1,
+        "Spotlight authority terminal shell-read projection anchors changed",
+    )
+    helper_start = merge.index(helper_start_marker)
+    helper_end = merge.index(helper_end_marker, helper_start)
+    projected = merge[:helper_start] + merge[helper_end:]
+    overlays = (
+        ("PR=\"$(spotlight_merge_get pr-initial)\"", "PR=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}\")\""),
+        ("MAIN_REF_RESPONSE=\"$(spotlight_merge_get main-initial)\"", "MAIN_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/main\")\""),
+        ("GENERATED_REF_RESPONSE=\"$(spotlight_merge_get generated-initial)\"", "GENERATED_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/generated\")\""),
+        ("CANDIDATE_REF_RESPONSE=\"$(spotlight_merge_get candidate-initial)\"", "CANDIDATE_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}\")\""),
+        ("FILES=\"$(spotlight_merge_get files)\"", "FILES=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100\")\""),
+        ("CANDIDATE_COMMIT=\"$(spotlight_merge_get candidate-commit)\"", "CANDIDATE_COMMIT=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}\")\""),
+        ("README_CONTENTS_RESPONSE=\"$(spotlight_merge_get candidate-readme)\"", "README_CONTENTS_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\")\""),
+        ("CODEQL_RUN_RAW=\"$(spotlight_merge_get codeql-run)\"", "CODEQL_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}\")\""),
+        ("DEPENDENCY_RUN_RAW=\"$(spotlight_merge_get dependency-run)\"", "DEPENDENCY_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}\")\""),
+        ("PROFILE_RUN_RAW=\"$(spotlight_merge_get profile-run)\"", "PROFILE_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}\")\""),
+        ("TRUSTED_WORKFLOW_RAW=\"$(spotlight_merge_get trusted-workflow)\"", "TRUSTED_WORKFLOW_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml\")\""),
+        ("TRUSTED_RUN_RAW=\"$(spotlight_merge_get trusted-run)\"", "TRUSTED_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}\")\""),
+        ("TRUSTED_CHECK_RAW=\"$(spotlight_merge_get trusted-check)\"", "TRUSTED_CHECK_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}\")\""),
+        ("REVIEW_PAGES=\"$(spotlight_merge_paginated_get owner-reviews)\"", "REVIEW_PAGES=\"$(gh api --paginate --slurp \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100\")\""),
+        ("CHECKS=\"$(spotlight_merge_get exact-head-checks)\"", "CHECKS=\"$(gh api -H 'Accept: application/vnd.github+json' \"repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100\")\""),
+        ("MAIN_REF_RESPONSE=\"$(spotlight_merge_get main-premerge)\"", "MAIN_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/main\")\""),
+        ("GENERATED_REF_RESPONSE=\"$(spotlight_merge_get generated-premerge)\"", "GENERATED_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/generated\")\""),
+        ("CANDIDATE_REF_RESPONSE=\"$(spotlight_merge_get candidate-premerge)\"", "CANDIDATE_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}\")\""),
+        ("MERGED_PR=\"$(spotlight_merge_get pr-postmerge)\"", "MERGED_PR=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}\")\""),
+        ("CURRENT_MAIN_REF_RESPONSE=\"$(spotlight_merge_get main-postmerge)\"", "CURRENT_MAIN_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/main\")\""),
+        ("CANDIDATE_REFS=\"$(spotlight_merge_get candidate-refs-postmerge)\"", "CANDIDATE_REFS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}\")\""),
+        ("AFTER_REFS=\"$(spotlight_merge_get candidate-refs-after-delete)\"", "AFTER_REFS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}\")\""),
+    )
+    for hardened, legacy in overlays:
+        core.require(
+            projected.count(hardened) == 1,
+            f"Spotlight authority terminal shell-read projection topology changed: {hardened}",
+        )
+        projected = projected.replace(hardened, legacy, 1)
+    core.require(
+        "spotlight_merge_get" not in projected and "spotlight_merge_paginated_get" not in projected,
+        "Spotlight authority terminal shell-read projection left retry transport bytes behind",
+    )
+    return sync[:merge_start] + projected + sync[merge_end:]
+
+
 def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
     """Project approve-only singleton retry transport to the accepted raw-GET semantic shape."""
     approve_start = sync.index("  approve:\n")
@@ -609,7 +664,8 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 
 def validate_item10_authority_with_typed_protected_runs(sync: str) -> None:
-    projected = project_spotlight_terminal_merge_status_to_legacy(sync)
+    projected = project_spotlight_merge_shell_reads_to_raw(sync)
+    projected = project_spotlight_terminal_merge_status_to_legacy(projected)
     lifecycle_overlays = (
         (
             '              CLOSED_PR_HTTP_RESPONSE="$(gh api --include --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input close-pr.json)"\n'
@@ -828,6 +884,7 @@ def project_state_driven_spotlight_reviewer_to_legacy(sync: str) -> str:
 
 
 def project_item9_sync_with_marker(sync: str) -> str:
+    sync = project_spotlight_merge_shell_reads_to_raw(sync)
     sync = project_spotlight_approve_shell_singleton_reads_to_raw(sync)
     sync = project_spotlight_terminal_merge_status_to_legacy(sync)
     sync = project_spotlight_terminal_protected_runs_to_legacy(sync)
