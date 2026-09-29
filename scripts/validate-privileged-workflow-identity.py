@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v128"
+VERSION = "governed-workflow-byte-identity-v129"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "2a6cdbad9ebeb84bba38e2ac21e8d38652418f4a",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
-    ".github/workflows/spotlight-link-sync.yml": "b9356f4cd806909f23d9761250d609352a001e15",
+    ".github/workflows/spotlight-link-sync.yml": "170549c4602460ac03d68b8d1f6e31a71a3d1993",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -574,6 +574,61 @@ def validate_leases(profile: str, spotlight: str) -> None:
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
 
 
+def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> str:
+    """Project the reviewed approve-only shell retry transport to its prior raw-GET semantics."""
+    approve_start = spotlight.index("  approve:\n")
+    approve_end = spotlight.index("  authorize:\n", approve_start)
+    approve = spotlight[approve_start:approve_end]
+
+    helper_start_marker = "          spotlight_singleton_get() {\n"
+    helper_end_marker = "          APPROVAL_REQUESTS_JSON='[]'\n"
+    require(
+        approve.count(helper_start_marker) == 1 and approve.count(helper_end_marker) == 1,
+        "Spotlight approve shell-read projection anchors changed",
+    )
+    helper_start = approve.index(helper_start_marker)
+    helper_end = approve.index(helper_end_marker, helper_start)
+    projected = approve[:helper_start] + approve[helper_end:]
+
+    overlays = (
+        ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
+        ('GENERATED_REF_RESPONSE="$(spotlight_singleton_get generated-initial)"',
+         'GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"'),
+        ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-initial)"',
+         'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"'),
+        ('COMPARE="$(spotlight_singleton_get compare-initial)"',
+         'COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"'),
+        ('PR="$(spotlight_singleton_get pr-initial)"',
+         'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'),
+        ('          spotlight_singleton_get codeql-workflow \\\n            > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"',
+         '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \\\n            > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"'),
+        ('          spotlight_singleton_get dependency-workflow \\\n            > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"',
+         '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" \\\n            > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"'),
+        ('          spotlight_singleton_get profile-workflow \\\n            > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"',
+         '          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" \\\n            > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"'),
+        ('            spotlight_singleton_get protected-runs \\\n              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"',
+         '            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \\\n              > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"'),
+        ('REVIEW_CHECKS="$(spotlight_singleton_get reviewer-checks)"',
+         'REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"'),
+        ('PRS="$(spotlight_singleton_get open-pr-list)"',
+         'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"'),
+        ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"',
+         'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),
+        ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"',
+         'CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"'),
+        ('PR_AFTER_REVIEW="$(spotlight_singleton_get pr-final)"',
+         'PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'),
+    )
+    for hardened, legacy in overlays:
+        require(projected.count(hardened) == 1,
+                f"Spotlight approve shell-read projection topology changed: {hardened}")
+        projected = projected.replace(hardened, legacy, 1)
+    require("spotlight_singleton_get" not in projected,
+            "Spotlight approve shell-read projection left retry transport bytes behind")
+    return spotlight[:approve_start] + projected + spotlight[approve_end:]
+
+
 def project_spotlight_privileged_refs_to_legacy(spotlight: str) -> str:
     helper = '''          validate_git_ref_object() {
             local payload="$1" expected_ref="$2" expected_sha="$3"
@@ -1017,16 +1072,13 @@ def validate_spotlight_pr_response_evidence(
         "Spotlight proposer regained permissive requested-reviewer traversal",
     )
 
-    approval_fetch = 'PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    approval_fetch = 'PR="$(spotlight_singleton_get pr-initial)"'
     approval_schema = (
         'validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$BASE_SHA" '
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
     )
     approval_consume = 'test "$(jq -r .user.login <<<"$PR")" = "$BOT_NAME"'
-    approval_collection_fetch = (
-        'PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:'
-        '${CANDIDATE_BRANCH}&base=main&per_page=10")"'
-    )
+    approval_collection_fetch = 'PRS="$(spotlight_singleton_get open-pr-list)"'
     approval_collection_envelope = (
         'jq -e \'(type == "array") and (length == 1)\' <<<"$PRS" >/dev/null'
     )
@@ -1038,7 +1090,7 @@ def validate_spotlight_pr_response_evidence(
     approval_collection_consume = (
         'test "$(jq -r .number <<<"$APPROVAL_PR")" = "$PR_NUMBER"'
     )
-    post_review_fetch = 'PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    post_review_fetch = 'PR_AFTER_REVIEW="$(spotlight_singleton_get pr-final)"'
     post_review_schema = (
         'validate_spotlight_open_pr_object "$PR_AFTER_REVIEW" "$PR_NUMBER" "$BASE_SHA" '
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
@@ -1329,6 +1381,7 @@ def project_spotlight_lifecycle_status_to_legacy(spotlight: str) -> str:
 
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
+    spotlight = project_spotlight_approve_shell_singleton_reads_to_raw(spotlight)
     spotlight = project_spotlight_lifecycle_status_to_legacy(spotlight)
     spotlight = project_spotlight_git_publication_status_to_legacy(spotlight)
     legacy = project_spotlight_privileged_refs_to_legacy(
@@ -2579,19 +2632,19 @@ def validate_spotlight_privileged_ref_evidence_schema(spotlight: str) -> None:
              'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
         ),
         "approve": (
-            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+            ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"',
              'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
              'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
-            ('GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"',
+            ('GENERATED_REF_RESPONSE="$(spotlight_singleton_get generated-initial)"',
              'validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"',
              'test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"'),
-            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+            ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-initial)"',
              'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
              'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
-            ('MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+            ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"',
              'validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"',
              'test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"'),
-            ('CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"',
+            ('CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"',
              'validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"',
              'test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"'),
         ),
@@ -3073,7 +3126,7 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
         "Spotlight approval-list compatibility projection left helper definition bytes behind",
     )
 
-    readiness_start_marker = '                REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"\n'
+    readiness_start_marker = '                REVIEW_CHECKS="$(spotlight_singleton_get reviewer-checks)"\n'
     readiness_end_marker = '                  echo "Reviewer dispatch occurred only after six exact-head prerequisites were green."\n'
     require(
         projected.count(readiness_start_marker) == 1
@@ -3568,9 +3621,9 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
             f"Spotlight protected workflow evidence regressed to raw scalar consumption: {forbidden}",
         )
     require(
-        approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml"') == 1
-        and approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml"') == 1
-        and approve.count('gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml"') == 1
+        approve.count('gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml"') == 1
+        and approve.count('gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml"') == 1
+        and approve.count('gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml"') == 1
         and approve.count('repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100') == 1,
         "Spotlight protected workflow evidence endpoint inventory changed",
     )

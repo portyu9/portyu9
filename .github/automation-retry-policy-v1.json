@@ -74,6 +74,35 @@
       "endpointScope": "repository-relative",
       "maxResponseBytes": 8000000,
       "rationale": "Canonical authenticated repository-scoped read-only GET transport for governed automation. Each retry issues a fresh GET and accepts only strict UTF-8 duplicate-key-safe JSON; authorization, not-found, malformed payload, schema/policy failures and every mutation remain terminal."
+    },
+    {
+      "id": "spotlight-approve-shell-read-transient",
+      "source": ".github/workflows/spotlight-link-sync.yml",
+      "workflow": ".github/workflows/spotlight-link-sync.yml",
+      "job": "approve",
+      "step": "Approve and wait for only the exact README-only automation checks",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "enumerated-static-literal",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only enumerated literal read-only GitHub API GET observations inside the interpreter-free privileged Spotlight approval job; all POST mutations remain outside this retry kernel and single-shot."
     }
   ],
   "terminalOperations": [
