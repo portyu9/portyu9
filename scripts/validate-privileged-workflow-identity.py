@@ -115,14 +115,14 @@ def validate_spotlight_approve_governed_read_transport(spotlight: str) -> None:
         and step.count("gh api ") == 4,
         "Spotlight approval must retain exactly four raw single-shot POST mutations and no raw GET",
     )
-    for endpoint in (
-        "actions/workflows/capability-admission.yml/dispatches",
-        "actions/runs/${RUN_ID}/approve",
-        "actions/workflows/bot-pr-user-approval.yml/dispatches",
-        "issues/${PR_NUMBER}/comments",
+    for mutation in (
+        'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml/dispatches"',
+        'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/approve"',
+        'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/bot-pr-user-approval.yml/dispatches"',
+        'gh api --include --method POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments"',
     ):
-        require(step.count(endpoint) == 1,
-                f"Spotlight approval single-shot mutation endpoint changed: {endpoint}")
+        require(step.count(mutation) == 1,
+                f"Spotlight approval single-shot mutation call changed: {mutation}")
     for endpoint in (
         "issues/${PR_NUMBER}/comments?per_page=100",
         "pulls/${PR_NUMBER}/reviews?per_page=100",
