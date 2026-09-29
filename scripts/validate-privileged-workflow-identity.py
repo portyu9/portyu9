@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v128"
+VERSION = "governed-workflow-byte-identity-v129"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "2a6cdbad9ebeb84bba38e2ac21e8d38652418f4a",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
-    ".github/workflows/spotlight-link-sync.yml": "b9356f4cd806909f23d9761250d609352a001e15",
+    ".github/workflows/spotlight-link-sync.yml": "f067c9c62db2ce7edc64a424b8f365d62a4e9aba",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -66,6 +66,99 @@ def job_block(text: str, job: str, next_job: str | None) -> str:
     end = text.index(end_marker, start)
     return text[start:end]
 
+
+
+def validate_spotlight_approve_governed_read_transport(spotlight: str) -> None:
+    approve = job_block(spotlight, "approve", "authorize")
+    checkout = "      - name: Checkout exact trusted source for governed reads\n"
+    identity = "      - name: Verify exact governed read source identity\n"
+    setup = "      - name: Set up Python\n"
+    runtime = "      - name: Verify resolved Python runtime\n"
+    approve_step = (
+        "      - name: Approve and wait for only the exact README-only automation checks\n"
+    )
+    for marker in (checkout, identity, setup, runtime, approve_step):
+        require(approve.count(marker) == 1,
+                f"Spotlight approval governed-read step topology changed: {marker.strip()}")
+    require(
+        approve.index(checkout) < approve.index(identity) < approve.index(setup)
+        < approve.index(runtime) < approve.index(approve_step),
+        "Spotlight approval governed-read bootstrap ordering changed",
+    )
+    require(
+        approve.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
+        and approve.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
+        "Spotlight approval governed-read runtime pins changed",
+    )
+    require(
+        "ref: main" in approve
+        and "ref: ${{ github.sha }}" not in approve
+        and "persist-credentials: false" in approve,
+        "Spotlight approval governed-read checkout must remain static credential-free main",
+    )
+    require(
+        'test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in approve
+        and 'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        in approve
+        and 'test "$(git -C source rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"'
+        in approve,
+        "Spotlight approval lost sealed-base or exact governed-read helper identity",
+    )
+    step = approve[approve.index(approve_step):]
+    require(
+        step.count("python3 source/scripts/automation_github_read.py") == 14
+        and step.count("python3 source/scripts/automation_github_paginated_read.py") == 2,
+        "Spotlight approval governed-read runtime call inventory changed",
+    )
+    require(
+        step.count("gh api --include --method POST") == 4
+        and step.count("gh api ") == 4,
+        "Spotlight approval must retain exactly four raw single-shot POST mutations and no raw GET",
+    )
+    for endpoint in (
+        "actions/workflows/capability-admission.yml/dispatches",
+        "actions/runs/${RUN_ID}/approve",
+        "actions/workflows/bot-pr-user-approval.yml/dispatches",
+        "issues/${PR_NUMBER}/comments",
+    ):
+        require(step.count(endpoint) == 1,
+                f"Spotlight approval single-shot mutation endpoint changed: {endpoint}")
+    for endpoint in (
+        "issues/${PR_NUMBER}/comments?per_page=100",
+        "pulls/${PR_NUMBER}/reviews?per_page=100",
+    ):
+        require(step.count(endpoint) == 1,
+                f"Spotlight approval governed paginated endpoint changed: {endpoint}")
+    require("GH_TOKEN: ${{ github.token }}" in step,
+            "Spotlight approval governed reads lost run-scoped GitHub token")
+
+
+def project_spotlight_approve_governed_reads_to_legacy(spotlight: str) -> str:
+    validate_spotlight_approve_governed_read_transport(spotlight)
+    approve_start = spotlight.index("  approve:\n")
+    approve_end = spotlight.index("  authorize:\n", approve_start)
+    approve = spotlight[approve_start:approve_end]
+    checkout = "      - name: Checkout exact trusted source for governed reads\n"
+    approve_step = (
+        "      - name: Approve and wait for only the exact README-only automation checks\n"
+    )
+    bootstrap_start = approve.index(checkout)
+    approve_step_start = approve.index(approve_step, bootstrap_start)
+    projected = approve[:bootstrap_start] + approve[approve_step_start:]
+    require(
+        projected.count("python3 source/scripts/automation_github_read.py") == 14
+        and projected.count("python3 source/scripts/automation_github_paginated_read.py") == 2,
+        "Spotlight approval legacy projection call inventory changed",
+    )
+    projected = projected.replace(
+        "python3 source/scripts/automation_github_paginated_read.py",
+        "gh api --paginate --slurp",
+    )
+    projected = projected.replace(
+        "python3 source/scripts/automation_github_read.py",
+        "gh api",
+    )
+    return spotlight[:approve_start] + projected + spotlight[approve_end:]
 
 def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
     budget = job_block(spotlight, "budget", "quarantine")
@@ -5252,7 +5345,9 @@ def main() -> int:
         validate_native_bot_review_gate(profile_quality, governed_bot_review_gate)
 
         bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
-        spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        spotlight_actual = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        validate_spotlight_approve_governed_read_transport(spotlight_actual)
+        spotlight = project_spotlight_approve_governed_reads_to_legacy(spotlight_actual)
         validate_main_check_cancellation_isolation(bot_review, spotlight)
         validate_bot_review_dispatch_status_contract(bot_review)
         validate_bot_review_creation_status_contract(bot_review)
