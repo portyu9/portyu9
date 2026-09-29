@@ -447,7 +447,10 @@ def project_spotlight_readme_contents_to_legacy(sync: str) -> str:
 def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
     """Project merge-only shell retry transport to the accepted raw-GET semantic shape."""
     merge_start = sync.index("  merge:\n")
-    merge_end = sync.index("  decision_receipt:\n", merge_start)
+    merge_end = sync.find("  decision_receipt:\n", merge_start)
+    if merge_end < 0:
+        # Item-10/item-9 authority validation receives the workflow after the item-11 tail is stripped.
+        merge_end = len(sync)
     merge = sync[merge_start:merge_end]
     helper_start_marker = "          spotlight_merge_get() {\n"
     helper_end_marker = "          # Verify exact short-lived mutation lease.\n"
