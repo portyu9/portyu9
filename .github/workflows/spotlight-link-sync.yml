@@ -284,10 +284,10 @@ jobs:
           [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$README_SHA256_AFTER" =~ ^[0-9a-f]{64}$ ]]
           test "$BASE_SHA" = "$GITHUB_SHA"
-          MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"
+          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
-          GENERATED_REF_RESPONSE="$(spotlight_singleton_get generated-initial)"
+          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
           validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
           test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
 
@@ -464,7 +464,7 @@ jobs:
             if [ "$PR_COUNT" = "1" ]; then
               PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
               [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-              PR="$(spotlight_singleton_get pr-initial)"
+              PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
               jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \
                 --arg title "chore: sync rotating Spotlight links" \
                 --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
@@ -864,7 +864,7 @@ jobs:
           [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
 
-          MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"
+          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
           MAIN_README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main")"
@@ -1056,11 +1056,11 @@ jobs:
             REF_CREATED=true
             echo "ref_created=true" >> "$GITHUB_OUTPUT"
           fi
-          CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-initial)"
+          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
 
-          PRS="$(spotlight_singleton_get open-pr-list)"
+          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
           COUNT="$(jq 'length' <<<"$PRS")"
           if [ "$COUNT" = "0" ]; then
             jq -n --arg title "chore: sync rotating Spotlight links" --arg head "$CANDIDATE_BRANCH" --arg base "main" \
@@ -1438,13 +1438,13 @@ jobs:
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
-          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
-          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          GENERATED_REF_RESPONSE="$(spotlight_singleton_get generated-initial)"
           validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
           test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
-          CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"
+          CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-initial)"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
           COMPARE="$(spotlight_singleton_get compare-initial)"
@@ -1459,7 +1459,7 @@ jobs:
           test "$(jq -r '.files[0].status' <<<"$COMPARE")" = "modified"
 
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          PR="$(spotlight_singleton_get pr-initial)"
           validate_spotlight_open_pr_object "$PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
           test "$(jq -r .user.login <<<"$PR")" = "$BOT_NAME"
           test "$(jq -r .state <<<"$PR")" = "open"
@@ -1767,7 +1767,7 @@ jobs:
           test "$ALL_SUCCESS" = "true"
           test "$REVIEW_DISPATCHED" = "true"
 
-          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
+          PRS="$(spotlight_singleton_get open-pr-list)"
           jq -e '(type == "array") and (length == 1)' <<<"$PRS" >/dev/null
           APPROVAL_PR="$(jq -c '.[0]' <<<"$PRS")"
           validate_spotlight_pull_list_item "$APPROVAL_PR" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
@@ -1885,10 +1885,10 @@ jobs:
             echo "ERROR: exact-base/head portyu9 approval is not singleton after all protected workflows converged." >&2
             exit 1
           }
-          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
-          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
           PR_AFTER_REVIEW="$(spotlight_singleton_get pr-final)"
