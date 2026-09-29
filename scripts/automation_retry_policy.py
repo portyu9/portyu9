@@ -35,6 +35,7 @@ EXPECTED_AUTOMATIC_RETRY_IDS = {
     "governed-bot-review-read-transient",
     "action-release-provenance-read-transient",
     "canonical-github-api-read-transient",
+    "spotlight-approve-shell-read-transient",
 }
 EXPECTED_TERMINAL_IDS = {
     "profile-quality-live-generator-fallback",
@@ -340,10 +341,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 3 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly three classified automatic read retries")
+    require(len(entries) == 4 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly four classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 3, "automatic retry IDs must remain unique")
+    require(len(by_id) == 4, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
@@ -441,6 +442,75 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
         require(forbidden not in canonical_source,
                 f"canonical GitHub read source acquired mutation method: {forbidden}")
+
+    spotlight_shell_item = by_id["spotlight-approve-shell-read-transient"]
+    require(
+        spotlight_shell_item.get("source") == ".github/workflows/spotlight-link-sync.yml"
+        and spotlight_shell_item.get("workflow") == ".github/workflows/spotlight-link-sync.yml"
+        and spotlight_shell_item.get("job") == "approve"
+        and spotlight_shell_item.get("step") == "Approve and wait for only the exact README-only automation checks",
+        "Spotlight privileged shell-read retry identity changed",
+    )
+    require(
+        spotlight_shell_item.get("endpointScope") == "enumerated-static-literal"
+        and spotlight_shell_item.get("maxResponseBytes") == 8_000_000,
+        "Spotlight privileged shell-read retry bounds changed",
+    )
+    spotlight = texts[".github/workflows/spotlight-link-sync.yml"]
+    spotlight_approve = named_step(
+        spotlight,
+        "approve",
+        "Approve and wait for only the exact README-only automation checks",
+    )
+    for fragment in (
+        "spotlight_singleton_get() {",
+        "for attempt in 1 2 3; do",
+        "timeout 20s gh api --include",
+        'if [ "$exit_code" -eq 124 ]; then',
+        'elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then',
+        "408|429|500|502|503|504)",
+        'if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then',
+        'if [ "$attempt" -eq 1 ]; then',
+        "delay=1",
+        "delay=2",
+        'if [ "$requested" -ge 5 ]; then',
+        "delay=5",
+        'test "$status_count" -eq 1 || {',
+        'test "$status" = "200" || {',
+        "application/json*) : ;;",
+        'test "${#body}" -le 8000000 || {',
+    ):
+        require(fragment in spotlight_approve,
+                f"Spotlight privileged shell-read retry contract is missing: {fragment}")
+    require(
+        spotlight_approve.count('timeout 20s gh api --include "repos/') == 14,
+        "Spotlight approval must retain exactly fourteen enumerated singleton GET retry case arms",
+    )
+    require(
+        spotlight_approve.count("gh api --paginate --slurp") == 2,
+        "Spotlight approval paginated read inventory changed in the singleton retry tranche",
+    )
+    require(
+        spotlight_approve.count("gh api --include --method POST") == 4,
+        "Spotlight approval mutation inventory changed while hardening singleton GETs",
+    )
+    for forbidden in (
+        "python3 ",
+        "curl ",
+        "wget ",
+        "git ",
+        "timeout 20s gh api --include --method",
+    ):
+        require(forbidden not in spotlight_approve,
+                f"Spotlight privileged shell-read retry acquired forbidden transport/mutation surface: {forbidden}")
+    for key in (
+        "main-initial", "generated-initial", "candidate-initial", "compare-initial",
+        "pr-initial", "codeql-workflow", "dependency-workflow", "profile-workflow",
+        "protected-runs", "reviewer-checks", "open-pr-list", "main-final",
+        "candidate-final", "pr-final",
+    ):
+        require(spotlight_approve.count(f"{key})") == 1,
+                f"Spotlight privileged shell-read retry key changed: {key}")
 
     automation_github_paginated_read.self_test()
     pagination_source = (ROOT / "scripts/automation_github_paginated_read.py").read_text(encoding="utf-8")

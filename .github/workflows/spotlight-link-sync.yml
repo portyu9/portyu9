@@ -284,10 +284,10 @@ jobs:
           [[ "$GENERATED_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$README_SHA256_AFTER" =~ ^[0-9a-f]{64}$ ]]
           test "$BASE_SHA" = "$GITHUB_SHA"
-          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
-          GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
+          GENERATED_REF_RESPONSE="$(spotlight_singleton_get generated-initial)"
           validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
           test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
 
@@ -464,7 +464,7 @@ jobs:
             if [ "$PR_COUNT" = "1" ]; then
               PR_NUMBER="$(jq -r '.[0].number' <<<"$PRS")"
               [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-              PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+              PR="$(spotlight_singleton_get pr-initial)"
               jq -e --argjson pr "$PR_NUMBER" --arg branch "$BRANCH" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \
                 --arg title "chore: sync rotating Spotlight links" \
                 --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
@@ -864,7 +864,7 @@ jobs:
           [[ "$CANDIDATE_ID" =~ ^[0-9a-f]{64}$ ]]
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
 
-          MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"
+          MAIN_REF_RESPONSE="$(spotlight_singleton_get main-final)"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$SOURCE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$SOURCE_SHA"
           MAIN_README_CONTENTS_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/contents/README.md?ref=main")"
@@ -1056,11 +1056,11 @@ jobs:
             REF_CREATED=true
             echo "ref_created=true" >> "$GITHUB_OUTPUT"
           fi
-          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-initial)"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
 
-          PRS="$(gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10")"
+          PRS="$(spotlight_singleton_get open-pr-list)"
           COUNT="$(jq 'length' <<<"$PRS")"
           if [ "$COUNT" = "0" ]; then
             jq -n --arg title "chore: sync rotating Spotlight links" --arg head "$CANDIDATE_BRANCH" --arg base "main" \
@@ -1245,6 +1245,172 @@ jobs:
               ' <<<"$payload" >/dev/null
           }
 
+          spotlight_singleton_get() {
+            local request="$1"
+            local attempt response exit_code line status status_count content_type
+            local rate_remaining retry_after body_started body retry delay requested
+            local LC_ALL=C
+
+            for attempt in 1 2 3; do
+              response=""
+              set +e
+              case "$request" in
+                main-initial)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" 2>&1)"
+                  ;;
+                generated-initial)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" 2>&1)"
+                  ;;
+                candidate-initial)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" 2>&1)"
+                  ;;
+                compare-initial)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" 2>&1)"
+                  ;;
+                pr-initial)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" 2>&1)"
+                  ;;
+                codeql-workflow)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" 2>&1)"
+                  ;;
+                dependency-workflow)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" 2>&1)"
+                  ;;
+                profile-workflow)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" 2>&1)"
+                  ;;
+                protected-runs)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" 2>&1)"
+                  ;;
+                reviewer-checks)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100" 2>&1)"
+                  ;;
+                open-pr-list)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=portyu9:${CANDIDATE_BRANCH}&base=main&per_page=10" 2>&1)"
+                  ;;
+                main-final)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" 2>&1)"
+                  ;;
+                candidate-final)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}" 2>&1)"
+                  ;;
+                pr-final)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" 2>&1)"
+                  ;;
+                *)
+                  set -e
+                  echo "ERROR: unknown Spotlight singleton GET identity: $request" >&2
+                  return 1
+                  ;;
+              esac
+              exit_code=$?
+              set -e
+
+              status=""
+              status_count=0
+              content_type=""
+              rate_remaining=""
+              retry_after=""
+              body_started=false
+              body=""
+              while IFS= read -r line; do
+                line="${line%$'\r'}"
+                if [ "$body_started" = "false" ]; then
+                  if [[ "$line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3})([[:space:]]|$) ]]; then
+                    status="${BASH_REMATCH[1]}"
+                    status_count=$((status_count + 1))
+                  elif [ -z "$line" ]; then
+                    body_started=true
+                  else
+                    case "${line,,}" in
+                      content-type:*)
+                        content_type="${line#*:}"
+                        content_type="${content_type#"${content_type%%[![:space:]]*}"}"
+                        ;;
+                      x-ratelimit-remaining:*)
+                        rate_remaining="${line#*:}"
+                        rate_remaining="${rate_remaining#"${rate_remaining%%[![:space:]]*}"}"
+                        ;;
+                      retry-after:*)
+                        retry_after="${line#*:}"
+                        retry_after="${retry_after#"${retry_after%%[![:space:]]*}"}"
+                        ;;
+                    esac
+                  fi
+                else
+                  if [ -n "$body" ]; then
+                    body+=$'\n'
+                  fi
+                  body+="$line"
+                fi
+              done <<<"$response"
+
+              if [ "$exit_code" -eq 0 ]; then
+                test "$status_count" -eq 1 || {
+                  echo "ERROR: Spotlight singleton GET returned an ambiguous HTTP response: $request" >&2
+                  return 1
+                }
+                test "$status" = "200" || {
+                  echo "ERROR: Spotlight singleton GET returned unexpected HTTP $status: $request" >&2
+                  return 1
+                }
+                case "${content_type,,}" in
+                  application/json*) : ;;
+                  *)
+                    echo "ERROR: Spotlight singleton GET returned non-JSON content type: $request" >&2
+                    return 1
+                    ;;
+                esac
+                test "${#body}" -le 8000000 || {
+                  echo "ERROR: Spotlight singleton GET exceeded the 8000000-byte response bound: $request" >&2
+                  return 1
+                }
+                printf '%s\n' "$body"
+                return 0
+              fi
+
+              retry=false
+              if [ "$exit_code" -eq 124 ]; then
+                retry=true
+              elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then
+                retry=true
+              elif [ "$status_count" -eq 1 ]; then
+                case "$status" in
+                  408|429|500|502|503|504)
+                    retry=true
+                    ;;
+                  403)
+                    if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then
+                      retry=true
+                    fi
+                    ;;
+                esac
+              fi
+
+              if [ "$retry" != "true" ] || [ "$attempt" -ge 3 ]; then
+                echo "ERROR: Spotlight singleton GET failed terminally (exit=$exit_code http=${status:-none}): $request" >&2
+                return 1
+              fi
+
+              if [ "$attempt" -eq 1 ]; then
+                delay=1
+              else
+                delay=2
+              fi
+              if [[ "$retry_after" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+                requested="${retry_after%%.*}"
+                if [ "$requested" -ge 5 ]; then
+                  delay=5
+                else
+                  delay="$retry_after"
+                fi
+              fi
+              echo "RETRY: Spotlight singleton GET transient (exit=$exit_code http=${status:-none}); attempt $attempt/3, sleeping ${delay}s: $request" >&2
+              sleep "$delay"
+            done
+            return 1
+          }
+
           APPROVAL_REQUESTS_JSON='[]'
           echo "approval_requests_json=$APPROVAL_REQUESTS_JSON" >> "$GITHUB_OUTPUT"
           # Verify exact short-lived mutation lease.
@@ -1278,10 +1444,10 @@ jobs:
           GENERATED_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated")"
           validate_git_ref_object "$GENERATED_REF_RESPONSE" "refs/heads/generated" "$GENERATED_SHA"
           test "$(jq -r .object.sha <<<"$GENERATED_REF_RESPONSE")" = "$GENERATED_SHA"
-          CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
+          CANDIDATE_REF_RESPONSE="$(spotlight_singleton_get candidate-final)"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
-          COMPARE="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}")"
+          COMPARE="$(spotlight_singleton_get compare-initial)"
           test "$(jq -r .status <<<"$COMPARE")" = "ahead"
           test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
           test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
@@ -1313,7 +1479,7 @@ jobs:
           }
           echo "Dispatched event-driven Spotlight admission proof from trusted main; Capability Admission independently binds the unique current-main candidate."
 
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml" \
+          spotlight_singleton_get codeql-workflow \
             > "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json"
           CODEQL_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/codeql.yml" --arg name "CodeQL" '
             if type != "object" then
@@ -1330,7 +1496,7 @@ jobs:
             end
           ' "$RUNNER_TEMP/spotlight-codeql-workflow-definition.json")"
 
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/dependency-review.yml" \
+          spotlight_singleton_get dependency-workflow \
             > "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json"
           DEPENDENCY_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/dependency-review.yml" --arg name "Dependency review" '
             if type != "object" then
@@ -1347,7 +1513,7 @@ jobs:
             end
           ' "$RUNNER_TEMP/spotlight-dependency-workflow-definition.json")"
 
-          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/profile-quality.yml" \
+          spotlight_singleton_get profile-workflow \
             > "$RUNNER_TEMP/spotlight-profile-workflow-definition.json"
           PROFILE_WORKFLOW_ID="$(jq -er --arg path ".github/workflows/profile-quality.yml" --arg name "Profile quality" '
             if type != "object" then
@@ -1370,7 +1536,7 @@ jobs:
           APPROVAL_REQUESTED_RUN_IDS=""
           REVIEW_DISPATCHED=false
           for attempt in $(seq 1 60); do
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
+            spotlight_singleton_get protected-runs \
               > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"
             jq -ce \
               --arg head "$HEAD_SHA" \
@@ -1531,7 +1697,7 @@ jobs:
               if [ "$REVIEW_DISPATCHED" = "false" ] &&
                  [ "$CODEQL_SUCCESS" = "true" ] &&
                  [ "$DEPENDENCY_SUCCESS" = "true" ]; then
-                REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"
+                REVIEW_CHECKS="$(spotlight_singleton_get reviewer-checks)"
                 jq -e --arg head "$HEAD_SHA" '
                   (type == "object") and
                   (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
@@ -1725,7 +1891,7 @@ jobs:
           CANDIDATE_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}")"
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
-          PR_AFTER_REVIEW="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          PR_AFTER_REVIEW="$(spotlight_singleton_get pr-final)"
           validate_spotlight_open_pr_object "$PR_AFTER_REVIEW" "$PR_NUMBER" "$BASE_SHA" "$CANDIDATE_BRANCH" "$HEAD_SHA"
           test "$(jq -r .state <<<"$PR_AFTER_REVIEW")" = "open"
           test "$(jq -r .base.sha <<<"$PR_AFTER_REVIEW")" = "$BASE_SHA"
