@@ -2,6 +2,7 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -154,8 +155,18 @@ def review_bootstrap_measurement_diagnostic() -> None:
             result.returncode == 0,
             f"accepted-main production --measure failed: {result.returncode}",
         )
-        require(result.stdout.startswith('{"measurement":'), "production --measure output shape changed")
-        print("CAPABILITY-MEASUREMENT-DIAGNOSTIC:" + result.stdout.strip(), flush=True)
+        payload = json.loads(result.stdout)
+        require(
+            isinstance(payload, dict)
+            and set(payload) == {"measurement"}
+            and isinstance(payload["measurement"], dict),
+            "production --measure output shape changed",
+        )
+        print(
+            "CAPABILITY-MEASUREMENT-DIAGNOSTIC:"
+            + json.dumps(payload, sort_keys=True, separators=(",", ":")),
+            flush=True,
+        )
 
         subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=True)
         subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=True)
