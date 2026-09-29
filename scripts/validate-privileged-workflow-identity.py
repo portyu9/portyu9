@@ -3073,7 +3073,7 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
         "Spotlight approval-list compatibility projection left helper definition bytes behind",
     )
 
-    readiness_start_marker = '                REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"\n'
+    readiness_start_marker = '                REVIEW_CHECKS="$(spotlight_singleton_get reviewer-checks)"\n'
     readiness_end_marker = '                  echo "Reviewer dispatch occurred only after six exact-head prerequisites were green."\n'
     require(
         projected.count(readiness_start_marker) == 1
