@@ -908,7 +908,7 @@
       "candidateBomSha256": "aace468e801a0fa6659c5b86c3458abbb736b9aa8c95d3ab58cbf99aa09b3c44",
       "expansionSha256": "9b3878a34aa8ae8774aa8972529e2501bb74c50ae55762ff1dacfde620bc29b8",
       "id": "cap-profile-quality-review-bootstrap-v1",
-      "rationale": "Authorize frozen #1308 measured by closed #1309: replace Profile Quality governed review's sole raw accepted-base gate Contents GET with pinned exact-base actions/checkout in an isolated path, prove checked-out HEAD equals the exact PR base SHA, and preserve exact gate Git-blob verification before execution. Semantic Workflow Capability records the raw GET removal and existing pinned checkout action while protected governance/byte-identity contracts advance accordingly. No permission, trigger, secret, mutation, endpoint, retry, ruleset, required-check reduction, merge authority, direct-main write, or bypass is added."
+      "rationale": "Authorize frozen #1308 measured by closed #1309: replace Profile Quality governed-review's raw accepted-base gate Contents GET with pinned exact-base actions/checkout, prove checked-out HEAD equals the PR base SHA, and retain exact gate Git-blob verification. The BOM records the GET removal and existing pinned checkout action. No permission, trigger, secret, mutation, endpoint, retry, ruleset, required-check reduction, merge/direct-main authority, or bypass is added."
     },
     {
       "baseBomSha256": "064955edce467b646ff1f3404fb11d42a87d6f856dafb5d1dfa54e447f74eb31",
