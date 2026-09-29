@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v130"
+VERSION = "governed-workflow-byte-identity-v131"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "58f61fbb7120b8b298032a2bf95f7624048880b6",
     ".github/workflows/profile-quality.yml": "2a6cdbad9ebeb84bba38e2ac21e8d38652418f4a",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
-    ".github/workflows/spotlight-link-sync.yml": "f4dea5927f47b1b65ffc79e412599acec6433420",
+    ".github/workflows/spotlight-link-sync.yml": "58a1635098c376fe652fd02aa38d00a4e6ff9287",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
@@ -150,6 +150,7 @@ def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
 
 
 def validate_item10_mac(spotlight: str) -> None:
+    spotlight = project_spotlight_merge_shell_reads_to_raw(spotlight)
     authorize = job_block(spotlight, "authorize", "authorize_attest")
     signer = job_block(spotlight, "authorize_attest", "merge")
     merge = job_block(spotlight, "merge", "decision_receipt")
@@ -572,6 +573,58 @@ def validate_leases(profile: str, spotlight: str) -> None:
         "LEASE_MIN_REMAINING_SECONDS=180",
     ):
         require(fragment in spotlight, f"Spotlight mutation-lease reserve contract is missing: {fragment}")
+
+
+
+def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
+    """Project merge-only shell retry transport to the accepted raw-GET semantic shape."""
+    merge_start = sync.index("  merge:\n")
+    merge_end = sync.index("  decision_receipt:\n", merge_start)
+    merge = sync[merge_start:merge_end]
+    helper_start_marker = "          spotlight_merge_get() {\n"
+    helper_end_marker = "          # Verify exact short-lived mutation lease.\n"
+    require(
+        merge.count(helper_start_marker) == 1 and merge.count(helper_end_marker) == 1,
+        "Spotlight identity terminal shell-read projection anchors changed",
+    )
+    helper_start = merge.index(helper_start_marker)
+    helper_end = merge.index(helper_end_marker, helper_start)
+    projected = merge[:helper_start] + merge[helper_end:]
+    overlays = (
+        ("PR=\"$(spotlight_merge_get pr-initial)\"", "PR=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}\")\""),
+        ("MAIN_REF_RESPONSE=\"$(spotlight_merge_get main-initial)\"", "MAIN_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/main\")\""),
+        ("GENERATED_REF_RESPONSE=\"$(spotlight_merge_get generated-initial)\"", "GENERATED_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/generated\")\""),
+        ("CANDIDATE_REF_RESPONSE=\"$(spotlight_merge_get candidate-initial)\"", "CANDIDATE_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}\")\""),
+        ("FILES=\"$(spotlight_merge_get files)\"", "FILES=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100\")\""),
+        ("CANDIDATE_COMMIT=\"$(spotlight_merge_get candidate-commit)\"", "CANDIDATE_COMMIT=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}\")\""),
+        ("README_CONTENTS_RESPONSE=\"$(spotlight_merge_get candidate-readme)\"", "README_CONTENTS_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${HEAD_SHA}\")\""),
+        ("CODEQL_RUN_RAW=\"$(spotlight_merge_get codeql-run)\"", "CODEQL_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${CODEQL_RUN_ID}\")\""),
+        ("DEPENDENCY_RUN_RAW=\"$(spotlight_merge_get dependency-run)\"", "DEPENDENCY_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${DEPENDENCY_RUN_ID}\")\""),
+        ("PROFILE_RUN_RAW=\"$(spotlight_merge_get profile-run)\"", "PROFILE_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${PROFILE_RUN_ID}\")\""),
+        ("TRUSTED_WORKFLOW_RAW=\"$(spotlight_merge_get trusted-workflow)\"", "TRUSTED_WORKFLOW_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/workflows/capability-admission.yml\")\""),
+        ("TRUSTED_RUN_RAW=\"$(spotlight_merge_get trusted-run)\"", "TRUSTED_RUN_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/actions/runs/${TRUSTED_RUN_ID}\")\""),
+        ("TRUSTED_CHECK_RAW=\"$(spotlight_merge_get trusted-check)\"", "TRUSTED_CHECK_RAW=\"$(gh api \"repos/${GITHUB_REPOSITORY}/check-runs/${TRUSTED_CHECK_RUN_ID}\")\""),
+        ("REVIEW_PAGES=\"$(spotlight_merge_paginated_get owner-reviews)\"", "REVIEW_PAGES=\"$(gh api --paginate --slurp \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100\")\""),
+        ("CHECKS=\"$(spotlight_merge_get exact-head-checks)\"", "CHECKS=\"$(gh api -H 'Accept: application/vnd.github+json' \"repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100\")\""),
+        ("MAIN_REF_RESPONSE=\"$(spotlight_merge_get main-premerge)\"", "MAIN_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/main\")\""),
+        ("GENERATED_REF_RESPONSE=\"$(spotlight_merge_get generated-premerge)\"", "GENERATED_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/generated\")\""),
+        ("CANDIDATE_REF_RESPONSE=\"$(spotlight_merge_get candidate-premerge)\"", "CANDIDATE_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/${CANDIDATE_BRANCH}\")\""),
+        ("MERGED_PR=\"$(spotlight_merge_get pr-postmerge)\"", "MERGED_PR=\"$(gh api \"repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}\")\""),
+        ("CURRENT_MAIN_REF_RESPONSE=\"$(spotlight_merge_get main-postmerge)\"", "CURRENT_MAIN_REF_RESPONSE=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/ref/heads/main\")\""),
+        ("CANDIDATE_REFS=\"$(spotlight_merge_get candidate-refs-postmerge)\"", "CANDIDATE_REFS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}\")\""),
+        ("AFTER_REFS=\"$(spotlight_merge_get candidate-refs-after-delete)\"", "AFTER_REFS=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}\")\""),
+    )
+    for hardened, legacy in overlays:
+        require(
+            projected.count(hardened) == 1,
+            f"Spotlight identity terminal shell-read projection topology changed: {hardened}",
+        )
+        projected = projected.replace(hardened, legacy, 1)
+    require(
+        "spotlight_merge_get" not in projected and "spotlight_merge_paginated_get" not in projected,
+        "Spotlight identity terminal shell-read projection left retry transport bytes behind",
+    )
+    return sync[:merge_start] + projected + sync[merge_end:]
 
 
 def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> str:
@@ -1387,6 +1440,7 @@ def project_spotlight_lifecycle_status_to_legacy(spotlight: str) -> str:
 
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
+    spotlight = project_spotlight_merge_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_approve_shell_singleton_reads_to_raw(spotlight)
     spotlight = project_spotlight_lifecycle_status_to_legacy(spotlight)
     spotlight = project_spotlight_git_publication_status_to_legacy(spotlight)
