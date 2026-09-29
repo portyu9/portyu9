@@ -237,7 +237,7 @@ def validate_reconciler_wake_contract(text: str) -> None:
     reconcile_start = text.index("  reconcile:\n", plan_start)
     plan = text[plan_start:reconcile_start]
 
-    live_capture = 'LIVE_MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"'
+    live_capture = 'LIVE_MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main")"'
     live_normalize = 'LIVE_MAIN_SHA="$(jq -er \''
     strict_current = 'test "$LIVE_MAIN_SHA" = "$TRUSTED_MAIN_SHA"'
     event_case = 'case "$GITHUB_EVENT_NAME" in'
@@ -311,7 +311,7 @@ def validate_reconciler_wake_contract(text: str) -> None:
 
 
 def validate_reconciler_main_ref_evidence(text: str) -> None:
-    endpoint = 'gh api "repos/portyu9/portyu9/git/ref/heads/main"'
+    endpoint = 'python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main"'
     legacy = 'gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha'
     schema_fragments = (
         'error("Ruleset main ref response must be an object")',
@@ -330,15 +330,17 @@ def validate_reconciler_main_ref_evidence(text: str) -> None:
         '\n              .object.sha\n            end',
     )
     require(text.count(endpoint) == 5,
-            "Ruleset reconciler must retain exactly five reviewed main-ref GET call sites")
+            "Ruleset reconciler must retain exactly five reviewed governed main-ref GET call sites")
+    require('gh api "repos/portyu9/portyu9/git/ref/heads/main"' not in text,
+            "Ruleset reconciler main-ref reads must not regress to direct gh api transport")
     require(legacy not in text,
             "Ruleset reconciler must not consume main-ref SHA through direct gh api --jq")
     require(
-        text.count('\n          LIVE_MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"') == 1,
+        text.count('\n          LIVE_MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main")"') == 1,
         "Ruleset plan main-ref response capture changed",
     )
     require(
-        text.count('\n          MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"') == 4,
+        text.count('\n          MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main")"') == 4,
         "Ruleset privileged main-ref response capture count changed",
     )
     for fragment in schema_fragments:
@@ -399,7 +401,7 @@ def validate_reconciler_main_ref_evidence(text: str) -> None:
         raise ValueError("Ruleset main-ref self-test accepted weakened ref identity")
 
     mutated = text.replace(
-        'MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main")"',
+        'MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main")"',
         'MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)"',
         1,
     )
@@ -412,9 +414,11 @@ def validate_reconciler_main_ref_evidence(text: str) -> None:
 
 
 def validate_reconciler_main_ref_evidence_fixture(text: str) -> None:
-    endpoint = 'gh api "repos/portyu9/portyu9/git/ref/heads/main"'
+    endpoint = 'python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main"'
     legacy = 'gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha'
-    require(text.count(endpoint) == 5, "fixture endpoint count changed")
+    require(text.count(endpoint) == 5, "fixture governed endpoint count changed")
+    require('gh api "repos/portyu9/portyu9/git/ref/heads/main"' not in text,
+            "fixture regained direct main-ref transport")
     require(legacy not in text, "fixture regained direct scalar extraction")
     for fragment in (
         'elif .ref != "refs/heads/main" then',
@@ -450,7 +454,7 @@ def validate_reconciler_admin_response_evidence(text: str) -> None:
     token_consume = text.index('ADMIN_TOKEN="$(jq -r .token installation-token.json)"', token_schema)
     repos_fetch = text.index('"installation/repositories?per_page=100" > token-repositories.json', token_consume)
     repos_schema = text.index('type == "object" and\n            (.total_count | type == "number"', repos_fetch)
-    prewrite = text.index('GH_TOKEN="$ADMIN_TOKEN" gh api "repos/portyu9/portyu9/rulesets/22148161"', repos_schema)
+    prewrite = text.index('GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py "repos/portyu9/portyu9/rulesets/22148161"', repos_schema)
     require(
         installation_fetch < installation_schema < token_fetch < token_schema < token_consume < repos_fetch < repos_schema < prewrite,
         "Ruleset admin response validation must precede token consumption and privileged ruleset reads",
@@ -519,7 +523,7 @@ def validate_reconciler_admin_status_evidence(text: str) -> None:
         '> ruleset-put-response.json'
     )
     readback = (
-        'GH_TOKEN="$ADMIN_TOKEN" gh api '
+        'GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py '
         '"repos/portyu9/portyu9/rulesets/22148161" > live-after.json'
     )
     for fragment, label in (

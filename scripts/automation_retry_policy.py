@@ -729,6 +729,76 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Ruleset drift sentinel lost exact governed-read helper identity",
     )
 
+
+    ruleset_reconciler = texts[".github/workflows/ruleset-reconciler.yml"]
+    ruleset_reconciler_pin = (
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
+        '"1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
+    ruleset_plan_step = named_step(
+        ruleset_reconciler,
+        "plan",
+        "Prove exact reviewed transition state",
+    )
+    ruleset_reconcile_step = named_step(
+        ruleset_reconciler,
+        "reconcile",
+        "Apply only exact reviewed predecessor to successor",
+    )
+    ruleset_attest_step = named_step(
+        ruleset_reconciler,
+        "attest",
+        "Re-prove successor and receipt identity",
+    )
+    for label, block, expected in (
+        ("plan", ruleset_plan_step, 2),
+        ("reconcile", ruleset_reconcile_step, 5),
+        ("attest", ruleset_attest_step, 2),
+    ):
+        require(
+            block.count("python3 scripts/automation_github_read.py") == expected,
+            f"Ruleset reconciler {label} must use exactly {expected} governed repository singleton reads",
+        )
+        require(
+            ruleset_reconciler_pin in block,
+            f"Ruleset reconciler {label} lost exact governed-read helper identity",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in block,
+            f"Ruleset reconciler {label} governed reads lost run-scoped token binding",
+        )
+    for forbidden in (
+        'gh api "repos/portyu9/portyu9/git/ref/heads/main"',
+        'gh api "repos/portyu9/portyu9/rulesets/22148161"',
+    ):
+        require(
+            forbidden not in ruleset_reconciler,
+            f"Ruleset reconciler regained direct repository singleton transport: {forbidden}",
+        )
+    require(
+        ruleset_reconcile_step.count(
+            'GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py '
+            '"repos/portyu9/portyu9/rulesets/22148161"'
+        ) == 2,
+        "Ruleset reconciler admin-token ruleset read count changed",
+    )
+    require(
+        ruleset_reconcile_step.count(
+            'GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" '
+            '"app/installations/${ADMIN_INSTALLATION_ID}"'
+        ) == 1
+        and ruleset_reconcile_step.count(
+            'GH_TOKEN="$ADMIN_TOKEN" gh api "installation/repositories?per_page=100"'
+        ) == 1,
+        "Ruleset reconciler specialist non-repository read boundary changed",
+    )
+    require(
+        ruleset_reconcile_step.count("gh api ") == 4
+        and ruleset_reconcile_step.count("--method POST") == 1
+        and ruleset_reconcile_step.count("--method PUT") == 1,
+        "Ruleset reconciler raw transport must remain exactly two specialist reads and two mutations",
+    )
+
     profile_stats = texts[".github/workflows/profile-stats.yml"]
     lease_step = named_step(
         profile_stats,
@@ -1004,6 +1074,77 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         ruleset_sentinel_transport_drift,
         "must use exactly one governed GitHub singleton read",
+    )
+
+
+    ruleset_plan_transport_drift = dict(texts)
+    ruleset_plan_source = ruleset_plan_transport_drift[".github/workflows/ruleset-reconciler.yml"]
+    ruleset_plan_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/portyu9/portyu9/rulesets/22148161" > live-plan.json'
+    )
+    require(
+        ruleset_plan_governed in ruleset_plan_source,
+        "retry-policy self-test fixture missing Ruleset reconciler plan governed read",
+    )
+    ruleset_plan_transport_drift[".github/workflows/ruleset-reconciler.yml"] = (
+        ruleset_plan_source.replace(
+            ruleset_plan_governed,
+            'gh api "repos/portyu9/portyu9/rulesets/22148161" > live-plan.json',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        ruleset_plan_transport_drift,
+        "Ruleset reconciler plan must use exactly 2 governed repository singleton reads",
+    )
+
+    ruleset_reconcile_transport_drift = dict(texts)
+    ruleset_reconcile_source = ruleset_reconcile_transport_drift[".github/workflows/ruleset-reconciler.yml"]
+    ruleset_reconcile_governed = (
+        'GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py '
+        '"repos/portyu9/portyu9/rulesets/22148161" > live-prewrite.json'
+    )
+    require(
+        ruleset_reconcile_governed in ruleset_reconcile_source,
+        "retry-policy self-test fixture missing Ruleset reconciler admin governed read",
+    )
+    ruleset_reconcile_transport_drift[".github/workflows/ruleset-reconciler.yml"] = (
+        ruleset_reconcile_source.replace(
+            ruleset_reconcile_governed,
+            'GH_TOKEN="$ADMIN_TOKEN" gh api '
+            '"repos/portyu9/portyu9/rulesets/22148161" > live-prewrite.json',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        ruleset_reconcile_transport_drift,
+        "Ruleset reconciler reconcile must use exactly 5 governed repository singleton reads",
+    )
+
+    ruleset_attest_transport_drift = dict(texts)
+    ruleset_attest_source = ruleset_attest_transport_drift[".github/workflows/ruleset-reconciler.yml"]
+    ruleset_attest_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/portyu9/portyu9/rulesets/22148161" > live-attest.json'
+    )
+    require(
+        ruleset_attest_governed in ruleset_attest_source,
+        "retry-policy self-test fixture missing Ruleset reconciler attest governed read",
+    )
+    ruleset_attest_transport_drift[".github/workflows/ruleset-reconciler.yml"] = (
+        ruleset_attest_source.replace(
+            ruleset_attest_governed,
+            'gh api "repos/portyu9/portyu9/rulesets/22148161" > live-attest.json',
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        ruleset_attest_transport_drift,
+        "Ruleset reconciler attest must use exactly 2 governed repository singleton reads",
     )
 
     profile_stats_transport_drift = dict(texts)

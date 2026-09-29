@@ -31,22 +31,7 @@
               "step": "Download exact reconciliation receipt"
             }
           ],
-          "apiSurfaces": [
-            {
-              "client": "gh-api",
-              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Re-prove successor and receipt identity"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
-              "method": "GET",
-              "mutating": false,
-              "step": "Re-prove successor and receipt identity"
-            }
-          ],
+          "apiSurfaces": [],
           "artifacts": [
             {
               "name": "ruleset-reconciliation-receipt",
@@ -92,22 +77,7 @@
               "step": "Checkout exact trusted main"
             }
           ],
-          "apiSurfaces": [
-            {
-              "client": "gh-api",
-              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Prove exact reviewed transition state"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
-              "method": "GET",
-              "mutating": false,
-              "step": "Prove exact reviewed transition state"
-            }
-          ],
+          "apiSurfaces": [],
           "artifacts": [],
           "id": "plan",
           "mutations": [],
@@ -161,41 +131,6 @@
             {
               "client": "gh-api",
               "endpoint": "installation/repositories?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Apply only exact reviewed predecessor to successor"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Apply only exact reviewed predecessor to successor"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Apply only exact reviewed predecessor to successor"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/portyu9/portyu9/git/ref/heads/main",
-              "method": "GET",
-              "mutating": false,
-              "step": "Apply only exact reviewed predecessor to successor"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
-              "method": "GET",
-              "mutating": false,
-              "step": "Apply only exact reviewed predecessor to successor"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
               "method": "GET",
               "mutating": false,
               "step": "Apply only exact reviewed predecessor to successor"
