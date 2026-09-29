@@ -246,6 +246,13 @@
       "rationale": "Authorize the exact trusted-control-source compatibility change in PR #436 that canonicalizes GitHub CodeQL Autofix's observed empty description metadata to null while preserving the known-status gate, semantic workflow capabilities, provenance validation, required-check/GHAS/review-thread admission, and protected auto-merge authority unchanged."
     },
     {
+      "baseBomSha256": "1aea89d5f98edc6a7b4e66ca1b669719f3035c407081d90d0989be2d91dcdf81",
+      "candidateBomSha256": "8918692fd200b297de976e99fe6e4c5fa70830ccc743be5e481f137004074163",
+      "expansionSha256": "8cb48ce91213ab30c21f61cd082215ba91b5d41366c04de544ca8b7a7f4e6346",
+      "id": "cap-codeql-autofix-main-ref-governed-read-v1",
+      "rationale": "Authorize frozen #1289 measured by closed #1290: route five existing CodeQL Autofix main-ref JSON GETs through the accepted transient-safe governed reader while preserving strict ref/admission schemas and exact SHA checks. Semantic change is only removal of those five raw GET surfaces; protected source expansion is the Autofix capability snapshot. No trigger, permission, mutation, convergence, check, merge/ruleset, direct-main, or bypass authority is added."
+    },
+    {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "e74a5f08b76f296469ed97a660b93ed8fbc20e8b5fb683ebfab1275bad2b9836",
