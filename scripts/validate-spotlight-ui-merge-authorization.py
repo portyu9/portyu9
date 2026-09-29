@@ -531,7 +531,7 @@ def self_test_merge_success_response_overlay(sync: str) -> None:
 def validate_terminal_object_schema_overlay(sync: str) -> None:
     merge = core.job_block(sync, "merge", None)
     fn_start = merge.index("          validate_terminal_pr_object() {\n")
-    pre_pr = merge.index('          PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"')
+    pre_pr = merge.index('          PR="$(spotlight_merge_get pr-initial)"')
     fn = merge[fn_start:pre_pr]
     for fragment in (
         '(type == "object") and',
@@ -560,7 +560,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     ):
         require(fragment in merge, f"Spotlight terminal exact pre-merge PR identity is missing: {fragment}")
 
-    files_fetch = merge.index('          FILES="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100")"')
+    files_fetch = merge.index('          FILES="$(spotlight_merge_get files)"')
     files_schema = merge.index('            (type == "array") and', files_fetch)
     files_consume = merge.index('          test "$(jq \'length\' <<<"$FILES")" = "1"', files_schema)
     files_block = merge[files_fetch:files_consume]
@@ -577,7 +577,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     require(files_fetch < files_schema < files_consume,
             "Spotlight terminal file evidence is consumed before schema validation")
 
-    commit_fetch = merge.index('          CANDIDATE_COMMIT="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${HEAD_SHA}")"')
+    commit_fetch = merge.index('          CANDIDATE_COMMIT="$(spotlight_merge_get candidate-commit)"')
     commit_schema = merge.index('          jq -e --arg head "$HEAD_SHA" \'', commit_fetch)
     commit_consume = merge.index('          test "$(jq \'.parents | length\' <<<"$CANDIDATE_COMMIT")" = "1"', commit_schema)
     commit_block = merge[commit_fetch:commit_consume]
@@ -593,13 +593,13 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
     require(commit_fetch < commit_schema < commit_consume,
             "Spotlight terminal commit evidence is consumed before schema validation")
 
-    merged_fetch = merge.index('          MERGED_PR="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"')
+    merged_fetch = merge.index('          MERGED_PR="$(spotlight_merge_get pr-postmerge)"')
     merged_validate = merge.index('          validate_terminal_pr_object "$MERGED_PR"', merged_fetch)
     merged_identity = merge.index('          jq -e --argjson pr "$PR_NUMBER" --arg merge "$MERGE_SHA"', merged_validate)
     merged_consume = merge.index('          test "$(jq -r .user.login <<<"$MERGED_PR")"', merged_identity)
     merge_sha_bind = merge.index('          test "$(jq -r .merge_commit_sha <<<"$MERGED_PR")" = "$MERGE_SHA"', merged_consume)
     current_main_ref = merge.index(
-        '          CURRENT_MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"',
+        '          CURRENT_MAIN_REF_RESPONSE="$(spotlight_merge_get main-postmerge)"',
         merge_sha_bind,
     )
     current_main_schema = merge.index(
@@ -610,7 +610,7 @@ def validate_terminal_object_schema_overlay(sync: str) -> None:
         '          CURRENT_MAIN_SHA="$(jq -r .object.sha <<<"$CURRENT_MAIN_REF_RESPONSE")"',
         current_main_schema,
     )
-    cleanup = merge.index('          CANDIDATE_REFS="$(gh api ', current_main)
+    cleanup = merge.index('          CANDIDATE_REFS="$(spotlight_merge_get candidate-refs-postmerge)"', current_main)
     identity_block = merge[merged_identity:merged_consume]
     for fragment in (
         '(.number == $pr) and',
@@ -1765,7 +1765,7 @@ def validate_lifecycle_http_status_overlay(sync: str) -> None:
 
     terminal_delete_pos = merge.index(blocks[3])
     terminal_readback = merge.index(
-        'AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"'
+        'AFTER_REFS="$(spotlight_merge_get candidate-refs-after-delete)"'
     )
     require(terminal_delete_pos < terminal_readback,
             "Spotlight terminal ref-delete HTTP 204 proof must precede absence readback")
@@ -1801,7 +1801,7 @@ def self_test_lifecycle_http_status_overlay(sync: str) -> None:
         raise ValueError("Spotlight lifecycle status self-test accepted non-201 PR creation")
 
     readback = (
-        '            AFTER_REFS="$(gh api "repos/${GITHUB_REPOSITORY}/git/matching-refs/heads/${CANDIDATE_BRANCH}")"\n'
+        '            AFTER_REFS="$(spotlight_merge_get candidate-refs-after-delete)"\n'
     )
     ordered = LIFECYCLE_STATUS_BLOCKS[3][0] + readback
     require(ordered in sync,
@@ -1825,7 +1825,7 @@ def validate_native_governed_bot_review_overlay(sync: str) -> None:
     for fragment in NATIVE_REVIEW_GATE_FRAGMENTS:
         require(fragment in merge,
                 f"Spotlight post-review native governed-bot gate proof is missing: {fragment}")
-    check_read = 'CHECKS="$(gh api -H \'Accept: application/vnd.github+json\' "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"'
+    check_read = 'CHECKS="$(spotlight_merge_get exact-head-checks)"'
     require(merge.count(check_read) == 1,
             "Spotlight terminal merge must retain exactly one canonical generic check-run read")
     review = merge.index(
