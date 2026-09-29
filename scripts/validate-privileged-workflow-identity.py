@@ -3338,7 +3338,9 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     )
     validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
-    spotlight_review_projection = project_spotlight_approval_list_helper_to_legacy(spotlight)
+    spotlight_review_projection = project_spotlight_merge_shell_reads_to_raw(
+        project_spotlight_approval_list_helper_to_legacy(spotlight)
+    )
     validate_pull_review_evidence_schema(
         spotlight_review_projection, "Spotlight authorization/terminal merge", 2
     )
