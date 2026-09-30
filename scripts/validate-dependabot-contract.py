@@ -924,15 +924,31 @@ def validate_controller_git_read_response_contract(text: str) -> None:
         )
 
     for forbidden in (
-        'COMMIT="$(gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"',
-        'TREE="$(gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"',
-        'BLOB="$(gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}")"',
+        'gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
+        'gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
+        'gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}"',
     ):
         require(
             forbidden not in text,
-            f"Dependabot controller regained raw candidate Git read consumption: {forbidden}",
+            f"Dependabot controller regained direct candidate Git read transport: {forbidden}",
         )
 
+    helper_pin = (
+        'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
+        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
+    commit_fetch = (
+        'python3 scripts/automation_github_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"'
+    )
+    tree_fetch = (
+        'python3 scripts/automation_github_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"'
+    )
+    blob_fetch = (
+        'python3 scripts/automation_github_read.py \\\n'
+        '              "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}"'
+    )
     blocks = (
         (
             '      - name: Assemble exact candidate tree as data\n',
@@ -953,8 +969,16 @@ def validate_controller_git_read_response_contract(text: str) -> None:
         start = text.index(start_marker)
         end = text.index(end_marker, start)
         block = text[start:end]
+        require(
+            block.count("python3 scripts/automation_github_read.py") == 3,
+            f"Dependabot {label} must use exactly three governed candidate Git reads",
+        )
+        require(
+            block.count(helper_pin) == 1 and "GH_TOKEN: ${{ github.token }}" in block,
+            f"Dependabot {label} governed candidate Git reads lost trusted helper/token binding",
+        )
         required = (
-            'gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
+            commit_fetch,
             '> "$RUNNER_TEMP/dependabot-candidate-commit-read.json"',
             'python3 scripts/dependabot_controller.py git-commit-read-response',
             '--response "$RUNNER_TEMP/dependabot-candidate-commit-read.json"',
@@ -962,7 +986,7 @@ def validate_controller_git_read_response_contract(text: str) -> None:
             '--out "$RUNNER_TEMP/dependabot-candidate-commit-read-normalized.json"',
             'COMMIT="$(cat "$RUNNER_TEMP/dependabot-candidate-commit-read-normalized.json")"',
             'TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"',
-            'gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
+            tree_fetch,
             '> "$RUNNER_TEMP/dependabot-candidate-tree-read.json"',
             'python3 scripts/dependabot_controller.py git-tree-read-response',
             '--response "$RUNNER_TEMP/dependabot-candidate-tree-read.json"',
@@ -970,7 +994,7 @@ def validate_controller_git_read_response_contract(text: str) -> None:
             '--out "$RUNNER_TEMP/dependabot-candidate-tree-read-normalized.json"',
             'TREE="$(cat "$RUNNER_TEMP/dependabot-candidate-tree-read-normalized.json")"',
             'ENTRY="$(jq -c --arg path "$PATH_VALUE"',
-            'gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}"',
+            blob_fetch,
             '> "$RUNNER_TEMP/dependabot-candidate-blob-read.json"',
             'python3 scripts/dependabot_controller.py git-blob-read-response',
             '--response "$RUNNER_TEMP/dependabot-candidate-blob-read.json"',
@@ -985,6 +1009,7 @@ def validate_controller_git_read_response_contract(text: str) -> None:
                 f"Dependabot {label} Git read boundary anchor changed: {fragment}",
             )
         ordered = (
+            helper_pin,
             required[0],
             required[1],
             required[2],
