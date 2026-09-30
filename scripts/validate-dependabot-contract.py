@@ -156,8 +156,8 @@ def validate_controller_wake_contract(text: str) -> None:
         "Dependabot controller must use an explicit allowlist rather than branch exclusions",
     )
     require(
-        "if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != 'main' || github.event.workflow_run.event != 'pull_request')) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')" in text,
-        "Dependabot controller must skip main-headed pull_request workflow_run ancestry-sync wakes before privileged job execution",
+        "if: github.event_name == 'schedule' || (github.event_name == 'workflow_run' && (github.event.workflow_run.head_branch != 'main' || (github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.event != 'schedule'))) || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')" in text,
+        "Dependabot controller must skip main-headed pull_request and scheduled workflow_run non-candidate wakes before privileged job execution",
     )
     reverse_sync_noop = """              if [ "$WAKE_HEAD_BRANCH" = "main" ]; then
                 if [ "$WAKE_EVENT" = "pull_request" ]; then
