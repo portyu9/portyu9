@@ -476,7 +476,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         'GRAPHQL_URL = "https://api.github.com/graphql"',
         'EXPECTED_REPOSITORY = "portyu9/portyu9"',
         'QUERY = (',
-        '"reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}"',
+        "reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}",
         'method="POST"',
         "automation_github_read.ATTEMPTS",
         "automation_github_read.TIMEOUT_SECONDS",
