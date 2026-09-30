@@ -3240,10 +3240,16 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             "python3 scripts/codeql_autofix_controller.py locate",
             "remediation PR discovery",
         ),
+        (
+            '"repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments?per_page=100"',
+            "> unsupported-comment-pages.json",
+            "python3 scripts/codeql_autofix_controller.py unsupported-evidence",
+            "unsupported-evidence comment collection",
+        ),
     )
     require(
-        autofix.count(pagination_helper) == 2,
-        "CodeQL Autofix must retain exactly two governed discovery pagination calls",
+        autofix.count(pagination_helper) == 3,
+        "CodeQL Autofix must retain exactly three governed pagination calls",
     )
     for endpoint, output_name, consumer, label in pagination_contracts:
         fetch = (
