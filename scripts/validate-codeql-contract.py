@@ -796,6 +796,41 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
             f"CodeQL Autofix {label} evidence must be fetched before typed consumption",
         )
 
+    review_thread_helper = "python3 scripts/automation_github_review_threads_read.py"
+    review_thread_fetch = (
+        review_thread_helper
+        + " "
+        + "\\"
+        + "\n            "
+        + '--repository "$TARGET_REPOSITORY"'
+        + " "
+        + "\\"
+        + "\n            "
+        + '--pr-number "$PR_NUMBER"'
+        + " "
+        + "\\"
+        + "\n            "
+        + "> review-threads.json"
+    )
+    require(
+        text.count(review_thread_helper) == 1
+        and text.count(review_thread_fetch) == 1,
+        "CodeQL Autofix terminal review-thread query must use exactly one fixed governed GraphQL reader",
+    )
+    require(
+        "gh api graphql" not in text,
+        "CodeQL Autofix terminal review-thread query regained raw gh GraphQL transport",
+    )
+    review_thread_fetch_pos = text.index(review_thread_fetch)
+    review_thread_admit_pos = text.index(
+        "python3 scripts/codeql_autofix_controller.py admit",
+        review_thread_fetch_pos,
+    )
+    require(
+        review_thread_fetch_pos < review_thread_admit_pos,
+        "CodeQL Autofix terminal review-thread evidence must precede typed admission",
+    )
+
     terminal_check_flatten = "jq '[.[].check_runs[]]' check-pages-raw.json > check-pages.json"
     terminal_check_flatten_pos = text.index(terminal_check_flatten)
     terminal_check_admit_pos = text.index(

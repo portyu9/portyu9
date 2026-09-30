@@ -138,6 +138,36 @@
       "rationale": "Canonical authenticated repository-scoped read-only GET transport for governed automation. Each retry issues a fresh GET and accepts only strict UTF-8 duplicate-key-safe JSON; authorization, not-found, malformed payload, schema/policy failures and every mutation remain terminal."
     },
     {
+      "id": "codeql-review-thread-graphql-query-transient",
+      "source": "scripts/automation_github_review_threads_read.py",
+      "workflow": ".github/workflows/codeql-autofix.yml",
+      "job": "controller",
+      "step": "Verify an existing Autofix PR and perform protected merge",
+      "operation": "read-only-github-graphql-query",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "fixed-review-threads-query",
+      "endpoint": "https://api.github.com/graphql",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only the fixed read-only CodeQL Autofix review-thread GraphQL query after classified transport/platform transients. The protected helper embeds the query document and accepts no query text or mutation input; authorization, GraphQL errors, malformed JSON/schema, pagination, policy, and every mutation failure remain terminal."
+    },
+    {
       "id": "spotlight-approve-shell-read-transient",
       "source": ".github/workflows/spotlight-link-sync.yml",
       "workflow": ".github/workflows/spotlight-link-sync.yml",

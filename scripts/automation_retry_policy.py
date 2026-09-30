@@ -10,6 +10,7 @@ from typing import Any
 
 import automation_github_paginated_read
 import automation_github_read
+import automation_github_review_threads_read
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / ".github/automation-retry-policy-v1.json"
@@ -37,6 +38,7 @@ EXPECTED_AUTOMATIC_RETRY_IDS = {
     "bot-pr-review-convergence-shell-read-transient",
     "action-release-provenance-read-transient",
     "canonical-github-api-read-transient",
+    "codeql-review-thread-graphql-query-transient",
     "spotlight-approve-shell-read-transient",
     "spotlight-reconcile-shell-read-transient",
     "spotlight-propose-shell-read-transient",
@@ -346,15 +348,20 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 9 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly nine classified automatic read retries")
+    require(len(entries) == 10 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly ten classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 9, "automatic retry IDs must remain unique")
+    require(len(by_id) == 10, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
-        require(item.get("operation") == "read-only-github-api-get",
-                f"automatic retry operation must remain read-only GitHub GET: {identifier}")
+        expected_operation = (
+            "read-only-github-graphql-query"
+            if identifier == "codeql-review-thread-graphql-query-transient"
+            else "read-only-github-api-get"
+        )
+        require(item.get("operation") == expected_operation,
+                f"automatic retry operation changed: {identifier}")
         require(item.get("failureClassifier") == "transport-or-github-transient-v1",
                 f"automatic retry transient classifier changed: {identifier}")
         require(item.get("maxAttempts") == 3 and item.get("timeoutSeconds") == 20,
@@ -447,6 +454,75 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
         require(forbidden not in canonical_source,
                 f"canonical GitHub read source acquired mutation method: {forbidden}")
+
+    graphql_item = by_id["codeql-review-thread-graphql-query-transient"]
+    require(
+        graphql_item.get("source") == "scripts/automation_github_review_threads_read.py"
+        and graphql_item.get("workflow") == ".github/workflows/codeql-autofix.yml"
+        and graphql_item.get("job") == "controller"
+        and graphql_item.get("step") == "Verify an existing Autofix PR and perform protected merge",
+        "CodeQL review-thread GraphQL retry identity changed",
+    )
+    require(
+        graphql_item.get("endpointScope") == "fixed-review-threads-query"
+        and graphql_item.get("endpoint") == "https://api.github.com/graphql"
+        and graphql_item.get("maxResponseBytes") == 8_000_000,
+        "CodeQL review-thread GraphQL retry scope/bounds changed",
+    )
+    automation_github_review_threads_read.self_test()
+    graphql_source = (ROOT / graphql_item["source"]).read_text(encoding="utf-8")
+    for fragment in (
+        'GRAPHQL_URL = "https://api.github.com/graphql"',
+        'QUERY = (',
+        '"reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}"',
+        'method="POST"',
+        "automation_github_read.ATTEMPTS",
+        "automation_github_read.TIMEOUT_SECONDS",
+        "automation_github_read.MAX_RESPONSE_BYTES",
+        "automation_github_read.retryable_http_error(exc)",
+        "automation_github_read.retry_delay_seconds(exc, attempt)",
+        'require(QUERY.startswith("query(") and "mutation" not in QUERY.lower(),',
+        'value.add_argument("--repository")',
+        'value.add_argument("--pr-number", type=int)',
+    ):
+        require(fragment in graphql_source,
+                f"CodeQL review-thread GraphQL transport contract is missing: {fragment}")
+    for forbidden in ('method="PUT"', 'method="PATCH"', 'method="DELETE"', 'add_argument("--query"'):
+        require(forbidden not in graphql_source,
+                f"CodeQL review-thread GraphQL transport acquired forbidden authority: {forbidden}")
+
+    codeql_terminal_step = named_step(
+        texts[".github/workflows/codeql-autofix.yml"],
+        "controller",
+        "Verify an existing Autofix PR and perform protected merge",
+    )
+    codeql_review_threads_governed = (
+        'python3 scripts/automation_github_review_threads_read.py \\\n'
+        '            --repository "$TARGET_REPOSITORY" \\\n'
+        '            --pr-number "$PR_NUMBER" \\\n'
+        '            > review-threads.json'
+    )
+    require(
+        codeql_terminal_step.count(codeql_review_threads_governed) == 1,
+        "CodeQL Autofix terminal review-thread query must use exactly one governed fixed GraphQL read",
+    )
+    require(
+        "gh api graphql" not in codeql_terminal_step,
+        "CodeQL Autofix terminal review-thread query regained raw gh GraphQL transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in codeql_terminal_step,
+        "CodeQL Autofix terminal review-thread governed query lost run-scoped token binding",
+    )
+    thread_fetch_pos = codeql_terminal_step.index(codeql_review_threads_governed)
+    thread_admit_pos = codeql_terminal_step.index(
+        "python3 scripts/codeql_autofix_controller.py admit",
+        thread_fetch_pos,
+    )
+    require(
+        thread_fetch_pos < thread_admit_pos,
+        "CodeQL Autofix terminal review-thread evidence moved after typed admission",
+    )
 
     bot_review = texts[".github/workflows/bot-pr-user-approval.yml"]
     reviewer_item = by_id["bot-pr-user-approval-shell-read-transient"]
