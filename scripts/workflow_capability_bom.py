@@ -507,13 +507,23 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
                 artifact: dict[str, Any] = {
                     "operation": operation,
                     "step": current_step,
-                    "name": with_values.get("name", ""),
                 }
+                name = with_values.get("name", "")
+                artifact_ids = with_values.get("artifact-ids", "")
+                if operation == "upload":
+                    require(name,
+                            f"{workflow}/{current_job}/{current_step}: artifact upload must name its artifact")
+                    artifact["name"] = name
+                else:
+                    require(bool(name) != bool(artifact_ids),
+                            f"{workflow}/{current_job}/{current_step}: artifact download must select exactly one name or artifact-ids")
+                    if name:
+                        artifact["name"] = name
+                    else:
+                        artifact["artifactIds"] = artifact_ids
                 for key in ("path", "retention-days", "if-no-files-found", "digest-mismatch"):
                     if key in with_values:
                         artifact[key] = with_values[key]
-                require(artifact["name"],
-                        f"{workflow}/{current_job}/{current_step}: artifact action must name its artifact")
                 require(artifact.get("path"),
                         f"{workflow}/{current_job}/{current_step}: artifact action must expose its path")
                 compiled[current_job]["artifacts"].append(artifact)
@@ -776,6 +786,39 @@ def self_test() -> None:
     )
     expect_failure(lambda: compile_steps(artifact_fixture, "fixture.yml", ["job"]),
                    "artifact action must expose its path")
+
+    artifact_id_fixture = (
+        "jobs:\n"
+        "  job:\n"
+        "    name: job\n"
+        "    steps:\n"
+        "      - name: Exact artifact download\n"
+        "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c\n"
+        "        with:\n"
+        "          artifact-ids: ${{ steps.upload.outputs.artifact-id }}\n"
+        "          path: artifact-out\n"
+        "          digest-mismatch: error\n"
+    )
+    artifact_id_compiled = compile_steps(artifact_id_fixture, "fixture.yml", ["job"])
+    require(
+        artifact_id_compiled["job"]["artifacts"] == [{
+            "artifactIds": "${{ steps.upload.outputs.artifact-id }}",
+            "digest-mismatch": "error",
+            "operation": "download",
+            "path": "artifact-out",
+            "step": "Exact artifact download",
+        }],
+        f"artifact-id selector self-test drifted: {artifact_id_compiled!r}",
+    )
+    conflicting_artifact_selector = artifact_id_fixture.replace(
+        "          artifact-ids: ${{ steps.upload.outputs.artifact-id }}\n",
+        "          name: fixture\n          artifact-ids: ${{ steps.upload.outputs.artifact-id }}\n",
+        1,
+    )
+    expect_failure(
+        lambda: compile_steps(conflicting_artifact_selector, "fixture.yml", ["job"]),
+        "artifact download must select exactly one name or artifact-ids",
+    )
 
     expect_failure(
         lambda: validate_job_authority("fixture.yml", {
