@@ -484,7 +484,8 @@ def validate_controller_pr_response_contract(text: str) -> None:
         text.index(validation_step_start):text.index(validation_step_end)
     ]
     list_fetch = (
-        'gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:'
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:'
         '${HEAD_REF}&per_page=10"'
     )
     list_output = '> "$RUNNER_TEMP/dependabot-validation-pr-list.json"'
