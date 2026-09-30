@@ -1001,7 +1001,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             "candidate-tree changed-file collection",
         ),
         (
-            "trusted-capability-admission",
+            "validation_bind",
             "Bind exact controller-issued validation target",
             "validation-target changed-file collection",
         ),
