@@ -404,7 +404,7 @@
       "candidateBomSha256": "bfec53b6792c9d5780682afa3d5f3924a11568196b6a4fcfef69f90d2e4d4d21",
       "expansionSha256": "1143b6120b407bbb494730996ca11d994fe9286d4ddc4b8a86c8171f4ff40e7b",
       "id": "cap-codeql-autofix-topology-read-transport-v1",
-      "rationale": "Authorize frozen #1377 measured by closed #1378: route three existing CodeQL Autofix candidate-topology GETs through the accepted bounded authenticated singleton reader while preserving endpoint strings and typed ref-state, compare/topology, and read-ref-response consumers. Semantic diff is 2 expansions/3 reductions. No permission, trigger, mutation/replay, secret/OIDC, required-check reduction, direct-main, merge/ruleset, or bypass authority is added."
+      "rationale": "Authorize frozen #1377 measured by closed #1378: route three existing read-only CodeQL Autofix candidate-topology GETs (branch inventory, generated compare, head ref) through the accepted bounded reader while preserving ref-state, compare/topology, and read-ref-response validation. Measured 2 expansions/3 reductions. No endpoint/query, trigger, permission, mutation/replay, secret/OIDC, check reduction, direct-main, merge/ruleset, or bypass authority."
     },
     {
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
