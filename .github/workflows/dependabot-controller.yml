@@ -76,7 +76,7 @@ jobs:
               ;;
             workflow_run)
               [[ "$WAKE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
-              gh api "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}" > "$RUNNER_TEMP/dependabot-wake-run.json"
+              python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}" > "$RUNNER_TEMP/dependabot-wake-run.json"
               python3 scripts/dependabot_controller.py wake-run-response \
                 --response "$RUNNER_TEMP/dependabot-wake-run.json" \
                 --expected-run-id "$WAKE_RUN_ID" \
@@ -612,7 +612,7 @@ jobs:
             proof_run_attempt="$(jq -r .runAttempt dependabot-admission-proof-meta.json)"
             [[ "$proof_run_id" =~ ^[1-9][0-9]*$ ]] || return 1
             [[ "$proof_run_attempt" =~ ^[1-9][0-9]*$ ]] || return 1
-            gh api "repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}" \
+            python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}" \
               > dependabot-admission-proof-current-run.json || return 1
             python3 scripts/dependabot_admission_proof.py verify-current \
               --current-run dependabot-admission-proof-current-run.json \
@@ -681,7 +681,7 @@ jobs:
             local codeql_workflow_id dependency_workflow_id profile_workflow_id expected_id
             local runs total observed name run run_count run_id check_suite_id run_attempt status conclusion
 
-            gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" \
+            python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" \
               > "$RUNNER_TEMP/dependabot-codeql-workflow-definition.json"
             python3 scripts/dependabot_controller.py workflow-definition-response \
               --response "$RUNNER_TEMP/dependabot-codeql-workflow-definition.json" \
@@ -689,7 +689,7 @@ jobs:
               --out "$RUNNER_TEMP/dependabot-codeql-workflow-definition-normalized.json"
             codeql_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-codeql-workflow-definition-normalized.json")"
 
-            gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" \
+            python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" \
               > "$RUNNER_TEMP/dependabot-dependency-workflow-definition.json"
             python3 scripts/dependabot_controller.py workflow-definition-response \
               --response "$RUNNER_TEMP/dependabot-dependency-workflow-definition.json" \
@@ -697,7 +697,7 @@ jobs:
               --out "$RUNNER_TEMP/dependabot-dependency-workflow-definition-normalized.json"
             dependency_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-dependency-workflow-definition-normalized.json")"
 
-            gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" \
+            python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" \
               > "$RUNNER_TEMP/dependabot-profile-workflow-definition.json"
             python3 scripts/dependabot_controller.py workflow-definition-response \
               --response "$RUNNER_TEMP/dependabot-profile-workflow-definition.json" \

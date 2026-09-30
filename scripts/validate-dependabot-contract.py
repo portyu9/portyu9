@@ -180,7 +180,10 @@ def validate_controller_wake_contract(text: str) -> None:
         text.count("python3 scripts/dependabot_controller.py wake-run-response") == 1,
         "Dependabot controller must validate exactly one workflow_run wake singleton response",
     )
-    wake_fetch = 'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}" > "$RUNNER_TEMP/dependabot-wake-run.json"'
+    wake_fetch = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}" > "$RUNNER_TEMP/dependabot-wake-run.json"'
+    )
     wake_schema = "python3 scripts/dependabot_controller.py wake-run-response"
     wake_consume = 'test "$(jq -r .id <<<"$WAKE")" = "$WAKE_RUN_ID"'
     for fragment in (
@@ -199,6 +202,10 @@ def validate_controller_wake_contract(text: str) -> None:
     require(
         'WAKE="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}")"' not in text,
         "Dependabot controller regressed to direct wake singleton consumption",
+    )
+    require(
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}"' not in text,
+        "Dependabot controller regained direct workflow-run wake transport",
     )
 
 
@@ -733,6 +740,29 @@ def validate_controller_required_check_snapshot_contract(text: str) -> None:
     end = text.index(end_marker, start)
     block = text[start:end]
 
+    proof_run_fetch = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}"'
+    )
+    require(
+        block.count(proof_run_fetch) == 1,
+        "Dependabot delegated admission must use one governed exact proof-run singleton read",
+    )
+    require(
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}"'
+        not in block,
+        "Dependabot delegated admission regained direct proof-run singleton transport",
+    )
+    proof_fetch_pos = block.index(proof_run_fetch)
+    proof_verify_pos = block.index(
+        "python3 scripts/dependabot_admission_proof.py verify-current",
+        proof_fetch_pos,
+    )
+    require(
+        proof_fetch_pos < proof_verify_pos,
+        "Dependabot delegated proof-run evidence must be fetched before current-run verification",
+    )
+
     snapshot_endpoint = (
         "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/"
         "check-runs?app_id=15368&filter=latest&per_page=100"
@@ -820,6 +850,9 @@ def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
         'actions/workflows/codeql.yml" --jq .id',
         'actions/workflows/dependency-review.yml" --jq .id',
         'actions/workflows/profile-quality.yml" --jq .id',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"',
         'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"',
         "'.total_count // empty' <<<\"$runs\"",
         'jq -r .head_sha <<<"$run"',
@@ -835,19 +868,19 @@ def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
 
     workflow_contracts = (
         (
-            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
+            'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
             '--response "$RUNNER_TEMP/dependabot-codeql-workflow-definition.json"',
             '--expected-path ".github/workflows/codeql.yml"',
             'codeql_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-codeql-workflow-definition-normalized.json")"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"',
+            'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"',
             '--response "$RUNNER_TEMP/dependabot-dependency-workflow-definition.json"',
             '--expected-path ".github/workflows/dependency-review.yml"',
             'dependency_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-dependency-workflow-definition-normalized.json")"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"',
+            'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"',
             '--response "$RUNNER_TEMP/dependabot-profile-workflow-definition.json"',
             '--expected-path ".github/workflows/profile-quality.yml"',
             'profile_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-profile-workflow-definition-normalized.json")"',

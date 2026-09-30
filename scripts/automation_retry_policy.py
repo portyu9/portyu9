@@ -1133,6 +1133,50 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             f"Dependabot {label} regained direct singleton PR transport",
         )
 
+    dependabot_workflow_singleton_pin = (
+        'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
+        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
+    for job_name, step_name, endpoints, label in (
+        (
+            "controller",
+            "Bind current main and one native Dependabot candidate",
+            ('"repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}"',),
+            "workflow-run wake",
+        ),
+        (
+            "controller",
+            "Validate reconciled candidate and inspect protected checks",
+            (
+                '"repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}"',
+                '"repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
+                '"repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"',
+                '"repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"',
+            ),
+            "protected workflow/proof metadata",
+        ),
+    ):
+        step = named_step(dependabot_controller, job_name, step_name)
+        for endpoint in endpoints:
+            governed = f"python3 scripts/automation_github_read.py {endpoint}"
+            direct = f"gh api {endpoint}"
+            require(
+                step.count(governed) == 1,
+                f"Dependabot {label} governed singleton read topology changed: {endpoint}",
+            )
+            require(
+                direct not in step,
+                f"Dependabot {label} regained direct singleton GET transport: {endpoint}",
+            )
+        require(
+            dependabot_workflow_singleton_pin in step,
+            f"Dependabot {label} lost exact governed-read helper identity",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in step,
+            f"Dependabot {label} governed singleton reads lost run-scoped token binding",
+        )
+
     codeql_autofix = texts[".github/workflows/codeql-autofix.yml"]
     for step_name, endpoint, output_name, label in (
         (
@@ -1979,6 +2023,49 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         dependabot_terminal_pr_transport_drift,
         "Dependabot terminal merge governed singleton PR read topology changed",
+    )
+
+    dependabot_workflow_singleton_source = texts[".github/workflows/dependabot-controller.yml"]
+    governed_wake_read = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}"'
+    )
+    direct_wake_read = 'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}"'
+    require(
+        dependabot_workflow_singleton_source.count(governed_wake_read) == 1,
+        "retry-policy self-test fixture changed for governed Dependabot workflow-run wake read",
+    )
+    dependabot_wake_transport_drift = dict(texts)
+    dependabot_wake_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_workflow_singleton_source.replace(governed_wake_read, direct_wake_read, 1)
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_wake_transport_drift,
+        "Dependabot workflow-run wake governed singleton read topology changed",
+    )
+
+    governed_proof_run_read = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}"'
+    )
+    direct_proof_run_read = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}"'
+    )
+    require(
+        dependabot_workflow_singleton_source.count(governed_proof_run_read) == 1,
+        "retry-policy self-test fixture changed for governed Dependabot proof-run read",
+    )
+    dependabot_proof_run_transport_drift = dict(texts)
+    dependabot_proof_run_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_workflow_singleton_source.replace(
+            governed_proof_run_read, direct_proof_run_read, 1
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_proof_run_transport_drift,
+        "Dependabot protected workflow/proof metadata governed singleton read topology changed",
     )
 
     dependabot_release_transport_drift = dict(texts)
