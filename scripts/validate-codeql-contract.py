@@ -806,7 +806,7 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         "CodeQL Autofix must retain exactly five governed main-ref observations",
     )
     require(
-        text.count(governed_fetch) == 21,
+        text.count(governed_fetch) == 22,
         "CodeQL Autofix governed GET topology changed",
     )
     require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref governed-read topology changed")
@@ -1058,6 +1058,45 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         'test "$(printf \'%s\\n\' "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" '
         '| LC_ALL=C sort -u | wc -l)" = "3"' in text,
         "CodeQL Autofix workflow IDs must remain exactly three distinct identities",
+    )
+
+    artifact_list_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100"'
+        + " "
+        + "\\"
+        + "\n            "
+        + "> artifacts.json"
+    )
+    artifact_list_direct = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json'
+    )
+    artifact_zip = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
+    )
+    require(
+        text.count(artifact_list_fetch) == 1 and artifact_list_direct not in text,
+        "CodeQL Autofix receipt artifact-list governed-read transport changed",
+    )
+    require(
+        text.count(artifact_zip) == 1,
+        "CodeQL Autofix receipt ZIP must remain exactly one raw binary read",
+    )
+    artifact_fetch_pos = text.index(artifact_list_fetch)
+    artifact_validate_pos = text.index(
+        "python3 scripts/codeql_autofix_controller.py artifact",
+        artifact_fetch_pos,
+    )
+    artifact_consume_pos = text.index(
+        'ARTIFACT_ID="$(jq -r .id artifact.json)"',
+        artifact_validate_pos,
+    )
+    artifact_zip_pos = text.index(artifact_zip, artifact_consume_pos)
+    require(
+        artifact_fetch_pos < artifact_validate_pos < artifact_consume_pos < artifact_zip_pos,
+        "CodeQL Autofix receipt artifact-list evidence moved out of typed provenance order",
     )
 
     prior_attempt_endpoint = '"repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}"'
