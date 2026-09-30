@@ -1385,6 +1385,38 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal GHAS evidence moved out of governed typed order",
     )
 
+    codeql_terminal_pr_alerts_governed = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100" \\\n'
+        '            > pr-alert-pages.json'
+    )
+    codeql_terminal_pr_alerts_direct = (
+        'gh api --paginate --slurp \\\n'
+        '            "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100" \\\n'
+        '            > pr-alert-pages.json'
+    )
+    require(
+        codeql_terminal_step.count(codeql_terminal_pr_alerts_governed) == 1,
+        "CodeQL Autofix terminal PR-scoped alert evidence must use exactly one governed paginated GitHub collection",
+    )
+    require(
+        codeql_terminal_pr_alerts_direct not in codeql_terminal_step,
+        "CodeQL Autofix terminal PR-scoped alert evidence regained direct gh pagination transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in codeql_terminal_step,
+        "CodeQL Autofix terminal PR-scoped alert governed pagination lost run-scoped token binding",
+    )
+    pr_alert_fetch_pos = codeql_terminal_step.index(codeql_terminal_pr_alerts_governed)
+    pr_alert_admit_pos = codeql_terminal_step.index(
+        "python3 scripts/codeql_autofix_controller.py admit",
+        pr_alert_fetch_pos,
+    )
+    require(
+        ghas_fetch_pos < pr_alert_fetch_pos < pr_alert_admit_pos,
+        "CodeQL Autofix terminal PR-scoped alert evidence moved out of governed typed order",
+    )
+
     codeql_terminal_artifact_list_governed = (
         'python3 scripts/automation_github_read.py \\\n'
         '            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" \\\n'

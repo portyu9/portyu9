@@ -84,13 +84,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Verify an existing Autofix PR and perform protected merge"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments",
               "method": "POST",
               "mutating": true,

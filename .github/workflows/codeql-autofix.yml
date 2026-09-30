@@ -742,7 +742,7 @@ jobs:
           python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \
             > ghas.json
-          gh api --paginate --slurp \
+          python3 scripts/automation_github_paginated_read.py \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100" \
             > pr-alert-pages.json
           gh api graphql \

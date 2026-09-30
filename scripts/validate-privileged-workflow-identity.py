@@ -3263,10 +3263,17 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             "terminal exact-head check-run collection",
             "            ",
         ),
+        (
+            '"repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100"',
+            "> pr-alert-pages.json",
+            "python3 scripts/codeql_autofix_controller.py admit",
+            "terminal PR-scoped CodeQL alert collection",
+            "            ",
+        ),
     )
     require(
-        autofix.count(pagination_helper) == 5,
-        "CodeQL Autofix must retain exactly five governed pagination calls",
+        autofix.count(pagination_helper) == 6,
+        "CodeQL Autofix must retain exactly six governed pagination calls",
     )
     for endpoint, output_name, consumer, label, continuation_indent in pagination_contracts:
         fetch = (
