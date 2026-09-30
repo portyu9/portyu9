@@ -218,9 +218,41 @@ def validate_controller_read_ref_response_contract(text: str) -> None:
         and text.count('assert_main_sha "$MERGE_SHA"') == 1,
         "Dependabot controller exact expected-SHA read-ref proof topology changed",
     )
+    require(
+        text.count('python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main"') == 7
+        and text.count('python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}"') == 6,
+        "Dependabot controller governed Git-ref transport count changed",
+    )
+    helper_pin = (
+        'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
+        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
+    for step_name in (
+        "Bind current main and one native Dependabot candidate",
+        "Atomically reconcile canonical governance files onto the bot head",
+        "Validate reconciled candidate and inspect protected checks",
+        "Perform exact-head protected Dependabot merge",
+        "Bind exact controller-issued validation target",
+        "Verify exact delegated admission proof",
+        "Dispatch CodeQL after exact read-only validation",
+    ):
+        start_marker = f"      - name: {step_name}\n"
+        require(text.count(start_marker) == 1, f"Dependabot Git-ref step anchor changed: {step_name}")
+        start = text.index(start_marker)
+        end = text.find("\n      - name: ", start + len(start_marker))
+        if end < 0:
+            end = len(text)
+        block = text[start:end]
+        require(
+            block.count(helper_pin) == 1 and "GH_TOKEN: ${{ github.token }}" in block,
+            f"Dependabot Git-ref step lost trusted helper/token binding: {step_name}",
+        )
+
     for forbidden in (
         'git/ref/heads/main" --jq .object.sha',
         'git/ref/heads/${HEAD_REF}" --jq .object.sha',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}"',
     ):
         require(
             forbidden not in text,
@@ -228,26 +260,26 @@ def validate_controller_read_ref_response_contract(text: str) -> None:
         )
 
     required = (
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-initial-main-ref.json"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-initial-main-ref.json"',
         '--response "$RUNNER_TEMP/dependabot-initial-main-ref.json"',
         '--expected-ref "refs/heads/main"',
         '--out "$RUNNER_TEMP/dependabot-initial-main-ref-normalized.json"',
         'MAIN_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-initial-main-ref-normalized.json")"',
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-validation-main-ref.json"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-validation-main-ref.json"',
         '--response "$RUNNER_TEMP/dependabot-validation-main-ref.json"',
         '--out "$RUNNER_TEMP/dependabot-validation-main-ref-normalized.json"',
         'BASE_SHA="$(jq -r .sha "$RUNNER_TEMP/dependabot-validation-main-ref-normalized.json")"',
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-validation-head-ref.json"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-validation-head-ref.json"',
         '--response "$RUNNER_TEMP/dependabot-validation-head-ref.json"',
         '--expected-ref "refs/heads/${HEAD_REF}"',
         '--expected-sha "$HEAD_SHA"',
         '--out "$RUNNER_TEMP/dependabot-validation-head-ref-normalized.json"',
         'test "$(jq -r .sha "$RUNNER_TEMP/dependabot-validation-head-ref-normalized.json")" = "$HEAD_SHA"',
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-main-ref.json"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main" > "$RUNNER_TEMP/dependabot-main-ref.json"',
         '--response "$RUNNER_TEMP/dependabot-main-ref.json"',
         '--out "$RUNNER_TEMP/dependabot-main-ref-normalized.json"',
         'test "$(jq -r .sha "$RUNNER_TEMP/dependabot-main-ref-normalized.json")" = "$expected_sha"',
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-head-ref.json"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" > "$RUNNER_TEMP/dependabot-head-ref.json"',
         '--response "$RUNNER_TEMP/dependabot-head-ref.json"',
         '--out "$RUNNER_TEMP/dependabot-head-ref-normalized.json"',
         'test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"',
