@@ -1022,6 +1022,54 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             f"Dependabot {label} governed pagination lost run-scoped token binding",
         )
 
+    dependabot_git_read_pin = (
+        'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
+        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
+    for job_name, step_name, label in (
+        (
+            "controller",
+            "Assemble exact candidate tree as data",
+            "candidate-tree Git-object reconstruction",
+        ),
+        (
+            "validation_bind",
+            "Reconstruct exact reconciled candidate as data",
+            "validation Git-object reconstruction",
+        ),
+    ):
+        step = named_step(dependabot_controller, job_name, step_name)
+        require(
+            step.count("python3 scripts/automation_github_read.py") == 3,
+            f"Dependabot {label} must use exactly three governed singleton Git-object reads",
+        )
+        require(
+            dependabot_git_read_pin in step,
+            f"Dependabot {label} lost exact governed-read helper identity",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in step,
+            f"Dependabot {label} governed Git-object reads lost run-scoped token binding",
+        )
+        for endpoint in (
+            '"repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
+            '"repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
+            '"repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}"',
+        ):
+            require(
+                step.count(endpoint) == 1,
+                f"Dependabot {label} governed Git-object endpoint topology changed: {endpoint}",
+            )
+        for forbidden in (
+            'gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
+            'gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
+            'gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}"',
+        ):
+            require(
+                forbidden not in step,
+                f"Dependabot {label} regained direct singleton Git-object transport: {forbidden}",
+            )
+
     codeql_autofix = texts[".github/workflows/codeql-autofix.yml"]
     for step_name, endpoint, output_name, label in (
         (
@@ -1737,6 +1785,53 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         dependabot_validation_file_transport_drift,
         "Dependabot validation-target changed-file collection must use exactly one governed paginated GitHub collection",
+    )
+
+    dependabot_git_read_source = texts[".github/workflows/dependabot-controller.yml"]
+    dependabot_commit_read_governed = (
+        'python3 scripts/automation_github_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}" \\\n'
+        '            > "$RUNNER_TEMP/dependabot-candidate-commit-read.json"'
+    )
+    dependabot_commit_read_direct = (
+        'gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}" \\\n'
+        '            > "$RUNNER_TEMP/dependabot-candidate-commit-read.json"'
+    )
+    require(
+        dependabot_git_read_source.count(dependabot_commit_read_governed) == 2,
+        "retry-policy self-test fixture missing both Dependabot governed candidate Git commit reads",
+    )
+
+    dependabot_candidate_git_transport_drift = dict(texts)
+    dependabot_candidate_git_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_git_read_source.replace(
+            dependabot_commit_read_governed,
+            dependabot_commit_read_direct,
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_candidate_git_transport_drift,
+        "Dependabot candidate-tree Git-object reconstruction must use exactly three governed singleton Git-object reads",
+    )
+
+    dependabot_validation_git_transport_drift = dict(texts)
+    dependabot_git_parts = dependabot_git_read_source.rsplit(
+        dependabot_commit_read_governed,
+        1,
+    )
+    require(
+        len(dependabot_git_parts) == 2,
+        "retry-policy self-test could not isolate Dependabot validation Git commit read",
+    )
+    dependabot_validation_git_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_commit_read_direct.join(dependabot_git_parts)
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_validation_git_transport_drift,
+        "Dependabot validation Git-object reconstruction must use exactly three governed singleton Git-object reads",
     )
 
     dependabot_release_transport_drift = dict(texts)
