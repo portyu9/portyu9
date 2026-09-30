@@ -1126,9 +1126,21 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
     )
 
     run_fetch = (
-        'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \\'
-        '\n              > "$RUNNER_TEMP/codeql-autofix-protected-runs.json"'
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + '"repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"'
+        + " "
+        + "\\"
+        + "\n              "
+        + '> "$RUNNER_TEMP/codeql-autofix-protected-runs.json"'
     )
+    direct_run_fetch = 'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"'
+    require(
+        direct_run_fetch not in text,
+        "CodeQL Autofix protected workflow-run collection regained direct gh API GET transport",
+    )
+
     run_consume = (
         'RUN_COUNT="$(jq -r .totalCount "$RUNNER_TEMP/codeql-autofix-protected-runs-normalized.json")"'
     )
