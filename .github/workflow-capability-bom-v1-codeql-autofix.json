@@ -175,13 +175,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Verify an existing Autofix PR and perform protected merge"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge",
               "method": "PUT",
               "mutating": true,
