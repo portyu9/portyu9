@@ -3256,10 +3256,17 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             "terminal PR changed-file collection",
             "            ",
         ),
+        (
+            '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100"',
+            "> check-pages-raw.json",
+            "jq '[.[].check_runs[]]' check-pages-raw.json > check-pages.json",
+            "terminal exact-head check-run collection",
+            "            ",
+        ),
     )
     require(
-        autofix.count(pagination_helper) == 4,
-        "CodeQL Autofix must retain exactly four governed pagination calls",
+        autofix.count(pagination_helper) == 5,
+        "CodeQL Autofix must retain exactly five governed pagination calls",
     )
     for endpoint, output_name, consumer, label, continuation_indent in pagination_contracts:
         fetch = (
@@ -3290,6 +3297,17 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             fetch_pos < consume_pos,
             f"CodeQL Autofix {label} evidence must be fetched before typed consumption",
         )
+
+    terminal_check_flatten = "jq '[.[].check_runs[]]' check-pages-raw.json > check-pages.json"
+    terminal_check_flatten_pos = autofix.index(terminal_check_flatten)
+    terminal_check_admit_pos = autofix.index(
+        "python3 scripts/codeql_autofix_controller.py admit",
+        terminal_check_flatten_pos,
+    )
+    require(
+        terminal_check_flatten_pos < terminal_check_admit_pos,
+        "CodeQL Autofix terminal check-run collection must be flattened before typed admission",
+    )
 
     governed_fetch = "python3 scripts/automation_github_read.py"
     main_endpoint = '"repos/${TARGET_REPOSITORY}/git/ref/heads/main"'
