@@ -283,7 +283,8 @@ jobs:
             if [ "$ATTEMPT_NUMBER" -ge "$RUN_ATTEMPT" ]; then
               break
             fi
-            gh api "repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}" \
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}" \
               | jq -c '.' >> prior-attempts.ndjson
             sleep 1
           done
@@ -695,7 +696,9 @@ jobs:
           test "$(jq -r .runId verified-receipt.json)" = "$ORIGIN_RUN_ID"
           RECEIPT_ATTEMPT="$(jq -r .runAttempt verified-receipt.json)"
           [[ "$RECEIPT_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
-          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" \
+            > origin-run.json
 
           python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" \
@@ -902,7 +905,9 @@ jobs:
           POST_MERGE_CODEQL_CONCLUSION=""
           for attempt in $(seq 1 120); do
             assert_main_sha "$MERGE_SHA"
-            gh api "repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}" > post-merge-codeql-run.json
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}" \
+              > post-merge-codeql-run.json
             python3 scripts/codeql_autofix_controller.py followup-run \
               --run-file post-merge-codeql-run.json \
               --run-id "$POST_MERGE_CODEQL_RUN_ID" \
