@@ -411,7 +411,7 @@
       "candidateBomSha256": "4362024f3c8559f5f6bbea832cba30d0e1d6b5f017332e43a3e6b557dc622210",
       "expansionSha256": "9e7f4f447bd59c439dbdb31c1d124a1d20534c0ed294de5ee81e0f6ae320f092",
       "id": "cap-codeql-autofix-review-thread-query-read-retry-v1",
-      "rationale": "Authorize frozen #1407 measured by closed diagnostic #1408: route the existing terminal CodeQL Autofix read-only review-thread GraphQL query through the protected fixed-query bounded authenticated helper while preserving the exact query projection, fixed GraphQL endpoint, review-threads.json evidence shape, and existing typed GraphQL error/schema/pagination/thread-resolution admission. Adds no permission, trigger, GraphQL mutation or REST mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
+      "rationale": "Authorize frozen #1407 measured by closed diagnostic #1408: route the existing terminal CodeQL Autofix read-only review-thread GraphQL query through the protected fixed-query bounded authenticated helper while preserving the query projection, fixed endpoint, review-threads.json shape, and existing typed GraphQL/schema/pagination/thread-resolution admission. Adds no permission, trigger, mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
     },
     {
       "baseBomSha256": "c0c6bd4d56b48c02598975c88d494e709db7c8378e6100f15110df31e5ad1226",
