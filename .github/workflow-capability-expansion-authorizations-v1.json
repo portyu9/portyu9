@@ -474,7 +474,7 @@
       "candidateBomSha256": "7594a75dbc37d03ddb523b670dd837121cfcc8f865dc139692ecae5a96bd948e",
       "expansionSha256": "97b2e5579bf2b6497a3d89ec472c8bb3d9b4c860e9a91df45f5cefb66f10447e",
       "id": "cap-dependabot-candidate-git-read-transport-retry-v1",
-      "rationale": "Authorize frozen #1342 measured by closed #1343: route the six existing Dependabot Controller candidate Git commit/tree/blob GET call sites through the accepted bounded singleton reader while preserving exact endpoints, evidence files, #1040 typed response validation, and downstream reconstruction semantics. Remove the six now-mediated raw GET BOM surfaces; mutations and every other read remain unchanged. Adds no permission, trigger, endpoint/query, mutation authority, secret/OIDC, check reduction, direct-main/ruleset/merge authority, replay, or bypass."
+      "rationale": "Authorize frozen #1342 measured by closed #1343: route six existing Dependabot candidate Git commit/tree/blob GETs through accepted bounded singleton reads; preserve endpoints, evidence files, #1040 typed response validation, and reconstruction semantics. Remove six mediated raw GET BOM surfaces. Mutations and all other reads stay unchanged. No permission, trigger, endpoint/query, mutation authority, secret/OIDC, check reduction, direct-main/ruleset/merge authority, replay, or bypass."
     },
     {
       "baseBomSha256": "32a494c4933c6e385b0fe90e49502513ee1d50c880dd0372a44d3d3abd197e51",
