@@ -512,6 +512,13 @@
       "rationale": "Authorize #533's hardened zero-touch Dependabot CodeQL controller after removing all candidate-code checkout/execution from trusted validation and switching privileged Capability Admission to literal main with exact-SHA reproof. GitHub CodeQL reports no new PR alerts. The controller still admits only the exact native grouped CodeQL release class, reconstructs candidate bytes as data, requires all six exact-head gates, and merges only the expected admitted head."
     },
     {
+      "baseBomSha256": "3d9d4099a47f2440dabae7c8f7b0cc63ff69bb87704f77efaaf3ab2c747a3812",
+      "candidateBomSha256": "2a708bf17c664fcaa3b31808bbf66302b0c9d9239c87dd4d8fef87177d574093",
+      "expansionSha256": "d141fdba3e2ca1fba20e71f35acfb6d618d6e874114786bc5e8cb2651b403950",
+      "id": "cap-dependabot-collection-snapshot-read-transport-retry-v1",
+      "rationale": "Authorize frozen #1354 measured by closed #1355: route five existing Dependabot collection/snapshot JSON GETs through the accepted bounded singleton reader and two existing review/comment page arrays through accepted bounded pagination, removing seven raw GET BOM surfaces. Preserve endpoints, typed consumers, permissions, triggers, mutations, checks, merge/ruleset authority, secrets/OIDC and direct-main policy. Adds no mutation replay or bypass."
+    },
+    {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "9bf26673bbdd102775d77abc6cafe650c7a262b678a72ab07961f6bbdd2bf7df",
