@@ -1289,8 +1289,8 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Approve exact protected checks and queue admission retry",
     )
     require(
-        codeql_workflow_step.count("python3 scripts/automation_github_read.py") == 5,
-        "CodeQL Autofix protected workflow metadata governed-read topology changed",
+        all(codeql_workflow_step.count(endpoint) == 1 for endpoint, _, _ in codeql_workflow_reads),
+        "CodeQL Autofix protected workflow metadata endpoint topology changed",
     )
     for endpoint, output_name, label in (
         (
