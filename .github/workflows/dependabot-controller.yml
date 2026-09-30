@@ -243,7 +243,9 @@ jobs:
           rm -rf "$CANDIDATE_ROOT"
           cp -a . "$CANDIDATE_ROOT"
 
-          gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > pr-file-pages.json
+          python3 scripts/automation_github_paginated_read.py \
+            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            > pr-file-pages.json
           python3 scripts/workflow_capability_api_collection.py files \
             --input pr-file-pages.json \
             --out changed-paths.txt
@@ -1084,7 +1086,9 @@ jobs:
             --out "$RUNNER_TEMP/dependabot-validation-head-ref-normalized.json"
           test "$(jq -r .sha "$RUNNER_TEMP/dependabot-validation-head-ref-normalized.json")" = "$HEAD_SHA"
 
-          gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > pr-file-pages.json
+          python3 scripts/automation_github_paginated_read.py \
+            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            > pr-file-pages.json
           python3 scripts/workflow_capability_api_collection.py files \
             --input pr-file-pages.json \
             --out changed-paths.txt
