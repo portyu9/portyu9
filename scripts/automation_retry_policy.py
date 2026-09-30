@@ -1897,7 +1897,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         '> "$RUNNER_TEMP/dependabot-head-ref.json"'
     )
     require(
-        dependabot_ref_source.count(governed_head_ref) == 4,
+        dependabot_ref_source.count(governed_head_ref) == 5,
         "retry-policy self-test fixture changed for shared Dependabot head-ref reads",
     )
     last_head = dependabot_ref_source.rfind(governed_head_ref)
