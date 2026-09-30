@@ -1288,10 +1288,6 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "controller",
         "Approve exact protected checks and queue admission retry",
     )
-    require(
-        codeql_workflow_step.count("python3 scripts/automation_github_read.py") == 5,
-        "CodeQL Autofix protected workflow metadata governed-read topology changed",
-    )
     for endpoint, output_name, label in (
         (
             '"repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
@@ -1331,6 +1327,53 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "GH_TOKEN: ${{ github.token }}" in codeql_workflow_step,
         "CodeQL Autofix protected workflow governed reads lost run-scoped token binding",
     )
+
+    for step_name, output_name, label in (
+        (
+            "Approve exact protected checks and queue admission retry",
+            '> "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
+            "candidate PR snapshot",
+        ),
+        (
+            "Approve exact protected checks and queue admission retry",
+            '> "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
+            "continuation PR snapshot",
+        ),
+        (
+            "Verify an existing Autofix PR and perform protected merge",
+            "> pr.json",
+            "terminal PR snapshot",
+        ),
+        (
+            "Verify an existing Autofix PR and perform protected merge",
+            "> final-pr.json",
+            "final pre-merge PR snapshot",
+        ),
+    ):
+        step = named_step(codeql_autofix, "controller", step_name)
+        endpoint = '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+        governed = (
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + endpoint
+            + " "
+            + "\\"
+            + "\n            "
+            + output_name
+        )
+        require(
+            step.count(governed) == 1,
+            f"CodeQL Autofix {label} must use exactly one governed singleton GitHub read",
+        )
+        require(
+            ("gh api " + endpoint) not in step,
+            f"CodeQL Autofix {label} regained direct gh API GET transport",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in step,
+            f"CodeQL Autofix {label} governed read lost run-scoped token binding",
+        )
 
     spotlight_merge_authorization = SPOTLIGHT_MERGE_AUTHORIZATION.read_text(encoding="utf-8")
     for fragment in (

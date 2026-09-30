@@ -3257,7 +3257,7 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     )
     require(
         autofix.count(main_endpoint) == 5
-        and autofix.count(governed_fetch) == 9
+        and autofix.count(governed_fetch) == 13
         and autofix.count(main_fetch) == 3
         and autofix.count('--expected-ref "refs/heads/main"') == 3
         and autofix.count(main_consume) == 3,
@@ -3324,7 +3324,14 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
 
     pr_contracts = (
         (
-            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
             '--response-file "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
             '--base-sha "$BASE_SHA"',
             '--head-sha "$HEAD_SHA"',
@@ -3332,7 +3339,14 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             'test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$HEAD_SHA"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
             '--response-file "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
             '--base-sha "$BASE_SHA"',
             '--head-sha "$HEAD_SHA"',
@@ -3340,7 +3354,14 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             'test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json")" = "$HEAD_SHA"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > pr.json',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> pr.json',
             '--response-file pr.json',
             '--base-sha "$BASE_SHA"',
             '--head-sha "$EXPECTED_HEAD_SHA"',
@@ -3348,7 +3369,14 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             'test "$(jq -r .headSha pr-normalized.json)" = "$EXPECTED_HEAD_SHA"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> final-pr.json',
             '--response-file final-pr.json',
             '--base-sha "$ADMITTED_BASE_SHA"',
             '--head-sha "$ADMITTED_HEAD_SHA"',

@@ -754,7 +754,7 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         "CodeQL Autofix must retain exactly five governed main-ref observations",
     )
     require(
-        text.count(governed_fetch) == 9,
+        text.count(governed_fetch) == 13,
         "CodeQL Autofix governed GET topology changed",
     )
     require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref governed-read topology changed")
@@ -863,7 +863,14 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
 
     pr_contracts = (
         (
-            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
             '--response-file "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"',
             '--base-sha "$BASE_SHA"',
             '--head-sha "$HEAD_SHA"',
@@ -871,7 +878,14 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
             'test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$HEAD_SHA"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
             '--response-file "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"',
             '--base-sha "$BASE_SHA"',
             '--head-sha "$HEAD_SHA"',
@@ -879,7 +893,14 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
             'test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-continuation-pr-normalized.json")" = "$HEAD_SHA"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > pr.json',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> pr.json',
             '--response-file pr.json',
             '--base-sha "$BASE_SHA"',
             '--head-sha "$EXPECTED_HEAD_SHA"',
@@ -887,7 +908,14 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
             'test "$(jq -r .headSha pr-normalized.json)" = "$EXPECTED_HEAD_SHA"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> final-pr.json',
             '--response-file final-pr.json',
             '--base-sha "$ADMITTED_BASE_SHA"',
             '--head-sha "$ADMITTED_HEAD_SHA"',
@@ -1399,11 +1427,20 @@ def validate_autofix_readiness_evidence(text: str) -> None:
     snapshot_endpoint = (
         'repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100'
     )
-    governed_fetch = "python3 scripts/automation_github_read.py"
+    snapshot_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100"'
+        + " "
+        + "\\"
+        + "\n              "
+        + "> readiness-snapshot-response.json"
+    )
     snapshot_validator = "python3 scripts/codeql_autofix_controller.py readiness-snapshot"
     require(
         readiness.count(snapshot_endpoint) == 1
-        and readiness.count(governed_fetch) == 1
+        and readiness.count(snapshot_fetch) == 1
         and readiness.count(snapshot_validator) == 1,
         "CodeQL Autofix readiness must use one governed complete exact-head check snapshot",
     )
@@ -1433,7 +1470,7 @@ def validate_autofix_readiness_evidence(text: str) -> None:
         require(forbidden not in readiness,
                 f"CodeQL Autofix regressed to repeated/raw readiness evidence: {forbidden}")
 
-    fetch_pos = readiness.index(governed_fetch)
+    fetch_pos = readiness.index(snapshot_fetch)
     endpoint_pos = readiness.index(snapshot_endpoint, fetch_pos)
     validate_pos = readiness.index(snapshot_validator, endpoint_pos)
     trusted_consume_pos = readiness.index(

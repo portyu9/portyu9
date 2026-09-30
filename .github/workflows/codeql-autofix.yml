@@ -454,7 +454,9 @@ jobs:
           }
           assert_main_sha "$BASE_SHA"
           assert_head_sha "$HEAD_SHA"
-          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" \
+            > "$RUNNER_TEMP/codeql-autofix-candidate-pr.json"
           python3 scripts/codeql_autofix_controller.py pull-request-response \
             --response-file "$RUNNER_TEMP/codeql-autofix-candidate-pr.json" \
             --pr-number "$PR_NUMBER" \
@@ -628,7 +630,9 @@ jobs:
           test "$TRUSTED_READY" = "true"
           test "$GHAS_READY" = "true"
           assert_main_sha "$BASE_SHA"
-          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" \
+            > "$RUNNER_TEMP/codeql-autofix-continuation-pr.json"
           python3 scripts/codeql_autofix_controller.py pull-request-response \
             --response-file "$RUNNER_TEMP/codeql-autofix-continuation-pr.json" \
             --pr-number "$PR_NUMBER" \
@@ -693,7 +697,9 @@ jobs:
           [[ "$RECEIPT_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
           gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json
 
-          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > pr.json
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" \
+            > pr.json
           python3 scripts/codeql_autofix_controller.py pull-request-response \
             --response-file pr.json \
             --pr-number "$PR_NUMBER" \
@@ -749,7 +755,9 @@ jobs:
 
           ADMITTED_BASE_SHA="$(jq -r .baseSha admission.json)"
           ADMITTED_HEAD_SHA="$(jq -r .headSha admission.json)"
-          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > final-pr.json
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" \
+            > final-pr.json
           python3 scripts/codeql_autofix_controller.py pull-request-response \
             --response-file final-pr.json \
             --pr-number "$PR_NUMBER" \
