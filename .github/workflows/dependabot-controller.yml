@@ -145,7 +145,7 @@ jobs:
 
           PR_NUMBER="$(jq -r '.[0].number' <<<"$MATCHES")"
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
           python3 scripts/dependabot_controller.py pull-request-response \
             --response dependabot-pr.json \
             --expected-number "$PR_NUMBER" \
@@ -189,7 +189,7 @@ jobs:
             UPDATE_CONVERGED=false
             for UPDATE_ATTEMPT in $(seq 1 24); do
               sleep 5
-              gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" \
+              python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" \
                 > "$RUNNER_TEMP/dependabot-post-update-pr.json"
               python3 scripts/dependabot_controller.py pull-request-response \
                 --response "$RUNNER_TEMP/dependabot-post-update-pr.json" \
@@ -854,7 +854,7 @@ jobs:
           }
           MERGE_ELIGIBLE=false
           for ATTEMPT in $(seq 1 12); do
-            gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr-snapshot.json"
+            python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr-snapshot.json"
             python3 scripts/dependabot_controller.py pull-request-response \
               --response "$RUNNER_TEMP/dependabot-pr-snapshot.json" \
               --expected-number "$PR_NUMBER" \
@@ -1077,7 +1077,7 @@ jobs:
             --out "$RUNNER_TEMP/dependabot-validation-pr-list-normalized.json"
           PR_NUMBER="$(jq -r .number "$RUNNER_TEMP/dependabot-validation-pr-list-normalized.json")"
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
-          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json
           python3 scripts/dependabot_controller.py pull-request-response \
             --response dependabot-pr.json \
             --expected-number "$PR_NUMBER" \
@@ -1582,7 +1582,7 @@ jobs:
             test "$(jq -r .sha "$RUNNER_TEMP/dependabot-head-ref-normalized.json")" = "$expected_sha"
           }
 
-          gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr-snapshot.json"
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr-snapshot.json"
           python3 scripts/dependabot_controller.py pull-request-response \
             --response "$RUNNER_TEMP/dependabot-pr-snapshot.json" \
             --expected-number "$PR_NUMBER" \
