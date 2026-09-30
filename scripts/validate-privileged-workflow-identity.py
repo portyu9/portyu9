@@ -3257,7 +3257,7 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     )
     require(
         autofix.count(main_endpoint) == 5
-        and autofix.count(governed_fetch) == 6
+        and autofix.count(governed_fetch) == 9
         and autofix.count(main_fetch) == 3
         and autofix.count('--expected-ref "refs/heads/main"') == 3
         and autofix.count(main_consume) == 3,
@@ -3276,25 +3276,39 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     workflow_fragments = (
         (
             'repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml',
+            '> "$RUNNER_TEMP/codeql-workflow-definition.json"',
             '--expected-path ".github/workflows/codeql.yml"',
             'CODEQL_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/codeql-workflow-definition-normalized.json")"',
         ),
         (
             'repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml',
+            '> "$RUNNER_TEMP/dependency-workflow-definition.json"',
             '--expected-path ".github/workflows/dependency-review.yml"',
             'DEPENDENCY_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/dependency-workflow-definition-normalized.json")"',
         ),
         (
             'repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml',
+            '> "$RUNNER_TEMP/profile-workflow-definition.json"',
             '--expected-path ".github/workflows/profile-quality.yml"',
             'PROFILE_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/profile-workflow-definition-normalized.json")"',
         ),
     )
     cursor = -1
-    for endpoint, expected_path, consume in workflow_fragments:
-        fetch = f'gh api "{endpoint}"'
+    for endpoint, output, expected_path, consume in workflow_fragments:
+        fetch = (
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + f'"{endpoint}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + output
+        )
+        direct = f'gh api "{endpoint}"'
         require(
             autofix.count(fetch) == 1
+            and direct not in autofix
             and expected_path in autofix
             and consume in autofix,
             f"CodeQL Autofix workflow-definition identity changed: {endpoint}",
