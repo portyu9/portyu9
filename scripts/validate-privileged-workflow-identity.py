@@ -3233,37 +3233,42 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             "> alert-pages.json",
             "python3 scripts/codeql_autofix_controller.py discover",
             "alert discovery",
+            "            ",
         ),
         (
             '"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"',
             "> open-pr-pages.json",
             "python3 scripts/codeql_autofix_controller.py locate",
             "remediation PR discovery",
+            "            ",
         ),
         (
             '"repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments?per_page=100"',
             "> unsupported-comment-pages.json",
             "python3 scripts/codeql_autofix_controller.py unsupported-evidence",
             "unsupported-evidence comment collection",
+            "              ",
         ),
     )
     require(
         autofix.count(pagination_helper) == 3,
         "CodeQL Autofix must retain exactly three governed pagination calls",
     )
-    for endpoint, output_name, consumer, label in pagination_contracts:
+    for endpoint, output_name, consumer, label, continuation_indent in pagination_contracts:
         fetch = (
             pagination_helper
             + " "
             + "\\"
-            + "\n            "
+            + "\n"
+            + continuation_indent
             + endpoint
             + " "
             + "\\"
-            + "\n            "
+            + "\n"
+            + continuation_indent
             + output_name
         )
-        direct = "gh api --paginate --slurp " + "\\" + "\n            " + endpoint
+        direct = "gh api --paginate --slurp " + "\\" + "\n" + continuation_indent + endpoint
         require(
             autofix.count(fetch) == 1,
             f"CodeQL Autofix {label} governed pagination topology changed",
