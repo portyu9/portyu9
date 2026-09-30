@@ -238,6 +238,8 @@ jobs:
           HEAD_SHA: ${{ steps.candidate.outputs.head_sha }}
         run: |
           set -euo pipefail
+          GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"
+          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           CANDIDATE_ROOT="$RUNNER_TEMP/dependabot-candidate"
           rm -rf "$CANDIDATE_ROOT"
@@ -252,7 +254,8 @@ jobs:
           test -s changed-paths.txt
           test "$(sort -u changed-paths.txt | wc -l)" = "$(wc -l < changed-paths.txt)"
 
-          gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}" \
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}" \
             > "$RUNNER_TEMP/dependabot-candidate-commit-read.json"
           python3 scripts/dependabot_controller.py git-commit-read-response \
             --response "$RUNNER_TEMP/dependabot-candidate-commit-read.json" \
@@ -262,7 +265,8 @@ jobs:
           test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
           TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1" \
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1" \
             > "$RUNNER_TEMP/dependabot-candidate-tree-read.json"
           python3 scripts/dependabot_controller.py git-tree-read-response \
             --response "$RUNNER_TEMP/dependabot-candidate-tree-read.json" \
@@ -286,7 +290,8 @@ jobs:
             test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
             BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
             [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-            gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}" \
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}" \
               > "$RUNNER_TEMP/dependabot-candidate-blob-read.json"
             python3 scripts/dependabot_controller.py git-blob-read-response \
               --response "$RUNNER_TEMP/dependabot-candidate-blob-read.json" \
@@ -1115,11 +1120,14 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"
+          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"
           CANDIDATE_ROOT="$RUNNER_TEMP/dependabot-validation-candidate"
           rm -rf "$CANDIDATE_ROOT"
           cp -a . "$CANDIDATE_ROOT"
 
-          gh api "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}" \
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}" \
             > "$RUNNER_TEMP/dependabot-candidate-commit-read.json"
           python3 scripts/dependabot_controller.py git-commit-read-response \
             --response "$RUNNER_TEMP/dependabot-candidate-commit-read.json" \
@@ -1129,7 +1137,8 @@ jobs:
           test "$(jq -r .sha <<<"$COMMIT")" = "$HEAD_SHA"
           TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          gh api "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1" \
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1" \
             > "$RUNNER_TEMP/dependabot-candidate-tree-read.json"
           python3 scripts/dependabot_controller.py git-tree-read-response \
             --response "$RUNNER_TEMP/dependabot-candidate-tree-read.json" \
@@ -1145,7 +1154,8 @@ jobs:
             test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
             BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
             [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
-            gh api "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}" \
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}" \
               > "$RUNNER_TEMP/dependabot-candidate-blob-read.json"
             python3 scripts/dependabot_controller.py git-blob-read-response \
               --response "$RUNNER_TEMP/dependabot-candidate-blob-read.json" \
