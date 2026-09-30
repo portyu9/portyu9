@@ -2,7 +2,12 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,9 +84,111 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+
+def codeql_artifact_list_measurement_diagnostic() -> None:
+    """Disposable carrier: measure frozen #1392 with accepted-main admission code."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    base_sha = "d223937cfc0538d4ab443d8f7b021d1cb1ca58f9"
+    source_sha = "123c79bab44c9f0ef6b64f71687defc2ee09705a"
+    expected_tree = "608ad9784805c52752c91ed1bd7d8506545748aa"
+    expected_blobs = {
+        ".github/workflow-capability-bom-v1-codeql-autofix.json": "1820854c77e02964f5d3d92824bbd9c139a711b1",
+        ".github/workflows/codeql-autofix.yml": "2bfc924b248ea0b8ecd991a4710e648a3f87c1f8",
+        "scripts/automation_retry_policy.py": "dc39c3892f5f9d316b0a961b03882fd074b76969",
+        "scripts/validate-codeql-contract.py": "4e7db30955c2f574d7d108fcea114c04884f34df",
+        "scripts/validate-privileged-workflow-identity.py": "d3f646547219d431cf54d4bf071ddb16c6621f42",
+    }
+
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=64", "origin", base_sha, source_sha],
+        check=True,
+    )
+    merge_base = subprocess.check_output(
+        ["git", "merge-base", base_sha, source_sha], text=True
+    ).strip()
+    require(
+        merge_base == base_sha,
+        f"diagnostic candidate no longer descends from exact accepted main: {merge_base}",
+    )
+    observed_paths = subprocess.check_output(
+        ["git", "diff", "--name-only", base_sha, source_sha], text=True
+    ).splitlines()
+    require(
+        observed_paths == sorted(expected_blobs),
+        f"diagnostic candidate path set changed: {observed_paths!r}",
+    )
+    for changed_path, expected_blob in expected_blobs.items():
+        observed_blob = subprocess.check_output(
+            ["git", "rev-parse", f"{source_sha}:{changed_path}"], text=True
+        ).strip()
+        require(
+            observed_blob == expected_blob,
+            f"diagnostic candidate blob changed for {changed_path}: {observed_blob}",
+        )
+    tree = subprocess.check_output(
+        ["git", "rev-parse", f"{source_sha}^{{tree}}"], text=True
+    ).strip()
+    require(tree == expected_tree, f"diagnostic candidate tree changed: {tree}")
+
+    with tempfile.TemporaryDirectory(
+        prefix="codeql-artifact-list-measurement-"
+    ) as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(trusted), base_sha],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(candidate), source_sha],
+            check=True,
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(trusted / "scripts/workflow_capability_admission.py"),
+                str(candidate),
+                "--candidate-tree-sha",
+                tree,
+                "--measure",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        if result.stderr:
+            print(result.stderr, file=sys.stderr, end="")
+        require(
+            result.returncode == 0,
+            f"accepted-main production --measure failed: {result.returncode}",
+        )
+        payload = json.loads(result.stdout)
+        require(
+            isinstance(payload, dict)
+            and set(payload) == {"measurement"}
+            and isinstance(payload["measurement"], dict),
+            "production --measure output shape changed",
+        )
+        print(
+            "CAPABILITY-MEASUREMENT-DIAGNOSTIC:"
+            + json.dumps(payload, sort_keys=True, separators=(",", ":")),
+            flush=True,
+        )
+
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(candidate)], check=True
+        )
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(trusted)], check=True
+        )
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        codeql_artifact_list_measurement_diagnostic()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
