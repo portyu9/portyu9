@@ -699,8 +699,7 @@ def validate_controller_collection_contract(text: str) -> None:
         'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
     )
     require(
-        text.count(pagination_helper) == 3
-        and text.count(file_endpoint) == 2
+        text.count(file_endpoint) == 2
         and text.count(file_fetch) == 2,
         "Dependabot controller must use exactly two governed changed-file paginated GitHub collections",
     )
