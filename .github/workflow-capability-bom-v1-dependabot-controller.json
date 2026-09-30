@@ -167,27 +167,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind current main and one native Dependabot candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind current main and one native Dependabot candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Perform exact-head protected Dependabot merge"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge",
               "method": "PUT",
               "mutating": true,
@@ -378,13 +357,6 @@
               "method": "POST",
               "mutating": true,
               "step": "Dispatch CodeQL after exact read-only validation"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Dispatch CodeQL after exact read-only validation"
             }
           ],
           "artifacts": [],
@@ -560,13 +532,6 @@
               "method": "GET",
               "mutating": false,
               "step": "Verify exact delegated admission proof"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind exact controller-issued validation target"
             },
             {
               "client": "gh-api",
