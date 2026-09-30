@@ -428,6 +428,13 @@
       "rationale": "Authorize the exact trusted-source boundary registration that protects all current and future scripts/codeql_autofix_* controller modules before any write-capable CodeQL Autofix workflow is introduced."
     },
     {
+      "baseBomSha256": "7710e1422ef25645d1c7805bd795e811e198a01b5909935a2c19fa1a409f74fa",
+      "candidateBomSha256": "c551212c1c563a762278011f200c99275a22e1f12e34597385eebeacdcb60b5f",
+      "expansionSha256": "869078a87753353981a14ef3100cbddc683c972f49bbf912e2c83f899eabefc5",
+      "id": "cap-codeql-autofix-terminal-check-runs-pagination-read-retry-v1",
+      "rationale": "Authorize frozen #1398 measured by closed diagnostic #1399: route the existing complete terminal CodeQL Autofix exact-head check-run collection through the accepted bounded authenticated paginator while preserving the exact endpoint/query, array-of-pages evidence shape, unchanged flattening to check-pages.json, and existing typed terminal admission. Adds no permission, trigger, mutation or mutation replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "8b3abd7a1cd0f2c74e66fb4be71310f77b848fb6e53c252a55dabb9207352259",
       "candidateBomSha256": "bfec53b6792c9d5780682afa3d5f3924a11568196b6a4fcfef69f90d2e4d4d21",
       "expansionSha256": "1143b6120b407bbb494730996ca11d994fe9286d4ddc4b8a86c8171f4ff40e7b",
