@@ -1375,6 +1375,47 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             f"CodeQL Autofix {label} governed read lost run-scoped token binding",
         )
 
+    for step_name, endpoint, output_name, label in (
+        (
+            "Commit exact Autofix to a dedicated branch and open one PR",
+            '"repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}"',
+            "| jq -c '.' >> prior-attempts.ndjson",
+            "prior-attempt workflow-run snapshot",
+        ),
+        (
+            "Verify an existing Autofix PR and perform protected merge",
+            '"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}"',
+            "> origin-run.json",
+            "receipt-origin workflow-run snapshot",
+        ),
+        (
+            "Verify an existing Autofix PR and perform protected merge",
+            '"repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}"',
+            "> post-merge-codeql-run.json",
+            "post-merge CodeQL workflow-run snapshot",
+        ),
+    ):
+        step = named_step(codeql_autofix, "controller", step_name)
+        endpoint_pos = step.index(endpoint)
+        output_pos = step.index(output_name, endpoint_pos)
+        helper_pos = step.rfind(
+            "python3 scripts/automation_github_read.py",
+            max(0, endpoint_pos - 160),
+            endpoint_pos,
+        )
+        require(
+            helper_pos >= 0 and helper_pos < endpoint_pos < output_pos,
+            f"CodeQL Autofix {label} must use the governed singleton GitHub reader",
+        )
+        require(
+            ("gh api " + endpoint) not in step,
+            f"CodeQL Autofix {label} regained direct gh API GET transport",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in step,
+            f"CodeQL Autofix {label} governed read lost run-scoped token binding",
+        )
+
     spotlight_merge_authorization = SPOTLIGHT_MERGE_AUTHORIZATION.read_text(encoding="utf-8")
     for fragment in (
         "import automation_github_read",
