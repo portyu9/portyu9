@@ -1353,6 +1353,38 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal exact-head check-run evidence moved out of governed typed order",
     )
 
+    codeql_terminal_ghas_governed = (
+        'python3 scripts/automation_github_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \\\n'
+        '            > ghas.json'
+    )
+    codeql_terminal_ghas_direct = (
+        'gh api \\\n'
+        '            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \\\n'
+        '            > ghas.json'
+    )
+    require(
+        codeql_terminal_step.count(codeql_terminal_ghas_governed) == 1,
+        "CodeQL Autofix terminal GHAS check lookup must use exactly one governed singleton GitHub read",
+    )
+    require(
+        codeql_terminal_ghas_direct not in codeql_terminal_step,
+        "CodeQL Autofix terminal GHAS check lookup regained direct gh API GET transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in codeql_terminal_step,
+        "CodeQL Autofix terminal GHAS governed read lost run-scoped token binding",
+    )
+    ghas_fetch_pos = codeql_terminal_step.index(codeql_terminal_ghas_governed)
+    ghas_admit_pos = codeql_terminal_step.index(
+        "python3 scripts/codeql_autofix_controller.py admit",
+        ghas_fetch_pos,
+    )
+    require(
+        check_flatten_pos < ghas_fetch_pos < ghas_admit_pos,
+        "CodeQL Autofix terminal GHAS evidence moved out of governed typed order",
+    )
+
     codeql_terminal_artifact_list_governed = (
         'python3 scripts/automation_github_read.py \\\n'
         '            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" \\\n'
@@ -2978,6 +3010,34 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         codeql_terminal_check_runs_transport_drift,
         "CodeQL Autofix terminal exact-head check-run collection must use exactly one governed paginated GitHub collection",
+    )
+
+    codeql_terminal_ghas_governed = (
+        'python3 scripts/automation_github_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \\\n'
+        '            > ghas.json'
+    )
+    codeql_terminal_ghas_direct = (
+        'gh api \\\n'
+        '            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \\\n'
+        '            > ghas.json'
+    )
+    require(
+        codeql_terminal_ghas_governed in codeql_terminal_pr_files_source,
+        "retry-policy self-test fixture missing CodeQL Autofix terminal governed GHAS read",
+    )
+    codeql_terminal_ghas_transport_drift = dict(texts)
+    codeql_terminal_ghas_transport_drift[".github/workflows/codeql-autofix.yml"] = (
+        codeql_terminal_pr_files_source.replace(
+            codeql_terminal_ghas_governed,
+            codeql_terminal_ghas_direct,
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        codeql_terminal_ghas_transport_drift,
+        "CodeQL Autofix terminal GHAS check lookup must use exactly one governed singleton GitHub read",
     )
 
     codeql_terminal_artifact_list_governed = (

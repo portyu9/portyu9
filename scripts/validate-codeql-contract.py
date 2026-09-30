@@ -824,7 +824,7 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         "CodeQL Autofix must retain exactly five governed main-ref observations",
     )
     require(
-        text.count(governed_fetch) == 22,
+        text.count(governed_fetch) == 23,
         "CodeQL Autofix governed GET topology changed",
     )
     require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref governed-read topology changed")
@@ -1076,6 +1076,36 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         'test "$(printf \'%s\\n\' "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" '
         '| LC_ALL=C sort -u | wc -l)" = "3"' in text,
         "CodeQL Autofix workflow IDs must remain exactly three distinct identities",
+    )
+
+    ghas_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100"'
+        + " "
+        + "\\"
+        + "\n            "
+        + "> ghas.json"
+    )
+    ghas_direct = (
+        'gh api \\'
+        + '\n            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \\'
+        + "\n            > ghas.json"
+    )
+    require(
+        text.count(ghas_fetch) == 1 and ghas_direct not in text,
+        "CodeQL Autofix terminal GHAS governed-read transport changed",
+    )
+    ghas_fetch_pos = text.index(ghas_fetch)
+    ghas_admit_pos = text.index(
+        "python3 scripts/codeql_autofix_controller.py admit",
+        ghas_fetch_pos,
+    )
+    require(
+        ghas_fetch_pos < ghas_admit_pos
+        and '--ghas ghas.json' in text[ghas_admit_pos:ghas_admit_pos + 1200],
+        "CodeQL Autofix terminal GHAS evidence must be typed by admission after governed fetch",
     )
 
     artifact_list_fetch = (
