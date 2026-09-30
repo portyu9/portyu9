@@ -192,7 +192,7 @@ jobs:
             test "$ALERT_NUMBER" -gt 0
             assert_main_sha "$BASE_SHA"
 
-            gh api --paginate --slurp \
+            python3 scripts/automation_github_paginated_read.py \
               "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments?per_page=100" \
               > unsupported-comment-pages.json
             python3 scripts/codeql_autofix_controller.py unsupported-evidence \
