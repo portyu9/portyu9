@@ -57,6 +57,37 @@
       "pageSize": 100
     },
     {
+      "id": "bot-pr-user-approval-shell-graphql-query-transient",
+      "source": ".github/workflows/bot-pr-user-approval.yml",
+      "workflow": ".github/workflows/bot-pr-user-approval.yml",
+      "job": "approve",
+      "step": "Approve only exact green governed bot PRs as portyu9",
+      "operation": "read-only-github-graphql-query",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "fixed-review-threads-query",
+      "endpoint": "https://api.github.com/graphql",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only the fixed read-only governed-reviewer reviewThreads GraphQL query after classified transport/platform transients. The interpreter-free shell helper embeds the query document and exact repository variables; GraphQL errors, malformed JSON/schema, pagination, policy, veto, and every mutation failure remain terminal.",
+      "repositoryScope": "portyu9/portyu9"
+    },
+    {
       "id": "bot-pr-review-convergence-shell-read-transient",
       "source": ".github/workflows/bot-pr-user-approval.yml",
       "workflow": ".github/workflows/bot-pr-user-approval.yml",
