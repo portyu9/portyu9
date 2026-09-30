@@ -1070,6 +1070,37 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
                 f"Dependabot {label} regained direct singleton Git-object transport: {forbidden}",
             )
 
+    dependabot_ref_read_pin = (
+        'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
+        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
+    for job_name, step_name, expected_main, expected_head, label in (
+        ("controller", "Bind current main and one native Dependabot candidate", 1, 0, "initial main binding"),
+        ("controller", "Atomically reconcile canonical governance files onto the bot head", 1, 1, "atomic reconciliation"),
+        ("controller", "Validate reconciled candidate and inspect protected checks", 1, 1, "reconciled validation"),
+        ("controller", "Perform exact-head protected Dependabot merge", 1, 1, "terminal merge"),
+        ("validation_bind", "Bind exact controller-issued validation target", 1, 1, "validation target binding"),
+        ("validation_bind", "Verify exact delegated admission proof", 1, 1, "delegated admission proof"),
+        ("dispatch_codeql", "Dispatch CodeQL after exact read-only validation", 1, 1, "CodeQL dispatch validation"),
+    ):
+        step = named_step(dependabot_controller, job_name, step_name)
+        main_read = 'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main"'
+        head_read = 'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}"'
+        require(
+            step.count(main_read) == expected_main and step.count(head_read) == expected_head,
+            f"Dependabot {label} governed Git-ref read topology changed",
+        )
+        require(dependabot_ref_read_pin in step,
+                f"Dependabot {label} lost exact governed-read helper identity")
+        require("GH_TOKEN: ${{ github.token }}" in step,
+                f"Dependabot {label} governed Git-ref reads lost run-scoped token binding")
+        for forbidden in (
+            'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
+            'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}"',
+        ):
+            require(forbidden not in step,
+                    f"Dependabot {label} regained direct Git-ref transport: {forbidden}")
+
     codeql_autofix = texts[".github/workflows/codeql-autofix.yml"]
     for step_name, endpoint, output_name, label in (
         (
@@ -1832,6 +1863,54 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         dependabot_validation_git_transport_drift,
         "Dependabot validation Git-object reconstruction must use exactly three governed singleton Git-object reads",
+    )
+
+    dependabot_ref_source = texts[".github/workflows/dependabot-controller.yml"]
+    governed_initial_ref = (
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main" '
+        '> "$RUNNER_TEMP/dependabot-initial-main-ref.json"'
+    )
+    direct_initial_ref = (
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main" '
+        '> "$RUNNER_TEMP/dependabot-initial-main-ref.json"'
+    )
+    require(
+        dependabot_ref_source.count(governed_initial_ref) == 1,
+        "retry-policy self-test fixture missing singular governed Dependabot initial main-ref read",
+    )
+    dependabot_initial_ref_transport_drift = dict(texts)
+    dependabot_initial_ref_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_ref_source.replace(governed_initial_ref, direct_initial_ref, 1)
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_initial_ref_transport_drift,
+        "Dependabot initial main binding governed Git-ref read topology changed",
+    )
+
+    governed_head_ref = (
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" '
+        '> "$RUNNER_TEMP/dependabot-head-ref.json"'
+    )
+    direct_head_ref = (
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}" '
+        '> "$RUNNER_TEMP/dependabot-head-ref.json"'
+    )
+    require(
+        dependabot_ref_source.count(governed_head_ref) == 4,
+        "retry-policy self-test fixture changed for shared Dependabot head-ref reads",
+    )
+    last_head = dependabot_ref_source.rfind(governed_head_ref)
+    require(last_head >= 0, "retry-policy self-test could not isolate terminal Dependabot head-ref read")
+    dependabot_terminal_ref_transport_drift = dict(texts)
+    dependabot_terminal_ref_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_ref_source[:last_head] + direct_head_ref
+        + dependabot_ref_source[last_head + len(governed_head_ref):]
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_terminal_ref_transport_drift,
+        "Dependabot CodeQL dispatch validation governed Git-ref read topology changed",
     )
 
     dependabot_release_transport_drift = dict(texts)
