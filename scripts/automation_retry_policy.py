@@ -1334,6 +1334,30 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix protected workflow governed reads lost run-scoped token binding",
     )
 
+    protected_run_endpoint = (
+        '"repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}'
+        '&event=pull_request&per_page=100"'
+    )
+    protected_run_output = '> "$RUNNER_TEMP/codeql-autofix-protected-runs.json"'
+    protected_run_governed = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + protected_run_endpoint
+        + " "
+        + "\\"
+        + "\n              "
+        + protected_run_output
+    )
+    require(
+        codeql_workflow_step.count(protected_run_governed) == 1,
+        "CodeQL Autofix protected-run discovery must use exactly one governed singleton GitHub read",
+    )
+    require(
+        ("gh api " + protected_run_endpoint) not in codeql_workflow_step,
+        "CodeQL Autofix protected-run discovery regained direct gh API GET transport",
+    )
+
     for step_name, output_name, label in (
         (
             "Approve exact protected checks and queue admission retry",
