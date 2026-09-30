@@ -497,6 +497,20 @@
       "operationRetry": false,
       "purpose": "Collect exact prior Bot PR user approval attempts as durable review provenance; the review POST remains outside the loop.",
       "mutationMode": "none"
+    },
+    {
+      "id": "profile-quality-review-artifact-visibility",
+      "workflow": ".github/workflows/profile-quality.yml",
+      "job": "integration",
+      "step": "Wait for exact Signal Field review artifact visibility",
+      "ordinal": 1,
+      "variable": "ARTIFACT_VISIBILITY_ATTEMPT",
+      "maxIterations": 12,
+      "sleepSeconds": 2,
+      "class": "bounded-observation",
+      "operationRetry": false,
+      "purpose": "Wait only for the exact just-uploaded Signal Field review artifact ID to become visible through the canonical authenticated GitHub artifact inventory before immutable-ID download.",
+      "mutationMode": "none"
     }
   ],
   "trustedReentry": [
