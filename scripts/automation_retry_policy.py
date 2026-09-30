@@ -1289,6 +1289,34 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             f"CodeQL Autofix {label} governed pagination lost run-scoped token binding",
         )
 
+    codeql_terminal_step = named_step(
+        codeql_autofix,
+        "controller",
+        "Verify an existing Autofix PR and perform protected merge",
+    )
+    codeql_terminal_pr_files_governed = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \\\n'
+        '            > pr-file-pages.json'
+    )
+    codeql_terminal_pr_files_direct = (
+        'gh api --paginate --slurp \\\n'
+        '            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \\\n'
+        '            > pr-file-pages.json'
+    )
+    require(
+        codeql_terminal_step.count(codeql_terminal_pr_files_governed) == 1,
+        "CodeQL Autofix terminal PR changed-file collection must use exactly one governed paginated GitHub collection",
+    )
+    require(
+        codeql_terminal_pr_files_direct not in codeql_terminal_step,
+        "CodeQL Autofix terminal PR changed-file collection regained direct gh pagination transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in codeql_terminal_step,
+        "CodeQL Autofix terminal PR changed-file governed pagination lost run-scoped token binding",
+    )
+
     codeql_workflow_step = named_step(
         codeql_autofix,
         "controller",
@@ -2812,6 +2840,35 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         spotlight_dispatch_guard_drift,
         "reviewer-dispatch dedupe initialization",
+    )
+
+    codeql_terminal_pr_files_source = texts[".github/workflows/codeql-autofix.yml"]
+    codeql_terminal_pr_files_governed = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \\\n'
+        '            > pr-file-pages.json'
+    )
+    codeql_terminal_pr_files_direct = (
+        'gh api --paginate --slurp \\\n'
+        '            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \\\n'
+        '            > pr-file-pages.json'
+    )
+    require(
+        codeql_terminal_pr_files_governed in codeql_terminal_pr_files_source,
+        "retry-policy self-test fixture missing CodeQL Autofix terminal governed PR-files collection",
+    )
+    codeql_terminal_pr_files_transport_drift = dict(texts)
+    codeql_terminal_pr_files_transport_drift[".github/workflows/codeql-autofix.yml"] = (
+        codeql_terminal_pr_files_source.replace(
+            codeql_terminal_pr_files_governed,
+            codeql_terminal_pr_files_direct,
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        codeql_terminal_pr_files_transport_drift,
+        "CodeQL Autofix terminal PR changed-file collection must use exactly one governed paginated GitHub collection",
     )
 
     autofix_drift = dict(texts)

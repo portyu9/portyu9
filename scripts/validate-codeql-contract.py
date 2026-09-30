@@ -740,10 +740,17 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
             "unsupported-evidence comment collection",
             "              ",
         ),
+        (
+            '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"',
+            "> pr-file-pages.json",
+            "python3 scripts/codeql_autofix_controller.py admit",
+            "terminal PR changed-file collection",
+            "            ",
+        ),
     )
     require(
-        text.count(pagination_helper) == 3,
-        "CodeQL Autofix must retain exactly three governed pagination calls",
+        text.count(pagination_helper) == 4,
+        "CodeQL Autofix must retain exactly four governed pagination calls",
     )
     for endpoint, output_name, consumer, label, continuation_indent in pagination_contracts:
         fetch = (

@@ -719,7 +719,7 @@ jobs:
             --head-sha "$EXPECTED_HEAD_SHA" \
             --out pr-normalized.json
           test "$(jq -r .headSha pr-normalized.json)" = "$EXPECTED_HEAD_SHA"
-          gh api --paginate --slurp \
+          python3 scripts/automation_github_paginated_read.py \
             "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
             > pr-file-pages.json
           jq -n \

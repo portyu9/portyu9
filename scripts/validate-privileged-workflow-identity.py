@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v135"
+VERSION = "governed-workflow-byte-identity-v136"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "ad10702c9ac0b516f99bd59335c26297f88d82c8",
     ".github/workflows/profile-quality.yml": "45e53e364dc95a3beecc4408f00b94d09e971f50",
@@ -3249,10 +3249,17 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             "unsupported-evidence comment collection",
             "              ",
         ),
+        (
+            '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"',
+            "> pr-file-pages.json",
+            "python3 scripts/codeql_autofix_controller.py admit",
+            "terminal PR changed-file collection",
+            "            ",
+        ),
     )
     require(
-        autofix.count(pagination_helper) == 3,
-        "CodeQL Autofix must retain exactly three governed pagination calls",
+        autofix.count(pagination_helper) == 4,
+        "CodeQL Autofix must retain exactly four governed pagination calls",
     )
     for endpoint, output_name, consumer, label, continuation_indent in pagination_contracts:
         fetch = (
