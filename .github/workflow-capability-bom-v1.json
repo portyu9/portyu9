@@ -282,10 +282,10 @@
             },
             {
               "digest-mismatch": "error",
-              "name": "signal-field-publishable-review",
               "operation": "download",
               "path": "roundtrip-signal-field",
-              "step": "Download Signal Field review artifacts"
+              "step": "Download Signal Field review artifacts",
+              "artifactIds": "${{ steps.signal_field_review_upload.outputs.artifact-id }}"
             },
             {
               "if-no-files-found": "error",
