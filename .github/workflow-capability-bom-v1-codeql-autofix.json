@@ -140,13 +140,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Commit exact Autofix to a dedicated branch and open one PR"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
               "method": "POST",
               "mutating": true,
@@ -172,20 +165,6 @@
               "method": "POST",
               "mutating": true,
               "step": "Verify an existing Autofix PR and perform protected merge"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Commit exact Autofix to a dedicated branch and open one PR"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
             },
             {
               "client": "gh-api",

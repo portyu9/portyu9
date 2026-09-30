@@ -3257,21 +3257,75 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     )
     require(
         autofix.count(main_endpoint) == 5
-        and autofix.count(governed_fetch) == 16
+        and autofix.count(governed_fetch) == 19
         and autofix.count(main_fetch) == 3
         and autofix.count('--expected-ref "refs/heads/main"') == 3
         and autofix.count(main_consume) == 3,
         "CodeQL Autofix typed governed main-ref identity changed",
     )
     head_fetch = (
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" '
-        '> "$RUNNER_TEMP/codeql-autofix-head-ref.json"'
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + '"repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}"'
+        + " "
+        + "\\"
+        + "\n              "
+        + '> "$RUNNER_TEMP/codeql-autofix-head-ref.json"'
     )
     require(
         autofix.count(head_fetch) == 1
         and autofix.count('--expected-ref "refs/heads/${BRANCH}"') == 1,
         "CodeQL Autofix exact candidate-ref identity changed",
     )
+
+    require(
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}"' not in autofix,
+        "CodeQL Autofix candidate head-ref regained direct GET transport",
+    )
+
+    topology_reads = (
+        (
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + "> matching-refs.json",
+            'gh api "repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}"',
+            "python3 scripts/codeql_autofix_controller.py ref-state",
+            'REF_STATE="$(jq -r .state ref-state.json)"',
+            "deterministic branch inventory",
+        ),
+        (
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + "> compare.json",
+            'gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}"',
+            "python3 scripts/codeql_autofix_controller.py compare",
+            "--out compare-proof.json",
+            "generated commit compare snapshot",
+        ),
+    )
+    for fetch, direct, validator, consume, label in topology_reads:
+        require(
+            autofix.count(fetch) == 1 and direct not in autofix,
+            f"CodeQL Autofix {label} governed-read identity changed",
+        )
+        fetch_pos = autofix.index(fetch)
+        validate_pos = autofix.index(validator, fetch_pos)
+        consume_pos = autofix.index(consume, validate_pos)
+        require(
+            fetch_pos < validate_pos < consume_pos,
+            f"CodeQL Autofix {label} evidence moved out of reviewed typed order",
+        )
 
     workflow_fragments = (
         (
