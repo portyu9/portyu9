@@ -338,7 +338,10 @@ def validate_controller_pr_response_contract(text: str) -> None:
             f"Dependabot controller regained raw singleton PR/update response consumption: {forbidden}",
         )
 
-    initial_fetch = 'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json'
+    initial_fetch = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > dependabot-pr.json'
+    )
     initial_schema = validator
     initial_consume = 'HEAD_SHA="$(jq -r .headSha dependabot-pr-normalized.json)"'
     require(
@@ -347,6 +350,42 @@ def validate_controller_pr_response_contract(text: str) -> None:
         < text.index(initial_consume),
         "Dependabot initial selected PR must be typed before identity consumption",
     )
+
+    governed_pr_read = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+    )
+    require(
+        text.count(governed_pr_read) == 5,
+        "Dependabot controller governed singleton PR transport count changed",
+    )
+    require(
+        'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"' not in text,
+        "Dependabot controller regained direct singleton PR GET transport",
+    )
+    helper_pin = (
+        'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
+        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
+    for step_name, expected_reads in (
+        ("Bind current main and one native Dependabot candidate", 2),
+        ("Perform exact-head protected Dependabot merge", 1),
+        ("Bind exact controller-issued validation target", 1),
+        ("Dispatch CodeQL after exact read-only validation", 1),
+    ):
+        start_marker = f"      - name: {step_name}\n"
+        require(text.count(start_marker) == 1, f"Dependabot PR-read step anchor changed: {step_name}")
+        step_start = text.index(start_marker)
+        step_end = text.find("\n      - name: ", step_start + len(start_marker))
+        if step_end < 0:
+            step_end = len(text)
+        block = text[step_start:step_end]
+        require(
+            block.count(governed_pr_read) == expected_reads
+            and block.count(helper_pin) == 1
+            and "GH_TOKEN: ${{ github.token }}" in block,
+            f"Dependabot governed PR-read helper/token topology changed: {step_name}",
+        )
 
     reviewer_fetch = (
         'REQUESTED_REVIEWER_HTTP_RESPONSE="$(gh api --include --method POST '

@@ -1101,6 +1101,38 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             require(forbidden not in step,
                     f"Dependabot {label} regained direct Git-ref transport: {forbidden}")
 
+    dependabot_pr_read_pin = (
+        'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
+        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+    )
+    dependabot_pr_read = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+    )
+    for job_name, step_name, expected_reads, label in (
+        ("controller", "Bind current main and one native Dependabot candidate", 2, "initial/update convergence"),
+        ("controller", "Perform exact-head protected Dependabot merge", 1, "terminal merge"),
+        ("validation_bind", "Bind exact controller-issued validation target", 1, "validation target binding"),
+        ("dispatch_codeql", "Dispatch CodeQL after exact read-only validation", 1, "CodeQL dispatch validation"),
+    ):
+        step = named_step(dependabot_controller, job_name, step_name)
+        require(
+            step.count(dependabot_pr_read) == expected_reads,
+            f"Dependabot {label} governed singleton PR read topology changed",
+        )
+        require(
+            dependabot_pr_read_pin in step,
+            f"Dependabot {label} lost exact governed-read helper identity",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in step,
+            f"Dependabot {label} governed PR reads lost run-scoped token binding",
+        )
+        require(
+            'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"' not in step,
+            f"Dependabot {label} regained direct singleton PR transport",
+        )
+
     codeql_autofix = texts[".github/workflows/codeql-autofix.yml"]
     for step_name, endpoint, output_name, label in (
         (
@@ -1911,6 +1943,42 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         dependabot_terminal_ref_transport_drift,
         "Dependabot CodeQL dispatch validation governed Git-ref read topology changed",
+    )
+
+    dependabot_pr_source = texts[".github/workflows/dependabot-controller.yml"]
+    governed_pr_read = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+    )
+    direct_pr_read = 'gh api "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}"'
+    require(
+        dependabot_pr_source.count(governed_pr_read) == 5,
+        "retry-policy self-test fixture changed for governed Dependabot PR snapshot reads",
+    )
+
+    dependabot_initial_pr_transport_drift = dict(texts)
+    dependabot_initial_pr_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_pr_source.replace(governed_pr_read, direct_pr_read, 1)
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_initial_pr_transport_drift,
+        "Dependabot initial/update convergence governed singleton PR read topology changed",
+    )
+
+    terminal_marker = "      - name: Perform exact-head protected Dependabot merge\n"
+    terminal_start = dependabot_pr_source.index(terminal_marker)
+    terminal_read = dependabot_pr_source.index(governed_pr_read, terminal_start)
+    dependabot_terminal_pr_transport_drift = dict(texts)
+    dependabot_terminal_pr_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_pr_source[:terminal_read]
+        + direct_pr_read
+        + dependabot_pr_source[terminal_read + len(governed_pr_read):]
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_terminal_pr_transport_drift,
+        "Dependabot terminal merge governed singleton PR read topology changed",
     )
 
     dependabot_release_transport_drift = dict(texts)
