@@ -3067,6 +3067,40 @@ def validate_codeql_autofix_constructive_response_schemas(autofix: str) -> None:
         'sed \'1,/^[[:space:]]*$/d\' "$AUTOFIX_CREATE_HTTP_RESPONSE" > autofix-create.json',
         request_guard,
     )
+
+    governed_status_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"'
+        + " "
+        + "\\"
+        + "\n            "
+        + "> autofix-status.json"
+    )
+    direct_status_fetch = (
+        "gh api "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"'
+        + " "
+        + "\\"
+        + "\n            "
+        + "> autofix-status.json"
+    )
+    status_validator = "python3 scripts/codeql_autofix_controller.py status"
+    status_consume = 'READY="$(jq -r .ready normalized-autofix.json)"'
+    require(
+        autofix.count(governed_status_fetch) == 1 and direct_status_fetch not in autofix,
+        "CodeQL Autofix status snapshot governed-read identity changed",
+    )
+    status_fetch_pos = autofix.index(governed_status_fetch, request_extract)
+    status_validate_pos = autofix.index(status_validator, status_fetch_pos)
+    status_consume_pos = autofix.index(status_consume, status_validate_pos)
+    require(
+        request_extract < status_fetch_pos < status_validate_pos < status_consume_pos,
+        "CodeQL Autofix status evidence moved out of reviewed governed typed order",
+    )
     unsupported_post = autofix.index(
         'gh api --include --method POST \\\n'
         '                "repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments"',
@@ -3257,7 +3291,7 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     )
     require(
         autofix.count(main_endpoint) == 5
-        and autofix.count(governed_fetch) == 19
+        and autofix.count(governed_fetch) == 20
         and autofix.count(main_fetch) == 3
         and autofix.count('--expected-ref "refs/heads/main"') == 3
         and autofix.count(main_consume) == 3,

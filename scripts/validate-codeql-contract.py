@@ -259,6 +259,40 @@ def validate_autofix_constructive_http_statuses(text: str) -> None:
         request_call_pos < request_status_pos < request_guard_pos < request_extract_pos < status_read_pos,
         "CodeQL Autofix request HTTP success proof must precede body extraction and status polling",
     )
+
+    governed_status_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"'
+        + " "
+        + "\\"
+        + "\n            "
+        + "> autofix-status.json"
+    )
+    direct_status_fetch = (
+        "gh api "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"'
+        + " "
+        + "\\"
+        + "\n            "
+        + "> autofix-status.json"
+    )
+    status_validator = "python3 scripts/codeql_autofix_controller.py status"
+    status_consume = 'READY="$(jq -r .ready normalized-autofix.json)"'
+    require(
+        text.count(governed_status_fetch) == 1 and direct_status_fetch not in text,
+        "CodeQL Autofix status snapshot governed-read transport changed",
+    )
+    governed_status_pos = text.index(governed_status_fetch, request_extract_pos)
+    status_validate_pos = text.index(status_validator, governed_status_pos)
+    status_consume_pos = text.index(status_consume, status_validate_pos)
+    require(
+        request_extract_pos < governed_status_pos < status_validate_pos < status_consume_pos,
+        "CodeQL Autofix status snapshot must be governed and typed before readiness consumption",
+    )
     require(
         'test "$ERROR_TEXT" = "gh: Alert is not supported by autofix. (HTTP 422)"' in text,
         "CodeQL Autofix must preserve the exact unsupported HTTP-422 classification",
@@ -754,7 +788,7 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         "CodeQL Autofix must retain exactly five governed main-ref observations",
     )
     require(
-        text.count(governed_fetch) == 19,
+        text.count(governed_fetch) == 20,
         "CodeQL Autofix governed GET topology changed",
     )
     require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref governed-read topology changed")

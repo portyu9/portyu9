@@ -247,7 +247,7 @@ jobs:
           }
           sed '1,/^[[:space:]]*$/d' "$AUTOFIX_CREATE_HTTP_RESPONSE" > autofix-create.json
 
-          gh api \
+          python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix" \
             > autofix-status.json
           python3 scripts/codeql_autofix_controller.py status \
