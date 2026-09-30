@@ -967,6 +967,13 @@
       "rationale": "Authorize frozen #1161's exact Profile Generator Compatibility Witness migration: route its two existing current/prior-attempt GitHub run GETs through the accepted canonical authenticated read-only retry client, bind helper/retry-policy bytes into the witness closure, and reject direct gh-api transport. No new endpoint, call count, permission, mutation, secret/OIDC, merge authority, required-check reduction, direct-main write, ruleset change, mutation retry, or bypass is added."
     },
     {
+      "baseBomSha256": "bc57168b982f00bccd9f2ab456bfbf39b9732987c651d692b4640655c8e5115e",
+      "candidateBomSha256": "c0c6bd4d56b48c02598975c88d494e709db7c8378e6100f15110df31e5ad1226",
+      "expansionSha256": "7a92eb8702ece9022dd86fb8c42d17e84fbb43a607c7514e1c0b038051d92785",
+      "id": "cap-profile-quality-artifact-visibility-convergence-v1",
+      "rationale": "Authorize frozen #1367 measured by diagnostic #1372: Profile Quality consumes the same-run Signal Field review artifact by exact uploaded ID, waits boundedly only for visibility, then downloads by exact ID. Digest/content validation and read-retry classification remain enforced. Includes matching capability snapshot and protected validators. No new trigger, permission, mutation, secret/OIDC, merge/ruleset, direct-main, check reduction, or bypass."
+    },
+    {
       "baseBomSha256": "40fd5a6821802adc9ce1364b9da28a69159ed8a23aab2a57dc142fc104fbb8bb",
       "candidateBomSha256": "777d972509bc55cecd154eca0013d01dfaddfc18be4c5f6cb5d899f3545a9286",
       "expansionSha256": "88fb8278f8790bc7e1e202bedef70380b4ec35fc1fd6fbcf6f1668bf7865a90e",
