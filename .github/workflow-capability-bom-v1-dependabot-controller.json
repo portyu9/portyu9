@@ -132,24 +132,10 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Assemble exact candidate tree as data"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/commits",
               "method": "POST",
               "mutating": true,
               "step": "Atomically reconcile canonical governance files onto the bot head"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Assemble exact candidate tree as data"
             },
             {
               "client": "gh-api",
@@ -213,13 +199,6 @@
               "method": "POST",
               "mutating": true,
               "step": "Atomically reconcile canonical governance files onto the bot head"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1",
-              "method": "GET",
-              "mutating": false,
-              "step": "Assemble exact candidate tree as data"
             },
             {
               "client": "gh-api",
@@ -647,20 +626,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Reconstruct exact reconciled candidate as data"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Reconstruct exact reconciled candidate as data"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}",
               "method": "GET",
               "mutating": false,
@@ -686,13 +651,6 @@
               "method": "GET",
               "mutating": false,
               "step": "Verify exact delegated admission proof"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1",
-              "method": "GET",
-              "mutating": false,
-              "step": "Reconstruct exact reconciled candidate as data"
             },
             {
               "client": "gh-api",
