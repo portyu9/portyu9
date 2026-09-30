@@ -589,6 +589,13 @@
       "rationale": "Authorize #556's exact incremental immutable workflow-run wake binding after the already-accepted duplicate-check convergence. The controller may GET the triggering Actions run by immutable run ID, then fail closed on workflow identity, event, repository, head repository, branch, and SHA before any bot-PR approval or merge logic runs. This adds one read-only trusted wake surface only; existing approval, required checks, provenance, and exact-head merge authority are unchanged."
     },
     {
+      "baseBomSha256": "2a708bf17c664fcaa3b31808bbf66302b0c9d9239c87dd4d8fef87177d574093",
+      "candidateBomSha256": "2a708bf17c664fcaa3b31808bbf66302b0c9d9239c87dd4d8fef87177d574093",
+      "expansionSha256": "b66ee1499934f18bbdc84a41ff56f4409fe4a7ff9412d41038f21dd5b9ef7d5c",
+      "id": "cap-dependabot-main-schedule-wake-noop-v1",
+      "rationale": "Authorize frozen #1357 measured by closed #1358: reject main-headed scheduled CodeQL/Profile Quality workflow_run completions before the privileged Dependabot controller job, matching accepted #833 false-wake reduction while preserving direct controller schedules, main push/manual wakes, native Dependabot pull-request/manual wakes, and the strict wake schema. Base/candidate semantic BOMs are identical; only exact protected TCB bytes change. Adds no permission, endpoint, mutation, secret/OIDC, required-check reduction, merge/ruleset authority, direct-main write, retry, or bypass."
+    },
+    {
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "expansionSha256": "31044d5572490dccd8a78eb9b48b960ca602b777cc399e7cac20ab46b7a40fcb",
