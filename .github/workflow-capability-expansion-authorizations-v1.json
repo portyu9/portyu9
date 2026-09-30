@@ -393,6 +393,13 @@
       "rationale": "Authorize frozen #1374 measured by closed #1375: route three existing read-only CodeQL Autofix workflow-run singleton GETs through the accepted bounded reader while preserving receipt history, origin-run admission binding, post-merge follow-up identity, polling bounds, and typed validation. Measured 2 expansions/3 reductions. Adds no trigger, permission, mutation, binary artifact, GraphQL, pagination, alert, secret/OIDC, check reduction, direct-main, merge/ruleset, or bypass authority."
     },
     {
+      "baseBomSha256": "bfec53b6792c9d5780682afa3d5f3924a11568196b6a4fcfef69f90d2e4d4d21",
+      "candidateBomSha256": "7be543f025e68347d527f26ea66f4ced7370cc290701ba3ecef3f4b99a2dadc9",
+      "expansionSha256": "e495c3b98cfbffdf758705f28b376ded1a7505cdc1f133c934d304671aef974b",
+      "id": "cap-codeql-autofix-status-read-transport-v1",
+      "rationale": "Authorize frozen #1380 measured by closed #1381: route exactly one existing read-only CodeQL Autofix status GET through the accepted bounded authenticated singleton reader while preserving the typed status consumer and the existing constructive POST unchanged. Removes only the raw GET capability entry; adds no permission, trigger, endpoint, mutation or mutation replay, secret/OIDC, required-check reduction, merge/ruleset authority, direct-main write, or bypass."
+    },
+    {
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "db3b64fcd4d5dedd135ede0971e06d9ea7990e051b3ae3f44079c21e518edb4d",
