@@ -2336,13 +2336,18 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
                 f"trusted governed-bot review evaluator acquired mutation/external execution surface: {forbidden}")
 
 
-def validate_pull_review_evidence_schema(workflow: str, label: str, expected_reads: int) -> None:
+def validate_pull_review_evidence_schema(
+    workflow: str,
+    label: str,
+    expected_reads: int,
+    transport: str = "gh api --paginate --slurp",
+) -> None:
     require(
         workflow.count('/reviews?per_page=100') == expected_reads,
         f"{label} pull-review endpoint count changed",
     )
     require(
-        workflow.count('REVIEW_PAGES="$(gh api --paginate --slurp') == expected_reads,
+        workflow.count(f'REVIEW_PAGES="$({transport}') == expected_reads,
         f"{label} must capture each paginated review response before filtering",
     )
     require(
@@ -3638,7 +3643,12 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         'REVIEWS="$(gh api --paginate --slurp' not in owner_review_job,
         "Bot PR owner-review path must validate paginated evidence before flattening",
     )
-    validate_pull_review_evidence_schema(dependabot, "Dependabot terminal merge", 1)
+    validate_pull_review_evidence_schema(
+        dependabot,
+        "Dependabot terminal merge",
+        1,
+        transport="python3 scripts/automation_github_paginated_read.py",
+    )
     validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
     spotlight_review_projection = project_spotlight_merge_shell_reads_to_raw(
         project_spotlight_approval_list_helper_to_legacy(spotlight)
