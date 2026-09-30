@@ -98,13 +98,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Verify an existing Autofix PR and perform protected merge"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
               "method": "POST",
               "mutating": true,

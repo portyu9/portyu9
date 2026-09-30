@@ -739,7 +739,7 @@ jobs:
             "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \
             > check-pages-raw.json
           jq '[.[].check_runs[]]' check-pages-raw.json > check-pages.json
-          gh api \
+          python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \
             > ghas.json
           gh api --paginate --slurp \

@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v137"
+VERSION = "governed-workflow-byte-identity-v138"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "ad10702c9ac0b516f99bd59335c26297f88d82c8",
     ".github/workflows/profile-quality.yml": "45e53e364dc95a3beecc4408f00b94d09e971f50",
@@ -3327,7 +3327,7 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     )
     require(
         autofix.count(main_endpoint) == 5
-        and autofix.count(governed_fetch) == 22
+        and autofix.count(governed_fetch) == 23
         and autofix.count(main_fetch) == 3
         and autofix.count('--expected-ref "refs/heads/main"') == 3
         and autofix.count(main_consume) == 3,
@@ -3532,6 +3532,36 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             "CodeQL Autofix pull-request singleton must be typed before scalar use",
         )
         cursor = consume_pos
+
+    ghas_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100"'
+        + " "
+        + "\\"
+        + "\n            "
+        + "> ghas.json"
+    )
+    ghas_direct = (
+        'gh api \\'
+        + '\n            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=57789&check_name=CodeQL&filter=latest&per_page=100" \\'
+        + "\n            > ghas.json"
+    )
+    require(
+        autofix.count(ghas_fetch) == 1 and ghas_direct not in autofix,
+        "CodeQL Autofix terminal GHAS governed-read identity changed",
+    )
+    ghas_fetch_pos = autofix.index(ghas_fetch)
+    ghas_admit_pos = autofix.index(
+        "python3 scripts/codeql_autofix_controller.py admit",
+        ghas_fetch_pos,
+    )
+    require(
+        ghas_fetch_pos < ghas_admit_pos
+        and '--ghas ghas.json' in autofix[ghas_admit_pos:ghas_admit_pos + 1200],
+        "CodeQL Autofix terminal GHAS evidence moved out of reviewed typed order",
+    )
 
     artifact_list_fetch = (
         "python3 scripts/automation_github_read.py "
