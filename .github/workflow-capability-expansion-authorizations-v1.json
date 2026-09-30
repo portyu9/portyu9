@@ -442,6 +442,13 @@
       "rationale": "Authorize frozen #1401 measured by closed diagnostic #1402: route the existing terminal exact-head GHAS CodeQL check singleton through the accepted bounded authenticated GitHub GET helper while preserving the exact endpoint/query, ghas.json evidence shape, existing typed admission, and downstream exact-head/app/name/status/conclusion validation. Adds no permission, trigger, mutation or mutation replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
     },
     {
+      "baseBomSha256": "0a77e54579ba181cfa20eca9ef0577f3f2f41bbab99666d07a311ceea50576a6",
+      "candidateBomSha256": "07d2fd2b17a4277f1e969ca026642fb0c48018bcd6e4c4388b5a19bf44f30932",
+      "expansionSha256": "99a9f76ce124710cdb8b1aaf5da63428371b990a2704c158a8169ccfebc208e9",
+      "id": "cap-codeql-autofix-terminal-pr-alert-pagination-read-retry-v1",
+      "rationale": "Authorize frozen #1404 measured by closed diagnostic #1405: route the existing terminal PR-scoped CodeQL alert collection through the accepted bounded authenticated paginator while preserving the exact endpoint/query, array-of-pages pr-alert-pages.json evidence shape, existing typed admission, and downstream CodeQL alert identity/state/rule validation. Adds no permission, trigger, mutation or mutation replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "8b3abd7a1cd0f2c74e66fb4be71310f77b848fb6e53c252a55dabb9207352259",
       "candidateBomSha256": "bfec53b6792c9d5780682afa3d5f3924a11568196b6a4fcfef69f90d2e4d4d21",
       "expansionSha256": "1143b6120b407bbb494730996ca11d994fe9286d4ddc4b8a86c8171f4ff40e7b",
