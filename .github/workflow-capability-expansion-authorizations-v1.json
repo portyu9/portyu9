@@ -568,6 +568,13 @@
       "rationale": "Authorize #839's exact Dependabot Git-data mutation-response schema hardening. Existing blob/tree/commit/ref endpoints, permissions, reconciliation targets, protected checks, review/merge authority, and semantic Workflow Capability stay unchanged. Responses now prove typed SHA identity plus exact commit tree/parent and ref/object binding before later writes. No trigger, secret, mutation class, retry, OIDC, candidate execution, check reduction, direct-main write, ruleset change, or bypass."
     },
     {
+      "baseBomSha256": "7594a75dbc37d03ddb523b670dd837121cfcc8f865dc139692ecae5a96bd948e",
+      "candidateBomSha256": "fe6c4b4d975a831b83470bbb9f392885c57a2585698cc00a8c8555f0aa487515",
+      "expansionSha256": "11dffc2497a3e8ed516c0d102cdb8c4a79e110db07f06ffd738dc1c74d2de7df",
+      "id": "cap-dependabot-git-ref-read-transport-retry-v1",
+      "rationale": "Authorize frozen #1345 measured by closed #1346: route 13 existing Dependabot main/head Git-ref GETs through accepted bounded singleton reads; preserve endpoints, evidence files, #940 typed ref validation, and expected-SHA transaction semantics. Remove 13 mediated raw GET BOM surfaces. Mutations and all other reads stay unchanged. No permission, trigger, endpoint/query, mutation authority, secret/OIDC, check reduction, direct-main/ruleset/merge authority, replay, or bypass."
+    },
+    {
       "baseBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "candidateBomSha256": "82945c362cc9c5aaf4df583b9a932d01fbf385671cca113919c98166bcef71b0",
       "expansionSha256": "3eea6a94686eadf56be86dad63b67cdaf3a19aa61794a7729adc5a5767b867e4",
