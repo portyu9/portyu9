@@ -904,7 +904,8 @@ def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
         cursor = consume_pos
 
     run_fetch = (
-        'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}'
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}'
         '&event=pull_request&per_page=100"'
     )
     run_consume = (
@@ -1895,6 +1896,54 @@ def validate_release_resolution_parity_contract(text: str) -> None:
         cursor = resolved_arg_pos
 
 
+
+def validate_controller_residual_read_transport_contract(text: str) -> None:
+    singleton_reads = (
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10"',
+    )
+    for governed in singleton_reads:
+        require(
+            text.count(governed) == 1,
+            f"Dependabot residual governed singleton snapshot topology changed: {governed}",
+        )
+
+    proof_snapshot = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?'
+        'app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100"'
+    )
+    require(
+        text.count(proof_snapshot) == 2,
+        "Dependabot delegated-admission proof snapshots must use exactly two governed singleton reads",
+    )
+
+    paginated_reads = (
+        'python3 scripts/automation_github_paginated_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100"',
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100"',
+    )
+    for governed in paginated_reads:
+        require(
+            text.count(governed) == 1,
+            f"Dependabot residual governed pagination topology changed: {governed}",
+        )
+
+    raw_api_lines = [
+        line.strip()
+        for line in text.splitlines()
+        if "gh api" in line
+    ]
+    require(raw_api_lines, "Dependabot controller unexpectedly lost all explicit mutation transports")
+    for line in raw_api_lines:
+        require(
+            re.search(r"--method (?:POST|PUT|PATCH|DELETE)\\b", line) is not None,
+            f"Dependabot controller direct gh api transport must be mutation-only: {line}",
+        )
+
+
 def validate_approval_comment_helper_contract(text: str) -> None:
     for forbidden in (
         "def dump(",
@@ -2149,6 +2198,7 @@ def main() -> int:
         self_test_controller_reviewer_request_status(controller_text)
         validate_controller_collection_contract(controller_text)
         validate_controller_required_check_snapshot_contract(controller_text)
+        validate_controller_residual_read_transport_contract(controller_text)
         validate_controller_git_read_response_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
         self_test_controller_git_mutation_status_contract(controller_text)
@@ -2164,7 +2214,7 @@ def main() -> int:
         print(
             "Dependabot governance validation passed: canonical discovery/grouping remains locked; exact native bot identity, "
             "atomic single-repository pin closure, forward SemVer, public release tag-to-SHA provenance, deterministic governance "
-            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology with exact HTTP-201/200 transport proof, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor exact HTTP-201-validated automation-approval comment evidence, delegated CodeQL-only capability admission, single-snapshot exact protected checks, and exact-head merge are all "
+            "reconciliation, fail-closed wake/ref, pull-list, singleton PR/update, exact HTTP-201-validated reviewer requests, and candidate Git read response evidence, fail-closed paginated PR/file collection evidence, fail-closed Git mutation response topology with exact HTTP-201/200 transport proof, exact HTTP-201-validated protected-run approvals, exact HTTP-204-validated repository and workflow dispatches, mirrored canonical/delegated public release reproof, typed terminal merge success evidence with exact HTTP-204-validated post-merge CodeQL dispatch, trusted-actor exact HTTP-201-validated automation-approval comment evidence, delegated CodeQL-only capability admission, single-snapshot exact protected checks, governed residual collection/snapshot reads, and exact-head merge are all "
             "self-tested while every external action remains pinned to one immutable commit SHA."
         )
         return 0
