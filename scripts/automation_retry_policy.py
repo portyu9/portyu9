@@ -1266,6 +1266,12 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             "> open-pr-pages.json",
             "remediation PR discovery",
         ),
+        (
+            "Request and inspect GitHub CodeQL Autofix",
+            '"repos/${TARGET_REPOSITORY}/commits/${BASE_SHA}/comments?per_page=100"',
+            "> unsupported-comment-pages.json",
+            "unsupported-evidence comment collection",
+        ),
     ):
         step = named_step(codeql_autofix, "controller", step_name)
         require(
