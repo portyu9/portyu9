@@ -600,7 +600,7 @@
       "candidateBomSha256": "32a494c4933c6e385b0fe90e49502513ee1d50c880dd0372a44d3d3abd197e51",
       "expansionSha256": "3fd9b5ea9566d3b8fe72c0eadcf71c7e231a16a73ee3cdb2e9413877916478d8",
       "id": "cap-dependabot-open-pr-discovery-pagination-read-retry-v1",
-      "rationale": "Authorize frozen #1336 measured by closed #1337: route the existing Dependabot open-main-PR discovery paginated GET collection through the accepted bounded governed paginator while preserving the exact endpoint/query, array-of-pages evidence shape, typed pull-request collection validation, and candidate-selection semantics. Existing changed-file paginations, singleton reads, and all mutations remain unchanged and single-shot outside automatic retry. Adds no permission, trigger, endpoint/query, mutation class/count, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, mutation replay, or bypass."
+      "rationale": "Authorize frozen #1336 measured by closed #1337: route the existing Dependabot open-main-PR discovery pagination through the accepted bounded governed paginator while preserving the exact query, pages evidence, typed collection validation, and candidate selection. Changed-file pagination, singleton reads, and all mutations remain unchanged and single-shot. Adds no permission, trigger, endpoint, mutation, secret/OIDC, check reduction, direct-main/ruleset/merge authority, replay, or bypass."
     },
     {
       "baseBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
