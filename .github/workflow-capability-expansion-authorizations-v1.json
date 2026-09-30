@@ -953,6 +953,13 @@
       "rationale": "Authorize frozen #897 governed-review liveness hardening. Workflow Capability is unchanged. Spotlight moves the existing reviewer dispatch after trusted admission and before whole-workflow convergence, once per pass. The native evaluator adds only bounded read-only GitHub GET retries for classified transient failures. Auth, malformed, schema, policy, veto, and all mutation failures remain terminal. No new permission, trigger, endpoint class, merge/ruleset authority, check reduction, or bypass."
     },
     {
+      "baseBomSha256": "4362024f3c8559f5f6bbea832cba30d0e1d6b5f017332e43a3e6b557dc622210",
+      "candidateBomSha256": "4362024f3c8559f5f6bbea832cba30d0e1d6b5f017332e43a3e6b557dc622210",
+      "expansionSha256": "82e09d4d91e2c328c421075768435fa4f6ce634a8660511796390649c52f87bb",
+      "id": "cap-governed-reviewer-graphql-query-retry-v1",
+      "rationale": "Authorize frozen #1410 measured by closed #1411: route the existing governed-reviewer fixed read-only reviewThreads GraphQL query through bounded interpreter-free retry while preserving exact query, run-scoped token, typed GraphQL/schema/pagination/thread-resolution admission. Adds no permission, trigger, mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "expansionSha256": "e37bb35703d67ddef566310db5763315855354d41fd18f89cdc5d99307d62bd0",
