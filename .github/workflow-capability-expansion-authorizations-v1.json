@@ -204,6 +204,13 @@
       "rationale": "Authorize #673's exact CodeQL Autofix artifact-list completeness hardening. The shared trusted parser now rejects truncated or oversized bounded artifact collections, malformed artifact identities, duplicate/missing receipt artifacts, and malformed selected receipt provenance before privileged admission/merge paths proceed. Composite Workflow Capability is unchanged; no trigger, permission, secret, endpoint, method, mutation, merge capability, required-check reduction, or bypass is added."
     },
     {
+      "baseBomSha256": "958e4463c565d5dd34b098908fee71917d7628e9dd4532aaeca2098051e87d3a",
+      "candidateBomSha256": "7710e1422ef25645d1c7805bd795e811e198a01b5909935a2c19fa1a409f74fa",
+      "expansionSha256": "e55624f65e95b4dfdff2ef450b1034c378a8fa3a5cc43d3931cf0e47e8478656",
+      "id": "cap-codeql-autofix-artifact-list-read-retry-v1",
+      "rationale": "Authorize frozen #1392 measured by diagnostic PR #1393: route the existing terminal CodeQL Autofix receipt artifact-list JSON GET through the accepted bounded authenticated singleton reader while preserving endpoint/query, artifacts.json, typed artifact completeness/provenance selection, artifact-id use, and the one raw binary receipt ZIP. Adds no permission, trigger, mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "candidateBomSha256": "622307a075e1059019fff7c3abb4c959bf9910168abc398be53558c1144916ed",
       "expansionSha256": "f8f3819da6f16794a8636fa2624c52cfe97fc4b577e60edb29fb0bd9f2f24bff",
