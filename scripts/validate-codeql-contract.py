@@ -184,6 +184,42 @@ def validate_codeql(text: str) -> None:
             "CodeQL results must retain a stable per-language SARIF category")
 
 
+AUTOFIX_WORKFLOW_RUN_ADMISSION = (
+    "  controller:\n"
+    "    if: github.event_name != 'workflow_run' || "
+    "(github.event.workflow_run.head_sha == github.sha && "
+    "github.event.workflow_run.conclusion == 'success')\n"
+    "    name: trusted-codeql-autofix-controller\n"
+)
+
+
+def validate_autofix_workflow_run_admission(text: str) -> None:
+    require(
+        text.count(AUTOFIX_WORKFLOW_RUN_ADMISSION) == 1,
+        "CodeQL Autofix workflow_run admission must require exactly one current-main successful CodeQL completion",
+    )
+
+
+def self_test_autofix_workflow_run_admission(good: str) -> None:
+    validate_autofix_workflow_run_admission(good)
+    weakened = good.replace(
+        "    if: github.event_name != 'workflow_run' || "
+        "(github.event.workflow_run.head_sha == github.sha && "
+        "github.event.workflow_run.conclusion == 'success')",
+        "    if: github.event_name != 'workflow_run' || github.event.workflow_run.head_sha == github.sha",
+        1,
+    )
+    try:
+        validate_autofix_workflow_run_admission(weakened)
+    except ValueError as exc:
+        require(
+            "current-main successful CodeQL completion" in str(exc),
+            f"Autofix workflow_run admission self-test failed for the wrong reason: {exc}",
+        )
+    else:
+        fail("Autofix workflow_run admission self-test accepted unsuccessful CodeQL completion wakes")
+
+
 def validate_autofix_constructive_http_statuses(text: str) -> None:
     request_call = (
         'gh api --include --method POST \\\n'
@@ -1655,6 +1691,7 @@ def main() -> int:
         codeql = CODEQL.read_text(encoding="utf-8")
         self_test(codeql)
         autofix = AUTOFIX.read_text(encoding="utf-8")
+        self_test_autofix_workflow_run_admission(autofix)
         self_test_autofix_constructive_http_statuses(autofix)
         self_test_autofix_constructive_response_schemas(autofix)
         self_test_autofix_reviewer_request_status(autofix)

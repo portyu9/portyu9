@@ -26,7 +26,7 @@ env:
 
 jobs:
   controller:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.head_sha == github.sha
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.head_sha == github.sha && github.event.workflow_run.conclusion == 'success')
     name: trusted-codeql-autofix-controller
     runs-on: ubuntu-24.04
     timeout-minutes: 20
