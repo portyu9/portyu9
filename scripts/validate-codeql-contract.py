@@ -1427,11 +1427,20 @@ def validate_autofix_readiness_evidence(text: str) -> None:
     snapshot_endpoint = (
         'repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100'
     )
-    governed_fetch = "python3 scripts/automation_github_read.py"
+    snapshot_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100"'
+        + " "
+        + "\\"
+        + "\n              "
+        + "> readiness-snapshot-response.json"
+    )
     snapshot_validator = "python3 scripts/codeql_autofix_controller.py readiness-snapshot"
     require(
         readiness.count(snapshot_endpoint) == 1
-        and readiness.count(governed_fetch) == 1
+        and readiness.count(snapshot_fetch) == 1
         and readiness.count(snapshot_validator) == 1,
         "CodeQL Autofix readiness must use one governed complete exact-head check snapshot",
     )
