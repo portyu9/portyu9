@@ -293,7 +293,9 @@ jobs:
           BRANCH="codeql-autofix/alert-${ALERT_NUMBER}/run-${RUN_ID}"
           TARGET_REF="refs/heads/${BRANCH}"
 
-          gh api "repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}" > matching-refs.json
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}" \
+            > matching-refs.json
           python3 scripts/codeql_autofix_controller.py ref-state \
             --refs-file matching-refs.json \
             --branch "$BRANCH" \
@@ -343,7 +345,9 @@ jobs:
           [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$HEAD_SHA" != "$BASE_SHA"
 
-          gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" > compare.json
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" \
+            > compare.json
           python3 scripts/codeql_autofix_controller.py compare \
             --compare-file compare.json \
             --base-sha "$BASE_SHA" \
@@ -445,7 +449,9 @@ jobs:
           }
           assert_head_sha() {
             local expected_sha="$1"
-            gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" > "$RUNNER_TEMP/codeql-autofix-head-ref.json"
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" \
+              > "$RUNNER_TEMP/codeql-autofix-head-ref.json"
             python3 scripts/codeql_autofix_controller.py read-ref-response \
               --response-file "$RUNNER_TEMP/codeql-autofix-head-ref.json" \
               --expected-ref "refs/heads/${BRANCH}" \

@@ -1378,6 +1378,24 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for step_name, endpoint, output_name, label in (
         (
             "Commit exact Autofix to a dedicated branch and open one PR",
+            '"repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}"',
+            "> matching-refs.json",
+            "deterministic branch inventory",
+        ),
+        (
+            "Commit exact Autofix to a dedicated branch and open one PR",
+            '"repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}"',
+            "> compare.json",
+            "generated commit compare snapshot",
+        ),
+        (
+            "Approve exact protected checks and queue admission retry",
+            '"repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}"',
+            '> "$RUNNER_TEMP/codeql-autofix-head-ref.json"',
+            "candidate head-ref snapshot",
+        ),
+        (
+            "Commit exact Autofix to a dedicated branch and open one PR",
             '"repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}"',
             "| jq -c '.' >> prior-attempts.ndjson",
             "prior-attempt workflow-run snapshot",

@@ -754,7 +754,7 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         "CodeQL Autofix must retain exactly five governed main-ref observations",
     )
     require(
-        text.count(governed_fetch) == 16,
+        text.count(governed_fetch) == 19,
         "CodeQL Autofix governed GET topology changed",
     )
     require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref governed-read topology changed")
@@ -781,8 +781,14 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         cursor = consume_pos
 
     head_fetch = (
-        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}" '
-        '> "$RUNNER_TEMP/codeql-autofix-head-ref.json"'
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + '"repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}"'
+        + " "
+        + "\\"
+        + "\n              "
+        + '> "$RUNNER_TEMP/codeql-autofix-head-ref.json"'
     )
     head_consume = (
         'test "$(jq -r .sha "$RUNNER_TEMP/codeql-autofix-head-ref-normalized.json")" '
@@ -803,6 +809,54 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         head_fetch_pos < head_validate_pos < head_consume_pos,
         "CodeQL Autofix candidate ref response must be typed before SHA consumption",
     )
+
+    require(
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/${BRANCH}"' not in text,
+        "CodeQL Autofix candidate head-ref regained direct GET transport",
+    )
+
+    topology_reads = (
+        (
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + "> matching-refs.json",
+            'gh api "repos/${TARGET_REPOSITORY}/git/matching-refs/heads/${BRANCH}"',
+            "python3 scripts/codeql_autofix_controller.py ref-state",
+            'REF_STATE="$(jq -r .state ref-state.json)"',
+            "deterministic branch inventory",
+        ),
+        (
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + "> compare.json",
+            'gh api "repos/${TARGET_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}"',
+            "python3 scripts/codeql_autofix_controller.py compare",
+            "--out compare-proof.json",
+            "generated commit compare snapshot",
+        ),
+    )
+    for fetch, direct, validator, consume, label in topology_reads:
+        require(
+            text.count(fetch) == 1 and direct not in text,
+            f"CodeQL Autofix {label} governed-read transport changed",
+        )
+        fetch_pos = text.index(fetch)
+        validate_pos = text.index(validator, fetch_pos)
+        consume_pos = text.index(consume, validate_pos)
+        require(
+            fetch_pos < validate_pos < consume_pos,
+            f"CodeQL Autofix {label} must be typed before authority-relevant consumption",
+        )
 
     workflow_contracts = (
         (
