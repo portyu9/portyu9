@@ -92,9 +92,9 @@ class _FakeResponse:
 
 
 def self_test() -> None:
-    require(successor_version("3.13.15") == "3.13.16", "successor calculation drifted")
+    require(successor_version("3.13.16") == "3.13.17", "successor calculation drifted")
     require(
-        release_url("3.13.16") == "https://www.python.org/downloads/release/python-31316/",
+        release_url("3.13.17") == "https://www.python.org/downloads/release/python-31317/",
         "release URL construction drifted",
     )
     try:
@@ -106,17 +106,17 @@ def self_test() -> None:
 
     quiet = lambda _message: None
     published = probe_release(
-        "3.13.16",
+        "3.13.17",
         opener=lambda *_args, **_kwargs: _FakeResponse(200),
         warning=quiet,
     )
     require(published is True, "self-test failed to detect a published successor")
 
     def missing(*_args: object, **_kwargs: object) -> object:
-        raise urllib.error.HTTPError(release_url("3.13.16"), 404, "not found", None, None)
+        raise urllib.error.HTTPError(release_url("3.13.17"), 404, "not found", None, None)
 
     require(
-        probe_release("3.13.16", opener=missing, warning=quiet) is False,
+        probe_release("3.13.17", opener=missing, warning=quiet) is False,
         "self-test failed to accept absent successor",
     )
 
@@ -124,7 +124,7 @@ def self_test() -> None:
         raise urllib.error.URLError("offline")
 
     require(
-        probe_release("3.13.16", opener=unavailable, warning=quiet) is None,
+        probe_release("3.13.17", opener=unavailable, warning=quiet) is None,
         "self-test made network uncertainty blocking",
     )
 

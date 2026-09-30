@@ -11,7 +11,7 @@ WORKFLOWS = ROOT / ".github/workflows"
 QUALITY = WORKFLOWS / "profile-quality.yml"
 RUNTIME_PROBE = ROOT / "scripts/verify-python-runtime.py"
 FRESHNESS_CHECKER = ROOT / "scripts/check-python-maintenance-freshness.py"
-EXPECTED_VERSION = "3.13.15"
+EXPECTED_VERSION = "3.13.16"
 EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
 EXPECTED_WORKFLOWS = {
     "action-provenance-witness.yml",
