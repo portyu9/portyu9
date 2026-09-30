@@ -386,6 +386,13 @@
       "rationale": "Authorize #811's exact CodeQL Autofix retry-history expansion: trusted controller may read up to 19 prior run-attempt objects before mutation, validate contiguous terminal history, and preserve attempt/check-suite/actor evidence in the immutable receipt while current runAttempt remains the only authorizing attempt. The loop is read-only with operationRetry=false. No new permission, trigger, mutation, merge authority, required-check change, ruleset change, direct-main write, or bypass."
     },
     {
+      "baseBomSha256": "c0c6bd4d56b48c02598975c88d494e709db7c8378e6100f15110df31e5ad1226",
+      "candidateBomSha256": "8b3abd7a1cd0f2c74e66fb4be71310f77b848fb6e53c252a55dabb9207352259",
+      "expansionSha256": "88b876918388d3b94aeb3ee95d751fd89ee8b0c2ce4c75e0b169a7230c904440",
+      "id": "cap-codeql-autofix-run-singleton-read-transport-v1",
+      "rationale": "Authorize frozen #1374 measured by closed #1375: route three existing read-only CodeQL Autofix workflow-run singleton GETs through the accepted bounded reader while preserving receipt history, origin-run admission binding, post-merge follow-up identity, polling bounds, and typed validation. Measured 2 expansions/3 reductions. Adds no trigger, permission, mutation, binary artifact, GraphQL, pagination, alert, secret/OIDC, check reduction, direct-main, merge/ruleset, or bypass authority."
+    },
+    {
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "db3b64fcd4d5dedd135ede0971e06d9ea7990e051b3ae3f44079c21e518edb4d",
