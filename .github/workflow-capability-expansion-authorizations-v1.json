@@ -428,6 +428,13 @@
       "rationale": "Authorize #484's exact trusted workflow-run admission path for GitHub-token-created CodeQL Autofix PRs. Read-only Capability admission may start only from Profile quality requested runs on codeql-autofix branches, bind the sole bot PR's exact repository/base/head identity, and evaluate candidate bytes strictly as data. Protect Main, six required checks, candidate non-execution, provenance, GHAS, review-thread, and exact-SHA protected merge gates remain fail-closed."
     },
     {
+      "baseBomSha256": "2a708bf17c664fcaa3b31808bbf66302b0c9d9239c87dd4d8fef87177d574093",
+      "candidateBomSha256": "b9ebd6635d1fef7ff6600743fcc3462f67a16c34002297842a0e7f57d7562814",
+      "expansionSha256": "66b098825dffcda39772ec91722635ea7c2f454f64a73ed54118ba566f0acc66",
+      "id": "cap-codeql-autofix-workflow-singleton-read-transport-v1",
+      "rationale": "Authorize frozen #1361 from diagnostic #1362: replace exactly three read-only CodeQL Autofix protected-workflow metadata GET transports with the already-accepted canonical bounded singleton reader, while preserving the exact endpoints, typed workflow-definition schemas, workflow IDs, required-check logic, triggers, permissions, mutations, polling, merge/review authority, GraphQL, artifact, PR/ref and pagination behavior. The measured semantic diff contains two expansions and three reductions because direct gh-api GET surfaces are replaced by governed canonical-read capability. Adds no bypass or mutation authority."
+    },
+    {
       "baseBomSha256": "cf57c64e11d6322af0c8e234fba72098ae02bcc5c29706e40800c4d0a8b38adc",
       "candidateBomSha256": "9266befda8c06d60c5e9fd8dfefc677149a92d177ee763b586778cdb6fd5eb61",
       "expansionSha256": "e38a445f873bdf3ecbfb83550d404064d4d4926db7fe408198b41a0b478d1659",
