@@ -91,13 +91,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
               "method": "POST",
               "mutating": true,
@@ -109,20 +102,6 @@
               "method": "GET",
               "mutating": false,
               "step": "Verify an existing Autofix PR and perform protected merge"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
             },
             {
               "client": "gh-api",
