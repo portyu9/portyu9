@@ -649,7 +649,7 @@
       "baseBomSha256": "fe6c4b4d975a831b83470bbb9f392885c57a2585698cc00a8c8555f0aa487515",
       "candidateBomSha256": "6fcc576c85747eee12cbb038c02a8b382f0b27144ef5af19edb88c96e07660fe",
       "expansionSha256": "a9e90555b20b95089592fb15b61edadd0610fad7b3d1e0639d0479dc1fe65ba6",
-      "rationale": "Authorize frozen #1348 measured by closed #1349: route five existing Dependabot singleton pull-request GET observations through the accepted bounded authenticated GET-only reader. Preserve the exact endpoint, #1015 typed pull-request response boundary, identity/state checks, update/merge convergence, validation binding, CodeQL dispatch sequencing, tokens and all mutations. Semantic Workflow Capability shrinks by four net surfaces; no trigger, permission, mutation replay, secret/OIDC, required-check, ruleset, merge, direct-main or bypass authority is added."
+      "rationale": "Authorize frozen #1348 measured by closed #1349: route five existing Dependabot singleton PR GETs through the accepted bounded authenticated GET-only reader. Preserve the endpoint, #1015 typed response boundary, identity/state checks, convergence, validation binding, CodeQL sequencing, tokens and all mutations. Semantic capability shrinks; no trigger, permission, mutation replay, secret/OIDC, required-check, ruleset, merge, direct-main or bypass authority is added."
     },
     {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
