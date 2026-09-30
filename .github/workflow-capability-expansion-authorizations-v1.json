@@ -344,6 +344,13 @@
       "rationale": "Authorize frozen #956's exact CodeQL Autofix trusted-source hardening: the existing protected pull_request workflow-run collection is typed before approval-loop scalar use, binding the exact three workflows, unique positive run/check-suite identities, positive attempts, candidate branch/SHA/repository identity, and reviewed status/conclusion classes. BOM capabilities, API surfaces/counts, permissions, approval/merge authority, required checks and bypass behavior are unchanged."
     },
     {
+      "baseBomSha256": "72474806bb8ef13d3abcf11d312fab7c9b11cc0cdc4e545dd4dcfeaa59385b6b",
+      "candidateBomSha256": "c5080173fe53130e4ae4a69e6bccd43a7db8d3143393a629f2e6d8f6292f1292",
+      "expansionSha256": "1b4281340741b88314fa678685e94f95ccacad56ed4899dfc2afb154fff29cc8",
+      "id": "cap-codeql-autofix-protected-run-discovery-read-retry-v1",
+      "rationale": "Authorize frozen #1386 measured by closed #1387: route the existing protected pull-request workflow-run discovery GET through the accepted bounded authenticated singleton reader while preserving the exact endpoint/query, 60-attempt outer polling budget, typed exact-three-workflow consumer, and single-shot run-approval POST. Adds no permission, trigger, endpoint/method, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, mutation retry/replay, or bypass."
+    },
+    {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "05512ad36d522448730f573b0f286445927d56ae85c1cd999b1855a534493f3f",
