@@ -1470,7 +1470,7 @@ def validate_autofix_readiness_evidence(text: str) -> None:
         require(forbidden not in readiness,
                 f"CodeQL Autofix regressed to repeated/raw readiness evidence: {forbidden}")
 
-    fetch_pos = readiness.index(governed_fetch)
+    fetch_pos = readiness.index(snapshot_fetch)
     endpoint_pos = readiness.index(snapshot_endpoint, fetch_pos)
     validate_pos = readiness.index(snapshot_validator, endpoint_pos)
     trusted_consume_pos = readiness.index(
