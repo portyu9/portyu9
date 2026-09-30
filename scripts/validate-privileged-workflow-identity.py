@@ -2597,6 +2597,55 @@ def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
         "Bot PR reviewer must validate workflow-run evidence before quiescence filtering",
     )
 
+
+def validate_dependabot_residual_read_transport_identity(dependabot: str) -> None:
+    singleton_reads = (
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"',
+        'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10"',
+    )
+    for governed in singleton_reads:
+        require(
+            dependabot.count(governed) == 1,
+            f"Dependabot governed residual singleton identity changed: {governed}",
+        )
+
+    delegated_proof = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?'
+        'app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100"'
+    )
+    require(
+        dependabot.count(delegated_proof) == 2,
+        "Dependabot delegated-admission proof transport must remain exactly two governed singleton reads",
+    )
+
+    review_pages = (
+        'REVIEW_PAGES="$(python3 scripts/automation_github_paginated_read.py '
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"'
+    )
+    comment_pages = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \\\n'
+        '            > "$RUNNER_TEMP/dependabot-approval-comment-pages.json"'
+    )
+    require(
+        dependabot.count(review_pages) == 1 and dependabot.count(comment_pages) == 1,
+        "Dependabot terminal review/comment evidence must remain on governed pagination",
+    )
+
+    direct_lines = [line.strip() for line in dependabot.splitlines() if "gh api" in line]
+    require(direct_lines, "Dependabot workflow unexpectedly lost all explicit mutation transports")
+    for line in direct_lines:
+        require(
+            any(
+                method in line
+                for method in ("--method POST", "--method PUT", "--method PATCH", "--method DELETE")
+            ),
+            f"Dependabot direct gh api transport must be mutation-only: {line}",
+        )
+
+
 def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> None:
     check_start_marker = "          checks_ready() {\n"
     check_end_marker = "\n\n          approve_exact_pr_workflows() {\n"
@@ -2716,7 +2765,10 @@ def validate_dependabot_readiness_run_check_evidence_schema(dependabot: str) -> 
         "Dependabot readiness and dispatch suppression must classify every validated non-completed run as active",
     )
 
-    run_fetch = 'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")"'
+    run_fetch = (
+        'runs="$(python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100")"'
+    )
     run_schema = '(.workflow_runs | type == "array" and length <= 100) and'
     first_run_consumer = 'if ! active="$(workflow_dispatch_runs)"; then'
     require(
@@ -2799,7 +2851,8 @@ def validate_dependabot_protected_workflow_evidence_schema(dependabot: str) -> N
         cursor = consume_pos
 
     run_fetch = (
-        'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}'
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}'
         '&event=pull_request&per_page=100"'
     )
     run_consume = (
@@ -3554,6 +3607,7 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
     validate_bot_review_run_check_evidence_schema(bot_review)
+    validate_dependabot_residual_read_transport_identity(dependabot)
     validate_dependabot_readiness_run_check_evidence_schema(dependabot)
     validate_dependabot_protected_workflow_evidence_schema(dependabot)
     owner_review_job = job_block(bot_review, "approve", "converge")
