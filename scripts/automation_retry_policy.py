@@ -1375,6 +1375,39 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             f"CodeQL Autofix {label} governed read lost run-scoped token binding",
         )
 
+    status_step = named_step(codeql_autofix, "controller", "Request and inspect GitHub CodeQL Autofix")
+    status_endpoint = '"repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix"'
+    status_output = "> autofix-status.json"
+    status_output_pos = status_step.index(status_output)
+    status_endpoint_pos = status_step.rfind(status_endpoint, 0, status_output_pos)
+    status_helper_pos = status_step.rfind(
+        "python3 scripts/automation_github_read.py",
+        max(0, status_endpoint_pos - 160),
+        status_endpoint_pos,
+    )
+    require(
+        status_helper_pos >= 0 and status_helper_pos < status_endpoint_pos < status_output_pos,
+        "CodeQL Autofix status snapshot must use the governed singleton GitHub reader",
+    )
+    direct_status_get = (
+        "gh api "
+        + "\\"
+        + "\n            "
+        + status_endpoint
+        + " "
+        + "\\"
+        + "\n            "
+        + status_output
+    )
+    require(
+        direct_status_get not in status_step,
+        "CodeQL Autofix status snapshot regained direct gh API GET transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in status_step,
+        "CodeQL Autofix status governed read lost run-scoped token binding",
+    )
+
     for step_name, endpoint, output_name, label in (
         (
             "Commit exact Autofix to a dedicated branch and open one PR",

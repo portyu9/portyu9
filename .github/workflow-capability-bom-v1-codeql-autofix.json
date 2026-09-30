@@ -85,13 +85,6 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix",
-              "method": "GET",
-              "mutating": false,
-              "step": "Request and inspect GitHub CodeQL Autofix"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/code-scanning/alerts/${ALERT_NUMBER}/autofix",
               "method": "POST",
               "mutating": true,
               "step": "Request and inspect GitHub CodeQL Autofix"
