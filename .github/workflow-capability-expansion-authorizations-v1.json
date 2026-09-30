@@ -292,7 +292,7 @@
       "candidateBomSha256": "bc57168b982f00bccd9f2ab456bfbf39b9732987c651d692b4640655c8e5115e",
       "expansionSha256": "5ca544667d38c2228946475cfe7e1fbbd63a651544e5c651d93d89bca0a02a51",
       "id": "cap-codeql-autofix-pr-singleton-read-transport-v1",
-      "rationale": "Authorize corrected frozen #1364 measured by closed #1365: route exactly four existing read-only CodeQL Autofix pull-request singleton GET snapshots through the accepted bounded singleton reader while preserving the existing typed pull-request-response validation and exact repository/base/head/branch bindings. The corrected validator ordering proof is included. Measured replacement is 2 expansions/2 reductions and adds no trigger, permission, mutation, polling, merge/review authority, GraphQL, artifact, Git-ref, workflow-run, pagination, direct-main, ruleset, retry-of-mutation, or bypass authority."
+      "rationale": "Authorize corrected frozen #1364 measured by closed #1365: route four existing read-only CodeQL Autofix PR singleton GETs through the accepted bounded singleton reader while preserving typed pull-request-response identity validation. Includes the corrected readiness ordering proof. Measured 2 expansions/2 reductions; no trigger, permission, mutation, polling, merge/review, GraphQL, artifact, ref, workflow-run, pagination, direct-main, ruleset, mutation-retry, or bypass authority."
     },
     {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
