@@ -425,7 +425,7 @@
       "candidateBomSha256": "72474806bb8ef13d3abcf11d312fab7c9b11cc0cdc4e545dd4dcfeaa59385b6b",
       "expansionSha256": "8643389693cf01e199dd0f6d9f1792c6b777bb54e3a81fa97f5c6e01ad5c70ec",
       "id": "cap-codeql-autofix-unsupported-comment-read-transport-v1",
-      "rationale": "Authorize frozen #1383 measured by closed #1384: route exactly one existing complete read-only CodeQL Autofix unsupported-evidence commit-comment collection through the accepted bounded authenticated paginated reader while preserving the typed evidence consumer and paired commit-comment POST unchanged and single-shot. Removes only the raw GET capability entry; adds no permission, trigger, endpoint, mutation or mutation replay, secret/OIDC, required-check reduction, merge/ruleset authority, direct-main write, or bypass."
+      "rationale": "Authorize frozen #1383 measured by closed #1384: route one existing read-only CodeQL Autofix unsupported-evidence commit-comment collection through the accepted bounded authenticated paginated reader. Preserve the typed consumer and paired commit-comment POST unchanged and single-shot. Removes only the raw GET capability entry; adds no permission, trigger, endpoint/mutation authority, mutation replay, secret/OIDC, check reduction, merge/ruleset authority, direct-main write, or bypass."
     },
     {
       "baseBomSha256": "eca6d89065bef7c07e2d95d78301162e8bb7654efffa02ac830e410ec325e269",
