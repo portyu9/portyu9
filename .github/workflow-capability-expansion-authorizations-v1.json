@@ -407,6 +407,13 @@
       "rationale": "Authorize #811's exact CodeQL Autofix retry-history expansion: trusted controller may read up to 19 prior run-attempt objects before mutation, validate contiguous terminal history, and preserve attempt/check-suite/actor evidence in the immutable receipt while current runAttempt remains the only authorizing attempt. The loop is read-only with operationRetry=false. No new permission, trigger, mutation, merge authority, required-check change, ruleset change, direct-main write, or bypass."
     },
     {
+      "baseBomSha256": "07d2fd2b17a4277f1e969ca026642fb0c48018bcd6e4c4388b5a19bf44f30932",
+      "candidateBomSha256": "4362024f3c8559f5f6bbea832cba30d0e1d6b5f017332e43a3e6b557dc622210",
+      "expansionSha256": "9e7f4f447bd59c439dbdb31c1d124a1d20534c0ed294de5ee81e0f6ae320f092",
+      "id": "cap-codeql-autofix-review-thread-query-read-retry-v1",
+      "rationale": "Authorize frozen #1407 measured by closed diagnostic #1408: route the existing terminal CodeQL Autofix read-only review-thread GraphQL query through the protected fixed-query bounded authenticated helper while preserving the exact query projection, fixed GraphQL endpoint, review-threads.json evidence shape, and existing typed GraphQL error/schema/pagination/thread-resolution admission. Adds no permission, trigger, GraphQL mutation or REST mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "c0c6bd4d56b48c02598975c88d494e709db7c8378e6100f15110df31e5ad1226",
       "candidateBomSha256": "8b3abd7a1cd0f2c74e66fb4be71310f77b848fb6e53c252a55dabb9207352259",
       "expansionSha256": "88b876918388d3b94aeb3ee95d751fd89ee8b0c2ce4c75e0b169a7230c904440",
