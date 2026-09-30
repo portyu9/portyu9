@@ -292,7 +292,7 @@
       "candidateBomSha256": "958e4463c565d5dd34b098908fee71917d7628e9dd4532aaeca2098051e87d3a",
       "expansionSha256": "c922c9db90496bdadcf83c8cbd63b79fadb49fd63c263331dd38ae9783e7590f",
       "id": "cap-codeql-autofix-pr-files-pagination-read-retry-v1",
-      "rationale": "Authorize frozen #1389 measured by closed #1390: route the existing terminal CodeQL Autofix pull-request changed-file collection through the accepted bounded authenticated paginated reader while preserving the exact endpoint/query, per_page=100, array-of-pages evidence shape, pr-wrapper construction, and typed terminal admit boundary. Removes only the raw GET capability entry; adds no permission, trigger, endpoint/method, mutation or mutation retry/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
+      "rationale": "Authorize frozen #1389 measured by closed #1390: route the existing terminal CodeQL Autofix PR-files GET through the accepted bounded paginated reader while preserving the exact endpoint/query, per_page=100, array-of-pages evidence, wrapper construction, and typed terminal admission. Removes only the raw GET capability; adds no permission, trigger, mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
     },
     {
       "baseBomSha256": "b9ebd6635d1fef7ff6600743fcc3462f67a16c34002297842a0e7f57d7562814",
