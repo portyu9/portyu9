@@ -1317,6 +1317,13 @@
       "rationale": "Authorize frozen #1282 measured by closed #1283: move accepted #1240 serialized-shell-separator semantics into protected workflow_capability_shell_source.py and invoke that pure inert-text guard from trusted_workflow_capability.py before semantic compilation. Semantic Workflow Capability is unchanged; only the trusted compiler source and new helper expand. No trigger, permission, endpoint, mutation, secret/OIDC, check reduction, candidate execution, merge/ruleset authority, or bypass."
     },
     {
+      "baseBomSha256": "bc57168b982f00bccd9f2ab456bfbf39b9732987c651d692b4640655c8e5115e",
+      "candidateBomSha256": "bc57168b982f00bccd9f2ab456bfbf39b9732987c651d692b4640655c8e5115e",
+      "expansionSha256": "98499db0f5fbed86ee200a1513787be26de48fd81393e7deb516bcd23f80db18",
+      "id": "cap-workflow-capability-artifact-id-selector-v1",
+      "rationale": "Authorize frozen staged evaluator #1369 measured by closed #1370: extend the inert trusted Workflow Capability compiler so artifact downloads select exactly one of name or artifact-ids, while uploads still require name, with exact selector self-tests. Semantic Workflow Capability is unchanged; only the protected compiler source expands. No trigger, permission, endpoint, mutation, secret/OIDC, required-check, merge/ruleset, direct-main, candidate-execution, or bypass authority is added."
+    },
+    {
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "3db685a54ec049e30c30399f16a481384af84972015b704f179723698aab5ac5",
