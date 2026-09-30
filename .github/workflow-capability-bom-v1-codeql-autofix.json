@@ -63,13 +63,6 @@
             },
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Approve exact protected checks and queue admission retry"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/dispatches",
               "method": "POST",
               "mutating": true,
