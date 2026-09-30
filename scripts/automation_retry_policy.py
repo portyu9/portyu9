@@ -991,6 +991,37 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Dependabot controller open-PR discovery governed pagination lost run-scoped token binding",
     )
 
+    dependabot_file_endpoint = (
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
+    )
+    for job_name, step_name, label in (
+        (
+            "controller",
+            "Assemble exact candidate tree as data",
+            "candidate-tree changed-file collection",
+        ),
+        (
+            "validation_bind",
+            "Bind exact controller-issued validation target",
+            "validation-target changed-file collection",
+        ),
+    ):
+        step = named_step(dependabot_controller, job_name, step_name)
+        require(
+            step.count("python3 scripts/automation_github_paginated_read.py") == 1
+            and dependabot_file_endpoint in step
+            and "> pr-file-pages.json" in step,
+            f"Dependabot {label} must use exactly one governed paginated GitHub collection",
+        )
+        require(
+            "gh api --paginate --slurp" not in step,
+            f"Dependabot {label} regained direct gh pagination transport",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in step,
+            f"Dependabot {label} governed pagination lost run-scoped token binding",
+        )
+
     codeql_autofix = texts[".github/workflows/codeql-autofix.yml"]
     for step_name, endpoint, output_name, label in (
         (
@@ -1659,6 +1690,53 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         dependabot_discovery_transport_drift,
         "Dependabot controller open-PR discovery must use exactly one governed paginated GitHub collection",
+    )
+
+    dependabot_file_pages_source = texts[".github/workflows/dependabot-controller.yml"]
+    dependabot_file_pages_governed = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \\\n'
+        '            > pr-file-pages.json'
+    )
+    dependabot_file_pages_direct = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" '
+        '> pr-file-pages.json'
+    )
+    require(
+        dependabot_file_pages_source.count(dependabot_file_pages_governed) == 2,
+        "retry-policy self-test fixture missing both Dependabot governed changed-file collections",
+    )
+
+    dependabot_candidate_file_transport_drift = dict(texts)
+    dependabot_candidate_file_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_file_pages_source.replace(
+            dependabot_file_pages_governed,
+            dependabot_file_pages_direct,
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_candidate_file_transport_drift,
+        "Dependabot candidate-tree changed-file collection must use exactly one governed paginated GitHub collection",
+    )
+
+    dependabot_validation_file_transport_drift = dict(texts)
+    dependabot_file_parts = dependabot_file_pages_source.rsplit(
+        dependabot_file_pages_governed,
+        1,
+    )
+    require(
+        len(dependabot_file_parts) == 2,
+        "retry-policy self-test could not isolate Dependabot validation changed-file collection",
+    )
+    dependabot_validation_file_transport_drift[".github/workflows/dependabot-controller.yml"] = (
+        dependabot_file_pages_direct.join(dependabot_file_parts)
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_validation_file_transport_drift,
+        "Dependabot validation-target changed-file collection must use exactly one governed paginated GitHub collection",
     )
 
     dependabot_release_transport_drift = dict(texts)

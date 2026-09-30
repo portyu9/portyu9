@@ -584,8 +584,7 @@ def validate_controller_collection_contract(text: str) -> None:
         'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100"'
     )
     require(
-        text.count(pagination_helper) == 1
-        and text.count(discovery_endpoint) == 1
+        text.count(discovery_endpoint) == 1
         and text.count(discovery_fetch) == 1,
         "Dependabot controller open-PR discovery must use exactly one governed paginated GitHub collection",
     )
@@ -606,9 +605,41 @@ def validate_controller_collection_contract(text: str) -> None:
         discovery_fetch_pos < discovery_consume_pos < discovery_select_pos,
         "Dependabot controller must govern, validate, then select from open-PR discovery evidence",
     )
+    file_endpoint = '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
+    file_fetch = (
+        pagination_helper
+        + " "
+        + "\\"
+        + "\n            "
+        + file_endpoint
+        + " "
+        + "\\"
+        + "\n            > pr-file-pages.json"
+    )
+    direct_file_fetch = (
+        'gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
+    )
     require(
-        text.count('repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100') == 2,
-        "Dependabot controller changed-file endpoint count changed",
+        text.count(pagination_helper) == 3
+        and text.count(file_endpoint) == 2
+        and text.count(file_fetch) == 2,
+        "Dependabot controller must use exactly two governed changed-file paginated GitHub collections",
+    )
+    require(
+        direct_file_fetch not in text,
+        "Dependabot controller changed-file evidence regained direct pagination transport",
+    )
+    file_consumer = "python3 scripts/workflow_capability_api_collection.py files"
+    first_file_fetch_pos = text.index(file_fetch)
+    first_file_consume_pos = text.index(file_consumer, first_file_fetch_pos)
+    second_file_fetch_pos = text.index(file_fetch, first_file_consume_pos)
+    second_file_consume_pos = text.index(file_consumer, second_file_fetch_pos)
+    require(
+        first_file_fetch_pos
+        < first_file_consume_pos
+        < second_file_fetch_pos
+        < second_file_consume_pos,
+        "Dependabot controller must govern then validate both changed-file collections before use",
     )
     require(
         "jq -r '.[][] | .filename' pr-file-pages.json" not in text,
