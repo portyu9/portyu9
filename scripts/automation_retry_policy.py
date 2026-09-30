@@ -1317,6 +1317,42 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal PR changed-file governed pagination lost run-scoped token binding",
     )
 
+    codeql_terminal_check_runs_governed = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \\\n'
+        '            > check-pages-raw.json'
+    )
+    codeql_terminal_check_runs_direct = (
+        'gh api --paginate --slurp \\\n'
+        '            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \\\n'
+        '            > check-pages-raw.json'
+    )
+    require(
+        codeql_terminal_step.count(codeql_terminal_check_runs_governed) == 1,
+        "CodeQL Autofix terminal exact-head check-run collection must use exactly one governed paginated GitHub collection",
+    )
+    require(
+        codeql_terminal_check_runs_direct not in codeql_terminal_step,
+        "CodeQL Autofix terminal exact-head check-run collection regained direct gh pagination transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in codeql_terminal_step,
+        "CodeQL Autofix terminal exact-head check-run governed pagination lost run-scoped token binding",
+    )
+    check_fetch_pos = codeql_terminal_step.index(codeql_terminal_check_runs_governed)
+    check_flatten_pos = codeql_terminal_step.index(
+        "jq '[.[].check_runs[]]' check-pages-raw.json > check-pages.json",
+        check_fetch_pos,
+    )
+    check_admit_pos = codeql_terminal_step.index(
+        "python3 scripts/codeql_autofix_controller.py admit",
+        check_flatten_pos,
+    )
+    require(
+        check_fetch_pos < check_flatten_pos < check_admit_pos,
+        "CodeQL Autofix terminal exact-head check-run evidence moved out of governed typed order",
+    )
+
     codeql_terminal_artifact_list_governed = (
         'python3 scripts/automation_github_read.py \\\n'
         '            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" \\\n'
@@ -2914,6 +2950,34 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         codeql_terminal_pr_files_transport_drift,
         "CodeQL Autofix terminal PR changed-file collection must use exactly one governed paginated GitHub collection",
+    )
+
+    codeql_terminal_check_runs_governed = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \\\n'
+        '            > check-pages-raw.json'
+    )
+    codeql_terminal_check_runs_direct = (
+        'gh api --paginate --slurp \\\n'
+        '            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \\\n'
+        '            > check-pages-raw.json'
+    )
+    require(
+        codeql_terminal_check_runs_governed in codeql_terminal_pr_files_source,
+        "retry-policy self-test fixture missing CodeQL Autofix terminal governed check-run collection",
+    )
+    codeql_terminal_check_runs_transport_drift = dict(texts)
+    codeql_terminal_check_runs_transport_drift[".github/workflows/codeql-autofix.yml"] = (
+        codeql_terminal_pr_files_source.replace(
+            codeql_terminal_check_runs_governed,
+            codeql_terminal_check_runs_direct,
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        codeql_terminal_check_runs_transport_drift,
+        "CodeQL Autofix terminal exact-head check-run collection must use exactly one governed paginated GitHub collection",
     )
 
     codeql_terminal_artifact_list_governed = (

@@ -735,7 +735,7 @@ jobs:
           python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/git/ref/heads/main" \
             > admission-main-ref.json
-          gh api --paginate --slurp \
+          python3 scripts/automation_github_paginated_read.py \
             "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100" \
             > check-pages-raw.json
           jq '[.[].check_runs[]]' check-pages-raw.json > check-pages.json
