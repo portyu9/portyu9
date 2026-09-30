@@ -745,16 +745,16 @@ def validate_controller_required_check_snapshot_contract(text: str) -> None:
         '"repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}"'
     )
     require(
-        block.count(proof_run_fetch) == 1,
+        text.count(proof_run_fetch) == 1,
         "Dependabot delegated admission must use one governed exact proof-run singleton read",
     )
     require(
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}"'
-        not in block,
+        not in text,
         "Dependabot delegated admission regained direct proof-run singleton transport",
     )
-    proof_fetch_pos = block.index(proof_run_fetch)
-    proof_verify_pos = block.index(
+    proof_fetch_pos = text.index(proof_run_fetch)
+    proof_verify_pos = text.index(
         "python3 scripts/dependabot_admission_proof.py verify-current",
         proof_fetch_pos,
     )
