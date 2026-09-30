@@ -14,6 +14,7 @@ import urllib.request
 import automation_github_read
 
 GRAPHQL_URL = "https://api.github.com/graphql"
+EXPECTED_REPOSITORY = "portyu9/portyu9"
 QUERY = (
     "query($owner:String!,$name:String!,$number:Int!){"
     "repository(owner:$owner,name:$name){pullRequest(number:$number){"
@@ -29,6 +30,8 @@ def require(condition: bool, message: str) -> None:
 def repository_parts(value: str) -> tuple[str, str]:
     require(isinstance(value, str) and value == value.strip() and bool(value),
             "review-thread repository must be one nonempty trimmed string")
+    require(value == EXPECTED_REPOSITORY,
+            "review-thread repository must be the exact governed repository")
     parts = value.split("/")
     require(
         len(parts) == 2
@@ -160,6 +163,8 @@ class _FixtureResponse:
 def self_test() -> None:
     require(GRAPHQL_URL == "https://api.github.com/graphql",
             "review-thread GraphQL endpoint changed")
+    require(EXPECTED_REPOSITORY == "portyu9/portyu9",
+            "review-thread governed repository changed")
     require(QUERY.startswith("query(") and "mutation" not in QUERY.lower(),
             "review-thread GraphQL document lost query-only identity")
     require("reviewThreads(first:100)" in QUERY and "nodes{isResolved}" in QUERY
@@ -177,7 +182,10 @@ def self_test() -> None:
         ).encode("utf-8"),
         "review-thread GraphQL request payload changed",
     )
-    for forbidden in ("", "portyu9", "portyu9/portyu9/extra", "../portyu9", "portyu9/../repo"):
+    for forbidden in (
+        "", "portyu9", "openai/openai", "portyu9/portyu9/extra",
+        "../portyu9", "portyu9/../repo",
+    ):
         try:
             repository_parts(forbidden)
         except ValueError:

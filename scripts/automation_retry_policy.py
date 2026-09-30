@@ -466,6 +466,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require(
         graphql_item.get("endpointScope") == "fixed-review-threads-query"
         and graphql_item.get("endpoint") == "https://api.github.com/graphql"
+        and graphql_item.get("repositoryScope") == "portyu9/portyu9"
         and graphql_item.get("maxResponseBytes") == 8_000_000,
         "CodeQL review-thread GraphQL retry scope/bounds changed",
     )
@@ -473,6 +474,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     graphql_source = (ROOT / graphql_item["source"]).read_text(encoding="utf-8")
     for fragment in (
         'GRAPHQL_URL = "https://api.github.com/graphql"',
+        'EXPECTED_REPOSITORY = "portyu9/portyu9"',
         'QUERY = (',
         '"reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}"',
         'method="POST"',
