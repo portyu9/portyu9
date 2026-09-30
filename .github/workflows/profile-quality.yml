@@ -442,6 +442,7 @@ jobs:
         run: python3 scripts/validate-engineering-card-geometry.py --spotlight-dir integration-engineering-spotlight
 
       - name: Upload Signal Field review artifacts
+        id: signal_field_review_upload
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -450,11 +451,70 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+      - name: Wait for exact Signal Field review artifact visibility
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ steps.signal_field_review_upload.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          [[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          ARTIFACT_VISIBLE=false
+          for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 12); do
+            python3 scripts/automation_github_read.py \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+              > "$RUNNER_TEMP/signal-field-review-artifacts.json"
+            jq -e '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+              (.artifacts | type == "array" and length == $total) and
+              all(.artifacts[];
+                (type == "object") and
+                (.id | type == "number" and . == floor and . > 0) and
+                (.name | type == "string" and length > 0) and
+                (.size_in_bytes | type == "number" and . == floor and . >= 0) and
+                (.expired | type == "boolean")
+              )
+            ' --argjson total "$(jq -r '.total_count // -1' "$RUNNER_TEMP/signal-field-review-artifacts.json")" \
+              "$RUNNER_TEMP/signal-field-review-artifacts.json" >/dev/null || {
+                echo "ERROR: Signal Field review artifact inventory schema is invalid." >&2
+                exit 1
+              }
+            ARTIFACT_MATCH_COUNT="$(jq --argjson id "$ARTIFACT_ID" '[.artifacts[] | select(.id == $id)] | length' "$RUNNER_TEMP/signal-field-review-artifacts.json")"
+            if [ "$ARTIFACT_MATCH_COUNT" = "1" ]; then
+              jq -e --argjson id "$ARTIFACT_ID" '
+                .artifacts[] |
+                select(.id == $id) |
+                .name == "signal-field-publishable-review" and
+                .expired == false and
+                .size_in_bytes > 0
+              ' "$RUNNER_TEMP/signal-field-review-artifacts.json" >/dev/null || {
+                echo "ERROR: Exact Signal Field review artifact metadata is invalid." >&2
+                exit 1
+              }
+              ARTIFACT_VISIBLE=true
+              break
+            fi
+            if [ "$ARTIFACT_MATCH_COUNT" != "0" ]; then
+              echo "ERROR: Exact Signal Field review artifact ID is not unique." >&2
+              exit 1
+            fi
+            if [ "$ARTIFACT_VISIBILITY_ATTEMPT" -eq 12 ]; then
+              echo "ERROR: Exact Signal Field review artifact did not become visible within the bounded convergence window." >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$ARTIFACT_VISIBLE" = "true"
+
       - name: Download Signal Field review artifacts
         if: github.event_name == 'pull_request'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: signal-field-publishable-review
+          artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
           path: roundtrip-signal-field
           digest-mismatch: error
 
