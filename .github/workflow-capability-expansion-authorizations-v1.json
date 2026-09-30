@@ -470,6 +470,13 @@
       "rationale": "Authorize frozen #1040 protected-TCB hardening that validates existing Dependabot candidate Git commit/tree/blob read responses before trusted reconstruction consumes identity or content. Equal base/candidate BOM hashes prove no semantic capability expansion. Endpoints, call counts, triggers, permissions, secrets, mutations, delegated admission, protected checks, merge/CodeQL authority, rulesets, direct-main writes, OIDC and bypasses remain unchanged."
     },
     {
+      "baseBomSha256": "32a494c4933c6e385b0fe90e49502513ee1d50c880dd0372a44d3d3abd197e51",
+      "candidateBomSha256": "b8f7491ff97b88a824530b8b14dc4f5d0967d77bb7702b27b95ee894b1d8de42",
+      "expansionSha256": "f06b26fffc28e336e77a871fcd0176f2635e25697c4fae2cfb432d5a74d16f25",
+      "id": "cap-dependabot-changed-file-pagination-read-retry-v1",
+      "rationale": "Authorize frozen #1339 measured by closed #1340: route the two existing Dependabot Controller changed-file GET collections through the accepted bounded governed paginator while preserving endpoint/query, page-array evidence, typed file validation, and downstream path checks. Singleton reads, review/comment pagination, and mutations remain unchanged. Adds no permission, trigger, endpoint, mutation authority, secret/OIDC, check reduction, direct-main/ruleset/merge authority, replay, or bypass."
+    },
+    {
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "expansionSha256": "5075e720aa0b91c71bc9dd38f802ded08c0f38ed9efd1a2f9fee6da4c282a398",
