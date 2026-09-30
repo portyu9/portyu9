@@ -596,6 +596,13 @@
       "rationale": "Authorize #541's source-only Dependabot identity fix after the live #516 controller proved GitHub may report native dependabot[bot] as CONTRIBUTOR. Exact bot login/ID/node/type/app URLs, same-repo Dependabot head, immutable expected head, and maintainer mutation lock remain authoritative. Only NONE or CONTRIBUTOR association is allowed; OWNER, MEMBER, COLLABORATOR, malformed, and unknown values remain fail-closed."
     },
     {
+      "baseBomSha256": "ac29bb25fca4d5945a407c9d66b902514821c11843263ed32c16f32f93930fa0",
+      "candidateBomSha256": "32a494c4933c6e385b0fe90e49502513ee1d50c880dd0372a44d3d3abd197e51",
+      "expansionSha256": "3fd9b5ea9566d3b8fe72c0eadcf71c7e231a16a73ee3cdb2e9413877916478d8",
+      "id": "cap-dependabot-open-pr-discovery-pagination-read-retry-v1",
+      "rationale": "Authorize frozen #1336 measured by closed #1337: route the existing Dependabot open-main-PR discovery pagination through the accepted bounded governed paginator while preserving the exact query, pages evidence, typed collection validation, and candidate selection. Changed-file pagination, singleton reads, and all mutations remain unchanged and single-shot. Adds no permission, trigger, endpoint, mutation, secret/OIDC, check reduction, direct-main/ruleset/merge authority, replay, or bypass."
+    },
+    {
       "baseBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
       "candidateBomSha256": "f0b10c97ee15f2b7d36fd99b94bdaec666a686a27208cce94627c7d7108f754d",
       "expansionSha256": "9558ce47eaa297b49ea59ed7b5f5b135c76e61dceb8fa524fba6d09a03632828",
