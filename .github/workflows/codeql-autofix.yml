@@ -513,7 +513,8 @@ jobs:
           COMPLETE=false
           APPROVAL_REQUESTED_RUN_IDS=""
           for ATTEMPT in $(seq 1 60); do
-            gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
+            python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \
               > "$RUNNER_TEMP/codeql-autofix-protected-runs.json"
             python3 scripts/codeql_autofix_controller.py protected-workflow-runs-response \
               --response-file "$RUNNER_TEMP/codeql-autofix-protected-runs.json" \
