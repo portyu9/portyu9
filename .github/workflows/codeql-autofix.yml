@@ -745,11 +745,9 @@ jobs:
           python3 scripts/automation_github_paginated_read.py \
             "repos/${TARGET_REPOSITORY}/code-scanning/alerts?pr=${PR_NUMBER}&tool_name=CodeQL&state=open&per_page=100" \
             > pr-alert-pages.json
-          gh api graphql \
-            -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}' \
-            -f owner='portyu9' \
-            -f name='portyu9' \
-            -F number="$PR_NUMBER" \
+          python3 scripts/automation_github_review_threads_read.py \
+            --repository "$TARGET_REPOSITORY" \
+            --pr-number "$PR_NUMBER" \
             > review-threads.json
 
           python3 scripts/codeql_autofix_controller.py admit \

@@ -34,14 +34,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "graphql",
-              "graphqlOperation": "query",
-              "method": "POST",
-              "mutating": false,
-              "step": "Verify an existing Autofix PR and perform protected merge"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip",
               "method": "GET",
               "mutating": false,
