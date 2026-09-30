@@ -754,7 +754,7 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         "CodeQL Autofix must retain exactly five governed main-ref observations",
     )
     require(
-        text.count(governed_fetch) == 6,
+        text.count(governed_fetch) == 9,
         "CodeQL Autofix governed GET topology changed",
     )
     require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref governed-read topology changed")
@@ -806,24 +806,42 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
 
     workflow_contracts = (
         (
-            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" '
-            '> "$RUNNER_TEMP/codeql-workflow-definition.json"',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> "$RUNNER_TEMP/codeql-workflow-definition.json"',
             '--response-file "$RUNNER_TEMP/codeql-workflow-definition.json"',
             '--expected-path ".github/workflows/codeql.yml"',
             '--out "$RUNNER_TEMP/codeql-workflow-definition-normalized.json"',
             'CODEQL_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/codeql-workflow-definition-normalized.json")"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" '
-            '> "$RUNNER_TEMP/dependency-workflow-definition.json"',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> "$RUNNER_TEMP/dependency-workflow-definition.json"',
             '--response-file "$RUNNER_TEMP/dependency-workflow-definition.json"',
             '--expected-path ".github/workflows/dependency-review.yml"',
             '--out "$RUNNER_TEMP/dependency-workflow-definition-normalized.json"',
             'DEPENDENCY_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/dependency-workflow-definition-normalized.json")"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" '
-            '> "$RUNNER_TEMP/profile-workflow-definition.json"',
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"'
+            + " "
+            + "\\"
+            + "\n            "
+            + '> "$RUNNER_TEMP/profile-workflow-definition.json"',
             '--response-file "$RUNNER_TEMP/profile-workflow-definition.json"',
             '--expected-path ".github/workflows/profile-quality.yml"',
             '--out "$RUNNER_TEMP/profile-workflow-definition-normalized.json"',
