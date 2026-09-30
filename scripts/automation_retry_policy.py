@@ -1317,6 +1317,51 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal PR changed-file governed pagination lost run-scoped token binding",
     )
 
+    codeql_terminal_artifact_list_governed = (
+        'python3 scripts/automation_github_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" \\\n'
+        '            > artifacts.json'
+    )
+    codeql_terminal_artifact_list_direct = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json'
+    )
+    codeql_terminal_artifact_zip = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
+    )
+    require(
+        codeql_terminal_step.count(codeql_terminal_artifact_list_governed) == 1,
+        "CodeQL Autofix terminal receipt artifact list must use exactly one governed singleton JSON read",
+    )
+    require(
+        codeql_terminal_artifact_list_direct not in codeql_terminal_step,
+        "CodeQL Autofix terminal receipt artifact list regained direct gh API GET transport",
+    )
+    require(
+        codeql_terminal_step.count(codeql_terminal_artifact_zip) == 1,
+        "CodeQL Autofix terminal receipt ZIP must remain exactly one raw binary read",
+    )
+    artifact_fetch_pos = codeql_terminal_step.index(codeql_terminal_artifact_list_governed)
+    artifact_validate_pos = codeql_terminal_step.index(
+        "python3 scripts/codeql_autofix_controller.py artifact",
+        artifact_fetch_pos,
+    )
+    artifact_consume_pos = codeql_terminal_step.index(
+        'ARTIFACT_ID="$(jq -r .id artifact.json)"',
+        artifact_validate_pos,
+    )
+    artifact_zip_pos = codeql_terminal_step.index(
+        codeql_terminal_artifact_zip,
+        artifact_consume_pos,
+    )
+    require(
+        artifact_fetch_pos < artifact_validate_pos < artifact_consume_pos < artifact_zip_pos,
+        "CodeQL Autofix terminal receipt artifact evidence moved out of governed typed order",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in codeql_terminal_step,
+        "CodeQL Autofix terminal receipt artifact governed read lost run-scoped token binding",
+    )
+
     codeql_workflow_step = named_step(
         codeql_autofix,
         "controller",
@@ -2869,6 +2914,32 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         codeql_terminal_pr_files_transport_drift,
         "CodeQL Autofix terminal PR changed-file collection must use exactly one governed paginated GitHub collection",
+    )
+
+    codeql_terminal_artifact_list_governed = (
+        'python3 scripts/automation_github_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" \\\n'
+        '            > artifacts.json'
+    )
+    codeql_terminal_artifact_list_direct = (
+        'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json'
+    )
+    require(
+        codeql_terminal_artifact_list_governed in codeql_terminal_pr_files_source,
+        "retry-policy self-test fixture missing CodeQL Autofix terminal governed artifact-list read",
+    )
+    codeql_terminal_artifact_list_transport_drift = dict(texts)
+    codeql_terminal_artifact_list_transport_drift[".github/workflows/codeql-autofix.yml"] = (
+        codeql_terminal_pr_files_source.replace(
+            codeql_terminal_artifact_list_governed,
+            codeql_terminal_artifact_list_direct,
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        codeql_terminal_artifact_list_transport_drift,
+        "CodeQL Autofix terminal receipt artifact list must use exactly one governed singleton JSON read",
     )
 
     autofix_drift = dict(texts)

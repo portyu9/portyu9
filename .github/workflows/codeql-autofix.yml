@@ -689,7 +689,9 @@ jobs:
           test "$ORIGIN_RUN_ID" -gt 0
           [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-          gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" \
+            > artifacts.json
           python3 scripts/codeql_autofix_controller.py artifact \
             --artifacts-file artifacts.json \
             --run-id "$ORIGIN_RUN_ID" \
