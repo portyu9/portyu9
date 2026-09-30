@@ -2751,6 +2751,9 @@ def validate_dependabot_protected_workflow_evidence_schema(dependabot: str) -> N
         'actions/workflows/codeql.yml" --jq .id',
         'actions/workflows/dependency-review.yml" --jq .id',
         'actions/workflows/profile-quality.yml" --jq .id',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"',
+        'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"',
         'runs="$(gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100")"',
         "'.total_count // empty' <<<\"$runs\"",
         'jq -r .head_sha <<<"$run"',
@@ -2765,17 +2768,17 @@ def validate_dependabot_protected_workflow_evidence_schema(dependabot: str) -> N
 
     workflow_contracts = (
         (
-            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
+            'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml"',
             '--expected-path ".github/workflows/codeql.yml"',
             'codeql_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-codeql-workflow-definition-normalized.json")"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"',
+            'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml"',
             '--expected-path ".github/workflows/dependency-review.yml"',
             'dependency_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-dependency-workflow-definition-normalized.json")"',
         ),
         (
-            'gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"',
+            'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml"',
             '--expected-path ".github/workflows/profile-quality.yml"',
             'profile_workflow_id="$(jq -r .id "$RUNNER_TEMP/dependabot-profile-workflow-definition-normalized.json")"',
         ),

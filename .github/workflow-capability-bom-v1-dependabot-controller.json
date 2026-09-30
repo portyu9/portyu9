@@ -27,20 +27,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${WAKE_RUN_ID}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Bind current main and one native Dependabot candidate"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${proof_run_id}/attempts/${proof_run_attempt}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Validate reconciled candidate and inspect protected checks"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs/${run_id}/approve",
               "method": "POST",
               "mutating": true,
@@ -56,13 +42,6 @@
             {
               "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100",
-              "method": "GET",
-              "mutating": false,
-              "step": "Validate reconciled candidate and inspect protected checks"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml",
               "method": "GET",
               "mutating": false,
               "step": "Validate reconciled candidate and inspect protected checks"
@@ -86,20 +65,6 @@
               "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches",
               "method": "POST",
               "mutating": true,
-              "step": "Validate reconciled candidate and inspect protected checks"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml",
-              "method": "GET",
-              "mutating": false,
-              "step": "Validate reconciled candidate and inspect protected checks"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml",
-              "method": "GET",
-              "mutating": false,
               "step": "Validate reconciled candidate and inspect protected checks"
             },
             {
