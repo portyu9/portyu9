@@ -470,21 +470,27 @@ jobs:
           test "$(jq -r .headSha "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$HEAD_SHA"
           test "$(jq -r .repository "$RUNNER_TEMP/codeql-autofix-candidate-pr-normalized.json")" = "$TARGET_REPOSITORY"
 
-          gh api "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" > "$RUNNER_TEMP/codeql-workflow-definition.json"
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml" \
+            > "$RUNNER_TEMP/codeql-workflow-definition.json"
           python3 scripts/codeql_autofix_controller.py workflow-definition-response \
             --response-file "$RUNNER_TEMP/codeql-workflow-definition.json" \
             --expected-path ".github/workflows/codeql.yml" \
             --out "$RUNNER_TEMP/codeql-workflow-definition-normalized.json"
           CODEQL_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/codeql-workflow-definition-normalized.json")"
 
-          gh api "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" > "$RUNNER_TEMP/dependency-workflow-definition.json"
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/actions/workflows/dependency-review.yml" \
+            > "$RUNNER_TEMP/dependency-workflow-definition.json"
           python3 scripts/codeql_autofix_controller.py workflow-definition-response \
             --response-file "$RUNNER_TEMP/dependency-workflow-definition.json" \
             --expected-path ".github/workflows/dependency-review.yml" \
             --out "$RUNNER_TEMP/dependency-workflow-definition-normalized.json"
           DEPENDENCY_WORKFLOW_ID="$(jq -r .id "$RUNNER_TEMP/dependency-workflow-definition-normalized.json")"
 
-          gh api "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" > "$RUNNER_TEMP/profile-workflow-definition.json"
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/actions/workflows/profile-quality.yml" \
+            > "$RUNNER_TEMP/profile-workflow-definition.json"
           python3 scripts/codeql_autofix_controller.py workflow-definition-response \
             --response-file "$RUNNER_TEMP/profile-workflow-definition.json" \
             --expected-path ".github/workflows/profile-quality.yml" \
