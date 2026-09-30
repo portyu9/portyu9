@@ -754,7 +754,7 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         "CodeQL Autofix must retain exactly five governed main-ref observations",
     )
     require(
-        text.count(governed_fetch) == 13,
+        text.count(governed_fetch) == 16,
         "CodeQL Autofix governed GET topology changed",
     )
     require(text.count(main_fetch) == 3, "CodeQL Autofix static main-ref governed-read topology changed")
@@ -952,6 +952,78 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         'test "$(printf \'%s\\n\' "$CODEQL_WORKFLOW_ID" "$DEPENDENCY_WORKFLOW_ID" "$PROFILE_WORKFLOW_ID" '
         '| LC_ALL=C sort -u | wc -l)" = "3"' in text,
         "CodeQL Autofix workflow IDs must remain exactly three distinct identities",
+    )
+
+    prior_attempt_endpoint = '"repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}"'
+    prior_attempt_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + prior_attempt_endpoint
+        + " "
+        + "\\"
+        + "\n              "
+        + "| jq -c '.' >> prior-attempts.ndjson"
+    )
+    origin_run_endpoint = '"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}"'
+    origin_run_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n            "
+        + origin_run_endpoint
+        + " "
+        + "\\"
+        + "\n            "
+        + "> origin-run.json"
+    )
+    post_merge_endpoint = '"repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}"'
+    post_merge_fetch = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n              "
+        + post_merge_endpoint
+        + " "
+        + "\\"
+        + "\n              "
+        + "> post-merge-codeql-run.json"
+    )
+    for fetch, endpoint, direct in (
+        (prior_attempt_fetch, prior_attempt_endpoint, "gh api " + prior_attempt_endpoint),
+        (origin_run_fetch, origin_run_endpoint, "gh api " + origin_run_endpoint),
+        (post_merge_fetch, post_merge_endpoint, "gh api " + post_merge_endpoint),
+    ):
+        require(text.count(fetch) == 1,
+                f"CodeQL Autofix workflow-run singleton transport changed: {endpoint}")
+        require(direct not in text,
+                f"CodeQL Autofix workflow-run singleton regained direct GET: {endpoint}")
+
+    prior_fetch_pos = text.index(prior_attempt_fetch)
+    prior_aggregate_pos = text.index("jq -s '.' prior-attempts.ndjson > prior-attempts.json", prior_fetch_pos)
+    prior_validate_pos = text.index("python3 scripts/codeql_autofix_controller.py receipt", prior_aggregate_pos)
+    prior_consume_pos = text.index("--attempt-history-file prior-attempts.json", prior_validate_pos)
+    require(
+        prior_fetch_pos < prior_aggregate_pos < prior_validate_pos < prior_consume_pos,
+        "CodeQL Autofix prior-attempt workflow-run evidence moved out of typed receipt order",
+    )
+
+    origin_fetch_pos = text.index(origin_run_fetch)
+    origin_validate_pos = text.index("python3 scripts/codeql_autofix_controller.py admit", origin_fetch_pos)
+    origin_consume_pos = text.index("--workflow-run origin-run.json", origin_validate_pos)
+    origin_eligible_pos = text.index("jq -e '.eligible == true' admission.json", origin_consume_pos)
+    require(
+        origin_fetch_pos < origin_validate_pos < origin_consume_pos < origin_eligible_pos,
+        "CodeQL Autofix origin workflow-run evidence moved out of admission validation order",
+    )
+
+    post_fetch_pos = text.index(post_merge_fetch)
+    post_validate_pos = text.index("python3 scripts/codeql_autofix_controller.py followup-run", post_fetch_pos)
+    post_consume_pos = text.index(
+        'POST_MERGE_CODEQL_STATUS="$(jq -r .status post-merge-codeql-status.json)"',
+        post_validate_pos,
+    )
+    require(
+        post_fetch_pos < post_validate_pos < post_consume_pos,
+        "CodeQL Autofix post-merge workflow-run evidence moved out of typed follow-up order",
     )
 
     run_fetch = (

@@ -3257,7 +3257,7 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
     )
     require(
         autofix.count(main_endpoint) == 5
-        and autofix.count(governed_fetch) == 13
+        and autofix.count(governed_fetch) == 16
         and autofix.count(main_fetch) == 3
         and autofix.count('--expected-ref "refs/heads/main"') == 3
         and autofix.count(main_consume) == 3,
@@ -3408,6 +3408,67 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             "CodeQL Autofix pull-request singleton must be typed before scalar use",
         )
         cursor = consume_pos
+
+    run_singletons = (
+        (
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n              "
+            + '"repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}"'
+            + " "
+            + "\\"
+            + "\n              "
+            + "| jq -c '.' >> prior-attempts.ndjson",
+            'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}"',
+            "jq -s '.' prior-attempts.ndjson > prior-attempts.json",
+            "python3 scripts/codeql_autofix_controller.py receipt",
+            "--attempt-history-file prior-attempts.json",
+            "prior-attempt workflow-run",
+        ),
+        (
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n            "
+            + '"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}"'
+            + " "
+            + "\\"
+            + "\n            "
+            + "> origin-run.json",
+            'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}"',
+            "> origin-run.json",
+            "python3 scripts/codeql_autofix_controller.py admit",
+            "--workflow-run origin-run.json",
+            "receipt-origin workflow-run",
+        ),
+        (
+            "python3 scripts/automation_github_read.py "
+            + "\\"
+            + "\n              "
+            + '"repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}"'
+            + " "
+            + "\\"
+            + "\n              "
+            + "> post-merge-codeql-run.json",
+            'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${POST_MERGE_CODEQL_RUN_ID}"',
+            "> post-merge-codeql-run.json",
+            "python3 scripts/codeql_autofix_controller.py followup-run",
+            "--run-file post-merge-codeql-run.json",
+            "post-merge CodeQL workflow-run",
+        ),
+    )
+    for fetch, direct, intermediate, validator, consume, label in run_singletons:
+        require(
+            autofix.count(fetch) == 1 and direct not in autofix,
+            f"CodeQL Autofix {label} governed-read identity changed",
+        )
+        fetch_pos = autofix.index(fetch)
+        intermediate_pos = autofix.index(intermediate, fetch_pos)
+        validate_pos = autofix.index(validator, intermediate_pos)
+        consume_pos = autofix.index(consume, validate_pos)
+        require(
+            fetch_pos <= intermediate_pos < validate_pos < consume_pos,
+            f"CodeQL Autofix {label} evidence moved out of reviewed typed order",
+        )
 
     run_fetch = (
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100" \\'
