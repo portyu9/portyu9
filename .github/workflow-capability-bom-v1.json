@@ -281,11 +281,11 @@
               "step": "Download exact fresh signed Profile Generator Compatibility Witness"
             },
             {
+              "artifactIds": "${{ steps.signal_field_review_upload.outputs.artifact-id }}",
               "digest-mismatch": "error",
               "operation": "download",
               "path": "roundtrip-signal-field",
-              "step": "Download Signal Field review artifacts",
-              "artifactIds": "${{ steps.signal_field_review_upload.outputs.artifact-id }}"
+              "step": "Download Signal Field review artifacts"
             },
             {
               "if-no-files-found": "error",
