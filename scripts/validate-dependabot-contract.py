@@ -1939,7 +1939,7 @@ def validate_controller_residual_read_transport_contract(text: str) -> None:
     require(raw_api_lines, "Dependabot controller unexpectedly lost all explicit mutation transports")
     for line in raw_api_lines:
         require(
-            re.search(r"--method (?:POST|PUT|PATCH|DELETE)\\b", line) is not None,
+            re.search(r"--method (?:POST|PUT|PATCH|DELETE)\b", line) is not None,
             f"Dependabot controller direct gh api transport must be mutation-only: {line}",
         )
 
