@@ -1177,6 +1177,81 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
             f"Dependabot {label} governed singleton reads lost run-scoped token binding",
         )
 
+    dependabot_residual_snapshot_contracts = (
+        (
+            "controller",
+            "Validate reconciled candidate and inspect protected checks",
+            (
+                '"repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100"',
+                '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100"',
+                '"repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"',
+            ),
+            "reconciled collection snapshots",
+        ),
+        (
+            "validation_bind",
+            "Bind exact controller-issued validation target",
+            ('"repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10"',),
+            "validation-target PR snapshot",
+        ),
+        (
+            "validation_bind",
+            "Verify exact delegated admission proof",
+            ('"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100"',),
+            "validation delegated-admission snapshot",
+        ),
+    )
+    for job_name, step_name, endpoints, label in dependabot_residual_snapshot_contracts:
+        step = named_step(dependabot_controller, job_name, step_name)
+        for endpoint in endpoints:
+            governed = f"python3 scripts/automation_github_read.py {endpoint}"
+            direct = f"gh api {endpoint}"
+            require(
+                step.count(governed) == 1,
+                f"Dependabot {label} governed snapshot read topology changed: {endpoint}",
+            )
+            require(
+                direct not in step,
+                f"Dependabot {label} regained direct snapshot GET transport: {endpoint}",
+            )
+        require(
+            dependabot_workflow_singleton_pin in step,
+            f"Dependabot {label} lost exact governed-read helper identity",
+        )
+        require(
+            "GH_TOKEN: ${{ github.token }}" in step,
+            f"Dependabot {label} governed snapshot reads lost run-scoped token binding",
+        )
+
+    dependabot_terminal_merge_step = named_step(
+        dependabot_controller,
+        "controller",
+        "Perform exact-head protected Dependabot merge",
+    )
+    dependabot_terminal_page_endpoints = (
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100"',
+        '"repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100"',
+    )
+    require(
+        dependabot_terminal_merge_step.count(
+            "python3 scripts/automation_github_paginated_read.py"
+        ) == 2,
+        "Dependabot terminal review/comment evidence must use exactly two governed paginated reads",
+    )
+    for endpoint in dependabot_terminal_page_endpoints:
+        require(
+            dependabot_terminal_merge_step.count(endpoint) == 1,
+            f"Dependabot terminal governed page endpoint topology changed: {endpoint}",
+        )
+    require(
+        "gh api --paginate --slurp" not in dependabot_terminal_merge_step,
+        "Dependabot terminal review/comment evidence regained direct gh pagination transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in dependabot_terminal_merge_step,
+        "Dependabot terminal governed pagination lost run-scoped token binding",
+    )
+
     codeql_autofix = texts[".github/workflows/codeql-autofix.yml"]
     for step_name, endpoint, output_name, label in (
         (
@@ -2067,6 +2142,86 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         dependabot_proof_run_transport_drift,
         "Dependabot protected workflow/proof metadata governed singleton read topology changed",
     )
+
+    dependabot_residual_source = texts[".github/workflows/dependabot-controller.yml"]
+    residual_snapshot_fixtures = (
+        (
+            'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100"',
+            'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100"',
+            "Dependabot reconciled collection snapshots governed snapshot read topology changed",
+        ),
+        (
+            'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"',
+            'gh api "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=pull_request&per_page=100"',
+            "Dependabot reconciled collection snapshots governed snapshot read topology changed",
+        ),
+        (
+            'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10"',
+            'gh api "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&head=portyu9:${HEAD_REF}&per_page=10"',
+            "Dependabot validation-target PR snapshot governed snapshot read topology changed",
+        ),
+    )
+    for governed, direct, expected in residual_snapshot_fixtures:
+        require(
+            dependabot_residual_source.count(governed) == 1,
+            f"retry-policy residual snapshot fixture changed: {governed}",
+        )
+        drift = dict(texts)
+        drift[".github/workflows/dependabot-controller.yml"] = (
+            dependabot_residual_source.replace(governed, direct, 1)
+        )
+        expect_failure(copy.deepcopy(policy), drift, expected)
+
+    proof_snapshot_governed = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100"'
+    )
+    proof_snapshot_direct = (
+        'gh api '
+        '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100"'
+    )
+    require(
+        dependabot_residual_source.count(proof_snapshot_governed) == 2,
+        "retry-policy residual delegated-admission snapshot fixture count changed",
+    )
+    for proof_index, expected in (
+        (dependabot_residual_source.index(proof_snapshot_governed),
+         "Dependabot reconciled collection snapshots governed snapshot read topology changed"),
+        (dependabot_residual_source.rfind(proof_snapshot_governed),
+         "Dependabot validation delegated-admission snapshot governed snapshot read topology changed"),
+    ):
+        proof_drift = dict(texts)
+        proof_drift[".github/workflows/dependabot-controller.yml"] = (
+            dependabot_residual_source[:proof_index]
+            + proof_snapshot_direct
+            + dependabot_residual_source[
+                proof_index + len(proof_snapshot_governed):
+            ]
+        )
+        expect_failure(copy.deepcopy(policy), proof_drift, expected)
+
+    for endpoint in (
+        '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100"',
+        '"repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100"',
+    ):
+        governed = "python3 scripts/automation_github_paginated_read.py"
+        endpoint_pos = dependabot_residual_source.index(endpoint)
+        helper_pos = dependabot_residual_source.rfind(governed, 0, endpoint_pos)
+        require(
+            helper_pos >= 0 and endpoint_pos - helper_pos < 300,
+            f"retry-policy residual pagination fixture changed: {endpoint}",
+        )
+        pagination_drift = dict(texts)
+        pagination_drift[".github/workflows/dependabot-controller.yml"] = (
+            dependabot_residual_source[:helper_pos]
+            + "gh api --paginate --slurp"
+            + dependabot_residual_source[helper_pos + len(governed):]
+        )
+        expect_failure(
+            copy.deepcopy(policy),
+            pagination_drift,
+            "Dependabot terminal review/comment evidence must use exactly two governed paginated reads",
+        )
 
     dependabot_release_transport_drift = dict(texts)
     dependabot_release_source = dependabot_release_transport_drift[".github/workflows/dependabot-controller.yml"]
