@@ -177,9 +177,9 @@ def policy_loop_identity(item: dict[str, Any]) -> tuple[Any, ...]:
 def validate_bounded_observation(policy: dict[str, Any], texts: dict[str, str]) -> None:
     declared = policy.get("boundedObservation")
     require(isinstance(declared, list), "retry policy boundedObservation must be an array")
-    require(len(declared) == 15, "retry policy must classify exactly the current 15 bounded seq loops")
+    require(len(declared) == 16, "retry policy must classify exactly the current 16 bounded seq loops")
     ids = [item.get("id") for item in declared if isinstance(item, dict)]
-    require(len(ids) == len(set(ids)) == 15 and all(isinstance(value, str) and value for value in ids),
+    require(len(ids) == len(set(ids)) == 16 and all(isinstance(value, str) and value for value in ids),
             "retry policy bounded observation IDs must be unique nonempty strings")
 
     observed = observed_bounded_loops(texts)

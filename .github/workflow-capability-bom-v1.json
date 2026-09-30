@@ -274,18 +274,18 @@
           "apiSurfaces": [],
           "artifacts": [
             {
+              "artifactIds": "${{ steps.signal_field_review_upload.outputs.artifact-id }}",
+              "digest-mismatch": "error",
+              "operation": "download",
+              "path": "roundtrip-signal-field",
+              "step": "Download Signal Field review artifacts"
+            },
+            {
               "digest-mismatch": "error",
               "name": "profile-generator-compatibility-witness-v1",
               "operation": "download",
               "path": "profile-generator-compatibility-witness-consumer",
               "step": "Download exact fresh signed Profile Generator Compatibility Witness"
-            },
-            {
-              "digest-mismatch": "error",
-              "name": "signal-field-publishable-review",
-              "operation": "download",
-              "path": "roundtrip-signal-field",
-              "step": "Download Signal Field review artifacts"
             },
             {
               "if-no-files-found": "error",

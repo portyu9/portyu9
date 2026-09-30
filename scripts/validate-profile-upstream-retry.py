@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/profile-quality.yml"
 UPSTREAM_SHA = "49b5f7091182a45f3ef93923505b660c6da5f835"
 UPSTREAM_USES = f"shinpr/github-profile-stats@{UPSTREAM_SHA} # v0.2.0"
+UPLOAD_USES = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1"
 DOWNLOAD_USES = "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1"
 PREDICATE_TYPE = "https://github.com/portyu9/portyu9/attestations/profile-generator-compatibility/v1"
 FALLBACK_IF = "steps.profile_generator_witness_verify.outcome != 'success'"
@@ -210,6 +211,76 @@ def validate(text: str) -> None:
     require(selector.count("ready-dir=$READY_DIR") == 1,
             "Pinned upstream selector must emit exactly one canonical ready-dir output")
 
+    upload = step_block(
+        integration,
+        "Upload Signal Field review artifacts",
+        "Wait for exact Signal Field review artifact visibility",
+    )
+    visibility = step_block(
+        integration,
+        "Wait for exact Signal Field review artifact visibility",
+        "Download Signal Field review artifacts",
+    )
+    roundtrip_download = step_block(
+        integration,
+        "Download Signal Field review artifacts",
+        "Revalidate Signal Field artifact round-trip",
+    )
+    for fragment in (
+        "        id: signal_field_review_upload",
+        "        if: github.event_name == 'pull_request'",
+        f"uses: {UPLOAD_USES}",
+        "name: signal-field-publishable-review",
+        "path: ${{ steps.stats.outputs.ready-dir }}/signal-field-*.svg",
+        "if-no-files-found: error",
+        "retention-days: 1",
+    ):
+        require(fragment in upload,
+                f"Signal Field review artifact upload contract changed: {fragment}")
+    require(upload.count(f"uses: {UPLOAD_USES}") == 1,
+            "Signal Field review artifact must be uploaded exactly once")
+
+    require(visibility.count("python3 scripts/automation_github_read.py") == 1,
+            "Signal Field review artifact visibility must use exactly one canonical GitHub read call site")
+    for fragment in (
+        "GH_TOKEN: ${{ github.token }}",
+        "ARTIFACT_ID: ${{ steps.signal_field_review_upload.outputs.artifact-id }}",
+        '[[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]',
+        "for ARTIFACT_VISIBILITY_ATTEMPT in $(seq 1 12); do",
+        '"repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100"',
+        '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100)',
+        '(.artifacts | type == "array" and length == $total)',
+        'ARTIFACT_MATCH_COUNT="$(jq --argjson id "$ARTIFACT_ID"',
+        '.name == "signal-field-publishable-review"',
+        ".expired == false",
+        ".size_in_bytes > 0",
+        'if [ "$ARTIFACT_MATCH_COUNT" != "0" ]; then',
+        'if [ "$ARTIFACT_VISIBILITY_ATTEMPT" -eq 12 ]; then',
+        "sleep 2",
+        'test "$ARTIFACT_VISIBLE" = "true"',
+    ):
+        require(fragment in visibility,
+                f"Signal Field review artifact visibility contract changed: {fragment}")
+    for forbidden in ("--method POST", "--method PUT", "--method PATCH", "--method DELETE", "continue-on-error:"):
+        require(forbidden not in visibility,
+                f"Signal Field review artifact visibility acquired forbidden mutation/failure masking: {forbidden}")
+
+    for fragment in (
+        f"uses: {DOWNLOAD_USES}",
+        "artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}",
+        "github-token: ${{ github.token }}",
+        "repository: ${{ github.repository }}",
+        "run-id: ${{ github.run_id }}",
+        "path: roundtrip-signal-field",
+        "digest-mismatch: error",
+    ):
+        require(fragment in roundtrip_download,
+                f"Signal Field review artifact exact-ID download contract changed: {fragment}")
+    require("\n          name: signal-field-publishable-review\n" not in roundtrip_download,
+            "Signal Field review artifact download must not regress to race-prone name lookup")
+    require(roundtrip_download.count(f"uses: {DOWNLOAD_USES}") == 1,
+            "Signal Field review artifact must be downloaded exactly once after visibility convergence")
+
     require("search/issues" not in integration,
             "Pinned upstream witness/fallback path must not introduce Search polling")
     for forbidden in ("--method POST", "--method PUT", "--method PATCH", "--method DELETE"):
@@ -310,6 +381,25 @@ def self_test(text: str) -> None:
     expect_failure(
         profile_discovery_transport_drift,
         "must use exactly three governed GitHub read call sites",
+    )
+
+    artifact_visibility_transport_drift = text.replace(
+        'python3 scripts/automation_github_read.py \\\n              "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100"',
+        'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100"',
+        1,
+    )
+    expect_failure(
+        artifact_visibility_transport_drift,
+        "must use exactly one canonical GitHub read call site",
+    )
+    artifact_download_identity_drift = text.replace(
+        "          artifact-ids: ${{ steps.signal_field_review_upload.outputs.artifact-id }}\n",
+        "          name: signal-field-publishable-review\n",
+        1,
+    )
+    expect_failure(
+        artifact_download_identity_drift,
+        "exact-ID download contract changed",
     )
 
     injected_poll = text.replace(
