@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+import automation_github_binary_read
 import automation_github_paginated_read
 import automation_github_read
 import automation_github_review_threads_read
@@ -39,6 +40,7 @@ EXPECTED_AUTOMATIC_RETRY_IDS = {
     "bot-pr-review-convergence-shell-read-transient",
     "action-release-provenance-read-transient",
     "canonical-github-api-read-transient",
+    "canonical-github-api-binary-read-transient",
     "codeql-review-thread-graphql-query-transient",
     "spotlight-approve-shell-read-transient",
     "spotlight-reconcile-shell-read-transient",
@@ -349,21 +351,22 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 11 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly eleven classified automatic read retries")
+    require(len(entries) == 12 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly twelve classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 11, "automatic retry IDs must remain unique")
+    require(len(by_id) == 12, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
-        expected_operation = (
-            "read-only-github-graphql-query"
-            if identifier in {
-                "codeql-review-thread-graphql-query-transient",
-                "bot-pr-user-approval-shell-graphql-query-transient",
-            }
-            else "read-only-github-api-get"
-        )
+        if identifier == "canonical-github-api-binary-read-transient":
+            expected_operation = "read-only-github-api-binary-get"
+        elif identifier in {
+            "codeql-review-thread-graphql-query-transient",
+            "bot-pr-user-approval-shell-graphql-query-transient",
+        }:
+            expected_operation = "read-only-github-graphql-query"
+        else:
+            expected_operation = "read-only-github-api-get"
         require(item.get("operation") == expected_operation,
                 f"automatic retry operation changed: {identifier}")
         require(item.get("failureClassifier") == "transport-or-github-transient-v1",
@@ -458,6 +461,45 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
         require(forbidden not in canonical_source,
                 f"canonical GitHub read source acquired mutation method: {forbidden}")
+
+    binary_item = by_id["canonical-github-api-binary-read-transient"]
+    require(
+        binary_item.get("source") == "scripts/automation_github_binary_read.py",
+        "canonical GitHub binary read retry source changed",
+    )
+    require(
+        binary_item.get("endpointScope") == "repository-artifact-zip-only"
+        and binary_item.get("maxResponseBytes") == 8_000_000
+        and binary_item.get("redirectPolicy") == "token-free-single-https-hop",
+        "canonical GitHub binary read scope/bounds/redirect policy changed",
+    )
+    automation_github_binary_read.self_test()
+    binary_source = (ROOT / binary_item["source"]).read_text(encoding="utf-8")
+    for fragment in (
+        "import automation_github_read",
+        "MAX_RESPONSE_BYTES = 8_000_000",
+        "ARTIFACT_ZIP_ENDPOINT = re.compile(",
+        "automation_github_read.normalize_endpoint(value)",
+        "automation_github_read.token_headers(token)",
+        "automation_github_read.NoRedirect()",
+        "if exc.code != 302:",
+        "normalize_signed_location(location)",
+        'request.get_header("Authorization") is None',
+        "automation_github_read.retryable_http_error(exc)",
+        "automation_github_read.retry_delay_seconds(exc, attempt)",
+        "for attempt in range(automation_github_read.ATTEMPTS):",
+        "os.replace(temporary, target)",
+        "raw.startswith(ZIP_PREFIXES)",
+    ):
+        require(
+            fragment in binary_source,
+            f"canonical governed GitHub binary read contract is missing: {fragment}",
+        )
+    for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
+        require(
+            forbidden not in binary_source,
+            f"canonical GitHub binary read source acquired mutation method: {forbidden}",
+        )
 
     graphql_item = by_id["codeql-review-thread-graphql-query-transient"]
     require(
