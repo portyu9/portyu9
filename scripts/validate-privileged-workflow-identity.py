@@ -81,7 +81,7 @@ def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
     require('test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"' in budget,
             "Spotlight mutation-budget governed helper checkout lost sealed-base equality")
     require(
-        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
         in budget,
         "Spotlight mutation-budget lost exact governed-read helper identity",
     )
@@ -418,7 +418,7 @@ def validate_leases(profile: str, spotlight: str) -> None:
     require(profile_lease.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
             and profile_lease.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
             "Profile Stats lease trusted governed-read runtime surface changed")
-    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in profile_lease,
+    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"' in profile_lease,
             "Profile Stats lease lost exact governed-read helper identity")
     require(profile_lease.count("python3 source/scripts/automation_github_read.py") == 1
             and 'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in profile_lease,
@@ -509,7 +509,7 @@ def validate_leases(profile: str, spotlight: str) -> None:
         < lease.index("- name: Set up Python"),
         "Spotlight mutation-lease must prove exact source before authored Python setup/use",
     )
-    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in lease,
+    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"' in lease,
             "Spotlight mutation-lease mint lost exact governed-read helper identity")
     require(lease.count("python3 source/scripts/automation_github_read.py") == 1
             and 'gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"' not in lease,
@@ -4347,7 +4347,7 @@ def validate_spotlight_event_admission(spotlight: str, capability: str) -> None:
         "workflow_dispatch|schedule)",
         'test "$ACTOR" = "github-actions[bot]"',
         'SPOTLIGHT_MODE="delegated"',
-        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"',
         'DISCOVERED_PR="$(jq -c \'.[0]\' <<<"$MATCHES")"',
         'PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
         'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
@@ -5786,7 +5786,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
     require(plan.count("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1") == 1
             and plan.count("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97") == 1,
             "Profile Stats Spotlight dispatch-plan trusted runtime surface changed")
-    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"' in plan,
+    require('test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"' in plan,
             "Profile Stats Spotlight dispatch plan lost exact governed-read helper identity")
     require(plan.count("python3 source/scripts/automation_github_read.py") == 2
             and "gh api " not in plan,
