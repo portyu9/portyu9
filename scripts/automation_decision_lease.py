@@ -84,13 +84,20 @@ def validate(env: dict[str, str], workflow_path: str) -> dict[str, str]:
     require(workflow_sha == base_sha,
             "Automation Decision Receipt lease workflow source SHA differs from leased base")
     run_id = env_value(env, "GITHUB_RUN_ID", POSITIVE)
-    run_attempt = env_value(env, "GITHUB_RUN_ATTEMPT", POSITIVE)
+    current_run_attempt = env_value(env, "GITHUB_RUN_ATTEMPT", POSITIVE)
+    lease_run_attempt = env_value(env, "LEASE_RUN_ATTEMPT", POSITIVE)
+    require(int(lease_run_attempt) <= int(current_run_attempt),
+            "Automation Decision Receipt lease ID differs from exact canonical lease identity: mint attempt is later than executing attempt")
     candidate_id = env_value(env, "LEASE_CANDIDATE_ID", SHA64)
     issued_at = env_value(env, "LEASE_ISSUED_AT", POSITIVE)
     expires_at = env_value(env, "LEASE_EXPIRES_AT", POSITIVE)
     require(int(expires_at) == int(issued_at) + TTL_SECONDS,
             "Automation Decision Receipt lease expiry differs from reviewed 30-minute lifetime")
     lease_id = env_value(env, "LEASE_ID", SHA64)
+
+    # GitHub's "re-run failed jobs" reuses successful prerequisite outputs from
+    # the minting attempt. Bind the lease to that explicit immutable attempt while
+    # allowing only same-run later attempts to consume the successful prerequisite.
     expected = expected_lease_id(
         repository=repository,
         repository_id=repository_id,
@@ -98,7 +105,7 @@ def validate(env: dict[str, str], workflow_path: str) -> dict[str, str]:
         workflow_ref=workflow_ref,
         workflow_sha=workflow_sha,
         run_id=run_id,
-        run_attempt=run_attempt,
+        run_attempt=lease_run_attempt,
         base_sha=base_sha,
         candidate_id=candidate_id,
         issued_at=issued_at,
@@ -127,6 +134,7 @@ def fixture(workflow_path: str) -> dict[str, str]:
         "GITHUB_SHA": base,
         "GITHUB_RUN_ID": "9001",
         "GITHUB_RUN_ATTEMPT": "2",
+        "LEASE_RUN_ATTEMPT": "2",
         "LEASE_CANDIDATE_ID": candidate,
         "LEASE_BASE_SHA": base,
         "LEASE_ISSUED_AT": "1000000",
@@ -139,7 +147,7 @@ def fixture(workflow_path: str) -> dict[str, str]:
         workflow_ref=env["GITHUB_WORKFLOW_REF"],
         workflow_sha=env["GITHUB_WORKFLOW_SHA"],
         run_id=env["GITHUB_RUN_ID"],
-        run_attempt=env["GITHUB_RUN_ATTEMPT"],
+        run_attempt=env["LEASE_RUN_ATTEMPT"],
         base_sha=env["LEASE_BASE_SHA"],
         candidate_id=env["LEASE_CANDIDATE_ID"],
         issued_at=env["LEASE_ISSUED_AT"],
@@ -155,15 +163,21 @@ def self_test() -> None:
         require(observed["leaseId"] == env["LEASE_ID"],
                 "Automation Decision Receipt lease self-test lost exact lease identity")
 
-        wrong_attempt = dict(env)
-        wrong_attempt["GITHUB_RUN_ATTEMPT"] = "3"
+        rerun_attempt = dict(env)
+        rerun_attempt["GITHUB_RUN_ATTEMPT"] = "3"
+        rerun_observed = validate(rerun_attempt, path)
+        require(rerun_observed["leaseId"] == env["LEASE_ID"],
+                "Automation Decision Receipt lease partial-rerun self-test lost the exact minted lease")
+
+        earlier_attempt = dict(env)
+        earlier_attempt["GITHUB_RUN_ATTEMPT"] = "1"
         try:
-            validate(wrong_attempt, path)
+            validate(earlier_attempt, path)
         except ValueError as exc:
             require("lease ID differs" in str(exc),
-                    f"Automation Decision Receipt lease run-attempt self-test failed for wrong reason: {exc}")
+                    f"Automation Decision Receipt lease future-attempt self-test failed for wrong reason: {exc}")
         else:
-            raise ValueError("Automation Decision Receipt lease accepted a mismatched run attempt")
+            raise ValueError("Automation Decision Receipt lease accepted a lease minted by a future run attempt")
 
         wrong_repo_id = dict(env)
         wrong_repo_id["GITHUB_REPOSITORY_ID"] = "1"
