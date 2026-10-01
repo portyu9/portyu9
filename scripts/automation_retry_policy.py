@@ -2196,7 +2196,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     )
     dependabot_repository_root_pin = (
         'test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = '
-        '"e0f6b16821f415007deeafaa4797508c04c4d293"'
+        '"d0ce5908e8dcbe46314156785a5379ba3255bf1b"'
     )
     for job_name, step_name, label in (
         ("controller", "Prove bot identity, atomic pin closure, and public release provenance", "canonical release proof"),
