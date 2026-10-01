@@ -51,7 +51,7 @@ def normalize_endpoint(value: str) -> str:
             "GitHub API endpoint must be a traversal-free relative path")
     segments = parsed.path.split("/")
     require(
-        len(segments) >= 4
+        len(segments) >= 3
         and segments[0] == "repos"
         and REPOSITORY_SEGMENT.fullmatch(segments[1]) is not None
         and REPOSITORY_SEGMENT.fullmatch(segments[2]) is not None,
@@ -216,6 +216,10 @@ def self_test() -> None:
         normalize_endpoint("repos/portyu9/portyu9/actions/runs/123?per_page=100")
         == "repos/portyu9/portyu9/actions/runs/123?per_page=100",
         "repository-scoped endpoint normalization changed",
+    )
+    require(
+        normalize_endpoint("repos/github/codeql-action") == "repos/github/codeql-action",
+        "repository-root endpoint normalization changed",
     )
     for forbidden in (
         "https://api.github.com/repos/portyu9/portyu9/actions/runs/1",
