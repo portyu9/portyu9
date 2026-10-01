@@ -456,6 +456,13 @@
       "rationale": "Authorize frozen #1404 measured by closed diagnostic #1405: route the existing terminal PR-scoped CodeQL alert collection through the accepted bounded authenticated paginator while preserving the exact endpoint/query, array-of-pages pr-alert-pages.json evidence shape, existing typed admission, and downstream CodeQL alert identity/state/rule validation. Adds no permission, trigger, mutation or mutation replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
     },
     {
+      "baseBomSha256": "4362024f3c8559f5f6bbea832cba30d0e1d6b5f017332e43a3e6b557dc622210",
+      "candidateBomSha256": "1f463549666e9791501b8551afce86bc06ed6bf1efba33135588efc517921737",
+      "expansionSha256": "28af5cea071d348a36f7bf7f6215184410da098dd8a328683a9143546c8808b0",
+      "id": "cap-codeql-autofix-terminal-review-pagination-v1",
+      "rationale": "Authorize frozen #1413 measured by closed #1414: route the existing CodeQL Autofix terminal pull-review GET pagination through the accepted bounded paginator while preserving the exact endpoint/query, complete page-array shape, strict review schema, marker-bound portyu9 approval, and manual CHANGES_REQUESTED veto. Removes one raw GET surface; adds no permission, trigger, mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "8b3abd7a1cd0f2c74e66fb4be71310f77b848fb6e53c252a55dabb9207352259",
       "candidateBomSha256": "bfec53b6792c9d5780682afa3d5f3924a11568196b6a4fcfef69f90d2e4d4d21",
       "expansionSha256": "1143b6120b407bbb494730996ca11d994fe9286d4ddc4b8a86c8171f4ff40e7b",
