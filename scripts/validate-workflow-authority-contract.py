@@ -611,6 +611,8 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
     for fragment in (
         '              . as $snapshot |',
         '(.check_runs | type == "array" and length == $snapshot.total_count and length <= 100) and',
+        '(.head_sha == $head) and',
+        '(.app | type == "object" and .id == 15368) and',
         'if [ "$request" = "reviewer-checks" ] &&',
         '! spotlight_validate_reviewer_checks_snapshot "$body"; then',
         'ERROR: Spotlight reviewer-checks HTTP 200 body remained schema-incompatible after 3 attempts.',
@@ -913,8 +915,6 @@ def project_state_driven_spotlight_reviewer_to_legacy(sync: str) -> str:
     for fragment in (
         'REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"',
         'spotlight_validate_reviewer_checks_snapshot "$REVIEW_CHECKS" || {',
-        '(.head_sha == $head) and',
-        '(.app | type == "object" and .id == 15368) and',
         'REVIEW_READY=true',
         'for CONTEXT in validate-contracts integration-pinned-upstream analyze-actions analyze-python dependency-review trusted-capability-admission; do',
         'test "$CONTEXT_COUNT" = "1"',
