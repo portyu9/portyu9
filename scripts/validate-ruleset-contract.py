@@ -447,12 +447,41 @@ def validate_reconciler_admin_response_evidence(text: str) -> None:
     for fragment in fragments:
         require(fragment in text, f"Ruleset admin response schema fragment missing: {fragment}")
 
-    installation_fetch = text.index('"app/installations/${ADMIN_INSTALLATION_ID}" > installation.json')
+    admin_read_pin = (
+        'test "$(git rev-parse HEAD:scripts/automation_github_ruleset_admin_read.py)" = '
+        '"1633c804071595f207ce2524633796213788b5f3"'
+    )
+    require(admin_read_pin in text,
+            "Ruleset admin governed-read helper identity changed")
+    installation_call = (
+        'GH_TOKEN="$APP_JWT" python3 scripts/automation_github_ruleset_admin_read.py '
+        '"app/installations/${ADMIN_INSTALLATION_ID}" > installation.json'
+    )
+    repositories_call = (
+        'GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_ruleset_admin_read.py '
+        '"installation/repositories?per_page=100" > token-repositories.json'
+    )
+    for call, label in (
+        (installation_call, "App installation"),
+        (repositories_call, "installation repository scope"),
+    ):
+        require(text.count(call) == 1,
+                f"Ruleset admin governed {label} read call changed")
+    for legacy in (
+        'GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" '
+        '"app/installations/${ADMIN_INSTALLATION_ID}" > installation.json',
+        'GH_TOKEN="$ADMIN_TOKEN" gh api "installation/repositories?per_page=100" '
+        '> token-repositories.json',
+    ):
+        require(legacy not in text,
+                f"Ruleset admin specialist read regained direct transport: {legacy}")
+
+    installation_fetch = text.index(installation_call)
     installation_schema = text.index('type == "object" and\n            (.id | type == "number"', installation_fetch)
     token_fetch = text.index('"app/installations/${ADMIN_INSTALLATION_ID}/access_tokens"', installation_schema)
     token_schema = text.index('type == "object" and\n            (.token | type == "string"', token_fetch)
     token_consume = text.index('ADMIN_TOKEN="$(jq -r .token installation-token.json)"', token_schema)
-    repos_fetch = text.index('"installation/repositories?per_page=100" > token-repositories.json', token_consume)
+    repos_fetch = text.index(repositories_call, token_consume)
     repos_schema = text.index('type == "object" and\n            (.total_count | type == "number"', repos_fetch)
     prewrite = text.index('GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py "repos/portyu9/portyu9/rulesets/22148161"', repos_schema)
     require(
