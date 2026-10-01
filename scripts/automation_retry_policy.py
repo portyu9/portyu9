@@ -11,6 +11,7 @@ from typing import Any
 import automation_github_artifact_download
 import automation_github_paginated_read
 import automation_github_read
+import automation_github_repository_read
 import automation_github_review_threads_read
 import automation_github_ruleset_admin_read
 
@@ -42,6 +43,7 @@ EXPECTED_AUTOMATIC_RETRY_IDS = {
     "bot-pr-review-convergence-shell-read-transient",
     "action-release-provenance-read-transient",
     "canonical-github-api-read-transient",
+    "repository-root-github-api-read-transient",
     "profile-contribution-graphql-query-transient",
     "canonical-github-api-binary-read-transient",
     "codeql-review-thread-graphql-query-transient",
@@ -355,10 +357,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 14 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly fourteen classified automatic read retries")
+    require(len(entries) == 15 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly fifteen classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 14, "automatic retry IDs must remain unique")
+    require(len(by_id) == 15, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
@@ -466,6 +468,41 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
         require(forbidden not in canonical_source,
                 f"canonical GitHub read source acquired mutation method: {forbidden}")
+
+    repository_root_item = by_id["repository-root-github-api-read-transient"]
+    require(
+        repository_root_item.get("source") == "scripts/automation_github_repository_read.py",
+        "repository-root GitHub read retry source changed",
+    )
+    require(
+        repository_root_item.get("endpointScope") == "repository-root-only"
+        and repository_root_item.get("maxResponseBytes") == 8_000_000,
+        "repository-root GitHub read scope/response bound changed",
+    )
+    automation_github_repository_read.self_test()
+    repository_root_source = (ROOT / repository_root_item["source"]).read_text(encoding="utf-8")
+    for fragment in (
+        "import automation_github_read",
+        "len(segments) == 3",
+        'segments[0] == "repos"',
+        '"GitHub repository-root endpoint must be exactly repos/{owner}/{repo}"',
+        "automation_github_read.token_headers(credential)",
+        "automation_github_read.NoRedirect()",
+        "automation_github_read.retryable_http_error(exc)",
+        "automation_github_read.retry_delay_seconds(exc, attempt)",
+        "automation_github_read.strict_json(text)",
+        "for attempt in range(ATTEMPTS):",
+        'method="GET"',
+    ):
+        require(
+            fragment in repository_root_source,
+            f"repository-root governed GitHub read contract is missing: {fragment}",
+        )
+    for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
+        require(
+            forbidden not in repository_root_source,
+            f"repository-root GitHub read source acquired mutation method: {forbidden}",
+        )
 
     ruleset_admin_item = by_id["ruleset-admin-bootstrap-read-transient"]
     require(
@@ -2157,18 +2194,24 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
         '"1b779bcea0acd290826fef8f60fd01480113a31a"'
     )
+    dependabot_repository_root_pin = (
+        'test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = '
+        '"e0f6b16821f415007deeafaa4797508c04c4d293"'
+    )
     for job_name, step_name, label in (
         ("controller", "Prove bot identity, atomic pin closure, and public release provenance", "canonical release proof"),
         ("validation_bind", "Independently re-prove deterministic reconciliation", "independent release reproof"),
     ):
         release_step = named_step(dependabot_controller, job_name, step_name)
         require(
-            release_step.count("python3 scripts/automation_github_read.py") == 2,
-            f"Dependabot {label} must use exactly two governed singleton release reads",
+            release_step.count("python3 scripts/automation_github_repository_read.py") == 1
+            and release_step.count("python3 scripts/automation_github_read.py") == 1,
+            f"Dependabot {label} must use exactly one repository-root and one canonical governed release read",
         )
         require(
-            dependabot_release_pin in release_step,
-            f"Dependabot {label} lost exact governed-read helper identity",
+            dependabot_release_pin in release_step
+            and dependabot_repository_root_pin in release_step,
+            f"Dependabot {label} lost exact governed read helper identities",
         )
         require(
             "GH_TOKEN: ${{ github.token }}" in release_step,
@@ -2327,8 +2370,11 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "admission",
         "Verify delegated Dependabot release provenance",
     )
-    require(capability_release_step.count("python3 scripts/automation_github_read.py") == 2,
-            "Capability Admission delegated release proof must use exactly two governed singleton JSON reads")
+    require(
+        capability_release_step.count("python3 scripts/automation_github_repository_read.py") == 1
+        and capability_release_step.count("python3 scripts/automation_github_read.py") == 1,
+        "Capability Admission delegated release proof must use exactly one repository-root and one canonical governed JSON read",
+    )
     require("gh api " not in capability_release_step,
             "Capability Admission delegated release proof regained direct gh api transport")
     for forbidden in (
@@ -3071,7 +3117,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     dependabot_release_transport_drift = dict(texts)
     dependabot_release_source = dependabot_release_transport_drift[".github/workflows/dependabot-controller.yml"]
     canonical_release_governed = (
-        'python3 scripts/automation_github_read.py '
+        'python3 scripts/automation_github_repository_read.py '
         '"repos/${DEPENDENCY_REPOSITORY}" > release-repository.json'
     )
     require(
@@ -3088,7 +3134,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     expect_failure(
         copy.deepcopy(policy),
         dependabot_release_transport_drift,
-        "Dependabot canonical release proof must use exactly two governed singleton release reads",
+        "Dependabot canonical release proof must use exactly one repository-root and one canonical governed release read",
     )
 
     dependabot_delegated_release_transport_drift = dict(texts)
@@ -3111,13 +3157,13 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     expect_failure(
         copy.deepcopy(policy),
         dependabot_delegated_release_transport_drift,
-        "Dependabot independent release reproof must use exactly two governed singleton release reads",
+        "Dependabot independent release reproof must use exactly one repository-root and one canonical governed release read",
     )
 
     capability_release_transport_drift = dict(texts)
     capability_release_source = capability_release_transport_drift[".github/workflows/capability-admission.yml"]
     capability_release_governed = (
-        'python3 scripts/automation_github_read.py '
+        'python3 scripts/automation_github_repository_read.py '
         '"repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json'
     )
     require(capability_release_governed in capability_release_source,
@@ -3132,7 +3178,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     expect_failure(
         copy.deepcopy(policy),
         capability_release_transport_drift,
-        "must use exactly two governed singleton JSON reads",
+        "must use exactly one repository-root and one canonical governed JSON read",
     )
 
     capability_autofix_transport_drift = dict(texts)
@@ -3153,7 +3199,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     expect_failure(
         copy.deepcopy(policy),
         capability_autofix_transport_drift,
-        "must use exactly two governed singleton JSON reads",
+        "must use exactly one repository-root and one canonical governed JSON read",
     )
 
     capability_history_transport_drift = dict(texts)
@@ -3684,7 +3730,7 @@ def validate_repository(root: Path = ROOT) -> None:
 if __name__ == "__main__":
     validate_repository()
     print(
-        "Automation retry taxonomy validation passed: exactly fourteen classified read-only GitHub retries are authorized; "
+        "Automation retry taxonomy validation passed: exactly fifteen classified read-only GitHub retries are authorized; "
         "unclassified generator/ruleset and mutation failures remain terminal; all 15 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )
