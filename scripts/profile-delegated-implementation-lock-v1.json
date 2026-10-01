@@ -1,6 +1,7 @@
 {
   "version": "profile-delegated-implementation-lock-v1",
   "files": {
+    "scripts/automation_github_read.py": "1b779bcea0acd290826fef8f60fd01480113a31a",
     "scripts/engineering_spotlight_renderer.py": "43ba4c1b0cf06b5508d0900aaa21c38db68ea4a2",
     "scripts/engineering_spotlight_v2.py": "e388b423a22a67b54d5eb0b523ff0b505b33251d",
     "scripts/engineering_spotlight_v21.py": "7bd9b1a53667a9192ba9976d95c9c8b95dfac981",
@@ -8,14 +9,14 @@
     "scripts/generate-engineering-spotlight.py": "f4101cce492f9928e20b41c603af65c0c870a6c7",
     "scripts/generate-portfolio-evidence-ledger.py": "9ebbb5963b0ab6c3e97fb98221fa5cbec1009340",
     "scripts/json_object_contract.py": "0eed47074ba6f0bd470dff9e814577d1f78eede6",
-    "scripts/portfolio-systems-v1.json": "fe8b4c12061b3e6c8b803e78e97a08fe43f98ad2",
     "scripts/portfolio_evidence_helpers.py": "74fedec29539f8a262c48780be26856f5daac8b1",
-    "scripts/portfolio_evidence_ledger.py": "bce65373e1920e33c19bb49ed3b4c44700dea766",
+    "scripts/portfolio_evidence_ledger.py": "fb767213cccc141d0590b7490a7ead7997c9332a",
     "scripts/portfolio_system_registry.py": "a29d8b743d3c115550a15683f50948193f6ab483",
-    "scripts/validate-engineering-spotlight.py": "388991c414a74569da749867929a97705ad67f9e",
-    "scripts/validate-portfolio-evidence-ledger.py": "0e6f51f0da8da540b8ee31a2c23e79316032a3b7",
+    "scripts/portfolio-systems-v1.json": "fe8b4c12061b3e6c8b803e78e97a08fe43f98ad2",
     "scripts/validate_engineering_spotlight_registry.py": "8db80dfb7395d284b5b844c39f28feb0db5a1147",
-    "scripts/validate_engineering_spotlight_v21.py": "1f312b87bb9e591b4692223c00da540cd062b752"
+    "scripts/validate_engineering_spotlight_v21.py": "1f312b87bb9e591b4692223c00da540cd062b752",
+    "scripts/validate-engineering-spotlight.py": "388991c414a74569da749867929a97705ad67f9e",
+    "scripts/validate-portfolio-evidence-ledger.py": "0e6f51f0da8da540b8ee31a2c23e79316032a3b7"
   },
   "stages": {
     "engineering-spotlight-generate": [
@@ -41,6 +42,7 @@
       "scripts/validate_engineering_spotlight_v21.py"
     ],
     "portfolio-ledger-generate": [
+      "scripts/automation_github_read.py",
       "scripts/generate-portfolio-evidence-ledger.py",
       "scripts/portfolio-systems-v1.json",
       "scripts/portfolio_evidence_helpers.py",
@@ -48,6 +50,7 @@
       "scripts/portfolio_system_registry.py"
     ],
     "portfolio-ledger-validate": [
+      "scripts/automation_github_read.py",
       "scripts/generate-portfolio-evidence-ledger.py",
       "scripts/json_object_contract.py",
       "scripts/portfolio-systems-v1.json",
