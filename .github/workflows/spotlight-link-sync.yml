@@ -1406,7 +1406,10 @@ jobs:
           test "$(jq -r .head.sha <<<"$PR")" = "$HEAD_SHA"
           test "$(jq -r .head.repo.full_name <<<"$PR")" = "$GITHUB_REPOSITORY"
           test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
-          # Workflow-run approval and exact-head PR approval are separate gates. Do not request\n          # a human reviewer here: the trusted approve job releases only the exact action_required\n          # runs, then bot-pr-user-approval submits the governed exact-head portyu9 review.\n          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          # Workflow-run approval and exact-head PR approval are separate gates. Do not request
+          # a human reviewer here: the trusted approve job releases only the exact action_required
+          # runs, then bot-pr-user-approval submits the governed exact-head portyu9 review.
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
           echo "base_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "candidate_branch=$CANDIDATE_BRANCH" >> "$GITHUB_OUTPUT"
