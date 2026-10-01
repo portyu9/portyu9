@@ -487,7 +487,8 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         'segments[0] == "repos"',
         '"GitHub repository-root endpoint must be exactly repos/{owner}/{repo}"',
         "automation_github_read.token_headers(credential)",
-        "automation_github_read.NoRedirect()",
+        "class NoRedirect(urllib.request.HTTPRedirectHandler):",
+        "NoRedirect()",
         "automation_github_read.retryable_http_error(exc)",
         "automation_github_read.retry_delay_seconds(exc, attempt)",
         "automation_github_read.strict_json(text)",
@@ -2196,7 +2197,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     )
     dependabot_repository_root_pin = (
         'test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = '
-        '"d0ce5908e8dcbe46314156785a5379ba3255bf1b"'
+        '"12acd01e53c84558617e868e9f3489f9770c85d8"'
     )
     for job_name, step_name, label in (
         ("controller", "Prove bot identity, atomic pin closure, and public release provenance", "canonical release proof"),
