@@ -1216,8 +1216,9 @@ def validate_spotlight_pr_response_evidence(
     proposer_pr_number_output = '          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"\n'
     proposer_head_output = '          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"\n'
     escaped_pr_number_output = r'\n          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"'
+    proposer_lines = propose.splitlines()
     require(
-        propose.count(proposer_pr_number_output) == 1,
+        proposer_lines.count(proposer_pr_number_output.rstrip("\n")) == 1,
         "Spotlight proposer must emit PR number as exactly one standalone shell output line",
     )
     require(
@@ -1225,7 +1226,7 @@ def validate_spotlight_pr_response_evidence(
         "Spotlight proposer PR-number output must not be swallowed behind a literal escaped newline",
     )
     require(
-        propose.count(proposer_head_output) == 1,
+        proposer_lines.count(proposer_head_output.rstrip("\n")) == 1,
         "Spotlight proposer head-SHA output cardinality changed",
     )
     for boundary_marker in (proposer_fetch, proposer_schema, proposer_consume):
