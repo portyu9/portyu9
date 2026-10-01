@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v144"
+VERSION = "governed-workflow-byte-identity-v145"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "92ed93fdce128ad71ed078912cbed5b10c25c0c6",
+    ".github/workflows/bot-pr-user-approval.yml": "619a3a85684de644ebc41ea24bbd13edb6cf6a4a",
     ".github/workflows/profile-quality.yml": "d58114f33e21cf6b76391d9d89a09226642e2534",
     ".github/workflows/profile-stats.yml": "0a6a2ff4924a9c5e27c20f0feb69f5c8e7756001",
     ".github/workflows/spotlight-link-sync.yml": "df15c37d6890e8f3a6eb348535966d16642405d5",
@@ -4023,12 +4023,12 @@ def project_spotlight_approval_list_helper_to_legacy(spotlight: str) -> str:
 def validate_main_check_cancellation_isolation(bot_review: str, spotlight: str) -> None:
     bot_block = (
         "concurrency:\n"
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'spotlight-dispatch' }}\n"
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event_name == 'repository_dispatch' && github.event.client_payload.headSha || 'spotlight-dispatch' }}\n"
         "  cancel-in-progress: true\n"
     )
     require(
         bot_review.count(bot_block) == 1,
-        "Bot PR reviewer must scope workflow-run cancellation to the immutable candidate head and isolate trusted dispatch wakes",
+        "Bot PR reviewer must scope workflow-run and candidate-bound Dependabot dispatch cancellation to the immutable candidate head while isolating Spotlight dispatch wakes",
     )
     require(
         "concurrency:\n  group: bot-pr-user-approval\n  cancel-in-progress: true\n" not in bot_review,
@@ -4068,7 +4068,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
     validate_main_check_cancellation_isolation(bot_review, spotlight)
 
     broad_bot = bot_review.replace(
-        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'spotlight-dispatch' }}\n",
+        "  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event_name == 'repository_dispatch' && github.event.client_payload.headSha || 'spotlight-dispatch' }}\n",
         "  group: bot-pr-user-approval\n",
         1,
     )
@@ -4194,12 +4194,31 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/')",
         "startsWith(github.event.workflow_run.head_branch, 'codeql-autofix/alert-')",
         "startsWith(github.event.workflow_run.head_branch, 'automation/spotlight-links/')",
+        "github.event_name == 'repository_dispatch'",
+        "github.event.action == 'dependabot-review-wake'",
+        "github.event.sender.login == 'github-actions[bot]'",
+        "github.event.client_payload.lane == 'dependabot'",
         "github.event_name == 'workflow_dispatch'",
         "github.actor == 'github-actions[bot]'",
         "github.ref == 'refs/heads/main'",
         'WAKE_EVENT_NAME: ${{ github.event_name }}',
-        'WAKE_HEAD_SHA: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_sha || \'\' }}',
-        'WAKE_HEAD_REF: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_branch || \'\' }}',
+        'WAKE_PR_NUMBER: ${{ github.event_name == \'repository_dispatch\' && github.event.client_payload.prNumber || \'\' }}',
+        'WAKE_BASE_SHA: ${{ github.event_name == \'repository_dispatch\' && github.event.client_payload.baseSha || \'\' }}',
+        'WAKE_HEAD_SHA: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_sha || github.event_name == \'repository_dispatch\' && github.event.client_payload.headSha || \'\' }}',
+        'WAKE_HEAD_REF: ${{ github.event_name == \'workflow_run\' && github.event.workflow_run.head_branch || github.event_name == \'repository_dispatch\' && github.event.client_payload.headRef || \'\' }}',
+        'WAKE_LANE: ${{ github.event_name == \'repository_dispatch\' && github.event.client_payload.lane || \'\' }}',
+        '[[ "$WAKE_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]',
+        '[[ "$WAKE_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        '[[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        '[[ "$WAKE_HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]',
+        'test "$WAKE_LANE" = "dependabot"',
+        'if $wake_mode == "repository_dispatch" then',
+        '.number == $wake_pr and',
+        '.base.sha == $wake_base and',
+        '.head.sha == $wake_head and',
+        '.head.ref == $wake_ref and',
+        '.user.login == "dependabot[bot]" and',
+        'candidate-bound Dependabot reviewer wake requires exactly one exact current-main candidate',
         'if $wake_mode == "workflow_dispatch" then',
         '.user.login == "github-actions[bot]" and',
         '(.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$")) and',
@@ -4223,10 +4242,24 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         "Bot PR reviewer fixed dispatch must not regain routed candidate inputs",
     )
     require(
-        "  repository_dispatch:\n" not in bot_review
-        and "spotlight-review-wake" not in bot_review
-        and "github.event.client_payload" not in bot_review,
-        "Bot PR reviewer must not regain generic repository-dispatch routing",
+        bot_review.count("  repository_dispatch:\n") == 1
+        and bot_review.count("      - dependabot-review-wake\n") == 1,
+        "Bot PR reviewer must expose exactly one typed Dependabot repository-dispatch wake",
+    )
+    require(
+        "spotlight-review-wake" not in bot_review,
+        "Bot PR reviewer repository-dispatch entry must remain Dependabot-only; Spotlight uses the fixed trusted-main workflow dispatch",
+    )
+    require(
+        "github.event.action == 'dependabot-review-wake'" in bot_review
+        and "github.event.sender.login == 'github-actions[bot]'" in bot_review
+        and "github.event.client_payload.lane == 'dependabot'" in bot_review
+        and 'if $wake_mode == "repository_dispatch" then' in bot_review
+        and '.number == $wake_pr' in bot_review
+        and '.base.sha == $wake_base' in bot_review
+        and '.head.sha == $wake_head' in bot_review
+        and '.head.ref == $wake_ref' in bot_review,
+        "Bot PR reviewer Dependabot dispatch must remain exact-candidate-bound and trusted-main/bot-only",
     )
     for retired in (
         "      - Capability admission\n",
