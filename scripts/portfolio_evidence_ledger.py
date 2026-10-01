@@ -7,12 +7,11 @@ import hashlib
 import json
 import os
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
+import automation_github_read
 import portfolio_evidence_helpers as evidence
 import portfolio_system_registry as registry
 
@@ -25,11 +24,6 @@ SHA40_ZERO = "0" * 40
 API_ORIGIN = "https://api.github.com"
 TRUSTED_WORKFLOW_EVENTS = frozenset({"push", "workflow_dispatch"})
 
-API_ATTEMPTS = 3
-API_TIMEOUT_SECONDS = 12
-API_BACKOFF_SECONDS = (1.0, 2.0)
-API_MAX_RETRY_AFTER_SECONDS = 5.0
-RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 JOB_PAGE_SIZE = 100
 WORKFLOW_RUN_PAGE_SIZE = 100
 MAX_WORKFLOW_RUN_PAGES = 20
@@ -63,72 +57,48 @@ def validate_api_url(url: str) -> str:
     return url
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Reject redirects so a token-bearing request cannot be replayed to another URL."""
-
-    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
-        return None
-
-
-def open_no_redirect(request: urllib.request.Request, *, timeout: float) -> Any:
-    return urllib.request.build_opener(NoRedirect()).open(request, timeout=timeout)
-
-
-def api_request(url: str, token: str | None) -> urllib.request.Request:
+def api_endpoint(url: str) -> str:
+    """Map an exact-origin GitHub API URL onto the canonical repository-scoped reader."""
     safe_url = validate_api_url(url)
-    request = urllib.request.Request(safe_url, headers=evidence.request_headers(None))
-    if token:
-        request.add_unredirected_header("Authorization", f"Bearer {token}")
-    return request
+    prefix = f"{API_ORIGIN}/"
+    require(safe_url.startswith(prefix), f"GitHub API URL escaped canonical origin: {url}")
+    endpoint = safe_url[len(prefix):]
+    require(
+        automation_github_read.normalize_endpoint(endpoint) == endpoint,
+        f"GitHub API endpoint escaped repository-scoped governed transport: {url}",
+    )
+    return endpoint
 
 
 def transport_self_test() -> None:
     good = "https://api.github.com/repos/portyu9/example/actions/runs?branch=main"
-    require(validate_api_url(good) == good, "GitHub API origin self-test rejected the canonical endpoint")
+    require(
+        api_endpoint(good) == "repos/portyu9/example/actions/runs?branch=main",
+        "GitHub API origin/repository projection rejected the canonical endpoint",
+    )
     for unsafe in (
         "http://api.github.com/repos/portyu9/example",
         "https://api.github.com.evil.example/repos/portyu9/example",
         "https://api.github.com:443/repos/portyu9/example",
         "https://user@api.github.com/repos/portyu9/example",
         "https://api.github.com/repos/portyu9/example#fragment",
+        "https://api.github.com/users/portyu9",
     ):
         try:
-            validate_api_url(unsafe)
+            api_endpoint(unsafe)
         except ValueError:
             pass
         else:
             raise ValueError(f"GitHub API origin self-test accepted unsafe URL: {unsafe}")
 
-    request = api_request(good, "fixture-token")
-    auth = {name.lower(): value for name, value in request.unredirected_hdrs.items()}
-    ordinary = {name.lower(): value for name, value in request.headers.items()}
-    require(auth.get("authorization") == "Bearer fixture-token",
-            "bearer token must be attached as an unredirected-only header")
-    require("authorization" not in ordinary,
-            "bearer token must not be attached as a redirect-copyable ordinary header")
-    require(NoRedirect().redirect_request(None, None, 302, "fixture", {}, "https://example.com") is None,
-            "redirect handler must refuse every redirect request")
-
-
-def retryable_http_error(exc: urllib.error.HTTPError) -> bool:
-    if exc.code in RETRYABLE_HTTP_STATUS:
-        return True
-    if exc.code != 403:
-        return False
-    headers = exc.headers or {}
-    return headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After"))
-
-
-def retry_delay_seconds(exc: BaseException, failure_index: int) -> float:
-    default = API_BACKOFF_SECONDS[min(failure_index, len(API_BACKOFF_SECONDS) - 1)]
-    if not isinstance(exc, urllib.error.HTTPError) or not exc.headers:
-        return default
-    raw = str(exc.headers.get("Retry-After") or "").strip()
-    try:
-        requested = float(raw)
-    except ValueError:
-        return default
-    return max(0.0, min(requested, API_MAX_RETRY_AFTER_SECONDS))
+    automation_github_read.self_test()
+    require(
+        automation_github_read.ATTEMPTS == 3
+        and automation_github_read.TIMEOUT_SECONDS == 20
+        and automation_github_read.BACKOFF_SECONDS == (1.0, 2.0)
+        and automation_github_read.MAX_RETRY_AFTER_SECONDS == 5.0,
+        "Portfolio delegated GitHub transport classifier changed",
+    )
 
 
 def fetch_json(
@@ -138,24 +108,16 @@ def fetch_json(
     opener: Callable[..., Any] | None = None,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
-    request = api_request(url, token)
-    transport = opener or open_no_redirect
-    for attempt in range(API_ATTEMPTS):
-        try:
-            with transport(request, timeout=API_TIMEOUT_SECONDS) as response:
-                payload = json.load(response)
-            if not isinstance(payload, dict):
-                raise ValueError("GitHub API response must be an object")
-            return payload
-        except urllib.error.HTTPError as exc:
-            if attempt + 1 >= API_ATTEMPTS or not retryable_http_error(exc):
-                raise
-            sleeper(retry_delay_seconds(exc, attempt))
-        except (urllib.error.URLError, TimeoutError, ConnectionResetError) as exc:
-            if attempt + 1 >= API_ATTEMPTS:
-                raise
-            sleeper(retry_delay_seconds(exc, attempt))
-    raise RuntimeError("unreachable GitHub API retry state")
+    text = automation_github_read.get_json_text(
+        api_endpoint(url),
+        token=token,
+        opener=opener,
+        sleeper=sleeper,
+    )
+    require(text is not None, "Portfolio governed GitHub read unexpectedly returned absence")
+    payload = automation_github_read.strict_json(text)
+    require(isinstance(payload, dict), "GitHub API response must be an object")
+    return payload
 
 
 def main_revision_from_payload(payload: dict[str, Any], repo: str) -> str:
