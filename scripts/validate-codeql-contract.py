@@ -1219,6 +1219,15 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json'
     )
     artifact_zip = (
+        "python3 scripts/automation_github_binary_read.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"'
+        + " "
+        + "\\"
+        + "\n            receipt.zip"
+    )
+    artifact_zip_direct = (
         'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
     )
     require(
@@ -1226,8 +1235,18 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         "CodeQL Autofix receipt artifact-list governed-read transport changed",
     )
     require(
-        text.count(artifact_zip) == 1,
-        "CodeQL Autofix receipt ZIP must remain exactly one raw binary read",
+        text.count("python3 scripts/automation_github_binary_read.py") == 1
+        and text.count(artifact_zip) == 1,
+        "CodeQL Autofix receipt ZIP must use exactly one governed binary read",
+    )
+    require(
+        artifact_zip_direct not in text,
+        "CodeQL Autofix receipt ZIP regained direct gh API transport",
+    )
+    require(
+        'test "$(git rev-parse HEAD:scripts/automation_github_binary_read.py)" = "ab7211197f0620e57d1a1e3013ab15a3715ce3e2"'
+        in text,
+        "CodeQL Autofix receipt ZIP lost exact governed binary helper identity",
     )
     artifact_fetch_pos = text.index(artifact_list_fetch)
     artifact_validate_pos = text.index(
@@ -1239,9 +1258,14 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
         artifact_validate_pos,
     )
     artifact_zip_pos = text.index(artifact_zip, artifact_consume_pos)
+    artifact_unzip_pos = text.index(
+        "unzip -p receipt.zip codeql-autofix-receipt.json > verified-receipt.json",
+        artifact_zip_pos,
+    )
     require(
-        artifact_fetch_pos < artifact_validate_pos < artifact_consume_pos < artifact_zip_pos,
-        "CodeQL Autofix receipt artifact-list evidence moved out of typed provenance order",
+        artifact_fetch_pos < artifact_validate_pos < artifact_consume_pos
+        < artifact_zip_pos < artifact_unzip_pos,
+        "CodeQL Autofix receipt artifact evidence moved out of governed typed order",
     )
 
     prior_attempt_endpoint = '"repos/${TARGET_REPOSITORY}/actions/runs/${RUN_ID}/attempts/${ATTEMPT_NUMBER}"'
