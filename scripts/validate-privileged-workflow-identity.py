@@ -9,12 +9,12 @@ import automation_decision_lease
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v148"
+VERSION = "governed-workflow-byte-identity-v149"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "f392c0d0351f55de82adf0331f4dd8d63b7753a9",
-    ".github/workflows/profile-stats.yml": "0a6a2ff4924a9c5e27c20f0feb69f5c8e7756001",
-    ".github/workflows/spotlight-link-sync.yml": "a0e999e575290f09be32c8682d7767ddd234b27c",
+    ".github/workflows/profile-stats.yml": "ac5fbfee01fd65334f1cc7f34c6e56ef0c8fb55d",
+    ".github/workflows/spotlight-link-sync.yml": "36ea2ad142fabaa1f001b4fa449cb6ce27ce5c25",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -569,6 +569,30 @@ def validate_leases(profile: str, spotlight: str) -> None:
             "Spotlight attestation signers must each retain one exact-lease proof step")
     require(spotlight.count(guard) == 6,
             "Every Spotlight writer must reserve lease lifetime through its hard timeout")
+
+    mint_attempt_output = 'run_attempt: ${{ steps.lease.outputs.run_attempt }}'
+    mint_attempt_echo = 'echo "run_attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"'
+    consumer_attempt_env = 'LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}'
+    attempt_lineage_guard = 'test "$LEASE_RUN_ATTEMPT" -le "$GITHUB_RUN_ATTEMPT"'
+    current_attempt_hash = '"$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \\\n'
+    leased_attempt_hash = '"$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$LEASE_RUN_ATTEMPT" \\\n'
+    for text, expected_profile, expected_spotlight, label in (
+        (mint_attempt_output, 1, 1, "mint-attempt job output"),
+        (mint_attempt_echo, 1, 1, "mint-attempt step output"),
+        (consumer_attempt_env, 7, 8, "lease-consumer attempt binding"),
+        (attempt_lineage_guard, 5, 6, "same-run partial-rerun lineage guard"),
+        (leased_attempt_hash, 5, 6, "lease hash mint-attempt binding"),
+        (current_attempt_hash, 1, 1, "mint-only current-attempt hash binding"),
+    ):
+        require(
+            profile.count(text) == expected_profile,
+            f"Profile Stats {label} cardinality changed",
+        )
+        require(
+            spotlight.count(text) == expected_spotlight,
+            f"Spotlight {label} cardinality changed",
+        )
+
     for fragment in (
         "LEASE_MIN_REMAINING_SECONDS=240",
         "LEASE_MIN_REMAINING_SECONDS=300",
