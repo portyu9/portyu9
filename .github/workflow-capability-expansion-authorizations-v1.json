@@ -1135,6 +1135,13 @@
       "rationale": "Correct #1301's stale protected-source measurement for frozen #1300. Current-main production reconstruction proves the same base/candidate BOM pair, exactly two protected-source transitions, one semantic read-surface reduction, and candidate TCB d442f46f749315ed6946ae79c512bef9838c14efe5e0e3d34e6839fa1b4e32ad. No trigger, permission, endpoint, mutation, secret/OIDC, ruleset, merge or bypass authority is added."
     },
     {
+      "baseBomSha256": "ec827e2c3a3e8961de5f2da50d5bf7d1208dd229b1dc6760ba5b455ec0d42f52",
+      "candidateBomSha256": "ec827e2c3a3e8961de5f2da50d5bf7d1208dd229b1dc6760ba5b455ec0d42f52",
+      "expansionSha256": "abb9d676c2bbfca10a2f2bae00549100042e2fce9027e600fc318e7ef8d6e145",
+      "id": "cap-profile-quality-repository-root-read-v1",
+      "rationale": "Authorize frozen #1457 measured by closed #1458: route Profile Quality's existing Dependabot release-repository metadata GET through the already-authorized exact repository-root reader and lock that split in retry/governance/identity contracts. Semantic BOM is unchanged; measured TCB expansion is 1 with 0 reductions. No trigger, permission, endpoint, method, mutation, retry budget, secret/OIDC, required-check, merge/ruleset/direct-main authority or bypass is added."
+    },
+    {
       "baseBomSha256": "2aa9ce035e5cbc08922756a28180047e097a2b4d26f3448b5868338775bb624c",
       "candidateBomSha256": "aace468e801a0fa6659c5b86c3458abbb736b9aa8c95d3ab58cbf99aa09b3c44",
       "expansionSha256": "9b3878a34aa8ae8774aa8972529e2501bb74c50ae55762ff1dacfde620bc29b8",
