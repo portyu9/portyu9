@@ -14,7 +14,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "f392c0d0351f55de82adf0331f4dd8d63b7753a9",
     ".github/workflows/profile-stats.yml": "ac5fbfee01fd65334f1cc7f34c6e56ef0c8fb55d",
-    ".github/workflows/spotlight-link-sync.yml": "36ea2ad142fabaa1f001b4fa449cb6ce27ce5c25",
+    ".github/workflows/spotlight-link-sync.yml": "1b7793c5576a0e300892e363edfbf9b1bd704f5f",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -766,8 +766,9 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> st
     helper_end = approve.index(helper_end_marker, helper_start)
     helper = approve[helper_start:helper_end]
     for fragment in (
-        '              . as $snapshot |',
-        '(.check_runs | type == "array" and length == $snapshot.total_count and length <= 100) and',
+        '                .total_count as $total_count |',
+        '($total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '(.check_runs | type == "array" and length == $total_count and length <= 100) and',
         'if [ "$request" = "reviewer-checks" ] &&',
         '! spotlight_validate_reviewer_checks_snapshot "$body"; then',
         'ERROR: Spotlight reviewer-checks HTTP 200 body remained schema-incompatible after 3 attempts.',
