@@ -2074,6 +2074,59 @@ def validate_release_resolution_parity_contract(text: str) -> None:
 
 
 
+def validate_validation_contract_provenance_token_contract(text: str) -> None:
+    job_marker = "  validate_contracts:\n"
+    next_job_marker = "\n  integration:\n"
+    require(
+        text.count(job_marker) == 1,
+        "Dependabot validation-contract job anchor changed",
+    )
+    job_start = text.index(job_marker)
+    job_end = text.index(next_job_marker, job_start)
+    block = text[job_start:job_end]
+    step_marker = "      - name: Validate exact repository contracts\n"
+    require(
+        block.count(step_marker) == 1,
+        "Dependabot exact repository-contract validation step anchor changed",
+    )
+    step = block[block.index(step_marker):]
+    require(
+        "          GH_TOKEN: ${{ github.token }}\n" in step,
+        "Dependabot repository-contract validation must bind the reviewed GH_TOKEN credential for live Action provenance reads",
+    )
+    require(
+        "          GITHUB_TOKEN: ${{ github.token }}\n" not in step,
+        "Dependabot repository-contract validation must not substitute ambient GITHUB_TOKEN for the reviewed GH_TOKEN boundary",
+    )
+    require(
+        step.count("python3 scripts/validate-action-release-provenance.py\n") == 1,
+        "Dependabot repository-contract validation must execute live Action release provenance exactly once",
+    )
+
+
+def self_test_validation_contract_provenance_token_contract(text: str) -> None:
+    validate_validation_contract_provenance_token_contract(text)
+    trusted = "          GH_TOKEN: ${{ github.token }}\n"
+    require(
+        text.count(trusted) >= 1,
+        "Dependabot provenance-token self-test fixture lost GH_TOKEN binding",
+    )
+    drift = text.replace(
+        trusted,
+        "          GITHUB_TOKEN: ${{ github.token }}\n",
+        1,
+    )
+    try:
+        validate_validation_contract_provenance_token_contract(drift)
+    except ValueError as exc:
+        require(
+            "reviewed GH_TOKEN credential" in str(exc),
+            f"Dependabot provenance-token self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot provenance-token self-test accepted an unauthenticated live provenance caller")
+
+
 def validate_controller_residual_read_transport_contract(text: str) -> None:
     singleton_reads = (
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100"',
@@ -2395,6 +2448,8 @@ def main() -> int:
         validate_dispatch_codeql_static_checkout_contract(controller_text)
         self_test_dispatch_codeql_static_checkout_contract(controller_text)
         validate_release_resolution_parity_contract(controller_text)
+        validate_validation_contract_provenance_token_contract(controller_text)
+        self_test_validation_contract_provenance_token_contract(controller_text)
         self_test_controller_merge_success_response_contract(controller_text)
         self_test_controller_approval_comment_contract(controller_text)
         validate_approval_comment_helper_contract(APPROVAL_COMMENT_HELPER.read_text(encoding="utf-8"))
