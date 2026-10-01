@@ -680,6 +680,13 @@
       "rationale": "Authorize #556's exact trusted-controller source change for duplicate required-check convergence. The semantic capability BOM is unchanged. The controller now accepts one or more exact-head GitHub Actions runs for each required context only when every returned latest run is from app 15368, bound to the exact candidate head, completed, and successful. Any missing, pending, failed, mismatched, or foreign duplicate still blocks convergence and merge."
     },
     {
+      "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "expansionSha256": "02c59f008515a33bed8986b4578fc6fb0df4f8c914c99948ff325b729b1899d3",
+      "id": "cap-dependabot-git-blob-request-body-v1",
+      "rationale": "Authorize frozen #1449 measured by closed #1450: move the existing Dependabot Git-blob POST payload from unbounded shell argv into a validated file-backed JSON body. Semantic BOM, endpoint, method, mutation count, HTTP 201/typed response proof, expected-head guards and downstream dispatches are unchanged; measured TCB expansion is 1 with 0 reductions. No trigger, permission, retry, secret/OIDC, required-check, merge/ruleset/direct-main authority or bypass is added."
+    },
+    {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "candidateBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
       "expansionSha256": "ae010db92c138b37b0d66b0e62fb70b05ba6567d60c69ea9cea2bb39b7a0fec8",
