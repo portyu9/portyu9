@@ -1013,7 +1013,7 @@
       "candidateBomSha256": "ec827e2c3a3e8961de5f2da50d5bf7d1208dd229b1dc6760ba5b455ec0d42f52",
       "expansionSha256": "00dfb7ac2ae41f71d5b62c85da7ba5e773ef4ca59742891840dceaef818d4d7b",
       "id": "cap-governed-review-single-pass-binding-v1",
-      "rationale": "Authorize frozen #1463 measured by closed #1464: bind Profile Quality's exact accepted-base governed-review runtime from the legacy waiting evaluator to the already-accepted single-pass evaluator and advance only its exact byte/identity and retry-policy source locks. Semantic Workflow Capability is unchanged; measured protected-TCB expansion is 1 with 0 reductions. No trigger, permission, endpoint/method, retry class/budget, mutation, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, candidate execution, or bypass is added."
+      "rationale": "Authorize frozen #1463 measured by closed #1464: bind Profile Quality from the legacy waiting governed-review evaluator to the already-accepted single-pass evaluator and advance its exact identity/retry-policy locks. Semantic Workflow Capability is unchanged; measured protected-TCB expansion is 1 with 0 reductions. No trigger, permission, endpoint/method, retry budget, mutation, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, candidate execution, or bypass."
     },
     {
       "baseBomSha256": "4362024f3c8559f5f6bbea832cba30d0e1d6b5f017332e43a3e6b557dc622210",
