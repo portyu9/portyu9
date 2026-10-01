@@ -12,6 +12,7 @@ import automation_github_artifact_download
 import automation_github_paginated_read
 import automation_github_read
 import automation_github_review_threads_read
+import automation_github_ruleset_admin_read
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / ".github/automation-retry-policy-v1.json"
@@ -42,6 +43,7 @@ EXPECTED_AUTOMATIC_RETRY_IDS = {
     "canonical-github-api-read-transient",
     "canonical-github-api-binary-read-transient",
     "codeql-review-thread-graphql-query-transient",
+    "ruleset-admin-bootstrap-read-transient",
     "spotlight-approve-shell-read-transient",
     "spotlight-reconcile-shell-read-transient",
     "spotlight-propose-shell-read-transient",
@@ -351,10 +353,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 12 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly twelve classified automatic read retries")
+    require(len(entries) == 13 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly thirteen classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 12, "automatic retry IDs must remain unique")
+    require(len(by_id) == 13, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
@@ -461,6 +463,51 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
         require(forbidden not in canonical_source,
                 f"canonical GitHub read source acquired mutation method: {forbidden}")
+
+    ruleset_admin_item = by_id["ruleset-admin-bootstrap-read-transient"]
+    require(
+        ruleset_admin_item.get("source")
+        == "scripts/automation_github_ruleset_admin_read.py",
+        "Ruleset admin bootstrap retry source changed",
+    )
+    require(
+        ruleset_admin_item.get("workflow") == ".github/workflows/ruleset-reconciler.yml"
+        and ruleset_admin_item.get("job") == "reconcile"
+        and ruleset_admin_item.get("step")
+        == "Apply only exact reviewed predecessor to successor",
+        "Ruleset admin bootstrap retry workflow identity changed",
+    )
+    require(
+        ruleset_admin_item.get("endpointScope") == "ruleset-admin-bootstrap-only"
+        and ruleset_admin_item.get("maxResponseBytes") == 8_000_000,
+        "Ruleset admin bootstrap retry endpoint/response bounds changed",
+    )
+    automation_github_ruleset_admin_read.self_test()
+    ruleset_admin_source = (
+        ROOT / ruleset_admin_item["source"]
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        'APP_INSTALLATION_ENDPOINT = re.compile(r"^app/installations/([1-9][0-9]{0,18})$")',
+        'INSTALLATION_REPOSITORIES_ENDPOINT = "installation/repositories?per_page=100"',
+        "automation_github_read.ATTEMPTS",
+        "automation_github_read.TIMEOUT_SECONDS",
+        "automation_github_read.MAX_RESPONSE_BYTES",
+        "automation_github_read.token_headers(credential)",
+        "automation_github_read.NoRedirect()",
+        "automation_github_read.retryable_http_error(exc)",
+        "automation_github_read.retry_delay_seconds(exc, attempt)",
+        "automation_github_read.strict_json(text)",
+        'method="GET"',
+    ):
+        require(
+            fragment in ruleset_admin_source,
+            f"Ruleset admin governed read contract is missing: {fragment}",
+        )
+    for forbidden in ('method="POST"', 'method="PUT"', 'method="PATCH"', 'method="DELETE"'):
+        require(
+            forbidden not in ruleset_admin_source,
+            f"Ruleset admin governed read source acquired mutation method: {forbidden}",
+        )
 
     binary_item = by_id["canonical-github-api-binary-read-transient"]
     require(
@@ -2379,21 +2426,39 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         ) == 2,
         "Ruleset reconciler admin-token ruleset read count changed",
     )
+    ruleset_admin_pin = (
+        'test "$(git rev-parse HEAD:scripts/automation_github_ruleset_admin_read.py)" = '
+        '"1633c804071595f207ce2524633796213788b5f3"'
+    )
+    require(
+        ruleset_admin_pin in ruleset_reconcile_step,
+        "Ruleset reconciler lost exact governed admin-read helper identity",
+    )
     require(
         ruleset_reconcile_step.count(
-            'GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" '
+            'GH_TOKEN="$APP_JWT" python3 scripts/automation_github_ruleset_admin_read.py '
             '"app/installations/${ADMIN_INSTALLATION_ID}"'
         ) == 1
         and ruleset_reconcile_step.count(
-            'GH_TOKEN="$ADMIN_TOKEN" gh api "installation/repositories?per_page=100"'
+            'GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_ruleset_admin_read.py '
+            '"installation/repositories?per_page=100"'
         ) == 1,
-        "Ruleset reconciler specialist non-repository read boundary changed",
+        "Ruleset reconciler governed specialist read boundary changed",
     )
+    for forbidden in (
+        'GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" '
+        '"app/installations/${ADMIN_INSTALLATION_ID}"',
+        'GH_TOKEN="$ADMIN_TOKEN" gh api "installation/repositories?per_page=100"',
+    ):
+        require(
+            forbidden not in ruleset_reconcile_step,
+            f"Ruleset reconciler specialist read regained raw transport: {forbidden}",
+        )
     require(
-        ruleset_reconcile_step.count("gh api ") == 4
+        ruleset_reconcile_step.count("gh api ") == 2
         and ruleset_reconcile_step.count("--method POST") == 1
         and ruleset_reconcile_step.count("--method PUT") == 1,
-        "Ruleset reconciler raw transport must remain exactly two specialist reads and two mutations",
+        "Ruleset reconciler raw transport must remain exactly the two single-shot mutations",
     )
 
     profile_stats = texts[".github/workflows/profile-stats.yml"]
