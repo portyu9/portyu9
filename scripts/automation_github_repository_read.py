@@ -213,7 +213,7 @@ def self_test() -> None:
 
     endpoint = "repos/github/codeql-action"
     target = automation_github_read.API_ROOT + endpoint
-    calls: list[tuple[str, int, str]] = []
+    calls: list[urllib.request.Request] = []
     sleeps: list[float] = []
     sequence: list[Any] = [
         urllib.error.HTTPError(
@@ -228,7 +228,7 @@ def self_test() -> None:
     ]
 
     def fixture_open(request: urllib.request.Request, *, timeout: int) -> Any:
-        calls.append((request.full_url, id(request), request.get_method()))
+        calls.append(request)
         require(timeout == TIMEOUT_SECONDS, "repository-root fixture timeout changed")
         result = sequence.pop(0)
         if isinstance(result, BaseException):
@@ -246,9 +246,9 @@ def self_test() -> None:
         "repository-root retry fixture changed response bytes",
     )
     require(
-        [url for url, _request_id, _method in calls] == [target, target, target]
-        and [method for _url, _request_id, method in calls] == ["GET", "GET", "GET"]
-        and len({request_id for _url, request_id, _method in calls}) == 3,
+        [request.full_url for request in calls] == [target, target, target]
+        and [request.get_method() for request in calls] == ["GET", "GET", "GET"]
+        and len({id(request) for request in calls}) == 3,
         "each repository-root retry must issue one fresh GET to the exact endpoint",
     )
     require(
