@@ -260,15 +260,15 @@ def validate_quality_native_gate(text: str) -> None:
         "persist-credentials: false",
         "fetch-depth: 1",
         'test "$(git -C "$GITHUB_WORKSPACE/trusted-review-base" rev-parse HEAD)" = "$EVENT_BASE_SHA"',
-        'TRUSTED_GATE="$GITHUB_WORKSPACE/trusted-review-base/scripts/governed_bot_review_gate.py"',
-        "EXPECTED_GATE_BLOB: e42c1a8c3204d9a83ac837bbd04743fe3907b41c",
+        'TRUSTED_GATE="$GITHUB_WORKSPACE/trusted-review-base/scripts/automation_governed_bot_review_gate.py"',
+        "EXPECTED_GATE_BLOB: 5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3",
         'python3 "$TRUSTED_GATE" --self-test',
         'python3 "$TRUSTED_GATE"',
     ):
         require(fragment in gate, f"Profile Quality native review gate contract is missing: {fragment}")
     require(gate.count("uses: actions/checkout@") == 1,
             "Profile Quality native review gate must use exactly one pinned accepted-base checkout")
-    require("gh api " not in gate and "contents/scripts/governed_bot_review_gate.py?ref=" not in gate,
+    require("gh api " not in gate and "contents/scripts/automation_governed_bot_review_gate.py?ref=" not in gate,
             "Profile Quality native review bootstrap regained a raw GitHub API read")
     for forbidden in (
         "actions/setup-python@",

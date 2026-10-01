@@ -8,16 +8,16 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v143"
+VERSION = "governed-workflow-byte-identity-v144"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "92ed93fdce128ad71ed078912cbed5b10c25c0c6",
-    ".github/workflows/profile-quality.yml": "53914bb9257d49ea29db7bb9d0f5a278ec373ad7",
+    ".github/workflows/profile-quality.yml": "d58114f33e21cf6b76391d9d89a09226642e2534",
     ".github/workflows/profile-stats.yml": "0a6a2ff4924a9c5e27c20f0feb69f5c8e7756001",
     ".github/workflows/spotlight-link-sync.yml": "df15c37d6890e8f3a6eb348535966d16642405d5",
 }
 
-TRUSTED_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
-ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "e42c1a8c3204d9a83ac837bbd04743fe3907b41c"
+TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
+ACCEPTED_BASE_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
 SPOTLIGHT_BUDGET_JQ_RUNTIME_TEST_BLOB = "be08b177e329343ff547b66c742e221d9cf9afed"
 
 OLD_MERGE_IF = (
@@ -2308,9 +2308,9 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         "- name: Run exact accepted-base governed bot review gate",
         "GH_TOKEN: ${{ github.token }}",
         "GITHUB_TOKEN: ${{ github.token }}",
-        "EXPECTED_GATE_BLOB: e42c1a8c3204d9a83ac837bbd04743fe3907b41c",
+        "EXPECTED_GATE_BLOB: 5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3",
         'test "$(git -C "$GITHUB_WORKSPACE/trusted-review-base" rev-parse HEAD)" = "$EVENT_BASE_SHA"',
-        'TRUSTED_GATE="$GITHUB_WORKSPACE/trusted-review-base/scripts/governed_bot_review_gate.py"',
+        'TRUSTED_GATE="$GITHUB_WORKSPACE/trusted-review-base/scripts/automation_governed_bot_review_gate.py"',
         'GATE_BLOB="$( { printf \'blob %s\\0\' "$GATE_SIZE"; cat "$TRUSTED_GATE"; } | sha1sum | cut -d\' \' -f1 )"',
         'test "$GATE_BLOB" = "$EXPECTED_GATE_BLOB"',
         'python3 "$TRUSTED_GATE" --self-test',
@@ -2333,12 +2333,12 @@ def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> Non
         "git push",
         "/pulls/${PR_NUMBER}/reviews",
         "/actions/workflows/",
-        "contents/scripts/governed_bot_review_gate.py?ref=",
+        "contents/scripts/automation_governed_bot_review_gate.py?ref=",
     ):
         require(forbidden not in gate,
                 f"native governed-bot review gate acquired forbidden candidate or mutation surface: {forbidden}")
 
-    actual = v21.git_blob_sha(ROOT / "scripts/governed_bot_review_gate.py")
+    actual = v21.git_blob_sha(ROOT / "scripts/automation_governed_bot_review_gate.py")
     require(
         actual == TRUSTED_GOVERNED_BOT_REVIEW_GATE,
         "trusted governed-bot review evaluator bytes changed without an explicit byte-lock update",
@@ -6189,7 +6189,7 @@ def main() -> int:
         )
 
         profile_quality = (ROOT / ".github/workflows/profile-quality.yml").read_text(encoding="utf-8")
-        governed_bot_review_gate = (ROOT / "scripts/governed_bot_review_gate.py").read_text(encoding="utf-8")
+        governed_bot_review_gate = (ROOT / "scripts/automation_governed_bot_review_gate.py").read_text(encoding="utf-8")
         validate_dependabot_admission_blob_locks(profile_quality)
         validate_native_bot_review_gate(profile_quality, governed_bot_review_gate)
 

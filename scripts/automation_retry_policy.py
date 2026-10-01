@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 POLICY = ROOT / ".github/automation-retry-policy-v1.json"
 WORKFLOWS = ROOT / ".github/workflows"
 PINNED_GENERATOR = "shinpr/github-profile-stats@49b5f7091182a45f3ef93923505b660c6da5f835 # v0.2.0"
-GOVERNED_REVIEW_GATE = ROOT / "scripts/governed_bot_review_gate.py"
+GOVERNED_REVIEW_GATE = ROOT / "scripts/automation_governed_bot_review_gate.py"
 ACTION_RELEASE_PROVENANCE = ROOT / "scripts/validate-action-release-provenance.py"
 PROFILE_CONTRIBUTION_SYNC = ROOT / "scripts/sync-profile-contribution-total.py"
 SPOTLIGHT_MERGE_AUTHORIZATION = ROOT / "scripts/prepare-spotlight-merge-authorization.py"
@@ -392,7 +392,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
                 f"automatic retry rationale must preserve read-only scope: {identifier}")
 
     review_item = by_id["governed-bot-review-read-transient"]
-    require(review_item.get("source") == "scripts/governed_bot_review_gate.py",
+    require(review_item.get("source") == "scripts/automation_governed_bot_review_gate.py",
             "governed-review automatic retry source changed")
     gate = GOVERNED_REVIEW_GATE.read_text(encoding="utf-8")
     for fragment in (
