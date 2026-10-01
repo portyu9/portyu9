@@ -295,6 +295,13 @@
       "rationale": "Authorize #796's exact post-merge continuation: trusted main snapshots CodeQL workflow-dispatch runs, dispatches CodeQL on the merged main SHA, binds exactly one new exact-SHA run, waits for that run to succeed while main stays fixed, then emits one existing codeql-autofix repository dispatch. No new permissions, triggers, candidate execution, direct-main mutation, merge authority, ruleset bypass, secrets, or OIDC."
     },
     {
+      "baseBomSha256": "da49ff6d4c15b91284bf3b5eee7d70dee22819bbd7c5970889a1b7ac792638be",
+      "candidateBomSha256": "bc16f67b4215162a076551b14ddf84e7cdae32faa478c4b7620e97cfc7cfc3a5",
+      "expansionSha256": "ac7671f1722cdd91ef4eb9e7fd59b63cb6d96868511eca6baac4b076d94238c7",
+      "id": "cap-codeql-autofix-post-merge-run-pagination-v1",
+      "rationale": "Authorize frozen #1419 measured by closed #1420: route the existing CodeQL Autofix post-merge workflow-dispatch run pagination through the accepted bounded paginator. Preserve endpoint/query, complete before/after page arrays, HTTP 204 dispatch proof, 60-attempt run binding, 120-attempt bound-run completion, exact-main reproofs, and continuation wake. Removes one raw GET; adds no permission, trigger, mutation replay, secret/OIDC, check reduction, direct-main/ruleset/merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "c5080173fe53130e4ae4a69e6bccd43a7db8d3143393a629f2e6d8f6292f1292",
       "candidateBomSha256": "958e4463c565d5dd34b098908fee71917d7628e9dd4532aaeca2098051e87d3a",
       "expansionSha256": "c922c9db90496bdadcf83c8cbd63b79fadb49fd63c263331dd38ae9783e7590f",
