@@ -13,15 +13,20 @@ RUNTIME_PROBE = ROOT / "scripts/verify-python-runtime.py"
 FRESHNESS_CHECKER = ROOT / "scripts/check-python-maintenance-freshness.py"
 EXPECTED_VERSION = "3.13.16"
 EXPECTED_VERSION_INFO = tuple(int(part) for part in EXPECTED_VERSION.split("."))
-EXPECTED_WORKFLOWS = {
-    "action-provenance-witness.yml",
-    "capability-admission.yml",
-    "codeql-autofix.yml",
-    "dependabot-controller.yml",
-    "profile-generator-compatibility-witness.yml",
-    "profile-quality.yml",
-    "profile-stats.yml",
-    "spotlight-link-sync.yml",
+LEGACY_VERSION = "3.13.15"
+EXPECTED_WORKFLOW_VERSIONS = {
+    "action-provenance-witness.yml": EXPECTED_VERSION,
+    "capability-admission.yml": LEGACY_VERSION,
+    "codeql-autofix.yml": EXPECTED_VERSION,
+    "dependabot-controller.yml": LEGACY_VERSION,
+    "profile-generator-compatibility-witness.yml": EXPECTED_VERSION,
+    "profile-quality.yml": EXPECTED_VERSION,
+    "profile-stats.yml": EXPECTED_VERSION,
+    "spotlight-link-sync.yml": EXPECTED_VERSION,
+}
+EXPECTED_WORKFLOWS = set(EXPECTED_WORKFLOW_VERSIONS)
+TEMPORARY_LEGACY_WORKFLOWS = {
+    name for name, version in EXPECTED_WORKFLOW_VERSIONS.items() if version == LEGACY_VERSION
 }
 VERIFY_COMMANDS = {
     "action-provenance-witness.yml": "python3 scripts/verify-python-runtime.py",
@@ -37,7 +42,6 @@ VERIFY_STEP_NAME = "      - name: Verify resolved Python runtime"
 QUALITY_IDENTITY_STEP_NAME = "      - name: Validate privileged workflow byte identity"
 QUALITY_IDENTITY_COMMAND = "python3 scripts/validate-privileged-workflow-identity.py"
 SETUP_PYTHON = re.compile(r"(?m)^\s*(?:-\s*)?uses:\s*actions/setup-python@[0-9a-f]{40}\s+#\s+v[0-9]+\.[0-9]+\.[0-9]+\s*$")
-VERSION_LINE = f'  PYTHON_VERSION: "{EXPECTED_VERSION}"'
 VERSION_INPUT = "          python-version: ${{ env.PYTHON_VERSION }}"
 FRESHNESS_SEQUENCE = (
     "      - name: Validate exact Python runtime contract\n"
@@ -94,15 +98,16 @@ def workflow_files() -> list[Path]:
     return sorted({*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")})
 
 
-def validate_text(text: str, label: str) -> bool:
+def validate_text(text: str, label: str, expected_version: str = EXPECTED_VERSION) -> bool:
     setup_count = len(SETUP_PYTHON.findall(text))
     if setup_count == 0:
         require("PYTHON_VERSION:" not in text,
                 f"{label}: declares PYTHON_VERSION without an authored setup-python execution surface")
         return False
 
-    require(text.count(VERSION_LINE) == 1,
-            f"{label}: Python runtime must be pinned exactly once to {EXPECTED_VERSION}")
+    version_line = f'  PYTHON_VERSION: "{expected_version}"'
+    require(text.count(version_line) == 1,
+            f"{label}: Python runtime must be pinned exactly once to {expected_version}")
     require(text.count("PYTHON_VERSION:") == 1,
             f"{label}: Python runtime declaration must have one canonical source")
     require(text.count(VERSION_INPUT) == setup_count,
@@ -122,7 +127,8 @@ def validate_repository() -> None:
     observed: set[str] = set()
     for path in workflow_files():
         text = path.read_text(encoding="utf-8")
-        if validate_text(text, path.name):
+        expected_version = EXPECTED_WORKFLOW_VERSIONS.get(path.name, EXPECTED_VERSION)
+        if validate_text(text, path.name, expected_version):
             observed.add(path.name)
             setup_count = len(SETUP_PYTHON.findall(text))
             require(path.name in VERIFY_COMMANDS,
@@ -181,6 +187,19 @@ def self_test() -> None:
         + "          python-version: ${{ env.PYTHON_VERSION }}\n"
     )
     require(validate_text(good, "self-test-good.yml"), "self-test rejected exact Python runtime pin")
+    require(
+        TEMPORARY_LEGACY_WORKFLOWS == {"capability-admission.yml", "dependabot-controller.yml"},
+        "temporary legacy-runtime workflow set drifted",
+    )
+    legacy_good = good.replace(EXPECTED_VERSION, LEGACY_VERSION, 1)
+    require(
+        validate_text(legacy_good, "capability-admission.yml", LEGACY_VERSION),
+        "self-test rejected the exact temporary protected-workflow legacy pin",
+    )
+    expect_failure(
+        legacy_good,
+        f"pinned exactly once to {EXPECTED_VERSION}",
+    )
     expect_failure(good.replace(EXPECTED_VERSION, "3.13", 1), "pinned exactly once")
     expect_failure(
         good.replace("python-version: ${{ env.PYTHON_VERSION }}", f"python-version: {EXPECTED_VERSION}", 1),
@@ -232,7 +251,8 @@ def main() -> int:
         validate_repository()
         print(
             "Python runtime contract passed: authored setup-python execution is closed to "
-            f"{EXPECTED_VERSION} across exactly {len(EXPECTED_WORKFLOWS)} reviewed workflows; "
+            f"{EXPECTED_VERSION} except the exact temporary protected-workflow set "
+            f"{sorted(TEMPORARY_LEGACY_WORKFLOWS)!r}, which remains pinned to {LEGACY_VERSION}; "
             "all setup jobs execute the reviewed runtime probe immediately after setup except the single "
             "Profile Quality path that first executes the exact governed-workflow byte gate; "
             "Profile Quality also owns the maintenance-line freshness gate; "
