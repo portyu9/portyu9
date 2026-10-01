@@ -3704,7 +3704,7 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
         "CodeQL Autofix receipt ZIP regained direct gh API transport",
     )
     require(
-        'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "27c89de923d6ccab7930134335908b64be7b25d5"'
+        'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "6ac186f3d123bb197175ece637558f70f2b1a24c"'
         in autofix,
         "CodeQL Autofix receipt ZIP lost exact governed binary helper identity",
     )

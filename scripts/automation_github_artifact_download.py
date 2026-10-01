@@ -107,7 +107,7 @@ def open_without_redirect(
 ) -> Any:
     if opener is not None:
         return opener(request, timeout=automation_github_read.TIMEOUT_SECONDS)
-    return urllib.request.build_opener(automation_github_read.NoRedirect()).open(
+    return urllib.request.build_opener(automation_github_read.NoRedirect).open(
         request,
         timeout=automation_github_read.TIMEOUT_SECONDS,
     )

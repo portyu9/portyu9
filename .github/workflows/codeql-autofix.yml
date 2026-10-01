@@ -699,7 +699,7 @@ jobs:
             --out artifact.json
           ARTIFACT_ID="$(jq -r .id artifact.json)"
           test "$ARTIFACT_ID" -gt 0
-          test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "27c89de923d6ccab7930134335908b64be7b25d5"
+          test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "6ac186f3d123bb197175ece637558f70f2b1a24c"
           python3 scripts/automation_github_artifact_download.py \
             "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
             receipt.zip

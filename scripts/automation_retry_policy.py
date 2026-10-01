@@ -482,7 +482,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "ALLOWED_STORAGE_HOST_SUFFIXES = (",
         "automation_github_read.normalize_endpoint(value)",
         "automation_github_read.token_headers(token)",
-        "automation_github_read.NoRedirect()",
+        "automation_github_read.NoRedirect",
         "if exc.code != 302:",
         "validate_signed_storage_url(str(location))",
         'request.get_header("Authorization") is None',
@@ -1768,7 +1768,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal receipt ZIP regained direct gh API transport",
     )
     require(
-        'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "27c89de923d6ccab7930134335908b64be7b25d5"'
+        'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "6ac186f3d123bb197175ece637558f70f2b1a24c"'
         in codeql_terminal_step,
         "CodeQL Autofix terminal receipt ZIP lost exact governed binary helper identity",
     )
