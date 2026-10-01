@@ -227,6 +227,37 @@
       "repositoryScope": "portyu9/portyu9"
     },
     {
+      "id": "profile-contribution-graphql-query-transient",
+      "source": "scripts/sync-profile-contribution-total.py",
+      "workflow": ".github/workflows/profile-stats.yml",
+      "job": "generate",
+      "step": "Generate canonical profile evidence",
+      "operation": "read-only-github-graphql-query",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "fixed-profile-contribution-query",
+      "endpoint": "https://api.github.com/graphql",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only the fixed read-only profile contribution GraphQL query after classified transport/platform transients. The query document and login variables are deterministic; authorization, GraphQL errors, malformed JSON/schema, policy failures, and every mutation failure remain terminal.",
+      "profileScope": "portyu9"
+    },
+    {
       "id": "ruleset-admin-bootstrap-read-transient",
       "source": "scripts/automation_github_ruleset_admin_read.py",
       "workflow": ".github/workflows/ruleset-reconciler.yml",
