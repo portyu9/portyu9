@@ -5,15 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 import sys
 
+import automation_decision_lease
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v147"
+VERSION = "governed-workflow-byte-identity-v148"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "f392c0d0351f55de82adf0331f4dd8d63b7753a9",
     ".github/workflows/profile-stats.yml": "0a6a2ff4924a9c5e27c20f0feb69f5c8e7756001",
-    ".github/workflows/spotlight-link-sync.yml": "a4018e7df1ad80925ffcac3c0cad997f4d19dbaf",
+    ".github/workflows/spotlight-link-sync.yml": "a0e999e575290f09be32c8682d7767ddd234b27c",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -731,7 +732,7 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> st
     approve_end = spotlight.index("  authorize:\n", approve_start)
     approve = spotlight[approve_start:approve_end]
 
-    helper_start_marker = "          spotlight_singleton_get() {\n"
+    helper_start_marker = "          spotlight_validate_reviewer_checks_snapshot() {\n"
     helper_end_marker = "          APPROVAL_REQUESTS_JSON='[]'\n"
     require(
         approve.count(helper_start_marker) == 1 and approve.count(helper_end_marker) == 1,
@@ -739,6 +740,23 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> st
     )
     helper_start = approve.index(helper_start_marker)
     helper_end = approve.index(helper_end_marker, helper_start)
+    helper = approve[helper_start:helper_end]
+    for fragment in (
+        '              . as $snapshot |',
+        '(.check_runs | type == "array" and length == $snapshot.total_count and length <= 100) and',
+        'if [ "$request" = "reviewer-checks" ] &&',
+        '! spotlight_validate_reviewer_checks_snapshot "$body"; then',
+        'ERROR: Spotlight reviewer-checks HTTP 200 body remained schema-incompatible after 3 attempts.',
+        'RETRY: Spotlight reviewer-checks semantic transient; attempt $attempt/3, sleeping ${delay}s.',
+    ):
+        require(
+            helper.count(fragment) == 1,
+            f"Spotlight reviewer-read semantic retry contract changed: {fragment}",
+        )
+    require(
+        'length == .total_count' not in helper,
+        "Spotlight reviewer snapshot must retain root-scoped total_count binding",
+    )
     projected = approve[:helper_start] + approve[helper_end:]
 
     overlays = (
@@ -6264,6 +6282,7 @@ def validate_profile_quality_portfolio_liveness_boundary(
 def main() -> int:
     try:
         self_test()
+        automation_decision_lease.self_test()
         observed: dict[str, str] = {}
         for relative, expected in EXPECTED.items():
             actual = v21.git_blob_sha(ROOT / relative)
