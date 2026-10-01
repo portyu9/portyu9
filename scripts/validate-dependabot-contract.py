@@ -232,7 +232,7 @@ def validate_controller_read_ref_response_contract(text: str) -> None:
     )
     helper_pin = (
         'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
-        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '          test "$GOVERNED_READ_BLOB" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     for step_name in (
         "Bind current main and one native Dependabot candidate",
@@ -372,7 +372,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
     )
     helper_pin = (
         'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
-        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '          test "$GOVERNED_READ_BLOB" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     for step_name, expected_reads in (
         ("Bind current main and one native Dependabot candidate", 2),
@@ -1066,7 +1066,7 @@ def validate_controller_git_read_response_contract(text: str) -> None:
 
     helper_pin = (
         'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
-        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '          test "$GOVERNED_READ_BLOB" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     commit_fetch = (
         'python3 scripts/automation_github_read.py \\\n'
@@ -1913,7 +1913,7 @@ def validate_release_resolution_parity_contract(text: str) -> None:
     resolver = "python3 scripts/dependabot_release.py"
     helper_pin = (
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
-        '"1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '"d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     ls_remote = 'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"'
     repository_get = (
@@ -2083,7 +2083,7 @@ def validate_quality_contract(text: str) -> None:
         "- name: Set up Python",
         "- name: Verify resolved Python runtime",
         "- name: Verify exact accepted-base governed read transport identity",
-        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"',
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         "- name: Prove exact PR-native Dependabot context",
         '(.maintainer_can_modify | type == "boolean" and . == false)',
@@ -2175,7 +2175,7 @@ def validate_quality_contract(text: str) -> None:
         "- name: Set up Python",
         "- name: Verify resolved Python runtime",
         "- name: Verify exact accepted-base governed read transport identity",
-        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"',
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         "- name: Prove exact PR-native Dependabot context",
         'python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
