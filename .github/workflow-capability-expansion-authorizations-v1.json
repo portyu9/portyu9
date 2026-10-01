@@ -838,7 +838,7 @@
       "candidateBomSha256": "22709b34154695ac8071e7801f723ea5c9eb36208455f61e82da9a5c93319d7b",
       "expansionSha256": "b9fba0f4c971a18d5b65eeff28a45524bf4cd7a16ebf67195a08a6554acbf49d",
       "id": "cap-dependabot-reviewer-wake-v1",
-      "rationale": "Authorize frozen #1466 measured by closed #1467: after the trusted Dependabot controller independently proves the six exact-head pre-review gates green, allow one exact candidate-bound dependabot-review-wake repository dispatch to the default-branch governed reviewer, with immutable PR/base/head/ref/lane binding and GitHub-Actions provenance. The reviewer reuses existing owner-review and one-shot convergence authority. Measured protected capability expansion is 3 with 0 reductions. No generic reviewer fanout, candidate-branch secret execution, required-check reduction, merge/ruleset/direct-main bypass, blind mutation retry, or manual-veto weakening."
+      "rationale": "Authorize frozen #1466 measured by closed #1467: after six exact-head pre-review gates are green, allow one candidate-bound dependabot-review-wake dispatch carrying immutable PR/base/head/ref/lane identity to the trusted main reviewer. Expansion: 3; reductions: 0. No generic fanout, candidate-branch secret execution, required-check reduction, merge/ruleset/direct-main bypass, blind mutation retry, or veto weakening."
     },
     {
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
