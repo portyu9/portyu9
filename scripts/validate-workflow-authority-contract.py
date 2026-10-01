@@ -599,7 +599,7 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
     approve_start = sync.index("  approve:\n")
     approve_end = sync.index("  authorize:\n", approve_start)
     approve = sync[approve_start:approve_end]
-    helper_start_marker = "          spotlight_singleton_get() {\n"
+    helper_start_marker = "          spotlight_validate_reviewer_checks_snapshot() {\n"
     helper_end_marker = "          APPROVAL_REQUESTS_JSON='[]'\n"
     core.require(
         approve.count(helper_start_marker) == 1 and approve.count(helper_end_marker) == 1,
@@ -607,6 +607,22 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
     )
     helper_start = approve.index(helper_start_marker)
     helper_end = approve.index(helper_end_marker, helper_start)
+    helper = approve[helper_start:helper_end]
+    for fragment in (
+        '              . as $snapshot |',
+        '(.check_runs | type == "array" and length == $snapshot.total_count and length <= 100) and',
+        'if [ "$request" = "reviewer-checks" ] &&',
+        '! spotlight_validate_reviewer_checks_snapshot "$body"; then',
+        'ERROR: Spotlight reviewer-checks HTTP 200 body remained schema-incompatible after 3 attempts.',
+    ):
+        core.require(
+            helper.count(fragment) == 1,
+            f"Spotlight authority reviewer-read semantic retry contract changed: {fragment}",
+        )
+    core.require(
+        'length == .total_count' not in helper,
+        "Spotlight authority reviewer snapshot must retain root-scoped total_count binding",
+    )
     projected = approve[:helper_start] + approve[helper_end:]
     overlays = (
         ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"',
@@ -896,7 +912,7 @@ def project_state_driven_spotlight_reviewer_to_legacy(sync: str) -> str:
     block = sync[start:block_end]
     for fragment in (
         'REVIEW_CHECKS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"',
-        '(.check_runs | type == "array" and length == .total_count and length <= 100) and',
+        'spotlight_validate_reviewer_checks_snapshot "$REVIEW_CHECKS" || {',
         '(.head_sha == $head) and',
         '(.app | type == "object" and .id == 15368) and',
         'REVIEW_READY=true',
