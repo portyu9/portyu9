@@ -626,6 +626,7 @@ jobs:
 
           validate_dependabot_pr_object() {
             local response="$1"
+            # The value can transiently flip on same-repository bot PRs; only its type is stable evidence.
             jq -e \
               --argjson number "$PR_NUMBER" \
               --arg repo "$TARGET_REPOSITORY" \
@@ -638,7 +639,6 @@ jobs:
                 (.number | type == "number" and . == floor and . > 0 and . == $number) and
                 (.state | type == "string" and . == "open") and
                 (.draft | type == "boolean" and . == false) and
-                # The value can transiently flip on same-repository bot PRs; only its type is stable evidence.
                 (.maintainer_can_modify | type == "boolean") and
                 (.user | type == "object" and (.login | type == "string" and . == "dependabot[bot]")) and
                 (.base | type == "object" and
