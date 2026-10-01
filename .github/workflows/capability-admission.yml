@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
-          test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "d0ce5908e8dcbe46314156785a5379ba3255bf1b"
+          test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"
           test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"
           test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "4e718d6268182d351e5913051206366e6eccd566"
 
