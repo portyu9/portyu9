@@ -827,6 +827,13 @@
       "rationale": "Authorize #550's exact source-only Dependabot terminal convergence hardening. The trusted controller reuses existing main/head identity and six read-only check queries during a bounded post-dispatch convergence window, then enters the existing exact-head merge only after all required contexts succeed. Semantic BOM, triggers, permissions, mutation surfaces, candidate-data boundary, check publishers, merge endpoint, and bypass authority are unchanged."
     },
     {
+      "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "expansionSha256": "805606d046dbfb8458e62a529d2904a98842e84e72dd758feceda281609b641b",
+      "id": "cap-dependabot-update-branch-http-status-v1",
+      "rationale": "Authorize frozen #1437 protected-source hardening of the existing expected-head-bound Dependabot update-branch PUT: capture the response, require exact HTTP 202 before extracting and validating the existing acknowledgement body, then preserve bounded post-update re-observation. Semantic BOM, endpoint, payload, mutation count, permissions, triggers, write retries, merge authority, required checks, secrets/OIDC, direct-main/ruleset authority, and bypass remain unchanged."
+    },
+    {
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "expansionSha256": "b608f64512c9f406d46c6097f14c117dfab329a0c9733367a5f34c27c9cfb9aa",
