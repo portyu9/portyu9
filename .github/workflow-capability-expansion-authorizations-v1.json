@@ -460,7 +460,7 @@
       "candidateBomSha256": "1f463549666e9791501b8551afce86bc06ed6bf1efba33135588efc517921737",
       "expansionSha256": "28af5cea071d348a36f7bf7f6215184410da098dd8a328683a9143546c8808b0",
       "id": "cap-codeql-autofix-terminal-review-pagination-v1",
-      "rationale": "Authorize frozen #1413 measured by closed #1414: route the existing CodeQL Autofix terminal pull-review GET pagination through the accepted bounded governed paginator while preserving the exact endpoint/query, complete page-array shape, strict review schema, exact base/head marker-bound portyu9 approval, and manual CHANGES_REQUESTED veto. The direct raw GET capability is reduced; no permission, trigger, mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass is added."
+      "rationale": "Authorize frozen #1413 measured by closed #1414: route the existing CodeQL Autofix terminal pull-review GET pagination through the accepted bounded paginator while preserving the exact endpoint/query, complete page-array shape, strict review schema, marker-bound portyu9 approval, and manual CHANGES_REQUESTED veto. Removes one raw GET surface; adds no permission, trigger, mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
     },
     {
       "baseBomSha256": "8b3abd7a1cd0f2c74e66fb4be71310f77b848fb6e53c252a55dabb9207352259",
