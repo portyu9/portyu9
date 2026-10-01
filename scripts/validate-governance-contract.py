@@ -49,7 +49,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"',
         "name: Prove exact PR-native Dependabot context",
         "validate_dependabot_pr_object() {",
-        '(.maintainer_can_modify | type == "boolean" and . == false) and',
+        '(.maintainer_can_modify | type == "boolean") and',
         "validate_git_ref_object() {",
         "validate_contents_file_object() {",
         'python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
@@ -92,6 +92,11 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
             fragment in block,
             f"Profile Quality self-contained Dependabot admission contract is missing: {fragment}",
         )
+
+    require(
+        '(.maintainer_can_modify | type == "boolean" and . == false)' not in block,
+        "Profile Quality governance must not bind Dependabot identity to volatile maintainer flag value",
+    )
 
     require(
         block.count(f"actions/checkout@{CHECKOUT_SHA}") == 2
