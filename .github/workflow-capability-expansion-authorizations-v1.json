@@ -792,10 +792,10 @@
       "rationale": "Authorize frozen #1071's exact replacement of the cross-run Dependabot proof relay with a self-contained PR-native read-only gate. It binds exact PR/base/head, proves Profile Quality bytes unchanged, executes verifier code only from accepted base, treats candidate checkout as inert data, re-proves the immutable CodeQL release, and runs trusted semantic admission locally. Removes checks-read relay authority and polling; adds no write, merge, bypass, OIDC, ruleset, or direct-main authority."
     },
     {
-      "id": "cap-dependabot-pr-snapshot-read-transport-retry-v1",
       "baseBomSha256": "fe6c4b4d975a831b83470bbb9f392885c57a2585698cc00a8c8555f0aa487515",
       "candidateBomSha256": "6fcc576c85747eee12cbb038c02a8b382f0b27144ef5af19edb88c96e07660fe",
       "expansionSha256": "a9e90555b20b95089592fb15b61edadd0610fad7b3d1e0639d0479dc1fe65ba6",
+      "id": "cap-dependabot-pr-snapshot-read-transport-retry-v1",
       "rationale": "Authorize frozen #1348 measured by closed #1349: route five existing Dependabot singleton PR GETs through the accepted bounded authenticated GET-only reader. Preserve the endpoint, #1015 typed response boundary, identity/state checks, convergence, validation binding, CodeQL sequencing, tokens and all mutations. Semantic capability shrinks; no trigger, permission, mutation replay, secret/OIDC, required-check, ruleset, merge, direct-main or bypass authority is added."
     },
     {
@@ -897,10 +897,10 @@
       "rationale": "Authorize frozen #1100's exact trusted-source-only hardening of three existing Dependabot workflow-dispatch POSTs: capture gh api --include responses and require HTTP 204 before reconciled-head validation success, exact-head validation continuation, or exact-head CodeQL success. Base/candidate semantic BOMs are identical; endpoints, refs, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets and bypass remain unchanged."
     },
     {
-      "id": "cap-dependabot-workflow-singleton-read-transport-retry-v1",
       "baseBomSha256": "6fcc576c85747eee12cbb038c02a8b382f0b27144ef5af19edb88c96e07660fe",
       "candidateBomSha256": "3d9d4099a47f2440dabae7c8f7b0cc63ff69bb87704f77efaaf3ab2c747a3812",
       "expansionSha256": "6f71de6dbcb22b4d14bb27b78289127acd14b3428317e9737285e66460e8c6b2",
+      "id": "cap-dependabot-workflow-singleton-read-transport-retry-v1",
       "rationale": "Authorize frozen #1351 measured by closed #1352: move five existing Dependabot singleton workflow/run-definition GETs to the accepted bounded authenticated GET-only reader. Preserve exact endpoints, typed wake/proof/workflow-definition consumers, helper identity, run-scoped tokens, protected checks, all mutations, and merge sequencing. No trigger, permission, mutation replay, secret/OIDC, required-check reduction, ruleset, merge, direct-main, or bypass authority is added."
     },
     {
@@ -1156,10 +1156,10 @@
       "rationale": "Authorize frozen #1300: route the single existing Profile Quality Dependabot changed-file pagination GET through the accepted bounded authenticated paginated read helper. Preserve the exact endpoint, token, array-of-pages evidence, full collection validation, downstream admission, permissions, triggers and mutations. Semantic Workflow Capability only shrinks; no write, secret/OIDC, ruleset, merge or bypass authority is added."
     },
     {
-      "id": "cap-profile-quality-dependabot-file-pages-governed-read-v2",
       "baseBomSha256": "9976c120af0e18762e82ef1a26041c9bde4b825c001f2cbe50b85398c1665da6",
       "candidateBomSha256": "2aa9ce035e5cbc08922756a28180047e097a2b4d26f3448b5868338775bb624c",
       "expansionSha256": "bb3b21d016e11de78c20192f0082be642cdd8b9066c7c1f7c105c3e363b559ff",
+      "id": "cap-profile-quality-dependabot-file-pages-governed-read-v2",
       "rationale": "Correct #1301's stale protected-source measurement for frozen #1300. Current-main production reconstruction proves the same base/candidate BOM pair, exactly two protected-source transitions, one semantic read-surface reduction, and candidate TCB d442f46f749315ed6946ae79c512bef9838c14efe5e0e3d34e6839fa1b4e32ad. No trigger, permission, endpoint, mutation, secret/OIDC, ruleset, merge or bypass authority is added."
     },
     {
@@ -1504,6 +1504,13 @@
       "expansionSha256": "87a7c1acb3aa8f2e42cde5b2f519081c7bf8869f94d5f155a3c08073c6315f8e",
       "id": "cap-spotlight-scheduled-admission-recovery-tcb",
       "rationale": "Authorize #518's exact final Spotlight scheduled admission recovery including the protected workflow and canonical BOM source boundary. Trusted code may discover and reprove at most one exact current-main deterministic github-actions[bot] README-only candidate, evaluate candidate TCB bytes only as data, and publish only trusted-capability-admission on that exact head. Merge authority and all other protected checks remain unchanged."
+    },
+    {
+      "baseBomSha256": "b9ad09b0a6dc78128556d97bfadae01a08d6fe43066636fa84028949a2ba5484",
+      "candidateBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
+      "expansionSha256": "ae462902dbe1021e169d49f5dba098e8c0234afeee7e20fd4d2d8686d867e745",
+      "id": "cap-spotlight-superseded-source-epoch-reproof-v1",
+      "rationale": "Authorize frozen #1484's exact two read-only Spotlight source-epoch reproof cardinalities: one additional transient-safe main-ref GET and one additional transient-safe generated-ref GET used only to classify an immutable candidate as superseded before/during protected-check convergence. The frozen source keeps terminal base/generated/candidate equality, required checks, owner approval, certificate, attestation, and exact-head merge reproofs. No trigger, permission, mutation class/count/retry, secret/OIDC, required-check reduction, direct-main write, ruleset/merge authority, candidate execution, or bypass is added."
     },
     {
       "baseBomSha256": "eef8ae03025cb0baf732be0c49e4f3c5e4c3d7b502258a1bbc0761c1c6a89977",
