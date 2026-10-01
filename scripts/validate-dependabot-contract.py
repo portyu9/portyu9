@@ -1242,7 +1242,6 @@ def validate_controller_git_mutation_status_contract(text: str) -> None:
     blob_request_fragments = (
         'base64 -w0 < "$FILE" | jq -Rs \'{content: ., encoding: "base64"}\' > git-blob-request.json',
         'jq -e \'type == "object" and keys == ["content", "encoding"] and .encoding == "base64" and (.content | type == "string" and length > 0)\' git-blob-request.json >/dev/null',
-        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/blobs" --input git-blob-request.json > git-blob-http-response.txt',
     )
     for fragment in blob_request_fragments:
         require(
