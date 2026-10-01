@@ -1506,6 +1506,13 @@
       "rationale": "Authorize #518's exact final Spotlight scheduled admission recovery including the protected workflow and canonical BOM source boundary. Trusted code may discover and reprove at most one exact current-main deterministic github-actions[bot] README-only candidate, evaluate candidate TCB bytes only as data, and publish only trusted-capability-admission on that exact head. Merge authority and all other protected checks remain unchanged."
     },
     {
+      "baseBomSha256": "b9ad09b0a6dc78128556d97bfadae01a08d6fe43066636fa84028949a2ba5484",
+      "candidateBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
+      "expansionSha256": "ae462902dbe1021e169d49f5dba098e8c0234afeee7e20fd4d2d8686d867e745",
+      "id": "cap-spotlight-superseded-source-epoch-noop-v1",
+      "rationale": "Authorize frozen #1484's exact Spotlight superseded-source-epoch liveness repair measured by closed #1485: add two read-only current main/generated observations inside the existing bounded approval GET kernel, terminate an immutable superseded source epoch successfully instead of polling to red, and require nonempty exact protected run IDs before merge-authorization preparation. Terminal merge retains independent exact root/check/review/certificate/attestation reproof. Adds no trigger, runtime permission, mutation endpoint/class/count/retry, secret/OIDC, candidate execution, required-check reduction, direct-main write, ruleset/terminal-merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "eef8ae03025cb0baf732be0c49e4f3c5e4c3d7b502258a1bbc0761c1c6a89977",
       "candidateBomSha256": "eef8ae03025cb0baf732be0c49e4f3c5e4c3d7b502258a1bbc0761c1c6a89977",
       "expansionSha256": "4c9d29f13f9ade858d2f2d874f873ed6baa6780b9f716a895c1179036d44e3a1",
