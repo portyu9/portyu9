@@ -26,7 +26,7 @@ ALLOWED_STORAGE_HOST_SUFFIXES = (
 )
 REDIRECT_STATUS = 302
 MAX_RESPONSE_BYTES = 8_000_000
-ZIP_SIGNATURES = (b"PK\\x03\\x04", b"PK\\x05\\x06", b"PK\\x07\\x08")
+ZIP_SIGNATURES = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
 USER_AGENT = "portyu9-governed-github-artifact-download-v1"
 
 
@@ -360,7 +360,7 @@ def self_test() -> None:
     ]
     storage_sequence: list[Any] = [
         urllib.error.HTTPError(signed, 503, "fixture", {}, None),
-        _FixtureResponse(signed, status=200, body=b"PK\\x03\\x04fixture"),
+        _FixtureResponse(signed, status=200, body=b"PK\x03\x04fixture"),
     ]
 
     def api_fixture(request: urllib.request.Request, *, timeout: int) -> Any:
@@ -394,7 +394,7 @@ def self_test() -> None:
         storage_opener=storage_fixture,
         sleeper=sleeps.append,
     )
-    require(payload == b"PK\\x03\\x04fixture", "artifact ZIP retry fixture payload changed")
+    require(payload == b"PK\x03\x04fixture", "artifact ZIP retry fixture payload changed")
     require(
         api_calls == [api_url, api_url, api_url],
         "each artifact ZIP retry must restart at the exact authenticated API endpoint",
@@ -433,9 +433,9 @@ def self_test() -> None:
 
     with tempfile.TemporaryDirectory(prefix="artifact-zip-self-test-") as directory:
         output = Path(directory) / "receipt.zip"
-        write_atomic(str(output), b"PK\\x03\\x04fixture")
+        write_atomic(str(output), b"PK\x03\x04fixture")
         require(
-            output.read_bytes() == b"PK\\x03\\x04fixture",
+            output.read_bytes() == b"PK\x03\x04fixture",
             "artifact ZIP atomic output changed bytes",
         )
 
