@@ -339,9 +339,10 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
           test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
             "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > release-refs.txt
-          python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json
+          python3 scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json
           python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json
           python3 scripts/dependabot_release.py \
             --refs release-refs.txt \
@@ -1206,9 +1207,10 @@ jobs:
           test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" \
             "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > release-refs.txt
-          python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json
+          python3 scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > release-repository.json
           python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > release.json
           python3 scripts/dependabot_release.py \
             --refs release-refs.txt \

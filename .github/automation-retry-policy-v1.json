@@ -169,6 +169,32 @@
       "rationale": "Canonical authenticated repository-scoped read-only GET transport for governed automation. Each retry issues a fresh GET and accepts only strict UTF-8 duplicate-key-safe JSON; authorization, not-found, malformed payload, schema/policy failures and every mutation remain terminal."
     },
     {
+      "id": "repository-root-github-api-read-transient",
+      "source": "scripts/automation_github_repository_read.py",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "repository-root-only",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only fresh authenticated read-only GitHub repository-root metadata GETs at exact repos/{owner}/{repo} after classified transport/platform transients. Deeper paths, redirects, authorization/not-found, malformed payload, schema/policy failures and every mutation remain terminal."
+    },
+    {
       "id": "profile-contribution-graphql-query-transient",
       "source": "scripts/sync-profile-contribution-total.py",
       "workflow": ".github/workflows/profile-stats.yml",

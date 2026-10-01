@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "fc50c88a2e3050fe3bc9a16acc3ae4beea2c253d"
+EXPECTED_GIT_BLOB = "c217d2b48a06083c4fd2f51a0cdd9fabb9789fcc"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -124,6 +124,7 @@ def validate_text(text: str) -> None:
         'PR="$(jq -c \'.pull_request\' "$GITHUB_EVENT_PATH")"',
         'ACTION="$(jq -r \'.action // ""\' "$GITHUB_EVENT_PATH")"',
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"',
         'test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "4e718d6268182d351e5913051206366e6eccd566"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
@@ -142,6 +143,7 @@ def validate_text(text: str) -> None:
         '        run: |\n'
         '          set -euo pipefail\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"\n'
+        '          test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "4e718d6268182d351e5913051206366e6eccd566"\n'
     )
@@ -683,8 +685,9 @@ def validate_text(text: str) -> None:
     delegated_release_step_end = text.index("\n      - name:", delegated_release_step_start + 8)
     delegated_release_step = text[delegated_release_step_start:delegated_release_step_end]
     require(
-        delegated_release_step.count("python3 scripts/automation_github_read.py") == 2,
-        "trusted Capability Admission delegated release proof must use exactly two governed singleton JSON reads",
+        delegated_release_step.count("python3 scripts/automation_github_repository_read.py") == 1
+        and delegated_release_step.count("python3 scripts/automation_github_read.py") == 1,
+        "trusted Capability Admission delegated release proof must use exactly one repository-root and one canonical governed JSON read",
     )
     require(
         "gh api " not in delegated_release_step,
@@ -743,7 +746,7 @@ def validate_text(text: str) -> None:
         'test "$DEPENDENCY_REPOSITORY" = "github/codeql-action"',
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
         "python3 scripts/dependabot_release.py",
-        'python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
+        'python3 scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
         'python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > dependabot-release.json',
         '--repository-json dependabot-release-repository.json',
         '--release-json dependabot-release.json',
@@ -1570,9 +1573,9 @@ def self_test() -> None:
     )
     expect_failure(
         text,
-        'python3 scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
+        'python3 scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
         'gh api "repos/${DEPENDENCY_REPOSITORY}" > dependabot-release-repository.json',
-        "must use exactly two governed singleton JSON reads",
+        "must use exactly one repository-root and one canonical governed JSON read",
     )
     expect_failure(
         text,
