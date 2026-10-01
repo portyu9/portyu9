@@ -446,6 +446,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
         positions == sorted(positions),
         "Dependabot update-branch must prove HTTP 202 before body/schema/acknowledgement consumption",
     )
+    update_consume_pos = text.index(update_consume)
 
     require(
         "Requested exact-head Dependabot branch update; next scheduled pass will re-prove the new head." not in text,
@@ -479,7 +480,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
         )
     post_update_fetch = text.index(
         '> "$RUNNER_TEMP/dependabot-post-update-pr.json"',
-        update_consume,
+        update_consume_pos,
     )
     post_update_schema = text.index(validator, post_update_fetch)
     post_update_consume = text.index(
@@ -489,7 +490,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
     rebound_head = text.index('HEAD_SHA="$UPDATED_HEAD_SHA"', post_update_consume)
     output_target = text.index("printf 'has_target=true\\n' >> \"$GITHUB_OUTPUT\"", rebound_head)
     require(
-        update_consume < post_update_fetch < post_update_schema < post_update_consume < rebound_head < output_target,
+        update_consume_pos < post_update_fetch < post_update_schema < post_update_consume < rebound_head < output_target,
         "Dependabot branch-update convergence must type the refreshed PR before exact-head rebinding and target publication",
     )
 
