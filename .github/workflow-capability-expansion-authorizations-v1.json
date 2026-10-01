@@ -726,7 +726,7 @@
       "candidateBomSha256": "b9ad09b0a6dc78128556d97bfadae01a08d6fe43066636fa84028949a2ba5484",
       "expansionSha256": "1099dfcc3985881930ff99334d2b3954cdae879dac1821d850b718c954aac7b9",
       "id": "cap-dependabot-maintainer-flag-volatility-v1",
-      "rationale": "Authorize frozen #1471 measured by diagnostic PR #1472: treat maintainer_can_modify as strictly typed but value-volatile metadata, while preserving exact Dependabot actor/ref/repository/base/head/draft/state/provenance/diff/check/review/merge bindings. Semantic Workflow Capability is unchanged; protected-TCB expansion is 3 with 0 reductions. No trigger, permission, endpoint/method, mutation, secret/OIDC, required-check, merge/ruleset/direct-main authority, candidate execution, or bypass."
+      "rationale": "Authorize frozen #1471 measured by diagnostic PR #1472: keep maintainer_can_modify boolean-typed but value-volatile while preserving exact Dependabot identity, provenance, checks, review, and merge bindings. Semantic Workflow Capability is unchanged; protected-TCB expansion is 3 with 0 reductions. Adds no trigger, permission, endpoint, mutation, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, candidate execution, or bypass."
     },
     {
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
