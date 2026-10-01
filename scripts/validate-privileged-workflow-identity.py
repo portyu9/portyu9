@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v141"
+VERSION = "governed-workflow-byte-identity-v142"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "92ed93fdce128ad71ed078912cbed5b10c25c0c6",
     ".github/workflows/profile-quality.yml": "45e53e364dc95a3beecc4408f00b94d09e971f50",
@@ -3679,6 +3679,15 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json'
     )
     artifact_zip = (
+        "python3 scripts/automation_github_artifact_download.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"'
+        + " "
+        + "\\"
+        + "\n            receipt.zip"
+    )
+    artifact_zip_direct = (
         'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
     )
     require(
@@ -3686,8 +3695,18 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
         "CodeQL Autofix receipt artifact-list governed-read identity changed",
     )
     require(
-        autofix.count(artifact_zip) == 1,
-        "CodeQL Autofix receipt ZIP raw binary identity changed",
+        autofix.count("python3 scripts/automation_github_artifact_download.py") == 1
+        and autofix.count(artifact_zip) == 1,
+        "CodeQL Autofix receipt ZIP governed binary identity changed",
+    )
+    require(
+        artifact_zip_direct not in autofix,
+        "CodeQL Autofix receipt ZIP regained direct gh API transport",
+    )
+    require(
+        'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "27c89de923d6ccab7930134335908b64be7b25d5"'
+        in autofix,
+        "CodeQL Autofix receipt ZIP lost exact governed binary helper identity",
     )
     artifact_fetch_pos = autofix.index(artifact_list_fetch)
     artifact_validate_pos = autofix.index(
@@ -3699,9 +3718,14 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
         artifact_validate_pos,
     )
     artifact_zip_pos = autofix.index(artifact_zip, artifact_consume_pos)
+    artifact_unzip_pos = autofix.index(
+        "unzip -p receipt.zip codeql-autofix-receipt.json > verified-receipt.json",
+        artifact_zip_pos,
+    )
     require(
-        artifact_fetch_pos < artifact_validate_pos < artifact_consume_pos < artifact_zip_pos,
-        "CodeQL Autofix receipt artifact-list evidence moved out of reviewed typed order",
+        artifact_fetch_pos < artifact_validate_pos < artifact_consume_pos
+        < artifact_zip_pos < artifact_unzip_pos,
+        "CodeQL Autofix receipt artifact evidence moved out of reviewed typed order",
     )
 
     run_singletons = (

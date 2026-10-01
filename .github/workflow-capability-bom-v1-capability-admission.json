@@ -27,13 +27,6 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip",
-              "method": "GET",
-              "mutating": false,
-              "step": "Verify immutable Autofix controller provenance"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/check-runs",
               "method": "POST",
               "mutating": true,

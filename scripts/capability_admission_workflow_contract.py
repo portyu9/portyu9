@@ -125,6 +125,7 @@ def validate_text(text: str) -> None:
         'ACTION="$(jq -r \'.action // ""\' "$GITHUB_EVENT_PATH")"',
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         'test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
+        'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "27c89de923d6ccab7930134335908b64be7b25d5"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}"',
         'python3 scripts/automation_github_read.py "repos/${HEAD_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1"',
@@ -142,6 +143,7 @@ def validate_text(text: str) -> None:
         '          set -euo pipefail\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"\n'
+        '          test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "27c89de923d6ccab7930134335908b64be7b25d5"\n'
     )
     require(expected_identity_run in identity_step,
             "trusted Capability Admission governed-read identity commands must remain distinct shell lines")
@@ -412,10 +414,24 @@ def validate_text(text: str) -> None:
         autofix_step.count("python3 scripts/automation_github_read.py") == 2,
         "trusted Capability Admission Autofix provenance must use exactly two governed singleton JSON reads",
     )
-    binary_zip = 'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
+    binary_zip = (
+        "python3 scripts/automation_github_artifact_download.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"'
+        + " "
+        + "\\"
+        + "\n            receipt.zip"
+    )
+    raw_binary_zip = 'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
     require(
-        autofix_step.count("gh api ") == 1 and autofix_step.count(binary_zip) == 1,
-        "trusted Capability Admission Autofix provenance must retain exactly one raw binary artifact ZIP read",
+        autofix_step.count("python3 scripts/automation_github_artifact_download.py") == 1
+        and autofix_step.count(binary_zip) == 1,
+        "trusted Capability Admission Autofix provenance must use exactly one governed artifact ZIP read",
+    )
+    require(
+        raw_binary_zip not in autofix_step and "gh api " not in autofix_step,
+        "trusted Capability Admission Autofix provenance regained direct artifact ZIP transport",
     )
     for forbidden in (
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json',
@@ -425,6 +441,25 @@ def validate_text(text: str) -> None:
             forbidden not in autofix_step,
             f"trusted Capability Admission Autofix provenance regained direct singleton JSON transport: {forbidden}",
         )
+
+    artifact_list_call = (
+        "python3 scripts/automation_github_read.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100"'
+    )
+    artifact_select = "python3 scripts/codeql_autofix_controller.py artifact"
+    artifact_id = 'ARTIFACT_ID="$(jq -r .id artifact.json)"'
+    unzip_receipt = "unzip -p receipt.zip codeql-autofix-receipt.json > verified-receipt.json"
+    artifact_list_pos = autofix_step.index(artifact_list_call)
+    artifact_select_pos = autofix_step.index(artifact_select, artifact_list_pos)
+    artifact_id_pos = autofix_step.index(artifact_id, artifact_select_pos)
+    binary_zip_pos = autofix_step.index(binary_zip, artifact_id_pos)
+    unzip_pos = autofix_step.index(unzip_receipt, binary_zip_pos)
+    require(
+        artifact_list_pos < artifact_select_pos < artifact_id_pos < binary_zip_pos < unzip_pos,
+        "trusted Capability Admission Autofix artifact ZIP moved out of typed receipt order",
+    )
 
     origin_call = 'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json'
     origin_schema_marker = '--argjson run "$ORIGIN_RUN_ID"'
