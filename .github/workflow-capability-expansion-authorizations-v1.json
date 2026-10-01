@@ -950,7 +950,7 @@
       "candidateBomSha256": "59fb56bd1f9a34f52387d9bc8c5d5a037466fc52d43d17f41b2cc7337eb3d891",
       "expansionSha256": "a4928dbbf3d574ef80a706f614e3e122963bca048b7108f827df5e7f8f4e7f0e",
       "id": "cap-governed-artifact-zip-read-v1",
-      "rationale": "Authorize frozen #1422 measured by closed #1424: replace the two existing raw CodeQL receipt artifact-ZIP GETs in Capability Admission and CodeQL Autofix with the reviewed repository-artifact-only bounded helper. Preserve typed artifact selection and receipt-validation order while keeping GH_TOKEN only on the GitHub API hop, validating one HTTPS signed-storage hop, retrying only the complete read transaction under the accepted transient classifier, bounding bytes, requiring ZIP magic, and atomically publishing complete output. Removes two raw GET capabilities; adds no permission, trigger, mutation/replay, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, or bypass."
+      "rationale": "Authorize frozen #1422 measured by closed #1424: replace two raw receipt artifact-ZIP GETs in Capability Admission and CodeQL Autofix with the reviewed repository-artifact-only helper. Preserve typed artifact selection/receipt validation, token isolation, validated HTTPS signed-storage redirect, bounded whole-read transient retry, byte cap, ZIP magic, and atomic output. Adds no permission, trigger, mutation/replay, secret/OIDC, check reduction, direct-main/ruleset/merge authority, or bypass."
     },
     {
       "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
