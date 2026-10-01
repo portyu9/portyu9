@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v143"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "92ed93fdce128ad71ed078912cbed5b10c25c0c6",
-    ".github/workflows/profile-quality.yml": "d825aee76592ac8f71213ea89b821cdb46f8f59f",
+    ".github/workflows/profile-quality.yml": "53914bb9257d49ea29db7bb9d0f5a278ec373ad7",
     ".github/workflows/profile-stats.yml": "0a6a2ff4924a9c5e27c20f0feb69f5c8e7756001",
     ".github/workflows/spotlight-link-sync.yml": "df15c37d6890e8f3a6eb348535966d16642405d5",
 }
@@ -2258,6 +2258,7 @@ def validate_dependabot_admission_blob_locks(profile_quality: str) -> None:
         "scripts/workflow_capability_api_collection.py",
         "scripts/workflow_capability_tcb.py",
         "scripts/automation_github_read.py",
+        "scripts/automation_github_repository_read.py",
         "scripts/automation_github_paginated_read.py",
     )
     for relative in trusted_paths:
@@ -2279,6 +2280,7 @@ def validate_dependabot_admission_blob_locks(profile_quality: str) -> None:
     ]
     for relative in (
         "scripts/automation_github_read.py",
+        "scripts/automation_github_repository_read.py",
         "scripts/automation_github_paginated_read.py",
     ):
         blob = v21.git_blob_sha(ROOT / relative)

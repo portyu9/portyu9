@@ -2173,6 +2173,7 @@ def validate_quality_contract(text: str) -> None:
         "- name: Verify resolved Python runtime",
         "- name: Verify exact accepted-base governed read transport identity",
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"',
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         "- name: Prove exact PR-native Dependabot context",
         '(.maintainer_can_modify | type == "boolean" and . == false)',
@@ -2196,7 +2197,7 @@ def validate_quality_contract(text: str) -> None:
         "python3 trusted-base/scripts/workflow_capability_api_collection.py files",
         "python3 trusted-base/scripts/dependabot_controller.py probe",
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}"',
-        'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"',
+        'python3 trusted-base/scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"',
         'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > "$RUNNER_TEMP/dependabot-release.json"',
         "python3 trusted-base/scripts/dependabot_release.py",
         "- name: Evaluate exact accepted-base semantic admission",
@@ -2223,6 +2224,14 @@ def validate_quality_contract(text: str) -> None:
     require(
         block.count(paginated_helper_pin) == 2,
         "Profile Quality PR-native Dependabot admission must byte-pin the governed paginated helper in both transport/source identity steps",
+    )
+    repository_root_helper_pin = (
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" '
+        '= "12acd01e53c84558617e868e9f3489f9770c85d8"'
+    )
+    require(
+        block.count(repository_root_helper_pin) == 2,
+        "Profile Quality PR-native Dependabot admission must byte-pin the root-only reader in both transport/source identity steps",
     )
     require(
         block.count(governed_file_pages) == 1,
@@ -2265,6 +2274,7 @@ def validate_quality_contract(text: str) -> None:
         "- name: Verify resolved Python runtime",
         "- name: Verify exact accepted-base governed read transport identity",
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"',
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         "- name: Prove exact PR-native Dependabot context",
         'python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
@@ -2285,7 +2295,7 @@ def validate_quality_contract(text: str) -> None:
         "python3 trusted-base/scripts/workflow_capability_api_collection.py files",
         "python3 trusted-base/scripts/dependabot_controller.py probe",
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}"',
-        'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"',
+        'python3 trusted-base/scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"',
         'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > "$RUNNER_TEMP/dependabot-release.json"',
         "python3 trusted-base/scripts/dependabot_release.py",
         "- name: Evaluate exact accepted-base semantic admission",

@@ -46,6 +46,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         "working-directory: trusted-base",
         "name: Verify exact accepted-base governed read transport identity",
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"',
         "name: Prove exact PR-native Dependabot context",
         "validate_dependabot_pr_object() {",
         '(.maintainer_can_modify | type == "boolean" and . == false) and',
@@ -69,6 +70,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"',
         'HEAD:scripts/workflow_capability_tcb.py)" = "58f4d55e7e65bc7f417c1ce3c006f0b7b9c412c7"',
         'HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"',
         'HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         "name: Fetch exact candidate release evidence",
         'python3 trusted-base/scripts/automation_github_paginated_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"',
@@ -77,7 +79,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         '--base-root trusted-base',
         '--candidate-root candidate-source',
         'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"',
-        'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}"',
+        'python3 trusted-base/scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}"',
         'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}"',
         "trusted-base/scripts/dependabot_release.py",
         "name: Evaluate exact accepted-base semantic admission",
@@ -101,8 +103,12 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         "PR-native Dependabot admission must execute both trusted Python phases from accepted-base modules",
     )
     require(
-        block.count("python3 trusted-base/scripts/automation_github_read.py") == 7,
-        "PR-native Dependabot admission must use exactly seven governed singleton GitHub reads",
+        block.count("python3 trusted-base/scripts/automation_github_read.py") == 6,
+        "PR-native Dependabot admission must use exactly six governed repository-subresource singleton GitHub reads",
+    )
+    require(
+        block.count("python3 trusted-base/scripts/automation_github_repository_read.py") == 1,
+        "PR-native Dependabot admission must use exactly one governed repository-root GitHub read",
     )
     require(
         block.count("python3 trusted-base/scripts/automation_github_paginated_read.py") == 1
@@ -191,7 +197,7 @@ def self_test_profile_quality_dependabot_admission_evidence(block: str) -> None:
             "contract is missing",
         ),
         (
-            'python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}"',
+            'python3 trusted-base/scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}"',
             'gh api "repos/${DEPENDENCY_REPOSITORY}"',
             "contract is missing",
         ),

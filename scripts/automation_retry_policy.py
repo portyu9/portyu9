@@ -2239,6 +2239,11 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Profile Quality Dependabot lost exact governed singleton-read helper identity",
     )
     require(
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"'
+        in dependabot_transport_identity_step,
+        "Profile Quality Dependabot lost exact governed repository-root helper identity",
+    )
+    require(
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"'
         in dependabot_transport_identity_step,
         "Profile Quality Dependabot lost exact governed paginated-read helper identity",
@@ -2272,8 +2277,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "dependabot_admission",
         "Fetch exact candidate release evidence",
     )
-    require(dependabot_release_step.count("python3 trusted-base/scripts/automation_github_read.py") == 2,
-            "Profile Quality Dependabot release proof must use exactly two governed singleton GitHub read call sites")
+    require(dependabot_release_step.count("python3 trusted-base/scripts/automation_github_read.py") == 1,
+            "Profile Quality Dependabot release proof must use exactly one governed repository-subresource singleton read")
+    require(dependabot_release_step.count("python3 trusted-base/scripts/automation_github_repository_read.py") == 1,
+            "Profile Quality Dependabot release proof must use exactly one governed repository-root singleton read")
     paginated_files = (
         'python3 trusted-base/scripts/automation_github_paginated_read.py '
         '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100"'
@@ -3412,18 +3419,42 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     dependabot_release_transport_drift = dict(texts)
     release_source = dependabot_release_transport_drift[".github/workflows/profile-quality.yml"]
     release_governed = (
-        'python3 trusted-base/scripts/automation_github_read.py '
+        'python3 trusted-base/scripts/automation_github_repository_read.py '
         '"repos/${DEPENDENCY_REPOSITORY}"'
     )
     require(release_governed in release_source,
-            "retry-policy self-test fixture missing Dependabot release governed read")
+            "retry-policy self-test fixture missing Dependabot repository-root governed read")
     dependabot_release_transport_drift[".github/workflows/profile-quality.yml"] = (
         release_source.replace(release_governed, 'gh api "repos/${DEPENDENCY_REPOSITORY}"', 1)
     )
     expect_failure(
         copy.deepcopy(policy),
         dependabot_release_transport_drift,
-        "must use exactly two governed singleton GitHub read call sites",
+        "must use exactly one governed repository-root singleton read",
+    )
+
+    dependabot_repository_root_identity_drift = dict(texts)
+    root_identity_source = dependabot_repository_root_identity_drift[".github/workflows/profile-quality.yml"]
+    root_identity = (
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" '
+        '= "12acd01e53c84558617e868e9f3489f9770c85d8"'
+    )
+    require(root_identity in root_identity_source,
+            "retry-policy self-test fixture missing Dependabot repository-root helper identity")
+    dependabot_repository_root_identity_drift[".github/workflows/profile-quality.yml"] = (
+        root_identity_source.replace(
+            root_identity,
+            root_identity.replace(
+                "12acd01e53c84558617e868e9f3489f9770c85d8",
+                "0000000000000000000000000000000000000000",
+            ),
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        dependabot_repository_root_identity_drift,
+        "lost exact governed repository-root helper identity",
     )
 
     dependabot_pagination_transport_drift = dict(texts)
