@@ -872,7 +872,7 @@ jobs:
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
           fetch_codeql_dispatch_runs() {
-            gh api --paginate --slurp \
+            python3 scripts/automation_github_paginated_read.py \
               "repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100"
           }
 
