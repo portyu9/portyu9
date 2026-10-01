@@ -57,7 +57,7 @@ REVIEWED_DYNAMIC_DELEGATES: dict[str, dict[str, tuple[str, frozenset[str]]]] = {
     "validate-portfolio-evidence-ledger.py": {
         "generator": (
             "generate-portfolio-evidence-ledger.py",
-            frozenset({"fetch_json", "retry_delay_seconds"}),
+            frozenset({"fetch_json"}),
         ),
     },
     "validate-profile-v4.py": {
