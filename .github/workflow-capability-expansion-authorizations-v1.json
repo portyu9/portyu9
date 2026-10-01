@@ -684,7 +684,7 @@
       "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "expansionSha256": "02c59f008515a33bed8986b4578fc6fb0df4f8c914c99948ff325b729b1899d3",
       "id": "cap-dependabot-git-blob-request-body-v1",
-      "rationale": "Authorize frozen #1449 measured by closed #1450: replace the existing Dependabot controller Git-blob POST payload's unbounded shell argv transport with a validated file-backed JSON request body, preserving the exact endpoint, method, mutation count, HTTP 201 proof, typed response validation, tree/commit/ref sequence, expected-head assertions and downstream dispatches. Semantic Workflow Capability is unchanged; measured protected TCB expansion is 1 with 0 reductions. No trigger, permission, endpoint/method, retry, secret/OIDC, required-check, merge/ruleset/direct-main authority, mutation replay, or bypass is added."
+      "rationale": "Authorize frozen #1449 measured by closed #1450: move the existing Dependabot Git-blob POST payload from unbounded shell argv to a validated file-backed JSON body. Preserve endpoint/method, mutation count, HTTP 201 proof, typed response validation, tree/commit/ref sequence, expected-head assertions and dispatches. Semantic BOM unchanged; TCB expansion 1, reductions 0. Adds no trigger, permission, retry, secret/OIDC, required-check, merge/ruleset/direct-main authority, replay, or bypass."
     },
     {
       "baseBomSha256": "aa5edec95c900590abd92fbf4349b1128ed3ec1074cad7f030bc129b802f1835",
