@@ -768,10 +768,17 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
             "terminal pull-review authorization collection",
             "            ",
         ),
+        (
+            '"repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100"',
+            "> approval-comment-pages.json",
+            "python3 scripts/codeql_autofix_controller.py approval-comment-evidence",
+            "terminal approval-comment authorization collection",
+            "            ",
+        ),
     )
     require(
-        text.count(pagination_helper) == 7,
-        "CodeQL Autofix must retain exactly seven governed pagination calls",
+        text.count(pagination_helper) == 8,
+        "CodeQL Autofix must retain exactly eight governed pagination calls",
     )
     for endpoint, output_name, consumer, label, continuation_indent in pagination_contracts:
         fetch = (
@@ -1866,6 +1873,7 @@ def validate_unsupported_evidence(text: str) -> None:
 
 def validate_approval_comment_evidence(text: str) -> None:
     get_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
+    pagination_helper = "python3 scripts/automation_github_paginated_read.py"
     post_endpoint = 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"'
     post_status = 'APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"'
     post_guard = '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
@@ -1902,6 +1910,11 @@ def validate_approval_comment_evidence(text: str) -> None:
         'APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"'
     )
     get_pos = text.index(get_endpoint, marker_pos)
+    helper_pos = text.rfind(pagination_helper, marker_pos, get_pos)
+    require(
+        helper_pos >= marker_pos and get_pos - helper_pos < 160,
+        "CodeQL Autofix approval-comment read must use exactly one governed paginated collection",
+    )
     validate_pos = text.index(evidence_validator, get_pos)
     consume_pos = text.index(
         'APPROVAL_COMMENT_EXISTS="$(jq -r .exists approval-comment-evidence.json)"',
@@ -1949,6 +1962,21 @@ def validate_approval_comment_evidence(text: str) -> None:
 
 def self_test_approval_comment_evidence(text: str) -> None:
     validate_approval_comment_evidence(text)
+    marker = 'APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"'
+    helper = "python3 scripts/automation_github_paginated_read.py"
+    marker_pos = text.index(marker)
+    helper_pos = text.index(helper, marker_pos)
+    transport_regression = text[:helper_pos] + "gh api --paginate --slurp" + text[helper_pos + len(helper):]
+    try:
+        validate_approval_comment_evidence(transport_regression)
+    except ValueError as exc:
+        require(
+            "must use exactly one governed paginated collection" in str(exc),
+            f"CodeQL Autofix approval-comment transport self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("CodeQL Autofix approval-comment transport self-test accepted direct pagination")
+
     mutations = (
         (
             text.replace(
