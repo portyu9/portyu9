@@ -1170,6 +1170,13 @@
       "rationale": "Authorize frozen #1432 measured by closed #1433: converge Capability Admission and Dependabot Controller from temporary 3.13.15 to canonical 3.13.16, restore the uniform eight-workflow runtime contract, and rederive only the Capability Admission byte lock. No setup-python identity, runner, trigger, permission, job topology, endpoint/method, mutation/retry, secret/OIDC, required check, ruleset, merge/direct-main authority, generated/profile content, or bypass behavior changes."
     },
     {
+      "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "expansionSha256": "946ea03935a3b53b5dfeceac5b26ae69f004f040bbef58d8541177f215a1535f",
+      "id": "cap-repository-root-github-read-v1",
+      "rationale": "Authorize frozen #1445 measured by closed #1447: add one dedicated protected authenticated GET-only reader for exact repos/{owner}/{repo} metadata, declare its bounded transient retry policy, and route exactly three existing Dependabot/Capability Admission release-provenance repository metadata reads through it while preserving the accepted canonical subresource reader for release-by-tag and every other call site. Semantic Workflow Capability BOM is unchanged; measured protected-TCB expansion is four entries with zero reductions. No trigger, permission, release endpoint, mutation, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, mutation replay, or bypass is added."
+    },
+    {
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "expansionSha256": "5d6431769d38cf2addf390f12a9ab5aaa23b42f3550d5de8a8ad178fceb9a1b2",
