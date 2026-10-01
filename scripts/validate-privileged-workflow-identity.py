@@ -10,7 +10,7 @@ import privileged_workflow_identity_v21_core as v21
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v145"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "619a3a85684de644ebc41ea24bbd13edb6cf6a4a",
+    ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "d58114f33e21cf6b76391d9d89a09226642e2534",
     ".github/workflows/profile-stats.yml": "0a6a2ff4924a9c5e27c20f0feb69f5c8e7756001",
     ".github/workflows/spotlight-link-sync.yml": "df15c37d6890e8f3a6eb348535966d16642405d5",
@@ -2619,7 +2619,11 @@ def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
         '(([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))',
         'ERROR: malformed or incomplete exact-head GitHub Actions check snapshot for ${head}.',
         'count="$(jq --arg name "$name" \'[.check_runs[] | select(.name == $name)] | length\' <<<"$checks")"',
-        'required check ${name} is not singleton in the exact-head snapshot.',
+        'if [ "$count" -lt 1 ]; then',
+        'active="$(jq --arg name "$name" \'[.check_runs[] | select(.name == $name and .status != "completed")] | length\' <<<"$checks")"',
+        'if [ "$active" -gt 0 ]; then',
+        'failed="$(jq --arg name "$name" \'[.check_runs[] | select(.name == $name and .status == "completed" and .conclusion != "success")] | length\' <<<"$checks")"',
+        'if [ "$failed" -gt 0 ]; then',
         '(.workflow_runs | type == "array" and length <= 100) and',
         '(.head_repository | type == "object" and',
         '(([.workflow_runs[] | .id] | length) == ([.workflow_runs[] | .id] | unique | length))',
@@ -2643,6 +2647,17 @@ def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
     require(
         'check_name=${name}' not in approve,
         "Bot PR reviewer regressed to one check-run request per required context",
+    )
+    require(
+        'required check ${name} is not singleton in the exact-head snapshot.' not in approve
+        and '[ "$count" = "1" ]' not in approve,
+        "Bot PR reviewer must tolerate duplicate same-name checks only through all-copies evidence",
+    )
+    require(
+        'if [ "$count" -lt 1 ]; then' in approve
+        and 'if [ "$active" -gt 0 ]; then' in approve
+        and 'if [ "$failed" -gt 0 ]; then' in approve,
+        "Bot PR reviewer multiplicity contract must require at least one copy, defer on any active copy, and fail on any unsuccessful copy",
     )
     check_schema = '(.check_runs | type == "array" and length <= 100) and'
     check_ready = 'for name in "${required[@]}"; do'

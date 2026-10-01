@@ -638,14 +638,10 @@ jobs:
             for name in "${required[@]}"; do
               count="$(jq --arg name "$name" '[.check_runs[] | select(.name == $name)] | length' <<<"$checks")"
               [[ "$count" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid required-check count for ${name}." >&2; return 1; }
-              if [ "$count" = "0" ]; then
+              if [ "$count" -lt 1 ]; then
                 echo "Governed bot head ${head} is not ready: required check ${name} has not materialized yet."
                 return 2
               fi
-              [ "$count" = "1" ] || {
-                echo "ERROR: required check ${name} is not singleton in the exact-head snapshot." >&2
-                return 1
-              }
               active="$(jq --arg name "$name" '[.check_runs[] | select(.name == $name and .status != "completed")] | length' <<<"$checks")"
               [[ "$active" =~ ^[0-9]+$ ]] || { echo "ERROR: invalid active required-check count for ${name}." >&2; return 1; }
               if [ "$active" -gt 0 ]; then
