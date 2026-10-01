@@ -1550,6 +1550,18 @@ jobs:
       pull-requests: read
 
     steps:
+      - name: Checkout static trusted validation base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validation_bind.outputs.base_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact trusted validation base
+        env:
+          BASE_SHA: ${{ needs.validation_bind.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
+
       - name: Dispatch CodeQL after exact read-only validation
         env:
           GH_TOKEN: ${{ github.token }}
