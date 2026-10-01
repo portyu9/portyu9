@@ -249,6 +249,11 @@
         "vars": []
       },
       "triggers": {
+        "repository_dispatch": {
+          "types": [
+            "dependabot-review-wake"
+          ]
+        },
         "workflow_dispatch": {},
         "workflow_run": {
           "types": [

@@ -823,12 +823,61 @@ jobs:
           fi
 
           printf 'ready=%s\n' "$READY" >> "$GITHUB_OUTPUT"
-          if [ "$READY" != "true" ]; then
+          REVIEW_READY=false
+          if [ "$READY" = "true" ]; then
+            assert_transaction
+            REVIEW_CHECKS="$(python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&filter=latest&per_page=100")"
+            jq -e --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+              (.check_runs | type == "array" and length <= 100) and
+              (.total_count == (.check_runs | length)) and
+              (all(.check_runs[];
+                type == "object" and
+                (.id | (type == "number") and . == floor and . > 0) and
+                (.name | type == "string" and length > 0) and
+                (.head_sha == $head) and
+                (.app | type == "object" and .id == 15368) and
+                (.status | type == "string" and
+                  (. == "queued" or . == "in_progress" or . == "requested" or
+                   . == "waiting" or . == "pending" or . == "completed")) and
+                (if .status == "completed"
+                 then (.conclusion | type == "string" and length > 0)
+                 else .conclusion == null
+                 end)
+              )) and
+              (([.check_runs[] | .id] | length) == ([.check_runs[] | .id] | unique | length))
+            ' <<<"$REVIEW_CHECKS" >/dev/null || {
+              echo "ERROR: malformed exact-head governed-review check evidence." >&2
+              exit 1
+            }
+            REVIEW_GATE_COUNT="$(jq '[.check_runs[] | select(.name == "trusted-governed-bot-review")] | length' <<<"$REVIEW_CHECKS")"
+            [[ "$REVIEW_GATE_COUNT" =~ ^[0-9]+$ ]]
+            if [ "$REVIEW_GATE_COUNT" -ge 1 ] &&
+               jq -e 'all(.check_runs[] | select(.name == "trusted-governed-bot-review");
+                 .status == "completed" and .conclusion == "success")' <<<"$REVIEW_CHECKS" >/dev/null; then
+              REVIEW_READY=true
+              echo "Exact-head governed-review gate is green; merge may proceed to final marker/veto reproof."
+            else
+              jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" --arg headRef "$HEAD_REF" \
+                '{event_type:"dependabot-review-wake",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha,headRef:$headRef,lane:"dependabot"}}' \
+                > dependabot-review-dispatch.json
+              REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input dependabot-review-dispatch.json)"
+              REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d '\r')"
+              [[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {
+                echo "ERROR: Dependabot candidate-bound reviewer dispatch returned unexpected status: ${REVIEW_DISPATCH_STATUS_LINE}" >&2
+                exit 1
+              }
+              echo "Dispatched exact candidate-bound Dependabot reviewer evaluation after all six pre-review gates converged."
+            fi
+          else
             echo "Exact-head checks did not converge inside the bounded controller window; a later trusted wake may retry."
           fi
+          printf 'review_ready=%s\n' "$REVIEW_READY" >> "$GITHUB_OUTPUT"
 
       - name: Perform exact-head protected Dependabot merge
-        if: steps.candidate.outputs.has_target == 'true' && steps.proof.outputs.state == 'reconciled' && steps.checks.outputs.ready == 'true'
+        if: steps.candidate.outputs.has_target == 'true' && steps.proof.outputs.state == 'reconciled' && steps.checks.outputs.ready == 'true' && steps.checks.outputs.review_ready == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET_REPOSITORY: ${{ github.repository }}

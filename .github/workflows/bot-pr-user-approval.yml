@@ -8,6 +8,9 @@ on:
       - Dependency review
     types:
       - completed
+  repository_dispatch:
+    types:
+      - dependabot-review-wake
   workflow_dispatch:
 
 permissions:
@@ -17,7 +20,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || 'spotlight-dispatch' }}
+  group: bot-pr-user-approval-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event_name == 'repository_dispatch' && github.event.client_payload.headSha || 'spotlight-dispatch' }}
   cancel-in-progress: true
 
 jobs:
@@ -30,6 +33,11 @@ jobs:
            (startsWith(github.event.workflow_run.head_branch, 'dependabot/github_actions/') ||
             startsWith(github.event.workflow_run.head_branch, 'codeql-autofix/alert-') ||
             startsWith(github.event.workflow_run.head_branch, 'automation/spotlight-links/'))) ||
+          (github.event_name == 'repository_dispatch' &&
+           github.event.action == 'dependabot-review-wake' &&
+           github.event.sender.login == 'github-actions[bot]' &&
+           github.ref == 'refs/heads/main' &&
+           github.event.client_payload.lane == 'dependabot') ||
           (github.event_name == 'workflow_dispatch' &&
            github.actor == 'github-actions[bot]' &&
            github.ref == 'refs/heads/main') }}
@@ -59,8 +67,11 @@ jobs:
           REVIEW_TOKEN: ${{ secrets.PORTYU9_BOT_REVIEW_TOKEN }}
           TARGET_REPOSITORY: ${{ github.repository }}
           WAKE_EVENT_NAME: ${{ github.event_name }}
-          WAKE_HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || '' }}
-          WAKE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || '' }}
+          WAKE_PR_NUMBER: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.prNumber || '' }}
+          WAKE_BASE_SHA: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.baseSha || '' }}
+          WAKE_HEAD_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event_name == 'repository_dispatch' && github.event.client_payload.headSha || '' }}
+          WAKE_HEAD_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.event_name == 'repository_dispatch' && github.event.client_payload.headRef || '' }}
+          WAKE_LANE: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.lane || '' }}
         run: |
           set -euo pipefail
           echo "reviewed=false" >> "$GITHUB_OUTPUT"
@@ -76,6 +87,13 @@ jobs:
               [[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
               test -n "$WAKE_HEAD_REF"
               test "$WAKE_HEAD_REF" != "main"
+              ;;
+            repository_dispatch)
+              [[ "$WAKE_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+              [[ "$WAKE_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$WAKE_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$WAKE_HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
+              test "$WAKE_LANE" = "dependabot"
               ;;
             workflow_dispatch)
               # Deliberate trusted-main wake carries no candidate payload. Candidate identity
@@ -495,7 +513,7 @@ jobs:
             echo "ERROR: malformed or incomplete paginated open-PR evidence." >&2
             exit 1
           }
-          CANDIDATES="$(jq -c --arg repo "$TARGET_REPOSITORY" --arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF" '
+          CANDIDATES="$(jq -c --arg repo "$TARGET_REPOSITORY" --arg main "$MAIN_SHA" --arg wake_mode "$WAKE_EVENT_NAME" --argjson wake_pr "${WAKE_PR_NUMBER:-0}" --arg wake_base "$WAKE_BASE_SHA" --arg wake_head "$WAKE_HEAD_SHA" --arg wake_ref "$WAKE_HEAD_REF" '
             [.[][] | select(
               .state == "open" and
               .draft == false and
@@ -503,7 +521,14 @@ jobs:
               .base.sha == $main and
               .head.repo.full_name == $repo and
               (
-                if $wake_mode == "workflow_dispatch" then
+                if $wake_mode == "repository_dispatch" then
+                  .number == $wake_pr and
+                  .base.sha == $wake_base and
+                  .head.sha == $wake_head and
+                  .head.ref == $wake_ref and
+                  .user.login == "dependabot[bot]" and
+                  (.head.ref | test("^dependabot/github_actions/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"))
+                elif $wake_mode == "workflow_dispatch" then
                   .user.login == "github-actions[bot]" and
                   (.head.ref | test("^automation/spotlight-links/[0-9a-f]{64}$")) and
                   .title == "chore: sync rotating Spotlight links" and
@@ -530,7 +555,12 @@ jobs:
           ' <<<"$PR_PAGES")"
           CANDIDATE_COUNT="$(jq 'length' <<<"$CANDIDATES")"
           [[ "$CANDIDATE_COUNT" =~ ^[0-9]+$ ]]
-          if [ "$WAKE_EVENT_NAME" = "workflow_dispatch" ]; then
+          if [ "$WAKE_EVENT_NAME" = "repository_dispatch" ]; then
+            test "$CANDIDATE_COUNT" = "1" || {
+              echo "ERROR: candidate-bound Dependabot reviewer wake requires exactly one exact current-main candidate; observed ${CANDIDATE_COUNT}." >&2
+              exit 1
+            }
+          elif [ "$WAKE_EVENT_NAME" = "workflow_dispatch" ]; then
             test "$CANDIDATE_COUNT" = "1" || {
               echo "ERROR: trusted-main Spotlight reviewer wake requires exactly one current-main candidate; observed ${CANDIDATE_COUNT}." >&2
               exit 1

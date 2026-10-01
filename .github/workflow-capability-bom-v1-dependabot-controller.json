@@ -69,6 +69,13 @@
             },
             {
               "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/dispatches",
+              "method": "POST",
+              "mutating": true,
+              "step": "Validate reconciled candidate and inspect protected checks"
+            },
+            {
+              "client": "gh-api",
               "endpoint": "repos/${TARGET_REPOSITORY}/git/blobs",
               "method": "POST",
               "mutating": true,
@@ -166,6 +173,12 @@
               "method": "POST",
               "step": "Atomically reconcile canonical governance files onto the bot head",
               "target": "repos/${TARGET_REPOSITORY}/git/trees"
+            },
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Validate reconciled candidate and inspect protected checks",
+              "target": "repos/${TARGET_REPOSITORY}/dispatches"
             },
             {
               "class": "github-api-post",

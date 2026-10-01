@@ -746,6 +746,7 @@
         "pull-requests": "read"
       },
       "triggers": [
+        "repository_dispatch",
         "workflow_dispatch",
         "workflow_run"
       ]

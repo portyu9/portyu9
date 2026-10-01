@@ -1450,7 +1450,7 @@ def self_test_controller_update_branch_status_contract(text: str) -> None:
 
 def validate_controller_repository_dispatch_status(text: str) -> None:
     require(
-        text.count('repos/${TARGET_REPOSITORY}/dispatches') == 2,
+        text.count('repos/${TARGET_REPOSITORY}/dispatches') == 3,
         "Dependabot repository-dispatch endpoint inventory changed",
     )
     specs = (
@@ -1467,6 +1467,13 @@ def validate_controller_repository_dispatch_status(text: str) -> None:
             '[[ "$ADMISSION_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
             "Dependabot exact-head repository dispatch returned unexpected status:",
             'printf \'dispatched=true\\n\' >> "$GITHUB_OUTPUT"',
+        ),
+        (
+            '\n              REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input dependabot-review-dispatch.json)"',
+            '\n              REVIEW_DISPATCH_STATUS_LINE="$(head -n 1 <<<"$REVIEW_DISPATCH_RESPONSE" | tr -d \'\\r\')"',
+            '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+            "Dependabot candidate-bound reviewer dispatch returned unexpected status:",
+            'echo "Dispatched exact candidate-bound Dependabot reviewer evaluation after all six pre-review gates converged."',
         ),
     )
     for response, status, guard, error, downstream in specs:
@@ -1487,8 +1494,32 @@ def validate_controller_repository_dispatch_status(text: str) -> None:
 
     require(
         'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input admission-dispatch.json >/dev/null'
+        not in text
+        and 'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input dependabot-review-dispatch.json >/dev/null'
         not in text,
         "Dependabot must not discard repository-dispatch responses",
+    )
+
+    for fragment in (
+        'REVIEW_READY=false',
+        'REVIEW_GATE_COUNT="$(jq \'[.check_runs[] | select(.name == "trusted-governed-bot-review")] | length\' <<<"$REVIEW_CHECKS")"',
+        'if [ "$REVIEW_GATE_COUNT" -ge 1 ] &&',
+        'REVIEW_READY=true',
+        'jq -n --argjson prNumber "$PR_NUMBER" --arg baseSha "$BASE_SHA" --arg headSha "$HEAD_SHA" --arg headRef "$HEAD_REF"',
+        '\'{event_type:"dependabot-review-wake",client_payload:{prNumber:$prNumber,baseSha:$baseSha,headSha:$headSha,headRef:$headRef,lane:"dependabot"}}\'',
+        'printf \'review_ready=%s\\n\' "$REVIEW_READY" >> "$GITHUB_OUTPUT"',
+        "steps.checks.outputs.ready == 'true' && steps.checks.outputs.review_ready == 'true'",
+    ):
+        require(fragment in text, f"Dependabot candidate-bound reviewer handoff contract is missing: {fragment}")
+
+    ready_pos = text.index('printf \'ready=%s\\n\' "$READY" >> "$GITHUB_OUTPUT"')
+    review_check_pos = text.index('REVIEW_CHECKS="$(python3 scripts/automation_github_read.py', ready_pos)
+    review_dispatch_pos = text.index('REVIEW_DISPATCH_RESPONSE="$(gh api --include --method POST', review_check_pos)
+    review_output_pos = text.index('printf \'review_ready=%s\\n\' "$REVIEW_READY" >> "$GITHUB_OUTPUT"', review_dispatch_pos)
+    merge_pos = text.index("steps.checks.outputs.ready == 'true' && steps.checks.outputs.review_ready == 'true'", review_output_pos)
+    require(
+        ready_pos < review_check_pos < review_dispatch_pos < review_output_pos < merge_pos,
+        "Dependabot reviewer handoff must occur only after six-gate convergence and before review-ready merge admission",
     )
 
 
@@ -1519,6 +1550,36 @@ def self_test_controller_repository_dispatch_status(text: str) -> None:
                 f"Dependabot repository-dispatch status self-test failed for wrong reason: {exc}")
     else:
         fail("Dependabot repository-dispatch self-test accepted non-204 success class")
+
+    reviewer_response_blind = text.replace(
+        'gh api --include --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input dependabot-review-dispatch.json',
+        'gh api --method POST "repos/${TARGET_REPOSITORY}/dispatches" --input dependabot-review-dispatch.json',
+        1,
+    )
+    try:
+        validate_controller_repository_dispatch_status(reviewer_response_blind)
+    except ValueError as exc:
+        require(
+            "response capture changed" in str(exc),
+            f"Dependabot reviewer-dispatch response self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot reviewer-dispatch self-test accepted response-blind mutation")
+
+    reviewer_wrong_status = text.replace(
+        '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {',
+        '[[ "$REVIEW_DISPATCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_controller_repository_dispatch_status(reviewer_wrong_status)
+    except ValueError as exc:
+        require(
+            "HTTP 204 guard changed" in str(exc),
+            f"Dependabot reviewer-dispatch status self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot reviewer-dispatch self-test accepted non-204 success class")
 
 
 
