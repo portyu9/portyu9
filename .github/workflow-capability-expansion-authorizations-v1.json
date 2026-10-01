@@ -831,7 +831,7 @@
       "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "expansionSha256": "805606d046dbfb8458e62a529d2904a98842e84e72dd758feceda281609b641b",
       "id": "cap-dependabot-update-branch-http-status-v1",
-      "rationale": "Authorize frozen #1437 protected-source-only hardening of the existing expected-head-bound Dependabot update-branch PUT: capture gh api --include, require exact HTTP 202 before extracting and strictly validating the existing acknowledgement body, and preserve the existing bounded post-update PR re-observation. Base/candidate semantic BOMs are identical; endpoint, payload, mutation count, permissions, triggers, retries of the write, merge authority, required checks, secrets/OIDC, direct-main/ruleset authority, and bypass remain unchanged."
+      "rationale": "Authorize frozen #1437 protected-source hardening of the existing expected-head-bound Dependabot update-branch PUT: capture the response, require exact HTTP 202 before extracting and validating the existing acknowledgement body, then preserve bounded post-update re-observation. Semantic BOM, endpoint, payload, mutation count, permissions, triggers, write retries, merge authority, required checks, secrets/OIDC, direct-main/ruleset authority, and bypass remain unchanged."
     },
     {
       "baseBomSha256": "6540b8b0a0b63f3e127ca1c130b71771b09d67907f25b1dc7ccae62eaf350d81",
