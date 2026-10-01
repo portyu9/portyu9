@@ -1917,7 +1917,7 @@ def validate_release_resolution_parity_contract(text: str) -> None:
     )
     repository_root_pin = (
         'test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = '
-        '"d0ce5908e8dcbe46314156785a5379ba3255bf1b"'
+        '"12acd01e53c84558617e868e9f3489f9770c85d8"'
     )
     ls_remote = 'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"'
     repository_get = (
