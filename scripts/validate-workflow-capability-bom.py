@@ -185,6 +185,106 @@ def codeql_post_merge_run_pagination_measurement_diagnostic() -> None:
         )
 
 
+def codeql_post_merge_run_pagination_measurement_diagnostic() -> None:
+    """Disposable carrier: measure frozen #1419 with accepted-main admission code."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    base_sha = "e88ef9689753cb1636a61c5eba5bfac7a7e850b5"
+    source_sha = "ce5326bd3316b064446a8d9e846da3498cc3a192"
+    expected_tree = "764780ff65d359f6eabbfe80bd1568a8685e22c5"
+    expected_blobs = {
+        ".github/workflow-capability-bom-v1-codeql-autofix.json": "901621b3429213066bf235126ffca29391d69428",
+        ".github/workflows/codeql-autofix.yml": "cb9b766f9afc7e1750ada252a27d062e6ef27afa",
+        "scripts/automation_retry_policy.py": "77a56571814dd07d1298a02ef4475d57a3e2e3b0",
+        "scripts/validate-codeql-contract.py": "bb1efe0af6d94a40a96b6cf2c70f8f20a0640810",
+        "scripts/validate-privileged-workflow-identity.py": "769f394f7c91df721689d35f54c121bc9f993339",
+    }
+
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=64", "origin", base_sha, source_sha],
+        check=True,
+    )
+    merge_base = subprocess.check_output(
+        ["git", "merge-base", base_sha, source_sha], text=True
+    ).strip()
+    require(
+        merge_base == base_sha,
+        f"diagnostic candidate no longer descends from exact accepted main: {merge_base}",
+    )
+    observed_paths = subprocess.check_output(
+        ["git", "diff", "--name-only", base_sha, source_sha], text=True
+    ).splitlines()
+    require(
+        observed_paths == sorted(expected_blobs),
+        f"diagnostic candidate path set changed: {observed_paths!r}",
+    )
+    for changed_path, expected_blob in expected_blobs.items():
+        observed_blob = subprocess.check_output(
+            ["git", "rev-parse", f"{source_sha}:{changed_path}"], text=True
+        ).strip()
+        require(
+            observed_blob == expected_blob,
+            f"diagnostic candidate blob changed for {changed_path}: {observed_blob}",
+        )
+    tree = subprocess.check_output(
+        ["git", "rev-parse", f"{source_sha}^{{tree}}"], text=True
+    ).strip()
+    require(tree == expected_tree, f"diagnostic candidate tree changed: {tree}")
+
+    with tempfile.TemporaryDirectory(
+        prefix="codeql-post-merge-run-pagination-measurement-"
+    ) as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(trusted), base_sha],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(candidate), source_sha],
+            check=True,
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(trusted / "scripts/workflow_capability_admission.py"),
+                str(candidate),
+                "--candidate-tree-sha",
+                tree,
+                "--measure",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        if result.stderr:
+            print(result.stderr, file=sys.stderr, end="")
+        require(
+            result.returncode == 0,
+            f"accepted-main production --measure failed: {result.returncode}",
+        )
+        payload = json.loads(result.stdout)
+        require(
+            isinstance(payload, dict)
+            and set(payload) == {"measurement"}
+            and isinstance(payload["measurement"], dict),
+            "production --measure output shape changed",
+        )
+        print(
+            "CAPABILITY-MEASUREMENT-DIAGNOSTIC:"
+            + json.dumps(payload, sort_keys=True, separators=(",", ":")),
+            flush=True,
+        )
+
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(candidate)], check=True
+        )
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(trusted)], check=True
+        )
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
