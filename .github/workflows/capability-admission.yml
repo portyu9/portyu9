@@ -57,6 +57,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
           test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"
+          test "$(git rev-parse HEAD:scripts/automation_github_binary_read.py)" = "ab7211197f0620e57d1a1e3013ab15a3715ce3e2"
 
       - name: Bind exact candidate context
         id: candidate
@@ -443,7 +444,9 @@ jobs:
           test "$(jq -r .workflow_run.head_branch artifact.json)" = "main"
           test "$(jq -r .workflow_run.head_sha artifact.json)" = "$BASE_SHA"
 
-          gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip
+          python3 scripts/automation_github_binary_read.py \
+            "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            receipt.zip
           unzip -p receipt.zip codeql-autofix-receipt.json > verified-receipt.json
           test -s verified-receipt.json
           test "$(jq -r .controllerId verified-receipt.json)" = "portyu9-codeql-autofix-v1"
