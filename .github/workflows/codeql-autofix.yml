@@ -699,7 +699,10 @@ jobs:
             --out artifact.json
           ARTIFACT_ID="$(jq -r .id artifact.json)"
           test "$ARTIFACT_ID" -gt 0
-          gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip
+          test "$(git rev-parse HEAD:scripts/automation_github_binary_read.py)" = "ab7211197f0620e57d1a1e3013ab15a3715ce3e2"
+          python3 scripts/automation_github_binary_read.py \
+            "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            receipt.zip
           unzip -p receipt.zip codeql-autofix-receipt.json > verified-receipt.json
           test -s verified-receipt.json
           test "$(jq -r .runId verified-receipt.json)" = "$ORIGIN_RUN_ID"
