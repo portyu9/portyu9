@@ -1617,7 +1617,13 @@ jobs:
                 main-initial)
                   response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" 2>&1)"
                   ;;
+                main-current)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" 2>&1)"
+                  ;;
                 generated-initial)
+                  response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" 2>&1)"
+                  ;;
+                generated-current)
                   response="$(timeout 20s gh api --include "repos/${GITHUB_REPOSITORY}/git/ref/heads/generated" 2>&1)"
                   ;;
                 candidate-initial)
@@ -1838,8 +1844,8 @@ jobs:
 
           spotlight_source_epoch_state() {
             local main_response generated_response current_main_sha current_generated_sha
-            main_response="$(spotlight_singleton_get main-final)" || return 1
-            generated_response="$(spotlight_singleton_get generated-initial)" || return 1
+            main_response="$(spotlight_singleton_get main-current)" || return 1
+            generated_response="$(spotlight_singleton_get generated-current)" || return 1
             current_main_sha="$(jq -er '.object.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' <<<"$main_response")" || return 1
             current_generated_sha="$(jq -er '.object.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' <<<"$generated_response")" || return 1
             validate_git_ref_object "$main_response" "refs/heads/main" "$current_main_sha" || return 1
