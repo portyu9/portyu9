@@ -81,92 +81,173 @@ def load_generator() -> Any:
     return module
 
 
-class FakeResponse(io.StringIO):
+class FakeHeaders(dict[str, str]):
+    def get_content_type(self) -> str:
+        return "application/json"
+
+
+class FakeResponse:
+    def __init__(self, url: str, body: str) -> None:
+        self.status = 200
+        self._url = url
+        self._body = body.encode("utf-8")
+        self.headers = FakeHeaders()
+
     def __enter__(self) -> "FakeResponse":
         return self
+
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
-        self.close()
+        return None
+
+    def geturl(self) -> str:
+        return self._url
+
+    def read(self, _limit: int) -> bytes:
+        return self._body
 
 
 def fake_opener(outcomes: list[Any], calls: list[float]) -> Any:
     queue = list(outcomes)
+
     def opener(request: Any, *, timeout: float) -> FakeResponse:
         calls.append(timeout)
         require(queue, "retry self-test exhausted fake opener outcomes")
         outcome = queue.pop(0)
         if isinstance(outcome, BaseException):
             raise outcome
-        if isinstance(outcome, str):
-            return FakeResponse(outcome)
-        return FakeResponse(json.dumps(outcome))
+        body = outcome if isinstance(outcome, str) else json.dumps(outcome)
+        return FakeResponse(request.full_url, body)
+
     return opener
 
 
 def http_error(code: int, headers: dict[str, str] | None = None) -> urllib.error.HTTPError:
-    return urllib.error.HTTPError("https://api.github.com/test", code, "fixture", headers or {}, None)
+    return urllib.error.HTTPError(
+        "https://api.github.com/repos/portyu9/example/actions/runs",
+        code,
+        "fixture",
+        headers or {},
+        None,
+    )
 
 
 def validate_retry_contract() -> None:
     generator = load_generator()
     require(generator.API_ATTEMPTS == 3, "GitHub evidence retry budget must remain exactly three attempts")
-    require(generator.API_TIMEOUT_SECONDS == 12, "GitHub evidence request timeout changed")
+    require(generator.API_TIMEOUT_SECONDS == 20, "GitHub evidence request timeout must use the canonical 20-second bound")
     require(generator.API_BACKOFF_SECONDS == (1.0, 2.0), "GitHub evidence backoff schedule changed")
     require(generator.API_MAX_RETRY_AFTER_SECONDS == 5.0, "GitHub Retry-After cap changed")
-    require(generator.RETRYABLE_HTTP_STATUS == frozenset({408, 429, 500, 502, 503, 504}), "retryable HTTP status allowlist changed")
+    require(
+        generator.RETRYABLE_HTTP_STATUS == frozenset({408, 429, 500, 502, 503, 504}),
+        "retryable HTTP status allowlist changed",
+    )
+    fixture_url = "https://api.github.com/repos/portyu9/example/actions/runs?per_page=1"
 
     calls: list[float] = []
     sleeps: list[float] = []
     payload = generator.fetch_json(
-        "https://api.github.com/test", None,
-        opener=fake_opener([urllib.error.URLError("connection reset"), http_error(503, {"Retry-After": "0"}), {"ok": True}], calls),
+        fixture_url,
+        "fixture-token",
+        opener=fake_opener(
+            [
+                urllib.error.URLError("connection reset"),
+                http_error(503, {"Retry-After": "0"}),
+                {"ok": True},
+            ],
+            calls,
+        ),
         sleeper=sleeps.append,
     )
     require(payload == {"ok": True}, "transient retry fixture did not recover")
-    require(calls == [12, 12, 12] and sleeps == [1.0, 0.0], "transient retry behavior changed")
+    require(calls == [20, 20, 20] and sleeps == [1.0, 0.0], "canonical transient retry behavior changed")
 
     rate_calls: list[float] = []
     rate_sleeps: list[float] = []
     payload = generator.fetch_json(
-        "https://api.github.com/test", None,
-        opener=fake_opener([http_error(403, {"X-RateLimit-Remaining": "0", "Retry-After": "1"}), {"rate": "recovered"}], rate_calls),
+        fixture_url,
+        "fixture-token",
+        opener=fake_opener(
+            [
+                http_error(403, {"X-RateLimit-Remaining": "0", "Retry-After": "1"}),
+                {"rate": "recovered"},
+            ],
+            rate_calls,
+        ),
         sleeper=rate_sleeps.append,
     )
-    require(payload == {"rate": "recovered"} and rate_calls == [12, 12] and rate_sleeps == [1.0], "rate-limit retry behavior changed")
-    require(generator.retry_delay_seconds(http_error(429, {"Retry-After": "999"}), 0) == 5.0, "Retry-After cap changed")
+    require(
+        payload == {"rate": "recovered"}
+        and rate_calls == [20, 20]
+        and rate_sleeps == [1.0],
+        "rate-limit retry behavior changed",
+    )
+    require(
+        generator.retry_delay_seconds(http_error(429, {"Retry-After": "999"}), 0) == 5.0,
+        "Retry-After cap changed",
+    )
 
     forbidden_calls: list[float] = []
     try:
-        generator.fetch_json("https://api.github.com/test", None, opener=fake_opener([http_error(403)], forbidden_calls), sleeper=lambda _: None)
-    except urllib.error.HTTPError as exc:
-        require(exc.code == 403, "non-retryable HTTP fixture failed for wrong reason")
+        generator.fetch_json(
+            fixture_url,
+            "fixture-token",
+            opener=fake_opener([http_error(403)], forbidden_calls),
+            sleeper=lambda _: None,
+        )
+    except ValueError as exc:
+        require("HTTP 403" in str(exc), "non-retryable HTTP fixture failed for wrong reason")
     else:
         raise ValueError("ordinary 403 was incorrectly retried or accepted")
-    require(forbidden_calls == [12], "ordinary 403 must fail on first attempt")
+    require(forbidden_calls == [20], "ordinary 403 must fail on first attempt")
 
     malformed_calls: list[float] = []
     try:
-        generator.fetch_json("https://api.github.com/test", None, opener=fake_opener(["{"], malformed_calls), sleeper=lambda _: None)
+        generator.fetch_json(
+            fixture_url,
+            "fixture-token",
+            opener=fake_opener(["{"], malformed_calls),
+            sleeper=lambda _: None,
+        )
     except json.JSONDecodeError:
         pass
     else:
         raise ValueError("malformed JSON was incorrectly retried or accepted")
-    require(malformed_calls == [12], "malformed JSON must fail without retry")
+    require(malformed_calls == [20], "malformed JSON must fail without retry")
+
+    duplicate_calls: list[float] = []
+    try:
+        generator.fetch_json(
+            fixture_url,
+            "fixture-token",
+            opener=fake_opener(['{"id":1,"id":2}'], duplicate_calls),
+            sleeper=lambda _: None,
+        )
+    except ValueError as exc:
+        require("duplicate object key" in str(exc), "duplicate-key fixture failed for wrong reason")
+    else:
+        raise ValueError("duplicate JSON object keys were incorrectly accepted")
+    require(duplicate_calls == [20], "duplicate-key JSON must fail without retry")
 
     exhausted_calls: list[float] = []
     exhausted_sleeps: list[float] = []
     try:
         generator.fetch_json(
-            "https://api.github.com/test", None,
-            opener=fake_opener([http_error(502), http_error(502), http_error(502)], exhausted_calls),
+            fixture_url,
+            "fixture-token",
+            opener=fake_opener(
+                [http_error(502), http_error(502), http_error(502)],
+                exhausted_calls,
+            ),
             sleeper=exhausted_sleeps.append,
         )
-    except urllib.error.HTTPError as exc:
-        require(exc.code == 502, "exhausted retry fixture failed for wrong reason")
+    except ValueError as exc:
+        require("HTTP 502" in str(exc), "exhausted retry fixture failed for wrong reason")
     else:
         raise ValueError("exhausted retry budget did not fail closed")
-    require(exhausted_calls == [12, 12, 12] and exhausted_sleeps == [1.0, 2.0], "retry exhaustion behavior changed")
-
-
+    require(
+        exhausted_calls == [20, 20, 20] and exhausted_sleeps == [1.0, 2.0],
+        "retry exhaustion behavior changed",
+    )
 def validate_dimensions(repository: str, subject: str, signal: dict[str, Any], require_live: bool) -> None:
     label = signal.get("label")
     workflow = signal.get("workflow")

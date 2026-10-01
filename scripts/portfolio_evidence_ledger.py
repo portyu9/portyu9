@@ -7,12 +7,11 @@ import hashlib
 import json
 import os
 import time
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
+import automation_github_read
 import portfolio_evidence_helpers as evidence
 import portfolio_system_registry as registry
 
@@ -25,11 +24,11 @@ SHA40_ZERO = "0" * 40
 API_ORIGIN = "https://api.github.com"
 TRUSTED_WORKFLOW_EVENTS = frozenset({"push", "workflow_dispatch"})
 
-API_ATTEMPTS = 3
-API_TIMEOUT_SECONDS = 12
-API_BACKOFF_SECONDS = (1.0, 2.0)
-API_MAX_RETRY_AFTER_SECONDS = 5.0
-RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+API_ATTEMPTS = automation_github_read.ATTEMPTS
+API_TIMEOUT_SECONDS = automation_github_read.TIMEOUT_SECONDS
+API_BACKOFF_SECONDS = automation_github_read.BACKOFF_SECONDS
+API_MAX_RETRY_AFTER_SECONDS = automation_github_read.MAX_RETRY_AFTER_SECONDS
+RETRYABLE_HTTP_STATUS = automation_github_read.RETRYABLE_HTTP_STATUS
 JOB_PAGE_SIZE = 100
 WORKFLOW_RUN_PAGE_SIZE = 100
 MAX_WORKFLOW_RUN_PAGES = 20
@@ -63,72 +62,65 @@ def validate_api_url(url: str) -> str:
     return url
 
 
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    """Reject redirects so a token-bearing request cannot be replayed to another URL."""
-
-    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
-        return None
-
-
-def open_no_redirect(request: urllib.request.Request, *, timeout: float) -> Any:
-    return urllib.request.build_opener(NoRedirect()).open(request, timeout=timeout)
-
-
-def api_request(url: str, token: str | None) -> urllib.request.Request:
+def repository_endpoint(url: str) -> str:
+    """Project an exact-origin GitHub API URL onto the canonical repository-relative client."""
     safe_url = validate_api_url(url)
-    request = urllib.request.Request(safe_url, headers=evidence.request_headers(None))
-    if token:
-        request.add_unredirected_header("Authorization", f"Bearer {token}")
-    return request
+    parsed = urllib.parse.urlsplit(safe_url)
+    endpoint = parsed.path.lstrip("/")
+    if parsed.query:
+        endpoint += f"?{parsed.query}"
+    return automation_github_read.normalize_endpoint(endpoint)
 
 
 def transport_self_test() -> None:
     good = "https://api.github.com/repos/portyu9/example/actions/runs?branch=main"
     require(validate_api_url(good) == good, "GitHub API origin self-test rejected the canonical endpoint")
+    require(
+        repository_endpoint(good) == "repos/portyu9/example/actions/runs?branch=main",
+        "Portfolio GitHub API projection changed",
+    )
     for unsafe in (
         "http://api.github.com/repos/portyu9/example",
         "https://api.github.com.evil.example/repos/portyu9/example",
         "https://api.github.com:443/repos/portyu9/example",
         "https://user@api.github.com/repos/portyu9/example",
         "https://api.github.com/repos/portyu9/example#fragment",
+        "https://api.github.com/users/portyu9",
     ):
         try:
-            validate_api_url(unsafe)
+            repository_endpoint(unsafe)
         except ValueError:
             pass
         else:
-            raise ValueError(f"GitHub API origin self-test accepted unsafe URL: {unsafe}")
+            raise ValueError(f"GitHub API origin/scope self-test accepted unsafe URL: {unsafe}")
 
-    request = api_request(good, "fixture-token")
-    auth = {name.lower(): value for name, value in request.unredirected_hdrs.items()}
-    ordinary = {name.lower(): value for name, value in request.headers.items()}
-    require(auth.get("authorization") == "Bearer fixture-token",
-            "bearer token must be attached as an unredirected-only header")
-    require("authorization" not in ordinary,
-            "bearer token must not be attached as a redirect-copyable ordinary header")
-    require(NoRedirect().redirect_request(None, None, 302, "fixture", {}, "https://example.com") is None,
-            "redirect handler must refuse every redirect request")
+    require(API_ATTEMPTS == automation_github_read.ATTEMPTS == 3,
+            "Portfolio GitHub read retry budget diverged from canonical policy")
+    require(API_TIMEOUT_SECONDS == automation_github_read.TIMEOUT_SECONDS == 20,
+            "Portfolio GitHub read timeout diverged from canonical policy")
+    require(API_BACKOFF_SECONDS == automation_github_read.BACKOFF_SECONDS == (1.0, 2.0),
+            "Portfolio GitHub read backoff diverged from canonical policy")
+    require(API_MAX_RETRY_AFTER_SECONDS == automation_github_read.MAX_RETRY_AFTER_SECONDS == 5.0,
+            "Portfolio GitHub read Retry-After cap diverged from canonical policy")
+    require(
+        RETRYABLE_HTTP_STATUS
+        == automation_github_read.RETRYABLE_HTTP_STATUS
+        == frozenset({408, 429, 500, 502, 503, 504}),
+        "Portfolio GitHub read HTTP transient allowlist diverged from canonical policy",
+    )
 
 
-def retryable_http_error(exc: urllib.error.HTTPError) -> bool:
-    if exc.code in RETRYABLE_HTTP_STATUS:
-        return True
-    if exc.code != 403:
-        return False
-    headers = exc.headers or {}
-    return headers.get("X-RateLimit-Remaining") == "0" or bool(headers.get("Retry-After"))
+def retryable_http_error(exc: BaseException) -> bool:
+    """Compatibility projection of the one canonical GitHub transient classifier."""
+    return (
+        isinstance(exc, automation_github_read.urllib.error.HTTPError)
+        and automation_github_read.retryable_http_error(exc)
+    )
 
 
 def retry_delay_seconds(exc: BaseException, failure_index: int) -> float:
-    default = API_BACKOFF_SECONDS[min(failure_index, len(API_BACKOFF_SECONDS) - 1)]
-    if not isinstance(exc, urllib.error.HTTPError) or not exc.headers:
-        return default
-    raw = str(exc.headers.get("Retry-After") or "").strip()
-    try:
-        requested = float(raw)
-    except ValueError:
-        return default
-    return max(0.0, min(requested, API_MAX_RETRY_AFTER_SECONDS))
+    """Compatibility projection of the canonical deterministic retry delay."""
+    return automation_github_read.retry_delay_seconds(exc, failure_index)
 
 
 def fetch_json(
@@ -138,26 +130,18 @@ def fetch_json(
     opener: Callable[..., Any] | None = None,
     sleeper: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
-    request = api_request(url, token)
-    transport = opener or open_no_redirect
-    for attempt in range(API_ATTEMPTS):
-        try:
-            with transport(request, timeout=API_TIMEOUT_SECONDS) as response:
-                payload = json.load(response)
-            if not isinstance(payload, dict):
-                raise ValueError("GitHub API response must be an object")
-            return payload
-        except urllib.error.HTTPError as exc:
-            if attempt + 1 >= API_ATTEMPTS or not retryable_http_error(exc):
-                raise
-            sleeper(retry_delay_seconds(exc, attempt))
-        except (urllib.error.URLError, TimeoutError, ConnectionResetError) as exc:
-            if attempt + 1 >= API_ATTEMPTS:
-                raise
-            sleeper(retry_delay_seconds(exc, attempt))
-    raise RuntimeError("unreachable GitHub API retry state")
-
-
+    """Fetch one repository-scoped JSON object through the canonical governed GET client."""
+    text = automation_github_read.get_json_text(
+        repository_endpoint(url),
+        token=token,
+        opener=opener,
+        sleeper=sleeper,
+    )
+    require(text is not None, "Portfolio governed GitHub read unexpectedly normalized to absence")
+    payload = automation_github_read.strict_json(text)
+    if not isinstance(payload, dict):
+        raise ValueError("GitHub API response must be an object")
+    return payload
 def main_revision_from_payload(payload: dict[str, Any], repo: str) -> str:
     object_value = payload.get("object")
     require(isinstance(object_value, dict), f"{repo}: current main revision object is malformed")
