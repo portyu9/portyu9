@@ -124,7 +124,7 @@ def validate_text(text: str) -> None:
         'PR="$(jq -c \'.pull_request\' "$GITHUB_EVENT_PATH")"',
         'ACTION="$(jq -r \'.action // ""\' "$GITHUB_EVENT_PATH")"',
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
-        'test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "e0f6b16821f415007deeafaa4797508c04c4d293"',
+        'test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "d0ce5908e8dcbe46314156785a5379ba3255bf1b"',
         'test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "4e718d6268182d351e5913051206366e6eccd566"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
@@ -143,7 +143,7 @@ def validate_text(text: str) -> None:
         '        run: |\n'
         '          set -euo pipefail\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"\n'
-        '          test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "e0f6b16821f415007deeafaa4797508c04c4d293"\n'
+        '          test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = "d0ce5908e8dcbe46314156785a5379ba3255bf1b"\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "4e718d6268182d351e5913051206366e6eccd566"\n'
     )
