@@ -1504,6 +1504,7 @@
       "expansionSha256": "de763ed76f5fa1c826116e0c28f0ac8fe5d2babed4544b74a49be6d47a632bba",
       "id": "cap-dependabot-dispatch-static-checkout-v1",
       "rationale": "Authorize frozen #1452 measured by closed diagnostic PR #1453: establish the existing pinned checkout action on the Dependabot CodeQL dispatch job at the exact admitted base before governed Git/script reads. Adds one already-approved remote action plus exact-base verification and protected contract bytes; no permission, trigger, endpoint/method, mutation, secret/OIDC, required-check reduction, merge/ruleset, direct-main, retry, or bypass authority is added."
+    }
   ],
   "ledgerId": "workflow-capability-expansion-authorizations-v1",
   "repository": "portyu9/portyu9",
