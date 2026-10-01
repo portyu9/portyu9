@@ -19,8 +19,8 @@ QUALITY = ROOT / ".github/workflows/profile-quality.yml"
 GOVERNANCE = ROOT / ".github/GOVERNANCE.md"
 
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
-CODEQL_SHA = "1c5b675653bb5c22dbe9b12b556ec555138e09fd"
-CODEQL_RELEASE = "v4.38.1"
+CODEQL_SHA = "2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2"
+CODEQL_RELEASE = "v4.38.2"
 STEP_START = re.compile(r"^      - name: (?P<name>.+?)\s*$")
 EXPECTED_STEP_NAMES = ("Checkout", "Initialize CodeQL", "Analyze")
 
