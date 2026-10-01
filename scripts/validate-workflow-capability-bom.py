@@ -90,11 +90,11 @@ def blob_input_measurement_diagnostic() -> None:
         return
 
     base_sha = "e84cba49343d4a91cb8228f70072d95dcd5ac823"
-    source_sha = "32bf7c3f5cfc084936748c17b4b34148821f951f"
-    expected_tree = "f082f83cef3c19b593c2878eaa90a39238e3d810"
+    source_sha = "91b8893b440258dffc9379ee349bb8f74beb84c0"
+    expected_tree = "855b7e000e4b23ca673b97f312efa50c5a9e18f6"
     expected_blobs = {
         ".github/workflows/dependabot-controller.yml": "26f2c34ff339cf3a97fe23cc549ca68202f93bff",
-        "scripts/validate-dependabot-contract.py": "c900c1acb0c0989344303146652feb69fdaeb66b",
+        "scripts/validate-dependabot-contract.py": "874f093e1a0e8399a168aaf571cf67deaa080359",
     }
 
     subprocess.run(
