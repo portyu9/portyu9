@@ -1302,7 +1302,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
 
     dependabot_git_read_pin = (
         'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
-        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '          test "$GOVERNED_READ_BLOB" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     for job_name, step_name, label in (
         (
@@ -1350,7 +1350,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
 
     dependabot_ref_read_pin = (
         'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
-        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '          test "$GOVERNED_READ_BLOB" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     for job_name, step_name, expected_main, expected_head, label in (
         ("controller", "Bind current main and one native Dependabot candidate", 1, 0, "initial main binding"),
@@ -1381,7 +1381,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
 
     dependabot_pr_read_pin = (
         'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
-        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '          test "$GOVERNED_READ_BLOB" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     dependabot_pr_read = (
         'python3 scripts/automation_github_read.py '
@@ -1413,7 +1413,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
 
     dependabot_workflow_singleton_pin = (
         'GOVERNED_READ_BLOB="$(git rev-parse HEAD:scripts/automation_github_read.py)"\n'
-        '          test "$GOVERNED_READ_BLOB" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '          test "$GOVERNED_READ_BLOB" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     for job_name, step_name, endpoints, label in (
         (
@@ -2155,7 +2155,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     dependabot_controller = texts[".github/workflows/dependabot-controller.yml"]
     dependabot_release_pin = (
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
-        '"1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '"d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     for job_name, step_name, label in (
         ("controller", "Prove bot identity, atomic pin closure, and public release provenance", "canonical release proof"),
@@ -2190,7 +2190,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Verify exact accepted-base governed read transport identity",
     )
     require(
-        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
         in dependabot_transport_identity_step,
         "Profile Quality Dependabot lost exact governed singleton-read helper identity",
     )
@@ -2255,7 +2255,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Verify exact governed read transport identity",
     )
     require(
-        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
         in capability_identity_step,
         "Capability Admission candidate binding lost exact governed-read helper identity",
     )
@@ -2413,7 +2413,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     require("GH_TOKEN: ${{ github.token }}" in ruleset_main_step,
             "Ruleset drift sentinel governed read lost run-scoped token binding")
     require(
-        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
         in ruleset_main_step,
         "Ruleset drift sentinel lost exact governed-read helper identity",
     )
@@ -2422,7 +2422,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     ruleset_reconciler = texts[".github/workflows/ruleset-reconciler.yml"]
     ruleset_reconciler_pin = (
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
-        '"1b779bcea0acd290826fef8f60fd01480113a31a"'
+        '"d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
     )
     ruleset_plan_step = named_step(
         ruleset_reconciler,
@@ -2550,7 +2550,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Verify exact governed read source identity",
     )
     require(
-        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
         in spotlight_identity_step,
         "Spotlight lease lost exact governed-read helper identity",
     )
@@ -2587,7 +2587,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "Verify exact governed read source identity",
     )
     require(
-        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"'
+        'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"'
         in spotlight_budget_identity_step,
         "Spotlight budget lost exact governed-read helper identity",
     )
