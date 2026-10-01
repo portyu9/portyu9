@@ -1560,6 +1560,44 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal PR-scoped alert evidence moved out of governed typed order",
     )
 
+    codeql_terminal_review_pages_governed = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" \\\n'
+        '            > review-pages.json'
+    )
+    codeql_terminal_review_pages_direct = (
+        'REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"'
+    )
+    require(
+        codeql_terminal_step.count(codeql_terminal_review_pages_governed) == 1,
+        "CodeQL Autofix terminal pull-review evidence must use exactly one governed paginated GitHub collection",
+    )
+    require(
+        codeql_terminal_review_pages_direct not in codeql_terminal_step,
+        "CodeQL Autofix terminal pull-review evidence regained direct gh pagination transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in codeql_terminal_step,
+        "CodeQL Autofix terminal pull-review governed pagination lost run-scoped token binding",
+    )
+    review_fetch_pos = codeql_terminal_step.index(codeql_terminal_review_pages_governed)
+    review_load_pos = codeql_terminal_step.index(
+        'REVIEW_PAGES="$(cat review-pages.json)"',
+        review_fetch_pos,
+    )
+    review_schema_guard_pos = codeql_terminal_step.index(
+        "ERROR: malformed or incomplete paginated pull-review evidence.",
+        review_load_pos,
+    )
+    review_approval_pos = codeql_terminal_step.index(
+        'PORTYU9_APPROVAL_COUNT=',
+        review_schema_guard_pos,
+    )
+    require(
+        pr_alert_admit_pos < review_fetch_pos < review_load_pos < review_schema_guard_pos < review_approval_pos,
+        "CodeQL Autofix terminal pull-review evidence moved out of governed schema/authorization order",
+    )
+
     codeql_terminal_artifact_list_governed = (
         'python3 scripts/automation_github_read.py \\\n'
         '            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" \\\n'
@@ -3157,6 +3195,32 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         codeql_terminal_pr_files_transport_drift,
         "CodeQL Autofix terminal PR changed-file collection must use exactly one governed paginated GitHub collection",
+    )
+
+    codeql_terminal_review_pages_governed = (
+        'python3 scripts/automation_github_paginated_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" \\\n'
+        '            > review-pages.json'
+    )
+    codeql_terminal_review_pages_direct = (
+        'REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"'
+    )
+    require(
+        codeql_terminal_review_pages_governed in codeql_terminal_pr_files_source,
+        "retry-policy self-test fixture missing CodeQL Autofix terminal governed pull-review collection",
+    )
+    codeql_terminal_review_pages_transport_drift = dict(texts)
+    codeql_terminal_review_pages_transport_drift[".github/workflows/codeql-autofix.yml"] = (
+        codeql_terminal_pr_files_source.replace(
+            codeql_terminal_review_pages_governed,
+            codeql_terminal_review_pages_direct,
+            1,
+        )
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        codeql_terminal_review_pages_transport_drift,
+        "CodeQL Autofix terminal pull-review evidence must use exactly one governed paginated GitHub collection",
     )
 
     codeql_terminal_check_runs_governed = (
