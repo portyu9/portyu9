@@ -3684,7 +3684,7 @@ def validate_repository(root: Path = ROOT) -> None:
 if __name__ == "__main__":
     validate_repository()
     print(
-        "Automation retry taxonomy validation passed: exactly twelve classified read-only GitHub retries are authorized; "
+        "Automation retry taxonomy validation passed: exactly fourteen classified read-only GitHub retries are authorized; "
         "unclassified generator/ruleset and mutation failures remain terminal; all 15 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )
