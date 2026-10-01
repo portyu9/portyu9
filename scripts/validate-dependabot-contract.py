@@ -408,19 +408,45 @@ def validate_controller_pr_response_contract(text: str) -> None:
         "Dependabot reviewer mutation response must be typed before reviewer-state consumption",
     )
 
-    update_fetch = 'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"'
-    update_schema = text.index(
-        "python3 scripts/dependabot_controller.py update-branch-response",
-        text.index(update_fetch),
+    update_fetch = (
+        'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \\\n'
+        '              -f expected_head_sha="$PRE_UPDATE_HEAD_SHA" > update-branch-http-response.txt'
     )
-    update_consume = text.index(
-        'test "$(jq -r .message update-branch-normalized.json)" = "Updating pull request branch."',
-        update_schema,
-    )
+    update_status = 'UPDATE_BRANCH_STATUS_LINE="$(head -n 1 update-branch-http-response.txt | tr -d \'\\r\')"'
+    update_guard = '[[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {'
+    update_extract = "sed '1,/^[[:space:]]*$/d' update-branch-http-response.txt > update-branch.json"
+    update_schema = "python3 scripts/dependabot_controller.py update-branch-response"
+    update_consume = 'test "$(jq -r .message update-branch-normalized.json)" = "Updating pull request branch."'
+    for fragment, label in (
+        (update_fetch, "response capture"),
+        (update_status, "status extraction"),
+        (update_guard, "HTTP 202 guard"),
+        ("Dependabot update-branch returned unexpected status:", "fail-closed diagnostic"),
+        (update_extract, "body extraction"),
+        (update_schema, "typed response validator"),
+        (update_consume, "acknowledgement consumption"),
+    ):
+        require(
+            text.count(fragment) == 1,
+            f"Dependabot update-branch {label} changed",
+        )
     require(
-        text.index(update_fetch) < update_schema < update_consume,
-        "Dependabot update-branch response must be typed before acknowledgement consumption",
+        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"' not in text,
+        "Dependabot update-branch must not use response-blind transport",
     )
+    positions = [text.index(fragment) for fragment in (
+        update_fetch,
+        update_status,
+        update_guard,
+        update_extract,
+        update_schema,
+        update_consume,
+    )]
+    require(
+        positions == sorted(positions),
+        "Dependabot update-branch must prove HTTP 202 before body/schema/acknowledgement consumption",
+    )
+    update_consume_pos = text.index(update_consume)
 
     require(
         "Requested exact-head Dependabot branch update; next scheduled pass will re-prove the new head." not in text,
@@ -454,7 +480,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
         )
     post_update_fetch = text.index(
         '> "$RUNNER_TEMP/dependabot-post-update-pr.json"',
-        update_consume,
+        update_consume_pos,
     )
     post_update_schema = text.index(validator, post_update_fetch)
     post_update_consume = text.index(
@@ -464,7 +490,7 @@ def validate_controller_pr_response_contract(text: str) -> None:
     rebound_head = text.index('HEAD_SHA="$UPDATED_HEAD_SHA"', post_update_consume)
     output_target = text.index("printf 'has_target=true\\n' >> \"$GITHUB_OUTPUT\"", rebound_head)
     require(
-        update_consume < post_update_fetch < post_update_schema < post_update_consume < rebound_head < output_target,
+        update_consume_pos < post_update_fetch < post_update_schema < post_update_consume < rebound_head < output_target,
         "Dependabot branch-update convergence must type the refreshed PR before exact-head rebinding and target publication",
     )
 
@@ -1342,6 +1368,68 @@ def self_test_controller_git_mutation_status_contract(text: str) -> None:
         fail("Dependabot Git publication status self-test accepted body extraction before status proof")
 
 
+def self_test_controller_update_branch_status_contract(text: str) -> None:
+    validate_controller_pr_response_contract(text)
+
+    response_blind = text.replace(
+        'gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"',
+        'gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"',
+        1,
+    )
+    try:
+        validate_controller_pr_response_contract(response_blind)
+    except ValueError as exc:
+        require(
+            "response capture changed" in str(exc),
+            f"Dependabot update-branch response self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot update-branch self-test accepted response-blind mutation")
+
+    wrong_status = text.replace(
+        '[[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {',
+        '[[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {',
+        1,
+    )
+    try:
+        validate_controller_pr_response_contract(wrong_status)
+    except ValueError as exc:
+        require(
+            "HTTP 202 guard changed" in str(exc),
+            f"Dependabot update-branch status self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot update-branch self-test accepted non-202 success class")
+
+    status_block = (
+        '            UPDATE_BRANCH_STATUS_LINE="$(head -n 1 update-branch-http-response.txt | tr -d \'\\r\')"\n'
+        '            [[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Dependabot update-branch returned unexpected status: ${UPDATE_BRANCH_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+        "            sed '1,/^[[:space:]]*$/d' update-branch-http-response.txt > update-branch.json\n"
+    )
+    reordered = (
+        "            sed '1,/^[[:space:]]*$/d' update-branch-http-response.txt > update-branch.json\n"
+        '            UPDATE_BRANCH_STATUS_LINE="$(head -n 1 update-branch-http-response.txt | tr -d \'\\r\')"\n'
+        '            [[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {\n'
+        '              echo "ERROR: Dependabot update-branch returned unexpected status: ${UPDATE_BRANCH_STATUS_LINE}" >&2\n'
+        '              exit 1\n'
+        '            }\n'
+    )
+    require(text.count(status_block) == 1, "Dependabot update-branch status/body self-test anchor changed")
+    mutated = text.replace(status_block, reordered, 1)
+    try:
+        validate_controller_pr_response_contract(mutated)
+    except ValueError as exc:
+        require(
+            "before body/schema/acknowledgement consumption" in str(exc),
+            f"Dependabot update-branch ordering self-test failed for wrong reason: {exc}",
+        )
+    else:
+        fail("Dependabot update-branch self-test accepted body extraction before status proof")
+
+
 def validate_controller_repository_dispatch_status(text: str) -> None:
     require(
         text.count('repos/${TARGET_REPOSITORY}/dispatches') == 2,
@@ -2195,6 +2283,7 @@ def main() -> int:
         validate_controller_protected_workflow_evidence_contract(controller_text)
         self_test_controller_workflow_run_approval_status(controller_text)
         validate_controller_pr_response_contract(controller_text)
+        self_test_controller_update_branch_status_contract(controller_text)
         self_test_controller_reviewer_request_status(controller_text)
         validate_controller_collection_contract(controller_text)
         validate_controller_required_check_snapshot_contract(controller_text)

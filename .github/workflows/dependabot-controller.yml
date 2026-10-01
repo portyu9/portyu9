@@ -179,8 +179,14 @@ jobs:
 
           if [ "$BASE_SHA" != "$MAIN_SHA" ]; then
             PRE_UPDATE_HEAD_SHA="$HEAD_SHA"
-            gh api --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
-              -f expected_head_sha="$PRE_UPDATE_HEAD_SHA" > update-branch.json
+            gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
+              -f expected_head_sha="$PRE_UPDATE_HEAD_SHA" > update-branch-http-response.txt
+            UPDATE_BRANCH_STATUS_LINE="$(head -n 1 update-branch-http-response.txt | tr -d '\r')"
+            [[ "$UPDATE_BRANCH_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+202([[:space:]]|$) ]] || {
+              echo "ERROR: Dependabot update-branch returned unexpected status: ${UPDATE_BRANCH_STATUS_LINE}" >&2
+              exit 1
+            }
+            sed '1,/^[[:space:]]*$/d' update-branch-http-response.txt > update-branch.json
             python3 scripts/dependabot_controller.py update-branch-response \
               --response update-branch.json \
               --out update-branch-normalized.json
