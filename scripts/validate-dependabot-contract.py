@@ -2106,14 +2106,22 @@ def validate_validation_contract_provenance_token_contract(text: str) -> None:
 
 def self_test_validation_contract_provenance_token_contract(text: str) -> None:
     validate_validation_contract_provenance_token_contract(text)
-    trusted = "          GH_TOKEN: ${{ github.token }}\n"
+    trusted = (
+        "      - name: Validate exact repository contracts\n"
+        "        env:\n"
+        "          GH_TOKEN: ${{ github.token }}\n"
+    )
     require(
-        text.count(trusted) >= 1,
-        "Dependabot provenance-token self-test fixture lost GH_TOKEN binding",
+        text.count(trusted) == 1,
+        "Dependabot provenance-token self-test fixture lost exact validation-step GH_TOKEN binding",
     )
     drift = text.replace(
         trusted,
-        "          GITHUB_TOKEN: ${{ github.token }}\n",
+        (
+            "      - name: Validate exact repository contracts\n"
+            "        env:\n"
+            "          GITHUB_TOKEN: ${{ github.token }}\n"
+        ),
         1,
     )
     try:
