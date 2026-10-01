@@ -435,6 +435,13 @@
       "rationale": "Authorize the exact trusted-source boundary registration that protects all current and future scripts/codeql_autofix_* controller modules before any write-capable CodeQL Autofix workflow is introduced."
     },
     {
+      "baseBomSha256": "1f463549666e9791501b8551afce86bc06ed6bf1efba33135588efc517921737",
+      "candidateBomSha256": "da49ff6d4c15b91284bf3b5eee7d70dee22819bbd7c5970889a1b7ac792638be",
+      "expansionSha256": "abb6f790d14b7b57abe74e9bdc4616e6628711c589028a623a3aacf0c373ebbc",
+      "id": "cap-codeql-autofix-terminal-approval-comment-pagination-v1",
+      "rationale": "Authorize frozen #1416 measured by closed #1417: route the existing CodeQL Autofix terminal approval-comment GET pagination through the accepted bounded paginator. Preserve exact endpoint/query, complete page-array evidence, trusted github-actions[bot] marker/duplicate semantics, HTTP 201 created-comment proof, and mutation/merge ordering. Removes one raw GET; adds no permission, trigger, mutation replay, secret/OIDC, check reduction, direct-main/ruleset/merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "7710e1422ef25645d1c7805bd795e811e198a01b5909935a2c19fa1a409f74fa",
       "candidateBomSha256": "c551212c1c563a762278011f200c99275a22e1f12e34597385eebeacdcb60b5f",
       "expansionSha256": "869078a87753353981a14ef3100cbddc683c972f49bbf912e2c83f899eabefc5",
