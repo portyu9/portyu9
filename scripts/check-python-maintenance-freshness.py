@@ -222,9 +222,9 @@ class _FakeResponse:
 
 
 def self_test() -> None:
-    require(successor_version("3.13.15") == "3.13.16", "successor calculation drifted")
+    require(successor_version("3.13.16") == "3.13.17", "successor calculation drifted")
     require(
-        release_url("3.13.16") == "https://www.python.org/downloads/release/python-31316/",
+        release_url("3.13.17") == "https://www.python.org/downloads/release/python-31317/",
         "release URL construction drifted",
     )
     try:
@@ -236,7 +236,7 @@ def self_test() -> None:
 
     quiet = lambda _message: None
     published = probe_release(
-        "3.13.16",
+        "3.13.17",
         opener=lambda *_args, **_kwargs: _FakeResponse(200),
         warning=quiet,
     )
@@ -246,19 +246,19 @@ def self_test() -> None:
         return json.dumps(entries, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
     exact_artifact = {
-        "filename": "python-3.13.16-linux-24.04-x64.tar.gz",
+        "filename": "python-3.13.17-linux-24.04-x64.tar.gz",
         "arch": "x64",
         "platform": "linux",
         "platform_version": "24.04",
         "download_url": (
             "https://github.com/actions/python-versions/releases/download/"
-            "3.13.16-123/python-3.13.16-linux-24.04-x64.tar.gz"
+            "3.13.17-123/python-3.13.17-linux-24.04-x64.tar.gz"
         ),
     }
     available_entry = {
-        "version": "3.13.16",
+        "version": "3.13.17",
         "stable": True,
-        "release_url": "https://github.com/actions/python-versions/releases/tag/3.13.16-123",
+        "release_url": "https://github.com/actions/python-versions/releases/tag/3.13.17-123",
         "files": [exact_artifact],
     }
     unrelated_prerelease = {
@@ -268,7 +268,7 @@ def self_test() -> None:
         "files": [],
     }
     available = probe_setup_python_availability(
-        "3.13.16",
+        "3.13.17",
         opener=lambda *_args, **_kwargs: _FakeResponse(
             200, manifest([unrelated_prerelease, available_entry])
         ),
@@ -277,15 +277,15 @@ def self_test() -> None:
     require(available is True, "self-test rejected an exact stable setup-python successor")
 
     absent = probe_setup_python_availability(
-        "3.13.16",
+        "3.13.17",
         opener=lambda *_args, **_kwargs: _FakeResponse(
             200,
             manifest(
                 [
                     {
-                        "version": "3.13.15",
+                        "version": "3.13.16",
                         "stable": True,
-                        "release_url": "https://github.com/actions/python-versions/releases/tag/3.13.15-123",
+                        "release_url": "https://github.com/actions/python-versions/releases/tag/3.13.16-123",
                         "files": [],
                     }
                 ]
@@ -299,7 +299,7 @@ def self_test() -> None:
     unstable_entry["stable"] = False
     require(
         probe_setup_python_availability(
-            "3.13.16",
+            "3.13.17",
             opener=lambda *_args, **_kwargs: _FakeResponse(200, manifest([unstable_entry])),
             warning=quiet,
         )
@@ -311,17 +311,17 @@ def self_test() -> None:
     wrong_platform_entry["files"] = [
         {
             **exact_artifact,
-            "filename": "python-3.13.16-linux-22.04-x64.tar.gz",
+            "filename": "python-3.13.17-linux-22.04-x64.tar.gz",
             "platform_version": "22.04",
             "download_url": (
                 "https://github.com/actions/python-versions/releases/download/"
-                "3.13.16-123/python-3.13.16-linux-22.04-x64.tar.gz"
+                "3.13.17-123/python-3.13.17-linux-22.04-x64.tar.gz"
             ),
         }
     ]
     require(
         probe_setup_python_availability(
-            "3.13.16",
+            "3.13.17",
             opener=lambda *_args, **_kwargs: _FakeResponse(200, manifest([wrong_platform_entry])),
             warning=quiet,
         )
@@ -331,7 +331,7 @@ def self_test() -> None:
 
     require(
         probe_setup_python_availability(
-            "3.13.16",
+            "3.13.17",
             opener=lambda *_args, **_kwargs: _FakeResponse(
                 200, manifest([available_entry, available_entry])
             ),
@@ -342,7 +342,7 @@ def self_test() -> None:
     )
     require(
         probe_setup_python_availability(
-            "3.13.16",
+            "3.13.17",
             opener=lambda *_args, **_kwargs: _FakeResponse(200, b"{"),
             warning=quiet,
         )
@@ -351,10 +351,10 @@ def self_test() -> None:
     )
 
     def missing(*_args: object, **_kwargs: object) -> object:
-        raise urllib.error.HTTPError(release_url("3.13.16"), 404, "not found", None, None)
+        raise urllib.error.HTTPError(release_url("3.13.17"), 404, "not found", None, None)
 
     require(
-        probe_release("3.13.16", opener=missing, warning=quiet) is False,
+        probe_release("3.13.17", opener=missing, warning=quiet) is False,
         "self-test failed to accept absent successor",
     )
 
@@ -362,11 +362,11 @@ def self_test() -> None:
         raise urllib.error.URLError("offline")
 
     require(
-        probe_release("3.13.16", opener=unavailable, warning=quiet) is None,
+        probe_release("3.13.17", opener=unavailable, warning=quiet) is None,
         "self-test made python.org network uncertainty blocking",
     )
     require(
-        probe_setup_python_availability("3.13.16", opener=unavailable, warning=quiet) is None,
+        probe_setup_python_availability("3.13.17", opener=unavailable, warning=quiet) is None,
         "self-test made setup-python manifest network uncertainty blocking",
     )
 
