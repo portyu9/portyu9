@@ -825,7 +825,7 @@ jobs:
           fi
 
           APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"
-          gh api --paginate --slurp \
+          python3 scripts/automation_github_paginated_read.py \
             "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100" \
             > approval-comment-pages.json
           python3 scripts/codeql_autofix_controller.py approval-comment-evidence \
