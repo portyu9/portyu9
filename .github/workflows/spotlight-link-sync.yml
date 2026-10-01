@@ -1836,6 +1836,37 @@ jobs:
             return 1
           }
 
+          spotlight_source_epoch_state() {
+            local main_response generated_response current_main_sha current_generated_sha
+            main_response="$(spotlight_singleton_get main-final)" || return 1
+            generated_response="$(spotlight_singleton_get generated-initial)" || return 1
+            current_main_sha="$(jq -er '.object.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' <<<"$main_response")" || return 1
+            current_generated_sha="$(jq -er '.object.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' <<<"$generated_response")" || return 1
+            validate_git_ref_object "$main_response" "refs/heads/main" "$current_main_sha" || return 1
+            validate_git_ref_object "$generated_response" "refs/heads/generated" "$current_generated_sha" || return 1
+            if [ "$current_main_sha" != "$BASE_SHA" ] || [ "$current_generated_sha" != "$GENERATED_SHA" ]; then
+              printf 'SUPERSEDED: Spotlight source epoch advanced (main %s -> %s, generated %s -> %s).\n' \
+                "$BASE_SHA" "$current_main_sha" "$GENERATED_SHA" "$current_generated_sha" >&2
+              return 10
+            fi
+            return 0
+          }
+
+          spotlight_require_current_source_epoch() {
+            local stage="$1" status
+            if spotlight_source_epoch_state; then
+              return 0
+            else
+              status=$?
+            fi
+            if [ "$status" -eq 10 ]; then
+              echo "Spotlight source epoch superseded ${stage}; this immutable candidate exits cleanly and the newer source epoch owns convergence." >&2
+              exit 0
+            fi
+            echo "ERROR: Spotlight source-epoch reproof failed ${stage}." >&2
+            return 1
+          }
+
           APPROVAL_REQUESTS_JSON='[]'
           echo "approval_requests_json=$APPROVAL_REQUESTS_JSON" >> "$GITHUB_OUTPUT"
           # Verify exact short-lived mutation lease.
@@ -1866,6 +1897,7 @@ jobs:
           EXPECTED_CANDIDATE_ID="$(printf '%s\n%s\n%s\n' "$BASE_SHA" "$GENERATED_SHA" "$README_SHA256_AFTER" | sha256sum | cut -d' ' -f1)"
           test "$CANDIDATE_BRANCH" = "${BOT_BRANCH_PREFIX}${EXPECTED_CANDIDATE_ID}"
           [[ "$CANDIDATE_BRANCH" =~ ^automation/spotlight-links/[0-9a-f]{64}$ ]]
+          spotlight_require_current_source_epoch "before initial protected-check proof"
           MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"
           validate_git_ref_object "$MAIN_REF_RESPONSE" "refs/heads/main" "$BASE_SHA"
           test "$(jq -r .object.sha <<<"$MAIN_REF_RESPONSE")" = "$BASE_SHA"
@@ -1964,6 +1996,7 @@ jobs:
           APPROVAL_REQUESTED_RUN_IDS=""
           REVIEW_DISPATCHED=false
           for attempt in $(seq 1 60); do
+            spotlight_require_current_source_epoch "during protected-check convergence"
             spotlight_singleton_get protected-runs \
               > "$RUNNER_TEMP/spotlight-protected-workflow-runs.json"
             jq -ce \
@@ -2174,6 +2207,7 @@ jobs:
             test "$attempt" -lt 60
             sleep 10
           done
+          spotlight_require_current_source_epoch "after protected-check convergence"
           test "$ALL_SUCCESS" = "true"
           test "$REVIEW_DISPATCHED" = "true"
 
@@ -2316,7 +2350,7 @@ jobs:
           echo "approval_requests_json=$APPROVAL_REQUESTS_JSON" >> "$GITHUB_OUTPUT"
 
   authorize:
-    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success'
+    if: needs.plan.outputs.changed == 'true' && needs.budget.outputs.allowed == 'true' && needs.propose.result == 'success' && needs.approve.result == 'success' && needs.approve.outputs.codeql_run_id != '' && needs.approve.outputs.dependency_run_id != '' && needs.approve.outputs.profile_run_id != ''
     name: prepare-merge-authorization-read-only
     needs: [plan, lease, reconcile, budget, propose, approve]
     runs-on: ubuntu-24.04
