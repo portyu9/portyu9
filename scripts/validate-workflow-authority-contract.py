@@ -609,8 +609,9 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
     helper_end = approve.index(helper_end_marker, helper_start)
     helper = approve[helper_start:helper_end]
     for fragment in (
-        '              . as $snapshot |',
-        '(.check_runs | type == "array" and length == $snapshot.total_count and length <= 100) and',
+        '                .total_count as $total_count |',
+        '($total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '(.check_runs | type == "array" and length == $total_count and length <= 100) and',
         '(.head_sha == $head) and',
         '(.app | type == "object" and .id == 15368) and',
         'if [ "$request" = "reviewer-checks" ] &&',
