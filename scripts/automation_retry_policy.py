@@ -1598,6 +1598,45 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal pull-review evidence moved out of governed schema/authorization order",
     )
 
+    codeql_terminal_approval_comments_endpoint = (
+        '"repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100"'
+    )
+    require(
+        codeql_terminal_step.count(codeql_terminal_approval_comments_endpoint) == 1,
+        "CodeQL Autofix terminal approval-comment endpoint topology changed",
+    )
+    approval_comment_fetch_pos = codeql_terminal_step.index(
+        codeql_terminal_approval_comments_endpoint,
+        review_approval_pos,
+    )
+    approval_comment_helper_pos = codeql_terminal_step.rfind(
+        "python3 scripts/automation_github_paginated_read.py",
+        review_approval_pos,
+        approval_comment_fetch_pos,
+    )
+    require(
+        approval_comment_helper_pos >= review_approval_pos
+        and approval_comment_fetch_pos - approval_comment_helper_pos < 160,
+        "CodeQL Autofix terminal approval-comment evidence must use exactly one governed paginated GitHub collection",
+    )
+    approval_comment_output_pos = codeql_terminal_step.index(
+        "> approval-comment-pages.json",
+        approval_comment_fetch_pos,
+    )
+    approval_comment_validate_pos = codeql_terminal_step.index(
+        "python3 scripts/codeql_autofix_controller.py approval-comment-evidence",
+        approval_comment_output_pos,
+    )
+    require(
+        review_approval_pos < approval_comment_helper_pos < approval_comment_fetch_pos
+        < approval_comment_output_pos < approval_comment_validate_pos,
+        "CodeQL Autofix terminal approval-comment evidence moved out of governed typed order",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in codeql_terminal_step,
+        "CodeQL Autofix terminal approval-comment governed pagination lost run-scoped token binding",
+    )
+
     codeql_terminal_artifact_list_governed = (
         'python3 scripts/automation_github_read.py \\\n'
         '            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" \\\n'
@@ -3221,6 +3260,32 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         codeql_terminal_review_pages_transport_drift,
         "CodeQL Autofix terminal pull-review evidence must use exactly one governed paginated GitHub collection",
+    )
+
+    codeql_terminal_approval_source = texts[".github/workflows/codeql-autofix.yml"]
+    codeql_terminal_approval_marker = (
+        'APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"'
+    )
+    codeql_terminal_approval_marker_pos = codeql_terminal_approval_source.index(
+        codeql_terminal_approval_marker
+    )
+    codeql_terminal_approval_helper = "python3 scripts/automation_github_paginated_read.py"
+    codeql_terminal_approval_helper_pos = codeql_terminal_approval_source.index(
+        codeql_terminal_approval_helper,
+        codeql_terminal_approval_marker_pos,
+    )
+    codeql_terminal_approval_transport_drift = dict(texts)
+    codeql_terminal_approval_transport_drift[".github/workflows/codeql-autofix.yml"] = (
+        codeql_terminal_approval_source[:codeql_terminal_approval_helper_pos]
+        + "gh api --paginate --slurp"
+        + codeql_terminal_approval_source[
+            codeql_terminal_approval_helper_pos + len(codeql_terminal_approval_helper):
+        ]
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        codeql_terminal_approval_transport_drift,
+        "CodeQL Autofix terminal approval-comment evidence must use exactly one governed paginated GitHub collection",
     )
 
     codeql_terminal_check_runs_governed = (
