@@ -27,6 +27,19 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: Any,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        return None
+
+
 def normalize_endpoint(value: str) -> str:
     """Accept exactly repos/{owner}/{repo}; reject all broader or deeper API authority."""
     require(
@@ -77,9 +90,10 @@ def get_json_text(
         )
         try:
             if opener is None:
-                response_context = urllib.request.build_opener(
-                    automation_github_read.NoRedirect()
-                ).open(request, timeout=TIMEOUT_SECONDS)
+                response_context = urllib.request.build_opener(NoRedirect()).open(
+                    request,
+                    timeout=TIMEOUT_SECONDS,
+                )
             else:
                 response_context = opener(request, timeout=TIMEOUT_SECONDS)
             with response_context as response:
