@@ -3,7 +3,7 @@
   "automaticRetries": [
     {
       "id": "governed-bot-review-read-transient",
-      "source": "scripts/governed_bot_review_gate.py",
+      "source": "scripts/automation_governed_bot_review_gate.py",
       "operation": "read-only-github-api-get",
       "failureClassifier": "transport-or-github-transient-v1",
       "maxAttempts": 3,
