@@ -375,7 +375,7 @@ def parse_args() -> argparse.Namespace:
             "with bounded transient retries."
         )
     )
-    parser.add_argument("endpoint")
+    parser.add_argument("endpoint", nargs="?")
     parser.add_argument(
         "--self-test",
         action="store_true",
@@ -390,6 +390,7 @@ def main() -> int:
         self_test()
         print("Ruleset admin governed read self-test passed")
         return 0
+    require(args.endpoint is not None, "Ruleset admin GitHub API endpoint is required")
     text = get_json_text(args.endpoint)
     sys.stdout.write(text)
     if not text.endswith("\n"):
