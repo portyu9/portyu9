@@ -600,6 +600,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"
           test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"
       - name: Prove exact PR-native Dependabot context
         env:
@@ -739,6 +740,7 @@ jobs:
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_tcb.py)" = "58f4d55e7e65bc7f417c1ce3c006f0b7b9c412c7"
           test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"
           test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"
           TREE_SHA="$(git -C candidate-source rev-parse 'HEAD^{tree}')"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -776,7 +778,7 @@ jobs:
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
           git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git" "refs/tags/${CANDIDATE_TAG}" "refs/tags/${CANDIDATE_TAG}^{}" > "$RUNNER_TEMP/dependabot-release-refs.txt"
-          python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"
+          python3 trusted-base/scripts/automation_github_repository_read.py "repos/${DEPENDENCY_REPOSITORY}" > "$RUNNER_TEMP/dependabot-release-repository.json"
           python3 trusted-base/scripts/automation_github_read.py "repos/${DEPENDENCY_REPOSITORY}/releases/tags/${CANDIDATE_TAG}" > "$RUNNER_TEMP/dependabot-release.json"
           python3 trusted-base/scripts/dependabot_release.py \
             --refs "$RUNNER_TEMP/dependabot-release-refs.txt" \
