@@ -253,7 +253,7 @@
       "mutationRetry": false,
       "endpointScope": "ruleset-admin-bootstrap-only",
       "maxResponseBytes": 8000000,
-      "rationale": "Retry only the two reviewed Ruleset Administration bootstrap GETs (App installation identity and installation-token selected-repository scope) after classified transport/platform transients. App-token creation POST and ruleset PUT remain outside this retry source and single-shot."
+      "rationale": "Retry only the two reviewed read-only Ruleset Administration bootstrap GETs (App installation identity and installation-token selected-repository scope) after classified transport/platform transients. App-token creation POST and ruleset PUT remain outside this retry source and single-shot."
     },
     {
       "id": "spotlight-approve-shell-read-transient",
