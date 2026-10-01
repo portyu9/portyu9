@@ -67,7 +67,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'HEAD:scripts/dependabot_controller.py)" = "b47cda8236412e8a051df46c80ad8520b2b56afa"',
         'HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"',
         'HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"',
-        'HEAD:scripts/workflow_capability_tcb.py)" = "963da472bad7f0ba7270dee0393a132a20dd4cc6"',
+        'HEAD:scripts/workflow_capability_tcb.py)" = "58f4d55e7e65bc7f417c1ce3c006f0b7b9c412c7"',
         'HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
         'HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         "name: Fetch exact candidate release evidence",

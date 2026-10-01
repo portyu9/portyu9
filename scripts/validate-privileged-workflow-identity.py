@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 VERSION = "governed-workflow-byte-identity-v143"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "92ed93fdce128ad71ed078912cbed5b10c25c0c6",
-    ".github/workflows/profile-quality.yml": "de900445f3c019b156c8dcc639670cb1e2dc0c91",
+    ".github/workflows/profile-quality.yml": "d825aee76592ac8f71213ea89b821cdb46f8f59f",
     ".github/workflows/profile-stats.yml": "0a6a2ff4924a9c5e27c20f0feb69f5c8e7756001",
     ".github/workflows/spotlight-link-sync.yml": "df15c37d6890e8f3a6eb348535966d16642405d5",
 }
@@ -2237,6 +2237,57 @@ def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
         "Bot reviewer shell-read projection left retry transport bytes behind",
     )
     return projected
+
+def validate_dependabot_admission_blob_locks(profile_quality: str) -> None:
+    admission = job_block(profile_quality, "dependabot_admission", "governed_bot_review")
+
+    identity_start = "      - name: Verify exact accepted-base admission source identity\n"
+    identity_end = "      - name: Fetch exact candidate release evidence\n"
+    require(
+        admission.count(identity_start) == 1 and admission.count(identity_end) == 1,
+        "Profile Quality Dependabot admission source-identity step topology changed",
+    )
+    identity = admission[
+        admission.index(identity_start):admission.index(identity_end, admission.index(identity_start))
+    ]
+
+    trusted_paths = (
+        "scripts/dependabot_capability_admission.py",
+        "scripts/dependabot_controller.py",
+        "scripts/dependabot_release.py",
+        "scripts/workflow_capability_api_collection.py",
+        "scripts/workflow_capability_tcb.py",
+        "scripts/automation_github_read.py",
+        "scripts/automation_github_paginated_read.py",
+    )
+    for relative in trusted_paths:
+        blob = v21.git_blob_sha(ROOT / relative)
+        fragment = f'test "$(git -C trusted-base rev-parse HEAD:{relative})" = "{blob}"'
+        require(
+            identity.count(fragment) == 1,
+            f"Profile Quality accepted-base Dependabot admission blob lock is stale or ambiguous: {relative}",
+        )
+
+    transport_start = "      - name: Verify exact accepted-base governed read transport identity\n"
+    transport_end = "      - name: Prove exact PR-native Dependabot context\n"
+    require(
+        admission.count(transport_start) == 1 and admission.count(transport_end) == 1,
+        "Profile Quality governed-read transport identity step topology changed",
+    )
+    transport = admission[
+        admission.index(transport_start):admission.index(transport_end, admission.index(transport_start))
+    ]
+    for relative in (
+        "scripts/automation_github_read.py",
+        "scripts/automation_github_paginated_read.py",
+    ):
+        blob = v21.git_blob_sha(ROOT / relative)
+        fragment = f'test "$(git -C trusted-base rev-parse HEAD:{relative})" = "{blob}"'
+        require(
+            transport.count(fragment) == 1,
+            f"Profile Quality accepted-base governed-read blob lock is stale or ambiguous: {relative}",
+        )
+
 
 def validate_native_bot_review_gate(profile_quality: str, evaluator: str) -> None:
     gate = job_block(profile_quality, "governed_bot_review", None)
@@ -6137,6 +6188,7 @@ def main() -> int:
 
         profile_quality = (ROOT / ".github/workflows/profile-quality.yml").read_text(encoding="utf-8")
         governed_bot_review_gate = (ROOT / "scripts/governed_bot_review_gate.py").read_text(encoding="utf-8")
+        validate_dependabot_admission_blob_locks(profile_quality)
         validate_native_bot_review_gate(profile_quality, governed_bot_review_gate)
 
         bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
