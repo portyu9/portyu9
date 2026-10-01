@@ -224,7 +224,7 @@ class _FakeResponse:
 def self_test() -> None:
     require(successor_version("3.13.16") == "3.13.17", "successor calculation drifted")
     require(
-        release_url("3.13.17") == "https://www.python.org/downloads/release/python-31316/",
+        release_url("3.13.17") == "https://www.python.org/downloads/release/python-31317/",
         "release URL construction drifted",
     )
     try:
