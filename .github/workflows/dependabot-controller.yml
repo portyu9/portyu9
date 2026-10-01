@@ -1334,7 +1334,7 @@ jobs:
 
       - name: Validate exact repository contracts
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python3 scripts/validate-privileged-workflow-identity.py
