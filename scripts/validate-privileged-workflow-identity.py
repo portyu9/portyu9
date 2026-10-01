@@ -8,7 +8,7 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v140"
+VERSION = "governed-workflow-byte-identity-v141"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "92ed93fdce128ad71ed078912cbed5b10c25c0c6",
     ".github/workflows/profile-quality.yml": "45e53e364dc95a3beecc4408f00b94d09e971f50",
@@ -3289,8 +3289,8 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
         ),
     )
     require(
-        autofix.count(pagination_helper) == 8,
-        "CodeQL Autofix must retain exactly eight governed pagination calls",
+        autofix.count(pagination_helper) == 9,
+        "CodeQL Autofix must retain exactly nine governed pagination calls",
     )
     for endpoint, output_name, consumer, label, continuation_indent in pagination_contracts:
         fetch = (
@@ -3321,6 +3321,49 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             fetch_pos < consume_pos,
             f"CodeQL Autofix {label} evidence must be fetched before typed consumption",
         )
+
+    post_merge_runs_endpoint = (
+        '"repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100"'
+    )
+    require(
+        autofix.count(post_merge_runs_endpoint) == 1,
+        "CodeQL Autofix post-merge CodeQL run endpoint topology changed",
+    )
+    post_merge_function_pos = autofix.index("fetch_codeql_dispatch_runs() {")
+    post_merge_endpoint_pos = autofix.index(post_merge_runs_endpoint, post_merge_function_pos)
+    post_merge_helper_pos = autofix.rfind(
+        pagination_helper,
+        post_merge_function_pos,
+        post_merge_endpoint_pos,
+    )
+    require(
+        post_merge_helper_pos >= post_merge_function_pos
+        and post_merge_endpoint_pos - post_merge_helper_pos < 180,
+        "CodeQL Autofix post-merge CodeQL run discovery must use governed pagination",
+    )
+    require(
+        "gh api --paginate --slurp" not in autofix[
+            post_merge_function_pos:post_merge_endpoint_pos
+        ],
+        "CodeQL Autofix post-merge CodeQL run discovery regained direct pagination transport",
+    )
+    post_merge_before_fetch_pos = autofix.index(
+        "fetch_codeql_dispatch_runs > codeql-dispatch-runs-before.json",
+        post_merge_endpoint_pos,
+    )
+    post_merge_before_select_pos = autofix.index(
+        "python3 scripts/codeql_autofix_controller.py followup-select",
+        post_merge_before_fetch_pos,
+    )
+    post_merge_after_fetch_pos = autofix.index(
+        "fetch_codeql_dispatch_runs > codeql-dispatch-runs-after.json",
+        post_merge_before_select_pos,
+    )
+    require(
+        post_merge_function_pos < post_merge_helper_pos < post_merge_endpoint_pos
+        < post_merge_before_fetch_pos < post_merge_before_select_pos < post_merge_after_fetch_pos,
+        "CodeQL Autofix post-merge CodeQL run evidence must preserve fetch-before-typed-consumption order",
+    )
 
     review_thread_helper = "python3 scripts/automation_github_review_threads_read.py"
     review_thread_fetch = (
