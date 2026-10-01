@@ -443,10 +443,9 @@ def validate_text(text: str) -> None:
         )
 
     artifact_list_call = (
-        "python3 scripts/automation_github_read.py "
-        + "\\"
-        + "\n            "
-        + '"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100"'
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" '
+        '> artifacts.json'
     )
     artifact_select = "python3 scripts/codeql_autofix_controller.py artifact"
     artifact_id = 'ARTIFACT_ID="$(jq -r .id artifact.json)"'
