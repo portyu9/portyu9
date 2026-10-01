@@ -197,7 +197,7 @@ def validate_workflow_source(workflow_id: str, workflow: dict[str, Any], text: s
             "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
             "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97",
             expected_checkout_ref,
-            'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+            'test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"',
         ):
             require(fragment in lease, f"{label} governed-read bootstrap changed: {fragment}")
         expected_source_head = (
@@ -357,7 +357,7 @@ def self_test(policy: dict[str, Any], root: Path) -> None:
         run: |
           set -euo pipefail
           test "$(git -C source rev-parse HEAD)" = "$BASE_SHA"
-          test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          test "$(git -C source rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
