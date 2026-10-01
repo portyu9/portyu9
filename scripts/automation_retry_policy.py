@@ -982,8 +982,8 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require(fragment in spotlight_approve,
                 f"Spotlight privileged shell-read retry contract is missing: {fragment}")
     require(
-        spotlight_approve.count('timeout 20s gh api --include "repos/') == 14,
-        "Spotlight approval must retain exactly fourteen enumerated singleton GET retry case arms",
+        spotlight_approve.count('timeout 20s gh api --include "repos/') == 16,
+        "Spotlight approval must retain exactly sixteen enumerated singleton GET retry case arms",
     )
     require(
         spotlight_approve.count('timeout 20s gh api --include --method GET -F page="$page"') == 2
@@ -1021,10 +1021,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require(forbidden not in spotlight_approve,
                 f"Spotlight privileged shell-read retry acquired forbidden transport/mutation surface: {forbidden}")
     for key in (
-        "main-initial", "generated-initial", "candidate-initial", "compare-initial",
-        "pr-initial", "codeql-workflow", "dependency-workflow", "profile-workflow",
-        "protected-runs", "reviewer-checks", "open-pr-list", "main-final",
-        "candidate-final", "pr-final",
+        "main-initial", "main-current", "generated-initial", "generated-current",
+        "candidate-initial", "compare-initial", "pr-initial", "codeql-workflow",
+        "dependency-workflow", "profile-workflow", "protected-runs", "reviewer-checks",
+        "open-pr-list", "main-final", "candidate-final", "pr-final",
     ):
         require(spotlight_approve.count(f"                {key})\n") == 1,
                 f"Spotlight privileged shell-read retry case arm changed: {key}")

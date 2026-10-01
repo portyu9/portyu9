@@ -627,6 +627,17 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
         "Spotlight authority reviewer snapshot must retain root-scoped total_count binding",
     )
     projected = approve[:helper_start] + approve[helper_end:]
+    source_epoch_guards = (
+        '          spotlight_require_current_source_epoch "before initial protected-check proof"\n',
+        '            spotlight_require_current_source_epoch "during protected-check convergence"\n',
+        '          spotlight_require_current_source_epoch "after protected-check convergence"\n',
+    )
+    for guard in source_epoch_guards:
+        core.require(
+            projected.count(guard) == 1,
+            f"Spotlight authority superseded-source projection anchor changed: {guard.strip()}",
+        )
+        projected = projected.replace(guard, "", 1)
     overlays = (
         ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"',
          'MAIN_REF_RESPONSE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main")"'),

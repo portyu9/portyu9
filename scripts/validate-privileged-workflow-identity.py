@@ -14,7 +14,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "f392c0d0351f55de82adf0331f4dd8d63b7753a9",
     ".github/workflows/profile-stats.yml": "ac5fbfee01fd65334f1cc7f34c6e56ef0c8fb55d",
-    ".github/workflows/spotlight-link-sync.yml": "4d496d4fb115c259a82288389b43b0d7a73d32bc",
+    ".github/workflows/spotlight-link-sync.yml": "990bdd9d75d83737394cb2ee51e77920b38483bc",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -783,6 +783,17 @@ def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> st
         "Spotlight reviewer snapshot must retain root-scoped total_count binding",
     )
     projected = approve[:helper_start] + approve[helper_end:]
+    source_epoch_guards = (
+        '          spotlight_require_current_source_epoch "before initial protected-check proof"\n',
+        '            spotlight_require_current_source_epoch "during protected-check convergence"\n',
+        '          spotlight_require_current_source_epoch "after protected-check convergence"\n',
+    )
+    for guard in source_epoch_guards:
+        require(
+            projected.count(guard) == 1,
+            f"Spotlight identity superseded-source projection anchor changed: {guard.strip()}",
+        )
+        projected = projected.replace(guard, "", 1)
 
     overlays = (
         ('MAIN_REF_RESPONSE="$(spotlight_singleton_get main-initial)"',
