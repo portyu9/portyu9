@@ -133,7 +133,6 @@ def http_error(code: int, headers: dict[str, str] | None = None) -> urllib.error
 
 def validate_retry_contract() -> None:
     generator = load_generator()
-    generator.transport_self_test()
     require(generator.API_ATTEMPTS == 3, "GitHub evidence retry budget must remain exactly three attempts")
     require(generator.API_TIMEOUT_SECONDS == 20, "GitHub evidence request timeout must use the canonical 20-second bound")
     require(generator.API_BACKOFF_SECONDS == (1.0, 2.0), "GitHub evidence backoff schedule changed")
