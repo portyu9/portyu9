@@ -163,6 +163,7 @@ jobs:
           test -n "$ADMIN_PRIVATE_KEY"
           test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
           test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"
+          test "$(git rev-parse HEAD:scripts/automation_github_ruleset_admin_read.py)" = "ef7c2306ac7007494a4c6bd951b0160d55c502a2"
           MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main")"
           MAIN_REF_SHA="$(jq -er '
             if type != "object" then
@@ -211,7 +212,7 @@ jobs:
           rm -f app-private-key.pem
           unset ADMIN_PRIVATE_KEY
 
-          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" "app/installations/${ADMIN_INSTALLATION_ID}" > installation.json
+          GH_TOKEN="$APP_JWT" python3 scripts/automation_github_ruleset_admin_read.py "app/installations/${ADMIN_INSTALLATION_ID}" > installation.json
           jq -e --argjson app "$ADMIN_APP_ID" --argjson installation "$ADMIN_INSTALLATION_ID" '
             type == "object" and
             (.id | type == "number" and floor == . and . == $installation) and
@@ -265,7 +266,7 @@ jobs:
           test "$TOKEN_EXPIRES_EPOCH" -gt "$((NOW + 120))"
           test "$TOKEN_EXPIRES_EPOCH" -le "$((NOW + 3700))"
 
-          GH_TOKEN="$ADMIN_TOKEN" gh api "installation/repositories?per_page=100" > token-repositories.json
+          GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_ruleset_admin_read.py "installation/repositories?per_page=100" > token-repositories.json
           jq -e '
             type == "object" and
             (.total_count | type == "number" and floor == . and . == 1) and

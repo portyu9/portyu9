@@ -227,6 +227,35 @@
       "repositoryScope": "portyu9/portyu9"
     },
     {
+      "id": "ruleset-admin-bootstrap-read-transient",
+      "source": "scripts/automation_github_ruleset_admin_read.py",
+      "workflow": ".github/workflows/ruleset-reconciler.yml",
+      "job": "reconcile",
+      "step": "Apply only exact reviewed predecessor to successor",
+      "operation": "read-only-github-api-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "ruleset-admin-bootstrap-only",
+      "maxResponseBytes": 8000000,
+      "rationale": "Retry only the two reviewed read-only Ruleset Administration bootstrap GETs (App installation identity and installation-token selected-repository scope) after classified transport/platform transients. App-token creation POST and ruleset PUT remain outside this retry source and single-shot."
+    },
+    {
       "id": "spotlight-approve-shell-read-transient",
       "source": ".github/workflows/spotlight-link-sync.yml",
       "workflow": ".github/workflows/spotlight-link-sync.yml",

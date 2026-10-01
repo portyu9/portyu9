@@ -116,23 +116,9 @@
           "apiSurfaces": [
             {
               "client": "gh-api",
-              "endpoint": "app/installations/${ADMIN_INSTALLATION_ID}",
-              "method": "GET",
-              "mutating": false,
-              "step": "Apply only exact reviewed predecessor to successor"
-            },
-            {
-              "client": "gh-api",
               "endpoint": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens",
               "method": "POST",
               "mutating": true,
-              "step": "Apply only exact reviewed predecessor to successor"
-            },
-            {
-              "client": "gh-api",
-              "endpoint": "installation/repositories?per_page=100",
-              "method": "GET",
-              "mutating": false,
               "step": "Apply only exact reviewed predecessor to successor"
             },
             {
