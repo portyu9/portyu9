@@ -4009,7 +4009,12 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         1,
         transport="python3 scripts/automation_github_paginated_read.py",
     )
-    validate_pull_review_evidence_schema(autofix, "CodeQL Autofix terminal merge", 1)
+    validate_pull_review_evidence_schema(
+        autofix,
+        "CodeQL Autofix terminal merge",
+        1,
+        transport="cat review-pages.json",
+    )
     spotlight_review_projection = project_spotlight_merge_shell_reads_to_raw(
         project_spotlight_approval_list_helper_to_legacy(spotlight)
     )
