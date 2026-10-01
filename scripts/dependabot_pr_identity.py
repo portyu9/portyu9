@@ -82,7 +82,12 @@ def classify_pr_identity(
         isinstance(association, str) and association in NON_PRIVILEGED_AUTHOR_ASSOCIATIONS,
         "Dependabot PR author association is privileged, unknown, or changed",
     )
-    require(pr.get("maintainer_can_modify") is False, "Dependabot PR must disable maintainer head mutation")
+    # GitHub can transiently flip this platform-owned field on same-repository bot PRs.
+    # Keep the response schema strict, but never use its value as Dependabot identity evidence.
+    require(
+        type(pr.get("maintainer_can_modify")) is bool,
+        "Dependabot PR maintainer_can_modify flag must remain boolean",
+    )
     require(type(pr.get("number")) is int and pr["number"] > 0, "Dependabot PR number is invalid")
     require(type(pr.get("commits")) is int and pr["commits"] >= 1,
             "Dependabot PR must contain at least one commit")
@@ -197,9 +202,21 @@ def self_test() -> None:
     stale["head"]["sha"] = "b" * 40
     expect_failure(stale, "differs from the exact event/admission head")
 
-    mutable = fixture()
-    mutable["maintainer_can_modify"] = True
-    expect_failure(mutable, "disable maintainer head mutation")
+    maintainer_toggle = fixture()
+    maintainer_toggle["maintainer_can_modify"] = True
+    toggled_result = classify_pr_identity(
+        maintainer_toggle,
+        repository="portyu9/portyu9",
+        expected_head_sha="a" * 40,
+    )
+    require(
+        toggled_result["classification"] == "dependabot-github-actions",
+        "boolean maintainer_can_modify volatility must not change Dependabot identity",
+    )
+
+    malformed_maintainer = fixture()
+    malformed_maintainer["maintainer_can_modify"] = "false"
+    expect_failure(malformed_maintainer, "maintainer_can_modify flag must remain boolean")
 
     contributor = fixture()
     contributor["author_association"] = "CONTRIBUTOR"
