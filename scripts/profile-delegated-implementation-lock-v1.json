@@ -9,14 +9,14 @@
     "scripts/generate-engineering-spotlight.py": "f4101cce492f9928e20b41c603af65c0c870a6c7",
     "scripts/generate-portfolio-evidence-ledger.py": "9ebbb5963b0ab6c3e97fb98221fa5cbec1009340",
     "scripts/json_object_contract.py": "0eed47074ba6f0bd470dff9e814577d1f78eede6",
+    "scripts/portfolio-systems-v1.json": "fe8b4c12061b3e6c8b803e78e97a08fe43f98ad2",
     "scripts/portfolio_evidence_helpers.py": "74fedec29539f8a262c48780be26856f5daac8b1",
     "scripts/portfolio_evidence_ledger.py": "73b9a75a49e83a8fa6bfd92ec1caf5c150beed9b",
     "scripts/portfolio_system_registry.py": "a29d8b743d3c115550a15683f50948193f6ab483",
-    "scripts/portfolio-systems-v1.json": "fe8b4c12061b3e6c8b803e78e97a08fe43f98ad2",
-    "scripts/validate_engineering_spotlight_registry.py": "8db80dfb7395d284b5b844c39f28feb0db5a1147",
-    "scripts/validate_engineering_spotlight_v21.py": "1f312b87bb9e591b4692223c00da540cd062b752",
     "scripts/validate-engineering-spotlight.py": "388991c414a74569da749867929a97705ad67f9e",
-    "scripts/validate-portfolio-evidence-ledger.py": "786ef88cd985154f4d959ec9abaee13b94c93d58"
+    "scripts/validate-portfolio-evidence-ledger.py": "7b233739d9ed6f255c23a808cb3fd59717801622",
+    "scripts/validate_engineering_spotlight_registry.py": "8db80dfb7395d284b5b844c39f28feb0db5a1147",
+    "scripts/validate_engineering_spotlight_v21.py": "1f312b87bb9e591b4692223c00da540cd062b752"
   },
   "stages": {
     "engineering-spotlight-generate": [
