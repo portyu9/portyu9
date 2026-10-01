@@ -426,8 +426,9 @@ jobs:
           for PATH_VALUE in .github/action-lock.json .github/workflow-capability-bom-v1.json scripts/validate-codeql-contract.py; do
             FILE="$RUNNER_TEMP/derived/$PATH_VALUE"
             test -s "$FILE"
-            CONTENT="$(base64 -w0 < "$FILE")"
-            gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/blobs" -f content="$CONTENT" -f encoding=base64 > git-blob-http-response.txt
+            base64 -w0 < "$FILE" | jq -Rs '{content: ., encoding: "base64"}' > git-blob-request.json
+            jq -e 'type == "object" and keys == ["content", "encoding"] and .encoding == "base64" and (.content | type == "string" and length > 0)' git-blob-request.json >/dev/null
+            gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/blobs" --input git-blob-request.json > git-blob-http-response.txt
             GIT_BLOB_STATUS_LINE="$(head -n 1 git-blob-http-response.txt | tr -d '\r')"
             [[ "$GIT_BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {
               echo "ERROR: Dependabot Git blob creation returned unexpected status: ${GIT_BLOB_STATUS_LINE}" >&2
