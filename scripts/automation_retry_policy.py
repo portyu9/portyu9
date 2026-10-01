@@ -1768,7 +1768,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal receipt ZIP regained direct gh API transport",
     )
     require(
-        'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "6ac186f3d123bb197175ece637558f70f2b1a24c"'
+        'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "4e718d6268182d351e5913051206366e6eccd566"'
         in codeql_terminal_step,
         "CodeQL Autofix terminal receipt ZIP lost exact governed binary helper identity",
     )
