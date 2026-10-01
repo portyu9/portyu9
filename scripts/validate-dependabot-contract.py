@@ -1915,9 +1915,13 @@ def validate_release_resolution_parity_contract(text: str) -> None:
         'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
         '"1b779bcea0acd290826fef8f60fd01480113a31a"'
     )
+    repository_root_pin = (
+        'test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = '
+        '"e0f6b16821f415007deeafaa4797508c04c4d293"'
+    )
     ls_remote = 'git ls-remote --tags "https://github.com/${DEPENDENCY_REPOSITORY}.git"'
     repository_get = (
-        'python3 scripts/automation_github_read.py '
+        'python3 scripts/automation_github_repository_read.py '
         '"repos/${DEPENDENCY_REPOSITORY}" > release-repository.json'
     )
     release_get = (
@@ -1934,6 +1938,7 @@ def validate_release_resolution_parity_contract(text: str) -> None:
 
     for fragment, expected_count in (
         (helper_pin, 2),
+        (repository_root_pin, 2),
         (ls_remote, 2),
         (repository_get, 2),
         (release_get, 2),
@@ -1964,7 +1969,8 @@ def validate_release_resolution_parity_contract(text: str) -> None:
     cursor = -1
     for label in ("canonical controller", "delegated admission"):
         pin_pos = text.index(helper_pin, cursor + 1)
-        ls_pos = text.index(ls_remote, pin_pos)
+        repository_root_pin_pos = text.index(repository_root_pin, pin_pos)
+        ls_pos = text.index(ls_remote, repository_root_pin_pos)
         repository_pos = text.index(repository_get, ls_pos)
         release_pos = text.index(release_get, repository_pos)
         resolver_pos = text.index(resolver, release_pos)
@@ -1976,7 +1982,7 @@ def validate_release_resolution_parity_contract(text: str) -> None:
         admit_pos = text.index(admit, verify_pos)
         resolved_arg_pos = text.index(resolved_arg, admit_pos)
         require(
-            pin_pos < ls_pos < repository_pos < release_pos < resolver_pos
+            pin_pos < repository_root_pin_pos < ls_pos < repository_pos < release_pos < resolver_pos
             < repository_arg_pos < release_arg_pos < output_pos
             < consume_pos < verify_pos < admit_pos < resolved_arg_pos,
             f"Dependabot {label} release reproof ordering changed",
