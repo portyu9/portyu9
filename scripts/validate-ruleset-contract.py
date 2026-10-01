@@ -449,7 +449,7 @@ def validate_reconciler_admin_response_evidence(text: str) -> None:
 
     admin_read_pin = (
         'test "$(git rev-parse HEAD:scripts/automation_github_ruleset_admin_read.py)" = '
-        '"1633c804071595f207ce2524633796213788b5f3"'
+        '"ef7c2306ac7007494a4c6bd951b0160d55c502a2"'
     )
     require(admin_read_pin in text,
             "Ruleset admin governed-read helper identity changed")
