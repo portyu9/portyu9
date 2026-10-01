@@ -186,7 +186,7 @@ def validate_publish_write_surface(publish: str) -> None:
 
 def validate_quality(text: str) -> None:
     require("name: Profile quality" in text, "Profile quality workflow name changed")
-    require('PYTHON_VERSION: "3.13.15"' in text, "Profile quality Python version is not explicit")
+    require('PYTHON_VERSION: "3.13.16"' in text, "Profile quality Python version is not explicit")
     require(text.count("runs-on: ubuntu-24.04") == 3, "All three Profile Quality jobs must pin ubuntu-24.04")
     require(text.count(f"actions/checkout@{CHECKOUT_SHA}") == 2, "Only the two evidence-validation Profile Quality jobs may use reviewed checkout")
     require(text.count(f"actions/setup-python@{SETUP_PYTHON_SHA}") == 2, "Only the two evidence-validation Profile Quality jobs may use reviewed setup-python")
@@ -381,7 +381,7 @@ def validate_stats(text: str) -> None:
     require('cron: "17,47 * * * *"' not in text and 'cron: "2-57/5 * * * *"' not in text,
             "Stale higher-frequency cron remains in production workflow")
     require("cancel-in-progress: true" in text, "Stats workflow must cancel stale runs")
-    require('PYTHON_VERSION: "3.13.15"' in text, "Stats Python version is not explicit")
+    require('PYTHON_VERSION: "3.13.16"' in text, "Stats Python version is not explicit")
     require(text.count("runs-on: ubuntu-24.04") == 6, "Projected six-job stats contract changed")
 
     generate = job_block(text, "generate", "attest")
