@@ -2,7 +2,12 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,9 +84,110 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+def profile_evidence_reads_measurement_diagnostic_v2() -> None:
+    """Disposable carrier: measure frozen #1435 current-main descendant with accepted-main admission code."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    base_sha = "edf1e7edec4fb5f2eebca2a7ac6178fd499e1a48"
+    source_sha = "961899f593910b0a76f83640383cfd522369d025"
+    expected_tree = "13b83f96952d1c9ce24bb362fe35868cfaa1c667"
+    expected_blobs = {
+        ".github/automation-retry-policy-v1.json": "0bc9817c2d5f3b6290a83801266ef1b9490836ba",
+        "scripts/automation_retry_policy.py": "bfadeead5eb71f1039330a3698ee6bf013124bbc",
+        "scripts/portfolio_evidence_ledger.py": "73b9a75a49e83a8fa6bfd92ec1caf5c150beed9b",
+        "scripts/profile-delegated-implementation-lock-v1.json": "eda30ce4379a9b8f8916b52c34291c3547017cfb",
+        "scripts/profile-stats-source-epoch-v1.json": "bd9f2961975a6604103ee6aaa47976538795ea4a",
+        "scripts/sync-profile-contribution-total.py": "eaf2fb589543aaa0521f3044034f915772edbe31",
+        "scripts/validate-portfolio-evidence-ledger.py": "7b233739d9ed6f255c23a808cb3fd59717801622",
+    }
+
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "--depth=64", "origin", base_sha, source_sha],
+        check=True,
+    )
+    merge_base = subprocess.check_output(
+        ["git", "merge-base", base_sha, source_sha], text=True
+    ).strip()
+    require(
+        merge_base == base_sha,
+        f"diagnostic candidate no longer descends from exact accepted main: {merge_base}",
+    )
+    observed_paths = subprocess.check_output(
+        ["git", "diff", "--name-only", base_sha, source_sha], text=True
+    ).splitlines()
+    require(
+        observed_paths == sorted(expected_blobs),
+        f"diagnostic candidate path set changed: {observed_paths!r}",
+    )
+    for changed_path, expected_blob in expected_blobs.items():
+        observed_blob = subprocess.check_output(
+            ["git", "rev-parse", f"{source_sha}:{changed_path}"], text=True
+        ).strip()
+        require(
+            observed_blob == expected_blob,
+            f"diagnostic candidate blob changed for {changed_path}: {observed_blob}",
+        )
+    tree = subprocess.check_output(
+        ["git", "rev-parse", f"{source_sha}^{{tree}}"], text=True
+    ).strip()
+    require(tree == expected_tree, f"diagnostic candidate tree changed: {tree}")
+
+    with tempfile.TemporaryDirectory(prefix="profile-evidence-reads-v2-measurement-") as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(trusted), base_sha],
+            check=True,
+        )
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(candidate), source_sha],
+            check=True,
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(trusted / "scripts/workflow_capability_admission.py"),
+                str(candidate),
+                "--candidate-tree-sha",
+                tree,
+                "--measure",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        if result.stderr:
+            print(result.stderr, file=sys.stderr, end="")
+        require(
+            result.returncode == 0,
+            f"accepted-main production --measure failed: {result.returncode}",
+        )
+        payload = json.loads(result.stdout)
+        require(
+            isinstance(payload, dict)
+            and set(payload) == {"measurement"}
+            and isinstance(payload["measurement"], dict),
+            "production --measure output shape changed",
+        )
+        print(
+            "CAPABILITY-MEASUREMENT-DIAGNOSTIC:"
+            + json.dumps(payload, sort_keys=True, separators=(",", ":")),
+            flush=True,
+        )
+
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(candidate)], check=True
+        )
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(trusted)], check=True
+        )
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        profile_evidence_reads_measurement_diagnostic_v2()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
