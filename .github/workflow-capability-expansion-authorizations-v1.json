@@ -1149,6 +1149,13 @@
       "rationale": "Authorize #743's exact protected-TCB hardening of paginated pull-review evidence: existing review GET endpoints, permissions, exact-head marker approval, manual CHANGES_REQUESTED veto, and merge authority are unchanged; bounded complete pages and strict review id/user/state/commit_id/body schema now fail closed before decisions. Semantic Workflow Capability is unchanged; no trigger, permission, secret, endpoint, mutation, check reduction, direct-main write, or bypass is added."
     },
     {
+      "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "expansionSha256": "e7b1be8080de1abe96f2a32f1c562267595ff08a2a7160c0c43dc370050a62ba",
+      "id": "cap-python-runtime-31316-convergence-v1",
+      "rationale": "Authorize frozen #1432 measured by closed #1433: converge Capability Admission and Dependabot Controller from temporary 3.13.15 to canonical 3.13.16, restore the uniform eight-workflow runtime contract, and rederive only the Capability Admission byte lock. No setup-python identity, runner, trigger, permission, job topology, endpoint/method, mutation/retry, secret/OIDC, required check, ruleset, merge/direct-main authority, generated/profile content, or bypass behavior changes."
+    },
+    {
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "expansionSha256": "5d6431769d38cf2addf390f12a9ab5aaa23b42f3550d5de8a8ad178fceb9a1b2",
