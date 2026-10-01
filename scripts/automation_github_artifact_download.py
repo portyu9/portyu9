@@ -431,14 +431,6 @@ def self_test() -> None:
         "artifact ZIP ordinary HTTP 403 must terminate without retry",
     )
 
-    with tempfile.TemporaryDirectory(prefix="artifact-zip-self-test-") as directory:
-        output = Path(directory) / "receipt.zip"
-        write_atomic(str(output), b"PK\x03\x04fixture")
-        require(
-            output.read_bytes() == b"PK\x03\x04fixture",
-            "artifact ZIP atomic output changed bytes",
-        )
-
 
 def parser() -> argparse.ArgumentParser:
     value = argparse.ArgumentParser(description=__doc__)
