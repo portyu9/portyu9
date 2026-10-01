@@ -1058,6 +1058,13 @@
       "rationale": "Authorize #559's exact PR-native Dependabot admission gate. The existing trusted-main semantic proof remains authoritative; the added Profile Quality pull_request job is read-only, executes no candidate repository code, re-proves the exact live PR/base/head, and succeeds only after consuming the exact trusted-capability-admission-proof. This gives Protect Main an eligible-event GitHub Actions check without weakening admission, reviewer visibility, workflow approval, or exact-head merge."
     },
     {
+      "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "expansionSha256": "2bd48c4cb8b4cabf131c8abb053e1c2e968b4edad6d450a177816a61d978bece",
+      "id": "cap-profile-evidence-transient-reads-v1",
+      "rationale": "Authorize frozen #1435 measured by closed #1442: route Portfolio REST evidence reads through the accepted governed GET client and give the fixed read-only Profile Contributions GraphQL query bounded transient-only fresh-attempt retry. Semantic Workflow Capability is unchanged; only protected TCB bytes expand. No permission, trigger, endpoint/query, mutation, secret/OIDC, required-check, ruleset/direct-main/merge authority, publication trust, or bypass is added."
+    },
+    {
       "baseBomSha256": "b7238a10559d84f2ba411d8aae2f140dd1448184de5a35440bdf70e910a6f37e",
       "candidateBomSha256": "50927413305943300a677fb60b1e9f13a9b52bcda6eb20481df21d0ff88f7420",
       "expansionSha256": "5a0393b9c51554bb10187f1ab7a1dd271d6a7160e597f9cbbdb8ab8ef6929a03",
