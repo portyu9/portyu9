@@ -1239,9 +1239,27 @@ def validate_controller_git_mutation_response_contract(text: str) -> None:
 
 
 def validate_controller_git_mutation_status_contract(text: str) -> None:
+    blob_request_fragments = (
+        'base64 -w0 < "$FILE" | jq -Rs \'{content: ., encoding: "base64"}\' > git-blob-request.json',
+        'jq -e \'type == "object" and keys == ["content", "encoding"] and .encoding == "base64" and (.content | type == "string" and length > 0)\' git-blob-request.json >/dev/null',
+    )
+    for fragment in blob_request_fragments:
+        require(
+            fragment in text,
+            f"Dependabot Git blob request-body transport is missing: {fragment}",
+        )
+    for forbidden in (
+        'CONTENT="$(base64 -w0 < "$FILE")"',
+        '-f content="$CONTENT" -f encoding=base64',
+    ):
+        require(
+            forbidden not in text,
+            f"Dependabot Git blob mutation regained unbounded argv payload transport: {forbidden}",
+        )
+
     specs = (
         (
-            'gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/blobs" -f content="$CONTENT" -f encoding=base64 > git-blob-http-response.txt',
+            'gh api --include --method POST "repos/${TARGET_REPOSITORY}/git/blobs" --input git-blob-request.json > git-blob-http-response.txt',
             'GIT_BLOB_STATUS_LINE="$(head -n 1 git-blob-http-response.txt | tr -d \'\\r\')"',
             '[[ "$GIT_BLOB_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {',
             "Dependabot Git blob creation returned unexpected status:",
