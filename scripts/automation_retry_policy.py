@@ -1737,7 +1737,16 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     codeql_terminal_artifact_list_direct = (
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json'
     )
-    codeql_terminal_artifact_zip = (
+    codeql_terminal_artifact_zip_governed = (
+        "python3 scripts/automation_github_binary_read.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"'
+        + " "
+        + "\\"
+        + "\n            receipt.zip"
+    )
+    codeql_terminal_artifact_zip_direct = (
         'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
     )
     require(
@@ -1749,8 +1758,18 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal receipt artifact list regained direct gh API GET transport",
     )
     require(
-        codeql_terminal_step.count(codeql_terminal_artifact_zip) == 1,
-        "CodeQL Autofix terminal receipt ZIP must remain exactly one raw binary read",
+        codeql_terminal_step.count("python3 scripts/automation_github_binary_read.py") == 1
+        and codeql_terminal_step.count(codeql_terminal_artifact_zip_governed) == 1,
+        "CodeQL Autofix terminal receipt ZIP must use exactly one governed binary read",
+    )
+    require(
+        codeql_terminal_artifact_zip_direct not in codeql_terminal_step,
+        "CodeQL Autofix terminal receipt ZIP regained direct gh API transport",
+    )
+    require(
+        'test "$(git rev-parse HEAD:scripts/automation_github_binary_read.py)" = "ab7211197f0620e57d1a1e3013ab15a3715ce3e2"'
+        in codeql_terminal_step,
+        "CodeQL Autofix terminal receipt ZIP lost exact governed binary helper identity",
     )
     artifact_fetch_pos = codeql_terminal_step.index(codeql_terminal_artifact_list_governed)
     artifact_validate_pos = codeql_terminal_step.index(
@@ -1762,7 +1781,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         artifact_validate_pos,
     )
     artifact_zip_pos = codeql_terminal_step.index(
-        codeql_terminal_artifact_zip,
+        codeql_terminal_artifact_zip_governed,
         artifact_consume_pos,
     )
     require(
@@ -2235,12 +2254,28 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     )
     require(capability_autofix_step.count("python3 scripts/automation_github_read.py") == 2,
             "Capability Admission Autofix provenance must use exactly two governed singleton JSON reads")
-    capability_autofix_zip = (
+    capability_autofix_zip_governed = (
+        "python3 scripts/automation_github_binary_read.py "
+        + "\\"
+        + "\n            "
+        + '"repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip"'
+        + " "
+        + "\\"
+        + "\n            receipt.zip"
+    )
+    capability_autofix_zip_direct = (
         'gh api "repos/${TARGET_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > receipt.zip'
     )
-    require(capability_autofix_step.count("gh api ") == 1
-            and capability_autofix_step.count(capability_autofix_zip) == 1,
-            "Capability Admission Autofix provenance must retain exactly one raw binary artifact ZIP read")
+    require(
+        capability_autofix_step.count("python3 scripts/automation_github_binary_read.py") == 1
+        and capability_autofix_step.count(capability_autofix_zip_governed) == 1,
+        "Capability Admission Autofix provenance must use exactly one governed artifact ZIP read",
+    )
+    require(
+        capability_autofix_zip_direct not in capability_autofix_step
+        and "gh api " not in capability_autofix_step,
+        "Capability Admission Autofix provenance regained direct artifact ZIP transport",
+    )
     for forbidden in (
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" > artifacts.json',
         'gh api "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/attempts/${RECEIPT_ATTEMPT}" > origin-run.json',
@@ -3485,6 +3520,42 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         "CodeQL Autofix terminal receipt artifact list must use exactly one governed singleton JSON read",
     )
 
+    capability_binary_source = texts[".github/workflows/capability-admission.yml"]
+    capability_binary_helper = "python3 scripts/automation_github_binary_read.py"
+    capability_binary_pos = capability_binary_source.index(
+        capability_binary_helper,
+        capability_binary_source.index("- name: Verify immutable Autofix controller provenance"),
+    )
+    capability_binary_transport_drift = dict(texts)
+    capability_binary_transport_drift[".github/workflows/capability-admission.yml"] = (
+        capability_binary_source[:capability_binary_pos]
+        + "gh api"
+        + capability_binary_source[capability_binary_pos + len(capability_binary_helper):]
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        capability_binary_transport_drift,
+        "Capability Admission Autofix provenance must use exactly one governed artifact ZIP read",
+    )
+
+    codeql_binary_source = texts[".github/workflows/codeql-autofix.yml"]
+    codeql_binary_helper = "python3 scripts/automation_github_binary_read.py"
+    codeql_binary_pos = codeql_binary_source.index(
+        codeql_binary_helper,
+        codeql_binary_source.index("- name: Verify an existing Autofix PR and perform protected merge"),
+    )
+    codeql_binary_transport_drift = dict(texts)
+    codeql_binary_transport_drift[".github/workflows/codeql-autofix.yml"] = (
+        codeql_binary_source[:codeql_binary_pos]
+        + "gh api"
+        + codeql_binary_source[codeql_binary_pos + len(codeql_binary_helper):]
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        codeql_binary_transport_drift,
+        "CodeQL Autofix terminal receipt ZIP must use exactly one governed binary read",
+    )
+
     autofix_drift = dict(texts)
     autofix_drift[".github/workflows/codeql-autofix.yml"] = autofix_drift[
         ".github/workflows/codeql-autofix.yml"
@@ -3502,7 +3573,7 @@ def validate_repository(root: Path = ROOT) -> None:
 if __name__ == "__main__":
     validate_repository()
     print(
-        "Automation retry taxonomy validation passed: exactly three classified read-only GitHub retries are authorized; "
+        "Automation retry taxonomy validation passed: exactly twelve classified read-only GitHub retries are authorized; "
         "unclassified generator/ruleset and mutation failures remain terminal; all 15 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )
