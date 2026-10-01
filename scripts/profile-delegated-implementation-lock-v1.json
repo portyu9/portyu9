@@ -14,7 +14,7 @@
     "scripts/portfolio_evidence_ledger.py": "fb767213cccc141d0590b7490a7ead7997c9332a",
     "scripts/portfolio_system_registry.py": "a29d8b743d3c115550a15683f50948193f6ab483",
     "scripts/validate-engineering-spotlight.py": "388991c414a74569da749867929a97705ad67f9e",
-    "scripts/validate-portfolio-evidence-ledger.py": "0e6f51f0da8da540b8ee31a2c23e79316032a3b7",
+    "scripts/validate-portfolio-evidence-ledger.py": "0cdb08daa54c7783f03d4766a4a198484a4f3a0e",
     "scripts/validate_engineering_spotlight_registry.py": "8db80dfb7395d284b5b844c39f28feb0db5a1147",
     "scripts/validate_engineering_spotlight_v21.py": "1f312b87bb9e591b4692223c00da540cd062b752"
   },
