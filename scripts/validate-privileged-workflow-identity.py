@@ -3280,10 +3280,17 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
             "terminal pull-review authorization collection",
             "            ",
         ),
+        (
+            '"repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100"',
+            "> approval-comment-pages.json",
+            "python3 scripts/codeql_autofix_controller.py approval-comment-evidence",
+            "terminal approval-comment authorization collection",
+            "            ",
+        ),
     )
     require(
-        autofix.count(pagination_helper) == 7,
-        "CodeQL Autofix must retain exactly seven governed pagination calls",
+        autofix.count(pagination_helper) == 8,
+        "CodeQL Autofix must retain exactly eight governed pagination calls",
     )
     for endpoint, output_name, consumer, label, continuation_indent in pagination_contracts:
         fetch = (
@@ -3762,6 +3769,7 @@ def validate_codeql_autofix_read_singleton_evidence(autofix: str) -> None:
 
 def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
     get_endpoint = 'repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments?per_page=100'
+    pagination_helper = "python3 scripts/automation_github_paginated_read.py"
     post_endpoint = 'gh api --include --method POST "repos/${TARGET_REPOSITORY}/issues/${PR_NUMBER}/comments"'
     post_status = 'APPROVAL_COMMENT_STATUS_LINE="$(head -n 1 <<<"$APPROVAL_COMMENT_HTTP_RESPONSE" | tr -d \'\\r\')"'
     post_guard = '[[ "$APPROVAL_COMMENT_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
@@ -3793,6 +3801,11 @@ def validate_codeql_autofix_approval_comment_evidence(autofix: str) -> None:
         'APPROVAL_MARKER="<!-- portyu9-automation-approval:v1 head=${ADMITTED_HEAD_SHA} -->"'
     )
     get_pos = autofix.index(get_endpoint, marker_pos)
+    helper_pos = autofix.rfind(pagination_helper, marker_pos, get_pos)
+    require(
+        helper_pos >= marker_pos and get_pos - helper_pos < 160,
+        "CodeQL Autofix approval-comment read must use exactly one governed paginated collection",
+    )
     validate_pos = autofix.index(evidence_validator, get_pos)
     consume_pos = autofix.index(
         'APPROVAL_COMMENT_EXISTS="$(jq -r .exists approval-comment-evidence.json)"',
