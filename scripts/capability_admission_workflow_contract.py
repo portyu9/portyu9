@@ -123,7 +123,7 @@ def validate_text(text: str) -> None:
         "TARGET_REPOSITORY: ${{ github.repository }}",
         'PR="$(jq -c \'.pull_request\' "$GITHUB_EVENT_PATH")"',
         'ACTION="$(jq -r \'.action // ""\' "$GITHUB_EVENT_PATH")"',
-        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"',
+        'test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"',
         'test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         'test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "4e718d6268182d351e5913051206366e6eccd566"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
@@ -141,7 +141,7 @@ def validate_text(text: str) -> None:
         '- name: Verify exact governed read transport identity\n'
         '        run: |\n'
         '          set -euo pipefail\n'
-        '          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "1b779bcea0acd290826fef8f60fd01480113a31a"\n'
+        '          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = "d937f2fbd54f41d17ee4a6517ca3c4ab0626626c"\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"\n'
         '          test "$(git rev-parse HEAD:scripts/automation_github_artifact_download.py)" = "4e718d6268182d351e5913051206366e6eccd566"\n'
     )
