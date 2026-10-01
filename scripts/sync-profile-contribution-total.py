@@ -25,14 +25,16 @@ import os
 from pathlib import Path
 import re
 import sys
+import time
 from typing import Any, Callable
 import urllib.error
 import urllib.parse
 import urllib.request
 
+import automation_github_read
+
 SYNC_ID = "signal-field-v2.9"
 GRAPHQL_URL = "https://api.github.com/graphql"
-GRAPHQL_TIMEOUT_SECONDS = 20
 REDIRECT_STATUS = frozenset({301, 302, 303, 307, 308})
 DEFAULT_USERNAME = "portyu9"
 EXPECTED_FILES = (
@@ -195,6 +197,38 @@ def transport_self_test() -> None:
             "GraphQL bearer token must not be attached as a redirect-copyable ordinary header")
     require(NoRedirect().redirect_request(None, None, 302, "fixture", {}, "https://example.com") is None,
             "GraphQL redirect handler must refuse every redirect request")
+    automation_github_read.self_test()
+    require(
+        automation_github_read.ATTEMPTS == 3
+        and automation_github_read.TIMEOUT_SECONDS == 20
+        and automation_github_read.BACKOFF_SECONDS == (1.0, 2.0)
+        and automation_github_read.MAX_RETRY_AFTER_SECONDS == 5.0,
+        "profile contribution GraphQL transient classifier changed",
+    )
+
+
+class _FixtureHeaders(dict[str, str]):
+    def get_content_type(self) -> str:
+        return "application/json"
+
+
+class _FixtureResponse:
+    def __init__(self, body: bytes) -> None:
+        self.status = 200
+        self._body = body
+        self.headers = _FixtureHeaders()
+
+    def __enter__(self) -> "_FixtureResponse":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        return None
+
+    def geturl(self) -> str:
+        return GRAPHQL_URL
+
+    def read(self, _limit: int) -> bytes:
+        return self._body
 
 
 def fetch_profile_visible_total(
@@ -202,23 +236,65 @@ def fetch_profile_visible_total(
     username: str,
     *,
     opener: Callable[..., Any] | None = None,
+    sleeper: Callable[[float], None] = time.sleep,
 ) -> tuple[int, str, str]:
     payload = json.dumps(
         {"query": QUERY, "variables": {"login": username}},
         separators=(",", ":"),
     ).encode("utf-8")
-    request = graphql_request(token, payload)
     transport = opener or open_no_redirect
-    try:
-        with transport(request, timeout=GRAPHQL_TIMEOUT_SECONDS) as response:
-            data = json.load(response)
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        if exc.code in REDIRECT_STATUS:
-            raise ValueError(f"GitHub GraphQL redirect rejected with HTTP {exc.code}") from exc
-        raise ValueError(f"GitHub GraphQL request failed with HTTP {exc.code}: {detail}") from exc
-    except urllib.error.URLError as exc:
-        raise ValueError(f"GitHub GraphQL request failed: {exc.reason}") from exc
+
+    data: Any | None = None
+    for attempt in range(automation_github_read.ATTEMPTS):
+        request = graphql_request(token, payload)
+        try:
+            with transport(request, timeout=automation_github_read.TIMEOUT_SECONDS) as response:
+                require(response.status == 200,
+                        f"GitHub GraphQL query returned unexpected HTTP {response.status}")
+                require(response.geturl() == GRAPHQL_URL,
+                        "GitHub GraphQL query was redirected")
+                raw = response.read(automation_github_read.MAX_RESPONSE_BYTES + 1)
+                require(
+                    len(raw) <= automation_github_read.MAX_RESPONSE_BYTES,
+                    "GitHub GraphQL response exceeds size bound",
+                )
+                require(
+                    response.headers.get_content_type() == "application/json",
+                    "GitHub GraphQL response content type is not application/json",
+                )
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError(f"GitHub GraphQL response is not UTF-8: {exc}") from exc
+            data = automation_github_read.strict_json(text)
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code in REDIRECT_STATUS:
+                raise ValueError(f"GitHub GraphQL redirect rejected with HTTP {exc.code}") from exc
+            if (
+                attempt + 1 >= automation_github_read.ATTEMPTS
+                or not automation_github_read.retryable_http_error(exc)
+            ):
+                raise ValueError(f"GitHub GraphQL request failed with HTTP {exc.code}") from exc
+            delay = automation_github_read.retry_delay_seconds(exc, attempt)
+            print(
+                f"RETRY: profile contribution GraphQL query transient HTTP {exc.code}; "
+                f"attempt {attempt + 1}/{automation_github_read.ATTEMPTS}, sleeping {delay:g}s",
+                file=sys.stderr,
+            )
+            sleeper(delay)
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError) as exc:
+            if attempt + 1 >= automation_github_read.ATTEMPTS:
+                raise ValueError(
+                    f"GitHub GraphQL request exhausted transient transport retry budget: {exc}"
+                ) from exc
+            delay = automation_github_read.retry_delay_seconds(exc, attempt)
+            print(
+                "RETRY: profile contribution GraphQL query transient transport failure; "
+                f"attempt {attempt + 1}/{automation_github_read.ATTEMPTS}, sleeping {delay:g}s",
+                file=sys.stderr,
+            )
+            sleeper(delay)
 
     if not isinstance(data, dict):
         raise ValueError("GitHub GraphQL response must be an object")
@@ -236,6 +312,80 @@ def fetch_profile_visible_total(
     if started >= ended:
         raise ValueError("GitHub contribution collection period is not increasing")
     return calendar_total, started.date().isoformat(), ended.date().isoformat()
+
+
+def graphql_retry_self_test() -> None:
+    body = (
+        b'{"data":{"user":{"contributionsCollection":'
+        b'{"startedAt":"2025-09-05T00:00:00Z","endedAt":"2026-09-04T00:00:00Z",'
+        b'"contributionCalendar":{"totalContributions":5030}}}}}\n'
+    )
+    sequence: list[Any] = [
+        urllib.error.HTTPError(
+            GRAPHQL_URL,
+            403,
+            "fixture",
+            {"X-RateLimit-Remaining": "0", "Retry-After": "1"},
+            None,
+        ),
+        urllib.error.HTTPError(GRAPHQL_URL, 503, "fixture", {}, None),
+        _FixtureResponse(body),
+    ]
+    calls: list[bytes] = []
+    sleeps: list[float] = []
+
+    def fixture_open(request: urllib.request.Request, *, timeout: int) -> Any:
+        require(request.get_method() == "POST",
+                "profile contribution retry fixture observed non-POST transport")
+        require(request.full_url == GRAPHQL_URL,
+                "profile contribution retry fixture endpoint changed")
+        require(timeout == automation_github_read.TIMEOUT_SECONDS,
+                "profile contribution retry fixture timeout changed")
+        require(request.data is not None,
+                "profile contribution retry fixture lost request payload")
+        decoded = automation_github_read.strict_json(bytes(request.data).decode("utf-8"))
+        require(decoded == {"query": QUERY, "variables": {"login": DEFAULT_USERNAME}},
+                "profile contribution retry fixture query/variables changed")
+        calls.append(bytes(request.data))
+        result = sequence.pop(0)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    observed = fetch_profile_visible_total(
+        "fixture-token",
+        DEFAULT_USERNAME,
+        opener=fixture_open,
+        sleeper=sleeps.append,
+    )
+    require(observed == (5030, "2025-09-05", "2026-09-04"),
+            "profile contribution retry fixture changed typed result")
+    require(len(calls) == 3 and calls[0] == calls[1] == calls[2],
+            "each profile contribution retry must replay only the identical fixed query")
+    require(sleeps == [1.0, 2.0],
+            "profile contribution deterministic retry backoff changed")
+
+    terminal_calls = 0
+
+    def terminal_open(request: urllib.request.Request, *, timeout: int) -> Any:
+        nonlocal terminal_calls
+        terminal_calls += 1
+        raise urllib.error.HTTPError(request.full_url, 401, "fixture", {}, None)
+
+    try:
+        fetch_profile_visible_total(
+            "fixture-token",
+            DEFAULT_USERNAME,
+            opener=terminal_open,
+            sleeper=lambda _: None,
+        )
+    except ValueError as exc:
+        require("HTTP 401" in str(exc),
+                "profile contribution terminal authorization fixture failed for wrong reason")
+    else:
+        raise ValueError("profile contribution reader retried or accepted HTTP 401")
+    require(terminal_calls == 1,
+            "profile contribution authorization failure must remain terminal")
 
 
 def set_attr(element: str, name: str, value: str) -> str:
@@ -441,6 +591,7 @@ def fixture(filename: str) -> str:
 
 def self_test() -> None:
     transport_self_test()
+    graphql_retry_self_test()
     require(normalize_contribution_count(0) == 0, "contribution-count self-test rejected zero")
     require(normalize_contribution_count(5_030) == 5_030, "contribution-count self-test rejected a positive integer")
     for invalid_count in (True, False, -1, 1.0, "1", None):
@@ -474,7 +625,7 @@ def self_test() -> None:
     print(
         f"Signal Field profile evidence self-test passed: {SYNC_ID}; "
         "one GitHub collection drives total + displayed period; exact non-negative integer typing is enforced; "
-        "no restricted aggregate is published; GraphQL bearer transport is exact-endpoint and no-redirect"
+        "no restricted aggregate is published; GraphQL bearer transport is exact-endpoint/no-redirect with transient-only bounded retry"
     )
 
 
