@@ -1522,6 +1522,71 @@ def self_test_controller_repository_dispatch_status(text: str) -> None:
 
 
 
+
+def validate_dispatch_codeql_static_checkout_contract(text: str) -> None:
+    job_marker = "  dispatch_codeql:\n"
+    require(
+        text.count(job_marker) == 1,
+        "Dependabot CodeQL dispatch job anchor changed",
+    )
+    block = text[text.index(job_marker) :]
+    checkout = """      - name: Checkout static trusted validation base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.validation_bind.outputs.base_sha }}
+          persist-credentials: false
+          fetch-depth: 1
+"""
+    verify = """      - name: Verify exact trusted validation base
+        env:
+          BASE_SHA: ${{ needs.validation_bind.outputs.base_sha }}
+        run: test "$(git rev-parse HEAD)" = "$BASE_SHA"
+"""
+    dispatch = "      - name: Dispatch CodeQL after exact read-only validation\n"
+    require(
+        checkout in block,
+        "Dependabot CodeQL dispatch job must checkout the exact trusted validation base",
+    )
+    require(
+        verify in block,
+        "Dependabot CodeQL dispatch job must verify the exact trusted validation base checkout",
+    )
+    require(
+        dispatch in block
+        and block.index(checkout) < block.index(verify) < block.index(dispatch),
+        "Dependabot CodeQL dispatch job must establish the trusted workspace before governed reads",
+    )
+
+
+def self_test_dispatch_codeql_static_checkout_contract(text: str) -> None:
+    validate_dispatch_codeql_static_checkout_contract(text)
+    trusted_checkout = """      - name: Checkout static trusted validation base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+"""
+    require(
+        text.count(trusted_checkout) == 1,
+        "Dependabot CodeQL dispatch trusted-checkout self-test anchor changed",
+    )
+    wrong_checkout = text.replace(
+        trusted_checkout,
+        """      - name: Checkout static trusted validation base
+        uses: actions/checkout@main
+""",
+        1,
+    )
+    try:
+        validate_dispatch_codeql_static_checkout_contract(wrong_checkout)
+    except ValueError as exc:
+        require(
+            "checkout the exact trusted validation base" in str(exc),
+            f"Dependabot CodeQL dispatch trusted-checkout self-test failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError(
+            "Dependabot CodeQL dispatch trusted-checkout self-test accepted an unpinned checkout"
+        )
+
+
 def validate_controller_workflow_dispatch_status(text: str) -> None:
     require(
         text.count('repos/${TARGET_REPOSITORY}/actions/workflows/dependabot-controller.yml/dispatches') == 2,
@@ -2317,6 +2382,8 @@ def main() -> int:
         self_test_controller_git_mutation_status_contract(controller_text)
         self_test_controller_repository_dispatch_status(controller_text)
         self_test_controller_workflow_dispatch_status(controller_text)
+        validate_dispatch_codeql_static_checkout_contract(controller_text)
+        self_test_dispatch_codeql_static_checkout_contract(controller_text)
         validate_release_resolution_parity_contract(controller_text)
         self_test_controller_merge_success_response_contract(controller_text)
         self_test_controller_approval_comment_contract(controller_text)
