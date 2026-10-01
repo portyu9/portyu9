@@ -493,7 +493,8 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "automation_github_read.TIMEOUT_SECONDS",
         "automation_github_read.MAX_RESPONSE_BYTES",
         "automation_github_read.token_headers(credential)",
-        "automation_github_read.NoRedirect()",
+        "class NoRedirect(urllib.request.HTTPRedirectHandler):",
+        "NoRedirect()",
         "automation_github_read.retryable_http_error(exc)",
         "automation_github_read.retry_delay_seconds(exc, attempt)",
         "automation_github_read.strict_json(text)",
@@ -2428,7 +2429,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     )
     ruleset_admin_pin = (
         'test "$(git rev-parse HEAD:scripts/automation_github_ruleset_admin_read.py)" = '
-        '"1633c804071595f207ce2524633796213788b5f3"'
+        '"ef7c2306ac7007494a4c6bd951b0160d55c502a2"'
     )
     require(
         ruleset_admin_pin in ruleset_reconcile_step,
