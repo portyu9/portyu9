@@ -1153,7 +1153,7 @@
       "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
       "expansionSha256": "e7b1be8080de1abe96f2a32f1c562267595ff08a2a7160c0c43dc370050a62ba",
       "id": "cap-python-runtime-31316-convergence-v1",
-      "rationale": "Authorize frozen #1432 measured by closed #1433: advance only Capability Admission and Dependabot Controller from the exact temporary Python 3.13.15 exception to the canonical 3.13.16 runtime and restore one uniform eight-workflow runtime contract, with only the necessary Capability Admission workflow byte lock rederived. Setup-python identity, runners, triggers, permissions, job topology, endpoints/methods, mutation/retry behavior, secrets/OIDC, required checks, rulesets, merge/direct-main authority, generated/profile content, and bypass behavior remain unchanged."
+      "rationale": "Authorize frozen #1432 measured by closed #1433: converge Capability Admission and Dependabot Controller from temporary 3.13.15 to canonical 3.13.16, restore the uniform eight-workflow runtime contract, and rederive only the Capability Admission byte lock. No setup-python identity, runner, trigger, permission, job topology, endpoint/method, mutation/retry, secret/OIDC, required check, ruleset, merge/direct-main authority, generated/profile content, or bypass behavior changes."
     },
     {
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
