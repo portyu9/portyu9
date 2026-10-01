@@ -946,6 +946,13 @@
       "rationale": "Authorize frozen #1122 hardening of the existing CodeQL Autofix, Dependabot, and Spotlight automation-approval issue-comment POSTs: capture gh api --include and require HTTP 201 before consuming the already-typed trusted-actor response. Semantic BOMs, endpoints, bodies, call counts, permissions, triggers, mutation classes, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets, retries, and bypass remain unchanged."
     },
     {
+      "baseBomSha256": "bc16f67b4215162a076551b14ddf84e7cdae32faa478c4b7620e97cfc7cfc3a5",
+      "candidateBomSha256": "59fb56bd1f9a34f52387d9bc8c5d5a037466fc52d43d17f41b2cc7337eb3d891",
+      "expansionSha256": "a4928dbbf3d574ef80a706f614e3e122963bca048b7108f827df5e7f8f4e7f0e",
+      "id": "cap-governed-artifact-zip-read-v1",
+      "rationale": "Authorize frozen #1422 measured by closed #1424: replace two raw receipt artifact-ZIP GETs in Capability Admission and CodeQL Autofix with the reviewed repository-artifact-only helper. Preserve typed artifact selection/receipt validation, token isolation, validated HTTPS signed-storage redirect, bounded whole-read transient retry, byte cap, ZIP magic, and atomic output. Adds no permission, trigger, mutation/replay, secret/OIDC, check reduction, direct-main/ruleset/merge authority, or bypass."
+    },
+    {
       "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "expansionSha256": "58f9913accb5a9af0fb09855ed024730c634d8bf0e682a691bb602f97ce2e17c",
