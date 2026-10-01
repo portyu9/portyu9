@@ -845,7 +845,7 @@ jobs:
           EVENT_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
           EVENT_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          EXPECTED_GATE_BLOB: e42c1a8c3204d9a83ac837bbd04743fe3907b41c
+          EXPECTED_GATE_BLOB: 5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3
         run: |
           set -euo pipefail
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
@@ -854,7 +854,7 @@ jobs:
           [[ "$EVENT_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$EVENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git -C "$GITHUB_WORKSPACE/trusted-review-base" rev-parse HEAD)" = "$EVENT_BASE_SHA"
-          TRUSTED_GATE="$GITHUB_WORKSPACE/trusted-review-base/scripts/governed_bot_review_gate.py"
+          TRUSTED_GATE="$GITHUB_WORKSPACE/trusted-review-base/scripts/automation_governed_bot_review_gate.py"
           test -s "$TRUSTED_GATE"
           GATE_SIZE="$(wc -c < "$TRUSTED_GATE" | tr -d '[:space:]')"
           [[ "$GATE_SIZE" =~ ^[1-9][0-9]*$ ]]
