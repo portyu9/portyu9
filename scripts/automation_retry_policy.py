@@ -43,6 +43,7 @@ EXPECTED_AUTOMATIC_RETRY_IDS = {
     "canonical-github-api-read-transient",
     "canonical-github-api-binary-read-transient",
     "codeql-review-thread-graphql-query-transient",
+    "profile-contribution-graphql-query-transient",
     "ruleset-admin-bootstrap-read-transient",
     "spotlight-approve-shell-read-transient",
     "spotlight-reconcile-shell-read-transient",
@@ -353,10 +354,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 13 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly thirteen classified automatic read retries")
+    require(len(entries) == 14 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly fourteen classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 13, "automatic retry IDs must remain unique")
+    require(len(by_id) == 14, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
@@ -365,6 +366,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         elif identifier in {
             "codeql-review-thread-graphql-query-transient",
             "bot-pr-user-approval-shell-graphql-query-transient",
+            "profile-contribution-graphql-query-transient",
         }:
             expected_operation = "read-only-github-graphql-query"
         else:
@@ -587,6 +589,79 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
     for forbidden in ('method="PUT"', 'method="PATCH"', 'method="DELETE"', 'add_argument("--query"'):
         require(forbidden not in graphql_source,
                 f"CodeQL review-thread GraphQL transport acquired forbidden authority: {forbidden}")
+
+    profile_graphql_item = by_id["profile-contribution-graphql-query-transient"]
+    require(
+        profile_graphql_item.get("source") == "scripts/sync-profile-contribution-total.py"
+        and profile_graphql_item.get("workflow") == ".github/workflows/profile-stats.yml"
+        and profile_graphql_item.get("job") == "generate"
+        and profile_graphql_item.get("step") == "Generate canonical profile evidence",
+        "profile contribution GraphQL retry identity changed",
+    )
+    require(
+        profile_graphql_item.get("endpointScope") == "fixed-profile-contribution-query"
+        and profile_graphql_item.get("endpoint") == "https://api.github.com/graphql"
+        and profile_graphql_item.get("profileScope") == "portyu9"
+        and profile_graphql_item.get("maxResponseBytes") == 8_000_000,
+        "profile contribution GraphQL retry scope/bounds changed",
+    )
+    profile_graphql_source = (
+        ROOT / profile_graphql_item["source"]
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        "import automation_github_read",
+        'GRAPHQL_URL = "https://api.github.com/graphql"',
+        "query ProfileVisibleContributionTotal($login: String!)",
+        "request = graphql_request(token, payload)",
+        "for attempt in range(automation_github_read.ATTEMPTS):",
+        "timeout=automation_github_read.TIMEOUT_SECONDS",
+        "response.read(automation_github_read.MAX_RESPONSE_BYTES + 1)",
+        "automation_github_read.strict_json(text)",
+        "automation_github_read.retryable_http_error(exc)",
+        "automation_github_read.retry_delay_seconds(exc, attempt)",
+        'if data.get("errors"):',
+        "graphql_retry_self_test()",
+        "calls[0] == calls[1] == calls[2]",
+        "sleeps == [1.0, 2.0]",
+        "terminal_calls == 1",
+    ):
+        require(
+            fragment in profile_graphql_source,
+            f"profile contribution GraphQL retry contract is missing: {fragment}",
+        )
+    require(
+        "GRAPHQL_TIMEOUT_SECONDS" not in profile_graphql_source
+        and "mutation " not in profile_graphql_source.lower(),
+        "profile contribution GraphQL transport regained an independent timeout or mutation document",
+    )
+
+    portfolio_source = (
+        ROOT / "scripts/portfolio_evidence_ledger.py"
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        "import automation_github_read",
+        "automation_github_read.normalize_endpoint(endpoint)",
+        "automation_github_read.get_json_text(",
+        "automation_github_read.strict_json(text)",
+        "automation_github_read.self_test()",
+        "WORKFLOW_RUN_SNAPSHOT_ATTEMPTS = 6",
+        "WORKFLOW_RUN_SNAPSHOT_BACKOFF_SECONDS = (1.0, 2.0, 4.0, 8.0, 15.0)",
+    ):
+        require(
+            fragment in portfolio_source,
+            f"Portfolio governed-read composition contract is missing: {fragment}",
+        )
+    for forbidden in (
+        "API_TIMEOUT_SECONDS = 12",
+        "API_ATTEMPTS = 3",
+        "def retryable_http_error(",
+        "def retry_delay_seconds(",
+        "urllib.request",
+    ):
+        require(
+            forbidden not in portfolio_source,
+            f"Portfolio evidence ledger regained independent GitHub transport classifier: {forbidden}",
+        )
 
     codeql_terminal_step = named_step(
         texts[".github/workflows/codeql-autofix.yml"],
@@ -3640,7 +3715,7 @@ def validate_repository(root: Path = ROOT) -> None:
 if __name__ == "__main__":
     validate_repository()
     print(
-        "Automation retry taxonomy validation passed: exactly twelve classified read-only GitHub retries are authorized; "
+        "Automation retry taxonomy validation passed: exactly fourteen classified read-only GitHub retries are authorized; "
         "unclassified generator/ruleset and mutation failures remain terminal; all 15 bounded seq loops are declared "
         "as observation/re-entry semantics with guarded approval mutations explicitly constrained."
     )
