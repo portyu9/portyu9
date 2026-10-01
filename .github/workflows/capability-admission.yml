@@ -23,7 +23,7 @@ permissions:
   pull-requests: read
 
 env:
-  PYTHON_VERSION: "3.13.16"
+  PYTHON_VERSION: "3.13.15"
 
 jobs:
   admission:
