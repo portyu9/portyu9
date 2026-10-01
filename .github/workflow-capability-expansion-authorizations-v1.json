@@ -1156,6 +1156,13 @@
       "rationale": "Authorize #659's exact review-thread GraphQL schema hardening. The governed bot reviewer and CodeQL Autofix admission keep the same endpoints and authority but now reject GraphQL errors, incomplete pagination, malformed/non-object nodes, and non-boolean isResolved/hasNextPage primitives before review or merge authorization can proceed. The composite BOM is unchanged; no trigger, permission, secret, OIDC authority, mutation, protected-check reduction, merge capability, or bypass is added."
     },
     {
+      "baseBomSha256": "59fb56bd1f9a34f52387d9bc8c5d5a037466fc52d43d17f41b2cc7337eb3d891",
+      "candidateBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "expansionSha256": "4bf4c7a5729260e436fb37447d4aaef707485e070a47634ccab5cbde7370f9c0",
+      "id": "cap-ruleset-admin-bootstrap-read-v1",
+      "rationale": "Authorize frozen #1426 measured by closed #1427: move exactly the two deferred Ruleset Administration bootstrap GETs (App installation identity and selected-repository proof) onto a protected GET-only transient-safe helper. Existing typed schemas, explicit Bearer App-JWT semantics, token POST, ruleset PUT, state machine, triggers, permissions, secrets, required checks, recovery, direct-main authority, and bypass behavior remain unchanged."
+    },
+    {
       "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
       "expansionSha256": "7aa6cdbd260ba91d217b4e988cd9d0545dc13c4a1a44d3bfd22716f23b11cef1",
