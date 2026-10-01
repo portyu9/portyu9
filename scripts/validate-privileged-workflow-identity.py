@@ -8,12 +8,12 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v146"
+VERSION = "governed-workflow-byte-identity-v147"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "f392c0d0351f55de82adf0331f4dd8d63b7753a9",
     ".github/workflows/profile-stats.yml": "0a6a2ff4924a9c5e27c20f0feb69f5c8e7756001",
-    ".github/workflows/spotlight-link-sync.yml": "df15c37d6890e8f3a6eb348535966d16642405d5",
+    ".github/workflows/spotlight-link-sync.yml": "a4018e7df1ad80925ffcac3c0cad997f4d19dbaf",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -1213,6 +1213,21 @@ def validate_spotlight_pr_response_evidence(
         '"$CANDIDATE_BRANCH" "$HEAD_SHA"'
     )
     proposer_consume = 'test "$(jq -r .state <<<"$PR")" = "open"'
+    proposer_pr_number_output = '          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"\n'
+    proposer_head_output = '          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"\n'
+    escaped_pr_number_output = r'\n          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"'
+    require(
+        propose.count(proposer_pr_number_output) == 1,
+        "Spotlight proposer must emit PR number as exactly one standalone shell output line",
+    )
+    require(
+        escaped_pr_number_output not in propose,
+        "Spotlight proposer PR-number output must not be swallowed behind a literal escaped newline",
+    )
+    require(
+        propose.count(proposer_head_output) == 1,
+        "Spotlight proposer head-SHA output cardinality changed",
+    )
     for boundary_marker in (proposer_fetch, proposer_schema, proposer_consume):
         require(
             propose.count(boundary_marker) == 1,
@@ -1221,8 +1236,10 @@ def validate_spotlight_pr_response_evidence(
     require(
         propose.index(proposer_fetch)
         < propose.index(proposer_schema)
-        < propose.index(proposer_consume),
-        "Spotlight proposer PR response boundary ordering changed",
+        < propose.index(proposer_consume)
+        < propose.index(proposer_pr_number_output)
+        < propose.index(proposer_head_output),
+        "Spotlight proposer PR response/output boundary ordering changed",
     )
     require(
         "requested_reviewers[]?" not in propose,
@@ -1288,6 +1305,30 @@ def validate_spotlight_pr_response_evidence(
     )
 
     if run_self_test:
+        require(
+            spotlight.count(proposer_pr_number_output) == 1,
+            "Spotlight proposer PR-number output self-test anchor changed",
+        )
+        swallowed_pr_number_output = spotlight.replace(
+            proposer_pr_number_output,
+            '          # adversarially swallowed output\\n          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"\n',
+            1,
+        )
+        try:
+            validate_spotlight_pr_response_evidence(
+                swallowed_pr_number_output, run_self_test=False
+            )
+        except ValueError as exc:
+            require(
+                "standalone shell output line" in str(exc)
+                or "literal escaped newline" in str(exc),
+                f"Spotlight proposer PR-number output self-test failed for wrong reason: {exc}",
+            )
+        else:
+            raise ValueError(
+                "Spotlight PR response self-test accepted a comment-swallowed PR-number output"
+            )
+
         weakened = spotlight.replace(
             post_review_schema, 'true # adversarially removed post-review PR schema', 1
         )
