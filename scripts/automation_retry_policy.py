@@ -3199,7 +3199,7 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
     expect_failure(
         copy.deepcopy(policy),
         capability_autofix_transport_drift,
-        "must use exactly one repository-root and one canonical governed JSON read",
+        "must use exactly two governed singleton JSON reads",
     )
 
     capability_history_transport_drift = dict(texts)
