@@ -483,7 +483,7 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "automation_github_read.normalize_endpoint(value)",
         "automation_github_read.token_headers(token)",
         "automation_github_read.NoRedirect",
-        "if exc.code != 302:",
+        "if exc.code != REDIRECT_STATUS:",
         "validate_signed_storage_url(str(location))",
         'request.get_header("Authorization") is None',
         "automation_github_read.retryable_http_error(exc)",
