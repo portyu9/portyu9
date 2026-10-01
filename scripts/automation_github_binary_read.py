@@ -17,7 +17,7 @@ import urllib.request
 import automation_github_read
 
 MAX_RESPONSE_BYTES = 8_000_000
-ZIP_PREFIXES = (b"PK\\x03\\x04", b"PK\\x05\\x06", b"PK\\x07\\x08")
+ZIP_PREFIXES = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
 ARTIFACT_ZIP_ENDPOINT = re.compile(
     r"^repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/artifacts/[1-9][0-9]*/zip$"
 )
@@ -297,7 +297,7 @@ def self_test() -> None:
         urllib.error.HTTPError(signed, 503, "fixture", {}, None),
         _FixtureResponse(
             signed,
-            b"PK\\x03\\x04fixture-artifact",
+            b"PK\x03\x04fixture-artifact",
             {"Content-Length": "20"},
         ),
     ]
@@ -339,7 +339,7 @@ def self_test() -> None:
             sleeper=sleeps.append,
         )
         require(
-            target.read_bytes() == b"PK\\x03\\x04fixture-artifact",
+            target.read_bytes() == b"PK\x03\x04fixture-artifact",
             "artifact ZIP helper changed complete output bytes",
         )
         require(
