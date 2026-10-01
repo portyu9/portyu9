@@ -1637,6 +1637,56 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "CodeQL Autofix terminal approval-comment governed pagination lost run-scoped token binding",
     )
 
+    codeql_post_merge_runs_endpoint = (
+        '"repos/${TARGET_REPOSITORY}/actions/workflows/codeql.yml/runs?branch=main&event=workflow_dispatch&per_page=100"'
+    )
+    require(
+        codeql_terminal_step.count(codeql_post_merge_runs_endpoint) == 1,
+        "CodeQL Autofix post-merge CodeQL run endpoint topology changed",
+    )
+    post_merge_function_pos = codeql_terminal_step.index("fetch_codeql_dispatch_runs() {")
+    post_merge_endpoint_pos = codeql_terminal_step.index(
+        codeql_post_merge_runs_endpoint,
+        post_merge_function_pos,
+    )
+    post_merge_helper_pos = codeql_terminal_step.rfind(
+        "python3 scripts/automation_github_paginated_read.py",
+        post_merge_function_pos,
+        post_merge_endpoint_pos,
+    )
+    require(
+        post_merge_helper_pos >= post_merge_function_pos
+        and post_merge_endpoint_pos - post_merge_helper_pos < 180,
+        "CodeQL Autofix post-merge CodeQL run discovery must use exactly one governed paginated GitHub collection",
+    )
+    require(
+        "gh api --paginate --slurp" not in codeql_terminal_step[
+            post_merge_function_pos:post_merge_endpoint_pos
+        ],
+        "CodeQL Autofix post-merge CodeQL run discovery regained direct gh pagination transport",
+    )
+    require(
+        "GH_TOKEN: ${{ github.token }}" in codeql_terminal_step,
+        "CodeQL Autofix post-merge CodeQL run discovery lost run-scoped token binding",
+    )
+    post_merge_before_fetch_pos = codeql_terminal_step.index(
+        "fetch_codeql_dispatch_runs > codeql-dispatch-runs-before.json",
+        post_merge_endpoint_pos,
+    )
+    post_merge_before_select_pos = codeql_terminal_step.index(
+        "python3 scripts/codeql_autofix_controller.py followup-select",
+        post_merge_before_fetch_pos,
+    )
+    post_merge_after_fetch_pos = codeql_terminal_step.index(
+        "fetch_codeql_dispatch_runs > codeql-dispatch-runs-after.json",
+        post_merge_before_select_pos,
+    )
+    require(
+        post_merge_function_pos < post_merge_helper_pos < post_merge_endpoint_pos
+        < post_merge_before_fetch_pos < post_merge_before_select_pos < post_merge_after_fetch_pos,
+        "CodeQL Autofix post-merge CodeQL run evidence moved out of governed typed order",
+    )
+
     codeql_terminal_artifact_list_governed = (
         'python3 scripts/automation_github_read.py \\\n'
         '            "repos/${TARGET_REPOSITORY}/actions/runs/${ORIGIN_RUN_ID}/artifacts?per_page=100" \\\n'
@@ -3286,6 +3336,29 @@ def self_test(policy: dict[str, Any], texts: dict[str, str]) -> None:
         copy.deepcopy(policy),
         codeql_terminal_approval_transport_drift,
         "CodeQL Autofix terminal approval-comment evidence must use exactly one governed paginated GitHub collection",
+    )
+
+    codeql_post_merge_source = texts[".github/workflows/codeql-autofix.yml"]
+    codeql_post_merge_function_pos = codeql_post_merge_source.index(
+        "fetch_codeql_dispatch_runs() {"
+    )
+    codeql_post_merge_helper = "python3 scripts/automation_github_paginated_read.py"
+    codeql_post_merge_helper_pos = codeql_post_merge_source.index(
+        codeql_post_merge_helper,
+        codeql_post_merge_function_pos,
+    )
+    codeql_post_merge_transport_drift = dict(texts)
+    codeql_post_merge_transport_drift[".github/workflows/codeql-autofix.yml"] = (
+        codeql_post_merge_source[:codeql_post_merge_helper_pos]
+        + "gh api --paginate --slurp"
+        + codeql_post_merge_source[
+            codeql_post_merge_helper_pos + len(codeql_post_merge_helper):
+        ]
+    )
+    expect_failure(
+        copy.deepcopy(policy),
+        codeql_post_merge_transport_drift,
+        "CodeQL Autofix post-merge CodeQL run discovery must use exactly one governed paginated GitHub collection",
     )
 
     codeql_terminal_check_runs_governed = (
