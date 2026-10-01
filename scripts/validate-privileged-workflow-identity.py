@@ -8,9 +8,9 @@ import sys
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v138"
+VERSION = "governed-workflow-byte-identity-v139"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "ad10702c9ac0b516f99bd59335c26297f88d82c8",
+    ".github/workflows/bot-pr-user-approval.yml": "92ed93fdce128ad71ed078912cbed5b10c25c0c6",
     ".github/workflows/profile-quality.yml": "45e53e364dc95a3beecc4408f00b94d09e971f50",
     ".github/workflows/profile-stats.yml": "7bf533549d38b76cf31710401631e52848dd8b08",
     ".github/workflows/spotlight-link-sync.yml": "2f06d82bc43a436996a4c5d21f247d05fe7c3c74",
@@ -2142,7 +2142,7 @@ def validate_v21_spotlight_invariants(spotlight: str) -> None:
 
 
 def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
-    """Project reviewer REST-GET retry transport to the accepted pre-hardening semantic shape."""
+    """Project reviewer REST/GraphQL retry transport to the accepted pre-hardening semantic shape."""
     has_reviewer_kernel = "          bot_reviewer_get() {\n" in bot_review
     has_convergence_kernel = "          bot_convergence_get() {\n" in bot_review
     require(
@@ -2177,6 +2177,8 @@ def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
     projected = bot_review[:approve_start] + approve + converge
 
     overlays = (
+        ('THREADS="$(bot_reviewer_review_threads_query)"',
+         'THREADS="$(gh api graphql               -F owner=portyu9               -F repo=portyu9               -F number="$PR_NUMBER"               -f query=\'query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}\')"', 1),
         ('REVIEW_IDENTITY_RESPONSE="$(bot_reviewer_get review-user)"',
          'REVIEW_IDENTITY_RESPONSE="$(GH_TOKEN="$REVIEW_TOKEN" gh api user)"', 1),
         ('PR_PAGES="$(bot_reviewer_paginated_get open-prs)"',
@@ -2229,6 +2231,7 @@ def project_bot_reviewer_shell_reads_to_raw(bot_review: str) -> str:
     require(
         "bot_reviewer_get" not in projected
         and "bot_reviewer_paginated_get" not in projected
+        and "bot_reviewer_review_threads_query" not in projected
         and "bot_convergence_get" not in projected
         and "bot_convergence_paginated_get" not in projected,
         "Bot reviewer shell-read projection left retry transport bytes behind",

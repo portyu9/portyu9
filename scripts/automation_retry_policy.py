@@ -35,6 +35,7 @@ MUTATION = re.compile(
 EXPECTED_AUTOMATIC_RETRY_IDS = {
     "governed-bot-review-read-transient",
     "bot-pr-user-approval-shell-read-transient",
+    "bot-pr-user-approval-shell-graphql-query-transient",
     "bot-pr-review-convergence-shell-read-transient",
     "action-release-provenance-read-transient",
     "canonical-github-api-read-transient",
@@ -348,16 +349,19 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         {item.get("id") for item in entries if isinstance(item, dict)} == EXPECTED_AUTOMATIC_RETRY_IDS,
         "automatic retry identities changed",
     )
-    require(len(entries) == 10 and all(isinstance(item, dict) for item in entries),
-            "retry policy must authorize exactly ten classified automatic read retries")
+    require(len(entries) == 11 and all(isinstance(item, dict) for item in entries),
+            "retry policy must authorize exactly eleven classified automatic read retries")
     by_id = {item["id"]: item for item in entries}
-    require(len(by_id) == 10, "automatic retry IDs must remain unique")
+    require(len(by_id) == 11, "automatic retry IDs must remain unique")
 
     for identifier in sorted(EXPECTED_AUTOMATIC_RETRY_IDS):
         item = by_id[identifier]
         expected_operation = (
             "read-only-github-graphql-query"
-            if identifier == "codeql-review-thread-graphql-query-transient"
+            if identifier in {
+                "codeql-review-thread-graphql-query-transient",
+                "bot-pr-user-approval-shell-graphql-query-transient",
+            }
             else "read-only-github-api-get"
         )
         require(item.get("operation") == expected_operation,
@@ -574,9 +578,10 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         require(fragment in reviewer,
                 f"governed reviewer shell-read retry contract is missing: {fragment}")
     require(
-        reviewer.count("timeout 20s gh api --include") == 9
+        reviewer.count("timeout 20s gh api --include") == 10
+        and reviewer.count("timeout 20s gh api --include graphql") == 1
         and reviewer.count('timeout 20s gh api --include --method GET -F page="$page"') == 2,
-        "governed reviewer enumerated GET retry case inventory changed",
+        "governed reviewer enumerated GET/query retry case inventory changed",
     )
     require(
         reviewer.count('GH_TOKEN="$REVIEW_TOKEN" timeout 20s gh api --include user') == 1,
@@ -589,10 +594,13 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         "governed reviewer regained raw ordinary REST GET transport",
     )
     require(
-        reviewer.count("gh api graphql") == 1
+        reviewer.count("gh api graphql") == 0
+        and reviewer.count("bot_reviewer_review_threads_query() {") == 1
+        and reviewer.count('THREADS="$(bot_reviewer_review_threads_query)"') == 1
+        and reviewer.count("timeout 20s gh api --include graphql") == 1
         and "reviewThreads(first:100)" in reviewer
         and "pageInfo{hasNextPage}" in reviewer,
-        "governed reviewer fixed GraphQL review-thread boundary changed",
+        "governed reviewer fixed GraphQL review-thread transport changed",
     )
     require(
         reviewer.count("gh api --include --method POST") == 1,
@@ -619,6 +627,63 @@ def validate_automatic_retries(policy: dict[str, Any], texts: dict[str, str]) ->
         and reviewer.count('bot_reviewer_get reviews-page "$page"') == 1,
         "governed reviewer paginated retry invocation inventory changed",
     )
+
+    reviewer_graphql_item = by_id["bot-pr-user-approval-shell-graphql-query-transient"]
+    require(
+        reviewer_graphql_item.get("source") == ".github/workflows/bot-pr-user-approval.yml"
+        and reviewer_graphql_item.get("workflow") == ".github/workflows/bot-pr-user-approval.yml"
+        and reviewer_graphql_item.get("job") == "approve"
+        and reviewer_graphql_item.get("step") == "Approve only exact green governed bot PRs as portyu9",
+        "governed reviewer GraphQL retry identity changed",
+    )
+    require(
+        reviewer_graphql_item.get("endpointScope") == "fixed-review-threads-query"
+        and reviewer_graphql_item.get("endpoint") == "https://api.github.com/graphql"
+        and reviewer_graphql_item.get("repositoryScope") == "portyu9/portyu9"
+        and reviewer_graphql_item.get("maxResponseBytes") == 8_000_000,
+        "governed reviewer GraphQL retry scope/bounds changed",
+    )
+    for fragment in (
+        "bot_reviewer_review_threads_query() {",
+        '[[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]',
+        'test "$TARGET_REPOSITORY" = "portyu9/portyu9"',
+        "for attempt in 1 2 3; do",
+        "timeout 20s gh api --include graphql",
+        "-F owner=portyu9",
+        "-F repo=portyu9",
+        '-F number="$PR_NUMBER"',
+        "-f query='query($owner:String!,$repo:String!,$number:Int!)",
+        "reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}",
+        'if [ "$exit_code" -eq 124 ]; then',
+        'elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then',
+        "408|429|500|502|503|504)",
+        'if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then',
+        'if [ "$retry" != "true" ] || [ "$attempt" -ge 3 ]; then',
+        'test "$status_count" -eq 1 || {',
+        'test "$status" = "200" || {',
+        "application/json*) : ;;",
+        'test "${#body}" -le 8000000 || {',
+        "jq -e 'type == \"object\"'",
+        'THREADS="$(bot_reviewer_review_threads_query)"',
+    ):
+        require(
+            fragment in reviewer,
+            f"governed reviewer GraphQL retry contract is missing: {fragment}",
+        )
+    require(
+        'GH_TOKEN="$REVIEW_TOKEN" timeout 20s gh api --include graphql' not in reviewer
+        and reviewer.count("gh api --include --method POST") == 1,
+        "governed reviewer GraphQL read must retain run-scoped token and must not broaden mutation retry",
+    )
+    for forbidden in (
+        "mutation(",
+        "bot_reviewer_review_threads_query \"",
+        "bot_reviewer_review_threads_query '$",
+    ):
+        require(
+            forbidden not in reviewer,
+            f"governed reviewer GraphQL retry acquired forbidden query authority: {forbidden}",
+        )
 
     convergence_item = by_id["bot-pr-review-convergence-shell-read-transient"]
     require(

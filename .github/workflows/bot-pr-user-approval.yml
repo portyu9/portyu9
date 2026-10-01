@@ -325,6 +325,130 @@ jobs:
             return 1
           }
 
+          bot_reviewer_review_threads_query() {
+            local attempt response exit_code line status status_count content_type
+            local rate_remaining retry_after body_started body retry delay requested
+            local LC_ALL=C
+
+            [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || {
+              echo "ERROR: invalid governed reviewer GraphQL PR number." >&2
+              return 1
+            }
+            test "$TARGET_REPOSITORY" = "portyu9/portyu9" || {
+              echo "ERROR: governed reviewer GraphQL repository identity changed." >&2
+              return 1
+            }
+
+            for attempt in 1 2 3; do
+              response=""
+              set +e
+              response="$(timeout 20s gh api --include graphql \
+                -F owner=portyu9 \
+                -F repo=portyu9 \
+                -F number="$PR_NUMBER" \
+                -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}' 2>&1)"
+              exit_code=$?
+              set -e
+
+              status=""
+              status_count=0
+              content_type=""
+              rate_remaining=""
+              retry_after=""
+              body_started=false
+              body=""
+              while IFS= read -r line; do
+                line="${line%$'\r'}"
+                if [ "$body_started" = "false" ]; then
+                  if [[ "$line" =~ ^HTTP/[0-9.]+[[:space:]]+([0-9]{3})([[:space:]]|$) ]]; then
+                    status="${BASH_REMATCH[1]}"
+                    status_count=$((status_count + 1))
+                  elif [ -z "$line" ]; then
+                    body_started=true
+                  else
+                    case "${line,,}" in
+                      content-type:*)
+                        content_type="${line#*:}"
+                        content_type="${content_type#"${content_type%%[![:space:]]*}"}"
+                        ;;
+                      x-ratelimit-remaining:*)
+                        rate_remaining="${line#*:}"
+                        rate_remaining="${rate_remaining#"${rate_remaining%%[![:space:]]*}"}"
+                        ;;
+                      retry-after:*)
+                        retry_after="${line#*:}"
+                        retry_after="${retry_after#"${retry_after%%[![:space:]]*}"}"
+                        ;;
+                    esac
+                  fi
+                else
+                  if [ -n "$body" ]; then
+                    body+=$'\n'
+                  fi
+                  body+="$line"
+                fi
+              done <<<"$response"
+
+              if [ "$exit_code" -eq 0 ]; then
+                test "$status_count" -eq 1 || {
+                  echo "ERROR: governed reviewer GraphQL query returned an ambiguous HTTP response." >&2
+                  return 1
+                }
+                test "$status" = "200" || {
+                  echo "ERROR: governed reviewer GraphQL query returned unexpected HTTP $status." >&2
+                  return 1
+                }
+                case "${content_type,,}" in
+                  application/json*) : ;;
+                  *)
+                    echo "ERROR: governed reviewer GraphQL query returned non-JSON content type." >&2
+                    return 1
+                    ;;
+                esac
+                test "${#body}" -le 8000000 || {
+                  echo "ERROR: governed reviewer GraphQL query exceeded the 8000000-byte response bound." >&2
+                  return 1
+                }
+                jq -e 'type == "object"' <<<"$body" >/dev/null || {
+                  echo "ERROR: governed reviewer GraphQL query returned malformed JSON." >&2
+                  return 1
+                }
+                printf '%s\n' "$body"
+                return 0
+              fi
+
+              retry=false
+              if [ "$exit_code" -eq 124 ]; then
+                retry=true
+              elif [ "$exit_code" -eq 1 ] && [ "$status_count" -eq 0 ]; then
+                retry=true
+              elif [ "$status_count" -eq 1 ]; then
+                case "$status" in
+                  408|429|500|502|503|504) retry=true ;;
+                  403)
+                    if [ "$rate_remaining" = "0" ] || [ -n "$retry_after" ]; then
+                      retry=true
+                    fi
+                    ;;
+                esac
+              fi
+
+              if [ "$retry" != "true" ] || [ "$attempt" -ge 3 ]; then
+                echo "ERROR: governed reviewer GraphQL query failed terminally (exit=$exit_code http=${status:-none})." >&2
+                return 1
+              fi
+
+              if [ "$attempt" -eq 1 ]; then delay=1; else delay=2; fi
+              if [[ "$retry_after" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+                requested="${retry_after%%.*}"
+                if [ "$requested" -ge 5 ]; then delay=5; else delay="$retry_after"; fi
+              fi
+              echo "RETRY: governed reviewer GraphQL query transient (exit=$exit_code http=${status:-none}); attempt $attempt/3, sleeping ${delay}s." >&2
+              sleep "$delay"
+            done
+            return 1
+          }
+
           REVIEW_IDENTITY_RESPONSE="$(bot_reviewer_get review-user)"
           jq -e '
             (type == "object") and
@@ -723,7 +847,7 @@ jobs:
               continue
             fi
 
-            THREADS="$(gh api graphql               -F owner=portyu9               -F repo=portyu9               -F number="$PR_NUMBER"               -f query='query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}pageInfo{hasNextPage}}}}}')"
+            THREADS="$(bot_reviewer_review_threads_query)"
             jq -e '
               (.errors == null) and
               (.data | type == "object") and
