@@ -574,8 +574,8 @@ def validate_leases(profile: str, spotlight: str) -> None:
     mint_attempt_echo = 'echo "run_attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"'
     consumer_attempt_env = 'LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}'
     attempt_lineage_guard = 'test "$LEASE_RUN_ATTEMPT" -le "$GITHUB_RUN_ATTEMPT"'
-    current_attempt_hash = '"$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \\\n'
-    leased_attempt_hash = '"$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$LEASE_RUN_ATTEMPT" \\\n'
+    current_attempt_hash = '"$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"'
+    leased_attempt_hash = '"$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$LEASE_RUN_ATTEMPT"'
     for text, expected_profile, expected_spotlight, label in (
         (mint_attempt_output, 1, 1, "mint-attempt job output"),
         (mint_attempt_echo, 1, 1, "mint-attempt step output"),
