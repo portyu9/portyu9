@@ -169,6 +169,33 @@
       "rationale": "Canonical authenticated repository-scoped read-only GET transport for governed automation. Each retry issues a fresh GET and accepts only strict UTF-8 duplicate-key-safe JSON; authorization, not-found, malformed payload, schema/policy failures and every mutation remain terminal."
     },
     {
+      "id": "canonical-github-api-binary-read-transient",
+      "source": "scripts/automation_github_artifact_download.py",
+      "operation": "read-only-github-api-binary-get",
+      "failureClassifier": "transport-or-github-transient-v1",
+      "maxAttempts": 3,
+      "timeoutSeconds": 20,
+      "backoffSeconds": [
+        1,
+        2
+      ],
+      "retryableHttpStatus": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "rateLimited403": true,
+      "retryAfterCapSeconds": 5,
+      "mutationRetry": false,
+      "endpointScope": "repository-artifact-zip-only",
+      "maxResponseBytes": 8000000,
+      "redirectPolicy": "token-free-single-https-hop",
+      "rationale": "Canonical authenticated repository-scoped read-only artifact-ZIP GET transport. Every retry restarts at the GitHub API, accepts only the exact artifact ZIP redirect, never forwards GH_TOKEN to the signed target, bounds complete bytes, atomically replaces output, and never retries mutations."
+    },
+    {
       "id": "codeql-review-thread-graphql-query-transient",
       "source": "scripts/automation_github_review_threads_read.py",
       "workflow": ".github/workflows/codeql-autofix.yml",
