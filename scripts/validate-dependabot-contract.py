@@ -2298,7 +2298,7 @@ def validate_quality_contract(text: str) -> None:
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"',
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" = "03c48844349950a1396c9b95290091076966226e"',
         "- name: Prove exact PR-native Dependabot context",
-        '(.maintainer_can_modify | type == "boolean" and . == false)',
+        '(.maintainer_can_modify | type == "boolean") and',
         'python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
         'validate_dependabot_pr_object "$PR"',
         'MAIN_REF_RESPONSE="$(python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
@@ -2333,6 +2333,10 @@ def validate_quality_contract(text: str) -> None:
             fragment in block,
             f"Profile Quality PR-native Dependabot admission contract is missing: {fragment}",
         )
+    require(
+        '(.maintainer_can_modify | type == "boolean" and . == false)' not in block,
+        "Profile Quality must not treat volatile Dependabot maintainer flag value as identity evidence",
+    )
 
     paginated_helper_pin = (
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_paginated_read.py)" '

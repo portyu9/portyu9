@@ -184,7 +184,8 @@ jobs:
                   test "$(jq -r .base.sha <<<"$PR")" = "$EXPECTED_BASE_SHA"
                   test "$(jq -r .head.sha <<<"$PR")" = "$EXPECTED_HEAD_SHA"
                   test "$(jq -r .head.repo.full_name <<<"$PR")" = "$TARGET_REPOSITORY"
-                  test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"
+                  # validate_api_pr_object already requires a boolean maintainer_can_modify field.
+                  # Its value is platform-owned and transient for same-repository bot PRs, so it is not identity evidence.
                   [[ "$(jq -r .head.ref <<<"$PR")" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]
                   HEAD_REPOSITORY="$TARGET_REPOSITORY"
                   DEPENDABOT=true

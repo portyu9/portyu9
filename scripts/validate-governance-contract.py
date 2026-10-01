@@ -49,7 +49,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'test "$(git -C trusted-base rev-parse HEAD:scripts/automation_github_repository_read.py)" = "12acd01e53c84558617e868e9f3489f9770c85d8"',
         "name: Prove exact PR-native Dependabot context",
         "validate_dependabot_pr_object() {",
-        '(.maintainer_can_modify | type == "boolean" and . == false) and',
+        '(.maintainer_can_modify | type == "boolean") and',
         "validate_git_ref_object() {",
         "validate_contents_file_object() {",
         'python3 trusted-base/scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
@@ -65,7 +65,7 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
         'test "$(git -C trusted-base rev-parse HEAD)" = "$BASE_SHA"',
         'test "$(git -C candidate-source rev-parse HEAD)" = "$HEAD_SHA"',
         'HEAD:scripts/dependabot_capability_admission.py)" = "96107595641a0f9ff0203d9df2b684b1822b0346"',
-        'HEAD:scripts/dependabot_controller.py)" = "b47cda8236412e8a051df46c80ad8520b2b56afa"',
+        'HEAD:scripts/dependabot_controller.py)" = "d6fbca25c4dfb049c8e410628f6ee3b53a5395ef"',
         'HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"',
         'HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"',
         'HEAD:scripts/workflow_capability_tcb.py)" = "58f4d55e7e65bc7f417c1ce3c006f0b7b9c412c7"',
@@ -92,6 +92,11 @@ def validate_profile_quality_dependabot_admission_evidence(block: str) -> None:
             fragment in block,
             f"Profile Quality self-contained Dependabot admission contract is missing: {fragment}",
         )
+
+    require(
+        '(.maintainer_can_modify | type == "boolean" and . == false)' not in block,
+        "Profile Quality governance must not bind Dependabot identity to volatile maintainer flag value",
+    )
 
     require(
         block.count(f"actions/checkout@{CHECKOUT_SHA}") == 2

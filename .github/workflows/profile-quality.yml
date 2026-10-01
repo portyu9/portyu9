@@ -626,6 +626,7 @@ jobs:
 
           validate_dependabot_pr_object() {
             local response="$1"
+            # The value can transiently flip on same-repository bot PRs; only its type is stable evidence.
             jq -e \
               --argjson number "$PR_NUMBER" \
               --arg repo "$TARGET_REPOSITORY" \
@@ -638,7 +639,7 @@ jobs:
                 (.number | type == "number" and . == floor and . > 0 and . == $number) and
                 (.state | type == "string" and . == "open") and
                 (.draft | type == "boolean" and . == false) and
-                (.maintainer_can_modify | type == "boolean" and . == false) and
+                (.maintainer_can_modify | type == "boolean") and
                 (.user | type == "object" and (.login | type == "string" and . == "dependabot[bot]")) and
                 (.base | type == "object" and
                   (.ref | type == "string" and . == $base_ref) and
@@ -735,7 +736,7 @@ jobs:
           test -z "$(git -C trusted-base status --porcelain)"
           test -z "$(git -C candidate-source status --porcelain)"
           test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_capability_admission.py)" = "96107595641a0f9ff0203d9df2b684b1822b0346"
-          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_controller.py)" = "b47cda8236412e8a051df46c80ad8520b2b56afa"
+          test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_controller.py)" = "d6fbca25c4dfb049c8e410628f6ee3b53a5395ef"
           test "$(git -C trusted-base rev-parse HEAD:scripts/dependabot_release.py)" = "229faaf9eadb7f187b71ce5c25809258cbf0c23a"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_api_collection.py)" = "fd111c3aae1ecaf704e522f17a998118978aa994"
           test "$(git -C trusted-base rev-parse HEAD:scripts/workflow_capability_tcb.py)" = "58f4d55e7e65bc7f417c1ce3c006f0b7b9c412c7"

@@ -10,7 +10,7 @@ import automation_pr_closing_directive_guard
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/capability-admission.yml"
 CLOSING_GUARD = ROOT / "scripts/automation_pr_closing_directive_guard.py"
-EXPECTED_GIT_BLOB = "c217d2b48a06083c4fd2f51a0cdd9fabb9789fcc"
+EXPECTED_GIT_BLOB = "bac9f39e9489c0b542d2fee3a03d72fb86c12bbb"
 EXPECTED_CLOSING_GUARD_GIT_BLOB = "f006aba7f00e860039b1c0f5f5372ab69eb06406"
 CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
 SETUP_PYTHON = "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0"
@@ -730,12 +730,20 @@ def validate_text(text: str) -> None:
         "trusted Capability Admission prior-attempt governed read lost run-scoped token binding",
     )
 
+    dependabot_case_start = text.index("              dependabot-admission)")
+    dependabot_case_end = text.index("                  ;;", dependabot_case_start)
+    dependabot_case = text[dependabot_case_start:dependabot_case_end]
+    require(
+        'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"' not in dependabot_case,
+        "delegated Dependabot admission must not bind authorization to volatile maintainer flag value",
+    )
+
     for dependabot_binding in (
         "dependabot-admission)",
         'test "$(jq -r \'.sender.login // ""\' "$GITHUB_EVENT_PATH")" = "github-actions[bot]"',
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}" > "$RUNNER_TEMP/dependabot-pr.json"',
         'PR="$(cat "$RUNNER_TEMP/dependabot-pr.json")"',
-        'test "$(jq -r .maintainer_can_modify <<<"$PR")" = "false"',
+        'validate_api_pr_object "$PR" "$PR_NUMBER"',
         '[[ "$HEAD_REF" =~ ^dependabot/github_actions/[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$ ]]',
         'python3 scripts/automation_github_paginated_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > dependabot-file-pages.json',
         "python3 scripts/workflow_capability_api_collection.py files",
