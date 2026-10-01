@@ -23,6 +23,19 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: Any,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        return None
+
+
 def normalize_endpoint(value: str) -> str:
     require(
         isinstance(value, str) and value == value.strip() and bool(value),
@@ -74,7 +87,7 @@ def get_json_text(
         try:
             if opener is None:
                 response_context = urllib.request.build_opener(
-                    automation_github_read.NoRedirect()
+                    NoRedirect()
                 ).open(
                     request,
                     timeout=automation_github_read.TIMEOUT_SECONDS,
