@@ -673,6 +673,13 @@
       "rationale": "Authorize frozen #1054's exact protected-source-only token wiring for the delegated Dependabot release reproof step plus its static regression contract. Semantic Workflow Capability is unchanged; the job already had read-only checks/contents/pull-request permissions and github.token reference. No endpoint, trigger, mutation, candidate execution, merge authority, required-check weakening, ruleset, direct-main write, OIDC, secret or bypass capability is added."
     },
     {
+      "baseBomSha256": "200f159b52f03b9f93e1e138e2227e7ab8a7dca03544b7105a49f04e114674de",
+      "candidateBomSha256": "ec827e2c3a3e8961de5f2da50d5bf7d1208dd229b1dc6760ba5b455ec0d42f52",
+      "expansionSha256": "de763ed76f5fa1c826116e0c28f0ac8fe5d2babed4544b74a49be6d47a632bba",
+      "id": "cap-dependabot-dispatch-static-checkout-v1",
+      "rationale": "Authorize frozen #1452 measured by closed diagnostic PR #1453: establish the existing pinned checkout action on the Dependabot CodeQL dispatch job at the exact admitted base before governed Git/script reads. Adds one already-approved remote action plus exact-base verification and protected contract bytes; no permission, trigger, endpoint/method, mutation, secret/OIDC, required-check reduction, merge/ruleset, direct-main, retry, or bypass authority is added."
+    },
+    {
       "baseBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "candidateBomSha256": "1b6e92a93cd373a3c2367bad2c9f891ccb918b70ef83e5ab8506f0285ee42ef7",
       "expansionSha256": "e8e5600822e69d3e1000ef582762c89b97273d39dce4e4b76db9b45fcc804b46",
