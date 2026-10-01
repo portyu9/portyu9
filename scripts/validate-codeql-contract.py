@@ -761,10 +761,17 @@ def validate_autofix_read_singleton_evidence(text: str) -> None:
             "terminal PR-scoped CodeQL alert collection",
             "            ",
         ),
+        (
+            '"repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100"',
+            "> review-pages.json",
+            'REVIEW_PAGES="$(cat review-pages.json)"',
+            "terminal pull-review authorization collection",
+            "            ",
+        ),
     )
     require(
-        text.count(pagination_helper) == 6,
-        "CodeQL Autofix must retain exactly six governed pagination calls",
+        text.count(pagination_helper) == 7,
+        "CodeQL Autofix must retain exactly seven governed pagination calls",
     )
     for endpoint, output_name, consumer, label, continuation_indent in pagination_contracts:
         fetch = (

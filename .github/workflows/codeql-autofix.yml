@@ -787,7 +787,10 @@ jobs:
           assert_main_sha "$ADMITTED_BASE_SHA"
 
           REVIEW_MARKER="<!-- portyu9-bot-review:v2 base=${ADMITTED_BASE_SHA} head=${ADMITTED_HEAD_SHA} -->"
-          REVIEW_PAGES="$(gh api --paginate --slurp "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100")"
+          python3 scripts/automation_github_paginated_read.py \
+            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/reviews?per_page=100" \
+            > review-pages.json
+          REVIEW_PAGES="$(cat review-pages.json)"
           jq -e '
             (type == "array") and (length >= 1) and (length <= 20) and
             (all(.[]; type == "array" and length <= 100)) and
