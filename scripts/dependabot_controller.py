@@ -380,10 +380,11 @@ def validate_pull_request_response(
     require(value.get("state") == "open", "Dependabot pull-request response state changed")
     require(type(value.get("draft")) is bool and value.get("draft") is False,
             "Dependabot pull-request response draft flag changed")
+    # Same-repository Dependabot PRs have exhibited transient true/false flips here.
+    # Type the field exactly, but bind authorization to immutable PR/head identity instead.
     require(
-        type(value.get("maintainer_can_modify")) is bool
-        and value.get("maintainer_can_modify") is False,
-        "Dependabot pull-request response maintainer_can_modify flag changed",
+        type(value.get("maintainer_can_modify")) is bool,
+        "Dependabot pull-request response maintainer_can_modify must be boolean",
     )
     base = value.get("base")
     require(isinstance(base, Mapping), "Dependabot pull-request response base must be an object")
@@ -450,7 +451,7 @@ def validate_pull_request_response(
         "user": "dependabot[bot]",
         "state": "open",
         "draft": False,
-        "maintainerCanModify": False,
+        "maintainerCanModify": value["maintainer_can_modify"],
         "baseRef": "main",
         "baseSha": base_sha,
         "headRef": head_ref,
@@ -1173,9 +1174,22 @@ def self_test() -> None:
     require(
         normalized_pr["headSha"] == commit_sha
         and normalized_pr["baseSha"] == parent_sha
+        and normalized_pr["maintainerCanModify"] is False
         and normalized_pr["portyu9Requested"] is True,
         "Dependabot pull-request response positive fixture changed",
     )
+    volatile_pr = validate_pull_request_response(
+        {**pr_response_fixture, "maintainer_can_modify": True},
+        expected_number=17,
+        expected_repository=REPOSITORY,
+    )
+    require(
+        volatile_pr["maintainerCanModify"] is True
+        and volatile_pr["headSha"] == commit_sha
+        and volatile_pr["baseSha"] == parent_sha,
+        "boolean maintainer_can_modify volatility changed trusted PR identity",
+    )
+
     update_response = validate_update_branch_response(
         {
             "message": "Updating pull request branch.",
@@ -1650,13 +1664,13 @@ def self_test() -> None:
             "draft flag changed",
         ),
         (
-            "pull-request maintainer mutation",
+            "pull-request malformed maintainer flag",
             lambda: validate_pull_request_response(
-                {**pr_response_fixture, "maintainer_can_modify": True},
+                {**pr_response_fixture, "maintainer_can_modify": "false"},
                 expected_number=17,
                 expected_repository=REPOSITORY,
             ),
-            "maintainer_can_modify flag changed",
+            "maintainer_can_modify must be boolean",
         ),
         (
             "pull-request malformed base sha",
