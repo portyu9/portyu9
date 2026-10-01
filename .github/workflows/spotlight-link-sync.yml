@@ -117,6 +117,7 @@ jobs:
       contents: read
     outputs:
       lease_id: ${{ steps.lease.outputs.lease_id }}
+      run_attempt: ${{ steps.lease.outputs.run_attempt }}
       issued_at: ${{ steps.lease.outputs.issued_at }}
       expires_at: ${{ steps.lease.outputs.expires_at }}
       base_sha: ${{ steps.lease.outputs.base_sha }}
@@ -203,6 +204,7 @@ jobs:
             "$BASE_SHA" "$CANDIDATE_ID" "$ISSUED_AT" "$EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           [[ "$LEASE_ID" =~ ^[0-9a-f]{64}$ ]]
           echo "lease_id=$LEASE_ID" >> "$GITHUB_OUTPUT"
+          echo "run_attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
           echo "issued_at=$ISSUED_AT" >> "$GITHUB_OUTPUT"
           echo "expires_at=$EXPIRES_AT" >> "$GITHUB_OUTPUT"
           echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
@@ -234,6 +236,7 @@ jobs:
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}
           LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
           LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
           LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
@@ -424,9 +427,12 @@ jobs:
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
           test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          [[ "$LEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_RUN_ATTEMPT" -le "$GITHUB_RUN_ATTEMPT"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
-            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$LEASE_RUN_ATTEMPT" \
             "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
 
@@ -913,6 +919,7 @@ jobs:
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}
           LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
           LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
           LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
@@ -1148,9 +1155,12 @@ jobs:
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
           test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          [[ "$LEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_RUN_ATTEMPT" -le "$GITHUB_RUN_ATTEMPT"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
-            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$LEASE_RUN_ATTEMPT" \
             "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
 
@@ -1451,6 +1461,7 @@ jobs:
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}
           LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
           LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
           LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
@@ -1845,9 +1856,12 @@ jobs:
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
           test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          [[ "$LEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_RUN_ATTEMPT" -le "$GITHUB_RUN_ATTEMPT"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
-            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$LEASE_RUN_ATTEMPT" \
             "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
 
@@ -2356,6 +2370,7 @@ jobs:
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}
           LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
           LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
           LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
@@ -2411,6 +2426,7 @@ jobs:
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}
           LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
           LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
           LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
@@ -2432,9 +2448,12 @@ jobs:
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
           test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          [[ "$LEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_RUN_ATTEMPT" -le "$GITHUB_RUN_ATTEMPT"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
-            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$LEASE_RUN_ATTEMPT" \
             "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
       - name: Download exact merge authorization artifact
@@ -2498,6 +2517,7 @@ jobs:
           GENERATED_SHA: ${{ needs.plan.outputs.generated_sha }}
           README_SHA256_AFTER: ${{ needs.plan.outputs.readme_sha256_after }}
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}
           LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
           LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
           LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
@@ -2789,9 +2809,12 @@ jobs:
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
           test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          [[ "$LEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_RUN_ATTEMPT" -le "$GITHUB_RUN_ATTEMPT"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
-            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$LEASE_RUN_ATTEMPT" \
             "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
           echo "Spotlight terminal stage: lease-verified" >&2
@@ -3372,6 +3395,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}
           LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
           LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
           LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
@@ -3432,6 +3456,7 @@ jobs:
       - name: Verify exact short-lived mutation lease
         env:
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
+          LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}
           LEASE_ISSUED_AT: ${{ needs.lease.outputs.issued_at }}
           LEASE_EXPIRES_AT: ${{ needs.lease.outputs.expires_at }}
           LEASE_BASE_SHA: ${{ needs.lease.outputs.base_sha }}
@@ -3455,9 +3480,12 @@ jobs:
           test "$NOW_EPOCH" -ge "$LEASE_ISSUED_AT"
           test "$NOW_EPOCH" -lt "$LEASE_EXPIRES_AT"
           test $((LEASE_EXPIRES_AT - NOW_EPOCH)) -ge "$LEASE_MIN_REMAINING_SECONDS"
+          [[ "$LEASE_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$GITHUB_RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]]
+          test "$LEASE_RUN_ATTEMPT" -le "$GITHUB_RUN_ATTEMPT"
           EXPECTED_LEASE_ID="$(printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_REPOSITORY_ID" ".github/workflows/spotlight-link-sync.yml" \
-            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            "$GITHUB_WORKFLOW_REF" "$GITHUB_WORKFLOW_SHA" "$GITHUB_RUN_ID" "$LEASE_RUN_ATTEMPT" \
             "$LEASE_BASE_SHA" "$LEASE_CANDIDATE_ID" "$LEASE_ISSUED_AT" "$LEASE_EXPIRES_AT" | sha256sum | cut -d' ' -f1)"
           test "$EXPECTED_LEASE_ID" = "$LEASE_ID"
       - name: Download exact Automation Decision Receipt artifact
