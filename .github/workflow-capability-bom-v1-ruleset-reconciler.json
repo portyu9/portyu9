@@ -289,11 +289,13 @@
           "artifacts": [],
           "id": "recovery_authorize",
           "mutations": [],
-          "name": "authorize-control-plane-recovery-human-gate",
+          "name": "select-control-plane-recovery-candidate-read-only",
           "needs": [],
           "oidc": false,
           "permissions": {
-            "contents": "read"
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
           },
           "references": {
             "env": [],
