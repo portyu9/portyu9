@@ -13,7 +13,7 @@ VERSION = "governed-workflow-byte-identity-v149"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "f392c0d0351f55de82adf0331f4dd8d63b7753a9",
-    ".github/workflows/profile-stats.yml": "ac5fbfee01fd65334f1cc7f34c6e56ef0c8fb55d",
+    ".github/workflows/profile-stats.yml": "7b9e481890602a0b35aaa1db2bf69dd063644f73",
     ".github/workflows/spotlight-link-sync.yml": "990bdd9d75d83737394cb2ee51e77920b38483bc",
 }
 
