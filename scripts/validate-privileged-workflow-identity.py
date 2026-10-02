@@ -9,9 +9,9 @@ import automation_decision_lease
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v155"
+VERSION = "governed-workflow-byte-identity-v156"
 EXPECTED = {
-    ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
+    ".github/workflows/bot-pr-user-approval.yml": "be42a02457df9b7f2a4a10b16c0f2c22f61e3b88",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
     ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
     ".github/workflows/spotlight-link-sync.yml": "e1e3321e193b71390eb9cb2a59e5067f9fc7cac5",
@@ -3006,6 +3006,147 @@ def validate_bot_review_run_check_evidence_schema(bot_review: str) -> None:
     )
 
 
+
+def validate_bot_review_prior_attempt_run_schema(bot_review: str) -> None:
+    approve = job_block(bot_review, "approve", "converge")
+    start_marker = "          prepare_review_retry_history() {\n"
+    end_marker = "          emit_reviewed_candidate() {\n"
+    require(
+        approve.count(start_marker) == 1 and approve.count(end_marker) == 1,
+        "Bot PR reviewer prior-attempt schema helper boundaries changed",
+    )
+    start = approve.index(start_marker)
+    end = approve.index(end_marker, start)
+    history = approve[start:end]
+    fetch = 'attempt_run="$(bot_reviewer_get prior-attempt)"'
+    serialize = 'jq -c \'{'
+    fragments = (
+        fetch,
+        '(type == "object") and',
+        '(.id | type == "number" and . == floor and . > 0 and . == $run) and',
+        '(.run_attempt | type == "number" and . == floor and . > 0 and . == $attempt) and',
+        '(.name | type == "string" and . == "Bot PR user approval") and',
+        '(.path | type == "string" and . == ".github/workflows/bot-pr-user-approval.yml") and',
+        '(.event | type == "string" and . == $event) and',
+        '(.head_branch | type == "string" and . == "main") and',
+        '(.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $source) and',
+        '(.repository | type == "object" and',
+        '(.full_name | type == "string" and . == $repo)) and',
+        '(.head_repository | type == "object" and',
+        '(.check_suite_id | type == "number" and . == floor and . > 0) and',
+        '(.status | type == "string" and . == "completed") and',
+        '(.conclusion | type == "string" and',
+        '(.actor | type == "object" and',
+        '(.login | type == "string" and length > 0)) and',
+        '(.triggering_actor | type == "object" and',
+        'bot-review-prior-attempts.ndjson',
+    )
+    for fragment in fragments:
+        require(
+            fragment in history,
+            f"Bot PR reviewer prior-attempt run schema contract is missing: {fragment}",
+        )
+    require(
+        history.count('(type == "object") and') == 1,
+        "Bot PR reviewer prior-attempt response must cross one top-level object boundary",
+    )
+    require(
+        history.count('(.full_name | type == "string" and . == $repo)) and') == 2,
+        "Bot PR reviewer prior-attempt repository identities must both be typed and exact",
+    )
+    require(
+        history.count('(.login | type == "string" and length > 0))') == 2,
+        "Bot PR reviewer prior-attempt actor identities must both be typed",
+    )
+    fetch_pos = history.index(fetch)
+    schema_pos = history.index('(type == "object") and', fetch_pos)
+    serialize_pos = history.index(serialize, schema_pos)
+    require(
+        fetch_pos < schema_pos < serialize_pos,
+        "Bot PR reviewer must validate the complete prior-attempt run before retry-history serialization",
+    )
+
+
+def self_test_bot_review_prior_attempt_run_schema(bot_review: str) -> None:
+    validate_bot_review_prior_attempt_run_schema(bot_review)
+    approve_start = bot_review.index("  approve:\n")
+    converge_start = bot_review.index("  converge:\n", approve_start)
+    approve = bot_review[approve_start:converge_start]
+    start_marker = "          prepare_review_retry_history() {\n"
+    end_marker = "          emit_reviewed_candidate() {\n"
+    start = approve.index(start_marker)
+    end = approve.index(end_marker, start)
+    history = approve[start:end]
+
+    weakened_top = history.replace(
+        '(type == "object") and',
+        '(.id != null) and',
+        1,
+    )
+    weakened = (
+        bot_review[:approve_start]
+        + approve[:start]
+        + weakened_top
+        + approve[end:]
+        + bot_review[converge_start:]
+    )
+    try:
+        validate_bot_review_prior_attempt_run_schema(weakened)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Bot PR prior-attempt schema self-test accepted missing top-level object typing")
+
+    weakened_repository = history.replace(
+        '(.repository | type == "object" and',
+        '(.repository != null and',
+        1,
+    )
+    weakened = (
+        bot_review[:approve_start]
+        + approve[:start]
+        + weakened_repository
+        + approve[end:]
+        + bot_review[converge_start:]
+    )
+    try:
+        validate_bot_review_prior_attempt_run_schema(weakened)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Bot PR prior-attempt schema self-test accepted weakened repository typing")
+
+    fetch_pos = history.index('attempt_run="$(bot_reviewer_get prior-attempt)"')
+    schema_start = history.index("              jq -e \\\n", fetch_pos)
+    schema_end_marker = '                \' <<<"$attempt_run" >/dev/null\n'
+    schema_end = history.index(schema_end_marker, schema_start) + len(schema_end_marker)
+    serialize_start = history.index("              jq -c '{\n", schema_end)
+    serialize_end_marker = '              }\' <<<"$attempt_run" >> "$RUNNER_TEMP/bot-review-prior-attempts.ndjson"\n'
+    serialize_end = history.index(serialize_end_marker, serialize_start) + len(serialize_end_marker)
+    schema_block = history[schema_start:schema_end]
+    serialize_block = history[serialize_start:serialize_end]
+    reordered_history = (
+        history[:schema_start]
+        + serialize_block
+        + history[schema_end:serialize_start]
+        + schema_block
+        + history[serialize_end:]
+    )
+    reordered = (
+        bot_review[:approve_start]
+        + approve[:start]
+        + reordered_history
+        + approve[end:]
+        + bot_review[converge_start:]
+    )
+    try:
+        validate_bot_review_prior_attempt_run_schema(reordered)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Bot PR prior-attempt schema self-test accepted serialization before validation")
+
+
 def validate_dependabot_residual_read_transport_identity(dependabot: str) -> None:
     singleton_reads = (
         'python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/actions/runs?head_sha=${HEAD_SHA}&event=workflow_dispatch&per_page=100"',
@@ -4538,6 +4679,7 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
 
 
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
+    validate_bot_review_prior_attempt_run_schema(bot_review)
     bot_review = project_bot_reviewer_shell_reads_to_raw(bot_review)
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
@@ -5945,6 +6087,8 @@ def self_test() -> None:
     spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
     self_test_main_check_cancellation_isolation(bot_review, spotlight)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
+    validate_bot_review_prior_attempt_run_schema(bot_review)
+    self_test_bot_review_prior_attempt_run_schema(bot_review)
     validate_bot_review_dispatch_status_contract(bot_review)
     validate_bot_review_creation_status_contract(bot_review)
 

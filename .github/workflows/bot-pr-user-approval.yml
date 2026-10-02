@@ -755,28 +755,34 @@ jobs:
                 --arg event "$WAKE_EVENT_NAME" \
                 --argjson run "$GITHUB_RUN_ID" \
                 --argjson attempt "$HISTORY_ATTEMPT" '
-                  .id == $run and
-                  .run_attempt == $attempt and
-                  .name == "Bot PR user approval" and
-                  .path == ".github/workflows/bot-pr-user-approval.yml" and
-                  .event == $event and
-                  .head_branch == "main" and
-                  .head_sha == $source and
-                  .repository.full_name == $repo and
-                  .head_repository.full_name == $repo and
+                  (type == "object") and
+                  (.id | type == "number" and . == floor and . > 0 and . == $run) and
+                  (.run_attempt | type == "number" and . == floor and . > 0 and . == $attempt) and
+                  (.name | type == "string" and . == "Bot PR user approval") and
+                  (.path | type == "string" and . == ".github/workflows/bot-pr-user-approval.yml") and
+                  (.event | type == "string" and . == $event) and
+                  (.head_branch | type == "string" and . == "main") and
+                  (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $source) and
+                  (.repository | type == "object" and
+                    (.full_name | type == "string" and . == $repo)) and
+                  (.head_repository | type == "object" and
+                    (.full_name | type == "string" and . == $repo)) and
                   (.check_suite_id | type == "number" and . == floor and . > 0) and
-                  .status == "completed" and
-                  (.conclusion == "action_required" or
-                   .conclusion == "cancelled" or
-                   .conclusion == "failure" or
-                   .conclusion == "neutral" or
-                   .conclusion == "skipped" or
-                   .conclusion == "stale" or
-                   .conclusion == "startup_failure" or
-                   .conclusion == "success" or
-                   .conclusion == "timed_out") and
-                  (.actor.login | type == "string" and length > 0) and
-                  (.triggering_actor.login | type == "string" and length > 0)
+                  (.status | type == "string" and . == "completed") and
+                  (.conclusion | type == "string" and
+                    (. == "action_required" or
+                     . == "cancelled" or
+                     . == "failure" or
+                     . == "neutral" or
+                     . == "skipped" or
+                     . == "stale" or
+                     . == "startup_failure" or
+                     . == "success" or
+                     . == "timed_out")) and
+                  (.actor | type == "object" and
+                    (.login | type == "string" and length > 0)) and
+                  (.triggering_actor | type == "object" and
+                    (.login | type == "string" and length > 0))
                 ' <<<"$attempt_run" >/dev/null
               jq -c '{
                 attempt:.run_attempt,
