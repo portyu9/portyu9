@@ -38,10 +38,14 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
     "          PARENT_SHA: ${{ needs.stage.outputs.base_sha }}",
     'REMOTE_MAIN="$(git -C artifacts ls-remote --exit-code origin refs/heads/main)"',
     '[[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
-    'test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
+    'CURRENT_MAIN_SHA="${BASH_REMATCH[1]}"',
+    'if [ "$CURRENT_MAIN_SHA" != "$SOURCE_SHA" ]; then',
+    'echo "publication_state=SUPERSEDED" >> "$GITHUB_OUTPUT"',
+    'exit 0',
     'push origin HEAD:generated',
     'REMOTE_GENERATED="$(git -C artifacts ls-remote --exit-code origin refs/heads/generated)"',
     'test "${BASH_REMATCH[1]}" = "$CANDIDATE_SHA"',
+    'echo "publication_state=PUBLISHED" >> "$GITHUB_OUTPUT"',
     'echo "published_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"',
 )
 
@@ -69,6 +73,7 @@ PROFILE_STATS_RECEIPT_SEQUENCE = (
     'source_sha: ${{ steps.publish.outputs.source_sha }}',
     'echo "published_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"',
     "  receipt:\n"
+    "    if: needs.publish.outputs.publication_state == 'PUBLISHED'\n"
     "    name: prepare-publication-receipt-read-only\n"
     "    needs: [publish, stage, lease, attest]",
     "    permissions:\n      contents: read\n    outputs:\n      published_sha: ${{ steps.receipt.outputs.published_sha }}",
@@ -329,7 +334,7 @@ def self_test() -> None:
     except ValueError:
         pass
     else:
-        raise ValueError("profile-stats source-freshness self-test accepted a missing terminal equality guard")
+        raise ValueError("profile-stats source-freshness self-test accepted a missing terminal publication guard")
 
     synthetic = "\n".join(PROFILE_STATS_LEASE_BINDING_SEQUENCE)
     validate_profile_stats_lease_binding(synthetic)
