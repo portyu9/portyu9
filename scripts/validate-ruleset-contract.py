@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
+import tempfile
 from pathlib import Path
 import sys
 import urllib.error
@@ -1096,11 +1098,314 @@ def validate_sentinel_main_ref_evidence(text: str, *, run_self_test: bool = True
             )
 
 
+
+def expect_recovery_candidate_failure(
+    *,
+    candidate_root: Path,
+    changed_paths: Path,
+    candidate_tree_sha: str,
+    label: str,
+) -> None:
+    try:
+        ruleset_transition_contract.evaluate_recovery_candidate(
+            candidate_root=candidate_root,
+            changed_paths=changed_paths,
+            candidate_tree_sha=candidate_tree_sha,
+        )
+    except ValueError:
+        return
+    raise ValueError(f"recovery acceptance fixture unexpectedly accepted: {label}")
+
+
+def self_test_recovery_acceptance() -> None:
+    transition = ruleset_transition_contract.load_contract()
+    recovery = ruleset_transition_contract.load_recovery_contract(transition)
+    require(
+        recovery["allowedChangedPaths"] == [
+            ".github/workflows/capability-admission.yml",
+            "scripts/capability_admission_workflow_contract.py",
+        ],
+        "recovery acceptance fixture scope drifted",
+    )
+
+    workflow_relative = Path(".github/workflows/capability-admission.yml")
+    companion_relative = Path("scripts/capability_admission_workflow_contract.py")
+    reconciler_relative = Path(".github/workflows/ruleset-reconciler.yml")
+    changed_paths_text = "\n".join(recovery["allowedChangedPaths"]) + "\n"
+
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture_root = Path(tmp)
+        positive_root = fixture_root / "positive"
+        shutil.copytree(
+            ROOT,
+            positive_root,
+            symlinks=True,
+            ignore=shutil.ignore_patterns(".git", "__pycache__"),
+        )
+
+        workflow_path = positive_root / workflow_relative
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        identity_anchor = (
+            '          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
+            '"1b779bcea0acd290826fef8f60fd01480113a31a"\n'
+            '          test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = '
+            '"12acd01e53c84558617e868e9f3489f9770c85d8"\n'
+        )
+        require(
+            workflow_text.count(identity_anchor) == 1,
+            "recovery acceptance positive workflow anchor changed",
+        )
+        repaired_identity = identity_anchor.replace("\n          test", "\n\n          test", 1)
+        workflow_text = workflow_text.replace(identity_anchor, repaired_identity, 1)
+        workflow_path.write_text(workflow_text, encoding="utf-8")
+
+        # Git blob identities for the exact accepted workflow and this one-line
+        # physical fixture repair. The fixture never computes a cryptographic digest.
+        base_blob = "bac9f39e9489c0b542d2fee3a03d72fb86c12bbb"
+        candidate_blob = "e16e1972ac857bbbbebe6554228a4c3bc2562402"
+
+        companion_path = positive_root / companion_relative
+        companion_text = companion_path.read_text(encoding="utf-8")
+        blob_anchor = f'EXPECTED_GIT_BLOB = "{base_blob}"'
+        require(
+            companion_text.count(blob_anchor) == 1,
+            "recovery acceptance companion blob anchor changed",
+        )
+        companion_text = companion_text.replace(
+            blob_anchor,
+            f'EXPECTED_GIT_BLOB = "{candidate_blob}"',
+            1,
+        )
+        companion_identity_anchor = (
+            '        \'          test "$(git rev-parse HEAD:scripts/automation_github_read.py)" = '
+            '"1b779bcea0acd290826fef8f60fd01480113a31a"\\n\'\n'
+            '        \'          test "$(git rev-parse HEAD:scripts/automation_github_repository_read.py)" = '
+            '"12acd01e53c84558617e868e9f3489f9770c85d8"\\n\'\n'
+        )
+        require(
+            companion_text.count(companion_identity_anchor) == 1,
+            "recovery acceptance companion identity anchor changed",
+        )
+        companion_text = companion_text.replace(
+            companion_identity_anchor,
+            companion_identity_anchor.splitlines(keepends=True)[0]
+            + "        '\\n'\n"
+            + companion_identity_anchor.splitlines(keepends=True)[1],
+            1,
+        )
+        companion_path.write_text(companion_text, encoding="utf-8")
+
+        changed_paths = fixture_root / "changed-paths.txt"
+        changed_paths.write_text(changed_paths_text, encoding="utf-8")
+        positive = ruleset_transition_contract.evaluate_recovery_candidate(
+            candidate_root=positive_root,
+            changed_paths=changed_paths,
+            candidate_tree_sha="1" * 40,
+        )
+        require(
+            positive["expansions"] == []
+            and positive["reductions"] == []
+            and positive["changedPaths"] == recovery["allowedChangedPaths"]
+            and positive["changedProtectedPaths"] == [str(workflow_relative)],
+            "recovery acceptance positive fixture no longer proves raw semantic identity and exact repair scope",
+        )
+
+        permission_anchor = (
+            "    permissions:\n"
+            "      actions: read\n"
+            "      checks: write\n"
+            "      contents: read\n"
+            "      pull-requests: read\n"
+        )
+        trigger_anchor = "on:\n  pull_request_target:\n"
+        reference_anchor = "    timeout-minutes: 6\n"
+        api_anchor = (
+            "      - name: Verify exact governed read transport identity\n"
+            "        run: |\n"
+            "          set -euo pipefail\n"
+        )
+        dependency_anchor = "  admission:\n    name: trusted-capability-admission\n"
+        reference_expression = "$" + "{{ vars.RECOVERY_ACCEPTANCE_FIXTURE }}"
+
+        variants = (
+            (
+                "write-permission",
+                permission_anchor,
+                permission_anchor.replace("      contents: read\n", "      contents: write\n"),
+            ),
+            (
+                "trigger",
+                trigger_anchor,
+                "on:\n  push:\n    branches:\n      - main\n  pull_request_target:\n",
+            ),
+            (
+                "expression-reference",
+                reference_anchor,
+                reference_anchor + "    env:\n      RECOVERY_ACCEPTANCE_FIXTURE: " + reference_expression + "\n",
+            ),
+            (
+                "api-mutation",
+                api_anchor,
+                api_anchor
+                + '          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/'
+                + 'capability-admission.yml/dispatches" -f ref=main\n',
+            ),
+            (
+                "job-dependency",
+                dependency_anchor,
+                "  admission:\n    needs: recovery-acceptance-parent\n    name: trusted-capability-admission\n",
+            ),
+        )
+
+        for index, (label, anchor, replacement) in enumerate(variants, start=2):
+            variant_root = fixture_root / label
+            shutil.copytree(positive_root, variant_root, symlinks=True)
+            variant_workflow = variant_root / workflow_relative
+            variant_text = variant_workflow.read_text(encoding="utf-8")
+            require(
+                variant_text.count(anchor) == 1,
+                f"recovery acceptance {label} fixture anchor changed",
+            )
+            variant_workflow.write_text(
+                variant_text.replace(anchor, replacement, 1),
+                encoding="utf-8",
+            )
+            expect_recovery_candidate_failure(
+                candidate_root=variant_root,
+                changed_paths=changed_paths,
+                candidate_tree_sha=str(index) * 40,
+                label=label,
+            )
+
+        second_protected_root = fixture_root / "second-protected-source"
+        shutil.copytree(positive_root, second_protected_root, symlinks=True)
+        second_reconciler = second_protected_root / reconciler_relative
+        second_reconciler.write_text(
+            second_reconciler.read_text(encoding="utf-8")
+            + "\n# recovery acceptance forbidden second protected-source fixture\n",
+            encoding="utf-8",
+        )
+        expect_recovery_candidate_failure(
+            candidate_root=second_protected_root,
+            changed_paths=changed_paths,
+            candidate_tree_sha="7" * 40,
+            label="second-protected-source",
+        )
+
+    run_id = 424242
+    run_attempt = 3
+    candidate_head_sha = "a" * 40
+    trusted_main_sha = "b" * 40
+    candidate_pr = 1234
+    check_id = 987654
+    issued_at = 1_800_000_000
+    expires_at = issued_at + recovery["leaseSeconds"]
+    context = ruleset_transition_contract.recovery_context(
+        run_id, run_attempt, candidate_head_sha
+    )
+    normal_live = {
+        "id": ruleset_transition_contract.RULESET_ID,
+        **json.loads(json.dumps(transition["successor"])),
+    }
+    temporary_live = {
+        "id": ruleset_transition_contract.RULESET_ID,
+        **ruleset_transition_contract.recovery_temporary_payload(
+            transition, run_id, run_attempt, candidate_head_sha
+        ),
+    }
+    open_receipt = ruleset_transition_contract.recovery_transition_receipt(
+        direction="open",
+        before=normal_live,
+        after=temporary_live,
+        transition=transition,
+        recovery=recovery,
+        trusted_main_sha=trusted_main_sha,
+        run_id=run_id,
+        run_attempt=run_attempt,
+        candidate_pr=candidate_pr,
+        candidate_head_sha=candidate_head_sha,
+        check_id=check_id,
+        issued_at=issued_at,
+        expires_at=expires_at,
+        write_status=0,
+    )
+    close_receipt = ruleset_transition_contract.recovery_transition_receipt(
+        direction="close",
+        before=temporary_live,
+        after=normal_live,
+        transition=transition,
+        recovery=recovery,
+        trusted_main_sha=trusted_main_sha,
+        run_id=run_id,
+        run_attempt=run_attempt,
+        candidate_pr=candidate_pr,
+        candidate_head_sha=candidate_head_sha,
+        check_id=check_id,
+        issued_at=issued_at,
+        expires_at=expires_at,
+        write_status=0,
+    )
+    watchdog_receipt = ruleset_transition_contract.recovery_watchdog_receipt(
+        before=temporary_live,
+        after=normal_live,
+        transition=transition,
+        recovery=recovery,
+        trusted_main_sha=trusted_main_sha,
+        run_id=run_id + 100,
+        run_attempt=1,
+        issued_at=issued_at,
+        write_status=0,
+    )
+    result_receipt = ruleset_transition_contract.recovery_result_receipt(
+        trusted_main_sha=trusted_main_sha,
+        run_id=run_id,
+        run_attempt=run_attempt,
+        candidate_pr=candidate_pr,
+        candidate_head_sha=candidate_head_sha,
+        check_id=check_id,
+        transaction_context=context,
+        merged=True,
+        merge_sha="c" * 40,
+        open_receipt_sha256=ruleset_transition_contract.sha256(open_receipt),
+        restore_receipt_sha256=ruleset_transition_contract.sha256(close_receipt),
+    )
+    require(
+        open_receipt["direction"] == "open"
+        and close_receipt["direction"] == "close"
+        and watchdog_receipt["direction"] == "watchdog-close"
+        and result_receipt["merged"] is True
+        and result_receipt["transactionContext"] == context,
+        "recovery acceptance receipt constructor invariants changed",
+    )
+
+    future_context = ruleset_transition_contract.recovery_context(
+        run_id + 1, run_attempt, candidate_head_sha
+    )
+    require(
+        future_context != context,
+        "recovery transaction context is not unique across runs",
+    )
+    try:
+        ruleset_transition_contract.classify_recovery_exact(
+            temporary_live,
+            transition,
+            recovery,
+            run_id + 1,
+            run_attempt,
+            candidate_head_sha,
+        )
+    except ValueError:
+        pass
+    else:
+        raise ValueError("stale recovery context satisfied a future transaction")
+
+
 def self_test(payload: dict[str, Any]) -> None:
     # The deliberate administration transition is pure source logic. Exercise its
     # exact predecessor/successor classifier here so runtime-only ordering or digest
     # regressions fail in ordinary protected PR validation before any admin run.
     ruleset_transition_contract.self_test()
+    self_test_recovery_acceptance()
     transition = ruleset_transition_contract.load_contract()
     transition_predecessor = next(
         rule for rule in transition["predecessor"]["rules"] if rule["type"] == "required_status_checks"
