@@ -119,6 +119,7 @@ def parse_trigger_details(text: str, label: str) -> dict[str, Any]:
     result: dict[str, Any] = {}
     current_event: str | None = None
     current_key: str | None = None
+    current_dispatch_input: str | None = None
     for line_number, line in enumerate(lines[starts[0] + 1:], start=starts[0] + 2):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
@@ -132,6 +133,7 @@ def parse_trigger_details(text: str, label: str) -> dict[str, Any]:
             require(current_event not in result, f"{label}:{line_number}: duplicate trigger event")
             result[current_event] = {}
             current_key = None
+            current_dispatch_input = None
             continue
         require(current_event is not None, f"{label}:{line_number}: trigger detail precedes event")
         if indent == 4:
@@ -146,19 +148,52 @@ def parse_trigger_details(text: str, label: str) -> dict[str, Any]:
             current_key, scalar = mapping.groups()
             require(current_key not in result[current_event],
                     f"{label}:{line_number}: duplicate trigger key: {current_event}.{current_key}")
+            current_dispatch_input = None
             if scalar:
                 result[current_event][current_key] = unquote(scalar)
                 current_key = None
+            elif current_event == "workflow_dispatch" and current_key == "inputs":
+                result[current_event][current_key] = {}
             else:
                 result[current_event][current_key] = []
             continue
         if indent == 6:
+            if current_event == "workflow_dispatch" and current_key == "inputs":
+                declared = re.fullmatch(r"      ([A-Za-z0-9_-]+):\s*", line)
+                require(declared is not None,
+                        f"{label}:{line_number}: unsupported workflow_dispatch input syntax")
+                inputs = result[current_event][current_key]
+                require(isinstance(inputs, dict),
+                        f"{label}:{line_number}: workflow_dispatch inputs parent is not a mapping")
+                current_dispatch_input = declared.group(1)
+                require(current_dispatch_input not in inputs,
+                        f"{label}:{line_number}: duplicate workflow_dispatch input: {current_dispatch_input}")
+                inputs[current_dispatch_input] = {}
+                continue
             item = re.fullmatch(r"      -\s+(.+?)\s*", line)
             require(item is not None and current_key is not None,
                     f"{label}:{line_number}: unsupported trigger list syntax")
             value = result[current_event][current_key]
             require(isinstance(value, list), f"{label}:{line_number}: trigger list parent is not a list")
             value.append(unquote(item.group(1)))
+            continue
+        if indent == 8:
+            require(
+                current_event == "workflow_dispatch"
+                and current_key == "inputs"
+                and current_dispatch_input is not None,
+                f"{label}:{line_number}: trigger input detail precedes workflow_dispatch input",
+            )
+            detail = re.fullmatch(r"        ([A-Za-z0-9_-]+):\s*(.+?)\s*", line)
+            require(detail is not None,
+                    f"{label}:{line_number}: unsupported workflow_dispatch input detail syntax")
+            detail_key, detail_value = detail.groups()
+            require(detail_key in {"description", "required", "type", "default"},
+                    f"{label}:{line_number}: unsupported workflow_dispatch input detail: {detail_key}")
+            input_spec = result[current_event][current_key][current_dispatch_input]
+            require(detail_key not in input_spec,
+                    f"{label}:{line_number}: duplicate workflow_dispatch input detail: {detail_key}")
+            input_spec[detail_key] = unquote(detail_value)
             continue
         raise ValueError(f"{label}:{line_number}: unsupported trigger capability syntax")
     require(result, f"{label}: empty trigger detail set")
@@ -668,11 +703,29 @@ def self_test() -> None:
         "  push:\n"
         "    branches:\n"
         "      - main\n"
-        "  workflow_dispatch:\n\n"
+        "  workflow_dispatch:\n"
+        "    inputs:\n"
+        "      source_sha:\n"
+        "        description: \"Exact source\"\n"
+        "        required: false\n"
+        "        type: string\n\n"
     )
     parsed = parse_trigger_details(fixture, "fixture.yml")
-    require(parsed == {"push": {"branches": ["main"]}, "workflow_dispatch": {}},
-            f"trigger parser self-test drifted: {parsed!r}")
+    require(
+        parsed == {
+            "push": {"branches": ["main"]},
+            "workflow_dispatch": {
+                "inputs": {
+                    "source_sha": {
+                        "description": "Exact source",
+                        "required": "false",
+                        "type": "string",
+                    }
+                }
+            },
+        },
+        f"trigger parser self-test drifted: {parsed!r}",
+    )
     action = REMOTE_ACTION.fullmatch(
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
     )
