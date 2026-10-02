@@ -41,6 +41,14 @@ CODEQL_VALIDATOR = Path("scripts/validate-codeql-contract.py")
 BASE_BOM = Path(".github/workflow-capability-bom-v1.json")
 DERIVED_PATHS = (ACTION_LOCK.as_posix(), BASE_BOM.as_posix(), CODEQL_VALIDATOR.as_posix())
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
+DEPENDABOT_RECONCILED_GIT_AUTHOR = {
+    "name": "github-actions[bot]",
+    "email": "41898282+github-actions[bot]@users.noreply.github.com",
+}
+DEPENDABOT_RECONCILED_GIT_COMMITTER = {
+    "name": "GitHub",
+    "email": "noreply@github.com",
+}
 
 
 def require(condition: bool, message: str) -> None:
@@ -868,6 +876,26 @@ def validate_git_commit_response(
             "Dependabot Git commit response parent must be an object")
     require(_response_sha(parents[0].get("sha"), "Dependabot Git commit response parent sha") == expected_parent_sha,
             "Dependabot Git commit response parent sha changed")
+    author = value.get("author")
+    require(isinstance(author, Mapping),
+            "Dependabot Git commit response author must be an object")
+    require(
+        author.get("name") == DEPENDABOT_RECONCILED_GIT_AUTHOR["name"]
+        and author.get("email") == DEPENDABOT_RECONCILED_GIT_AUTHOR["email"],
+        "Dependabot Git commit response author identity changed",
+    )
+    require(isinstance(author.get("date"), str) and bool(author["date"].strip()),
+            "Dependabot Git commit response author date must be a non-empty string")
+    committer = value.get("committer")
+    require(isinstance(committer, Mapping),
+            "Dependabot Git commit response committer must be an object")
+    require(
+        committer.get("name") == DEPENDABOT_RECONCILED_GIT_COMMITTER["name"]
+        and committer.get("email") == DEPENDABOT_RECONCILED_GIT_COMMITTER["email"],
+        "Dependabot Git commit response committer identity changed",
+    )
+    require(isinstance(committer.get("date"), str) and bool(committer["date"].strip()),
+            "Dependabot Git commit response committer date must be a non-empty string")
     return {
         "kind": "commit",
         "sha": commit_sha,
@@ -1081,8 +1109,21 @@ def self_test() -> None:
             "Dependabot Git blob response positive fixture changed")
     require(validate_git_tree_response({"sha": tree_sha}) == {"kind": "tree", "sha": tree_sha},
             "Dependabot Git tree response positive fixture changed")
+    commit_response = {
+        "sha": commit_sha,
+        "tree": {"sha": tree_sha},
+        "parents": [{"sha": parent_sha}],
+        "author": {
+            **DEPENDABOT_RECONCILED_GIT_AUTHOR,
+            "date": "2026-10-01T16:28:38Z",
+        },
+        "committer": {
+            **DEPENDABOT_RECONCILED_GIT_COMMITTER,
+            "date": "2026-10-01T16:28:38Z",
+        },
+    }
     commit = validate_git_commit_response(
-        {"sha": commit_sha, "tree": {"sha": tree_sha}, "parents": [{"sha": parent_sha}]},
+        commit_response,
         expected_tree_sha=tree_sha,
         expected_parent_sha=parent_sha,
     )
@@ -1881,7 +1922,7 @@ def self_test() -> None:
         (
             "commit wrong tree",
             lambda: validate_git_commit_response(
-                {"sha": commit_sha, "tree": {"sha": "5" * 40}, "parents": [{"sha": parent_sha}]},
+                {**commit_response, "tree": {"sha": "5" * 40}},
                 expected_tree_sha=tree_sha,
                 expected_parent_sha=parent_sha,
             ),
@@ -1890,7 +1931,7 @@ def self_test() -> None:
         (
             "commit parent cardinality",
             lambda: validate_git_commit_response(
-                {"sha": commit_sha, "tree": {"sha": tree_sha}, "parents": []},
+                {**commit_response, "parents": []},
                 expected_tree_sha=tree_sha,
                 expected_parent_sha=parent_sha,
             ),
@@ -1899,11 +1940,47 @@ def self_test() -> None:
         (
             "commit wrong parent",
             lambda: validate_git_commit_response(
-                {"sha": commit_sha, "tree": {"sha": tree_sha}, "parents": [{"sha": "6" * 40}]},
+                {**commit_response, "parents": [{"sha": "6" * 40}]},
                 expected_tree_sha=tree_sha,
                 expected_parent_sha=parent_sha,
             ),
             "parent sha changed",
+        ),
+        (
+            "commit wrong author",
+            lambda: validate_git_commit_response(
+                {**commit_response, "author": {**commit_response["author"], "name": "GitHub"}},
+                expected_tree_sha=tree_sha,
+                expected_parent_sha=parent_sha,
+            ),
+            "author identity changed",
+        ),
+        (
+            "commit missing author date",
+            lambda: validate_git_commit_response(
+                {**commit_response, "author": {**commit_response["author"], "date": ""}},
+                expected_tree_sha=tree_sha,
+                expected_parent_sha=parent_sha,
+            ),
+            "author date must be a non-empty string",
+        ),
+        (
+            "commit wrong committer",
+            lambda: validate_git_commit_response(
+                {**commit_response, "committer": {**commit_response["committer"], "email": "bad@example.com"}},
+                expected_tree_sha=tree_sha,
+                expected_parent_sha=parent_sha,
+            ),
+            "committer identity changed",
+        ),
+        (
+            "commit missing committer date",
+            lambda: validate_git_commit_response(
+                {**commit_response, "committer": {**commit_response["committer"], "date": ""}},
+                expected_tree_sha=tree_sha,
+                expected_parent_sha=parent_sha,
+            ),
+            "committer date must be a non-empty string",
         ),
         (
             "ref wrong identity",
