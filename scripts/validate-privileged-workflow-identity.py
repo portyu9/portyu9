@@ -9,12 +9,12 @@ import automation_decision_lease
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v153"
+VERSION = "governed-workflow-byte-identity-v155"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
     ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
-    ".github/workflows/spotlight-link-sync.yml": "813acd8a3f2b02cf7eeba4b87013b037e08b2101",
+    ".github/workflows/spotlight-link-sync.yml": "e1e3321e193b71390eb9cb2a59e5067f9fc7cac5",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -791,6 +791,26 @@ def project_spotlight_source_epoch_ref_schema_to_legacy(spotlight: str) -> str:
     return spotlight[:approve_start] + projected_approve + spotlight[approve_end:]
 
 
+def project_spotlight_proposer_pr_list_schema_to_legacy(spotlight: str) -> str:
+    """Project the current proposer PR-list schema out of frozen historical proofs."""
+    propose_start = spotlight.index("  propose:\n")
+    propose_end = spotlight.index("  approve:\n", propose_start)
+    propose = spotlight[propose_start:propose_end]
+    fetch = '          PRS="$(spotlight_propose_get open-prs)"\n'
+    consume = '          COUNT="$(jq \'length\' <<<"$PRS")"\n'
+    schema_start = '          jq -e --arg branch "$CANDIDATE_BRANCH" --arg base "$SOURCE_SHA" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\\n'
+    schema_end = '          \' <<<"$PRS" >/dev/null\n'
+    require(propose.count(fetch) == 1 and propose.count(consume) == 1,
+            "Spotlight proposer PR-list projection anchors changed")
+    fetch_pos = propose.index(fetch)
+    consume_pos = propose.index(consume, fetch_pos)
+    schema_pos = propose.index(schema_start, fetch_pos + len(fetch), consume_pos)
+    schema_end_pos = propose.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+    require(fetch_pos + len(fetch) == schema_pos and schema_end_pos == consume_pos,
+            "Spotlight proposer PR-list schema is not the exact pre-consumption overlay")
+    projected = propose[:schema_pos] + propose[consume_pos:]
+    return spotlight[:propose_start] + projected + spotlight[propose_end:]
+
 def project_spotlight_initial_compare_schema_to_legacy(spotlight: str) -> str:
     """Project the current typed initial-compare boundary out of frozen historical proofs."""
     approve_start = spotlight.index("  approve:\n")
@@ -1293,6 +1313,87 @@ def validate_spotlight_initial_compare_evidence(
             raise ValueError("Spotlight initial compare self-test accepted schema-after-consumption ordering")
 
 
+def validate_spotlight_proposer_pr_list_evidence(
+    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    propose = job_block(spotlight, "propose", "approve")
+    fetch = 'PRS="$(spotlight_propose_get open-prs)"'
+    schema = 'jq -e --arg branch "$CANDIDATE_BRANCH" --arg base "$SOURCE_SHA" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\'
+    consume = 'COUNT="$(jq \'length\' <<<"$PRS")"'
+    fetch_pos = propose.index(fetch)
+    schema_pos = propose.index(schema, fetch_pos)
+    consume_pos = propose.index(consume, schema_pos)
+    boundary = propose[schema_pos:consume_pos]
+    required = (
+        '(type == "array") and',
+        '(length <= 1) and',
+        '(all(.[];',
+        '(.number | type == "number" and . == floor and . > 0) and',
+        '(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and',
+        '(.state | type == "string" and . == "open") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.title | type == "string" and . == $title) and',
+        '(.body | type == "string" and . == $body) and',
+        '(.ref | type == "string" and . == "main") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and',
+        '(.ref | type == "string" and . == $branch) and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.requested_reviewers | type == "array" and length <= 100) and',
+        '(all(.requested_reviewers[];',
+        '(.id | (type == "number") and (. == floor) and (. > 0)) and',
+        '(.login | (type == "string") and (length > 0))) and',
+        '(([.requested_reviewers[].id] | unique | length) == (.requested_reviewers | length)) and',
+        '(([.requested_reviewers[].login] | unique | length) == (.requested_reviewers | length)) and',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0)',
+    )
+    require(propose.count(fetch) == 1 and propose.count(schema) == 1 and propose.count(consume) == 1,
+            "Spotlight proposer PR-list fetch/schema/consume cardinality changed")
+    for fragment in required:
+        require(fragment in boundary, f"Spotlight proposer PR-list schema changed: {fragment}")
+    require(boundary.count('(.full_name | type == "string" and . == $repo))) and') == 2,
+            "Spotlight proposer PR-list must bind both base/head repository identity")
+    require(fetch_pos < schema_pos < consume_pos,
+            "Spotlight proposer PR-list must be typed before cardinality/PR-number consumption")
+    if not run_self_test:
+        return
+    propose_start = spotlight.index("  propose:\n")
+    propose_end = spotlight.index("  approve:\n", propose_start)
+    mutations = (
+        ('(type == "array") and', '(type == "object") and'),
+        ('(length <= 1) and', '(length <= 10) and'),
+        ('(.number | type == "number" and . == floor and . > 0) and', '(.number | type == "number") and'),
+        ('(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and', '(.user | type == "object") and'),
+        ('(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and', '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and'),
+        ('(.requested_reviewers | type == "array" and length <= 100) and', '(.requested_reviewers | type == "array") and'),
+    )
+    for old, new in mutations:
+        require(boundary.count(old) == 1, f"Spotlight proposer PR-list self-test anchor changed: {old}")
+        weakened_propose = propose[:schema_pos] + boundary.replace(old, new, 1) + propose[consume_pos:]
+        weakened = spotlight[:propose_start] + weakened_propose + spotlight[propose_end:]
+        try:
+            validate_spotlight_proposer_pr_list_evidence(weakened, run_self_test=False)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Spotlight proposer PR-list self-test accepted weakened evidence")
+    fetch_line = '          PRS="$(spotlight_propose_get open-prs)"\n'
+    consume_line = '          COUNT="$(jq \'length\' <<<"$PRS")"\n'
+    schema_start = '          jq -e --arg branch "$CANDIDATE_BRANCH" --arg base "$SOURCE_SHA" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\\n'
+    schema_end = '          \' <<<"$PRS" >/dev/null\n'
+    fetch_abs = spotlight.index(fetch_line)
+    consume_abs = spotlight.index(consume_line, fetch_abs)
+    schema_abs = spotlight.index(schema_start, fetch_abs, consume_abs)
+    schema_end_abs = spotlight.index(schema_end, schema_abs, consume_abs) + len(schema_end)
+    reordered = (spotlight[:schema_abs] + spotlight[schema_end_abs:consume_abs + len(consume_line)]
+                 + spotlight[schema_abs:schema_end_abs] + spotlight[consume_abs + len(consume_line):])
+    try:
+        validate_spotlight_proposer_pr_list_evidence(reordered, run_self_test=False)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight proposer PR-list self-test accepted schema-after-consumption ordering")
+
 def validate_spotlight_pr_response_evidence(
     spotlight: str, *, run_self_test: bool = True
 ) -> None:
@@ -1768,6 +1869,7 @@ def project_spotlight_lifecycle_status_to_legacy(spotlight: str) -> str:
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
     spotlight = project_spotlight_source_epoch_ref_schema_to_legacy(spotlight)
     spotlight = project_spotlight_initial_compare_schema_to_legacy(spotlight)
+    spotlight = project_spotlight_proposer_pr_list_schema_to_legacy(spotlight)
     spotlight = project_spotlight_reconcile_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_propose_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_merge_shell_reads_to_raw(spotlight)
@@ -4483,8 +4585,10 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         1,
         transport="cat review-pages.json",
     )
-    spotlight_review_projection = project_spotlight_merge_shell_reads_to_raw(
-        project_spotlight_approval_list_helper_to_legacy(spotlight)
+    spotlight_review_projection = project_spotlight_proposer_pr_list_schema_to_legacy(
+        project_spotlight_merge_shell_reads_to_raw(
+            project_spotlight_approval_list_helper_to_legacy(spotlight)
+        )
     )
     validate_pull_review_evidence_schema(
         spotlight_review_projection, "Spotlight authorization/terminal merge", 2
@@ -6599,6 +6703,7 @@ def main() -> int:
         validate_spotlight_privileged_ref_evidence_schema(spotlight)
         validate_spotlight_readme_contents_evidence(spotlight)
         validate_spotlight_initial_compare_evidence(spotlight)
+        validate_spotlight_proposer_pr_list_evidence(spotlight)
         validate_spotlight_pr_response_evidence(spotlight)
 
         validate_spotlight_budget_artifact_history(spotlight)

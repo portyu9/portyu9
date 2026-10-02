@@ -635,6 +635,26 @@ def project_spotlight_source_epoch_ref_schema_to_legacy(sync: str) -> str:
     return sync[:approve_start] + projected_approve + sync[approve_end:]
 
 
+def project_spotlight_proposer_pr_list_schema_to_legacy(sync: str) -> str:
+    """Project the current proposer PR-list schema out of frozen historical proofs."""
+    propose_start = sync.index("  propose:\n")
+    propose_end = sync.index("  approve:\n", propose_start)
+    propose = sync[propose_start:propose_end]
+    fetch = '          PRS="$(spotlight_propose_get open-prs)"\n'
+    consume = '          COUNT="$(jq \'length\' <<<"$PRS")"\n'
+    schema_start = '          jq -e --arg branch "$CANDIDATE_BRANCH" --arg base "$SOURCE_SHA" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\\n'
+    schema_end = '          \' <<<"$PRS" >/dev/null\n'
+    core.require(propose.count(fetch) == 1 and propose.count(consume) == 1,
+            "Spotlight proposer PR-list projection anchors changed")
+    fetch_pos = propose.index(fetch)
+    consume_pos = propose.index(consume, fetch_pos)
+    schema_pos = propose.index(schema_start, fetch_pos + len(fetch), consume_pos)
+    schema_end_pos = propose.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+    core.require(fetch_pos + len(fetch) == schema_pos and schema_end_pos == consume_pos,
+            "Spotlight proposer PR-list schema is not the exact pre-consumption overlay")
+    projected = propose[:schema_pos] + propose[consume_pos:]
+    return sync[:propose_start] + projected + sync[propose_end:]
+
 def project_spotlight_initial_compare_schema_to_legacy(sync: str) -> str:
     """Project the current typed initial-compare boundary out of frozen historical proofs."""
     approve_start = sync.index("  approve:\n")
@@ -1166,6 +1186,7 @@ def project_state_driven_spotlight_reviewer_to_legacy(sync: str) -> str:
 def project_item9_sync_with_marker(sync: str) -> str:
     sync = project_spotlight_source_epoch_ref_schema_to_legacy(sync)
     sync = project_spotlight_initial_compare_schema_to_legacy(sync)
+    sync = project_spotlight_proposer_pr_list_schema_to_legacy(sync)
     sync = project_spotlight_reconcile_shell_reads_to_raw(sync)
     sync = project_spotlight_propose_shell_reads_to_raw(sync)
     sync = project_spotlight_merge_shell_reads_to_raw(sync)
