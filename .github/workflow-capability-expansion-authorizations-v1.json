@@ -1555,18 +1555,18 @@
       "rationale": "Authorize the exact trusted compiler hardening in PR #426 that makes gh api graphql fail closed, classifies GraphQL mutations explicitly, and exposes enablePullRequestAutoMerge to the semantic mutation inventory; the current six-workflow BOM remains byte-for-byte unchanged."
     },
     {
-      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
-      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
-      "expansionSha256": "ada0eb49a80556fdd29de0d1889143878ee4f979506604923335c59f43d932b9",
-      "id": "cap-workflow-run-approval-response-status-v1",
-      "rationale": "Authorize frozen #1096's exact trusted-source-only hardening of the three existing protected workflow-run approval POSTs in CodeQL Autofix, Dependabot and Spotlight: capture gh api --include responses and require HTTP 201 before approval state/evidence or success. Base/candidate semantic BOMs are identical; endpoints, run identity, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority and bypass remain unchanged."
-    },
-    {
       "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "candidateBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
       "expansionSha256": "c4b4b043ba92373c36d682852ef6cc0f1bb928dbef527bacf67d22af2b737ca0",
       "id": "cap-workflow-dispatch-input-parser-v1",
       "rationale": "Authorize frozen #1503 measured by closed #1504: advance only the trusted Workflow Capability trigger parser so accepted-main Capability Admission can represent closed workflow_dispatch.inputs mappings before #1500. Base/candidate semantic BOMs are identical. Adds no workflow byte, trigger, permission, endpoint/method, mutation, retry, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, or bypass."
+    },
+    {
+      "baseBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "candidateBomSha256": "ad28d35ab7cc548f8decdc9fc3716ad80cf7921e55490cd17872e674e133a2c2",
+      "expansionSha256": "ada0eb49a80556fdd29de0d1889143878ee4f979506604923335c59f43d932b9",
+      "id": "cap-workflow-run-approval-response-status-v1",
+      "rationale": "Authorize frozen #1096's exact trusted-source-only hardening of the three existing protected workflow-run approval POSTs in CodeQL Autofix, Dependabot and Spotlight: capture gh api --include responses and require HTTP 201 before approval state/evidence or success. Base/candidate semantic BOMs are identical; endpoints, run identity, call counts, permissions, triggers, mutations, merge authority, required checks, secrets/OIDC, direct-main authority and bypass remain unchanged."
     }
   ],
   "ledgerId": "workflow-capability-expansion-authorizations-v1",
