@@ -145,15 +145,18 @@ def item28_shared_control_plane_epoch_measurement_diagnostic() -> None:
         subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
         subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
         try:
+            probe = (
+                "import pathlib,sys; "
+                "sys.path.insert(0, str(pathlib.Path.cwd() / 'scripts')); "
+                "import workflow_capability_admission as admission; "
+                "import workflow_capability_bom as bom; "
+                "candidate=pathlib.Path(sys.argv[1]); tree=sys.argv[2]; "
+                "diff=admission.measure(candidate, candidate_tree_sha=tree); "
+                "print(bom.canonical_json({'measurement': admission.public_measurement(diff, candidate_tree_sha=tree)}), end='')"
+            )
             result = subprocess.run(
-                [
-                    sys.executable,
-                    str(trusted / "scripts/workflow_capability_admission.py"),
-                    str(candidate),
-                    "--candidate-tree-sha",
-                    tree,
-                    "--measure",
-                ],
+                [sys.executable, "-c", probe, str(candidate), tree],
+                cwd=trusted,
                 text=True,
                 capture_output=True,
             )
