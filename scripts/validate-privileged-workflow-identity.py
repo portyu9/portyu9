@@ -4590,8 +4590,10 @@ def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str,
         1,
         transport="cat review-pages.json",
     )
-    spotlight_review_projection = project_spotlight_merge_shell_reads_to_raw(
-        project_spotlight_approval_list_helper_to_legacy(spotlight)
+    spotlight_review_projection = project_spotlight_proposer_pr_list_schema_to_legacy(
+        project_spotlight_merge_shell_reads_to_raw(
+            project_spotlight_approval_list_helper_to_legacy(spotlight)
+        )
     )
     validate_pull_review_evidence_schema(
         spotlight_review_projection, "Spotlight authorization/terminal merge", 2
