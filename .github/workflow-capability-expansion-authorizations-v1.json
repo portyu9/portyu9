@@ -50,6 +50,13 @@
       "rationale": "Authorize frozen #1520 measured by closed #1521: compile a repository-wide invariant rejecting third-party Actions in authority-bearing jobs. Semantic BOM is unchanged; one protected compiler source changes. Future exceptions are capped, exact to workflow/job/repository/subpath/immutable SHA, and stale exceptions fail closed. Adds no trigger, permission, endpoint, mutation, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, candidate execution, or bypass."
     },
     {
+      "baseBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "expansionSha256": "2e2c2a847adf765eccdfd3483e4fd1a7893df57d8ffc00333e00f2d0ee043b0a",
+      "id": "cap-authority-artifact-retention-invariant-v1",
+      "rationale": "Authorize frozen #1524 measured by closed #1525: compile a repository-wide 20-producer/28-consumer artifact retention invariant separating authority, ephemeral validation, and evidence. Semantic Workflow Capability is unchanged; one protected compiler source changes. Authority defaults to one-day retention, evidence may persist only under read-only/attestation-only consumption, and the sole reviewed seven-day CodeQL provenance exception remains exact-current-main plus GitHub-expiry bound. Adds no trigger, permission, endpoint, mutation, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, candidate execution, or bypass."
+    },
+    {
       "baseBomSha256": "dcbce54d22ce6558471e0ac1fb2448213c7ba9f09f33601194c48b76c70510d2",
       "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
       "expansionSha256": "63f30f967e67094daa7668646e6070220ee404383e231757940969dd6fdf3d3f",
