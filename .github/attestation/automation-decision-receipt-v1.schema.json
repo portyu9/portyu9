@@ -103,10 +103,19 @@
               "target": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["workflowPath", "ref"],
+                "required": ["workflowPath", "ref", "inputs"],
                 "properties": {
                   "workflowPath": {"const": ".github/workflows/spotlight-link-sync.yml"},
-                  "ref": {"const": "main"}
+                  "ref": {"const": "main"},
+                  "inputs": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["mainSourceSha", "generatedPublicationSha"],
+                    "properties": {
+                      "mainSourceSha": {"$ref": "#/$defs/sha40"},
+                      "generatedPublicationSha": {"$ref": "#/$defs/sha40"}
+                    }
+                  }
                 }
               },
               "observation": {
