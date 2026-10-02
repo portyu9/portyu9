@@ -47,7 +47,7 @@
       "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
       "expansionSha256": "63f30f967e67094daa7668646e6070220ee404383e231757940969dd6fdf3d3f",
       "id": "cap-autonomous-control-plane-recovery-v1",
-      "rationale": "Authorize frozen #1516 measured by closed #1517: remove the residual human/environment recovery approval dependency and replace it with one schedule-only, read-only exact-candidate selector in the already authority-separated Ruleset Reconciler. The selector proves exact main/ruleset, same-repository current-main two-path repair scope, six surviving exact-head GitHub-Actions successes, terminal-broken trusted admission, and exactly-one-candidate cardinality before the existing independent recovery_plan fully re-proves eligibility. Scheduled recovery/watchdog transactions are serialized; zero candidates no-op and ambiguity fails closed. Exact tuple: 7 expansions / 2 reductions. No bypass actor, direct-main write, external repository, candidate execution, new secret, broader admin/check/merge mutation, required-check relaxation, or blind mutation replay."
+      "rationale": "Authorize frozen #1516 measured by closed #1517: replace the human/environment recovery gate with one schedule-only read-only exact-candidate selector, while retaining the existing independent recovery reproof and authority-separated mutation transaction. Exact tuple: 7 expansions / 2 reductions. Zero candidates no-op; ambiguity fails closed. No bypass, direct-main write, external repo, candidate execution, new secret, required-check relaxation, broader mutation authority, or blind replay."
     },
     {
       "baseBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
