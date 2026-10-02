@@ -1399,12 +1399,17 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Download exact recovery receipts
+      - name: Download exact recovery-open receipt
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: control-plane-recovery-*-receipt
+          name: control-plane-recovery-open-receipt
           path: recovery-receipts
-          merge-multiple: true
+
+      - name: Download exact recovery-restoration receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: control-plane-recovery-restore-receipt
+          path: recovery-receipts
 
       - name: Build exact immutable recovery result receipt
         env:
