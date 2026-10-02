@@ -1218,7 +1218,7 @@ def self_test_recovery_acceptance() -> None:
             "      pull-requests: read\n"
         )
         trigger_anchor = "on:\n  pull_request_target:\n"
-        secret_anchor = "    timeout-minutes: 6\n"
+        reference_anchor = "    timeout-minutes: 6\n"
         api_anchor = (
             "      - name: Verify exact governed read transport identity\n"
             "        run: |\n"
@@ -1240,8 +1240,8 @@ def self_test_recovery_acceptance() -> None:
             ),
             (
                 "expression-reference",
-                secret_anchor,
-                secret_anchor + "    env:\n      RECOVERY_ACCEPTANCE_FIXTURE: " + reference_expression + "\n",
+                reference_anchor,
+                reference_anchor + "    env:\n      RECOVERY_ACCEPTANCE_FIXTURE: " + reference_expression + "\n",
             ),
             (
                 "api-mutation",
