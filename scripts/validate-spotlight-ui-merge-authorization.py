@@ -1114,6 +1114,26 @@ def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
     return sync[:merge_start] + projected + sync[merge_end:]
 
 
+def project_spotlight_proposer_pr_list_schema_to_legacy(sync: str) -> str:
+    """Project the current proposer PR-list schema out of frozen historical proofs."""
+    propose_start = sync.index("  propose:\n")
+    propose_end = sync.index("  approve:\n", propose_start)
+    propose = sync[propose_start:propose_end]
+    fetch = '          PRS="$(spotlight_propose_get open-prs)"\n'
+    consume = '          COUNT="$(jq \'length\' <<<"$PRS")"\n'
+    schema_start = '          jq -e --arg branch "$CANDIDATE_BRANCH" --arg base "$SOURCE_SHA" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\\n'
+    schema_end = '          \' <<<"$PRS" >/dev/null\n'
+    require(propose.count(fetch) == 1 and propose.count(consume) == 1,
+            "Spotlight proposer PR-list projection anchors changed")
+    fetch_pos = propose.index(fetch)
+    consume_pos = propose.index(consume, fetch_pos)
+    schema_pos = propose.index(schema_start, fetch_pos + len(fetch), consume_pos)
+    schema_end_pos = propose.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+    require(fetch_pos + len(fetch) == schema_pos and schema_end_pos == consume_pos,
+            "Spotlight proposer PR-list schema is not the exact pre-consumption overlay")
+    projected = propose[:schema_pos] + propose[consume_pos:]
+    return sync[:propose_start] + projected + sync[propose_end:]
+
 def project_spotlight_initial_compare_schema_to_legacy(sync: str) -> str:
     """Project the current typed initial-compare boundary out of frozen historical proofs."""
     approve_start = sync.index("  approve:\n")
@@ -1344,6 +1364,7 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 def project_item9(sync: str) -> str:
     sync = project_spotlight_initial_compare_schema_to_legacy(sync)
+    sync = project_spotlight_proposer_pr_list_schema_to_legacy(sync)
     sync = project_spotlight_reconcile_shell_reads_to_raw(sync)
     sync = project_spotlight_propose_shell_reads_to_raw(sync)
     sync = project_spotlight_merge_shell_reads_to_raw(sync)
@@ -2064,6 +2085,95 @@ def validate_builder_script_with_trusted_admission(wrapper: str, builder_core: s
                 f"Spotlight MAC schema lost trusted admission binding: {fragment}")
 
 
+def validate_proposer_pr_list_schema_overlay(sync: str) -> None:
+    propose = core.job_block(sync, "propose", "approve")
+    fetch = 'PRS="$(spotlight_propose_get open-prs)"'
+    schema = 'jq -e --arg branch "$CANDIDATE_BRANCH" --arg base "$SOURCE_SHA" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\'
+    consume = 'COUNT="$(jq \'length\' <<<"$PRS")"'
+    fetch_pos = propose.index(fetch)
+    schema_pos = propose.index(schema, fetch_pos)
+    consume_pos = propose.index(consume, schema_pos)
+    boundary = propose[schema_pos:consume_pos]
+    required = (
+        '(type == "array") and',
+        '(length <= 1) and',
+        '(all(.[];',
+        '(.number | type == "number" and . == floor and . > 0) and',
+        '(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and',
+        '(.state | type == "string" and . == "open") and',
+        '(.draft | type == "boolean" and . == false) and',
+        '(.title | type == "string" and . == $title) and',
+        '(.body | type == "string" and . == $body) and',
+        '(.ref | type == "string" and . == "main") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and',
+        '(.ref | type == "string" and . == $branch) and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
+        '(.requested_reviewers | type == "array" and length <= 100) and',
+        '(all(.requested_reviewers[];',
+        '(.id | type == "number" and . == floor and . > 0) and',
+        '(.login | type == "string" and length > 0))) and',
+        '(([.requested_reviewers[].id] | unique | length) == (.requested_reviewers | length)) and',
+        '(([.requested_reviewers[].login] | unique | length) == (.requested_reviewers | length)) and',
+        '(.url | type == "string" and length > 0) and',
+        '(.html_url | type == "string" and length > 0)',
+    )
+    require(propose.count(fetch) == 1 and propose.count(schema) == 1 and propose.count(consume) == 1,
+            "Spotlight proposer PR-list fetch/schema/consume cardinality changed")
+    for fragment in required:
+        require(fragment in boundary, f"Spotlight proposer PR-list schema changed: {fragment}")
+    require(boundary.count('(.full_name | type == "string" and . == $repo))) and') == 2,
+            "Spotlight proposer PR-list must bind both base/head repository identity")
+    require(fetch_pos < schema_pos < consume_pos,
+            "Spotlight proposer PR-list must be typed before cardinality/PR-number consumption")
+
+
+def self_test_proposer_pr_list_schema_overlay(sync: str) -> None:
+    validate_proposer_pr_list_schema_overlay(sync)
+    propose_start = sync.index("  propose:\n")
+    propose_end = sync.index("  approve:\n", propose_start)
+    propose = sync[propose_start:propose_end]
+    fetch = 'PRS="$(spotlight_propose_get open-prs)"'
+    consume = 'COUNT="$(jq \'length\' <<<"$PRS")"'
+    schema = 'jq -e --arg branch "$CANDIDATE_BRANCH" --arg base "$SOURCE_SHA" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\'
+    fetch_pos = propose.index(fetch)
+    schema_pos = propose.index(schema, fetch_pos)
+    consume_pos = propose.index(consume, schema_pos)
+    boundary = propose[schema_pos:consume_pos]
+    mutations = (
+        ('(type == "array") and', '(type == "object") and'),
+        ('(length <= 1) and', '(length <= 10) and'),
+        ('(.number | type == "number" and . == floor and . > 0) and', '(.number | type == "number") and'),
+        ('(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and', '(.user | type == "object") and'),
+        ('(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and', '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and'),
+        ('(.requested_reviewers | type == "array" and length <= 100) and', '(.requested_reviewers | type == "array") and'),
+    )
+    for old, new in mutations:
+        require(boundary.count(old) == 1, f"Spotlight proposer PR-list self-test anchor ambiguous: {old}")
+        weakened_propose = propose[:schema_pos] + boundary.replace(old, new, 1) + propose[consume_pos:]
+        weakened = sync[:propose_start] + weakened_propose + sync[propose_end:]
+        try:
+            validate_proposer_pr_list_schema_overlay(weakened)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Spotlight proposer PR-list self-test accepted weakened evidence")
+    fetch_line = '          PRS="$(spotlight_propose_get open-prs)"\n'
+    consume_line = '          COUNT="$(jq \'length\' <<<"$PRS")"\n'
+    schema_start = '          jq -e --arg branch "$CANDIDATE_BRANCH" --arg base "$SOURCE_SHA" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \\\n'
+    schema_end = '          \' <<<"$PRS" >/dev/null\n'
+    fetch_abs = sync.index(fetch_line)
+    consume_abs = sync.index(consume_line, fetch_abs)
+    schema_abs = sync.index(schema_start, fetch_abs, consume_abs)
+    schema_end_abs = sync.index(schema_end, schema_abs, consume_abs) + len(schema_end)
+    reordered = (sync[:schema_abs] + sync[schema_end_abs:consume_abs + len(consume_line)]
+                 + sync[schema_abs:schema_end_abs] + sync[consume_abs + len(consume_line):])
+    try:
+        validate_proposer_pr_list_schema_overlay(reordered)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight proposer PR-list self-test accepted schema-after-consumption ordering")
+
 def validate_initial_compare_schema_overlay(sync: str) -> None:
     approve = core.job_block(sync, "approve", "authorize")
     fetch = 'COMPARE="$(spotlight_singleton_get compare-initial)"'
@@ -2161,6 +2271,8 @@ def main() -> int:
         core.validate_preparer_script(preparer)
         core.validate_builder_script(builder, builder_core)
         core.validate_mac(sync)
+        validate_proposer_pr_list_schema_overlay(sync)
+        self_test_proposer_pr_list_schema_overlay(sync)
         validate_initial_compare_schema_overlay(sync)
         self_test_initial_compare_schema_overlay(sync)
         validate_protected_workflow_evidence_overlay(sync)

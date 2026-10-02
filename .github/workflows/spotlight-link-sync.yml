@@ -1403,6 +1403,38 @@ jobs:
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
 
           PRS="$(spotlight_propose_get open-prs)"
+          jq -e --arg branch "$CANDIDATE_BRANCH" --arg base "$SOURCE_SHA" --arg head "$HEAD_SHA" --arg repo "$GITHUB_REPOSITORY" \
+            --arg title "chore: sync rotating Spotlight links" \
+            --arg body "Automation-managed README-only update. Direct Spotlight repository/workflow links and immutable card snapshot are derived from the validated published evidence. Main protection and all required checks remain in force." '
+            (type == "array") and
+            (length <= 1) and
+            (all(.[];
+              (type == "object") and
+              (.number | type == "number" and . == floor and . > 0) and
+              (.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and
+              (.state | type == "string" and . == "open") and
+              (.draft | type == "boolean" and . == false) and
+              (.title | type == "string" and . == $title) and
+              (.body | type == "string" and . == $body) and
+              (.base | type == "object" and
+                (.ref | type == "string" and . == "main") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and
+                (.repo | type == "object" and (.full_name | type == "string" and . == $repo))) and
+              (.head | type == "object" and
+                (.ref | type == "string" and . == $branch) and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+                (.repo | type == "object" and (.full_name | type == "string" and . == $repo))) and
+              (.requested_reviewers | type == "array" and length <= 100) and
+              (all(.requested_reviewers[];
+                (type == "object") and
+                (.id | type == "number" and . == floor and . > 0) and
+                (.login | type == "string" and length > 0))) and
+              (([.requested_reviewers[].id] | unique | length) == (.requested_reviewers | length)) and
+              (([.requested_reviewers[].login] | unique | length) == (.requested_reviewers | length)) and
+              (.url | type == "string" and length > 0) and
+              (.html_url | type == "string" and length > 0)
+            ))
+          ' <<<"$PRS" >/dev/null
           COUNT="$(jq 'length' <<<"$PRS")"
           if [ "$COUNT" = "0" ]; then
             jq -n --arg title "chore: sync rotating Spotlight links" --arg head "$CANDIDATE_BRANCH" --arg base "main" \
