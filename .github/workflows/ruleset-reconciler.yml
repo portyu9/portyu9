@@ -519,7 +519,7 @@ jobs:
           predicate-path: receipt/ruleset-reconciliation-receipt.json
           show-summary: true
 
-recovery_authorize:
+  recovery_authorize:
     if: "${{ github.event_name == 'workflow_dispatch' && (inputs.recovery_pr != '' || inputs.recovery_head_sha != '') }}"
     name: authorize-control-plane-recovery-human-gate
     runs-on: ubuntu-24.04
