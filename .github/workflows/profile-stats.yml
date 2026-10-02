@@ -859,6 +859,9 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    outputs:
+      source_sha: ${{ needs.receipt.outputs.source_sha }}
+      published_sha: ${{ needs.receipt.outputs.published_sha }}
 
     steps:
       - name: Verify exact short-lived mutation lease
@@ -1055,7 +1058,7 @@ jobs:
 
   dispatch:
     name: dispatch-spotlight-link-sync
-    needs: [dispatch_plan, receipt_attest, receipt, lease, attest]
+    needs: [dispatch_plan, receipt_attest, lease, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     concurrency:
@@ -1113,8 +1116,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PREVIOUS_RUN_HIGH_WATER: ${{ needs.dispatch_plan.outputs.previous_run_high_water }}
-          MAIN_SOURCE_SHA: ${{ needs.receipt.outputs.source_sha }}
-          GENERATED_PUBLICATION_SHA: ${{ needs.receipt.outputs.published_sha }}
+          MAIN_SOURCE_SHA: ${{ needs.receipt_attest.outputs.source_sha }}
+          GENERATED_PUBLICATION_SHA: ${{ needs.receipt_attest.outputs.published_sha }}
         run: |
           set -euo pipefail
           [[ "$PREVIOUS_RUN_HIGH_WATER" =~ ^[0-9]+$ ]]
