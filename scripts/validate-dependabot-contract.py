@@ -853,6 +853,135 @@ def validate_controller_required_check_snapshot_contract(text: str) -> None:
     )
 
 
+def validate_controller_delegated_proof_collection_contract(text: str) -> None:
+    endpoint = (
+        "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/"
+        "check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100"
+    )
+    require(
+        text.count(endpoint) == 2,
+        "Dependabot delegated-proof collection endpoint inventory changed",
+    )
+
+    readiness_start = "          delegated_admission_attempt_ready() {\n"
+    readiness_end = "\n\n          checks_ready() {\n"
+    terminal_start = "      - name: Verify exact delegated admission proof\n"
+    terminal_end = "\n  validate_contracts:\n"
+    for marker in (readiness_start, readiness_end, terminal_start, terminal_end):
+        require(
+            text.count(marker) == 1,
+            f"Dependabot delegated-proof collection block anchor changed: {marker.strip()}",
+        )
+
+    readiness = text[
+        text.index(readiness_start):text.index(readiness_end, text.index(readiness_start))
+    ]
+    terminal = text[
+        text.index(terminal_start):text.index(terminal_end, text.index(terminal_start))
+    ]
+
+    schema_fragments = (
+        '(type == "object") and',
+        '(.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and',
+        '(.check_runs | type == "array" and length <= 100) and',
+        '(.total_count == (.check_runs | length)) and',
+        '(all(.check_runs[];',
+        'type == "object" and',
+        '(.head_sha == $head)',
+    )
+    readiness_fetch = (
+        'proof_checks="$(python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?'
+        'app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"'
+    )
+    readiness_cardinality = 'if [ "$(jq -r .total_count <<<"$proof_checks")" != "1" ]; then'
+    readiness_select = 'jq \'.check_runs[0]\' <<<"$proof_checks" > dependabot-admission-proof-check.json'
+    terminal_fetch = (
+        'CHECKS="$(python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?'
+        'app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"'
+    )
+    terminal_cardinality = 'if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then'
+    terminal_select = 'jq \'.check_runs[0]\' <<<"$CHECKS" > dependabot-admission-check.json'
+    schema_marker = 'if ! jq -e --arg head "$HEAD_SHA" \''
+
+    for label, block, fetch, cardinality, select in (
+        ("readiness", readiness, readiness_fetch, readiness_cardinality, readiness_select),
+        ("terminal", terminal, terminal_fetch, terminal_cardinality, terminal_select),
+    ):
+        for fragment in (fetch, schema_marker, *schema_fragments, cardinality, select):
+            require(
+                block.count(fragment) == 1,
+                f"Dependabot delegated-proof {label} boundary anchor changed: {fragment}",
+            )
+        positions = [
+            block.index(fetch),
+            block.index(schema_marker),
+            *(block.index(fragment, block.index(schema_marker)) for fragment in schema_fragments),
+            block.index(cardinality),
+            block.index(select),
+        ]
+        require(
+            positions == sorted(positions),
+            f"Dependabot delegated-proof {label} collection schema must precede cardinality and selection",
+        )
+
+    require(
+        'echo "ERROR: malformed exact-head delegated admission proof collection for ${HEAD_SHA}." >&2'
+        in terminal,
+        "Dependabot terminal delegated-proof malformed collection must fail closed explicitly",
+    )
+
+
+def self_test_controller_delegated_proof_collection_contract(text: str) -> None:
+    validate_controller_delegated_proof_collection_contract(text)
+
+    def move_line_before_in_block(
+        source: str,
+        start_marker: str,
+        end_marker: str,
+        line: str,
+        anchor: str,
+    ) -> str:
+        start = source.index(start_marker)
+        end = source.index(end_marker, start)
+        block = source[start:end]
+        line_with_newline = line + "\n"
+        require(
+            block.count(line) == 1 and block.count(anchor) == 1,
+            "Dependabot delegated-proof ordering self-test fixture changed",
+        )
+        mutated = block.replace(line_with_newline, "", 1)
+        mutated = mutated.replace(anchor, line_with_newline + anchor, 1)
+        return source[:start] + mutated + source[end:]
+
+    cases = (
+        (
+            "          delegated_admission_attempt_ready() {\n",
+            "\n\n          checks_ready() {\n",
+            '            if [ "$(jq -r .total_count <<<"$proof_checks")" != "1" ]; then',
+            '            if ! jq -e --arg head "$HEAD_SHA" \'',
+        ),
+        (
+            "      - name: Verify exact delegated admission proof\n",
+            "\n  validate_contracts:\n",
+            '            if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then',
+            '            if ! jq -e --arg head "$HEAD_SHA" \'',
+        ),
+    )
+    for start_marker, end_marker, line, anchor in cases:
+        drift = move_line_before_in_block(text, start_marker, end_marker, line, anchor)
+        try:
+            validate_controller_delegated_proof_collection_contract(drift)
+        except ValueError as exc:
+            require(
+                "schema must precede cardinality and selection" in str(exc),
+                f"Dependabot delegated-proof ordering self-test failed for wrong reason: {exc}",
+            )
+        else:
+            fail("Dependabot delegated-proof ordering self-test accepted cardinality before schema")
+
+
 def validate_controller_protected_workflow_evidence_contract(text: str) -> None:
     start_marker = "          approve_exact_pr_workflows() {\n"
     end_marker = "\n\n          assert_transaction\n          approve_exact_pr_workflows\n"
@@ -2512,6 +2641,7 @@ def main() -> int:
         self_test_controller_reviewer_request_status(controller_text)
         validate_controller_collection_contract(controller_text)
         validate_controller_required_check_snapshot_contract(controller_text)
+        self_test_controller_delegated_proof_collection_contract(controller_text)
         validate_controller_residual_read_transport_contract(controller_text)
         validate_controller_git_read_response_contract(controller_text)
         validate_controller_git_mutation_response_contract(controller_text)
