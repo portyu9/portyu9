@@ -159,6 +159,33 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
         "ruleset reconciler workflow secret inventory changed",
     )
     jobs = {job["id"]: job for job in workflow["jobs"]}
+    require(
+        set(jobs) == {
+            "plan",
+            "reconcile",
+            "attest",
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate",
+            "recovery_open",
+            "recovery_complete_certificate",
+            "recovery_merge",
+            "recovery_restore",
+            "recovery_attest",
+            "watchdog_plan",
+            "watchdog_restore",
+            "watchdog_attest",
+        },
+        "ruleset reconciler job inventory changed",
+    )
+    admin_jobs = {"reconcile", "recovery_open", "recovery_restore", "watchdog_restore"}
+    for job_id, job in jobs.items():
+        expected_secrets = RULESET_RECONCILER_ADMIN_SECRETS if job_id in admin_jobs else []
+        require(
+            job["references"]["secrets"] == expected_secrets,
+            f"ruleset reconciler authority separation changed for {job_id}",
+        )
+
     reconcile = jobs["reconcile"]
     require(
         reconcile["references"]["secrets"] == RULESET_RECONCILER_ADMIN_SECRETS,
@@ -181,6 +208,85 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
         ],
         "ruleset reconciler writer mutation inventory changed",
     )
+    expected_admin_mutations = {
+        "recovery_open": (
+            "Open only exact reviewed recovery aperture",
+            "repos/${TARGET_REPOSITORY}/rulesets/22148161",
+        ),
+        "recovery_restore": (
+            "Restore exact normal ruleset regardless of transaction outcome",
+            "repos/${TARGET_REPOSITORY}/rulesets/22148161",
+        ),
+        "watchdog_restore": (
+            "Close only exact stale temporary recovery shape",
+            "repos/${TARGET_REPOSITORY}/rulesets/22148161",
+        ),
+    }
+    for job_id, (step, ruleset_target) in expected_admin_mutations.items():
+        require(
+            jobs[job_id]["mutations"] == [
+                {
+                    "class": "github-api-post",
+                    "method": "POST",
+                    "step": step,
+                    "target": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens",
+                },
+                {
+                    "class": "github-api-put",
+                    "method": "PUT",
+                    "step": step,
+                    "target": ruleset_target,
+                },
+            ],
+            f"ruleset reconciler recovery admin mutation inventory changed for {job_id}",
+        )
+    require(
+        jobs["recovery_create_certificate"]["permissions"] == {
+            "checks": "write",
+            "contents": "read",
+        }
+        and jobs["recovery_create_certificate"]["mutations"] == [
+            {
+                "class": "github-api-post",
+                "method": "POST",
+                "step": "Create and pin exact incomplete recovery certificate",
+                "target": "repos/${TARGET_REPOSITORY}/check-runs",
+            }
+        ],
+        "recovery certificate creation authority changed",
+    )
+    require(
+        jobs["recovery_complete_certificate"]["permissions"] == {
+            "checks": "write",
+            "contents": "read",
+            "pull-requests": "read",
+        }
+        and jobs["recovery_complete_certificate"]["mutations"] == [
+            {
+                "class": "github-api-patch",
+                "method": "PATCH",
+                "step": "Freshly re-prove and complete exact certificate",
+                "target": "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}",
+            }
+        ],
+        "recovery certificate completion authority changed",
+    )
+    require(
+        jobs["recovery_merge"]["permissions"] == {
+            "checks": "read",
+            "contents": "write",
+            "pull-requests": "write",
+        }
+        and jobs["recovery_merge"]["mutations"] == [
+            {
+                "class": "pull-request-merge",
+                "method": "PUT",
+                "step": "Merge exactly once with expected head after final reproof",
+                "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge",
+            }
+        ],
+        "recovery merge authority changed",
+    )
     source = RULESET_RECONCILER_WORKFLOW.read_text(encoding="utf-8")
     require("PORTYU9_BOT_REVIEW_TOKEN" not in source,
             "ruleset reconciler must never reference the bot-review credential")
@@ -193,9 +299,9 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
         "ruleset reconciler admin writers lost complete non-cancellable serialization",
     )
     require(
-        source.count('          JWT_EXP="$((ISSUED_AT + 540))"\n') == 1
+        source.count('          JWT_EXP="$((ISSUED_AT + 540))"\n') == 4
         and 'JWT_EXP="$(ISSUED_AT + 540))"' not in source,
-        "ruleset reconciler GitHub App JWT expiry arithmetic changed",
+        "ruleset reconciler admin JWT expiry arithmetic changed",
     )
     require(
         source.count("scripts/ruleset_transition_contract.py classify-observable --live live-plan.json") == 1
