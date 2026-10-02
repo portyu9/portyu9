@@ -189,9 +189,19 @@ def validate_dispatch(effect: dict[str, Any], path: str, lease: dict[str, str]) 
     require(path == PROFILE_WORKFLOW, "Spotlight dispatch receipts must originate from Profile Stats")
     require(effect["job"] == "dispatch" and effect["outcome"] == "applied",
             "Spotlight dispatch receipt job/outcome changed")
-    target = exact_object(effect["target"], {"workflowPath", "ref"}, "Spotlight dispatch target")
-    require(target == {"workflowPath": SPOTLIGHT_WORKFLOW, "ref": "main"},
+    target = exact_object(effect["target"], {"workflowPath", "ref", "inputs"}, "Spotlight dispatch target")
+    require(target["workflowPath"] == SPOTLIGHT_WORKFLOW and target["ref"] == "main",
             "Spotlight dispatch target changed")
+    inputs = exact_object(
+        target["inputs"],
+        {"mainSourceSha", "generatedPublicationSha"},
+        "Spotlight dispatch shared publication epoch inputs",
+    )
+    require(
+        sha40(inputs["mainSourceSha"], "Spotlight dispatch main-source input") == lease["baseSha"],
+        "Spotlight dispatch main-source input escaped exact lease identity",
+    )
+    sha40(inputs["generatedPublicationSha"], "Spotlight dispatch generated-publication input")
     observation = exact_object(
         effect["observation"],
         {"acceptedStatus", "previousRunHighWater", "downstreamRun", "sourceAncestry"},
@@ -447,7 +457,14 @@ def fixture(path: str) -> tuple[dict[str, Any], dict[str, str]]:
                 "job": "dispatch",
                 "kind": "spotlight-workflow-dispatch",
                 "outcome": "applied",
-                "target": {"workflowPath": SPOTLIGHT_WORKFLOW, "ref": "main"},
+                "target": {
+                    "workflowPath": SPOTLIGHT_WORKFLOW,
+                    "ref": "main",
+                    "inputs": {
+                        "mainSourceSha": base,
+                        "generatedPublicationSha": "d" * 40,
+                    },
+                },
                 "observation": {
                     "acceptedStatus": 204,
                     "previousRunHighWater": 9000,
