@@ -1873,6 +1873,22 @@ jobs:
             local main_response generated_response current_main_sha current_generated_sha
             main_response="$(spotlight_singleton_get main-current)" || return 1
             generated_response="$(spotlight_singleton_get generated-current)" || return 1
+            jq -e --arg ref "refs/heads/main" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.url | type == "string" and length > 0))
+            ' <<<"$main_response" >/dev/null || return 1
+            jq -e --arg ref "refs/heads/generated" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.url | type == "string" and length > 0))
+            ' <<<"$generated_response" >/dev/null || return 1
             current_main_sha="$(jq -er '.object.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' <<<"$main_response")" || return 1
             current_generated_sha="$(jq -er '.object.sha | select(type == "string" and test("^[0-9a-f]{40}$"))' <<<"$generated_response")" || return 1
             validate_git_ref_object "$main_response" "refs/heads/main" "$current_main_sha" || return 1

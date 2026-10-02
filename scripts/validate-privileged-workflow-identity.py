@@ -9,12 +9,12 @@ import automation_decision_lease
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v152"
+VERSION = "governed-workflow-byte-identity-v153"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
     ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
-    ".github/workflows/spotlight-link-sync.yml": "79f9d8a073d4e33593a607d647c7c056f8868ee9",
+    ".github/workflows/spotlight-link-sync.yml": "813acd8a3f2b02cf7eeba4b87013b037e08b2101",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -49,6 +49,26 @@ IMMUTABLE_PROJECTED = (
 
 HARDENED_RUN_BRANCH_PROOF = '                  (.head_branch != $branch) or'
 LEGACY_RUN_BRANCH_PROOF = 'test "$(jq -r .head_branch <<<"$RUN")" = "$CANDIDATE_BRANCH"'
+
+
+SPOTLIGHT_SOURCE_EPOCH_MAIN_SCHEMA = """            jq -e --arg ref "refs/heads/main" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.url | type == "string" and length > 0))
+            ' <<<"$main_response" >/dev/null || return 1
+"""
+SPOTLIGHT_SOURCE_EPOCH_GENERATED_SCHEMA = """            jq -e --arg ref "refs/heads/generated" '
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.object | type == "object" and
+                (.type | type == "string" and . == "commit") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.url | type == "string" and length > 0))
+            ' <<<"$generated_response" >/dev/null || return 1
+"""
 
 
 def require(condition: bool, message: str) -> None:
@@ -750,6 +770,27 @@ def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
     return sync[:merge_start] + projected + sync[merge_end:]
 
 
+
+def project_spotlight_source_epoch_ref_schema_to_legacy(spotlight: str) -> str:
+    approve_start = spotlight.index("  approve:\n")
+    approve_end = spotlight.index("  authorize:\n", approve_start)
+    approve = spotlight[approve_start:approve_end]
+    state_start = approve.index("          spotlight_source_epoch_state() {\n")
+    state_end = approve.index("          spotlight_require_current_source_epoch() {\n", state_start)
+    state = approve[state_start:state_end]
+    for schema in (
+        SPOTLIGHT_SOURCE_EPOCH_MAIN_SCHEMA,
+        SPOTLIGHT_SOURCE_EPOCH_GENERATED_SCHEMA,
+    ):
+        require(
+            state.count(schema) == 1,
+            "Spotlight source-epoch ref-schema projection anchor changed",
+        )
+        state = state.replace(schema, "", 1)
+    projected_approve = approve[:state_start] + state + approve[state_end:]
+    return spotlight[:approve_start] + projected_approve + spotlight[approve_end:]
+
+
 def project_spotlight_initial_compare_schema_to_legacy(spotlight: str) -> str:
     """Project the current typed initial-compare boundary out of frozen historical proofs."""
     approve_start = spotlight.index("  approve:\n")
@@ -1270,7 +1311,8 @@ def validate_spotlight_pr_response_evidence(
     )
     pull_list_helper_start = approve.index(pull_list_helper_marker)
     pull_list_helper_end = approve.index(
-        "\n\n          APPROVAL_REQUESTS_JSON='[]'", pull_list_helper_start
+        "\n\n          spotlight_validate_reviewer_checks_snapshot() {",
+        pull_list_helper_start,
     )
     pull_list_helper = approve[pull_list_helper_start:pull_list_helper_end]
     pull_list_schema_fragments = (
@@ -1724,6 +1766,7 @@ def project_spotlight_lifecycle_status_to_legacy(spotlight: str) -> str:
 
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
+    spotlight = project_spotlight_source_epoch_ref_schema_to_legacy(spotlight)
     spotlight = project_spotlight_initial_compare_schema_to_legacy(spotlight)
     spotlight = project_spotlight_reconcile_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_propose_shell_reads_to_raw(spotlight)
@@ -3146,6 +3189,96 @@ def validate_dependabot_protected_workflow_evidence_schema(dependabot: str) -> N
         fetch_pos < validate_pos < consume_pos,
         "Dependabot protected workflow-run collection must be typed before scalar use",
     )
+
+
+
+def validate_spotlight_source_epoch_ref_schema(spotlight: str) -> None:
+    approve = job_block(spotlight, "approve", "authorize")
+    start_marker = "          spotlight_source_epoch_state() {\n"
+    end_marker = "          spotlight_require_current_source_epoch() {\n"
+    require(
+        approve.count(start_marker) == 1 and approve.count(end_marker) == 1,
+        "Spotlight source-epoch ref-schema helper boundaries changed",
+    )
+    start = approve.index(start_marker)
+    end = approve.index(end_marker, start)
+    state = approve[start:end]
+    main_fetch = 'main_response="$(spotlight_singleton_get main-current)" || return 1'
+    generated_fetch = 'generated_response="$(spotlight_singleton_get generated-current)" || return 1'
+    main_consume = 'current_main_sha="$(jq -er'
+    generated_consume = 'current_generated_sha="$(jq -er'
+    main_reproof = 'validate_git_ref_object "$main_response" "refs/heads/main" "$current_main_sha" || return 1'
+    generated_reproof = 'validate_git_ref_object "$generated_response" "refs/heads/generated" "$current_generated_sha" || return 1'
+    for marker in (
+        main_fetch, generated_fetch, SPOTLIGHT_SOURCE_EPOCH_MAIN_SCHEMA,
+        SPOTLIGHT_SOURCE_EPOCH_GENERATED_SCHEMA, main_consume, generated_consume,
+        main_reproof, generated_reproof,
+    ):
+        require(
+            state.count(marker) == 1,
+            f"Spotlight source-epoch ref-schema anchor missing or ambiguous: {marker}",
+        )
+    positions = (
+        state.index(main_fetch),
+        state.index(generated_fetch),
+        state.index(SPOTLIGHT_SOURCE_EPOCH_MAIN_SCHEMA),
+        state.index(SPOTLIGHT_SOURCE_EPOCH_GENERATED_SCHEMA),
+        state.index(main_consume),
+        state.index(generated_consume),
+        state.index(main_reproof),
+        state.index(generated_reproof),
+    )
+    require(
+        list(positions) == sorted(positions) and len(set(positions)) == len(positions),
+        "Spotlight source-epoch Git-ref evidence must cross both complete schema boundaries before SHA consumption",
+    )
+
+
+def self_test_spotlight_source_epoch_ref_schema(spotlight: str) -> None:
+    validate_spotlight_source_epoch_ref_schema(spotlight)
+    approve_start = spotlight.index("  approve:\n")
+    approve_end = spotlight.index("  authorize:\n", approve_start)
+    approve = spotlight[approve_start:approve_end]
+    state_start = approve.index("          spotlight_source_epoch_state() {\n")
+    state_end = approve.index("          spotlight_require_current_source_epoch() {\n", state_start)
+    state = approve[state_start:state_end]
+
+    weakened_schema = SPOTLIGHT_SOURCE_EPOCH_MAIN_SCHEMA.replace(
+        '(.object | type == "object" and',
+        '(.object != null and',
+        1,
+    )
+    weakened_state = state.replace(
+        SPOTLIGHT_SOURCE_EPOCH_MAIN_SCHEMA,
+        weakened_schema,
+        1,
+    )
+    weakened_approve = approve[:state_start] + weakened_state + approve[state_end:]
+    weakened = spotlight[:approve_start] + weakened_approve + spotlight[approve_end:]
+    try:
+        validate_spotlight_source_epoch_ref_schema(weakened)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight source-epoch schema self-test accepted weakened object typing")
+
+    schema_pos = state.index(SPOTLIGHT_SOURCE_EPOCH_MAIN_SCHEMA)
+    consume_pos = state.index('            current_main_sha="$(jq -er', schema_pos)
+    consume_end = state.index("\n", consume_pos) + 1
+    reordered_state = (
+        state[:schema_pos]
+        + state[schema_pos + len(SPOTLIGHT_SOURCE_EPOCH_MAIN_SCHEMA):consume_end]
+        + SPOTLIGHT_SOURCE_EPOCH_MAIN_SCHEMA
+        + state[consume_end:]
+    )
+    reordered_approve = approve[:state_start] + reordered_state + approve[state_end:]
+    reordered = spotlight[:approve_start] + reordered_approve + spotlight[approve_end:]
+    try:
+        validate_spotlight_source_epoch_ref_schema(reordered)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight source-epoch schema self-test accepted schema-after-SHA-consumption ordering")
 
 
 def validate_spotlight_privileged_ref_evidence_schema(spotlight: str) -> None:
@@ -6461,6 +6594,8 @@ def main() -> int:
         validate_spotlight_terminal_protected_run_evidence(spotlight)
         validate_spotlight_terminal_trusted_admission_evidence(spotlight)
         validate_spotlight_same_base_supersession(spotlight)
+        validate_spotlight_source_epoch_ref_schema(spotlight)
+        self_test_spotlight_source_epoch_ref_schema(spotlight)
         validate_spotlight_privileged_ref_evidence_schema(spotlight)
         validate_spotlight_readme_contents_evidence(spotlight)
         validate_spotlight_initial_compare_evidence(spotlight)
