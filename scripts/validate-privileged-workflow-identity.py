@@ -4679,11 +4679,11 @@ def self_test_main_check_cancellation_isolation(bot_review: str, spotlight: str)
 
 
 def validate_bot_review_liveness(bot_review: str, dependabot: str, autofix: str, spotlight: str) -> None:
+    validate_bot_review_prior_attempt_run_schema(bot_review)
     bot_review = project_bot_reviewer_shell_reads_to_raw(bot_review)
     validate_bot_review_single_object_evidence_schema(bot_review)
     validate_bot_review_identity_ref_evidence_schema(bot_review)
     validate_bot_review_run_check_evidence_schema(bot_review)
-    validate_bot_review_prior_attempt_run_schema(bot_review)
     validate_dependabot_residual_read_transport_identity(dependabot)
     validate_dependabot_readiness_run_check_evidence_schema(dependabot)
     validate_dependabot_protected_workflow_evidence_schema(dependabot)
