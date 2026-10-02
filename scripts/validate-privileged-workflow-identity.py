@@ -9,12 +9,12 @@ import automation_decision_lease
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v150"
+VERSION = "governed-workflow-byte-identity-v151"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
-    ".github/workflows/profile-stats.yml": "0f781b577ab15e4aa829f76ebdb953dc8791b5a1",
-    ".github/workflows/spotlight-link-sync.yml": "990bdd9d75d83737394cb2ee51e77920b38483bc",
+    ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
+    ".github/workflows/spotlight-link-sync.yml": "a895db4a36a7f17e7287ab3c045796bd9e7fb07a",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -5998,6 +5998,19 @@ def validate_profile_stats_spotlight_dispatch_evidence(
                 f"Profile Stats dispatcher acquired forbidden authored/read surface: {forbidden}")
     require('PREVIOUS_RUN_HIGH_WATER: ${{ needs.dispatch_plan.outputs.previous_run_high_water }}' in dispatch,
             "Profile Stats dispatcher lost exact read-plan high-water input")
+    for fragment in (
+        'MAIN_SOURCE_SHA: ${{ needs.receipt_attest.outputs.source_sha }}',
+        'GENERATED_PUBLICATION_SHA: ${{ needs.receipt_attest.outputs.published_sha }}',
+        '[[ "$MAIN_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        '[[ "$GENERATED_PUBLICATION_SHA" =~ ^[0-9a-f]{40}$ ]]',
+        'test "$MAIN_SOURCE_SHA" = "$GITHUB_SHA"',
+        '-f "inputs[main_source_sha]=$MAIN_SOURCE_SHA"',
+        '-f "inputs[generated_publication_sha]=$GENERATED_PUBLICATION_SHA"',
+        'echo "main_source_sha=$MAIN_SOURCE_SHA" >> "$GITHUB_OUTPUT"',
+        'echo "generated_publication_sha=$GENERATED_PUBLICATION_SHA" >> "$GITHUB_OUTPUT"',
+    ):
+        require(fragment in dispatch,
+                f"Profile Stats dispatcher lost shared publication epoch binding: {fragment}")
     require(dispatch.count("gh api ") == 1 and dispatch.count("--method POST") == 1
             and dispatch.count(dispatch_post) == 1,
             "Profile Stats dispatcher must retain exactly one workflow-dispatch POST")
@@ -6369,6 +6382,7 @@ def main() -> int:
         v21.validate_profile_stats_lease_binding(profile)
         v21.validate_profile_stats_commit_topology(profile)
         v21.validate_profile_stats_receipt(profile)
+        v21.validate_shared_control_plane_epoch(profile, spotlight)
         validate_profile_stats_spotlight_dispatch_evidence(profile)
 
         validate_v21_spotlight_invariants(spotlight)
@@ -6378,7 +6392,7 @@ def main() -> int:
 
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
-            "v21 profile/publication and Spotlight reconciliation/immutable-candidate invariants preserved · "
+            "v21 profile/publication, shared Profile-Stats→Spotlight control-plane epoch, and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema plus exact HTTP-200/202/201 transport ordering locked · bot-review credential/ref response schema ordering, exact workflow-dispatch HTTP 204 validation, and exact review-creation HTTP 200 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-201 reviewer-request, exact-204 admission/reviewer dispatch, and exact-201 protected-run approval status validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence uses the canonical retrying GET client and is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run evidence is isolated in a canonical-read-only plan before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget canonical retrying GET transport, trusted-main helper identity, artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )

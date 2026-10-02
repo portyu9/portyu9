@@ -2490,7 +2490,20 @@
             "41 * * * *"
           ]
         },
-        "workflow_dispatch": {}
+        "workflow_dispatch": {
+          "inputs": {
+            "generated_publication_sha": {
+              "description": "Optional Profile Stats generated publication SHA; pair with main_source_sha.",
+              "required": "false",
+              "type": "string"
+            },
+            "main_source_sha": {
+              "description": "Optional Profile Stats source main SHA; pair with generated_publication_sha.",
+              "required": "false",
+              "type": "string"
+            }
+          }
+        }
       },
       "workflowPermissions": {
         "contents": "read"

@@ -86,6 +86,40 @@ PROFILE_STATS_COMMIT_TOPOLOGY_SEQUENCE = (
     'push origin HEAD:generated',
 )
 
+PROFILE_STATS_SHARED_EPOCH_SEQUENCE = (
+    'source_sha: ${{ steps.receipt.outputs.source_sha }}',
+    'echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"',
+    'source_sha: ${{ needs.receipt.outputs.source_sha }}',
+    'published_sha: ${{ needs.receipt.outputs.published_sha }}',
+    'needs: [dispatch_plan, receipt_attest, lease, attest]',
+    'MAIN_SOURCE_SHA: ${{ needs.receipt_attest.outputs.source_sha }}',
+    'GENERATED_PUBLICATION_SHA: ${{ needs.receipt_attest.outputs.published_sha }}',
+    'test "$MAIN_SOURCE_SHA" = "$GITHUB_SHA"',
+    '-f "inputs[main_source_sha]=$MAIN_SOURCE_SHA"',
+    '-f "inputs[generated_publication_sha]=$GENERATED_PUBLICATION_SHA"',
+    'echo "main_source_sha=$MAIN_SOURCE_SHA" >> "$GITHUB_OUTPUT"',
+    'echo "generated_publication_sha=$GENERATED_PUBLICATION_SHA" >> "$GITHUB_OUTPUT"',
+    'DISPATCH_MAIN_SOURCE_SHA: ${{ needs.dispatch.outputs.main_source_sha }}',
+    'DISPATCH_GENERATED_PUBLICATION_SHA: ${{ needs.dispatch.outputs.generated_publication_sha }}',
+)
+
+SPOTLIGHT_SHARED_EPOCH_SEQUENCE = (
+    'main_source_sha:',
+    'generated_publication_sha:',
+    'name: Verify optional shared publication epoch',
+    'UPSTREAM_MAIN_SOURCE_SHA: ${{ inputs.main_source_sha }}',
+    'UPSTREAM_GENERATED_PUBLICATION_SHA: ${{ inputs.generated_publication_sha }}',
+    'if [ -z "$UPSTREAM_MAIN_SOURCE_SHA" ] && [ -z "$UPSTREAM_GENERATED_PUBLICATION_SHA" ]; then',
+    'test "$GITHUB_EVENT_NAME" = "workflow_dispatch"',
+    'test -n "$UPSTREAM_MAIN_SOURCE_SHA"',
+    'test -n "$UPSTREAM_GENERATED_PUBLICATION_SHA"',
+    '[[ "$UPSTREAM_MAIN_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]',
+    '[[ "$UPSTREAM_GENERATED_PUBLICATION_SHA" =~ ^[0-9a-f]{40}$ ]]',
+    'test "$UPSTREAM_MAIN_SOURCE_SHA" = "$GITHUB_SHA"',
+    'test "$(git -C published rev-parse HEAD)" = "$UPSTREAM_GENERATED_PUBLICATION_SHA"',
+    'GENERATED_SHA="$(git -C published rev-parse HEAD)"',
+)
+
 PROFILE_STATS_RECEIPT_SEQUENCE = (
     'published_sha: ${{ steps.publish.outputs.published_sha }}',
     'parent_sha: ${{ steps.publish.outputs.parent_sha }}',
@@ -287,6 +321,19 @@ def validate_profile_stats_commit_topology(text: str) -> None:
     )
 
 
+def validate_shared_control_plane_epoch(profile: str, spotlight: str) -> None:
+    validate_ordered_presence(
+        profile,
+        PROFILE_STATS_SHARED_EPOCH_SEQUENCE,
+        "Profile Stats shared control-plane epoch handoff",
+    )
+    validate_ordered_presence(
+        spotlight,
+        SPOTLIGHT_SHARED_EPOCH_SEQUENCE,
+        "Spotlight shared control-plane epoch consumption",
+    )
+
+
 def validate_profile_stats_receipt(text: str) -> None:
     validate_ordered_presence(text, PROFILE_STATS_RECEIPT_SEQUENCE,
                               "Profile Stats post-publication receipt contract")
@@ -399,6 +446,33 @@ def self_test() -> None:
             "Profile Stats commit-topology self-test accepted a missing sealed tree reproof"
         )
 
+    profile_epoch = "\n".join(PROFILE_STATS_SHARED_EPOCH_SEQUENCE)
+    spotlight_epoch = "\n".join(SPOTLIGHT_SHARED_EPOCH_SEQUENCE)
+    validate_shared_control_plane_epoch(profile_epoch, spotlight_epoch)
+    for sequence, target_index, label in (
+        (PROFILE_STATS_SHARED_EPOCH_SEQUENCE, 6, "main-source dispatch input"),
+        (PROFILE_STATS_SHARED_EPOCH_SEQUENCE, 7, "generated-publication dispatch input"),
+        (SPOTLIGHT_SHARED_EPOCH_SEQUENCE, 7, "paired main-source input"),
+        (SPOTLIGHT_SHARED_EPOCH_SEQUENCE, 12, "exact generated-publication equality"),
+    ):
+        profile_fixture = profile_epoch
+        spotlight_fixture = spotlight_epoch
+        mutated = "\n".join(
+            fragment for index, fragment in enumerate(sequence) if index != target_index
+        )
+        if sequence is PROFILE_STATS_SHARED_EPOCH_SEQUENCE:
+            profile_fixture = mutated
+        else:
+            spotlight_fixture = mutated
+        try:
+            validate_shared_control_plane_epoch(profile_fixture, spotlight_fixture)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(
+                f"shared control-plane epoch self-test accepted missing {label}"
+            )
+
     synthetic = "\n".join(PROFILE_STATS_RECEIPT_SEQUENCE)
     validate_profile_stats_receipt(synthetic)
     try:
@@ -471,6 +545,7 @@ def main() -> int:
         validate_profile_stats_commit_topology(profile)
         validate_profile_stats_receipt(profile)
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+        validate_shared_control_plane_epoch(profile, spotlight)
         validate_spotlight_reconciliation(spotlight)
         validate_spotlight_mutation_budget(spotlight)
         validate_spotlight_provenance(spotlight)
@@ -479,7 +554,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
-            "generated publication is source-epoch freshness bound, commit-tree/author/committer re-proved before mutation, and remote-head re-proved · "
+            "generated publication is source-epoch freshness bound, commit-tree/author/committer re-proved before mutation, and its exact main/generated epoch is carried into Spotlight · "
             "Profile Stats post-publication receipt binds the actual Git commit object under SHA-256 · "
             "lease reserves cover every writer hard timeout · short-lived mutation leases bind the exact run/base/candidate transaction · "
             "Spotlight retains stale-only reconciliation, source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"

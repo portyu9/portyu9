@@ -83,6 +83,26 @@ def validate_dispatch_schema(conditions: list[Any]) -> None:
     require(properties.get("job") == {"const": "dispatch"}
             and properties.get("outcome") == {"const": "applied"},
             "Automation Decision Receipt dispatch job/outcome schema changed")
+    target = properties.get("target")
+    require(isinstance(target, dict) and target.get("type") == "object"
+            and target.get("additionalProperties") is False,
+            "Automation Decision Receipt dispatch target must remain closed")
+    require(target.get("required") == ["workflowPath", "ref", "inputs"],
+            "Automation Decision Receipt dispatch target required set changed")
+    target_fields = target.get("properties", {})
+    require(target_fields.get("workflowPath") == {"const": builder.SPOTLIGHT_WORKFLOW}
+            and target_fields.get("ref") == {"const": "main"},
+            "Automation Decision Receipt dispatch target identity schema changed")
+    inputs = target_fields.get("inputs")
+    require(isinstance(inputs, dict) and inputs.get("type") == "object"
+            and inputs.get("additionalProperties") is False,
+            "Automation Decision Receipt dispatch shared epoch inputs must remain closed")
+    require(inputs.get("required") == ["mainSourceSha", "generatedPublicationSha"],
+            "Automation Decision Receipt dispatch shared epoch required set changed")
+    input_fields = inputs.get("properties", {})
+    require(input_fields.get("mainSourceSha") == {"$ref": "#/$defs/sha40"}
+            and input_fields.get("generatedPublicationSha") == {"$ref": "#/$defs/sha40"},
+            "Automation Decision Receipt dispatch shared epoch SHA schema changed")
     observation = properties.get("observation")
     require(isinstance(observation, dict) and observation.get("type") == "object"
             and observation.get("additionalProperties") is False,

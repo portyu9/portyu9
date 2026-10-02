@@ -756,6 +756,7 @@ jobs:
     outputs:
       published_sha: ${{ steps.receipt.outputs.published_sha }}
       parent_sha: ${{ steps.receipt.outputs.parent_sha }}
+      source_sha: ${{ steps.receipt.outputs.source_sha }}
       git_object_sha256: ${{ steps.receipt.outputs.git_object_sha256 }}
       predicate_sha256: ${{ steps.receipt.outputs.predicate_sha256 }}
 
@@ -833,6 +834,7 @@ jobs:
           [[ "$PREDICATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
           echo "published_sha=$PUBLISHED_SHA" >> "$GITHUB_OUTPUT"
           echo "parent_sha=$PUBLISHED_PARENT_SHA" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "git_object_sha256=$GIT_OBJECT_SHA256" >> "$GITHUB_OUTPUT"
           echo "predicate_sha256=$PREDICATE_SHA256" >> "$GITHUB_OUTPUT"
 
@@ -857,6 +859,9 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+    outputs:
+      source_sha: ${{ needs.receipt.outputs.source_sha }}
+      published_sha: ${{ needs.receipt.outputs.published_sha }}
 
     steps:
       - name: Verify exact short-lived mutation lease
@@ -1065,6 +1070,8 @@ jobs:
     outputs:
       previous_run_high_water: ${{ steps.dispatch.outputs.previous_run_high_water }}
       accepted_status: ${{ steps.dispatch.outputs.accepted_status }}
+      main_source_sha: ${{ steps.dispatch.outputs.main_source_sha }}
+      generated_publication_sha: ${{ steps.dispatch.outputs.generated_publication_sha }}
 
     steps:
       - name: Verify exact short-lived mutation lease
@@ -1109,16 +1116,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PREVIOUS_RUN_HIGH_WATER: ${{ needs.dispatch_plan.outputs.previous_run_high_water }}
+          MAIN_SOURCE_SHA: ${{ needs.receipt_attest.outputs.source_sha }}
+          GENERATED_PUBLICATION_SHA: ${{ needs.receipt_attest.outputs.published_sha }}
         run: |
           set -euo pipefail
           [[ "$PREVIOUS_RUN_HIGH_WATER" =~ ^[0-9]+$ ]]
+          [[ "$MAIN_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GENERATED_PUBLICATION_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$MAIN_SOURCE_SHA" = "$GITHUB_SHA"
           RESPONSE="$(gh api --include --method POST \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/spotlight-link-sync.yml/dispatches" \
-            -f ref=main)"
+            -f ref=main \
+            -f "inputs[main_source_sha]=$MAIN_SOURCE_SHA" \
+            -f "inputs[generated_publication_sha]=$GENERATED_PUBLICATION_SHA")"
           STATUS_LINE="$(head -n 1 <<<"$RESPONSE" | tr -d '\r')"
           [[ "$STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]]
           echo "previous_run_high_water=$PREVIOUS_RUN_HIGH_WATER" >> "$GITHUB_OUTPUT"
           echo "accepted_status=204" >> "$GITHUB_OUTPUT"
+          echo "main_source_sha=$MAIN_SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "generated_publication_sha=$GENERATED_PUBLICATION_SHA" >> "$GITHUB_OUTPUT"
 
   decision_receipt:
     name: prepare-automation-decision-receipt-read-only
@@ -1163,6 +1179,8 @@ jobs:
           LEASE_CANDIDATE_ID: ${{ needs.lease.outputs.candidate_id }}
           DISPATCH_ACCEPTED_STATUS: ${{ needs.dispatch.outputs.accepted_status }}
           DISPATCH_PREVIOUS_RUN_HIGH_WATER: ${{ needs.dispatch.outputs.previous_run_high_water }}
+          DISPATCH_MAIN_SOURCE_SHA: ${{ needs.dispatch.outputs.main_source_sha }}
+          DISPATCH_GENERATED_PUBLICATION_SHA: ${{ needs.dispatch.outputs.generated_publication_sha }}
           DISPATCH_WORKFLOW_PATH: .github/workflows/spotlight-link-sync.yml
           DISPATCH_REF: main
         run: |
