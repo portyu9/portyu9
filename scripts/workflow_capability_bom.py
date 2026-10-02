@@ -22,7 +22,7 @@ SCHEMA_VERSION = 1
 BOM_ID = "workflow-capability-bom-v1"
 FIRST_PARTY_ACTION_OWNERS = frozenset({"actions", "github"})
 MAX_REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS = 2
-REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS: frozenset[tuple[str, str, str]] = frozenset()
+REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS: frozenset[tuple[str, str, str, str, str]] = frozenset()
 REMOTE_ACTION = re.compile(
     r"^(?P<repository>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?P<subpath>/[^@]+)?@(?P<ref>[0-9a-f]{40})$"
 )
@@ -487,7 +487,7 @@ def job_is_authority_bearing(entry: dict[str, Any]) -> bool:
 
 def validate_authority_action_origins(
     workflows: list[dict[str, Any]],
-    reviewed_exceptions: frozenset[tuple[str, str, str]] = REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS,
+    reviewed_exceptions: frozenset[tuple[str, str, str, str, str]] = REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS,
 ) -> None:
     require(
         len(reviewed_exceptions) <= MAX_REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS,
@@ -495,13 +495,22 @@ def validate_authority_action_origins(
     )
     for exception in reviewed_exceptions:
         require(
-            isinstance(exception, tuple)
-            and len(exception) == 3
-            and all(isinstance(value, str) and value for value in exception),
+            isinstance(exception, tuple) and len(exception) == 5,
+            f"malformed reviewed third-party authority Action exception: {exception!r}",
+        )
+        workflow_path, job_id, repository, action_path, action_ref = exception
+        require(
+            all(isinstance(value, str) for value in exception)
+            and bool(workflow_path)
+            and bool(job_id)
+            and repository.count("/") == 1
+            and all(repository.split("/", 1))
+            and not action_path.startswith("/")
+            and re.fullmatch(r"[0-9a-f]{40}", action_ref) is not None,
             f"malformed reviewed third-party authority Action exception: {exception!r}",
         )
 
-    observed: set[tuple[str, str, str]] = set()
+    observed: set[tuple[str, str, str, str, str]] = set()
     for workflow in workflows:
         workflow_path = workflow.get("path")
         jobs = workflow.get("jobs")
@@ -526,9 +535,19 @@ def validate_authority_action_origins(
                     and all(repository.split("/", 1)),
                     f"{workflow_path}/{job_id}: remote Action repository is malformed: {repository!r}",
                 )
+                action_path = action.get("path")
+                action_ref = action.get("ref")
+                require(
+                    isinstance(action_path, str) and not action_path.startswith("/"),
+                    f"{workflow_path}/{job_id}: remote Action path is malformed: {action_path!r}",
+                )
+                require(
+                    isinstance(action_ref, str) and re.fullmatch(r"[0-9a-f]{40}", action_ref) is not None,
+                    f"{workflow_path}/{job_id}: remote Action ref is malformed: {action_ref!r}",
+                )
                 owner = repository.split("/", 1)[0]
                 if owner not in FIRST_PARTY_ACTION_OWNERS:
-                    observed.add((workflow_path, job_id, repository))
+                    observed.add((workflow_path, job_id, repository, action_path, action_ref))
 
     unexpected = sorted(observed - reviewed_exceptions)
     stale = sorted(reviewed_exceptions - observed)
@@ -972,6 +991,8 @@ def self_test() -> None:
         oidc: bool = False,
         mutations: list[dict[str, Any]] | None = None,
         secrets: list[str] | None = None,
+        action_path: str = "",
+        action_ref: str = "0" * 40,
     ) -> list[dict[str, Any]]:
         return [{
             "path": ".github/workflows/fixture.yml",
@@ -980,8 +1001,8 @@ def self_test() -> None:
                 "actions": [{
                     "kind": "remote",
                     "repository": "example/third-party-action",
-                    "path": "",
-                    "ref": "0" * 40,
+                    "path": action_path,
+                    "ref": action_ref,
                     "step": "Third-party fixture",
                 }],
                 "permissions": permissions,
@@ -1007,11 +1028,33 @@ def self_test() -> None:
         )
 
     exact_exception = frozenset({
-        (".github/workflows/fixture.yml", "job", "example/third-party-action")
+        (".github/workflows/fixture.yml", "job", "example/third-party-action", "", "0" * 40)
     })
     validate_authority_action_origins(
         action_origin_fixture(permissions={"contents": "write"}, mutations=[{"class": "git-ref-push"}]),
         exact_exception,
+    )
+    expect_failure(
+        lambda: validate_authority_action_origins(
+            action_origin_fixture(
+                permissions={"contents": "write"},
+                mutations=[{"class": "git-ref-push"}],
+                action_path="alternate",
+            ),
+            exact_exception,
+        ),
+        "unreviewed third-party Action entered authority-bearing job",
+    )
+    expect_failure(
+        lambda: validate_authority_action_origins(
+            action_origin_fixture(
+                permissions={"contents": "write"},
+                mutations=[{"class": "git-ref-push"}],
+                action_ref="1" * 40,
+            ),
+            exact_exception,
+        ),
+        "unreviewed third-party Action entered authority-bearing job",
     )
     expect_failure(
         lambda: validate_authority_action_origins(
