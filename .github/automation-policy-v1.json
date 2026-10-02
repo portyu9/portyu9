@@ -755,6 +755,7 @@
       "path": ".github/workflows/ruleset-reconciler.yml",
       "triggers": [
         "push",
+        "schedule",
         "workflow_dispatch",
         "workflow_run"
       ],
@@ -782,6 +783,137 @@
           "name": "attest-ruleset-reconciliation-receipt-write-only",
           "needs": [
             "reconcile"
+          ],
+          "permissions": {
+            "contents": "read",
+            "id-token": "write",
+            "attestations": "write"
+          }
+        },
+        "recovery_authorize": {
+          "name": "authorize-control-plane-recovery-human-gate",
+          "needs": [],
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "recovery_plan": {
+          "name": "plan-control-plane-recovery-read-only",
+          "needs": [
+            "recovery_authorize"
+          ],
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          }
+        },
+        "recovery_create_certificate": {
+          "name": "create-incomplete-control-plane-recovery-check",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan"
+          ],
+          "permissions": {
+            "checks": "write",
+            "contents": "read"
+          }
+        },
+        "recovery_open": {
+          "name": "open-exact-control-plane-recovery-aperture-admin",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate"
+          ],
+          "permissions": {
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          }
+        },
+        "recovery_complete_certificate": {
+          "name": "complete-exact-control-plane-recovery-check",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate",
+            "recovery_open"
+          ],
+          "permissions": {
+            "checks": "write",
+            "contents": "read",
+            "pull-requests": "read"
+          }
+        },
+        "recovery_merge": {
+          "name": "merge-exact-control-plane-recovery-candidate",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate",
+            "recovery_open",
+            "recovery_complete_certificate"
+          ],
+          "permissions": {
+            "checks": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          }
+        },
+        "recovery_restore": {
+          "name": "restore-exact-control-plane-recovery-aperture-admin",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate",
+            "recovery_open",
+            "recovery_complete_certificate",
+            "recovery_merge"
+          ],
+          "permissions": {
+            "contents": "read"
+          }
+        },
+        "recovery_attest": {
+          "name": "attest-control-plane-recovery-receipts-write-only",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate",
+            "recovery_open",
+            "recovery_merge",
+            "recovery_restore"
+          ],
+          "permissions": {
+            "contents": "read",
+            "id-token": "write",
+            "attestations": "write"
+          }
+        },
+        "watchdog_plan": {
+          "name": "plan-close-only-control-plane-recovery-watchdog",
+          "needs": [],
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          }
+        },
+        "watchdog_restore": {
+          "name": "restore-stale-control-plane-recovery-close-only-admin",
+          "needs": [
+            "watchdog_plan"
+          ],
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          }
+        },
+        "watchdog_attest": {
+          "name": "attest-control-plane-recovery-watchdog-receipt-write-only",
+          "needs": [
+            "watchdog_restore"
           ],
           "permissions": {
             "contents": "read",

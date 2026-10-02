@@ -174,6 +174,671 @@
             ],
             "vars": []
           }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest recovery-open receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest recovery-restoration receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest recovery-result receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted recovery source"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact recovery-open receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download exact recovery-restoration receipt"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "name": "control-plane-recovery-open-receipt",
+              "operation": "download",
+              "path": "recovery-receipts",
+              "step": "Download exact recovery-open receipt"
+            },
+            {
+              "name": "control-plane-recovery-restore-receipt",
+              "operation": "download",
+              "path": "recovery-receipts",
+              "step": "Download exact recovery-restoration receipt"
+            }
+          ],
+          "id": "recovery_attest",
+          "mutations": [
+            {
+              "class": "attestation",
+              "step": "Attest recovery-open receipt",
+              "target": ".github/rulesets/ruleset-transitions-v1.json"
+            },
+            {
+              "class": "attestation",
+              "step": "Attest recovery-restoration receipt",
+              "target": ".github/rulesets/ruleset-transitions-v1.json"
+            },
+            {
+              "class": "attestation",
+              "step": "Attest recovery-result receipt",
+              "target": ".github/rulesets/ruleset-transitions-v1.json"
+            }
+          ],
+          "name": "attest-control-plane-recovery-receipts-write-only",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate",
+            "recovery_open",
+            "recovery_merge",
+            "recovery_restore"
+          ],
+          "oidc": true,
+          "permissions": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [],
+          "id": "recovery_authorize",
+          "mutations": [],
+          "name": "authorize-control-plane-recovery-human-gate",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}",
+              "method": "PATCH",
+              "mutating": true,
+              "step": "Freshly re-prove and complete exact certificate"
+            }
+          ],
+          "artifacts": [],
+          "id": "recovery_complete_certificate",
+          "mutations": [
+            {
+              "class": "github-api-patch",
+              "method": "PATCH",
+              "step": "Freshly re-prove and complete exact certificate",
+              "target": "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}"
+            }
+          ],
+          "name": "complete-exact-control-plane-recovery-check",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate",
+            "recovery_open"
+          ],
+          "oidc": false,
+          "permissions": {
+            "checks": "write",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/check-runs",
+              "method": "POST",
+              "mutating": true,
+              "step": "Create and pin exact incomplete recovery certificate"
+            }
+          ],
+          "artifacts": [],
+          "id": "recovery_create_certificate",
+          "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Create and pin exact incomplete recovery certificate",
+              "target": "repos/${TARGET_REPOSITORY}/check-runs"
+            }
+          ],
+          "name": "create-incomplete-control-plane-recovery-check",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan"
+          ],
+          "oidc": false,
+          "permissions": {
+            "checks": "write",
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Merge exactly once with expected head after final reproof"
+            }
+          ],
+          "artifacts": [],
+          "id": "recovery_merge",
+          "mutations": [
+            {
+              "class": "pull-request-merge",
+              "method": "PUT",
+              "step": "Merge exactly once with expected head after final reproof",
+              "target": "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge"
+            }
+          ],
+          "name": "merge-exact-control-plane-recovery-candidate",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate",
+            "recovery_open",
+            "recovery_complete_certificate"
+          ],
+          "oidc": false,
+          "permissions": {
+            "checks": "read",
+            "contents": "write",
+            "pull-requests": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve recovery-open receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens",
+              "method": "POST",
+              "mutating": true,
+              "step": "Open only exact reviewed recovery aperture"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/rulesets/22148161",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Open only exact reviewed recovery aperture"
+            }
+          ],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "control-plane-recovery-open-receipt",
+              "operation": "upload",
+              "path": "control-plane-recovery-open-receipt.json",
+              "retention-days": "30",
+              "step": "Preserve recovery-open receipt"
+            }
+          ],
+          "id": "recovery_open",
+          "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Open only exact reviewed recovery aperture",
+              "target": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens"
+            },
+            {
+              "class": "github-api-put",
+              "method": "PUT",
+              "step": "Open only exact reviewed recovery aperture",
+              "target": "repos/${TARGET_REPOSITORY}/rulesets/22148161"
+            }
+          ],
+          "name": "open-exact-control-plane-recovery-aperture-admin",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate"
+          ],
+          "oidc": false,
+          "permissions": {
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [
+              "PORTYU9_RULESET_ADMIN_APP_ID",
+              "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
+              "PORTYU9_RULESET_ADMIN_PRIVATE_KEY"
+            ],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve immutable recovery candidate evidence"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "control-plane-recovery-candidate-evidence",
+              "operation": "upload",
+              "path": "recovery-candidate-evidence.json",
+              "retention-days": "30",
+              "step": "Preserve immutable recovery candidate evidence"
+            }
+          ],
+          "id": "recovery_plan",
+          "mutations": [],
+          "name": "plan-control-plane-recovery-read-only",
+          "needs": [
+            "recovery_authorize"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve recovery-restoration receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted recovery source"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens",
+              "method": "POST",
+              "mutating": true,
+              "step": "Restore exact normal ruleset regardless of transaction outcome"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/rulesets/22148161",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Restore exact normal ruleset regardless of transaction outcome"
+            }
+          ],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "control-plane-recovery-restore-receipt",
+              "operation": "upload",
+              "path": "control-plane-recovery-restore-receipt.json",
+              "retention-days": "30",
+              "step": "Preserve recovery-restoration receipt"
+            }
+          ],
+          "id": "recovery_restore",
+          "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Restore exact normal ruleset regardless of transaction outcome",
+              "target": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens"
+            },
+            {
+              "class": "github-api-put",
+              "method": "PUT",
+              "step": "Restore exact normal ruleset regardless of transaction outcome",
+              "target": "repos/${TARGET_REPOSITORY}/rulesets/22148161"
+            }
+          ],
+          "name": "restore-exact-control-plane-recovery-aperture-admin",
+          "needs": [
+            "recovery_authorize",
+            "recovery_plan",
+            "recovery_create_certificate",
+            "recovery_open",
+            "recovery_complete_certificate",
+            "recovery_merge"
+          ],
+          "oidc": false,
+          "permissions": {
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [
+              "PORTYU9_RULESET_ADMIN_APP_ID",
+              "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
+              "PORTYU9_RULESET_ADMIN_PRIVATE_KEY"
+            ],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "1e69f48acb82d1966a394da916b4c1698aa569d6",
+              "repository": "actions/attest",
+              "step": "Attest watchdog restoration receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+              "repository": "actions/download-artifact",
+              "step": "Download watchdog restoration receipt"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [
+            {
+              "name": "control-plane-recovery-watchdog-receipt",
+              "operation": "download",
+              "path": "watchdog-receipt",
+              "step": "Download watchdog restoration receipt"
+            }
+          ],
+          "id": "watchdog_attest",
+          "mutations": [
+            {
+              "class": "attestation",
+              "step": "Attest watchdog restoration receipt",
+              "target": ".github/rulesets/ruleset-transitions-v1.json"
+            }
+          ],
+          "name": "attest-control-plane-recovery-watchdog-receipt-write-only",
+          "needs": [
+            "watchdog_restore"
+          ],
+          "oidc": true,
+          "permissions": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [],
+          "artifacts": [],
+          "id": "watchdog_plan",
+          "mutations": [],
+          "name": "plan-close-only-control-plane-recovery-watchdog",
+          "needs": [],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [],
+            "vars": []
+          }
+        },
+        {
+          "actions": [
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+              "repository": "actions/upload-artifact",
+              "step": "Preserve watchdog-restoration receipt"
+            },
+            {
+              "kind": "remote",
+              "path": "",
+              "ref": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "repository": "actions/checkout",
+              "step": "Checkout exact trusted main"
+            }
+          ],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens",
+              "method": "POST",
+              "mutating": true,
+              "step": "Close only exact stale temporary recovery shape"
+            },
+            {
+              "client": "gh-api",
+              "endpoint": "repos/${TARGET_REPOSITORY}/rulesets/22148161",
+              "method": "PUT",
+              "mutating": true,
+              "step": "Close only exact stale temporary recovery shape"
+            }
+          ],
+          "artifacts": [
+            {
+              "if-no-files-found": "error",
+              "name": "control-plane-recovery-watchdog-receipt",
+              "operation": "upload",
+              "path": "control-plane-recovery-watchdog-receipt.json",
+              "retention-days": "30",
+              "step": "Preserve watchdog-restoration receipt"
+            }
+          ],
+          "id": "watchdog_restore",
+          "mutations": [
+            {
+              "class": "github-api-post",
+              "method": "POST",
+              "step": "Close only exact stale temporary recovery shape",
+              "target": "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens"
+            },
+            {
+              "class": "github-api-put",
+              "method": "PUT",
+              "step": "Close only exact stale temporary recovery shape",
+              "target": "repos/${TARGET_REPOSITORY}/rulesets/22148161"
+            }
+          ],
+          "name": "restore-stale-control-plane-recovery-close-only-admin",
+          "needs": [
+            "watchdog_plan"
+          ],
+          "oidc": false,
+          "permissions": {
+            "actions": "read",
+            "contents": "read"
+          },
+          "references": {
+            "env": [],
+            "githubToken": [
+              "github.token"
+            ],
+            "secrets": [
+              "PORTYU9_RULESET_ADMIN_APP_ID",
+              "PORTYU9_RULESET_ADMIN_INSTALLATION_ID",
+              "PORTYU9_RULESET_ADMIN_PRIVATE_KEY"
+            ],
+            "vars": []
+          }
         }
       ],
       "name": "Ruleset reconciler",
@@ -196,7 +861,25 @@
             "main"
           ]
         },
-        "workflow_dispatch": {},
+        "schedule": {
+          "cron": [
+            "*/5 * * * *"
+          ]
+        },
+        "workflow_dispatch": {
+          "inputs": {
+            "recovery_head_sha": {
+              "description": "Exact immutable repair head SHA; empty means ordinary reconcile",
+              "required": "false",
+              "type": "string"
+            },
+            "recovery_pr": {
+              "description": "Exact same-repository repair PR number; empty means ordinary reconcile",
+              "required": "false",
+              "type": "string"
+            }
+          }
+        },
         "workflow_run": {
           "types": [
             "completed"

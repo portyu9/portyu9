@@ -695,6 +695,59 @@ def self_test_reconciler_admin_status_evidence(text: str) -> None:
         raise ValueError("Ruleset admin HTTP-status self-test accepted PUT body before status proof")
 
 
+def reconciler_job_slice(text: str, job_id: str, next_job_id: str) -> str:
+    start_marker = f"  {job_id}:\n"
+    end_marker = f"  {next_job_id}:\n"
+    require(text.count(start_marker) == 1, f"Ruleset reconciler job boundary changed: {job_id}")
+    require(text.count(end_marker) == 1, f"Ruleset reconciler job boundary changed: {next_job_id}")
+    start = text.index(start_marker)
+    end = text.index(end_marker, start + len(start_marker))
+    require(start < end, f"Ruleset reconciler job order changed: {job_id} -> {next_job_id}")
+    return text[start:end]
+
+
+def validate_recovery_admin_transport_evidence(text: str) -> None:
+    """Bind every recovery ruleset writer to serialized, status-checked admin transport."""
+    specs = (
+        ("recovery_open", "recovery_complete_certificate", "recovery open"),
+        ("recovery_restore", "recovery_attest", "recovery restore"),
+        ("watchdog_restore", "watchdog_attest", "watchdog restore"),
+    )
+    for job_id, next_job_id, label in specs:
+        block = reconciler_job_slice(text, job_id, next_job_id)
+        for fragment in (
+            "    concurrency:\n"
+            "      group: ruleset-reconciler-admin-write\n"
+            "      cancel-in-progress: false\n",
+            "    environment: ruleset-admin-identity\n",
+            "          ADMIN_APP_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_APP_ID }}\n",
+            "          ADMIN_INSTALLATION_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_INSTALLATION_ID }}\n",
+            "          ADMIN_PRIVATE_KEY: ${{ secrets.PORTYU9_RULESET_ADMIN_PRIVATE_KEY }}\n",
+            'GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --include --method POST',
+            '"app/installations/${ADMIN_INSTALLATION_ID}/access_tokens"',
+            '^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$)',
+            'GH_TOKEN="$ADMIN_TOKEN" gh api --include --method PUT',
+            '^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$)',
+            'WRITE_STATUS="$?"',
+            'if [ "$WRITE_STATUS" -eq 0 ]; then',
+        ):
+            require(fragment in block, f"Ruleset {label} transport contract is missing: {fragment}")
+        require(
+            block.count('GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --include --method POST') == 1
+            and block.count('GH_TOKEN="$ADMIN_TOKEN" gh api --include --method PUT') == 1,
+            f"Ruleset {label} must retain exactly one token POST and one ruleset PUT",
+        )
+        require(
+            block.index('GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --include --method POST')
+            < block.index('^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$)')
+            < block.index('GH_TOKEN="$ADMIN_TOKEN" gh api --include --method PUT')
+            < block.index('WRITE_STATUS="$?"')
+            < block.index('if [ "$WRITE_STATUS" -eq 0 ]; then')
+            < block.index('^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$)'),
+            f"Ruleset {label} transport proof moved out of reviewed order",
+        )
+
+
 def validate_api_url(url: str) -> str:
     """Return a credential-safe GitHub ruleset URL or fail closed.
 
@@ -1303,9 +1356,11 @@ def main() -> int:
         reconciler = RECONCILER.read_text(encoding="utf-8")
         validate_reconciler_wake_contract(reconciler)
         validate_reconciler_main_ref_evidence(reconciler)
-        validate_reconciler_admin_response_evidence(reconciler)
-        validate_reconciler_admin_status_evidence(reconciler)
-        self_test_reconciler_admin_status_evidence(reconciler)
+        historical_reconcile = reconciler_job_slice(reconciler, "reconcile", "attest")
+        validate_reconciler_admin_response_evidence(historical_reconcile)
+        validate_reconciler_admin_status_evidence(historical_reconcile)
+        self_test_reconciler_admin_status_evidence(historical_reconcile)
+        validate_recovery_admin_transport_evidence(reconciler)
         sentinel = SENTINEL.read_text(encoding="utf-8")
         validate_sentinel_main_ref_evidence(sentinel)
         self_test(payload)
@@ -1316,7 +1371,7 @@ def main() -> int:
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
             f"seven required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity, "
-            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all five privileged reconciler main-ref reads plus the read-only drift-sentinel main-ref read are typed before SHA consumption, Administration token/ruleset writes prove exact HTTP 201/200 on nominal success, and observable drift fails closed."
+            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all five historical privileged reconciler main-ref reads plus the read-only drift-sentinel main-ref read are typed before SHA consumption, every historical/recovery Administration token and ruleset writer proves exact HTTP 201/200 on nominal success under one non-cancellable serialization group, and observable drift fails closed."
         )
         if unobservable:
             print(
