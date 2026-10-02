@@ -102,5 +102,34 @@
         ]
       }
     }
-  ]
+  ],
+  "recovery": {
+    "id": "trusted-capability-admission-recovery-v1",
+    "rulesetId": 22148161,
+    "rulesetName": "Protect Main",
+    "method": "PUT",
+    "endpoint": "repos/portyu9/portyu9/rulesets/22148161",
+    "normalDigest": "sha256:399e05f6b83be86e5d31c0fe45943f10c84ca9e15e51a02de9c87cdaf51fa4a1",
+    "brokenContext": "trusted-capability-admission",
+    "integrationId": 15368,
+    "contextPrefix": "trusted-control-plane-recovery",
+    "contextPattern": "^trusted-control-plane-recovery/r([1-9][0-9]*)-a([1-9][0-9]*)-([0-9a-f]{12})$",
+    "leaseSeconds": 600,
+    "watchdogMaxAgeSeconds": 900,
+    "allowedChangedPaths": [
+      ".github/workflows/capability-admission.yml",
+      "scripts/capability_admission_workflow_contract.py"
+    ],
+    "allowedProtectedChangedPaths": [
+      ".github/workflows/capability-admission.yml"
+    ],
+    "survivingContexts": [
+      "validate-contracts",
+      "trusted-governed-bot-review",
+      "integration-pinned-upstream",
+      "dependency-review",
+      "analyze-actions",
+      "analyze-python"
+    ]
+  }
 }
