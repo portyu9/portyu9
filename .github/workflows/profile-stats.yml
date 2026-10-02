@@ -464,6 +464,7 @@ jobs:
       changed: ${{ steps.seal.outputs.changed }}
       base_sha: ${{ steps.seal.outputs.base_sha }}
       candidate_sha: ${{ steps.seal.outputs.candidate_sha }}
+      candidate_tree_sha: ${{ steps.seal.outputs.candidate_tree_sha }}
       source_sha: ${{ steps.seal.outputs.source_sha }}
 
     steps:
@@ -559,14 +560,22 @@ jobs:
           git -C artifacts config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git -C artifacts commit -m "chore: publish validated profile evidence [skip ci]"
           candidate_sha="$(git -C artifacts rev-parse HEAD)"
+          candidate_tree_sha="$(git -C artifacts rev-parse "${candidate_sha}^{tree}")"
+          [[ "$candidate_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$candidate_tree_sha" =~ ^[0-9a-f]{40}$ ]]
           test "$(git -C artifacts rev-parse HEAD^)" = "$base_sha"
           test "$(git -C artifacts rev-list --parents -n 1 HEAD | awk '{print NF}')" -eq 2
+          test "$candidate_tree_sha" = "$(git -C artifacts write-tree)"
+          test "$(git -C artifacts log -1 --format=%s "$candidate_sha")" = "chore: publish validated profile evidence [skip ci]"
+          test "$(git -C artifacts log -1 --format='%an <%ae>' "$candidate_sha")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          test "$(git -C artifacts log -1 --format='%cn <%ce>' "$candidate_sha")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
           test -z "$(git -C artifacts status --porcelain)"
           git -C artifacts bundle create ../generated-publication.bundle generated
           git -C artifacts bundle verify ../generated-publication.bundle
           test "$(git bundle list-heads generated-publication.bundle)" = "$candidate_sha refs/heads/generated"
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "candidate_tree_sha=$candidate_tree_sha" >> "$GITHUB_OUTPUT"
 
       - name: Upload sealed generated publication candidate
         if: steps.seal.outputs.changed == 'true'
@@ -650,11 +659,13 @@ jobs:
         env:
           BASE_SHA: ${{ needs.stage.outputs.base_sha }}
           CANDIDATE_SHA: ${{ needs.stage.outputs.candidate_sha }}
+          CANDIDATE_TREE_SHA: ${{ needs.stage.outputs.candidate_tree_sha }}
           SOURCE_SHA: ${{ needs.stage.outputs.source_sha }}
         run: |
           set -euo pipefail
           [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$BASE_SHA" != "$CANDIDATE_SHA"
           test "$(find publication-candidate -mindepth 1 -maxdepth 1 -type f -printf '%f\n')" = "generated-publication.bundle"
@@ -667,10 +678,12 @@ jobs:
           test "$(git -C artifacts rev-parse HEAD)" = "$CANDIDATE_SHA"
           test "$(git -C artifacts rev-parse HEAD^)" = "$BASE_SHA"
           test "$(git -C artifacts rev-list --parents -n 1 HEAD | awk '{print NF}')" -eq 2
+          test "$(git -C artifacts rev-parse "${CANDIDATE_SHA}^{tree}")" = "$CANDIDATE_TREE_SHA"
+          test "$(git -C artifacts write-tree)" = "$CANDIDATE_TREE_SHA"
           test -z "$(git -C artifacts status --porcelain)"
-          test "$(git -C artifacts log -1 --format=%s)" = "chore: publish validated profile evidence [skip ci]"
-          test "$(git -C artifacts log -1 --format='%an <%ae>')" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
-          test "$(git -C artifacts log -1 --format='%cn <%ce>')" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          test "$(git -C artifacts log -1 --format=%s "$CANDIDATE_SHA")" = "chore: publish validated profile evidence [skip ci]"
+          test "$(git -C artifacts log -1 --format='%an <%ae>' "$CANDIDATE_SHA")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          test "$(git -C artifacts log -1 --format='%cn <%ce>' "$CANDIDATE_SHA")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
           printf '%s\n' \
             engineering-spotlight/spotlight-1-dark.svg \
             engineering-spotlight/spotlight-1-light.svg \
