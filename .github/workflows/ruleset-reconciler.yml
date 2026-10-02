@@ -5,6 +5,17 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      recovery_pr:
+        description: Exact same-repository repair PR number; empty means ordinary reconcile
+        required: false
+        type: string
+      recovery_head_sha:
+        description: Exact immutable repair head SHA; empty means ordinary reconcile
+        required: false
+        type: string
+  schedule:
+    - cron: "*/5 * * * *"
   workflow_run:
     workflows:
       - CodeQL Autofix controller
@@ -16,8 +27,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && inputs.recovery_pr != '' && 'ruleset-control-plane-recovery-v1' || format('ruleset-reconciler-{0}', github.run_id) }}
+  cancel-in-progress: false
+
 jobs:
   plan:
+    if: "${{ github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && (inputs.recovery_pr != '' || inputs.recovery_head_sha != '')) }}"
     name: ruleset-transition-plan-read-only
     runs-on: ubuntu-24.04
     timeout-minutes: 4
@@ -501,4 +517,1196 @@ jobs:
           subject-path: .github/rulesets/ruleset-transitions-v1.json
           predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/ruleset-reconciliation-receipt-v1.schema.json
           predicate-path: receipt/ruleset-reconciliation-receipt.json
+          show-summary: true
+
+recovery_authorize:
+    if: "${{ github.event_name == 'workflow_dispatch' && (inputs.recovery_pr != '' || inputs.recovery_head_sha != '') }}"
+    name: authorize-control-plane-recovery-human-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: ruleset-recovery-approval
+    permissions:
+      contents: read
+    outputs:
+      pr_number: ${{ steps.authorize.outputs.pr_number }}
+      head_sha: ${{ steps.authorize.outputs.head_sha }}
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Bind exact human-approved recovery dispatch
+        id: authorize
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RECOVERY_PR: ${{ inputs.recovery_pr }}
+          RECOVERY_HEAD_SHA: ${{ inputs.recovery_head_sha }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+          DISPATCH_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$DISPATCH_ACTOR" = "portyu9"
+          [[ "$RECOVERY_PR" =~ ^[1-9][0-9]*$ ]]
+          [[ "$RECOVERY_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
+          LIVE_MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          jq -e --arg sha "$TRUSTED_MAIN_SHA" '
+            (type == "object") and
+            (.ref == "refs/heads/main") and
+            (.object | type == "object" and .type == "commit" and .sha == $sha)
+          ' <<<"$LIVE_MAIN" >/dev/null
+          echo "pr_number=$RECOVERY_PR" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$RECOVERY_HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+  recovery_plan:
+    name: plan-control-plane-recovery-read-only
+    needs: [recovery_authorize]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+    outputs:
+      base_sha: ${{ steps.plan.outputs.base_sha }}
+      head_sha: ${{ steps.plan.outputs.head_sha }}
+      head_ref: ${{ steps.plan.outputs.head_ref }}
+      tree_sha: ${{ steps.plan.outputs.tree_sha }}
+      transaction_context: ${{ steps.plan.outputs.transaction_context }}
+      temporary_digest: ${{ steps.plan.outputs.temporary_digest }}
+      candidate_evidence_sha256: ${{ steps.plan.outputs.candidate_evidence_sha256 }}
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Prove exact recovery candidate and broken trusted gate
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.recovery_authorize.outputs.pr_number }}
+          EXPECTED_HEAD_SHA: ${{ needs.recovery_authorize.outputs.head_sha }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
+
+          MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          LIVE_MAIN_SHA="$(jq -er '.object.sha | select(test("^[0-9a-f]{40}$"))' <<<"$MAIN")"
+          test "$LIVE_MAIN_SHA" = "$TRUSTED_MAIN_SHA"
+
+          PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          jq -e --argjson pr "$PR_NUMBER" --arg repo "$TARGET_REPOSITORY" --arg base "$TRUSTED_MAIN_SHA" --arg head "$EXPECTED_HEAD_SHA" '
+            (type == "object") and
+            (.number == $pr) and
+            (.state == "open") and
+            (.draft == false) and
+            (.base | type == "object" and .ref == "main" and .sha == $base and .repo.full_name == $repo) and
+            (.head | type == "object" and .sha == $head and .repo.full_name == $repo and
+              (.ref | type == "string" and length > 0))
+          ' <<<"$PR" >/dev/null
+          HEAD_SHA="$(jq -r .head.sha <<<"$PR")"
+          HEAD_REF="$(jq -r .head.ref <<<"$PR")"
+
+          HEAD_REF_JSON="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+          jq -e --arg head "$HEAD_SHA" --arg ref "refs/heads/${HEAD_REF}" '
+            (type == "object") and .ref == $ref and
+            (.object | type == "object" and .type == "commit" and .sha == $head)
+          ' <<<"$HEAD_REF_JSON" >/dev/null
+
+          python3 scripts/automation_github_review_threads_read.py \
+            --repository "$TARGET_REPOSITORY" --pr-number "$PR_NUMBER" > review-threads.json
+          jq -e '
+            (.data.repository.pullRequest.reviewThreads | type == "object") and
+            (.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false) and
+            ([.data.repository.pullRequest.reviewThreads.nodes[].isResolved] | all(. == true))
+          ' review-threads.json >/dev/null
+
+          python3 scripts/automation_github_paginated_read.py \
+            "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > recovery-file-pages.json
+          python3 scripts/workflow_capability_api_collection.py files \
+            --input recovery-file-pages.json --out recovery-changed-paths.txt
+          printf '%s\n' \
+            ".github/workflows/capability-admission.yml" \
+            "scripts/capability_admission_workflow_contract.py" > expected-recovery-paths.txt
+          diff -u expected-recovery-paths.txt recovery-changed-paths.txt
+
+          COMMIT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          jq -e --arg head "$HEAD_SHA" '
+            (type == "object") and .sha == $head and
+            (.tree | type == "object" and (.sha | type == "string" and test("^[0-9a-f]{40}$"))) and
+            (.parents | type == "array" and length >= 1)
+          ' <<<"$COMMIT" >/dev/null
+          TREE_SHA="$(jq -r .tree.sha <<<"$COMMIT")"
+
+          TREE="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/trees/${TREE_SHA}?recursive=1")"
+          jq -e --arg tree "$TREE_SHA" '
+            (type == "object") and .sha == $tree and .truncated == false and
+            (.tree | type == "array") and
+            (([.tree[].path] | length) == ([.tree[].path] | unique | length))
+          ' <<<"$TREE" >/dev/null
+
+          CANDIDATE_ROOT="$RUNNER_TEMP/control-plane-recovery-candidate"
+          rm -rf "$CANDIDATE_ROOT"
+          mkdir -p "$CANDIDATE_ROOT"
+          cp -a .github scripts "$CANDIDATE_ROOT/"
+
+          while IFS= read -r PATH_VALUE; do
+            ENTRY="$(jq -c --arg path "$PATH_VALUE" '[.tree[] | select(.path == $path)]' <<<"$TREE")"
+            test "$(jq 'length' <<<"$ENTRY")" = "1"
+            test "$(jq -r '.[0].type' <<<"$ENTRY")" = "blob"
+            test "$(jq -r '.[0].mode' <<<"$ENTRY")" = "100644"
+            BLOB_SHA="$(jq -r '.[0].sha' <<<"$ENTRY")"
+            [[ "$BLOB_SHA" =~ ^[0-9a-f]{40}$ ]]
+            BLOB="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/blobs/${BLOB_SHA}")"
+            jq -e --arg sha "$BLOB_SHA" '
+              (type == "object") and .sha == $sha and .encoding == "base64" and
+              (.content | type == "string" and length > 0)
+            ' <<<"$BLOB" >/dev/null
+            mkdir -p "$CANDIDATE_ROOT/$(dirname "$PATH_VALUE")"
+            jq -r .content <<<"$BLOB" | tr -d '\n' | base64 --decode > "$CANDIDATE_ROOT/$PATH_VALUE"
+            test -s "$CANDIDATE_ROOT/$PATH_VALUE"
+          done < recovery-changed-paths.txt
+
+          CANDIDATE_EVIDENCE_SHA256="$(python3 scripts/ruleset_transition_contract.py \
+            recovery-evaluate-candidate \
+            --candidate-root "$CANDIDATE_ROOT" \
+            --changed-paths recovery-changed-paths.txt \
+            --candidate-tree-sha "$TREE_SHA" \
+            --output recovery-candidate-evidence.json)"
+          [[ "$CANDIDATE_EVIDENCE_SHA256" =~ ^sha256:[0-9a-f]{64}$ ]]
+          jq -e '.expansions == [] and .reductions == [] and
+            .changedProtectedPaths == [".github/workflows/capability-admission.yml"]' \
+            recovery-candidate-evidence.json >/dev/null
+
+          CHECKS="$(python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          jq -e '
+            (type == "object") and
+            (.total_count | type == "number" and floor == . and . >= 0 and . <= 100) and
+            (.check_runs | type == "array" and length <= 100)
+          ' <<<"$CHECKS" >/dev/null
+
+          for CONTEXT_NAME in \
+            validate-contracts \
+            trusted-governed-bot-review \
+            integration-pinned-upstream \
+            dependency-review \
+            analyze-actions \
+            analyze-python
+          do
+            LATEST="$(jq -c --arg name "$CONTEXT_NAME" '
+              [.check_runs[] | select(.name == $name and .app.id == 15368)] |
+              sort_by(.id) | last
+            ' <<<"$CHECKS")"
+            test "$LATEST" != "null"
+            test "$(jq -r .head_sha <<<"$LATEST")" = "$HEAD_SHA"
+            test "$(jq -r .status <<<"$LATEST")" = "completed"
+            test "$(jq -r .conclusion <<<"$LATEST")" = "success"
+          done
+
+          BROKEN="$(jq -c '
+            [.check_runs[] |
+              select(.name == "trusted-capability-admission" and .app.id == 15368)] |
+            sort_by(.id) | last
+          ' <<<"$CHECKS")"
+          test "$BROKEN" != "null"
+          test "$(jq -r .head_sha <<<"$BROKEN")" = "$HEAD_SHA"
+          test "$(jq -r .status <<<"$BROKEN")" = "completed"
+          case "$(jq -r .conclusion <<<"$BROKEN")" in
+            failure|cancelled|timed_out|action_required|startup_failure|stale)
+              ;;
+            *)
+              echo "ERROR: trusted-capability-admission is not terminal-broken on the exact repair head." >&2
+              exit 1
+              ;;
+          esac
+
+          python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-recovery-plan.json
+          CLASSIFY="$(python3 scripts/ruleset_transition_contract.py recovery-classify \
+            --live live-recovery-plan.json \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --head-sha "$HEAD_SHA" --observable)"
+          test "$(jq -r .state <<<"$CLASSIFY")" = "normal"
+          CONTEXT="$(jq -r .transactionContext <<<"$CLASSIFY")"
+          TEMP_DIGEST="$(jq -r .temporaryDigest <<<"$CLASSIFY")"
+
+          echo "base_sha=$TRUSTED_MAIN_SHA" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "tree_sha=$TREE_SHA" >> "$GITHUB_OUTPUT"
+          echo "transaction_context=$CONTEXT" >> "$GITHUB_OUTPUT"
+          echo "temporary_digest=$TEMP_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "candidate_evidence_sha256=$CANDIDATE_EVIDENCE_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve immutable recovery candidate evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: control-plane-recovery-candidate-evidence
+          path: recovery-candidate-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+  recovery_create_certificate:
+    name: create-incomplete-control-plane-recovery-check
+    needs: [recovery_authorize, recovery_plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      checks: write
+      contents: read
+    outputs:
+      check_id: ${{ steps.create.outputs.check_id }}
+      external_id: ${{ steps.create.outputs.external_id }}
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Create and pin exact incomplete recovery certificate
+        id: create
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.recovery_authorize.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.recovery_plan.outputs.head_sha }}
+          CONTEXT: ${{ needs.recovery_plan.outputs.transaction_context }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTEXT" =~ ^trusted-control-plane-recovery/r[1-9][0-9]*-a[1-9][0-9]*-[0-9a-f]{12}$ ]]
+          MANIFEST_SHA256="sha256:$(sha256sum .github/rulesets/ruleset-transitions-v1.json | cut -d' ' -f1)"
+          DETAILS_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          EXTERNAL_ID="control-plane-recovery-v1:${TARGET_REPOSITORY}:main:${PR_NUMBER}:${HEAD_SHA}:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:trusted-capability-admission:${MANIFEST_SHA256}"
+          SUMMARY="Incomplete transaction certificate for the exact human-approved trusted-capability-admission recovery."
+
+          set +e
+          RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/check-runs" \
+            -f name="$CONTEXT" -f head_sha="$HEAD_SHA" -f details_url="$DETAILS_URL" \
+            -f status=queued -f external_id="$EXTERNAL_ID" \
+            -f 'output[title]=Control-plane recovery pending' -f "output[summary]=$SUMMARY" 2>&1)"
+          POST_STATUS="$?"
+          set -e
+
+          CHECK=""
+          if [ "$POST_STATUS" -eq 0 ]; then
+            STATUS_LINE="$(head -n 1 <<<"$RESPONSE" | tr -d '\r')"
+            [[ "$STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || exit 1
+            CHECK="$(sed '1,/^[[:space:]]*$/d' <<<"$RESPONSE")"
+          else
+            OBSERVED="$(python3 scripts/automation_github_read.py \
+              "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+            MATCHES="$(jq -c --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" --arg details "$DETAILS_URL" '
+              [.check_runs[] | select(
+                .name == $name and .head_sha == $head and .external_id == $external and
+                .details_url == $details and .status == "queued" and .conclusion == null and
+                .app.id == 15368 and .app.slug == "github-actions"
+              )]
+            ' <<<"$OBSERVED")"
+            test "$(jq 'length' <<<"$MATCHES")" = "1" || {
+              echo "ERROR: ambiguous recovery check POST could not be reconciled exactly; POST will not be replayed." >&2
+              exit 1
+            }
+            CHECK="$(jq -c '.[0]' <<<"$MATCHES")"
+          fi
+
+          jq -e --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" --arg details "$DETAILS_URL" '
+            (type == "object") and (.id | type == "number" and floor == . and . > 0) and
+            .name == $name and .head_sha == $head and .external_id == $external and
+            .details_url == $details and .status == "queued" and .conclusion == null and
+            .app.id == 15368 and .app.slug == "github-actions"
+          ' <<<"$CHECK" >/dev/null
+          CHECK_ID="$(jq -r .id <<<"$CHECK")"
+          EXACT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
+          jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
+            .id == $id and .name == $name and .head_sha == $head and .external_id == $external and
+            .status == "queued" and .conclusion == null and .app.id == 15368 and .app.slug == "github-actions"
+          ' <<<"$EXACT" >/dev/null
+          echo "check_id=$CHECK_ID" >> "$GITHUB_OUTPUT"
+          echo "external_id=$EXTERNAL_ID" >> "$GITHUB_OUTPUT"
+
+  recovery_open:
+    name: open-exact-control-plane-recovery-aperture-admin
+    needs: [recovery_authorize, recovery_plan, recovery_create_certificate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    concurrency:
+      group: ruleset-reconciler-admin-write
+      cancel-in-progress: false
+    environment: ruleset-admin-identity
+    permissions:
+      checks: read
+      contents: read
+      pull-requests: read
+    outputs:
+      mutated: ${{ steps.open.outputs.mutated }}
+      receipt_sha256: ${{ steps.open.outputs.receipt_sha256 }}
+      expires_at: ${{ steps.open.outputs.expires_at }}
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Open only exact reviewed recovery aperture
+        id: open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ needs.recovery_authorize.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.recovery_plan.outputs.head_sha }}
+          HEAD_REF: ${{ needs.recovery_plan.outputs.head_ref }}
+          TREE_SHA: ${{ needs.recovery_plan.outputs.tree_sha }}
+          CONTEXT: ${{ needs.recovery_plan.outputs.transaction_context }}
+          CHECK_ID: ${{ needs.recovery_create_certificate.outputs.check_id }}
+          EXTERNAL_ID: ${{ needs.recovery_create_certificate.outputs.external_id }}
+          ADMIN_APP_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_APP_ID }}
+          ADMIN_INSTALLATION_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_INSTALLATION_ID }}
+          ADMIN_PRIVATE_KEY: ${{ secrets.PORTYU9_RULESET_ADMIN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f app-private-key.pem installation-token.json' EXIT
+          echo "mutated=false" >> "$GITHUB_OUTPUT"
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
+          [[ "$CHECK_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$ADMIN_APP_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$ADMIN_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
+          test -n "$ADMIN_PRIVATE_KEY"
+
+          MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          jq -e --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
+            .state == "open" and .draft == false and .base.ref == "main" and .base.sha == $base and
+            .head.sha == $head and .head.ref == $ref and .head.repo.full_name == $repo
+          ' <<<"$PR" >/dev/null
+          HEAD_REF_JSON="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+          test "$(jq -r .object.sha <<<"$HEAD_REF_JSON")" = "$HEAD_SHA"
+          COMMIT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          test "$(jq -r .tree.sha <<<"$COMMIT")" = "$TREE_SHA"
+          python3 scripts/automation_github_review_threads_read.py \
+            --repository "$TARGET_REPOSITORY" --pr-number "$PR_NUMBER" > recovery-open-threads.json
+          jq -e '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false and
+            ([.data.repository.pullRequest.reviewThreads.nodes[].isResolved] | all(. == true))' \
+            recovery-open-threads.json >/dev/null
+
+          EXACT_CHECK="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
+          jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
+            .id == $id and .name == $name and .head_sha == $head and .external_id == $external and
+            .status == "queued" and .conclusion == null and .app.id == 15368 and .app.slug == "github-actions"
+          ' <<<"$EXACT_CHECK" >/dev/null
+
+          CHECKS="$(python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          for REQUIRED in validate-contracts trusted-governed-bot-review integration-pinned-upstream dependency-review analyze-actions analyze-python; do
+            LATEST="$(jq -c --arg name "$REQUIRED" \
+              '[.check_runs[] | select(.name == $name and .app.id == 15368)] | sort_by(.id) | last' <<<"$CHECKS")"
+            test "$LATEST" != "null"
+            test "$(jq -r .status <<<"$LATEST")" = "completed"
+            test "$(jq -r .conclusion <<<"$LATEST")" = "success"
+            test "$(jq -r .head_sha <<<"$LATEST")" = "$HEAD_SHA"
+          done
+
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-open-observable.json
+          OBS="$(python3 scripts/ruleset_transition_contract.py recovery-classify \
+            --live live-open-observable.json --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --head-sha "$HEAD_SHA" --observable)"
+          test "$(jq -r .state <<<"$OBS")" = "normal"
+          test "$(jq -r .transactionContext <<<"$OBS")" = "$CONTEXT"
+
+          ISSUED_AT="$(date +%s)"
+          EXPIRES_AT="$((ISSUED_AT + 600))"
+          printf '%s' "$ADMIN_PRIVATE_KEY" > app-private-key.pem
+          openssl pkey -in app-private-key.pem -noout >/dev/null
+          JWT_IAT="$((ISSUED_AT - 60))"
+          JWT_EXP="$((ISSUED_AT + 540))"
+          JWT_UNSIGNED="$(python3 - "$ADMIN_APP_ID" "$JWT_IAT" "$JWT_EXP" <<'PY'
+          import base64, json, sys
+          def enc(value):
+              return base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).rstrip(b"=").decode()
+          app_id, issued_at, expires_at = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+          print(enc({"alg":"RS256","typ":"JWT"}) + "." + enc({"iat":issued_at,"exp":expires_at,"iss":app_id}))
+          PY
+          )"
+          JWT_SIGNATURE="$(printf '%s' "$JWT_UNSIGNED" | openssl dgst -binary -sha256 -sign app-private-key.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          APP_JWT="${JWT_UNSIGNED}.${JWT_SIGNATURE}"
+          rm -f app-private-key.pem
+          unset ADMIN_PRIVATE_KEY
+
+          GH_TOKEN="$APP_JWT" python3 scripts/automation_github_ruleset_admin_read.py \
+            "app/installations/${ADMIN_INSTALLATION_ID}" > recovery-open-installation.json
+          jq -e --argjson app "$ADMIN_APP_ID" --argjson installation "$ADMIN_INSTALLATION_ID" '
+            .id == $installation and .app_id == $app and .account.id == 35150859 and
+            .account.login == "portyu9" and .repository_selection == "selected" and
+            .permissions.administration == "write" and
+            ((.permissions | keys - ["administration","metadata"]) | length == 0)
+          ' recovery-open-installation.json >/dev/null
+
+          TOKEN_RESPONSE="$RUNNER_TEMP/recovery-open-token-response.txt"
+          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --include --method POST \
+            "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens" \
+            -f 'repositories[]=portyu9' -f 'permissions[administration]=write' > "$TOKEN_RESPONSE"
+          [[ "$(head -n 1 "$TOKEN_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]]
+          sed '1,/^[[:space:]]*$/d' "$TOKEN_RESPONSE" > installation-token.json
+          jq -e '.token | type == "string" and length > 20' installation-token.json >/dev/null
+          ADMIN_TOKEN="$(jq -r .token installation-token.json)"
+          rm -f installation-token.json
+          unset APP_JWT
+
+          GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_ruleset_admin_read.py \
+            "installation/repositories?per_page=100" > recovery-open-token-repositories.json
+          jq -e '.total_count == 1 and .repositories[0].id == 1355082509 and
+            .repositories[0].full_name == "portyu9/portyu9"' recovery-open-token-repositories.json >/dev/null
+
+          GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-recovery-before-open.json
+          PRE="$(python3 scripts/ruleset_transition_contract.py recovery-classify \
+            --live live-recovery-before-open.json --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --head-sha "$HEAD_SHA")"
+          test "$(jq -r .state <<<"$PRE")" = "normal"
+
+          python3 scripts/ruleset_transition_contract.py recovery-emit-open \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --head-sha "$HEAD_SHA" --output recovery-open-put.json >/dev/null
+
+          PUT_RESPONSE="$RUNNER_TEMP/recovery-open-put-response.txt"
+          set +e
+          GH_TOKEN="$ADMIN_TOKEN" gh api --include --method PUT \
+            "repos/${TARGET_REPOSITORY}/rulesets/22148161" --input recovery-open-put.json > "$PUT_RESPONSE"
+          WRITE_STATUS="$?"
+          set -e
+          if [ "$WRITE_STATUS" -eq 0 ]; then
+            [[ "$(head -n 1 "$PUT_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]]
+          fi
+
+          GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-recovery-after-open.json
+          POST="$(python3 scripts/ruleset_transition_contract.py recovery-classify \
+            --live live-recovery-after-open.json --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --head-sha "$HEAD_SHA")"
+          test "$(jq -r .state <<<"$POST")" = "temporary" || {
+            echo "ERROR: recovery open did not converge; no automatic PUT replay will occur." >&2
+            exit 1
+          }
+
+          RECEIPT_SHA256="$(python3 scripts/ruleset_transition_contract.py recovery-transition-receipt \
+            --direction open --before live-recovery-before-open.json --after live-recovery-after-open.json \
+            --trusted-main-sha "$TRUSTED_MAIN_SHA" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --candidate-pr "$PR_NUMBER" \
+            --candidate-head-sha "$HEAD_SHA" --check-id "$CHECK_ID" \
+            --issued-at "$ISSUED_AT" --expires-at "$EXPIRES_AT" --write-status "$WRITE_STATUS" \
+            --output control-plane-recovery-open-receipt.json)"
+          echo "mutated=true" >> "$GITHUB_OUTPUT"
+          echo "receipt_sha256=$RECEIPT_SHA256" >> "$GITHUB_OUTPUT"
+          echo "expires_at=$EXPIRES_AT" >> "$GITHUB_OUTPUT"
+          unset ADMIN_TOKEN
+
+      - name: Preserve recovery-open receipt
+        if: steps.open.outputs.mutated == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: control-plane-recovery-open-receipt
+          path: control-plane-recovery-open-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  recovery_complete_certificate:
+    name: complete-exact-control-plane-recovery-check
+    needs: [recovery_authorize, recovery_plan, recovery_create_certificate, recovery_open]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      checks: write
+      contents: read
+      pull-requests: read
+    outputs:
+      completed: ${{ steps.complete.outputs.completed }}
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Freshly re-prove and complete exact certificate
+        id: complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ needs.recovery_authorize.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.recovery_plan.outputs.head_sha }}
+          HEAD_REF: ${{ needs.recovery_plan.outputs.head_ref }}
+          TREE_SHA: ${{ needs.recovery_plan.outputs.tree_sha }}
+          CONTEXT: ${{ needs.recovery_plan.outputs.transaction_context }}
+          CHECK_ID: ${{ needs.recovery_create_certificate.outputs.check_id }}
+          EXTERNAL_ID: ${{ needs.recovery_create_certificate.outputs.external_id }}
+          EXPIRES_AT: ${{ needs.recovery_open.outputs.expires_at }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(date +%s)" -lt "$EXPIRES_AT"
+          MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          jq -e --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
+            .state == "open" and .draft == false and .base.sha == $base and .base.ref == "main" and
+            .head.sha == $head and .head.ref == $ref and .head.repo.full_name == $repo
+          ' <<<"$PR" >/dev/null
+          HEAD_REF_JSON="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
+          test "$(jq -r .object.sha <<<"$HEAD_REF_JSON")" = "$HEAD_SHA"
+          COMMIT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
+          test "$(jq -r .tree.sha <<<"$COMMIT")" = "$TREE_SHA"
+          python3 scripts/automation_github_review_threads_read.py \
+            --repository "$TARGET_REPOSITORY" --pr-number "$PR_NUMBER" > recovery-complete-threads.json
+          jq -e '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false and
+            ([.data.repository.pullRequest.reviewThreads.nodes[].isResolved] | all(. == true))' \
+            recovery-complete-threads.json >/dev/null
+          CHECKS="$(python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          for REQUIRED in validate-contracts trusted-governed-bot-review integration-pinned-upstream dependency-review analyze-actions analyze-python; do
+            LATEST="$(jq -c --arg name "$REQUIRED" \
+              '[.check_runs[] | select(.name == $name and .app.id == 15368)] | sort_by(.id) | last' <<<"$CHECKS")"
+            test "$LATEST" != "null"
+            test "$(jq -r .status <<<"$LATEST")" = "completed"
+            test "$(jq -r .conclusion <<<"$LATEST")" = "success"
+            test "$(jq -r .head_sha <<<"$LATEST")" = "$HEAD_SHA"
+          done
+
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-recovery-before-complete.json
+          STATE="$(python3 scripts/ruleset_transition_contract.py recovery-classify \
+            --live live-recovery-before-complete.json --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --head-sha "$HEAD_SHA" --observable)"
+          test "$(jq -r .state <<<"$STATE")" = "temporary"
+          test "$(jq -r .transactionContext <<<"$STATE")" = "$CONTEXT"
+
+          EXACT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
+          jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
+            .id == $id and .name == $name and .head_sha == $head and .external_id == $external and
+            .status == "queued" and .conclusion == null and .app.id == 15368 and .app.slug == "github-actions"
+          ' <<<"$EXACT" >/dev/null
+
+          set +e
+          PATCH_RESPONSE="$(gh api --include --method PATCH "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}" \
+            -f status=completed -f conclusion=success \
+            -f 'output[title]=Control-plane recovery authorized' \
+            -f 'output[summary]=Exact recovery candidate re-proved under the temporary ruleset.' 2>&1)"
+          PATCH_STATUS="$?"
+          set -e
+          if [ "$PATCH_STATUS" -eq 0 ]; then
+            [[ "$(head -n 1 <<<"$PATCH_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]]
+          fi
+
+          AFTER="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
+          jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
+            .id == $id and .name == $name and .head_sha == $head and .external_id == $external and
+            .status == "completed" and .conclusion == "success" and
+            .app.id == 15368 and .app.slug == "github-actions"
+          ' <<<"$AFTER" >/dev/null
+          LATEST_CHECKS="$(python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          MATCHES="$(jq -c --arg name "$CONTEXT" --arg head "$HEAD_SHA" \
+            '[.check_runs[] | select(.name == $name and .head_sha == $head and .app.id == 15368)]' <<<"$LATEST_CHECKS")"
+          test "$(jq 'length' <<<"$MATCHES")" = "1"
+          test "$(jq -r '.[0].id' <<<"$MATCHES")" = "$CHECK_ID"
+          echo "completed=true" >> "$GITHUB_OUTPUT"
+
+  recovery_merge:
+    name: merge-exact-control-plane-recovery-candidate
+    needs: [recovery_authorize, recovery_plan, recovery_create_certificate, recovery_open, recovery_complete_certificate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      checks: read
+      contents: write
+      pull-requests: write
+    outputs:
+      merged: ${{ steps.merge.outputs.merged }}
+      merge_sha: ${{ steps.merge.outputs.merge_sha }}
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Merge exactly once with expected head after final reproof
+        id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ needs.recovery_authorize.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.recovery_plan.outputs.head_sha }}
+          HEAD_REF: ${{ needs.recovery_plan.outputs.head_ref }}
+          CONTEXT: ${{ needs.recovery_plan.outputs.transaction_context }}
+          CHECK_ID: ${{ needs.recovery_create_certificate.outputs.check_id }}
+          EXPIRES_AT: ${{ needs.recovery_open.outputs.expires_at }}
+        run: |
+          set -euo pipefail
+          echo "merged=false" >> "$GITHUB_OUTPUT"
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$(date +%s)" -lt "$EXPIRES_AT"
+          MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+          jq -e --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
+            .state == "open" and .draft == false and .base.sha == $base and
+            .head.sha == $head and .head.ref == $ref and .head.repo.full_name == $repo
+          ' <<<"$PR" >/dev/null
+          python3 scripts/automation_github_review_threads_read.py \
+            --repository "$TARGET_REPOSITORY" --pr-number "$PR_NUMBER" > recovery-merge-threads.json
+          jq -e '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false and
+            ([.data.repository.pullRequest.reviewThreads.nodes[].isResolved] | all(. == true))' \
+            recovery-merge-threads.json >/dev/null
+
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-recovery-before-merge.json
+          STATE="$(python3 scripts/ruleset_transition_contract.py recovery-classify \
+            --live live-recovery-before-merge.json --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --head-sha "$HEAD_SHA" --observable)"
+          test "$(jq -r .state <<<"$STATE")" = "temporary"
+          test "$(jq -r .transactionContext <<<"$STATE")" = "$CONTEXT"
+          EXACT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
+          jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" '
+            .id == $id and .name == $name and .head_sha == $head and
+            .status == "completed" and .conclusion == "success" and .app.id == 15368
+          ' <<<"$EXACT" >/dev/null
+          CHECKS="$(python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          for REQUIRED in validate-contracts trusted-governed-bot-review integration-pinned-upstream dependency-review analyze-actions analyze-python; do
+            LATEST="$(jq -c --arg name "$REQUIRED" \
+              '[.check_runs[] | select(.name == $name and .app.id == 15368)] | sort_by(.id) | last' <<<"$CHECKS")"
+            test "$LATEST" != "null"
+            test "$(jq -r .conclusion <<<"$LATEST")" = "success"
+            test "$(jq -r .head_sha <<<"$LATEST")" = "$HEAD_SHA"
+          done
+
+          set +e
+          MERGE_RESPONSE="$(gh api --include --method PUT "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/merge" \
+            -f sha="$HEAD_SHA" -f merge_method=merge 2>&1)"
+          MERGE_STATUS="$?"
+          set -e
+          MERGE_SHA=""
+          if [ "$MERGE_STATUS" -eq 0 ]; then
+            [[ "$(head -n 1 <<<"$MERGE_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]]
+            BODY="$(sed '1,/^[[:space:]]*$/d' <<<"$MERGE_RESPONSE")"
+            test "$(jq -r .merged <<<"$BODY")" = "true"
+            MERGE_SHA="$(jq -r .sha <<<"$BODY")"
+          else
+            AFTER_PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
+            test "$(jq -r .state <<<"$AFTER_PR")" = "closed"
+            test "$(jq -r .merged <<<"$AFTER_PR")" = "true"
+            test "$(jq -r .head.sha <<<"$AFTER_PR")" = "$HEAD_SHA"
+            MERGE_SHA="$(jq -r .merge_commit_sha <<<"$AFTER_PR")"
+          fi
+          [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          AFTER_MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          test "$(jq -r .object.sha <<<"$AFTER_MAIN")" = "$MERGE_SHA"
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+          echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"
+
+  recovery_restore:
+    if: "${{ always() && needs.recovery_plan.result == 'success' && needs.recovery_create_certificate.result == 'success' }}"
+    name: restore-exact-control-plane-recovery-aperture-admin
+    needs: [recovery_authorize, recovery_plan, recovery_create_certificate, recovery_open, recovery_complete_certificate, recovery_merge]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    concurrency:
+      group: ruleset-reconciler-admin-write
+      cancel-in-progress: false
+    environment: ruleset-admin-identity
+    permissions:
+      contents: read
+    outputs:
+      mutated: ${{ steps.restore.outputs.mutated }}
+      restored: ${{ steps.restore.outputs.restored }}
+      receipt_sha256: ${{ steps.restore.outputs.receipt_sha256 }}
+    steps:
+      - name: Checkout exact trusted recovery source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Restore exact normal ruleset regardless of transaction outcome
+        id: restore
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_SOURCE_SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ needs.recovery_authorize.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.recovery_plan.outputs.head_sha }}
+          CONTEXT: ${{ needs.recovery_plan.outputs.transaction_context }}
+          CHECK_ID: ${{ needs.recovery_create_certificate.outputs.check_id }}
+          EXPECTED_MERGE_SHA: ${{ needs.recovery_merge.outputs.merge_sha }}
+          ADMIN_APP_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_APP_ID }}
+          ADMIN_INSTALLATION_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_INSTALLATION_ID }}
+          ADMIN_PRIVATE_KEY: ${{ secrets.PORTYU9_RULESET_ADMIN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f app-private-key.pem installation-token.json' EXIT
+          echo "mutated=false" >> "$GITHUB_OUTPUT"
+          echo "restored=false" >> "$GITHUB_OUTPUT"
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$CHECK_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$ADMIN_APP_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$ADMIN_INSTALLATION_ID" =~ ^[1-9][0-9]*$ ]]
+          test -n "$ADMIN_PRIVATE_KEY"
+
+          LIVE_MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          LIVE_MAIN_SHA="$(jq -er '.object.sha | select(test("^[0-9a-f]{40}$"))' <<<"$LIVE_MAIN")"
+          if [ -n "$EXPECTED_MERGE_SHA" ]; then
+            test "$LIVE_MAIN_SHA" = "$EXPECTED_MERGE_SHA"
+          else
+            test "$LIVE_MAIN_SHA" = "$TRUSTED_SOURCE_SHA"
+          fi
+          LIVE_WORKFLOW="$(python3 scripts/automation_github_read.py \
+            "repos/${TARGET_REPOSITORY}/contents/.github/workflows/ruleset-reconciler.yml?ref=${LIVE_MAIN_SHA}")"
+          SOURCE_BLOB="$(git rev-parse HEAD:.github/workflows/ruleset-reconciler.yml)"
+          test "$(jq -r .sha <<<"$LIVE_WORKFLOW")" = "$SOURCE_BLOB"
+
+          ISSUED_AT="$(date +%s)"
+          EXPIRES_AT="$((ISSUED_AT + 600))"
+          printf '%s' "$ADMIN_PRIVATE_KEY" > app-private-key.pem
+          openssl pkey -in app-private-key.pem -noout >/dev/null
+          JWT_IAT="$((ISSUED_AT - 60))"
+          JWT_EXP="$((ISSUED_AT + 540))"
+          JWT_UNSIGNED="$(python3 - "$ADMIN_APP_ID" "$JWT_IAT" "$JWT_EXP" <<'PY'
+          import base64, json, sys
+          def enc(value):
+              return base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).rstrip(b"=").decode()
+          app_id, issued_at, expires_at = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+          print(enc({"alg":"RS256","typ":"JWT"}) + "." + enc({"iat":issued_at,"exp":expires_at,"iss":app_id}))
+          PY
+          )"
+          JWT_SIGNATURE="$(printf '%s' "$JWT_UNSIGNED" | openssl dgst -binary -sha256 -sign app-private-key.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          APP_JWT="${JWT_UNSIGNED}.${JWT_SIGNATURE}"
+          rm -f app-private-key.pem
+          unset ADMIN_PRIVATE_KEY
+          TOKEN_RESPONSE="$RUNNER_TEMP/recovery-restore-token-response.txt"
+          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --include --method POST \
+            "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens" \
+            -f 'repositories[]=portyu9' -f 'permissions[administration]=write' > "$TOKEN_RESPONSE"
+          [[ "$(head -n 1 "$TOKEN_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]]
+          sed '1,/^[[:space:]]*$/d' "$TOKEN_RESPONSE" > installation-token.json
+          ADMIN_TOKEN="$(jq -er '.token | select(type == "string" and length > 20)' installation-token.json)"
+          rm -f installation-token.json
+          unset APP_JWT
+
+          GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-recovery-before-restore.json
+          STATE="$(python3 scripts/ruleset_transition_contract.py recovery-classify \
+            --live live-recovery-before-restore.json --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --head-sha "$HEAD_SHA")"
+          case "$(jq -r .state <<<"$STATE")" in
+            normal)
+              echo "restored=true" >> "$GITHUB_OUTPUT"
+              unset ADMIN_TOKEN
+              exit 0
+              ;;
+            temporary)
+              test "$(jq -r .transactionContext <<<"$STATE")" = "$CONTEXT"
+              ;;
+            *)
+              echo "ERROR: live ruleset is outside the exact recovery transaction." >&2
+              exit 1
+              ;;
+          esac
+
+          python3 scripts/ruleset_transition_contract.py recovery-emit-close --output recovery-close-put.json >/dev/null
+          PUT_RESPONSE="$RUNNER_TEMP/recovery-restore-put-response.txt"
+          set +e
+          GH_TOKEN="$ADMIN_TOKEN" gh api --include --method PUT \
+            "repos/${TARGET_REPOSITORY}/rulesets/22148161" --input recovery-close-put.json > "$PUT_RESPONSE"
+          WRITE_STATUS="$?"
+          set -e
+          if [ "$WRITE_STATUS" -eq 0 ]; then
+            [[ "$(head -n 1 "$PUT_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]]
+          fi
+          GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-recovery-after-restore.json
+          AFTER="$(python3 scripts/ruleset_transition_contract.py recovery-classify \
+            --live live-recovery-after-restore.json --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --head-sha "$HEAD_SHA")"
+          test "$(jq -r .state <<<"$AFTER")" = "normal" || {
+            echo "ERROR: recovery restore failed; no automatic PUT replay will occur." >&2
+            exit 1
+          }
+
+          RECEIPT_SHA256="$(python3 scripts/ruleset_transition_contract.py recovery-transition-receipt \
+            --direction close --before live-recovery-before-restore.json --after live-recovery-after-restore.json \
+            --trusted-main-sha "$TRUSTED_SOURCE_SHA" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --candidate-pr "$PR_NUMBER" \
+            --candidate-head-sha "$HEAD_SHA" --check-id "$CHECK_ID" \
+            --issued-at "$ISSUED_AT" --expires-at "$EXPIRES_AT" --write-status "$WRITE_STATUS" \
+            --output control-plane-recovery-restore-receipt.json)"
+          echo "mutated=true" >> "$GITHUB_OUTPUT"
+          echo "restored=true" >> "$GITHUB_OUTPUT"
+          echo "receipt_sha256=$RECEIPT_SHA256" >> "$GITHUB_OUTPUT"
+          unset ADMIN_TOKEN
+
+      - name: Preserve recovery-restoration receipt
+        if: steps.restore.outputs.mutated == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: control-plane-recovery-restore-receipt
+          path: control-plane-recovery-restore-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  recovery_attest:
+    if: "${{ always() && needs.recovery_open.outputs.mutated == 'true' && needs.recovery_restore.outputs.mutated == 'true' }}"
+    name: attest-control-plane-recovery-receipts-write-only
+    needs: [recovery_authorize, recovery_plan, recovery_create_certificate, recovery_open, recovery_merge, recovery_restore]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout exact trusted recovery source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download exact recovery receipts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: control-plane-recovery-*-receipt
+          path: recovery-receipts
+          merge-multiple: true
+
+      - name: Build exact immutable recovery result receipt
+        env:
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ needs.recovery_authorize.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.recovery_plan.outputs.head_sha }}
+          CONTEXT: ${{ needs.recovery_plan.outputs.transaction_context }}
+          CHECK_ID: ${{ needs.recovery_create_certificate.outputs.check_id }}
+          MERGED: ${{ needs.recovery_merge.outputs.merged == 'true' && 'true' || 'false' }}
+          MERGE_SHA: ${{ needs.recovery_merge.outputs.merge_sha }}
+          OPEN_SHA256: ${{ needs.recovery_open.outputs.receipt_sha256 }}
+          RESTORE_SHA256: ${{ needs.recovery_restore.outputs.receipt_sha256 }}
+        run: |
+          set -euo pipefail
+          test "sha256:$(sha256sum recovery-receipts/control-plane-recovery-open-receipt.json | cut -d' ' -f1)" = "$OPEN_SHA256"
+          test "sha256:$(sha256sum recovery-receipts/control-plane-recovery-restore-receipt.json | cut -d' ' -f1)" = "$RESTORE_SHA256"
+          MERGE_ARGS=()
+          if [ -n "$MERGE_SHA" ]; then
+            MERGE_ARGS=(--merge-sha "$MERGE_SHA")
+          fi
+          python3 scripts/ruleset_transition_contract.py recovery-result-receipt \
+            --trusted-main-sha "$TRUSTED_MAIN_SHA" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --candidate-pr "$PR_NUMBER" \
+            --candidate-head-sha "$HEAD_SHA" --check-id "$CHECK_ID" \
+            --transaction-context "$CONTEXT" --merged "$MERGED" \
+            "${MERGE_ARGS[@]}" --open-receipt-sha256 "$OPEN_SHA256" \
+            --restore-receipt-sha256 "$RESTORE_SHA256" \
+            --output recovery-receipts/control-plane-recovery-result-receipt.json
+
+      - name: Attest recovery-open receipt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: .github/rulesets/ruleset-transitions-v1.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/ruleset-reconciliation-receipt-v1.schema.json
+          predicate-path: recovery-receipts/control-plane-recovery-open-receipt.json
+          show-summary: true
+
+      - name: Attest recovery-restoration receipt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: .github/rulesets/ruleset-transitions-v1.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/ruleset-reconciliation-receipt-v1.schema.json
+          predicate-path: recovery-receipts/control-plane-recovery-restore-receipt.json
+          show-summary: true
+
+      - name: Attest recovery-result receipt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: .github/rulesets/ruleset-transitions-v1.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/ruleset-reconciliation-receipt-v1.schema.json
+          predicate-path: recovery-receipts/control-plane-recovery-result-receipt.json
+          show-summary: true
+
+  watchdog_plan:
+    if: github.event_name == 'schedule'
+    name: plan-close-only-control-plane-recovery-watchdog
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      action: ${{ steps.watchdog.outputs.action }}
+      transaction_context: ${{ steps.watchdog.outputs.transaction_context }}
+      origin_run_id: ${{ steps.watchdog.outputs.origin_run_id }}
+      origin_run_attempt: ${{ steps.watchdog.outputs.origin_run_attempt }}
+      head_prefix: ${{ steps.watchdog.outputs.head_prefix }}
+      temporary_digest: ${{ steps.watchdog.outputs.temporary_digest }}
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Classify only normal or frozen temporary shape
+        id: watchdog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > watchdog-live.json
+          SHAPE="$(python3 scripts/ruleset_transition_contract.py recovery-classify-shape --live watchdog-live.json --observable)"
+          if [ "$(jq -r .state <<<"$SHAPE")" = "normal" ]; then
+            echo "action=noop" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test "$(jq -r .state <<<"$SHAPE")" = "temporary-shape"
+          ORIGIN_RUN_ID="$(jq -r .originRunId <<<"$SHAPE")"
+          ORIGIN_ATTEMPT="$(jq -r .originRunAttempt <<<"$SHAPE")"
+          CONTEXT="$(jq -r .transactionContext <<<"$SHAPE")"
+          HEAD_PREFIX="$(jq -r .headPrefix <<<"$SHAPE")"
+          TEMP_DIGEST="$(jq -r .digest <<<"$SHAPE")"
+
+          python3 - "$TARGET_REPOSITORY" "$ORIGIN_RUN_ID" "$ORIGIN_ATTEMPT" > watchdog-origin.json <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          import automation_github_read
+          repo, run, attempt = sys.argv[1:]
+          text = automation_github_read.get_json_text(
+              f"repos/{repo}/actions/runs/{run}/attempts/{attempt}", allow_not_found=True
+          )
+          print("null" if text is None else text)
+          PY
+
+          ACTION=restore
+          if [ "$(jq -r 'type' watchdog-origin.json)" = "object" ]; then
+            jq -e --argjson run "$ORIGIN_RUN_ID" --argjson attempt "$ORIGIN_ATTEMPT" --arg repo "$TARGET_REPOSITORY" '
+              .id == $run and .run_attempt == $attempt and .repository.full_name == $repo and
+              (.status | type == "string") and (.run_started_at | type == "string")
+            ' watchdog-origin.json >/dev/null
+            STATUS="$(jq -r .status watchdog-origin.json)"
+            START_EPOCH="$(date -u -d "$(jq -r .run_started_at watchdog-origin.json)" +%s)"
+            AGE="$(($(date +%s) - START_EPOCH))"
+            if [ "$STATUS" != "completed" ] && [ "$AGE" -lt 900 ]; then
+              ACTION=noop
+            fi
+          fi
+
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+          echo "transaction_context=$CONTEXT" >> "$GITHUB_OUTPUT"
+          echo "origin_run_id=$ORIGIN_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "origin_run_attempt=$ORIGIN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "head_prefix=$HEAD_PREFIX" >> "$GITHUB_OUTPUT"
+          echo "temporary_digest=$TEMP_DIGEST" >> "$GITHUB_OUTPUT"
+
+  watchdog_restore:
+    if: needs.watchdog_plan.outputs.action == 'restore'
+    name: restore-stale-control-plane-recovery-close-only-admin
+    needs: [watchdog_plan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    concurrency:
+      group: ruleset-reconciler-admin-write
+      cancel-in-progress: false
+    environment: ruleset-admin-identity
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      mutated: ${{ steps.restore.outputs.mutated }}
+      receipt_sha256: ${{ steps.restore.outputs.receipt_sha256 }}
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Close only exact stale temporary recovery shape
+        id: restore
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+          TRUSTED_MAIN_SHA: ${{ github.sha }}
+          EXPECTED_CONTEXT: ${{ needs.watchdog_plan.outputs.transaction_context }}
+          ORIGIN_RUN_ID: ${{ needs.watchdog_plan.outputs.origin_run_id }}
+          ORIGIN_ATTEMPT: ${{ needs.watchdog_plan.outputs.origin_run_attempt }}
+          ADMIN_APP_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_APP_ID }}
+          ADMIN_INSTALLATION_ID: ${{ secrets.PORTYU9_RULESET_ADMIN_INSTALLATION_ID }}
+          ADMIN_PRIVATE_KEY: ${{ secrets.PORTYU9_RULESET_ADMIN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f app-private-key.pem installation-token.json' EXIT
+          echo "mutated=false" >> "$GITHUB_OUTPUT"
+          test "$TARGET_REPOSITORY" = "portyu9/portyu9"
+          test "$GITHUB_REF" = "refs/heads/main"
+          MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > watchdog-before-admin.json
+          SHAPE="$(python3 scripts/ruleset_transition_contract.py recovery-classify-shape --live watchdog-before-admin.json --observable)"
+          test "$(jq -r .state <<<"$SHAPE")" = "temporary-shape"
+          test "$(jq -r .transactionContext <<<"$SHAPE")" = "$EXPECTED_CONTEXT"
+          test "$(jq -r .originRunId <<<"$SHAPE")" = "$ORIGIN_RUN_ID"
+          test "$(jq -r .originRunAttempt <<<"$SHAPE")" = "$ORIGIN_ATTEMPT"
+
+          python3 - "$TARGET_REPOSITORY" "$ORIGIN_RUN_ID" "$ORIGIN_ATTEMPT" > watchdog-origin-recheck.json <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          import automation_github_read
+          repo, run, attempt = sys.argv[1:]
+          text = automation_github_read.get_json_text(
+              f"repos/{repo}/actions/runs/{run}/attempts/{attempt}", allow_not_found=True
+          )
+          print("null" if text is None else text)
+          PY
+          if [ "$(jq -r 'type' watchdog-origin-recheck.json)" = "object" ]; then
+            STATUS="$(jq -r .status watchdog-origin-recheck.json)"
+            AGE="$(($(date +%s) - $(date -u -d "$(jq -r .run_started_at watchdog-origin-recheck.json)" +%s)))"
+            if [ "$STATUS" != "completed" ] && [ "$AGE" -lt 900 ]; then
+              echo "ERROR: originating recovery is live within watchdog bound; close denied." >&2
+              exit 1
+            fi
+          fi
+
+          ISSUED_AT="$(date +%s)"
+          printf '%s' "$ADMIN_PRIVATE_KEY" > app-private-key.pem
+          openssl pkey -in app-private-key.pem -noout >/dev/null
+          JWT_IAT="$((ISSUED_AT - 60))"
+          JWT_EXP="$((ISSUED_AT + 540))"
+          JWT_UNSIGNED="$(python3 - "$ADMIN_APP_ID" "$JWT_IAT" "$JWT_EXP" <<'PY'
+          import base64, json, sys
+          def enc(value):
+              return base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).rstrip(b"=").decode()
+          app_id, issued_at, expires_at = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+          print(enc({"alg":"RS256","typ":"JWT"}) + "." + enc({"iat":issued_at,"exp":expires_at,"iss":app_id}))
+          PY
+          )"
+          JWT_SIGNATURE="$(printf '%s' "$JWT_UNSIGNED" | openssl dgst -binary -sha256 -sign app-private-key.pem | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+          APP_JWT="${JWT_UNSIGNED}.${JWT_SIGNATURE}"
+          rm -f app-private-key.pem
+          unset ADMIN_PRIVATE_KEY
+          TOKEN_RESPONSE="$RUNNER_TEMP/watchdog-token-response.txt"
+          GH_TOKEN="$APP_JWT" gh api -H "Authorization: Bearer ${APP_JWT}" --include --method POST \
+            "app/installations/${ADMIN_INSTALLATION_ID}/access_tokens" \
+            -f 'repositories[]=portyu9' -f 'permissions[administration]=write' > "$TOKEN_RESPONSE"
+          [[ "$(head -n 1 "$TOKEN_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]]
+          sed '1,/^[[:space:]]*$/d' "$TOKEN_RESPONSE" > installation-token.json
+          ADMIN_TOKEN="$(jq -er '.token | select(type == "string" and length > 20)' installation-token.json)"
+          rm -f installation-token.json
+          unset APP_JWT
+
+          GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > watchdog-before-exact.json
+          EXACT="$(python3 scripts/ruleset_transition_contract.py recovery-classify-shape --live watchdog-before-exact.json)"
+          test "$(jq -r .state <<<"$EXACT")" = "temporary-shape"
+          test "$(jq -r .transactionContext <<<"$EXACT")" = "$EXPECTED_CONTEXT"
+
+          python3 scripts/ruleset_transition_contract.py recovery-emit-close --output watchdog-close-put.json >/dev/null
+          PUT_RESPONSE="$RUNNER_TEMP/watchdog-put-response.txt"
+          set +e
+          GH_TOKEN="$ADMIN_TOKEN" gh api --include --method PUT \
+            "repos/${TARGET_REPOSITORY}/rulesets/22148161" --input watchdog-close-put.json > "$PUT_RESPONSE"
+          WRITE_STATUS="$?"
+          set -e
+          if [ "$WRITE_STATUS" -eq 0 ]; then
+            [[ "$(head -n 1 "$PUT_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]]
+          fi
+          GH_TOKEN="$ADMIN_TOKEN" python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > watchdog-after.json
+          AFTER="$(python3 scripts/ruleset_transition_contract.py recovery-classify-shape --live watchdog-after.json)"
+          test "$(jq -r .state <<<"$AFTER")" = "normal" || {
+            echo "ERROR: close-only watchdog failed; no automatic PUT replay will occur." >&2
+            exit 1
+          }
+          RECEIPT_SHA256="$(python3 scripts/ruleset_transition_contract.py recovery-watchdog-receipt \
+            --before watchdog-before-exact.json --after watchdog-after.json \
+            --trusted-main-sha "$TRUSTED_MAIN_SHA" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --issued-at "$ISSUED_AT" \
+            --write-status "$WRITE_STATUS" --output control-plane-recovery-watchdog-receipt.json)"
+          echo "mutated=true" >> "$GITHUB_OUTPUT"
+          echo "receipt_sha256=$RECEIPT_SHA256" >> "$GITHUB_OUTPUT"
+          unset ADMIN_TOKEN
+
+      - name: Preserve watchdog-restoration receipt
+        if: steps.restore.outputs.mutated == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: control-plane-recovery-watchdog-receipt
+          path: control-plane-recovery-watchdog-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  watchdog_attest:
+    if: needs.watchdog_restore.outputs.mutated == 'true'
+    name: attest-control-plane-recovery-watchdog-receipt-write-only
+    needs: [watchdog_restore]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout exact trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download watchdog restoration receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: control-plane-recovery-watchdog-receipt
+          path: watchdog-receipt
+
+      - name: Verify watchdog receipt digest
+        env:
+          EXPECTED_SHA256: ${{ needs.watchdog_restore.outputs.receipt_sha256 }}
+        run: |
+          set -euo pipefail
+          test "sha256:$(sha256sum watchdog-receipt/control-plane-recovery-watchdog-receipt.json | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+
+      - name: Attest watchdog restoration receipt
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: .github/rulesets/ruleset-transitions-v1.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/ruleset-reconciliation-receipt-v1.schema.json
+          predicate-path: watchdog-receipt/control-plane-recovery-watchdog-receipt.json
           show-summary: true
