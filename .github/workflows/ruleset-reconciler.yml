@@ -1524,7 +1524,10 @@ jobs:
             ' watchdog-origin.json >/dev/null
             STATUS="$(jq -r .status watchdog-origin.json)"
             START_EPOCH="$(date -u -d "$(jq -r .run_started_at watchdog-origin.json)" +%s)"
-            AGE="$(($(date +%s) - START_EPOCH))"
+            NOW_EPOCH="$(date +%s)"
+            [[ "$START_EPOCH" =~ ^[1-9][0-9]*$ ]]
+            [[ "$NOW_EPOCH" =~ ^[1-9][0-9]*$ ]]
+            AGE="$((NOW_EPOCH - START_EPOCH))"
             if [ "$STATUS" != "completed" ] && [ "$AGE" -lt 900 ]; then
               ACTION=noop
             fi
