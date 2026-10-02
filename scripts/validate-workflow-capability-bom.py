@@ -2,7 +2,12 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,9 +84,82 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+def item28_shared_epoch_measurement_diagnostic_v2() -> None:
+    """Disposable carrier: measure parser-enabled frozen #1500 from exact accepted main."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    base_sha = "d6a978353f87ffb1cd907d897a85677b83686f9d"
+    source_sha = "132d55f2e6c0747d715de464ccd0fd3075402eec"
+    expected_tree = "b7a2dac52e806093e363413e8336ada108599686"
+    expected_blobs = {
+        ".github/attestation/automation-decision-receipt-v1.schema.json": "f3d3497b4d512ef6ea5347637588f48bfdaf6a54",
+        ".github/workflow-capability-bom-v1.json": "884d7a946025426234e01323721099aa279ea230",
+        ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
+        ".github/workflows/spotlight-link-sync.yml": "a895db4a36a7f17e7287ab3c045796bd9e7fb07a",
+        "scripts/automation_decision_receipt.py": "ac4e6a92dc7225528e100e9fe74582b813625887",
+        "scripts/automation_decision_receipt_schema.py": "02d7cb46f9d89a78547cdb7b616fc256d88df453",
+        "scripts/governance_contract_item10_core.py": "a4f2e4fe3835cd121179276d47803ab8c2cf4dec",
+        "scripts/privileged_workflow_identity_v21_core.py": "c2830c8854a6a2fc223dd5ff620dd52f88094e8d",
+        "scripts/profile-stats-source-epoch-v1.json": "c3a3eff0efb324650f863cf1d900f3f27f3fa212",
+        "scripts/profile_stats_decision_receipt.py": "d6e62ac3d727e4c118c2c14e5e89773d67dc4dd7",
+        "scripts/validate-privileged-workflow-identity.py": "3017f03f8f4df7470537cfb089541a9964eb9a0e",
+    }
+
+    subprocess.run(["git", "fetch", "--no-tags", "--depth=128", "origin", base_sha, source_sha], check=True)
+    merge_base = subprocess.check_output(["git", "merge-base", base_sha, source_sha], text=True).strip()
+    require(merge_base == base_sha, f"diagnostic candidate no longer descends from exact accepted main: {merge_base}")
+    observed_paths = subprocess.check_output(["git", "diff", "--name-only", base_sha, source_sha], text=True).splitlines()
+    require(observed_paths == sorted(expected_blobs), f"diagnostic candidate path set changed: {observed_paths!r}")
+    for changed_path, expected_blob in expected_blobs.items():
+        observed_blob = subprocess.check_output(["git", "rev-parse", f"{source_sha}:{changed_path}"], text=True).strip()
+        require(observed_blob == expected_blob, f"diagnostic candidate blob changed for {changed_path}: {observed_blob}")
+    tree = subprocess.check_output(["git", "rev-parse", f"{source_sha}^{{tree}}"], text=True).strip()
+    require(tree == expected_tree, f"diagnostic candidate tree changed: {tree}")
+
+    with tempfile.TemporaryDirectory(prefix="item28-shared-epoch-measurement-v2-") as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(trusted / "scripts/workflow_capability_admission.py"),
+                    str(candidate),
+                    "--candidate-tree-sha",
+                    tree,
+                    "--measure",
+                ],
+                text=True,
+                capture_output=True,
+            )
+            if result.stderr:
+                print(result.stderr, file=sys.stderr, end="")
+            require(result.returncode == 0, f"accepted-main production --measure failed: {result.returncode}")
+            payload = json.loads(result.stdout)
+            require(
+                isinstance(payload, dict)
+                and set(payload) == {"measurement"}
+                and isinstance(payload["measurement"], dict),
+                "production --measure output shape changed",
+            )
+            print(
+                "CAPABILITY-MEASUREMENT-DIAGNOSTIC:"
+                + json.dumps(payload, sort_keys=True, separators=(",", ":")),
+                flush=True,
+            )
+        finally:
+            subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=False)
+            subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=False)
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        item28_shared_epoch_measurement_diagnostic_v2()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
