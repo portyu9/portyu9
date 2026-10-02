@@ -5,6 +5,15 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      main_source_sha:
+        description: "Optional Profile Stats source main SHA; pair with generated_publication_sha."
+        required: false
+        type: string
+      generated_publication_sha:
+        description: "Optional Profile Stats generated publication SHA; pair with main_source_sha."
+        required: false
+        type: string
   schedule:
     # Eventual-consistency recovery only; main pushes and Profile Stats dispatch are primary.
     - cron: "41 * * * *"
@@ -57,6 +66,24 @@ jobs:
 
       - name: Verify resolved Python runtime
         run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Verify optional shared publication epoch
+        env:
+          UPSTREAM_MAIN_SOURCE_SHA: ${{ inputs.main_source_sha }}
+          UPSTREAM_GENERATED_PUBLICATION_SHA: ${{ inputs.generated_publication_sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "$UPSTREAM_MAIN_SOURCE_SHA" ] && [ -z "$UPSTREAM_GENERATED_PUBLICATION_SHA" ]; then
+            exit 0
+          fi
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test -n "$UPSTREAM_MAIN_SOURCE_SHA"
+          test -n "$UPSTREAM_GENERATED_PUBLICATION_SHA"
+          [[ "$UPSTREAM_MAIN_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$UPSTREAM_GENERATED_PUBLICATION_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$UPSTREAM_MAIN_SOURCE_SHA" = "$GITHUB_SHA"
+          test "$(git -C published rev-parse HEAD)" = "$UPSTREAM_GENERATED_PUBLICATION_SHA"
 
       - name: Reconstruct exact published Spotlight projection
         run: |
