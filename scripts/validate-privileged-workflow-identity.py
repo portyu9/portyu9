@@ -9,12 +9,12 @@ import automation_decision_lease
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v151"
+VERSION = "governed-workflow-byte-identity-v152"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
     ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
-    ".github/workflows/spotlight-link-sync.yml": "a895db4a36a7f17e7287ab3c045796bd9e7fb07a",
+    ".github/workflows/spotlight-link-sync.yml": "79f9d8a073d4e33593a607d647c7c056f8868ee9",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -750,6 +750,26 @@ def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
     return sync[:merge_start] + projected + sync[merge_end:]
 
 
+def project_spotlight_initial_compare_schema_to_legacy(spotlight: str) -> str:
+    """Project the current typed initial-compare boundary out of frozen historical proofs."""
+    approve_start = spotlight.index("  approve:\n")
+    approve_end = spotlight.index("  authorize:\n", approve_start)
+    approve = spotlight[approve_start:approve_end]
+    fetch = '          COMPARE="$(spotlight_singleton_get compare-initial)"\n'
+    consume = '          test "$(jq -r .status <<<"$COMPARE")" = "ahead"\n'
+    schema_start = '          jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \'\n'
+    schema_end = '          \' <<<"$COMPARE" >/dev/null\n'
+    require(approve.count(fetch) == 1 and approve.count(consume) == 1,
+            "Spotlight initial-compare projection anchors changed")
+    fetch_pos = approve.index(fetch)
+    consume_pos = approve.index(consume, fetch_pos)
+    schema_pos = approve.index(schema_start, fetch_pos + len(fetch), consume_pos)
+    schema_end_pos = approve.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+    require(fetch_pos + len(fetch) == schema_pos and schema_end_pos == consume_pos,
+            "Spotlight initial-compare schema is not the exact pre-consumption overlay")
+    projected = approve[:schema_pos] + approve[consume_pos:]
+    return spotlight[:approve_start] + projected + spotlight[approve_end:]
+
 def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> str:
     """Project the reviewed approve-only shell retry transport to its prior raw-GET semantics."""
     approve_start = spotlight.index("  approve:\n")
@@ -1160,6 +1180,76 @@ def validate_spotlight_readme_contents_evidence(
                 "Spotlight terminal README Contents self-test accepted unbound blob identity"
             )
 
+
+
+def validate_spotlight_initial_compare_evidence(
+    spotlight: str, *, run_self_test: bool = True
+) -> None:
+    approve = job_block(spotlight, "approve", "authorize")
+    fetch = 'COMPARE="$(spotlight_singleton_get compare-initial)"'
+    schema = 'jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \''
+    consume = 'test "$(jq -r .status <<<"$COMPARE")" = "ahead"'
+    required = (
+        '(type == "object") and',
+        '(.status == "ahead") and',
+        '(.base_commit | type == "object" and .sha == $base) and',
+        '(.merge_base_commit | type == "object" and .sha == $base) and',
+        '(.ahead_by | type == "number" and . == floor and . == 1) and',
+        '(.behind_by | type == "number" and . == floor and . == 0) and',
+        '(.total_commits | type == "number" and . == floor and . == 1) and',
+        '(.commits | type == "array" and length == 1 and',
+        '(.[0] | type == "object" and .sha == $head)) and',
+        '(.files | type == "array" and length == 1 and',
+        '(.filename | type == "string" and . == "README.md") and',
+        '(.status | type == "string" and . == "modified") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.additions | type == "number" and . == floor and . >= 0) and',
+        '(.deletions | type == "number" and . == floor and . >= 0) and',
+        '(.changes | type == "number" and . == floor and . >= 0)',
+    )
+    require(approve.count(fetch) == 1 and approve.count(schema) == 1 and approve.count(consume) == 1,
+            "Spotlight initial compare fetch/schema/consume cardinality changed")
+    for fragment in required:
+        require(fragment in approve,
+                f"Spotlight initial compare schema changed: {fragment}")
+    require(approve.index(fetch) < approve.index(schema) < approve.index(consume),
+            "Spotlight initial compare must be typed before scalar authorization consumption")
+    if run_self_test:
+        mutations = (
+            ('(.status == "ahead") and', '(.status | type == "string") and'),
+            ('(.base_commit | type == "object" and .sha == $base) and', '(.base_commit | type == "object") and'),
+            ('(.ahead_by | type == "number" and . == floor and . == 1) and', '(.ahead_by | type == "number") and'),
+            ('(.commits | type == "array" and length == 1 and', '(.commits | type == "array" and length >= 1 and'),
+            ('(.status | type == "string" and . == "modified") and', '(.status | type == "string") and'),
+        )
+        approve_start = spotlight.index("  approve:\n")
+        approve_end = spotlight.index("  authorize:\n", approve_start)
+        for old, new in mutations:
+            require(approve.count(old) == 1,
+                    f"Spotlight initial compare self-test anchor changed: {old}")
+            weakened = spotlight[:approve_start] + approve.replace(old, new, 1) + spotlight[approve_end:]
+            try:
+                validate_spotlight_initial_compare_evidence(weakened, run_self_test=False)
+            except ValueError:
+                pass
+            else:
+                raise ValueError("Spotlight initial compare self-test accepted weakened evidence")
+        fetch_line = '          COMPARE="$(spotlight_singleton_get compare-initial)"\n'
+        consume_line = '          test "$(jq -r .status <<<"$COMPARE")" = "ahead"\n'
+        schema_start = '          jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \'\n'
+        schema_end = '          \' <<<"$COMPARE" >/dev/null\n'
+        fetch_pos = spotlight.index(fetch_line)
+        consume_pos = spotlight.index(consume_line, fetch_pos)
+        schema_pos = spotlight.index(schema_start, fetch_pos, consume_pos)
+        schema_end_pos = spotlight.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+        reordered = (spotlight[:schema_pos] + spotlight[schema_end_pos:consume_pos + len(consume_line)]
+                     + spotlight[schema_pos:schema_end_pos] + spotlight[consume_pos + len(consume_line):])
+        try:
+            validate_spotlight_initial_compare_evidence(reordered, run_self_test=False)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Spotlight initial compare self-test accepted schema-after-consumption ordering")
 
 
 def validate_spotlight_pr_response_evidence(
@@ -1634,6 +1724,7 @@ def project_spotlight_lifecycle_status_to_legacy(spotlight: str) -> str:
 
 
 def validate_v21_spotlight_invariants(spotlight: str) -> None:
+    spotlight = project_spotlight_initial_compare_schema_to_legacy(spotlight)
     spotlight = project_spotlight_reconcile_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_propose_shell_reads_to_raw(spotlight)
     spotlight = project_spotlight_merge_shell_reads_to_raw(spotlight)
@@ -6372,6 +6463,7 @@ def main() -> int:
         validate_spotlight_same_base_supersession(spotlight)
         validate_spotlight_privileged_ref_evidence_schema(spotlight)
         validate_spotlight_readme_contents_evidence(spotlight)
+        validate_spotlight_initial_compare_evidence(spotlight)
         validate_spotlight_pr_response_evidence(spotlight)
 
         validate_spotlight_budget_artifact_history(spotlight)

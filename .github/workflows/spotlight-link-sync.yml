@@ -1941,6 +1941,25 @@ jobs:
           validate_git_ref_object "$CANDIDATE_REF_RESPONSE" "refs/heads/${CANDIDATE_BRANCH}" "$HEAD_SHA"
           test "$(jq -r .object.sha <<<"$CANDIDATE_REF_RESPONSE")" = "$HEAD_SHA"
           COMPARE="$(spotlight_singleton_get compare-initial)"
+          jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" '
+            (type == "object") and
+            (.status == "ahead") and
+            (.base_commit | type == "object" and .sha == $base) and
+            (.merge_base_commit | type == "object" and .sha == $base) and
+            (.ahead_by | type == "number" and . == floor and . == 1) and
+            (.behind_by | type == "number" and . == floor and . == 0) and
+            (.total_commits | type == "number" and . == floor and . == 1) and
+            (.commits | type == "array" and length == 1 and
+              (.[0] | type == "object" and .sha == $head)) and
+            (.files | type == "array" and length == 1 and
+              (.[0] | type == "object" and
+                (.filename | type == "string" and . == "README.md") and
+                (.status | type == "string" and . == "modified") and
+                (.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+                (.additions | type == "number" and . == floor and . >= 0) and
+                (.deletions | type == "number" and . == floor and . >= 0) and
+                (.changes | type == "number" and . == floor and . >= 0)))
+          ' <<<"$COMPARE" >/dev/null
           test "$(jq -r .status <<<"$COMPARE")" = "ahead"
           test "$(jq -r .base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
           test "$(jq -r .merge_base_commit.sha <<<"$COMPARE")" = "$BASE_SHA"
