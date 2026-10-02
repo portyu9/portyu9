@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import governance_contract_item10_core as core
+import repository_settings_contract as repository_settings
 
 
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
@@ -438,6 +439,7 @@ def main() -> int:
     core.validate_quality = validate_quality_native_gate
     try:
         validate_action_identity_projection()
+        repository_settings.validate_and_self_test()
         return core.main()
     finally:
         core.validate_stats = original_stats
