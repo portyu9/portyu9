@@ -13,7 +13,7 @@ VERSION = "governed-workflow-byte-identity-v151"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
-    ".github/workflows/profile-stats.yml": "d618b3d538ad843b3ac347d90fd39b9feefbb813",
+    ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
     ".github/workflows/spotlight-link-sync.yml": "a895db4a36a7f17e7287ab3c045796bd9e7fb07a",
 }
 
@@ -5989,7 +5989,7 @@ def validate_profile_stats_spotlight_dispatch_evidence(
             and "gh api " not in plan,
             "Profile Stats Spotlight dispatch plan must contain exactly two governed GETs and no direct gh api")
     require("name: dispatch-spotlight-link-sync" in dispatch
-            and "needs: [dispatch_plan, receipt_attest, receipt, lease, attest]" in dispatch,
+            and "needs: [dispatch_plan, receipt_attest, lease, attest]" in dispatch,
             "Profile Stats write-only dispatcher dependency closure changed")
     require("permissions:\n      actions: write" in dispatch,
             "Profile Stats dispatcher must retain actions-write-only authority")
@@ -5999,8 +5999,8 @@ def validate_profile_stats_spotlight_dispatch_evidence(
     require('PREVIOUS_RUN_HIGH_WATER: ${{ needs.dispatch_plan.outputs.previous_run_high_water }}' in dispatch,
             "Profile Stats dispatcher lost exact read-plan high-water input")
     for fragment in (
-        'MAIN_SOURCE_SHA: ${{ needs.receipt.outputs.source_sha }}',
-        'GENERATED_PUBLICATION_SHA: ${{ needs.receipt.outputs.published_sha }}',
+        'MAIN_SOURCE_SHA: ${{ needs.receipt_attest.outputs.source_sha }}',
+        'GENERATED_PUBLICATION_SHA: ${{ needs.receipt_attest.outputs.published_sha }}',
         '[[ "$MAIN_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]',
         '[[ "$GENERATED_PUBLICATION_SHA" =~ ^[0-9a-f]{40}$ ]]',
         'test "$MAIN_SOURCE_SHA" = "$GITHUB_SHA"',
