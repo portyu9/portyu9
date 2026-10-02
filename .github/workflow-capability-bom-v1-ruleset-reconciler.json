@@ -289,11 +289,13 @@
           "artifacts": [],
           "id": "recovery_authorize",
           "mutations": [],
-          "name": "authorize-control-plane-recovery-human-gate",
+          "name": "select-control-plane-recovery-candidate-read-only",
           "needs": [],
           "oidc": false,
           "permissions": {
-            "contents": "read"
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
           },
           "references": {
             "env": [],
@@ -866,20 +868,7 @@
             "*/5 * * * *"
           ]
         },
-        "workflow_dispatch": {
-          "inputs": {
-            "recovery_head_sha": {
-              "description": "Exact immutable repair head SHA; empty means ordinary reconcile",
-              "required": "false",
-              "type": "string"
-            },
-            "recovery_pr": {
-              "description": "Exact same-repository repair PR number; empty means ordinary reconcile",
-              "required": "false",
-              "type": "string"
-            }
-          }
-        },
+        "workflow_dispatch": {},
         "workflow_run": {
           "types": [
             "completed"

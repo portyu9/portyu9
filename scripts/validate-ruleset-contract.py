@@ -312,6 +312,80 @@ def validate_reconciler_wake_contract(text: str) -> None:
             "Ruleset reconciler must keep push/manual exact-main freshness before workflow_run handling")
 
 
+def validate_recovery_autonomy_contract(text: str) -> None:
+    """Lock autonomous recovery selection to bounded read-only evidence."""
+    for forbidden in (
+        "ruleset-recovery-approval",
+        "authorize-control-plane-recovery-human-gate",
+        "inputs.recovery_pr",
+        "inputs.recovery_head_sha",
+        'test "$DISPATCH_ACTOR" = "portyu9"',
+        "human-approved trusted-capability-admission recovery",
+    ):
+        require(forbidden not in text, f"Ruleset recovery retained human/manual authorization residue: {forbidden}")
+
+    require(
+        "  workflow_dispatch:\n" in text
+        and "  workflow_dispatch:\n    inputs:\n" not in text,
+        "Ruleset reconciler manual dispatch must not carry recovery candidate inputs",
+    )
+    require(
+        "  group: ${{ github.event_name == 'schedule' && 'ruleset-control-plane-recovery-v1' || format('ruleset-reconciler-{0}', github.run_id) }}\n"
+        in text,
+        "Scheduled recovery/watchdog runs lost transaction serialization",
+    )
+
+    selector = reconciler_job_slice(text, "recovery_authorize", "recovery_plan")
+    for fragment in (
+        "    if: github.event_name == 'schedule'\n",
+        "    name: select-control-plane-recovery-candidate-read-only\n",
+        "      checks: read\n",
+        "      contents: read\n",
+        "      pull-requests: read\n",
+        "      selected: ${{ steps.authorize.outputs.selected }}\n",
+        '          echo "selected=false" >> "$GITHUB_OUTPUT"\n',
+        '          test "$GITHUB_EVENT_NAME" = "schedule"\n',
+        'recovery-classify-shape --live selector-live-ruleset.json --observable',
+        'pulls?state=open&base=main&per_page=100',
+        "scripts/workflow_capability_api_collection.py pull-requests",
+        ".github/workflows/capability-admission.yml",
+        "scripts/capability_admission_workflow_contract.py",
+        "validate-contracts",
+        "trusted-governed-bot-review",
+        "integration-pinned-upstream",
+        "dependency-review",
+        "analyze-actions",
+        "analyze-python",
+        "trusted-capability-admission",
+        'CANDIDATE_COUNT="$(jq -s \'length\' "$CANDIDATES")"',
+        'echo "ERROR: multiple exact autonomous recovery candidates are simultaneously eligible."',
+        '          echo "selected=true" >> "$GITHUB_OUTPUT"\n',
+    ):
+        require(fragment in selector, f"Autonomous recovery selector contract is missing: {fragment}")
+
+    require(
+        selector.count("scripts/automation_github_paginated_read.py") == 2
+        and selector.count("scripts/workflow_capability_api_collection.py") == 2,
+        "Autonomous recovery selector read/normalization budget changed",
+    )
+    require(
+        selector.count('echo "selected=false" >> "$GITHUB_OUTPUT"') == 1
+        and selector.count('echo "selected=true" >> "$GITHUB_OUTPUT"') == 1,
+        "Autonomous recovery selector decision outputs are no longer singular",
+    )
+
+    plan = reconciler_job_slice(text, "recovery_plan", "recovery_create_certificate")
+    require(
+        "    if: needs.recovery_authorize.outputs.selected == 'true'\n" in plan,
+        "Recovery plan is not gated on an exact autonomous selector decision",
+    )
+    require(
+        'SUMMARY="Incomplete transaction certificate for the exact autonomous trusted-capability-admission recovery."'
+        in text,
+        "Recovery certificate summary still describes human authorization",
+    )
+
+
 def validate_reconciler_main_ref_evidence(text: str) -> None:
     endpoint = 'python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main"'
     legacy = 'gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha'
@@ -1660,6 +1734,7 @@ def main() -> int:
         validate_source(payload)
         reconciler = RECONCILER.read_text(encoding="utf-8")
         validate_reconciler_wake_contract(reconciler)
+        validate_recovery_autonomy_contract(reconciler)
         validate_reconciler_main_ref_evidence(reconciler)
         historical_reconcile = reconciler_job_slice(reconciler, "reconcile", "attest")
         validate_reconciler_admin_response_evidence(historical_reconcile)

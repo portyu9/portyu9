@@ -186,6 +186,20 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
             f"ruleset reconciler authority separation changed for {job_id}",
         )
 
+    selector = jobs["recovery_authorize"]
+    require(
+        selector["name"] == "select-control-plane-recovery-candidate-read-only"
+        and selector["needs"] == []
+        and selector["permissions"] == {
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read",
+        }
+        and selector["mutations"] == []
+        and selector["references"]["secrets"] == [],
+        "autonomous recovery selector authority changed",
+    )
+
     reconcile = jobs["reconcile"]
     require(
         reconcile["references"]["secrets"] == RULESET_RECONCILER_ADMIN_SECRETS,
