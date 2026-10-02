@@ -752,20 +752,23 @@ def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
 
 def project_spotlight_initial_compare_schema_to_legacy(spotlight: str) -> str:
     """Project the current typed initial-compare boundary out of frozen historical proofs."""
+    approve_start = spotlight.index("  approve:\n")
+    approve_end = spotlight.index("  authorize:\n", approve_start)
+    approve = spotlight[approve_start:approve_end]
     fetch = '          COMPARE="$(spotlight_singleton_get compare-initial)"\n'
     consume = '          test "$(jq -r .status <<<"$COMPARE")" = "ahead"\n'
     schema_start = '          jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \'\n'
     schema_end = '          \' <<<"$COMPARE" >/dev/null\n'
-    require(spotlight.count(fetch) == 1 and spotlight.count(consume) == 1,
+    require(approve.count(fetch) == 1 and approve.count(consume) == 1,
             "Spotlight initial-compare projection anchors changed")
-    fetch_pos = spotlight.index(fetch)
-    consume_pos = spotlight.index(consume, fetch_pos)
-    schema_pos = spotlight.index(schema_start, fetch_pos + len(fetch), consume_pos)
-    schema_end_pos = spotlight.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+    fetch_pos = approve.index(fetch)
+    consume_pos = approve.index(consume, fetch_pos)
+    schema_pos = approve.index(schema_start, fetch_pos + len(fetch), consume_pos)
+    schema_end_pos = approve.index(schema_end, schema_pos, consume_pos) + len(schema_end)
     require(fetch_pos + len(fetch) == schema_pos and schema_end_pos == consume_pos,
             "Spotlight initial-compare schema is not the exact pre-consumption overlay")
-    return spotlight[:schema_pos] + spotlight[consume_pos:]
-
+    projected = approve[:schema_pos] + approve[consume_pos:]
+    return spotlight[:approve_start] + projected + spotlight[approve_end:]
 
 def project_spotlight_approve_shell_singleton_reads_to_raw(spotlight: str) -> str:
     """Project the reviewed approve-only shell retry transport to its prior raw-GET semantics."""

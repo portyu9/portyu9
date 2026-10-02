@@ -1116,20 +1116,23 @@ def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
 
 def project_spotlight_initial_compare_schema_to_legacy(sync: str) -> str:
     """Project the current typed initial-compare boundary out of frozen historical proofs."""
+    approve_start = sync.index("  approve:\n")
+    approve_end = sync.index("  authorize:\n", approve_start)
+    approve = sync[approve_start:approve_end]
     fetch = '          COMPARE="$(spotlight_singleton_get compare-initial)"\n'
     consume = '          test "$(jq -r .status <<<"$COMPARE")" = "ahead"\n'
     schema_start = '          jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \'\n'
     schema_end = '          \' <<<"$COMPARE" >/dev/null\n'
-    require(sync.count(fetch) == 1 and sync.count(consume) == 1,
+    require(approve.count(fetch) == 1 and approve.count(consume) == 1,
             "Spotlight initial-compare projection anchors changed")
-    fetch_pos = sync.index(fetch)
-    consume_pos = sync.index(consume, fetch_pos)
-    schema_pos = sync.index(schema_start, fetch_pos + len(fetch), consume_pos)
-    schema_end_pos = sync.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+    fetch_pos = approve.index(fetch)
+    consume_pos = approve.index(consume, fetch_pos)
+    schema_pos = approve.index(schema_start, fetch_pos + len(fetch), consume_pos)
+    schema_end_pos = approve.index(schema_end, schema_pos, consume_pos) + len(schema_end)
     require(fetch_pos + len(fetch) == schema_pos and schema_end_pos == consume_pos,
             "Spotlight initial-compare schema is not the exact pre-consumption overlay")
-    return sync[:schema_pos] + sync[consume_pos:]
-
+    projected = approve[:schema_pos] + approve[consume_pos:]
+    return sync[:approve_start] + projected + sync[approve_end:]
 
 def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
     """Project approve-only singleton retry transport to the accepted item-9 raw-GET shape."""
