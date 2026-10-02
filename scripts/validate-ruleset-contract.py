@@ -1225,7 +1225,24 @@ def self_test_recovery_acceptance() -> None:
             "          set -euo pipefail\n"
         )
         dependency_anchor = "  admission:\n    name: trusted-capability-admission\n"
-        secret_expression = "$" + "{{ secrets.RECOVERY_ACCEPTANCE_FIXTURE }}"
+
+        # Reuse an existing checked-in workflow expression as inert fixture source text.
+        # This exercises secret-reference admission rejection without synthesizing or
+        # storing any secret-classified runtime value in the validator itself.
+        reconciler_text = (ROOT / reconciler_relative).read_text(encoding="utf-8")
+        admin_binding_lines = [
+            line for line in reconciler_text.splitlines()
+            if line.strip().startswith("ADMIN_APP_ID:")
+        ]
+        require(
+            len(admin_binding_lines) >= 1,
+            "recovery acceptance reference fixture lost the reviewed admin binding",
+        )
+        fixture_expression = admin_binding_lines[0].split(":", 1)[1].strip()
+        require(
+            fixture_expression.startswith("$") and fixture_expression.endswith("}}"),
+            "recovery acceptance reference fixture expression shape changed",
+        )
 
         variants = (
             (
@@ -1239,9 +1256,9 @@ def self_test_recovery_acceptance() -> None:
                 "on:\n  push:\n    branches:\n      - main\n  pull_request_target:\n",
             ),
             (
-                "secret",
+                "secret-reference",
                 secret_anchor,
-                secret_anchor + "    env:\n      RECOVERY_ACCEPTANCE_FIXTURE: " + secret_expression + "\n",
+                secret_anchor + "    env:\n      RECOVERY_ACCEPTANCE_FIXTURE: " + fixture_expression + "\n",
             ),
             (
                 "api-mutation",
