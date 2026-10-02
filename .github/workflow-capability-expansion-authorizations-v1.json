@@ -827,6 +827,13 @@
       "rationale": "Authorize #765's exact Dependabot readiness evidence hardening. Existing read endpoints, permissions, protected contexts, dispatch target, and merge/review authority stay unchanged. Bounded run/check collections, strict identity/status/conclusion schemas, unique ids, and all-noncompleted activity now fail closed before readiness or redispatch. Semantic Workflow Capability is unchanged; no trigger, secret, mutation class, retry, ruleset, direct-main write, check reduction, or bypass is added."
     },
     {
+      "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
+      "candidateBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
+      "expansionSha256": "f9a4a499b5edd8d06b089674686ec437d2b427127bce61c340d8e0ebd53e6a6e",
+      "id": "cap-dependabot-reconciled-commit-identity-v1",
+      "rationale": "Authorize frozen #1493 measured by closed #1494: bind the existing Dependabot reconciled Git-commit response to exact GitHub Actions bot author and GitHub committer identity plus typed dates, while preserving exact tree and one-parent topology. Semantic Workflow Capability is unchanged. Adds no trigger, permission, endpoint/method, mutation, retry, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, or bypass."
+    },
+    {
       "baseBomSha256": "36d0790286cd4a3ebd02d9df98687e9cfd656819f920426c38c1fdd41e222889",
       "candidateBomSha256": "9976c120af0e18762e82ef1a26041c9bde4b825c001f2cbe50b85398c1665da6",
       "expansionSha256": "a9aa30bd74e3ba8582d171af07053a634e31e6e3dbda29b1b739481f8508d00b",
