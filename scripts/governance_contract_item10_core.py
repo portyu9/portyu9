@@ -138,6 +138,7 @@ def validate_publish_write_surface(publish: str) -> None:
     expressions = re.findall(r"\$\{\{\s*([^}]+?)\s*\}\}", publish)
     require(
         expressions == [
+            "steps.publish.outputs.publication_state",
             "steps.publish.outputs.published_sha",
             "steps.publish.outputs.parent_sha",
             "steps.publish.outputs.source_sha",
@@ -167,21 +168,44 @@ def validate_publish_write_surface(publish: str) -> None:
         '          test "$(git -C artifacts rev-parse HEAD^)" = "$PARENT_SHA"',
         '          REMOTE_MAIN="$(git -C artifacts ls-remote --exit-code origin refs/heads/main)"',
         '          [[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
-        '          test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"',
+        '          CURRENT_MAIN_SHA="${BASH_REMATCH[1]}"',
+        '          if [ "$CURRENT_MAIN_SHA" != "$SOURCE_SHA" ]; then',
+        '            echo "publication_state=SUPERSEDED" >> "$GITHUB_OUTPUT"',
+        '            echo "Profile Stats source epoch superseded before generated publication (source $SOURCE_SHA, current main $CURRENT_MAIN_SHA); the newer main epoch owns convergence."',
+        '            exit 0',
+        '          fi',
         '          REMOTE_GENERATED="$(git -C artifacts ls-remote --exit-code origin refs/heads/generated)"',
         '          test "${BASH_REMATCH[1]}" = "$CANDIDATE_SHA"',
+        '          echo "publication_state=PUBLISHED" >> "$GITHUB_OUTPUT"',
         '          echo "published_sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"',
         '          echo "parent_sha=$PARENT_SHA" >> "$GITHUB_OUTPUT"',
         '          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"',
     ):
         require(terminal.count(fragment) == 1,
                 f"Publication terminal source/receipt handoff contract changed: {fragment}")
-    freshness_guard = '          test "${BASH_REMATCH[1]}" = "$SOURCE_SHA"'
+    main_schema = '          [[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]'
+    current_main = '          CURRENT_MAIN_SHA="${BASH_REMATCH[1]}"'
+    superseded_guard = '          if [ "$CURRENT_MAIN_SHA" != "$SOURCE_SHA" ]; then'
+    superseded_state = '            echo "publication_state=SUPERSEDED" >> "$GITHUB_OUTPUT"'
+    superseded_exit = '            exit 0'
+    superseded_close = '          fi'
     auth_intro = '          AUTH_HEADER="$(printf \'x-access-token:%s\' "$GITHUB_TOKEN" | base64 -w0)"'
     push = 'git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated'
     generated_reproof = '          REMOTE_GENERATED="$(git -C artifacts ls-remote --exit-code origin refs/heads/generated)"'
-    require(terminal.index(freshness_guard) < terminal.index(auth_intro) < terminal.index(push) < terminal.index(generated_reproof),
-            "Publication must prove current main before token derivation/push and re-prove generated after the exact push")
+    published_state = '          echo "publication_state=PUBLISHED" >> "$GITHUB_OUTPUT"'
+    require(
+        terminal.index(main_schema)
+        < terminal.index(current_main)
+        < terminal.index(superseded_guard)
+        < terminal.index(superseded_state)
+        < terminal.index(superseded_exit)
+        < terminal.index(superseded_close)
+        < terminal.index(auth_intro)
+        < terminal.index(push)
+        < terminal.index(generated_reproof)
+        < terminal.index(published_state),
+        "Publication must type current main, fully terminate a valid superseded epoch before token derivation/push, re-prove generated after the exact push, then emit PUBLISHED",
+    )
 
 
 def validate_quality(text: str) -> None:
