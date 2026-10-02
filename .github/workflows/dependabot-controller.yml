@@ -601,10 +601,17 @@ jobs:
             proof_checks="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")" || return 1
             if ! jq -e --arg head "$HEAD_SHA" '
               (type == "object") and
-              (.total_count == 1) and
-              (.check_runs | type == "array" and length == 1) and
-              (.check_runs[0] | type == "object" and .head_sha == $head)
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+              (.check_runs | type == "array" and length <= 100) and
+              (.total_count == (.check_runs | length)) and
+              (all(.check_runs[];
+                type == "object" and
+                (.head_sha == $head)
+              ))
             ' <<<"$proof_checks" >/dev/null; then
+              return 1
+            fi
+            if [ "$(jq -r .total_count <<<"$proof_checks")" != "1" ]; then
               return 1
             fi
             jq '.check_runs[0]' <<<"$proof_checks" > dependabot-admission-proof-check.json
@@ -1330,6 +1337,19 @@ jobs:
             assert_main_sha "$BASE_SHA"
             assert_head_sha "$HEAD_SHA"
             CHECKS="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?app_id=15368&check_name=trusted-capability-admission-proof&filter=latest&per_page=100")"
+            if ! jq -e --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+              (.check_runs | type == "array" and length <= 100) and
+              (.total_count == (.check_runs | length)) and
+              (all(.check_runs[];
+                type == "object" and
+                (.head_sha == $head)
+              ))
+            ' <<<"$CHECKS" >/dev/null; then
+              echo "ERROR: malformed exact-head delegated admission proof collection for ${HEAD_SHA}." >&2
+              exit 1
+            fi
             if [ "$(jq -r .total_count <<<"$CHECKS")" = "1" ]; then
               jq '.check_runs[0]' <<<"$CHECKS" > dependabot-admission-check.json
               EXTERNAL_ID="$(jq -r '.external_id // ""' dependabot-admission-check.json)"
