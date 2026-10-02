@@ -387,9 +387,73 @@ def validate_recovery_autonomy_contract(text: str) -> None:
 
 
 def validate_reconciler_main_ref_evidence(text: str) -> None:
-    endpoint = 'python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main"'
-    legacy = 'gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha'
+    validate_reconciler_main_ref_evidence_fixture(text)
+
+    # Negative fixtures: every required identity/type primitive, direct scalar
+    # extraction, and schema-before-consumption ordering must fail closed.
+    for original, weakened, label in (
+        ('if type != "object" then', 'if false then', "top-level object typing"),
+        ('elif .ref != "refs/heads/main" then', 'elif false then', "ref identity"),
+        (
+            'elif ((.object | type) != "object") or (.object.type != "commit") then',
+            'elif false then',
+            "object identity",
+        ),
+        (
+            'elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then',
+            'elif false then',
+            "node-id typing",
+        ),
+    ):
+        mutated = text.replace(original, weakened, 1)
+        try:
+            validate_reconciler_main_ref_evidence_fixture(mutated)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"Ruleset main-ref self-test accepted weakened {label}")
+
+    mutated = text.replace(
+        'MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main")"',
+        'MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)"',
+        1,
+    )
+    try:
+        validate_reconciler_main_ref_evidence_fixture(mutated)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Ruleset main-ref self-test accepted direct scalar extraction")
+
+    first_capture = (
+        'LIVE_MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py '
+        '"repos/portyu9/portyu9/git/ref/heads/main")"'
+    )
+    mutated = text.replace(
+        first_capture,
+        first_capture
+        + '\n          PRE_SCHEMA_SHA="$(jq -r .object.sha <<<"$LIVE_MAIN_REF_RESPONSE")"',
+        1,
+    )
+    try:
+        validate_reconciler_main_ref_evidence_fixture(mutated)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Ruleset main-ref self-test accepted SHA consumption before schema validation")
+
+
+def validate_reconciler_main_ref_evidence_fixture(text: str) -> None:
+    hardcoded_endpoint = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/portyu9/portyu9/git/ref/heads/main"'
+    )
+    recovery_endpoint = (
+        'python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/git/ref/heads/main"'
+    )
     schema_fragments = (
+        'if type != "object" then',
         'error("Ruleset main ref response must be an object")',
         '.ref != "refs/heads/main"',
         'error("Ruleset main ref identity changed")',
@@ -405,105 +469,104 @@ def validate_reconciler_main_ref_evidence(text: str) -> None:
         'error("Ruleset main ref object URL is invalid")',
         '\n              .object.sha\n            end',
     )
-    require(text.count(endpoint) == 5,
-            "Ruleset reconciler must retain exactly five reviewed governed main-ref GET call sites")
-    require('gh api "repos/portyu9/portyu9/git/ref/heads/main"' not in text,
-            "Ruleset reconciler main-ref reads must not regress to direct gh api transport")
-    require(legacy not in text,
-            "Ruleset reconciler must not consume main-ref SHA through direct gh api --jq")
     require(
-        text.count('\n          LIVE_MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main")"') == 1,
-        "Ruleset plan main-ref response capture changed",
+        text.count(hardcoded_endpoint) == 5,
+        "Ruleset reconciler historical main-ref GET inventory changed",
     )
     require(
-        text.count('\n          MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main")"') == 4,
-        "Ruleset privileged main-ref response capture count changed",
+        text.count(recovery_endpoint) == 9,
+        "Ruleset reconciler recovery main-ref GET inventory changed",
     )
+    for direct in (
+        'gh api "repos/portyu9/portyu9/git/ref/heads/main"',
+        'gh api "repos/${TARGET_REPOSITORY}/git/ref/heads/main"',
+    ):
+        require(
+            direct not in text,
+            f"Ruleset reconciler main-ref reads must not regain direct transport: {direct}",
+        )
     for fragment in schema_fragments:
         require(
-            text.count(fragment) == 5,
-            f"Ruleset main-ref singleton schema must appear at all five call sites: {fragment}",
+            text.count(fragment) == 14,
+            f"Ruleset main-ref singleton schema must appear at all fourteen call sites: {fragment}",
         )
 
     fetch_positions: list[int] = []
-    cursor = 0
-    while True:
-        position = text.find(endpoint, cursor)
-        if position < 0:
-            break
-        fetch_positions.append(position)
-        cursor = position + len(endpoint)
-    require(len(fetch_positions) == 5,
-            "Ruleset main-ref endpoint position inventory changed")
+    for endpoint in (hardcoded_endpoint, recovery_endpoint):
+        cursor = 0
+        while True:
+            position = text.find(endpoint, cursor)
+            if position < 0:
+                break
+            fetch_positions.append(position)
+            cursor = position + len(endpoint)
+    fetch_positions.sort()
+    require(
+        len(fetch_positions) == 14,
+        "Ruleset main-ref endpoint position inventory changed",
+    )
 
-    for index, fetch_pos in enumerate(fetch_positions):
-        next_fetch = fetch_positions[index + 1] if index + 1 < len(fetch_positions) else len(text)
+    normalizers = (
+        'LIVE_MAIN_SHA="$(jq -er',
+        'MAIN_REF_SHA="$(jq -er',
+        'MAIN_REF_SHA="$(jq -er',
+        'MAIN_REF_SHA="$(jq -er',
+        'MAIN_REF_SHA="$(jq -er',
+        'MAIN_SHA="$(jq -er',
+        'LIVE_MAIN_SHA="$(jq -er',
+        'MAIN_SHA="$(jq -er',
+        'MAIN_SHA="$(jq -er',
+        'MAIN_SHA="$(jq -er',
+        'AFTER_MAIN_SHA="$(jq -er',
+        'LIVE_MAIN_SHA="$(jq -er',
+        'MAIN_SHA="$(jq -er',
+        'MAIN_SHA="$(jq -er',
+    )
+    consumers = (
+        'test "$LIVE_MAIN_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$LIVE_MAIN_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$AFTER_MAIN_SHA" = "$MERGE_SHA"',
+        'test "$LIVE_MAIN_SHA" = "$EXPECTED_MERGE_SHA"',
+        'test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"',
+        'test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"',
+    )
+    require(
+        len(normalizers) == len(fetch_positions) == len(consumers),
+        "Ruleset main-ref ordered evidence inventory changed",
+    )
+
+    for index, (fetch_pos, normalizer, consumer) in enumerate(
+        zip(fetch_positions, normalizers, consumers),
+        start=1,
+    ):
+        next_fetch = fetch_positions[index] if index < len(fetch_positions) else len(text)
         block = text[fetch_pos:next_fetch]
+        normalizer_pos = block.find(normalizer)
         schema_start = block.find('if type != "object" then')
         schema_end = block.find('\n              .object.sha\n            end', schema_start + 1)
         require(
-            schema_start >= 0 and schema_end > schema_start,
-            f"Ruleset main-ref call {index + 1} must validate the complete object before SHA projection",
+            normalizer_pos >= 0
+            and schema_start > normalizer_pos
+            and schema_end > schema_start,
+            f"Ruleset main-ref call {index} must normalize through the complete singleton schema",
         )
-        if index == 0:
-            compare = block.find('test "$LIVE_MAIN_SHA" = "$TRUSTED_MAIN_SHA"')
-            require(
-                'LIVE_MAIN_SHA="$(jq -er' in block,
-                "Ruleset plan main-ref normalization variable changed",
-            )
-        else:
-            compare = block.find('test "$MAIN_REF_SHA" = "$TRUSTED_MAIN_SHA"')
-            require(
-                'MAIN_REF_SHA="$(jq -er' in block,
-                f"Ruleset privileged main-ref normalization variable changed at call {index + 1}",
-            )
         require(
-            compare > schema_end,
-            f"Ruleset main-ref call {index + 1} consumed freshness state before schema validation",
+            ".object.sha" not in block[:schema_start],
+            f"Ruleset main-ref call {index} consumed SHA before schema validation",
         )
-
-    # Negative fixtures: weakening any one required primitive or reintroducing scalar
-    # extraction must be rejected by this contract.
-    mutated = text.replace(
-        'elif .ref != "refs/heads/main" then',
-        'elif false then',
-        1,
-    )
-    try:
-        validate_reconciler_main_ref_evidence_fixture(mutated)
-    except ValueError:
-        pass
-    else:
-        raise ValueError("Ruleset main-ref self-test accepted weakened ref identity")
-
-    mutated = text.replace(
-        'MAIN_REF_RESPONSE="$(python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main")"',
-        'MAIN_REF_RESPONSE="$(gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha)"',
-        1,
-    )
-    try:
-        validate_reconciler_main_ref_evidence_fixture(mutated)
-    except ValueError:
-        pass
-    else:
-        raise ValueError("Ruleset main-ref self-test accepted direct scalar extraction")
-
-
-def validate_reconciler_main_ref_evidence_fixture(text: str) -> None:
-    endpoint = 'python3 scripts/automation_github_read.py "repos/portyu9/portyu9/git/ref/heads/main"'
-    legacy = 'gh api "repos/portyu9/portyu9/git/ref/heads/main" --jq .object.sha'
-    require(text.count(endpoint) == 5, "fixture governed endpoint count changed")
-    require('gh api "repos/portyu9/portyu9/git/ref/heads/main"' not in text,
-            "fixture regained direct main-ref transport")
-    require(legacy not in text, "fixture regained direct scalar extraction")
-    for fragment in (
-        'elif .ref != "refs/heads/main" then',
-        '((.object | type) != "object") or (.object.type != "commit")',
-        '((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not)',
-        '((.object.url | type) != "string") or ((.object.url | length) == 0)',
-    ):
-        require(text.count(fragment) == 5, f"fixture main-ref schema changed: {fragment}")
-
+        consumer_pos = block.find(consumer, schema_end)
+        require(
+            consumer_pos > schema_end,
+            f"Ruleset main-ref call {index} consumed freshness/merge state before schema validation",
+        )
 
 
 def validate_reconciler_admin_response_evidence(text: str) -> None:
@@ -1751,7 +1814,7 @@ def main() -> int:
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
             f"seven required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity, "
-            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all five historical privileged reconciler main-ref reads plus the read-only drift-sentinel main-ref read are typed before SHA consumption, every historical/recovery Administration token and ruleset writer proves exact HTTP 201/200 on nominal success under one non-cancellable serialization group, and observable drift fails closed."
+            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all fourteen reconciler main-ref reads plus the read-only drift-sentinel main-ref read are typed before SHA consumption, every historical/recovery Administration token and ruleset writer proves exact HTTP 201/200 on nominal success under one non-cancellable serialization group, and observable drift fails closed."
         )
         if unobservable:
             print(
