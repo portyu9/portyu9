@@ -527,6 +527,14 @@ def validate_stats(text: str) -> None:
             "Spotlight dispatcher must not checkout or execute authored Python")
     require("actions/workflows/spotlight-link-sync.yml/dispatches" in dispatch and "-f ref=main" in dispatch,
             "Spotlight dispatcher target changed")
+    for fragment in (
+        'MAIN_SOURCE_SHA: ${{ needs.receipt_attest.outputs.source_sha }}',
+        'GENERATED_PUBLICATION_SHA: ${{ needs.receipt_attest.outputs.published_sha }}',
+        '-f "inputs[main_source_sha]=$MAIN_SOURCE_SHA"',
+        '-f "inputs[generated_publication_sha]=$GENERATED_PUBLICATION_SHA"',
+    ):
+        require(fragment in dispatch,
+                f"Spotlight dispatcher shared publication epoch contract changed: {fragment}")
 
     require(f"shinpr/github-profile-stats@{UPSTREAM_SHA}" in generate, "Pinned upstream generator SHA changed")
     require(generate.count(f"actions/upload-artifact@{UPLOAD_SHA}") == 3,
