@@ -791,10 +791,12 @@
           }
         },
         "recovery_authorize": {
-          "name": "authorize-control-plane-recovery-human-gate",
+          "name": "select-control-plane-recovery-candidate-read-only",
           "needs": [],
           "permissions": {
-            "contents": "read"
+            "checks": "read",
+            "contents": "read",
+            "pull-requests": "read"
           }
         },
         "recovery_plan": {
