@@ -1114,6 +1114,23 @@ def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
     return sync[:merge_start] + projected + sync[merge_end:]
 
 
+def project_spotlight_initial_compare_schema_to_legacy(sync: str) -> str:
+    """Project the current typed initial-compare boundary out of frozen historical proofs."""
+    fetch = '          COMPARE="$(spotlight_singleton_get compare-initial)"\n'
+    consume = '          test "$(jq -r .status <<<"$COMPARE")" = "ahead"\n'
+    schema_start = '          jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \'\n'
+    schema_end = '          \' <<<"$COMPARE" >/dev/null\n'
+    require(sync.count(fetch) == 1 and sync.count(consume) == 1,
+            "Spotlight initial-compare projection anchors changed")
+    fetch_pos = sync.index(fetch)
+    consume_pos = sync.index(consume, fetch_pos)
+    schema_pos = sync.index(schema_start, fetch_pos + len(fetch), consume_pos)
+    schema_end_pos = sync.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+    require(fetch_pos + len(fetch) == schema_pos and schema_end_pos == consume_pos,
+            "Spotlight initial-compare schema is not the exact pre-consumption overlay")
+    return sync[:schema_pos] + sync[consume_pos:]
+
+
 def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
     """Project approve-only singleton retry transport to the accepted item-9 raw-GET shape."""
     approve_start = sync.index("  approve:\n")
@@ -1323,6 +1340,7 @@ def project_spotlight_terminal_protected_runs_to_legacy(sync: str) -> str:
 
 
 def project_item9(sync: str) -> str:
+    sync = project_spotlight_initial_compare_schema_to_legacy(sync)
     sync = project_spotlight_reconcile_shell_reads_to_raw(sync)
     sync = project_spotlight_propose_shell_reads_to_raw(sync)
     sync = project_spotlight_merge_shell_reads_to_raw(sync)
@@ -2043,6 +2061,76 @@ def validate_builder_script_with_trusted_admission(wrapper: str, builder_core: s
                 f"Spotlight MAC schema lost trusted admission binding: {fragment}")
 
 
+def validate_initial_compare_schema_overlay(sync: str) -> None:
+    approve = core.job_block(sync, "approve", "authorize")
+    fetch = 'COMPARE="$(spotlight_singleton_get compare-initial)"'
+    schema = 'jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \''
+    consume = 'test "$(jq -r .status <<<"$COMPARE")" = "ahead"'
+    required = (
+        '(type == "object") and',
+        '(.status == "ahead") and',
+        '(.base_commit | type == "object" and .sha == $base) and',
+        '(.merge_base_commit | type == "object" and .sha == $base) and',
+        '(.ahead_by | type == "number" and . == floor and . == 1) and',
+        '(.behind_by | type == "number" and . == floor and . == 0) and',
+        '(.total_commits | type == "number" and . == floor and . == 1) and',
+        '(.commits | type == "array" and length == 1 and',
+        '(.[0] | type == "object" and .sha == $head)) and',
+        '(.files | type == "array" and length == 1 and',
+        '(.filename | type == "string" and . == "README.md") and',
+        '(.status | type == "string" and . == "modified") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and',
+        '(.additions | type == "number" and . == floor and . >= 0) and',
+        '(.deletions | type == "number" and . == floor and . >= 0) and',
+        '(.changes | type == "number" and . == floor and . >= 0)',
+    )
+    require(approve.count(fetch) == 1 and approve.count(schema) == 1 and approve.count(consume) == 1,
+            "Spotlight initial compare fetch/schema/consume cardinality changed")
+    for fragment in required:
+        require(fragment in approve,
+                f"Spotlight initial compare schema changed: {fragment}")
+    require(approve.index(fetch) < approve.index(schema) < approve.index(consume),
+            "Spotlight initial compare must be typed before scalar authorization consumption")
+
+
+def self_test_initial_compare_schema_overlay(sync: str) -> None:
+    validate_initial_compare_schema_overlay(sync)
+    mutations = (
+        ('(.status == "ahead") and', '(.status | type == "string") and'),
+        ('(.base_commit | type == "object" and .sha == $base) and', '(.base_commit | type == "object") and'),
+        ('(.ahead_by | type == "number" and . == floor and . == 1) and', '(.ahead_by | type == "number") and'),
+        ('(.commits | type == "array" and length == 1 and', '(.commits | type == "array" and length >= 1 and'),
+        ('(.status | type == "string" and . == "modified") and', '(.status | type == "string") and'),
+    )
+    approve_start = sync.index("  approve:\n")
+    approve_end = sync.index("  authorize:\n", approve_start)
+    approve = sync[approve_start:approve_end]
+    for old, new in mutations:
+        require(approve.count(old) == 1, f"Spotlight initial compare self-test anchor ambiguous: {old}")
+        weakened = sync[:approve_start] + approve.replace(old, new, 1) + sync[approve_end:]
+        try:
+            validate_initial_compare_schema_overlay(weakened)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Spotlight initial compare schema self-test accepted weakened evidence")
+    fetch = '          COMPARE="$(spotlight_singleton_get compare-initial)"\n'
+    consume = '          test "$(jq -r .status <<<"$COMPARE")" = "ahead"\n'
+    schema_start = '          jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \'\n'
+    schema_end = '          \' <<<"$COMPARE" >/dev/null\n'
+    fetch_pos = sync.index(fetch)
+    consume_pos = sync.index(consume, fetch_pos)
+    schema_pos = sync.index(schema_start, fetch_pos, consume_pos)
+    schema_end_pos = sync.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+    reordered = sync[:schema_pos] + sync[schema_end_pos:consume_pos + len(consume)] + sync[schema_pos:schema_end_pos] + sync[consume_pos + len(consume):]
+    try:
+        validate_initial_compare_schema_overlay(reordered)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Spotlight initial compare schema self-test accepted schema-after-consumption ordering")
+
+
 core.DOWNLOAD_STEP = COMPRESSED_DOWNLOAD_STEP
 core.project_item9 = project_item9
 core.validate_mac = validate_mac_with_merge_http_projection
@@ -2070,6 +2158,8 @@ def main() -> int:
         core.validate_preparer_script(preparer)
         core.validate_builder_script(builder, builder_core)
         core.validate_mac(sync)
+        validate_initial_compare_schema_overlay(sync)
+        self_test_initial_compare_schema_overlay(sync)
         validate_protected_workflow_evidence_overlay(sync)
         self_test_protected_workflow_evidence_overlay(sync)
         validate_approval_comment_evidence_overlay(sync)

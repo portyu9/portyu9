@@ -594,6 +594,23 @@ def project_spotlight_merge_shell_reads_to_raw(sync: str) -> str:
     return sync[:merge_start] + projected + sync[merge_end:]
 
 
+def project_spotlight_initial_compare_schema_to_legacy(sync: str) -> str:
+    """Project the current typed initial-compare boundary out of frozen historical proofs."""
+    fetch = '          COMPARE="$(spotlight_singleton_get compare-initial)"\n'
+    consume = '          test "$(jq -r .status <<<"$COMPARE")" = "ahead"\n'
+    schema_start = '          jq -e --arg base "$BASE_SHA" --arg head "$HEAD_SHA" \'\n'
+    schema_end = '          \' <<<"$COMPARE" >/dev/null\n'
+    core.require(sync.count(fetch) == 1 and sync.count(consume) == 1,
+            "Spotlight initial-compare projection anchors changed")
+    fetch_pos = sync.index(fetch)
+    consume_pos = sync.index(consume, fetch_pos)
+    schema_pos = sync.index(schema_start, fetch_pos + len(fetch), consume_pos)
+    schema_end_pos = sync.index(schema_end, schema_pos, consume_pos) + len(schema_end)
+    core.require(fetch_pos + len(fetch) == schema_pos and schema_end_pos == consume_pos,
+            "Spotlight initial-compare schema is not the exact pre-consumption overlay")
+    return sync[:schema_pos] + sync[consume_pos:]
+
+
 def project_spotlight_approve_shell_singleton_reads_to_raw(sync: str) -> str:
     """Project approve-only singleton retry transport to the accepted raw-GET semantic shape."""
     approve_start = sync.index("  approve:\n")
@@ -1010,6 +1027,7 @@ def project_state_driven_spotlight_reviewer_to_legacy(sync: str) -> str:
 
 
 def project_item9_sync_with_marker(sync: str) -> str:
+    sync = project_spotlight_initial_compare_schema_to_legacy(sync)
     sync = project_spotlight_reconcile_shell_reads_to_raw(sync)
     sync = project_spotlight_propose_shell_reads_to_raw(sync)
     sync = project_spotlight_merge_shell_reads_to_raw(sync)
