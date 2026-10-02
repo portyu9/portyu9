@@ -189,8 +189,8 @@ def validate_ruleset_reconciler_safety(combined: dict[str, Any]) -> None:
             "    concurrency:\n"
             "      group: ruleset-reconciler-admin-write\n"
             "      cancel-in-progress: false\n"
-        ) == 1,
-        "ruleset reconciler admin writer lost non-cancellable serialization",
+        ) == 4,
+        "ruleset reconciler admin writers lost complete non-cancellable serialization",
     )
     require(
         source.count('          JWT_EXP="$((ISSUED_AT + 540))"\n') == 1
