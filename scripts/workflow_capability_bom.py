@@ -23,6 +23,70 @@ BOM_ID = "workflow-capability-bom-v1"
 FIRST_PARTY_ACTION_OWNERS = frozenset({"actions", "github"})
 MAX_REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS = 2
 REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS: frozenset[tuple[str, str, str, str, str]] = frozenset()
+
+ARTIFACT_RETENTION_POLICY_SCHEMA_VERSION = 1
+ARTIFACT_RETENTION_POLICY_ID = "artifact-retention-policy-v1"
+ARTIFACT_RETENTION_LIMITS = {
+    "authority": 1,
+    "ephemeral-validation": 1,
+    "evidence": 30,
+}
+MAX_REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS = 7
+REVIEWED_ARTIFACT_RETENTION_CLASSIFICATIONS: dict[tuple[str, str, str], dict[str, str]] = {
+    (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"): {"classification": "authority", "consumerMode": "cross-run-attested-authority"},
+    (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): {"classification": "authority", "consumerMode": "cross-run-custom-api-authority"},
+    (".github/workflows/dependabot-controller.yml", "integration", "Upload exact validation Signal Field"): {"classification": "ephemeral-validation", "consumerMode": "same-job-roundtrip-validation"},
+    (".github/workflows/profile-generator-compatibility-witness.yml", "prepare", "Upload unsigned reviewed compatibility witness bundle"): {"classification": "authority", "consumerMode": "cross-run-attested-authority"},
+    (".github/workflows/profile-quality.yml", "integration", "Upload Signal Field review artifacts"): {"classification": "ephemeral-validation", "consumerMode": "same-job-roundtrip-validation"},
+    (".github/workflows/profile-stats.yml", "attest", "Upload reviewed attestation predicate"): {"classification": "authority", "consumerMode": "same-run-attestation-authority"},
+    (".github/workflows/profile-stats.yml", "decision_receipt", "Upload exact Automation Decision Receipt artifact"): {"classification": "evidence", "consumerMode": "evidence-attestation-only"},
+    (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Engineering Spotlight"): {"classification": "authority", "consumerMode": "same-run-publication-authority"},
+    (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Portfolio Evidence Ledger"): {"classification": "authority", "consumerMode": "same-run-publication-authority"},
+    (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Signal Field"): {"classification": "authority", "consumerMode": "same-run-publication-authority"},
+    (".github/workflows/profile-stats.yml", "receipt", "Upload exact post-publication receipt predicate"): {"classification": "evidence", "consumerMode": "evidence-attestation-only"},
+    (".github/workflows/profile-stats.yml", "stage", "Upload sealed generated publication candidate"): {"classification": "authority", "consumerMode": "same-run-publication-authority"},
+    (".github/workflows/ruleset-reconciler.yml", "reconcile", "Preserve exact non-secret reconciliation receipt"): {"classification": "evidence", "consumerMode": "evidence-attestation-only"},
+    (".github/workflows/ruleset-reconciler.yml", "recovery_open", "Preserve recovery-open receipt"): {"classification": "evidence", "consumerMode": "evidence-attestation-only"},
+    (".github/workflows/ruleset-reconciler.yml", "recovery_plan", "Preserve immutable recovery candidate evidence"): {"classification": "evidence", "consumerMode": "evidence-preservation-only"},
+    (".github/workflows/ruleset-reconciler.yml", "recovery_restore", "Preserve recovery-restoration receipt"): {"classification": "evidence", "consumerMode": "evidence-attestation-only"},
+    (".github/workflows/ruleset-reconciler.yml", "watchdog_restore", "Preserve watchdog-restoration receipt"): {"classification": "evidence", "consumerMode": "evidence-attestation-only"},
+    (".github/workflows/spotlight-link-sync.yml", "authorize", "Upload exact merge authorization artifact"): {"classification": "authority", "consumerMode": "same-run-terminal-merge-authority"},
+    (".github/workflows/spotlight-link-sync.yml", "decision_receipt", "Upload exact Automation Decision Receipt artifact"): {"classification": "evidence", "consumerMode": "evidence-attestation-only"},
+    (".github/workflows/spotlight-link-sync.yml", "plan", "Upload reviewed direct-link proposal"): {"classification": "authority", "consumerMode": "same-run-proposal-authority"},
+}
+REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS: dict[tuple[str, str, str], int] = {
+    (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): 7,
+}
+REVIEWED_ARTIFACT_DOWNLOAD_BINDINGS: dict[tuple[str, str, str], dict[str, Any]] = {
+    (".github/workflows/action-provenance-witness.yml", "attest", "Download exact prepared witness bundle"): {"producer": (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "action-provenance-witness-v1"},
+    (".github/workflows/dependabot-controller.yml", "integration", "Download exact validation Signal Field"): {"producer": (".github/workflows/dependabot-controller.yml", "integration", "Upload exact validation Signal Field"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "dependabot-signal-field-${{ needs.validation_bind.outputs.head_sha }}"},
+    (".github/workflows/profile-generator-compatibility-witness.yml", "attest", "Download exact prepared compatibility witness bundle"): {"producer": (".github/workflows/profile-generator-compatibility-witness.yml", "prepare", "Upload unsigned reviewed compatibility witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "profile-generator-compatibility-witness-v1"},
+    (".github/workflows/profile-quality.yml", "integration", "Download exact fresh signed Profile Generator Compatibility Witness"): {"producer": (".github/workflows/profile-generator-compatibility-witness.yml", "prepare", "Upload unsigned reviewed compatibility witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "profile-generator-compatibility-witness-v1"},
+    (".github/workflows/profile-quality.yml", "integration", "Download Signal Field review artifacts"): {"producer": (".github/workflows/profile-quality.yml", "integration", "Upload Signal Field review artifacts"), "selectorMode": "artifact-id-same-job", "selector": "artifactIds", "selectorValue": "${{ steps.signal_field_review_upload.outputs.artifact-id }}"},
+    (".github/workflows/profile-quality.yml", "validate", "Download exact fresh signed Action provenance witness"): {"producer": (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "action-provenance-witness-v1"},
+    (".github/workflows/profile-stats.yml", "attest_publish", "Download reviewed attestation predicate"): {"producer": (".github/workflows/profile-stats.yml", "attest", "Upload reviewed attestation predicate"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "profile-evidence-attestation-predicate"},
+    (".github/workflows/profile-stats.yml", "attest_publish", "Download validated Engineering Spotlight for terminal attestation"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Engineering Spotlight"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "engineering-spotlight-svg"},
+    (".github/workflows/profile-stats.yml", "attest_publish", "Download validated Portfolio Evidence Ledger for terminal attestation"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Portfolio Evidence Ledger"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "portfolio-evidence-ledger"},
+    (".github/workflows/profile-stats.yml", "attest_publish", "Download validated Signal Field for terminal attestation"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Signal Field"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "signal-field-svg"},
+    (".github/workflows/profile-stats.yml", "attest", "Download validated Engineering Spotlight for attestation preparation"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Engineering Spotlight"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "engineering-spotlight-svg"},
+    (".github/workflows/profile-stats.yml", "attest", "Download validated Portfolio Evidence Ledger for attestation preparation"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Portfolio Evidence Ledger"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "portfolio-evidence-ledger"},
+    (".github/workflows/profile-stats.yml", "attest", "Download validated Signal Field for attestation preparation"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Signal Field"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "signal-field-svg"},
+    (".github/workflows/profile-stats.yml", "decision_receipt_attest", "Download exact Automation Decision Receipt artifact"): {"producer": (".github/workflows/profile-stats.yml", "decision_receipt", "Upload exact Automation Decision Receipt artifact"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "automation-decision-receipt-profile-${{ github.run_id }}-${{ github.run_attempt }}"},
+    (".github/workflows/profile-stats.yml", "publish", "Download sealed generated publication candidate"): {"producer": (".github/workflows/profile-stats.yml", "stage", "Upload sealed generated publication candidate"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "generated-publication-candidate"},
+    (".github/workflows/profile-stats.yml", "receipt_attest", "Download exact post-publication receipt predicate"): {"producer": (".github/workflows/profile-stats.yml", "receipt", "Upload exact post-publication receipt predicate"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "generated-publication-receipt-predicate"},
+    (".github/workflows/profile-stats.yml", "receipt", "Download reviewed profile evidence predicate for receipt"): {"producer": (".github/workflows/profile-stats.yml", "attest", "Upload reviewed attestation predicate"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "profile-evidence-attestation-predicate"},
+    (".github/workflows/profile-stats.yml", "stage", "Download validated Engineering Spotlight for publication staging"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Engineering Spotlight"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "engineering-spotlight-svg"},
+    (".github/workflows/profile-stats.yml", "stage", "Download validated Portfolio Evidence Ledger for publication staging"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Portfolio Evidence Ledger"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "portfolio-evidence-ledger"},
+    (".github/workflows/profile-stats.yml", "stage", "Download validated Signal Field for publication staging"): {"producer": (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Signal Field"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "signal-field-svg"},
+    (".github/workflows/ruleset-reconciler.yml", "attest", "Download exact reconciliation receipt"): {"producer": (".github/workflows/ruleset-reconciler.yml", "reconcile", "Preserve exact non-secret reconciliation receipt"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "ruleset-reconciliation-receipt"},
+    (".github/workflows/ruleset-reconciler.yml", "recovery_attest", "Download exact recovery-open receipt"): {"producer": (".github/workflows/ruleset-reconciler.yml", "recovery_open", "Preserve recovery-open receipt"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "control-plane-recovery-open-receipt"},
+    (".github/workflows/ruleset-reconciler.yml", "recovery_attest", "Download exact recovery-restoration receipt"): {"producer": (".github/workflows/ruleset-reconciler.yml", "recovery_restore", "Preserve recovery-restoration receipt"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "control-plane-recovery-restore-receipt"},
+    (".github/workflows/ruleset-reconciler.yml", "watchdog_attest", "Download watchdog restoration receipt"): {"producer": (".github/workflows/ruleset-reconciler.yml", "watchdog_restore", "Preserve watchdog-restoration receipt"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "control-plane-recovery-watchdog-receipt"},
+    (".github/workflows/spotlight-link-sync.yml", "authorize_attest", "Download exact merge authorization artifact"): {"producer": (".github/workflows/spotlight-link-sync.yml", "authorize", "Upload exact merge authorization artifact"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}"},
+    (".github/workflows/spotlight-link-sync.yml", "decision_receipt_attest", "Download exact Automation Decision Receipt artifact"): {"producer": (".github/workflows/spotlight-link-sync.yml", "decision_receipt", "Upload exact Automation Decision Receipt artifact"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "automation-decision-receipt-spotlight-${{ github.run_id }}-${{ github.run_attempt }}"},
+    (".github/workflows/spotlight-link-sync.yml", "merge", "Download attested merge authorization artifact"): {"producer": (".github/workflows/spotlight-link-sync.yml", "authorize", "Upload exact merge authorization artifact"), "selectorMode": "name-exact", "selector": "name", "selectorValue": "spotlight-merge-authorization-${{ needs.propose.outputs.head_sha }}"},
+    (".github/workflows/spotlight-link-sync.yml", "propose", "Download reviewed direct-link proposal"): {"producer": (".github/workflows/spotlight-link-sync.yml", "plan", "Upload reviewed direct-link proposal"), "selectorMode": "reviewed-name-rebind", "selector": "name", "selectorValue": "spotlight-link-plan-${{ needs.plan.outputs.base_sha }}-${{ needs.plan.outputs.generated_sha }}"},
+}
 REMOTE_ACTION = re.compile(
     r"^(?P<repository>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?P<subpath>/[^@]+)?@(?P<ref>[0-9a-f]{40})$"
 )
@@ -728,6 +792,270 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
     return compiled
 
 
+
+def artifact_identity(workflow: str, job: str, step: str) -> tuple[str, str, str]:
+    return (workflow, job, step)
+
+
+def _compile_artifact_retention_policy(
+    workflows: list[dict[str, Any]],
+    repository: str,
+    *,
+    classifications: dict[tuple[str, str, str], dict[str, str]] | None = None,
+    long_lived_authority: dict[tuple[str, str, str], int] | None = None,
+    download_bindings: dict[tuple[str, str, str], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    reviewed = classifications if classifications is not None else REVIEWED_ARTIFACT_RETENTION_CLASSIFICATIONS
+    long_lived = (
+        long_lived_authority
+        if long_lived_authority is not None
+        else REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS
+    )
+    bindings = download_bindings if download_bindings is not None else REVIEWED_ARTIFACT_DOWNLOAD_BINDINGS
+    require(len(long_lived) <= 1, "reviewed long-lived authority artifact exception budget exceeded")
+
+    producer_lookup: dict[tuple[str, str, str], tuple[dict[str, Any], dict[str, Any]]] = {}
+    download_lookup: dict[tuple[str, str, str], tuple[dict[str, Any], dict[str, Any]]] = {}
+    for workflow in workflows:
+        workflow_path = workflow["path"]
+        for job in workflow["jobs"]:
+            for artifact in job["artifacts"]:
+                identity = artifact_identity(workflow_path, job["id"], artifact["step"])
+                if artifact["operation"] == "upload":
+                    require(identity not in producer_lookup, f"duplicate artifact upload producer identity: {identity}")
+                    producer_lookup[identity] = (job, artifact)
+                elif artifact["operation"] == "download":
+                    require(identity not in download_lookup, f"duplicate artifact download consumer identity: {identity}")
+                    download_lookup[identity] = (job, artifact)
+                else:
+                    raise ValueError(f"unclassified artifact operation: {artifact['operation']}")
+
+    observed_producers = set(producer_lookup)
+    reviewed_producers = set(reviewed)
+    require(
+        observed_producers <= reviewed_producers,
+        f"unclassified artifact upload producer entered repository: {sorted(observed_producers - reviewed_producers)}",
+    )
+    require(
+        reviewed_producers <= observed_producers,
+        f"reviewed artifact upload producer is stale or missing: {sorted(reviewed_producers - observed_producers)}",
+    )
+    observed_downloads = set(download_lookup)
+    reviewed_downloads = set(bindings)
+    require(
+        observed_downloads <= reviewed_downloads,
+        f"unclassified artifact download consumer entered repository: {sorted(observed_downloads - reviewed_downloads)}",
+    )
+    require(
+        reviewed_downloads <= observed_downloads,
+        f"reviewed artifact download consumer is stale or missing: {sorted(reviewed_downloads - observed_downloads)}",
+    )
+
+    consumers_by_producer: dict[tuple[str, str, str], list[dict[str, str]]] = {
+        identity: [] for identity in producer_lookup
+    }
+    for consumer_identity in sorted(download_lookup):
+        consumer_job, consumer = download_lookup[consumer_identity]
+        binding = bindings[consumer_identity]
+        require(set(binding) == {"producer", "selectorMode", "selector", "selectorValue"},
+                f"artifact download binding shape changed: {consumer_identity}")
+        producer_identity = tuple(binding["producer"])
+        require(
+            len(producer_identity) == 3 and producer_identity in producer_lookup,
+            f"artifact download binding names an unknown producer: {consumer_identity}",
+        )
+        _, producer = producer_lookup[producer_identity]
+        selector = binding["selector"]
+        require(selector in {"name", "artifactIds"}, f"artifact download binding selector changed: {consumer_identity}")
+        observed_selector = consumer.get(selector)
+        require(
+            isinstance(observed_selector, str) and observed_selector == binding["selectorValue"],
+            f"artifact download selector drifted: {consumer_identity}",
+        )
+        selector_mode = binding["selectorMode"]
+        if selector_mode == "name-exact":
+            require(selector == "name" and observed_selector == producer.get("name"),
+                    f"artifact exact-name binding drifted: {consumer_identity}")
+        elif selector_mode == "artifact-id-same-job":
+            require(selector == "artifactIds", f"artifact-id binding selector drifted: {consumer_identity}")
+            require(
+                consumer_identity[:2] == producer_identity[:2],
+                f"artifact-id binding escaped producer job: {consumer_identity}",
+            )
+        elif selector_mode == "reviewed-name-rebind":
+            require(selector == "name" and observed_selector != producer.get("name"),
+                    f"reviewed artifact expression-rebind boundary changed: {consumer_identity}")
+        else:
+            raise ValueError(f"unclassified artifact download selector mode: {selector_mode}")
+
+        producer_class = reviewed[producer_identity]["classification"]
+        write_permissions = {
+            name for name, level in consumer_job["permissions"].items() if level == "write"
+        }
+        mutations = consumer_job["mutations"]
+        secret_refs = consumer_job["references"]["secrets"]
+        if producer_class == "ephemeral-validation":
+            require(
+                consumer_identity[:2] == producer_identity[:2]
+                and not write_permissions
+                and not mutations
+                and consumer_job["oidc"] is False
+                and not secret_refs,
+                f"ephemeral validation artifact escaped its read-only producer job: {consumer_identity}",
+            )
+        elif producer_class == "evidence":
+            if mutations:
+                require(
+                    all(mutation["class"] == "attestation" for mutation in mutations)
+                    and write_permissions <= {"attestations", "id-token"}
+                    and consumer_job["oidc"] is True
+                    and not secret_refs,
+                    f"evidence artifact entered non-attestation mutation authority: {consumer_identity}",
+                )
+            else:
+                require(
+                    not write_permissions and consumer_job["oidc"] is False and not secret_refs,
+                    f"evidence artifact entered non-read-only authority: {consumer_identity}",
+                )
+
+        consumers_by_producer[producer_identity].append({
+            "workflow": consumer_identity[0],
+            "job": consumer_identity[1],
+            "step": consumer_identity[2],
+            "selectorMode": selector_mode,
+            "selector": selector,
+            "selectorValue": observed_selector,
+        })
+
+    entries: list[dict[str, Any]] = []
+    for identity in sorted(producer_lookup):
+        _, artifact = producer_lookup[identity]
+        spec = reviewed[identity]
+        require(set(spec) == {"classification", "consumerMode"},
+                f"artifact retention classification shape changed: {identity}")
+        classification = spec["classification"]
+        require(classification in ARTIFACT_RETENTION_LIMITS,
+                f"artifact retention classification is invalid: {identity}")
+        retention = artifact.get("retention-days")
+        require(
+            isinstance(retention, str) and re.fullmatch(r"[1-9][0-9]*", retention) is not None,
+            f"artifact upload retention must be a literal positive day count: {identity}",
+        )
+        retention_days = int(retention)
+        require(
+            artifact.get("if-no-files-found") == "error",
+            f"artifact upload must fail closed when payload is missing: {identity}",
+        )
+        default_max = ARTIFACT_RETENTION_LIMITS[classification]
+        max_retention_days = long_lived.get(identity, default_max)
+        if identity in long_lived:
+            require(
+                classification == "authority"
+                and default_max < max_retention_days <= MAX_REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS,
+                f"reviewed long-lived authority artifact exception is invalid: {identity}",
+            )
+        else:
+            require(max_retention_days == default_max,
+                    f"artifact retention maximum drifted from class default: {identity}")
+        require(
+            retention_days <= max_retention_days,
+            f"artifact retention exceeds reviewed class maximum: {identity}",
+        )
+
+        consumers = sorted(consumers_by_producer[identity], key=lambda value: canonical_json(value))
+        consumer_mode = spec["consumerMode"]
+        if classification == "evidence":
+            if consumer_mode == "evidence-preservation-only":
+                require(not consumers, f"preservation-only evidence gained an artifact consumer: {identity}")
+            elif consumer_mode == "evidence-attestation-only":
+                require(consumers, f"attestation evidence lost all artifact consumers: {identity}")
+            else:
+                raise ValueError(f"evidence artifact consumer mode changed: {identity}")
+        elif classification == "ephemeral-validation":
+            require(consumer_mode == "same-job-roundtrip-validation" and consumers,
+                    f"ephemeral validation artifact consumer mode changed: {identity}")
+        else:
+            if consumer_mode == "cross-run-custom-api-authority":
+                require(identity in long_lived and not consumers,
+                        f"custom API authority artifact boundary changed: {identity}")
+            elif consumer_mode == "cross-run-attested-authority":
+                require(
+                    consumers and any(consumer["workflow"] != identity[0] for consumer in consumers),
+                    f"cross-run attested authority artifact lost its external consumer: {identity}",
+                )
+            elif consumer_mode in {
+                "same-run-attestation-authority",
+                "same-run-publication-authority",
+                "same-run-terminal-merge-authority",
+                "same-run-proposal-authority",
+            }:
+                require(
+                    consumers and all(consumer["workflow"] == identity[0] for consumer in consumers),
+                    f"same-run authority artifact escaped its workflow: {identity}",
+                )
+            else:
+                raise ValueError(f"authority artifact consumer mode changed: {identity}")
+
+        entries.append({
+            "workflow": identity[0],
+            "job": identity[1],
+            "step": identity[2],
+            "name": artifact["name"],
+            "path": artifact["path"],
+            "ifNoFilesFound": artifact["if-no-files-found"],
+            "retentionDays": retention_days,
+            "maxRetentionDays": max_retention_days,
+            "classification": classification,
+            "consumerMode": consumer_mode,
+            "reviewedLongLivedAuthorityException": identity in long_lived,
+            "consumers": consumers,
+        })
+
+    if long_lived:
+        codeql_identity = next(iter(long_lived))
+        require(
+            codeql_identity == (
+                ".github/workflows/codeql-autofix.yml",
+                "controller",
+                "Upload immutable controller provenance receipt",
+            ),
+            "reviewed long-lived authority exception identity changed",
+        )
+        controller = (ROOT / "scripts" / "codeql_autofix_controller.py").read_text(encoding="utf-8")
+        contract = (ROOT / "scripts" / "codeql_autofix_controller_contract.py").read_text(encoding="utf-8")
+        for fragment in (
+            'require(artifact["expired"] is False, "controller receipt artifact is expired")',
+            'current_main_sha = current_main(main_ref, provenance["baseSha"])["baseSha"]',
+        ):
+            require(fragment in controller, "CodeQL Autofix long-lived authority freshness guard changed")
+        require(
+            'require(artifact_value.get("expired") is False, "Autofix provenance artifact is expired")'
+            in contract,
+            "CodeQL Autofix provenance artifact expiry guard changed",
+        )
+
+    return {
+        "schemaVersion": ARTIFACT_RETENTION_POLICY_SCHEMA_VERSION,
+        "policyId": ARTIFACT_RETENTION_POLICY_ID,
+        "repository": repository,
+        "uploadProducerCount": len(producer_lookup),
+        "downloadConsumerCount": len(download_lookup),
+        "limits": {
+            "authorityDefaultRetentionDays": ARTIFACT_RETENTION_LIMITS["authority"],
+            "ephemeralValidationMaxRetentionDays": ARTIFACT_RETENTION_LIMITS["ephemeral-validation"],
+            "evidenceMaxRetentionDays": ARTIFACT_RETENTION_LIMITS["evidence"],
+            "reviewedLongLivedAuthorityMaxRetentionDays": MAX_REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS,
+            "reviewedLongLivedAuthorityExceptionCount": len(long_lived),
+        },
+        "entries": entries,
+    }
+
+
+def compile_artifact_retention_policy(
+    workflows: list[dict[str, Any]], repository: str
+) -> dict[str, Any]:
+    return _compile_artifact_retention_policy(workflows, repository)
+
 def compile_bom(root: Path = ROOT) -> dict[str, Any]:
     require(root == ROOT, "workflow capability compiler root substitution is not supported")
     policy = automation_policy.load_policy()
@@ -772,6 +1100,7 @@ def compile_bom(root: Path = ROOT) -> dict[str, Any]:
             "references": expression_references(text),
         })
     validate_authority_action_origins(workflows)
+    compile_artifact_retention_policy(workflows, policy["repository"])
     return {
         "schemaVersion": SCHEMA_VERSION,
         "bomId": BOM_ID,
@@ -1062,6 +1391,144 @@ def self_test() -> None:
             exact_exception,
         ),
         "reviewed third-party authority Action exception is stale",
+    )
+
+
+    live_bom = compile_bom()
+    live_workflows = live_bom["workflows"]
+    live_retention = compile_artifact_retention_policy(live_workflows, live_bom["repository"])
+    require(
+        live_retention["uploadProducerCount"] == 20
+        and live_retention["downloadConsumerCount"] == 28,
+        "artifact retention live inventory cardinality changed",
+    )
+
+    def mutated_workflows() -> list[dict[str, Any]]:
+        return json.loads(json.dumps(live_workflows))
+
+    broadened = mutated_workflows()
+    broadened_target = next(
+        artifact
+        for workflow in broadened
+        if workflow["path"] == ".github/workflows/profile-stats.yml"
+        for job in workflow["jobs"]
+        if job["id"] == "stage"
+        for artifact in job["artifacts"]
+        if artifact["operation"] == "upload"
+    )
+    broadened_target["retention-days"] = "2"
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(broadened, live_bom["repository"]),
+        "retention exceeds reviewed class maximum",
+    )
+
+    dynamic = mutated_workflows()
+    dynamic_target = next(
+        artifact
+        for workflow in dynamic
+        for job in workflow["jobs"]
+        for artifact in job["artifacts"]
+        if artifact["operation"] == "upload"
+    )
+    dynamic_target["retention-days"] = "$" + "{{ vars.RETENTION_DAYS }}"
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(dynamic, live_bom["repository"]),
+        "retention must be a literal positive day count",
+    )
+
+    missing = mutated_workflows()
+    missing_job = next(
+        job
+        for workflow in missing
+        if workflow["path"] == ".github/workflows/dependabot-controller.yml"
+        for job in workflow["jobs"]
+        if job["id"] == "integration"
+    )
+    missing_job["artifacts"] = [
+        artifact for artifact in missing_job["artifacts"]
+        if artifact["step"] != "Upload exact validation Signal Field"
+    ]
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(missing, live_bom["repository"]),
+        "reviewed artifact upload producer is stale or missing",
+    )
+
+    duplicated = mutated_workflows()
+    duplicate_job = next(
+        job
+        for workflow in duplicated
+        if workflow["path"] == ".github/workflows/profile-quality.yml"
+        for job in workflow["jobs"]
+        if job["id"] == "integration"
+    )
+    duplicate_upload = next(
+        artifact for artifact in duplicate_job["artifacts"]
+        if artifact["operation"] == "upload"
+    )
+    duplicate_job["artifacts"].append(json.loads(json.dumps(duplicate_upload)))
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(duplicated, live_bom["repository"]),
+        "duplicate artifact upload producer identity",
+    )
+
+    unbound_download = mutated_workflows()
+    unbound_job = next(
+        job
+        for workflow in unbound_download
+        if workflow["path"] == ".github/workflows/profile-quality.yml"
+        for job in workflow["jobs"]
+        if job["id"] == "validate"
+    )
+    unbound_job["artifacts"].append({
+        "operation": "download",
+        "step": "Unreviewed artifact consumer",
+        "name": "action-provenance-witness-v1",
+        "path": "unreviewed",
+        "digest-mismatch": "error",
+    })
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(unbound_download, live_bom["repository"]),
+        "unclassified artifact download consumer entered repository",
+    )
+
+    evidence_as_authority = {
+        identity: dict(spec)
+        for identity, spec in REVIEWED_ARTIFACT_RETENTION_CLASSIFICATIONS.items()
+    }
+    evidence_identity = (
+        ".github/workflows/ruleset-reconciler.yml",
+        "reconcile",
+        "Preserve exact non-secret reconciliation receipt",
+    )
+    evidence_as_authority[evidence_identity]["classification"] = "authority"
+    evidence_as_authority[evidence_identity]["consumerMode"] = "same-run-attestation-authority"
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(
+            live_workflows,
+            live_bom["repository"],
+            classifications=evidence_as_authority,
+        ),
+        "retention exceeds reviewed class maximum",
+    )
+
+    authority_as_evidence = {
+        identity: dict(spec)
+        for identity, spec in REVIEWED_ARTIFACT_RETENTION_CLASSIFICATIONS.items()
+    }
+    authority_identity = (
+        ".github/workflows/profile-stats.yml",
+        "stage",
+        "Upload sealed generated publication candidate",
+    )
+    authority_as_evidence[authority_identity]["classification"] = "evidence"
+    authority_as_evidence[authority_identity]["consumerMode"] = "evidence-attestation-only"
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(
+            live_workflows,
+            live_bom["repository"],
+            classifications=authority_as_evidence,
+        ),
+        "evidence artifact entered non-attestation mutation authority",
     )
 
 
