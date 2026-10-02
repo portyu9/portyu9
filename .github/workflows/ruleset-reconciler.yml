@@ -546,11 +546,26 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
 
           MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-          jq -e --arg sha "$TRUSTED_MAIN_SHA" '
-            (type == "object") and
-            (.ref == "refs/heads/main") and
-            (.object | type == "object" and .type == "commit" and .sha == $sha)
-          ' <<<"$MAIN" >/dev/null
+          MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN")"
+          test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"
 
           python3 scripts/automation_github_read.py             "repos/${TARGET_REPOSITORY}/rulesets/22148161" > selector-live-ruleset.json
           SHAPE="$(python3 scripts/ruleset_transition_contract.py             recovery-classify-shape --live selector-live-ruleset.json --observable)"
@@ -704,7 +719,25 @@ jobs:
           test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
 
           MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-          LIVE_MAIN_SHA="$(jq -er '.object.sha | select(test("^[0-9a-f]{40}$"))' <<<"$MAIN")"
+          LIVE_MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN")"
           test "$LIVE_MAIN_SHA" = "$TRUSTED_MAIN_SHA"
 
           PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
@@ -998,7 +1031,26 @@ jobs:
           test -n "$ADMIN_PRIVATE_KEY"
 
           MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN")"
+          test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"
           PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
           jq -e --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
             .state == "open" and .draft == false and .base.ref == "main" and .base.sha == $base and
@@ -1172,7 +1224,26 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           test "$(date +%s)" -lt "$EXPIRES_AT"
           MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN")"
+          test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"
           PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
           jq -e --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
             .state == "open" and .draft == false and .base.sha == $base and .base.ref == "main" and
@@ -1274,7 +1345,26 @@ jobs:
           test "$GITHUB_REF" = "refs/heads/main"
           test "$(date +%s)" -lt "$EXPIRES_AT"
           MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN")"
+          test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"
           PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
           jq -e --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
             .state == "open" and .draft == false and .base.sha == $base and
@@ -1327,7 +1417,26 @@ jobs:
           fi
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
           AFTER_MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-          test "$(jq -r .object.sha <<<"$AFTER_MAIN")" = "$MERGE_SHA"
+          AFTER_MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$AFTER_MAIN")"
+          test "$AFTER_MAIN_SHA" = "$MERGE_SHA"
           echo "merged=true" >> "$GITHUB_OUTPUT"
           echo "merge_sha=$MERGE_SHA" >> "$GITHUB_OUTPUT"
 
@@ -1382,7 +1491,25 @@ jobs:
           test -n "$ADMIN_PRIVATE_KEY"
 
           LIVE_MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-          LIVE_MAIN_SHA="$(jq -er '.object.sha | select(test("^[0-9a-f]{40}$"))' <<<"$LIVE_MAIN")"
+          LIVE_MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$LIVE_MAIN")"
           if [ -n "$EXPECTED_MERGE_SHA" ]; then
             test "$LIVE_MAIN_SHA" = "$EXPECTED_MERGE_SHA"
           else
@@ -1594,7 +1721,26 @@ jobs:
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
           test "$GITHUB_REF" = "refs/heads/main"
           MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN")"
+          test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"
           python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > watchdog-live.json
           SHAPE="$(python3 scripts/ruleset_transition_contract.py recovery-classify-shape --live watchdog-live.json --observable)"
           if [ "$(jq -r .state <<<"$SHAPE")" = "normal" ]; then
@@ -1686,7 +1832,26 @@ jobs:
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
           test "$GITHUB_REF" = "refs/heads/main"
           MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
-          test "$(jq -r .object.sha <<<"$MAIN")" = "$TRUSTED_MAIN_SHA"
+          MAIN_SHA="$(jq -er '
+            if type != "object" then
+              error("Ruleset main ref response must be an object")
+            elif .ref != "refs/heads/main" then
+              error("Ruleset main ref identity changed")
+            elif ((.node_id | type) != "string") or ((.node_id | length) == 0) then
+              error("Ruleset main ref node id is invalid")
+            elif ((.url | type) != "string") or ((.url | length) == 0) then
+              error("Ruleset main ref URL is invalid")
+            elif ((.object | type) != "object") or (.object.type != "commit") then
+              error("Ruleset main ref object identity changed")
+            elif ((.object.sha | type) != "string") or ((.object.sha | test("^[0-9a-f]{40}$")) | not) then
+              error("Ruleset main ref SHA is invalid")
+            elif ((.object.url | type) != "string") or ((.object.url | length) == 0) then
+              error("Ruleset main ref object URL is invalid")
+            else
+              .object.sha
+            end
+          ' <<<"$MAIN")"
+          test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"
           python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > watchdog-before-admin.json
           SHAPE="$(python3 scripts/ruleset_transition_contract.py recovery-classify-shape --live watchdog-before-admin.json --observable)"
           test "$(jq -r .state <<<"$SHAPE")" = "temporary-shape"
