@@ -43,6 +43,13 @@
       "rationale": "Authorize #1230's exact one-file trusted TCB selector preparation measured on accepted post-recovery main. Capability Admission will protect the reviewed future AI QA owner-certifier manifest, BOM shard, workflow, and verifier script. Semantic Workflow Capability is unchanged; no permission, trigger, secret, mutation, required-check reduction, ruleset/merge authority, direct-main write, AWS authority, or bypass is added."
     },
     {
+      "baseBomSha256": "dcbce54d22ce6558471e0ac1fb2448213c7ba9f09f33601194c48b76c70510d2",
+      "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "expansionSha256": "63f30f967e67094daa7668646e6070220ee404383e231757940969dd6fdf3d3f",
+      "id": "cap-autonomous-control-plane-recovery-v1",
+      "rationale": "Authorize frozen #1516 measured by closed #1517: remove the residual human/environment recovery approval dependency and replace it with one schedule-only, read-only exact-candidate selector in the already authority-separated Ruleset Reconciler. The selector proves exact main/ruleset, same-repository current-main two-path repair scope, six surviving exact-head GitHub-Actions successes, terminal-broken trusted admission, and exactly-one-candidate cardinality before the existing independent recovery_plan fully re-proves eligibility. Scheduled recovery/watchdog transactions are serialized; zero candidates no-op and ambiguity fails closed. Exact tuple: 7 expansions / 2 reductions. No bypass actor, direct-main write, external repository, candidate execution, new secret, broader admin/check/merge mutation, required-check relaxation, or blind mutation replay."
+    },
+    {
       "baseBomSha256": "3fc102d8405e2ef600e2efd6695d2cd34b5638e95bd57bad53c6948129ce240a",
       "candidateBomSha256": "cf57c64e11d6322af0c8e234fba72098ae02bcc5c29706e40800c4d0a8b38adc",
       "expansionSha256": "fefcf2b1e852a99e422a8c98947e93dd5d462c9049cec547e514e73782968dc2",
