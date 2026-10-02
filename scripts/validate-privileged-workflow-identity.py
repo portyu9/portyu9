@@ -1311,7 +1311,8 @@ def validate_spotlight_pr_response_evidence(
     )
     pull_list_helper_start = approve.index(pull_list_helper_marker)
     pull_list_helper_end = approve.index(
-        "\n\n          APPROVAL_REQUESTS_JSON='[]'", pull_list_helper_start
+        "\n\n          spotlight_validate_reviewer_checks_snapshot() {",
+        pull_list_helper_start,
     )
     pull_list_helper = approve[pull_list_helper_start:pull_list_helper_end]
     pull_list_schema_fragments = (
