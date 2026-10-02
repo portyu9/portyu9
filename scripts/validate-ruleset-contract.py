@@ -9,7 +9,6 @@ workflow identity to match the checked-in target.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import shutil
@@ -1160,17 +1159,13 @@ def self_test_recovery_acceptance() -> None:
         workflow_text = workflow_text.replace(identity_anchor, repaired_identity, 1)
         workflow_path.write_text(workflow_text, encoding="utf-8")
 
-        workflow_bytes = workflow_path.read_bytes()
-        candidate_blob = hashlib.sha1(
-            f"blob {len(workflow_bytes)}\0".encode("ascii") + workflow_bytes
-        ).hexdigest()  # noqa: S324 - Git object identity is SHA-1 by protocol.
+        # Git blob identities for the exact accepted workflow and this one-line
+        # physical fixture repair. The fixture never computes a cryptographic digest.
+        base_blob = "bac9f39e9489c0b542d2fee3a03d72fb86c12bbb"
+        candidate_blob = "e16e1972ac857bbbbebe6554228a4c3bc2562402"
 
         companion_path = positive_root / companion_relative
         companion_text = companion_path.read_text(encoding="utf-8")
-        base_workflow_bytes = (ROOT / workflow_relative).read_bytes()
-        base_blob = hashlib.sha1(
-            f"blob {len(base_workflow_bytes)}\0".encode("ascii") + base_workflow_bytes
-        ).hexdigest()  # noqa: S324 - Git object identity is SHA-1 by protocol.
         blob_anchor = f'EXPECTED_GIT_BLOB = "{base_blob}"'
         require(
             companion_text.count(blob_anchor) == 1,
