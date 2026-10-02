@@ -20,6 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 SCHEMA_VERSION = 1
 BOM_ID = "workflow-capability-bom-v1"
+FIRST_PARTY_ACTION_OWNERS = frozenset({"actions", "github"})
+MAX_REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS = 2
+REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS: frozenset[tuple[str, str, str, str, str]] = frozenset()
 REMOTE_ACTION = re.compile(
     r"^(?P<repository>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?P<subpath>/[^@]+)?@(?P<ref>[0-9a-f]{40})$"
 )
@@ -467,6 +470,97 @@ def validate_job_authority(filename: str, entry: dict[str, Any]) -> None:
                 f"{filename}/{entry['id']}: write permissions lack a classified mutation: {write_permissions}")
 
 
+def job_is_authority_bearing(entry: dict[str, Any]) -> bool:
+    permissions = entry.get("permissions")
+    references = entry.get("references")
+    require(isinstance(permissions, dict), f"{entry.get('id', '<unknown>')}: permissions are malformed")
+    require(isinstance(references, dict), f"{entry.get('id', '<unknown>')}: references are malformed")
+    secrets = references.get("secrets")
+    require(isinstance(secrets, list), f"{entry.get('id', '<unknown>')}: secret references are malformed")
+    return (
+        any(level == "write" for level in permissions.values())
+        or entry.get("oidc") is True
+        or bool(entry.get("mutations"))
+        or bool(secrets)
+    )
+
+
+def validate_authority_action_origins(
+    workflows: list[dict[str, Any]],
+    reviewed_exceptions: frozenset[tuple[str, str, str, str, str]] = REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS,
+) -> None:
+    require(
+        len(reviewed_exceptions) <= MAX_REVIEWED_THIRD_PARTY_AUTHORITY_ACTION_EXCEPTIONS,
+        "too many reviewed third-party authority Action exceptions",
+    )
+    for exception in reviewed_exceptions:
+        require(
+            isinstance(exception, tuple) and len(exception) == 5,
+            f"malformed reviewed third-party authority Action exception: {exception!r}",
+        )
+        workflow_path, job_id, repository, action_path, action_ref = exception
+        require(
+            all(isinstance(value, str) for value in exception)
+            and bool(workflow_path)
+            and bool(job_id)
+            and repository.count("/") == 1
+            and all(repository.split("/", 1))
+            and not action_path.startswith("/")
+            and re.fullmatch(r"[0-9a-f]{40}", action_ref) is not None,
+            f"malformed reviewed third-party authority Action exception: {exception!r}",
+        )
+
+    observed: set[tuple[str, str, str, str, str]] = set()
+    for workflow in workflows:
+        workflow_path = workflow.get("path")
+        jobs = workflow.get("jobs")
+        require(isinstance(workflow_path, str) and workflow_path, "workflow path is malformed")
+        require(isinstance(jobs, list), f"{workflow_path}: workflow jobs are malformed")
+        for job in jobs:
+            require(isinstance(job, dict), f"{workflow_path}: workflow job is malformed")
+            if not job_is_authority_bearing(job):
+                continue
+            job_id = job.get("id")
+            actions = job.get("actions")
+            require(isinstance(job_id, str) and job_id, f"{workflow_path}: job identity is malformed")
+            require(isinstance(actions, list), f"{workflow_path}/{job_id}: actions are malformed")
+            for action in actions:
+                require(isinstance(action, dict), f"{workflow_path}/{job_id}: action is malformed")
+                if action.get("kind") != "remote":
+                    continue
+                repository = action.get("repository")
+                require(
+                    isinstance(repository, str)
+                    and repository.count("/") == 1
+                    and all(repository.split("/", 1)),
+                    f"{workflow_path}/{job_id}: remote Action repository is malformed: {repository!r}",
+                )
+                action_path = action.get("path")
+                action_ref = action.get("ref")
+                require(
+                    isinstance(action_path, str) and not action_path.startswith("/"),
+                    f"{workflow_path}/{job_id}: remote Action path is malformed: {action_path!r}",
+                )
+                require(
+                    isinstance(action_ref, str) and re.fullmatch(r"[0-9a-f]{40}", action_ref) is not None,
+                    f"{workflow_path}/{job_id}: remote Action ref is malformed: {action_ref!r}",
+                )
+                owner = repository.split("/", 1)[0]
+                if owner not in FIRST_PARTY_ACTION_OWNERS:
+                    observed.add((workflow_path, job_id, repository, action_path, action_ref))
+
+    unexpected = sorted(observed - reviewed_exceptions)
+    stale = sorted(reviewed_exceptions - observed)
+    require(
+        not unexpected,
+        f"unreviewed third-party Action entered authority-bearing job: {unexpected}",
+    )
+    require(
+        not stale,
+        f"reviewed third-party authority Action exception is stale: {stale}",
+    )
+
+
 def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[str, Any]]:
     lines = text.splitlines()
     compiled: dict[str, dict[str, Any]] = {
@@ -677,6 +771,7 @@ def compile_bom(root: Path = ROOT) -> dict[str, Any]:
             "jobs": job_entries,
             "references": expression_references(text),
         })
+    validate_authority_action_origins(workflows)
     return {
         "schemaVersion": SCHEMA_VERSION,
         "bomId": BOM_ID,
@@ -888,6 +983,85 @@ def self_test() -> None:
             "mutations": [{"class": "attestation"}],
         }),
         "attestation action lacks exact OIDC/attestations write authority",
+    )
+
+    def action_origin_fixture(
+        *,
+        permissions: dict[str, str],
+        oidc: bool = False,
+        mutations: list[dict[str, Any]] | None = None,
+        secrets: list[str] | None = None,
+        action_path: str = "",
+        action_ref: str = "0" * 40,
+    ) -> list[dict[str, Any]]:
+        return [{
+            "path": ".github/workflows/fixture.yml",
+            "jobs": [{
+                "id": "job",
+                "actions": [{
+                    "kind": "remote",
+                    "repository": "example/third-party-action",
+                    "path": action_path,
+                    "ref": action_ref,
+                    "step": "Third-party fixture",
+                }],
+                "permissions": permissions,
+                "oidc": oidc,
+                "mutations": mutations or [],
+                "references": {"secrets": secrets or []},
+            }],
+        }]
+
+    validate_authority_action_origins(
+        action_origin_fixture(permissions={"contents": "read"})
+    )
+    authority_variants = (
+        action_origin_fixture(permissions={"contents": "write"}, mutations=[{"class": "git-ref-push"}]),
+        action_origin_fixture(permissions={"contents": "read", "id-token": "write"}, oidc=True),
+        action_origin_fixture(permissions={"contents": "read"}, mutations=[{"class": "pull-request"}]),
+        action_origin_fixture(permissions={"contents": "read"}, secrets=["AUTHORITY_SECRET"]),
+    )
+    for fixture_workflows in authority_variants:
+        expect_failure(
+            lambda fixture_workflows=fixture_workflows: validate_authority_action_origins(fixture_workflows),
+            "unreviewed third-party Action entered authority-bearing job",
+        )
+
+    exact_exception = frozenset({
+        (".github/workflows/fixture.yml", "job", "example/third-party-action", "", "0" * 40)
+    })
+    validate_authority_action_origins(
+        action_origin_fixture(permissions={"contents": "write"}, mutations=[{"class": "git-ref-push"}]),
+        exact_exception,
+    )
+    expect_failure(
+        lambda: validate_authority_action_origins(
+            action_origin_fixture(
+                permissions={"contents": "write"},
+                mutations=[{"class": "git-ref-push"}],
+                action_path="alternate",
+            ),
+            exact_exception,
+        ),
+        "unreviewed third-party Action entered authority-bearing job",
+    )
+    expect_failure(
+        lambda: validate_authority_action_origins(
+            action_origin_fixture(
+                permissions={"contents": "write"},
+                mutations=[{"class": "git-ref-push"}],
+                action_ref="1" * 40,
+            ),
+            exact_exception,
+        ),
+        "unreviewed third-party Action entered authority-bearing job",
+    )
+    expect_failure(
+        lambda: validate_authority_action_origins(
+            action_origin_fixture(permissions={"contents": "read"}),
+            exact_exception,
+        ),
+        "reviewed third-party authority Action exception is stale",
     )
 
 
