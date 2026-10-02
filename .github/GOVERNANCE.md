@@ -21,6 +21,16 @@ GitHub does not expose `bypass_actors` to the short-lived read-only Actions toke
 
 The current `Protect Main` pull-request contract intentionally keeps zero required approving reviews for my solo-maintainer model while requiring review-thread resolution, allowing merge commits only, requiring the branch to be current, and enforcing the exact five status contexts above. The desired-state contract also requires no bypass actors.
 
+## Repository + Actions settings desired state
+
+`.github/repository-settings-v1.json` is the canonical source-controlled desired state for repository-level and GitHub Actions settings that sit **outside** the branch-ruleset payload. It binds the immutable repository identity, public/default-branch identity, repository feature and pull-request/merge controls, and the repository Actions policy. `scripts/repository_settings_contract.py` validates this document as a closed-world exact-typed contract and is called by the existing `validate-governance-contract.py` path, so ordinary Profile Quality exercises the settings contract without a new workflow, token permission, network read, secret, or write surface.
+
+The Actions desired state is deliberately narrower than GitHub's broad defaults: Actions remain enabled, but the policy is **selected actions only**. Blanket GitHub-owned and verified-creator allowances are disabled; the explicit `patternsAllowed` inventory must equal the unique action-repository inventory derived from `.github/action-lock.json`. The default `GITHUB_TOKEN` policy is read-only and the repository setting that would let that token approve pull-request reviews is disabled. Existing write-bearing jobs therefore continue to depend on their explicit job-level permissions and the separate reviewed user/App identities already modeled by the Workflow authority firewall.
+
+Repository-wide merge methods remain explicit in this contract. The repository currently permits merge, squash, and rebase generally, while `.github/rulesets/repository-rulesets-v1.json` independently restricts protected `main` to the single reviewed `merge` method. The settings validator cross-checks that this protected method remains permitted at repository scope and rejects any broadening of the protected-main rule.
+
+This file is **desired source state, not proof of a live settings mutation**. The ordinary connector/read-only workflow surface does not expose every repository Actions-administration endpoint. Deliberate live remediation remains separated under the least-authority Administration control plane established by #632 / #298 item 30; no reviewer credential, candidate code, or generic settings writer is introduced by the source contract.
+
 ## Dependency update automation
 
 `.github/dependabot.yml` is the canonical GitHub Actions update-discovery policy. Every dependency update remains a **separate pull request** so executable-identity changes stay attributable. By default, Dependabot proposes trust-boundary changes but does not authorize them: updates outside the narrow delegated path below are **never auto-merged** and must pass ordinary review plus the same five merge gates.
