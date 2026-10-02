@@ -5,15 +5,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      recovery_pr:
-        description: Exact same-repository repair PR number; empty means ordinary reconcile
-        required: false
-        type: string
-      recovery_head_sha:
-        description: Exact immutable repair head SHA; empty means ordinary reconcile
-        required: false
-        type: string
   schedule:
     - cron: "*/5 * * * *"
   workflow_run:
@@ -28,12 +19,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.event_name == 'workflow_dispatch' && inputs.recovery_pr != '' && 'ruleset-control-plane-recovery-v1' || format('ruleset-reconciler-{0}', github.run_id) }}
+  group: ${{ github.event_name == 'schedule' && 'ruleset-control-plane-recovery-v1' || format('ruleset-reconciler-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
   plan:
-    if: "${{ github.event_name != 'schedule' && !(github.event_name == 'workflow_dispatch' && (inputs.recovery_pr != '' || inputs.recovery_head_sha != '')) }}"
+    if: github.event_name != 'schedule'
     name: ruleset-transition-plan-read-only
     runs-on: ubuntu-24.04
     timeout-minutes: 4
@@ -520,14 +511,16 @@ jobs:
           show-summary: true
 
   recovery_authorize:
-    if: "${{ github.event_name == 'workflow_dispatch' && (inputs.recovery_pr != '' || inputs.recovery_head_sha != '') }}"
-    name: authorize-control-plane-recovery-human-gate
+    if: github.event_name == 'schedule'
+    name: select-control-plane-recovery-candidate-read-only
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    environment: ruleset-recovery-approval
+    timeout-minutes: 8
     permissions:
+      checks: read
       contents: read
+      pull-requests: read
     outputs:
+      selected: ${{ steps.authorize.outputs.selected }}
       pr_number: ${{ steps.authorize.outputs.pr_number }}
       head_sha: ${{ steps.authorize.outputs.head_sha }}
     steps:
@@ -537,34 +530,139 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Bind exact human-approved recovery dispatch
+      - name: Select exactly one autonomous recovery candidate
         id: authorize
         env:
           GH_TOKEN: ${{ github.token }}
-          RECOVERY_PR: ${{ inputs.recovery_pr }}
-          RECOVERY_HEAD_SHA: ${{ inputs.recovery_head_sha }}
           TARGET_REPOSITORY: ${{ github.repository }}
           TRUSTED_MAIN_SHA: ${{ github.sha }}
-          DISPATCH_ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
+          echo "selected=false" >> "$GITHUB_OUTPUT"
           test "$TARGET_REPOSITORY" = "portyu9/portyu9"
           test "$GITHUB_REF" = "refs/heads/main"
-          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
-          test "$DISPATCH_ACTOR" = "portyu9"
-          [[ "$RECOVERY_PR" =~ ^[1-9][0-9]*$ ]]
-          [[ "$RECOVERY_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_EVENT_NAME" = "schedule"
+          [[ "$TRUSTED_MAIN_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$TRUSTED_MAIN_SHA"
-          LIVE_MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
+
+          MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
           jq -e --arg sha "$TRUSTED_MAIN_SHA" '
             (type == "object") and
             (.ref == "refs/heads/main") and
             (.object | type == "object" and .type == "commit" and .sha == $sha)
-          ' <<<"$LIVE_MAIN" >/dev/null
-          echo "pr_number=$RECOVERY_PR" >> "$GITHUB_OUTPUT"
-          echo "head_sha=$RECOVERY_HEAD_SHA" >> "$GITHUB_OUTPUT"
+          ' <<<"$MAIN" >/dev/null
+
+          python3 scripts/automation_github_read.py             "repos/${TARGET_REPOSITORY}/rulesets/22148161" > selector-live-ruleset.json
+          SHAPE="$(python3 scripts/ruleset_transition_contract.py             recovery-classify-shape --live selector-live-ruleset.json --observable)"
+          case "$(jq -r .state <<<"$SHAPE")" in
+            normal)
+              ;;
+            temporary-shape)
+              echo "Existing recovery aperture is owned by the close-only watchdog; selector no-op."
+              exit 0
+              ;;
+            *)
+              echo "ERROR: autonomous recovery selector observed an unknown ruleset state." >&2
+              exit 1
+              ;;
+          esac
+
+          python3 scripts/automation_github_paginated_read.py             "repos/${TARGET_REPOSITORY}/pulls?state=open&base=main&per_page=100" > recovery-open-pr-pages.json
+          jq -e '
+            (type == "array") and (length == 1) and
+            (.[0] | type == "array" and length <= 100)
+          ' recovery-open-pr-pages.json >/dev/null
+          python3 scripts/workflow_capability_api_collection.py pull-requests             --input recovery-open-pr-pages.json --out recovery-open-prs.json
+          jq -e 'type == "array" and length <= 100' recovery-open-prs.json >/dev/null
+
+          printf '%s\n'             ".github/workflows/capability-admission.yml"             "scripts/capability_admission_workflow_contract.py" > expected-recovery-paths.txt
+          CANDIDATES="$RUNNER_TEMP/autonomous-recovery-candidates.jsonl"
+          : > "$CANDIDATES"
+
+          while IFS= read -r PR; do
+            if ! jq -e --arg repo "$TARGET_REPOSITORY" --arg base "$TRUSTED_MAIN_SHA" '
+              .state == "open" and .draft == false and
+              .base.ref == "main" and .base.sha == $base and
+              .head.repo.full_name == $repo and
+              (.head.ref | type == "string" and length > 0) and
+              (.head.sha | type == "string" and test("^[0-9a-f]{40}$"))
+            ' <<<"$PR" >/dev/null; then
+              continue
+            fi
+            PR_NUMBER="$(jq -r .number <<<"$PR")"
+            HEAD_SHA="$(jq -r .head.sha <<<"$PR")"
+
+            python3 scripts/automation_github_paginated_read.py               "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" > recovery-selector-file-pages.json
+            python3 scripts/workflow_capability_api_collection.py files               --input recovery-selector-file-pages.json --out recovery-selector-paths.txt
+            if ! diff -u expected-recovery-paths.txt recovery-selector-paths.txt >/dev/null; then
+              continue
+            fi
+
+            CHECKS="$(python3 scripts/automation_github_read.py               "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+            jq -e '
+              (type == "object") and
+              (.total_count | type == "number" and floor == . and . >= 0 and . <= 100) and
+              (.check_runs | type == "array" and length <= 100)
+            ' <<<"$CHECKS" >/dev/null
+
+            READY=true
+            for CONTEXT_NAME in               validate-contracts               trusted-governed-bot-review               integration-pinned-upstream               dependency-review               analyze-actions               analyze-python
+            do
+              LATEST="$(jq -c --arg name "$CONTEXT_NAME" '
+                [.check_runs[] | select(.name == $name and .app.id == 15368)] |
+                sort_by(.id) | last
+              ' <<<"$CHECKS")"
+              if [ "$LATEST" = "null" ] ||                  [ "$(jq -r .head_sha <<<"$LATEST")" != "$HEAD_SHA" ] ||                  [ "$(jq -r .status <<<"$LATEST")" != "completed" ] ||                  [ "$(jq -r .conclusion <<<"$LATEST")" != "success" ]; then
+                READY=false
+                break
+              fi
+            done
+            [ "$READY" = "true" ] || continue
+
+            BROKEN="$(jq -c '
+              [.check_runs[] |
+                select(.name == "trusted-capability-admission" and .app.id == 15368)] |
+              sort_by(.id) | last
+            ' <<<"$CHECKS")"
+            [ "$BROKEN" != "null" ] || continue
+            [ "$(jq -r .head_sha <<<"$BROKEN")" = "$HEAD_SHA" ] || continue
+            [ "$(jq -r .status <<<"$BROKEN")" = "completed" ] || continue
+            case "$(jq -r .conclusion <<<"$BROKEN")" in
+              failure|cancelled|timed_out|action_required|startup_failure|stale)
+                ;;
+              *)
+                continue
+                ;;
+            esac
+
+            jq -cn --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA"               '{pr_number:$pr,head_sha:$head}' >> "$CANDIDATES"
+          done < <(jq -c '.[]' recovery-open-prs.json)
+
+          CANDIDATE_COUNT="$(jq -s 'length' "$CANDIDATES")"
+          case "$CANDIDATE_COUNT" in
+            0)
+              echo "No exact autonomous recovery candidate is ready."
+              exit 0
+              ;;
+            1)
+              ;;
+            *)
+              echo "ERROR: multiple exact autonomous recovery candidates are simultaneously eligible." >&2
+              exit 1
+              ;;
+          esac
+
+          SELECTED="$(jq -sc '.[0]' "$CANDIDATES")"
+          PR_NUMBER="$(jq -r .pr_number <<<"$SELECTED")"
+          HEAD_SHA="$(jq -r .head_sha <<<"$SELECTED")"
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          [[ "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "selected=true" >> "$GITHUB_OUTPUT"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
 
   recovery_plan:
+    if: needs.recovery_authorize.outputs.selected == 'true'
     name: plan-control-plane-recovery-read-only
     needs: [recovery_authorize]
     runs-on: ubuntu-24.04
@@ -798,7 +896,7 @@ jobs:
           MANIFEST_SHA256="sha256:$(sha256sum .github/rulesets/ruleset-transitions-v1.json | cut -d' ' -f1)"
           DETAILS_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           EXTERNAL_ID="control-plane-recovery-v1:${TARGET_REPOSITORY}:main:${PR_NUMBER}:${HEAD_SHA}:${GITHUB_RUN_ID}:${GITHUB_RUN_ATTEMPT}:trusted-capability-admission:${MANIFEST_SHA256}"
-          SUMMARY="Incomplete transaction certificate for the exact human-approved trusted-capability-admission recovery."
+          SUMMARY="Incomplete transaction certificate for the exact autonomous trusted-capability-admission recovery."
 
           set +e
           RESPONSE="$(gh api --include --method POST "repos/${TARGET_REPOSITORY}/check-runs" \
