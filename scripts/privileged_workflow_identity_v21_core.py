@@ -40,8 +40,9 @@ PROFILE_STATS_FRESHNESS_SEQUENCE = (
     '[[ "$REMOTE_MAIN" =~ ^([0-9a-f]{40})[[:space:]]refs/heads/main$ ]]',
     'CURRENT_MAIN_SHA="${BASH_REMATCH[1]}"',
     'if [ "$CURRENT_MAIN_SHA" != "$SOURCE_SHA" ]; then',
-    'echo "publication_state=SUPERSEDED" >> "$GITHUB_OUTPUT"',
-    'exit 0',
+    'echo "publication_state=SUPERSEDED" >> "$GITHUB_OUTPUT"\n'
+    '            echo "Profile Stats source epoch superseded before generated publication (source $SOURCE_SHA, current main $CURRENT_MAIN_SHA); the newer main epoch owns convergence."\n'
+    '            exit 0',
     'push origin HEAD:generated',
     'REMOTE_GENERATED="$(git -C artifacts ls-remote --exit-code origin refs/heads/generated)"',
     'test "${BASH_REMATCH[1]}" = "$CANDIDATE_SHA"',
