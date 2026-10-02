@@ -687,6 +687,13 @@
       "rationale": "Authorize #539's event-driven Dependabot controller liveness TCB. Profile Quality or CodeQL completion may only wake trusted default-branch code; every pass re-proves live main, native bot PR identity, exact head/base, atomic CodeQL release closure, and provenance. Reconciliation dispatches data-only validation/admission, a no-checkout terminal job dispatches CodeQL only after three read-only gates, and merge remains exact-head after all six contexts pass."
     },
     {
+      "baseBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "expansionSha256": "cfcc15a63854915a0502a864fe974e99a152b741e99e6de7bd6249fe7c8518a1",
+      "id": "cap-dependabot-delegated-proof-collection-schema-v1",
+      "rationale": "Authorize frozen #1536 measured by closed #1537: type both existing delegated admission proof check-run collections before cardinality or element selection, preserving exact endpoint, polling, verifier, triggers, permissions, mutations, required checks, merge/release/reconciliation authority, and retry semantics. Equal BOM hashes prove no semantic Workflow Capability change; 1 protected-TCB expansion / 0 reductions."
+    },
+    {
       "baseBomSha256": "1a9347f7d7dac2e199a07fd42d47d025e514e607dc62c7a9eee6abe42f4d52b0",
       "candidateBomSha256": "88ffdb7cb971f6389ed68dd566eef42ffa4088a03d793518f5b533600b16c1d2",
       "expansionSha256": "e99efdcfde55b41a792e0ee8341a566991bff988debd6cfb754ca851c39a35c0",
