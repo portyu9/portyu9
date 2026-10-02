@@ -14,7 +14,7 @@ EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
     ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
-    ".github/workflows/spotlight-link-sync.yml": "21299bf92642a29d0fd45c2290012df4cf676c15",
+    ".github/workflows/spotlight-link-sync.yml": "2452d4a9ad940de6112639b08fd7d35eb9547aa7",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -1299,8 +1299,13 @@ def validate_spotlight_proposer_pr_list_evidence(
         '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and',
         '(.requested_reviewers | type == "array" and length <= 100) and',
         '(all(.requested_reviewers[];',
-        '(.id | type == "number" and . == floor and . > 0) and',
-        '(.login | type == "string" and length > 0))) and',
+        '(.id as $reviewer_id |',
+        '($reviewer_id | type) == "number" and',
+        '($reviewer_id | floor) == $reviewer_id and',
+        '$reviewer_id > 0) and',
+        '(.login as $reviewer_login |',
+        '($reviewer_login | type) == "string" and',
+        '($reviewer_login | length) > 0))) and',
         '(([.requested_reviewers[].id] | unique | length) == (.requested_reviewers | length)) and',
         '(([.requested_reviewers[].login] | unique | length) == (.requested_reviewers | length)) and',
         '(.url | type == "string" and length > 0) and',
