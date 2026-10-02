@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "id": 1355082509,
+    "fullName": "portyu9/portyu9"
+  },
+  "repositorySettings": {
+    "visibility": "public",
+    "defaultBranch": "main",
+    "archived": false,
+    "isTemplate": false,
+    "allowForking": true,
+    "webCommitSignoffRequired": false,
+    "features": {
+      "issues": true,
+      "projects": true,
+      "wiki": true,
+      "discussions": false
+    },
+    "pullRequests": {
+      "creationPolicy": "collaborators_only",
+      "allowMergeCommit": true,
+      "allowSquashMerge": true,
+      "allowRebaseMerge": true,
+      "allowAutoMerge": false,
+      "deleteBranchOnMerge": true,
+      "allowUpdateBranch": false
+    }
+  },
+  "actionsSettings": {
+    "enabled": true,
+    "allowedActions": "selected",
+    "selectedActions": {
+      "githubOwnedAllowed": false,
+      "verifiedAllowed": false,
+      "patternsAllowed": [
+        "actions/attest@*",
+        "actions/checkout@*",
+        "actions/dependency-review-action@*",
+        "actions/download-artifact@*",
+        "actions/setup-python@*",
+        "actions/upload-artifact@*",
+        "github/codeql-action@*",
+        "shinpr/github-profile-stats@*"
+      ]
+    },
+    "workflowPermissions": {
+      "defaultWorkflowPermissions": "read",
+      "canApprovePullRequestReviews": false
+    }
+  }
+}
