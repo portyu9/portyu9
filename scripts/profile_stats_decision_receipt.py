@@ -126,8 +126,12 @@ def build_state(
     require(status == "204", "Profile Stats Spotlight dispatch must record exact HTTP 204 acceptance")
     target = env_value(env, "DISPATCH_WORKFLOW_PATH")
     target_ref = env_value(env, "DISPATCH_REF")
+    dispatch_main_source = env_value(env, "DISPATCH_MAIN_SOURCE_SHA", SHA40)
+    dispatch_generated_publication = env_value(env, "DISPATCH_GENERATED_PUBLICATION_SHA", SHA40)
     require(target == SPOTLIGHT_PATH and target_ref == "main",
             "Profile Stats Spotlight dispatch target changed")
+    require(dispatch_main_source == lease["baseSha"],
+            "Profile Stats Spotlight dispatch main-source input escaped exact lease identity")
     high_water = int(env_value(env, "DISPATCH_PREVIOUS_RUN_HIGH_WATER", NONNEGATIVE))
     observed = exact_downstream_run(downstream_run, env, high_water)
     ancestry = exact_source_ancestry(source_ancestry, env, observed["headSha"])
@@ -139,7 +143,14 @@ def build_state(
             "job": "dispatch",
             "kind": "spotlight-workflow-dispatch",
             "outcome": "applied",
-            "target": {"workflowPath": target, "ref": target_ref},
+            "target": {
+                "workflowPath": target,
+                "ref": target_ref,
+                "inputs": {
+                    "mainSourceSha": dispatch_main_source,
+                    "generatedPublicationSha": dispatch_generated_publication,
+                },
+            },
             "observation": {
                 "acceptedStatus": 204,
                 "previousRunHighWater": high_water,
@@ -159,6 +170,8 @@ def fixture() -> tuple[dict[str, str], dict[str, Any]]:
         "DISPATCH_WORKFLOW_PATH": SPOTLIGHT_PATH,
         "DISPATCH_REF": "main",
         "DISPATCH_PREVIOUS_RUN_HIGH_WATER": "900",
+        "DISPATCH_MAIN_SOURCE_SHA": base,
+        "DISPATCH_GENERATED_PUBLICATION_SHA": "d" * 40,
     })
     downstream = {
         "workflowId": 351927175,
@@ -200,6 +213,14 @@ def self_test() -> None:
     env, downstream = fixture()
     ancestry = source_ancestry_fixture(env)
     state = build_state(dict(env), dict(downstream), dict(ancestry))
+    target = state["effects"][0]["target"]
+    require(
+        target["inputs"] == {
+            "mainSourceSha": env["LEASE_BASE_SHA"],
+            "generatedPublicationSha": env["DISPATCH_GENERATED_PUBLICATION_SHA"],
+        },
+        "Profile Stats decision receipt self-test lost shared publication epoch inputs",
+    )
     observation = state["effects"][0]["observation"]
     require(observation["acceptedStatus"] == 204 and observation["previousRunHighWater"] == 900,
             "Profile Stats decision receipt self-test lost dispatch acceptance/high-water identity")
@@ -214,6 +235,16 @@ def self_test() -> None:
     advanced_state = build_state(dict(env), advanced, advanced_ancestry)
     require(advanced_state["effects"][0]["observation"]["sourceAncestry"]["status"] == "ahead",
             "Profile Stats decision receipt rejected proven forward main advance")
+
+    wrong_epoch = dict(env)
+    wrong_epoch["DISPATCH_MAIN_SOURCE_SHA"] = "e" * 40
+    try:
+        build_state(wrong_epoch, dict(downstream), dict(ancestry))
+    except ValueError as exc:
+        require("main-source input" in str(exc),
+                f"Profile Stats decision receipt failed for wrong shared epoch reason: {exc}")
+    else:
+        raise ValueError("Profile Stats decision receipt accepted a dispatch main-source split")
 
     wrong_status = dict(env)
     wrong_status["DISPATCH_ACCEPTED_STATUS"] = "200"
