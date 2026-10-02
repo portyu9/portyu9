@@ -1600,7 +1600,13 @@ jobs:
           PY
           if [ "$(jq -r 'type' watchdog-origin-recheck.json)" = "object" ]; then
             STATUS="$(jq -r .status watchdog-origin-recheck.json)"
-            AGE="$(($(date +%s) - $(date -u -d "$(jq -r .run_started_at watchdog-origin-recheck.json)" +%s)))"
+            STARTED="$(jq -r .run_started_at watchdog-origin-recheck.json)"
+            [[ "$STARTED" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]]
+            START_EPOCH="$(date -u -d "$STARTED" +%s)"
+            NOW_EPOCH="$(date +%s)"
+            [[ "$START_EPOCH" =~ ^[1-9][0-9]*$ ]]
+            [[ "$NOW_EPOCH" =~ ^[1-9][0-9]*$ ]]
+            AGE="$((NOW_EPOCH - START_EPOCH))"
             if [ "$STATUS" != "completed" ] && [ "$AGE" -lt 900 ]; then
               echo "ERROR: originating recovery is live within watchdog bound; close denied." >&2
               exit 1
