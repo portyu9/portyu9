@@ -187,6 +187,8 @@ def validate_publish_write_surface(publish: str) -> None:
     current_main = '          CURRENT_MAIN_SHA="${BASH_REMATCH[1]}"'
     superseded_guard = '          if [ "$CURRENT_MAIN_SHA" != "$SOURCE_SHA" ]; then'
     superseded_state = '            echo "publication_state=SUPERSEDED" >> "$GITHUB_OUTPUT"'
+    superseded_exit = '            exit 0'
+    superseded_close = '          fi'
     auth_intro = '          AUTH_HEADER="$(printf \'x-access-token:%s\' "$GITHUB_TOKEN" | base64 -w0)"'
     push = 'git -C artifacts -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH_HEADER}" push origin HEAD:generated'
     generated_reproof = '          REMOTE_GENERATED="$(git -C artifacts ls-remote --exit-code origin refs/heads/generated)"'
@@ -196,11 +198,13 @@ def validate_publish_write_surface(publish: str) -> None:
         < terminal.index(current_main)
         < terminal.index(superseded_guard)
         < terminal.index(superseded_state)
+        < terminal.index(superseded_exit)
+        < terminal.index(superseded_close)
         < terminal.index(auth_intro)
         < terminal.index(push)
         < terminal.index(generated_reproof)
         < terminal.index(published_state),
-        "Publication must type current main, cleanly classify only a valid superseded epoch before token derivation/push, re-prove generated after the exact push, then emit PUBLISHED",
+        "Publication must type current main, fully terminate a valid superseded epoch before token derivation/push, re-prove generated after the exact push, then emit PUBLISHED",
     )
 
 
