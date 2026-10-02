@@ -43,6 +43,13 @@
       "rationale": "Authorize #1230's exact one-file trusted TCB selector preparation measured on accepted post-recovery main. Capability Admission will protect the reviewed future AI QA owner-certifier manifest, BOM shard, workflow, and verifier script. Semantic Workflow Capability is unchanged; no permission, trigger, secret, mutation, required-check reduction, ruleset/merge authority, direct-main write, AWS authority, or bypass is added."
     },
     {
+      "baseBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "expansionSha256": "dfcce01f75de2002fb2863d2285e369157c21adcfb666acfea6419085b9ee439",
+      "id": "cap-authority-action-origin-invariant-v1",
+      "rationale": "Authorize frozen #1520 measured by closed #1521: compile a repository-wide invariant rejecting third-party Actions in authority-bearing jobs. Semantic BOM is unchanged; one protected compiler source changes. Future exceptions are capped, exact to workflow/job/repository/subpath/immutable SHA, and stale exceptions fail closed. Adds no trigger, permission, endpoint, mutation, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, candidate execution, or bypass."
+    },
+    {
       "baseBomSha256": "dcbce54d22ce6558471e0ac1fb2448213c7ba9f09f33601194c48b76c70510d2",
       "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
       "expansionSha256": "63f30f967e67094daa7668646e6070220ee404383e231757940969dd6fdf3d3f",
