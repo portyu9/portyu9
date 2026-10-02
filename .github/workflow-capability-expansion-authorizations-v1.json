@@ -547,6 +547,13 @@
       "rationale": "Authorize #601's frozen Spotlight convergence. Trusted admission binds proof to exact workflow run ID/attempt in external_id; normalized details_url is check metadata only. Spotlight adds one trusted-main post-check reviewer dispatch. Missing/active gates are a no-op; trusted admission is required before portyu9 approval; malformed or failed gates hard-fail. Protected checks, marker review, attestation, lease, expected-head merge, candidate non-execution, and no-bypass remain unchanged."
     },
     {
+      "baseBomSha256": "d1c6dc9d071c5876eeee3b6ad1cd6b42f0f7d5682115b1afe1644b24ca571020",
+      "candidateBomSha256": "dcbce54d22ce6558471e0ac1fb2448213c7ba9f09f33601194c48b76c70510d2",
+      "expansionSha256": "f54375adf1a4b8cad7e3d12338146568a73de6d39b786c06c38c17402bb0ce01",
+      "id": "cap-control-plane-recovery-v1",
+      "rationale": "Authorize frozen #1512 measured by closed #1513: add the exact authority-separated Ruleset Reconciler recovery transaction and close-only watchdog, including transaction checks, Administration-only normal↔temporary writes, expected-head merge, unconditional restore, attestation, and frozen V1 repair/semantic-identity scope. Exact tuple: 19 expansions / 1 reduction. No bypass, direct-main write, external repo, broad relaxation, candidate execution, or blind mutation replay."
+    },
+    {
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "expansionSha256": "62da5fe9ecf379b76d6b7d523fc3f73f0e5e223e3aaddf569972b3e009aa11d4",
