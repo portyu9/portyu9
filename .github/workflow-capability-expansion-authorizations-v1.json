@@ -1065,6 +1065,13 @@
       "rationale": "Authorize frozen #1116 hardening of the existing Dependabot, CodeQL Autofix, and Spotlight terminal merge PUTs: capture gh api --include and require HTTP 200 before consuming the already-typed success response, while preserving Dependabot's existing nonzero failure diagnostics. Semantic BOMs, endpoints, call counts, permissions, triggers, merge authority, required checks, secrets/OIDC, direct-main authority, rulesets, retries, and bypass remain unchanged."
     },
     {
+      "baseBomSha256": "7f91352fc1f77fbb890b058b86e71592ff85012777b149fecff0deb378fd37c3",
+      "candidateBomSha256": "d1c6dc9d071c5876eeee3b6ad1cd6b42f0f7d5682115b1afe1644b24ca571020",
+      "expansionSha256": "76db7100bd3c51f0880a62cab3add50fc86e75bdb15660850492fa4fbf901517",
+      "id": "cap-item28-shared-profile-spotlight-epoch-v1",
+      "rationale": "Authorize frozen #1500 measured by closed #1506: add only paired optional string inputs main_source_sha and generated_publication_sha to the existing Spotlight workflow_dispatch so Profile Stats can carry its exact publication epoch. BOM inspection confirms unchanged main push, schedule, jobs, permissions, mutations and API surfaces; no new endpoint, secret/OIDC, merge/direct-main authority, required-check reduction or bypass."
+    },
+    {
       "baseBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
       "candidateBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
       "expansionSha256": "d73d144f30855e201f5ab0b68c32fbc881d9f4c95c41eb2c6bc87eaffc00d887",
