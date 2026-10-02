@@ -68,6 +68,24 @@ PROFILE_STATS_LEASE_BINDING_SEQUENCE = (
     'test "$base_sha" = "$LEASED_GENERATED_SHA"',
 )
 
+PROFILE_STATS_COMMIT_TOPOLOGY_SEQUENCE = (
+    'candidate_tree_sha: ${{ steps.seal.outputs.candidate_tree_sha }}',
+    'candidate_sha="$(git -C artifacts rev-parse HEAD)"',
+    'candidate_tree_sha="$(git -C artifacts rev-parse "${candidate_sha}^{tree}")"',
+    'test "$candidate_tree_sha" = "$(git -C artifacts write-tree)"',
+    'test "$(git -C artifacts rev-parse HEAD^)" = "$base_sha"',
+    'test "$(git -C artifacts rev-list --parents -n 1 HEAD | awk \'{print NF}\')" -eq 2',
+    'test "$(git -C artifacts log -1 --format=\'%an <%ae>\' "$candidate_sha")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"',
+    'test "$(git -C artifacts log -1 --format=\'%cn <%ce>\' "$candidate_sha")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"',
+    'git -C artifacts bundle create ../generated-publication.bundle generated',
+    'CANDIDATE_TREE_SHA: ${{ needs.stage.outputs.candidate_tree_sha }}',
+    'test "$(git -C artifacts rev-parse "${CANDIDATE_SHA}^{tree}")" = "$CANDIDATE_TREE_SHA"',
+    'test "$(git -C artifacts write-tree)" = "$CANDIDATE_TREE_SHA"',
+    'test "$(git -C artifacts log -1 --format=\'%an <%ae>\' "$CANDIDATE_SHA")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"',
+    'test "$(git -C artifacts log -1 --format=\'%cn <%ce>\' "$CANDIDATE_SHA")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"',
+    'push origin HEAD:generated',
+)
+
 PROFILE_STATS_RECEIPT_SEQUENCE = (
     'published_sha: ${{ steps.publish.outputs.published_sha }}',
     'parent_sha: ${{ steps.publish.outputs.parent_sha }}',
@@ -257,6 +275,18 @@ def validate_profile_stats_lease_binding(text: str) -> None:
                               "Profile Stats generated-base lease-binding contract")
 
 
+def validate_profile_stats_commit_topology(text: str) -> None:
+    validate_ordered_presence(
+        text,
+        PROFILE_STATS_COMMIT_TOPOLOGY_SEQUENCE,
+        "Profile Stats generated commit topology/identity contract",
+    )
+    require(
+        "--force" not in text and "push -f " not in text,
+        "Profile Stats generated publication must remain non-force",
+    )
+
+
 def validate_profile_stats_receipt(text: str) -> None:
     validate_ordered_presence(text, PROFILE_STATS_RECEIPT_SEQUENCE,
                               "Profile Stats post-publication receipt contract")
@@ -346,6 +376,29 @@ def self_test() -> None:
     else:
         raise ValueError("Profile Stats lease-binding self-test accepted a missing generated-base equality guard")
 
+    synthetic = "\n".join(PROFILE_STATS_COMMIT_TOPOLOGY_SEQUENCE)
+    validate_profile_stats_commit_topology(synthetic)
+    try:
+        validate_profile_stats_commit_topology(
+            synthetic.replace(PROFILE_STATS_COMMIT_TOPOLOGY_SEQUENCE[6], "", 1)
+        )
+    except ValueError:
+        pass
+    else:
+        raise ValueError(
+            "Profile Stats commit-topology self-test accepted a missing staged author identity proof"
+        )
+    try:
+        validate_profile_stats_commit_topology(
+            synthetic.replace(PROFILE_STATS_COMMIT_TOPOLOGY_SEQUENCE[10], "", 1)
+        )
+    except ValueError:
+        pass
+    else:
+        raise ValueError(
+            "Profile Stats commit-topology self-test accepted a missing sealed tree reproof"
+        )
+
     synthetic = "\n".join(PROFILE_STATS_RECEIPT_SEQUENCE)
     validate_profile_stats_receipt(synthetic)
     try:
@@ -415,6 +468,7 @@ def main() -> int:
         profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
         validate_profile_stats_freshness(profile)
         validate_profile_stats_lease_binding(profile)
+        validate_profile_stats_commit_topology(profile)
         validate_profile_stats_receipt(profile)
         spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
         validate_spotlight_reconciliation(spotlight)
@@ -425,7 +479,7 @@ def main() -> int:
         print(
             f"Governed workflow byte identity passed: {VERSION} · "
             f"{len(observed)} exact reviewed workflow blobs · mutation/required-check source is byte-locked · "
-            "generated publication is source-epoch freshness bound and remote-head re-proved · "
+            "generated publication is source-epoch freshness bound, commit-tree/author/committer re-proved before mutation, and remote-head re-proved · "
             "Profile Stats post-publication receipt binds the actual Git commit object under SHA-256 · "
             "lease reserves cover every writer hard timeout · short-lived mutation leases bind the exact run/base/candidate transaction · "
             "Spotlight retains stale-only reconciliation, source-epoch constructive-mutation admission, immutable candidates, and exact-run/suite authorization"
