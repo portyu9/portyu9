@@ -9,11 +9,11 @@ import automation_decision_lease
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v149"
+VERSION = "governed-workflow-byte-identity-v150"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "0e302b761928a870ca9f7684b0b1d889e9a1ff51",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
-    ".github/workflows/profile-stats.yml": "7b9e481890602a0b35aaa1db2bf69dd063644f73",
+    ".github/workflows/profile-stats.yml": "0f781b577ab15e4aa829f76ebdb953dc8791b5a1",
     ".github/workflows/spotlight-link-sync.yml": "990bdd9d75d83737394cb2ee51e77920b38483bc",
 }
 
@@ -6367,6 +6367,7 @@ def main() -> int:
         validate_profile_quality_portfolio_liveness_boundary(profile_quality, profile)
         v21.validate_profile_stats_freshness(profile)
         v21.validate_profile_stats_lease_binding(profile)
+        v21.validate_profile_stats_commit_topology(profile)
         v21.validate_profile_stats_receipt(profile)
         validate_profile_stats_spotlight_dispatch_evidence(profile)
 
