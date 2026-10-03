@@ -57,6 +57,13 @@
       "rationale": "Authorize frozen #1524 measured by closed #1525: compile exact 20-producer/28-consumer artifact retention classes separating authority, ephemeral validation, and evidence. Semantic Workflow Capability is unchanged; one protected compiler source changes. Authority defaults to one day; evidence remains read-only/attestation-only; the sole seven-day CodeQL provenance exception stays current-main and expiry bound. Adds no runtime authority, required-check reduction, direct-main write, or bypass."
     },
     {
+      "baseBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "candidateBomSha256": "e52705bb5ff54c53735bde50471ff28451df77a41ce3956c8f748a146b6a09bf",
+      "expansionSha256": "fffe2d2034dda5a772f1119b8cd212fdc7db3dab2368e3e841bfcee8d8dc928c",
+      "id": "cap-autonomous-control-plane-pluscal-tlc-v1",
+      "rationale": "Authorize frozen #1554 measured by closed #1555: gate a bounded PlusCal/TLA+ autonomous control-plane safety model in existing Profile Quality with pinned TLA+ Tools v1.7.4, exact artifact integrity, positive invariants, and an exact safety-exit negative control. Exact tuple: 3 expansions / 0 reductions. Adds one read-only release-asset GET and one formal push path; no write permission, mutation, secret/OIDC, check reduction, direct-main/ruleset/merge authority, candidate execution, or bypass."
+    },
+    {
       "baseBomSha256": "dcbce54d22ce6558471e0ac1fb2448213c7ba9f09f33601194c48b76c70510d2",
       "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
       "expansionSha256": "63f30f967e67094daa7668646e6070220ee404383e231757940969dd6fdf3d3f",
