@@ -341,7 +341,15 @@
               "step": "Set up Python"
             }
           ],
-          "apiSurfaces": [],
+          "apiSurfaces": [
+            {
+              "client": "gh-api",
+              "endpoint": "repos/tlaplus/tlaplus/releases/assets/184694200",
+              "method": "GET",
+              "mutating": false,
+              "step": "Verify autonomous control-plane PlusCal/TLC model"
+            }
+          ],
           "artifacts": [
             {
               "digest-mismatch": "error",
@@ -407,6 +415,7 @@
             ".github/action-lock.json",
             ".github/automation-policy-v1.json",
             ".github/workflow-capability-bom-v1.json",
+            "formal/automation-control-plane/**",
             ".github/workflows/**"
           ]
         }
