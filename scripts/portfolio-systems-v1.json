@@ -143,7 +143,7 @@
       "spotlight": {"domain":"E2E / BROWSER · PLAYWRIGHT","signature":"Context isolation · traces · attributable browser evidence","accent":"#4D8613","accent2":"#28D7FF","accent3":"#8C7CFF","glyph":"trace-frame","topology":"trace-fan"}
     },
     {
-      "repo": "qa-automation-load-k6",
+      "repo": "k6-performance-testing-framework",
       "title": "K6 PERFORMANCE QE",
       "classification": "rotating",
       "evidence": [
