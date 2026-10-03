@@ -1,4 +1,4 @@
-name: Temporary hero optimization evidence
+name: Temporary hero optimization finalizer
 
 on:
   push:
@@ -6,63 +6,69 @@ on:
       - fix-unbounded-streak-optimize-hero-v1
     paths:
       - ".github/workflows/temporary-hero-optimization.yml"
-      - "assets/profile-badges/quality-engineering-automation-systems.png"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  optimize:
+  finalize:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout exact branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
 
-      - name: Produce bounded hero candidates and quality evidence
+      - name: Replace fallback hero with measured candidate and self-remove
         shell: bash
+        env:
+          EXPECTED_BRANCH: refs/heads/fix-unbounded-streak-optimize-hero-v1
+          ORIGINAL_SHA256: f99901f3da31c68441d471a92dcf9c7829681c8ec390286159b78eea97a5bcd0
+          CANDIDATE_SHA256: d840734c78ec59f3c53644330bc2166c51e1bb5eb8e768595035a37767eb5452
+          CANDIDATE_BYTES: "1472916"
+          CANDIDATE_GEOMETRY: 1280x854
         run: |
           set -euo pipefail
+          test "$GITHUB_REF" = "$EXPECTED_BRANCH"
           input="assets/profile-badges/quality-engineering-automation-systems.png"
+          workflow=".github/workflows/temporary-hero-optimization.yml"
           test -f "$input"
-          if ! command -v identify >/dev/null 2>&1 || ! command -v convert >/dev/null 2>&1 || ! command -v compare >/dev/null 2>&1; then
+          test -f "$workflow"
+
+          observed_original="$(sha256sum "$input" | awk '{print $1}')"
+          test "$observed_original" = "$ORIGINAL_SHA256"
+          test "$(wc -c < "$input" | tr -d ' ')" = "2947658"
+
+          if ! command -v identify >/dev/null 2>&1 || ! command -v convert >/dev/null 2>&1; then
             sudo apt-get update -y
             sudo apt-get install -y --no-install-recommends imagemagick
           fi
-          command -v identify
-          command -v convert
-          command -v compare
           convert -version
 
-          mkdir -p hero-optimization-evidence
-          identify -verbose "$input" > hero-optimization-evidence/original-identify.txt
-          original_bytes="$(wc -c < "$input" | tr -d ' ')"
-          test "$original_bytes" = "2947658"
+          candidate="$RUNNER_TEMP/quality-engineering-automation-systems-1280.png"
+          convert "$input" -strip -filter Lanczos -resize "1280x>" \
+            -define png:compression-level=9 \
+            "$candidate"
 
-          for width in 1400 1320 1280 1240 1200 1152; do
-            output="hero-optimization-evidence/hero-${width}.png"
-            convert "$input" -strip -filter Lanczos -resize "${width}x>"               -define png:compression-level=9               "$output"
-            test -s "$output"
-            identify "$output" >> hero-optimization-evidence/candidates.txt
-            printf '%s %s\n' "$width" "$(wc -c < "$output" | tr -d ' ')" >> hero-optimization-evidence/sizes.txt
+          test -s "$candidate"
+          test "$(identify -format '%wx%h' "$candidate")" = "$CANDIDATE_GEOMETRY"
+          test "$(wc -c < "$candidate" | tr -d ' ')" = "$CANDIDATE_BYTES"
+          test "$(sha256sum "$candidate" | awk '{print $1}')" = "$CANDIDATE_SHA256"
 
-            restored="hero-optimization-evidence/restored-${width}.png"
-            convert "$output" -filter Lanczos -resize "1535x1024!" "$restored"
-            set +e
-            compare -metric PSNR "$input" "$restored" null: 2> "hero-optimization-evidence/psnr-${width}.txt"
-            compare_rc=$?
-            set -e
-            test "$compare_rc" -eq 0 || test "$compare_rc" -eq 1
-            rm -f "$restored"
-          done
+          cp -- "$candidate" "$input"
+          test "$(sha256sum "$input" | awk '{print $1}')" = "$CANDIDATE_SHA256"
+          git rm -- "$workflow"
+          git add -- "$input"
 
-          sha256sum "$input" hero-optimization-evidence/hero-*.png > hero-optimization-evidence/sha256.txt
-          cp "$input" hero-optimization-evidence/original.png
+          mapfile -t staged < <(git diff --cached --name-only)
+          test "${#staged[@]}" -eq 2
+          printf '%s\n' "${staged[@]}" | grep -Fx "$workflow"
+          printf '%s\n' "${staged[@]}" | grep -Fx "$input"
+          test -z "$(git diff --name-only)"
+          git diff --cached --name-status
 
-      - name: Upload optimization evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: hero-optimization-evidence
-          path: hero-optimization-evidence/
-          if-no-files-found: error
-          retention-days: 1
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "perf: optimize profile hero fallback"
+          git push origin "HEAD:fix-unbounded-streak-optimize-hero-v1"
