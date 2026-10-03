@@ -16,10 +16,10 @@ import workflow_capability_snapshot
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v158"
+VERSION = "governed-workflow-byte-identity-v159"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "be42a02457df9b7f2a4a10b16c0f2c22f61e3b88",
-    ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
+    ".github/workflows/profile-quality.yml": "0d697baf4ecd29e427707dc07bffafecb03ef6cd",
     ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
     ".github/workflows/spotlight-link-sync.yml": "e1e3321e193b71390eb9cb2a59e5067f9fc7cac5",
 }
