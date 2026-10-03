@@ -276,15 +276,20 @@
             {
               "artifactIds": "${{ steps.signal_field_review_upload.outputs.artifact-id }}",
               "digest-mismatch": "error",
+              "githubToken": "${{ github.token }}",
               "operation": "download",
               "path": "roundtrip-signal-field",
+              "repository": "${{ github.repository }}",
+              "runId": "${{ github.run_id }}",
               "step": "Download Signal Field review artifacts"
             },
             {
               "digest-mismatch": "error",
+              "githubToken": "${{ github.token }}",
               "name": "profile-generator-compatibility-witness-v1",
               "operation": "download",
               "path": "profile-generator-compatibility-witness-consumer",
+              "runId": "${{ steps.profile_generator_witness_discovery.outputs.run_id }}",
               "step": "Download exact fresh signed Profile Generator Compatibility Witness"
             },
             {
@@ -353,9 +358,11 @@
           "artifacts": [
             {
               "digest-mismatch": "error",
+              "githubToken": "${{ github.token }}",
               "name": "action-provenance-witness-v1",
               "operation": "download",
               "path": "action-provenance-witness-consumer",
+              "runId": "${{ steps.action_provenance_witness_discovery.outputs.run_id }}",
               "step": "Download exact fresh signed Action provenance witness"
             }
           ],
