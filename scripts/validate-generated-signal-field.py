@@ -154,7 +154,8 @@ def validate_file(path: Path) -> None:
     for name in (
         "data-calendar-contributions", "data-profile-visible-contributions",
         "data-profile-period-from", "data-profile-period-to", "data-activity-from",
-        "data-activity-to", "data-active-days", "data-current-streak", "data-peak-count",
+        "data-activity-to", "data-active-days", "data-current-streak",
+        "data-current-streak-source", "data-current-streak-through", "data-peak-count",
         "data-peak-date", "data-evidence-id", "data-evidence-digest",
     ):
         if not attrs.get(name):
@@ -166,6 +167,10 @@ def validate_file(path: Path) -> None:
 
     if attrs["data-calendar-contributions"] != attrs["data-profile-visible-contributions"]:
         fail(f"{path.name}: profile-visible total diverges from calendar total")
+    if attrs["data-current-streak-source"] != "github-graphql-account-history":
+        fail(f"{path.name}: current streak is not bound to account-history GraphQL evidence")
+    if attrs["data-current-streak-through"] != attrs["data-activity-to"]:
+        fail(f"{path.name}: current-streak through-date diverges from activity snapshot")
     headline = HEADLINE.findall(text)
     accessible = DESC_TOTAL.findall(text)
     expected = f"{int(attrs['data-calendar-contributions']):,}"
@@ -219,6 +224,18 @@ def validate_file(path: Path) -> None:
 
     if text.count('data-activity-summary="true"') != 1:
         fail(f"{path.name}: activity summary count changed")
+    streak_telemetry = re.findall(
+        r'<tspan\b(?=[^>]*\bdata-telemetry-phosphor="streak")[^>]*>STREAK (\d+)</tspan>',
+        text,
+        re.I,
+    )
+    if len(streak_telemetry) != 1 or streak_telemetry[0] != attrs["data-current-streak"]:
+        fail(f"{path.name}: visible STREAK telemetry diverges from account-history evidence")
+    accessible_streak = (
+        f"the account-history current streak is {attrs['data-current-streak']} days;"
+    )
+    if text.count(accessible_streak) != 1:
+        fail(f"{path.name}: accessible current-streak evidence is missing or stale")
     if text.count('data-telemetry-phosphor="peak_date"') != 1 or text.count('data-telemetry-phosphor="peak_count"') != 1:
         fail(f"{path.name}: PEAK telemetry is incomplete")
     if text.count('data-header-ambient="signal-field-v2.8-header"') != 1:
