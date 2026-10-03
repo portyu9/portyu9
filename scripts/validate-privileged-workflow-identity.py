@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+import copy
 import sys
 
 import automation_decision_lease
+import automation_leases
+import automation_policy
+import workflow_capability_admission
+import workflow_capability_authorization
+import workflow_capability_diff
+import workflow_capability_snapshot
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v157"
+VERSION = "governed-workflow-byte-identity-v158"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "be42a02457df9b7f2a4a10b16c0f2c22f61e3b88",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
@@ -6318,10 +6325,489 @@ def validate_integrated_failure_injection_matrix() -> None:
     )
 
 
+
+
+CAPABILITY_PERMISSION_RANK = {None: 0, "none": 0, "read": 1, "write": 2}
+TRANSACTION_PHASE_RANK = {
+    "propose": 0,
+    "approve": 1,
+    "mutate": 2,
+    "verify": 3,
+    "terminalize": 4,
+}
+
+
+def _expect_property_failure(callback, label: str, expected: str | None = None) -> None:
+    try:
+        callback()
+    except (KeyError, ValueError) as exc:
+        if expected is not None:
+            require(
+                expected in str(exc),
+                f"automation safety property {label} failed for wrong reason: {exc}",
+            )
+    else:
+        raise ValueError(f"automation safety property accepted unsafe model mutation: {label}")
+
+
+def _bom_workflow(bom: dict[str, object], workflow_id: str) -> dict[str, object]:
+    matches = [
+        workflow
+        for workflow in bom["workflows"]
+        if workflow["id"] == workflow_id
+    ]
+    require(
+        len(matches) == 1,
+        f"automation safety property model cannot isolate workflow: {workflow_id}",
+    )
+    return matches[0]
+
+
+def _bom_job(workflow: dict[str, object], job_id: str) -> dict[str, object]:
+    matches = [job for job in workflow["jobs"] if job["id"] == job_id]
+    require(
+        len(matches) == 1,
+        f"automation safety property model cannot isolate job: {workflow['id']}/{job_id}",
+    )
+    return matches[0]
+
+
+def _capability_diff_for_candidate(
+    base: dict[str, object], candidate: dict[str, object]
+) -> dict[str, object]:
+    diff = workflow_capability_diff.semantic_diff(base, candidate)
+    return workflow_capability_admission.protect_trusted_control(base, candidate, diff)
+
+
+def _prove_exact_prior_authorization_property(
+    diff: dict[str, object],
+    *,
+    label: str,
+    category: str,
+    workflow_id: str,
+    job_id: str | None = None,
+    key: str | None = None,
+) -> None:
+    matching = [
+        item
+        for item in diff["expansions"]
+        if item.get("category") == category
+        and item.get("workflow") == workflow_id
+        and (job_id is None or item.get("job") == job_id)
+        and (key is None or item.get("key") == key)
+    ]
+    require(
+        len(matching) == 1,
+        f"automation safety property {label} did not produce one exact {category} expansion",
+    )
+    require(
+        diff["hasExpansion"] is True,
+        f"automation safety property {label} lost capability expansion classification",
+    )
+
+    _expect_property_failure(
+        lambda: workflow_capability_authorization.authorize(
+            diff, workflow_capability_authorization.empty_ledger()
+        ),
+        label + "/without-authorization",
+        "lacks exactly one prior trusted authorization",
+    )
+
+    ledger = workflow_capability_authorization.empty_ledger()
+    ledger["authorizations"].append(
+        {
+            "id": "cap-property-model",
+            "baseBomSha256": diff["baseBomSha256"],
+            "candidateBomSha256": diff["candidateBomSha256"],
+            "expansionSha256": diff["expansionSha256"],
+            "rationale": "Exact generated automation safety property expansion.",
+        }
+    )
+    decision = workflow_capability_authorization.authorize(diff, ledger)
+    require(
+        decision["allowed"] is True
+        and decision["authorizationRequired"] is True
+        and decision["authorizationId"] == "cap-property-model",
+        f"automation safety property {label} rejected its exact prior authorization",
+    )
+
+    stale = copy.deepcopy(ledger)
+    digest = stale["authorizations"][0]["expansionSha256"]
+    stale["authorizations"][0]["expansionSha256"] = (
+        ("0" if digest[0] != "0" else "1") + digest[1:]
+    )
+    _expect_property_failure(
+        lambda: workflow_capability_authorization.authorize(diff, stale),
+        label + "/stale-authorization",
+        "lacks exactly one prior trusted authorization",
+    )
+
+
+def _validate_capability_state_space_properties() -> tuple[int, int]:
+    base = workflow_capability_snapshot.load_combined()
+    workflow_capability_diff.validate_bom_shape(base, "automation safety property base")
+
+    expected_permission_targets: set[tuple[str, str, str | None, str]] = set()
+    observed_permission_targets: set[tuple[str, str, str | None, str]] = set()
+    permission_cases = 0
+
+    for workflow in base["workflows"]:
+        workflow_id = workflow["id"]
+        for scope, permission in sorted(workflow["workflowPermissions"].items()):
+            require(
+                permission in CAPABILITY_PERMISSION_RANK,
+                f"automation safety property observed unsupported workflow permission: "
+                f"{workflow_id}/{scope}={permission!r}",
+            )
+            if CAPABILITY_PERMISSION_RANK[permission] >= CAPABILITY_PERMISSION_RANK["write"]:
+                continue
+            target = ("workflow", workflow_id, None, scope)
+            expected_permission_targets.add(target)
+            candidate = copy.deepcopy(base)
+            candidate_workflow = _bom_workflow(candidate, workflow_id)
+            candidate_workflow["workflowPermissions"][scope] = "write"
+            diff = _capability_diff_for_candidate(base, candidate)
+            _prove_exact_prior_authorization_property(
+                diff,
+                label=f"workflow-permission/{workflow_id}/{scope}",
+                category="workflow-permission",
+                workflow_id=workflow_id,
+                key=scope,
+            )
+            observed_permission_targets.add(target)
+            permission_cases += 1
+
+        for job in workflow["jobs"]:
+            job_id = job["id"]
+            for scope, permission in sorted(job["permissions"].items()):
+                require(
+                    permission in CAPABILITY_PERMISSION_RANK,
+                    f"automation safety property observed unsupported job permission: "
+                    f"{workflow_id}/{job_id}/{scope}={permission!r}",
+                )
+                if CAPABILITY_PERMISSION_RANK[permission] >= CAPABILITY_PERMISSION_RANK["write"]:
+                    continue
+                target = ("job", workflow_id, job_id, scope)
+                expected_permission_targets.add(target)
+                candidate = copy.deepcopy(base)
+                candidate_workflow = _bom_workflow(candidate, workflow_id)
+                candidate_job = _bom_job(candidate_workflow, job_id)
+                candidate_job["permissions"][scope] = "write"
+                diff = _capability_diff_for_candidate(base, candidate)
+                _prove_exact_prior_authorization_property(
+                    diff,
+                    label=f"job-permission/{workflow_id}/{job_id}/{scope}",
+                    category="job-permission",
+                    workflow_id=workflow_id,
+                    job_id=job_id,
+                    key=scope,
+                )
+                observed_permission_targets.add(target)
+                permission_cases += 1
+
+    require(
+        observed_permission_targets == expected_permission_targets,
+        "automation safety property permission coverage changed: "
+        f"expected={sorted(expected_permission_targets)} "
+        f"observed={sorted(observed_permission_targets)}",
+    )
+    require(
+        permission_cases > 0,
+        "automation safety property model generated no permission-expansion cases",
+    )
+
+    expected_dependency_targets = {
+        (workflow["id"], job["id"], dependency)
+        for workflow in base["workflows"]
+        for job in workflow["jobs"]
+        for dependency in job["needs"]
+    }
+    observed_dependency_targets: set[tuple[str, str, str]] = set()
+    dependency_cases = 0
+    for workflow_id, job_id, dependency in sorted(expected_dependency_targets):
+        candidate = copy.deepcopy(base)
+        candidate_workflow = _bom_workflow(candidate, workflow_id)
+        candidate_job = _bom_job(candidate_workflow, job_id)
+        require(
+            candidate_job["needs"].count(dependency) == 1,
+            f"automation safety property dependency fixture is ambiguous: "
+            f"{workflow_id}/{job_id}/{dependency}",
+        )
+        candidate_job["needs"].remove(dependency)
+        diff = _capability_diff_for_candidate(base, candidate)
+        _prove_exact_prior_authorization_property(
+            diff,
+            label=f"dependency-removal/{workflow_id}/{job_id}/{dependency}",
+            category="job-dependency",
+            workflow_id=workflow_id,
+            job_id=job_id,
+            key=dependency,
+        )
+        observed_dependency_targets.add((workflow_id, job_id, dependency))
+        dependency_cases += 1
+
+    require(
+        observed_dependency_targets == expected_dependency_targets,
+        "automation safety property dependency coverage changed: "
+        f"expected={sorted(expected_dependency_targets)} "
+        f"observed={sorted(observed_dependency_targets)}",
+    )
+    require(
+        dependency_cases > 0,
+        "automation safety property model generated no dependency-removal cases",
+    )
+    return permission_cases, dependency_cases
+
+
+def _enumerate_transaction_paths(
+    workflow_id: str, machine: dict[str, object]
+) -> tuple[list[tuple[int, ...]], set[int]]:
+    transitions = machine["transitions"]
+    outgoing: dict[str, list[tuple[int, dict[str, object]]]] = {
+        state: [] for state in machine["states"]
+    }
+    for index, transition in enumerate(transitions):
+        outgoing[transition["from"]].append((index, transition))
+
+    terminals = set(machine["terminalStates"])
+    paths: list[tuple[int, ...]] = []
+    observed_transitions: set[int] = set()
+
+    def visit(state: str, path: tuple[int, ...], seen: frozenset[str]) -> None:
+        require(
+            state not in seen,
+            f"automation safety property model found transaction cycle: {workflow_id}/{state}",
+        )
+        if state in terminals:
+            require(
+                not outgoing[state],
+                f"automation safety property model found outgoing terminal transition: "
+                f"{workflow_id}/{state}",
+            )
+            paths.append(path)
+            observed_transitions.update(path)
+            return
+        require(
+            outgoing[state],
+            f"automation safety property model found nonterminal dead end: "
+            f"{workflow_id}/{state}",
+        )
+        next_seen = seen | {state}
+        for index, transition in outgoing[state]:
+            visit(transition["to"], path + (index,), next_seen)
+
+    visit(machine["initialState"], tuple(), frozenset())
+    require(paths, f"automation safety property model found no paths: {workflow_id}")
+    return paths, observed_transitions
+
+
+def _validate_transaction_state_space_properties(
+    policy: dict[str, object],
+) -> tuple[int, int]:
+    expected_workflows = set(policy["transactionMachines"])
+    require(
+        expected_workflows == set(automation_policy.LEASE_WORKFLOWS),
+        "automation safety property transaction workflow inventory changed",
+    )
+    path_count = 0
+    bypass_cases = 0
+    observed_workflows: set[str] = set()
+
+    for workflow_id in sorted(expected_workflows):
+        machine = policy["transactionMachines"][workflow_id]
+        transitions = machine["transitions"]
+        paths, observed_transitions = _enumerate_transaction_paths(workflow_id, machine)
+        require(
+            observed_transitions == set(range(len(transitions))),
+            f"automation safety property transaction transition coverage changed: {workflow_id}",
+        )
+
+        for path in paths:
+            phases = [transitions[index]["phase"] for index in path]
+            ranks = [TRANSACTION_PHASE_RANK[phase] for phase in phases]
+            require(
+                ranks == sorted(ranks),
+                f"automation safety property transaction phase regression: "
+                f"{workflow_id}/{path}",
+            )
+            terminal = transitions[path[-1]]["to"]
+            require(
+                terminal in machine["terminalStates"],
+                f"automation safety property transaction path did not terminate: "
+                f"{workflow_id}/{path}",
+            )
+            if "mutate" in phases:
+                require(
+                    "approve" in phases
+                    and phases.index("approve") < phases.index("mutate"),
+                    f"automation safety property mutation bypassed approval: "
+                    f"{workflow_id}/{path}",
+                )
+            if "verify" in phases:
+                require(
+                    "mutate" in phases
+                    and phases.index("mutate") < phases.index("verify"),
+                    f"automation safety property verification bypassed mutation: "
+                    f"{workflow_id}/{path}",
+                )
+            if terminal == "completed":
+                require(
+                    all(phase in phases for phase in TRANSACTION_PHASE_RANK)
+                    and phases[-1] == "terminalize",
+                    f"automation safety property completed path bypassed lifecycle phase: "
+                    f"{workflow_id}/{path}",
+                )
+            path_count += 1
+
+        for index, transition in enumerate(transitions):
+            phase = transition["phase"]
+            if phase in {"approve", "mutate", "verify"}:
+                require(
+                    transition["from"] != machine["initialState"],
+                    f"automation safety property canonical transition already bypasses prior phases: "
+                    f"{workflow_id}/{index}",
+                )
+                mutated = copy.deepcopy(policy)
+                mutated["transactionMachines"][workflow_id]["transitions"][index][
+                    "from"
+                ] = machine["initialState"]
+                _expect_property_failure(
+                    lambda mutated=mutated: automation_policy.validate_policy(mutated),
+                    f"transaction-source-bypass/{workflow_id}/{index}",
+                )
+                bypass_cases += 1
+            if phase == "terminalize":
+                mutated = copy.deepcopy(policy)
+                mutated["transactionMachines"][workflow_id]["transitions"][index][
+                    "to"
+                ] = machine["initialState"]
+                _expect_property_failure(
+                    lambda mutated=mutated: automation_policy.validate_policy(mutated),
+                    f"transaction-terminal-bypass/{workflow_id}/{index}",
+                )
+                bypass_cases += 1
+
+        observed_workflows.add(workflow_id)
+
+    require(
+        observed_workflows == expected_workflows,
+        "automation safety property transaction workflow coverage changed",
+    )
+    require(path_count > 0 and bypass_cases > 0,
+            "automation safety property model generated no transaction cases")
+    return path_count, bypass_cases
+
+
+def _validate_lease_state_space_properties(
+    policy: dict[str, object],
+) -> tuple[int, int, int]:
+    expected_bound: set[tuple[str, str]] = set()
+    observed_bound: set[tuple[str, str]] = set()
+    expected_reserve: set[tuple[str, str]] = set()
+    observed_reserve: set[tuple[str, str]] = set()
+    expected_write_promotions: set[tuple[str, str, str]] = set()
+    observed_write_promotions: set[tuple[str, str, str]] = set()
+
+    for workflow_id in sorted(automation_policy.LEASE_WORKFLOWS):
+        workflow = policy["workflows"][workflow_id]
+        automation_leases.validate_policy(workflow_id, workflow)
+        lease = workflow["lease"]
+        lease_job = lease["job"]
+
+        for job_id in lease["boundJobs"]:
+            expected_bound.add((workflow_id, job_id))
+            mutated = copy.deepcopy(workflow)
+            mutated["lease"]["boundJobs"].remove(job_id)
+            del mutated["lease"]["minimumRemainingSeconds"][job_id]
+            _expect_property_failure(
+                lambda workflow_id=workflow_id, mutated=mutated: automation_leases.validate_policy(
+                    workflow_id, mutated
+                ),
+                f"lease-bound-job-removal/{workflow_id}/{job_id}",
+                "boundJobs must equal the complete write-capable job set",
+            )
+            observed_bound.add((workflow_id, job_id))
+
+        for job_id in sorted(lease["minimumRemainingSeconds"]):
+            expected_reserve.add((workflow_id, job_id))
+            mutated = copy.deepcopy(workflow)
+            mutated["lease"]["minimumRemainingSeconds"][job_id] = 0
+            _expect_property_failure(
+                lambda workflow_id=workflow_id, mutated=mutated: automation_leases.validate_policy(
+                    workflow_id, mutated
+                ),
+                f"lease-reserve-zero/{workflow_id}/{job_id}",
+                "minimumRemainingSeconds must be a positive integer below TTL",
+            )
+            observed_reserve.add((workflow_id, job_id))
+
+        for job_id, job in workflow["jobs"].items():
+            if job_id == lease_job or job_id in lease["boundJobs"]:
+                continue
+            read_scopes = sorted(
+                scope
+                for scope, permission in job["permissions"].items()
+                if permission == "read"
+            )
+            require(
+                read_scopes,
+                f"automation safety property unbound job has no read authority to promote: "
+                f"{workflow_id}/{job_id}",
+            )
+            scope = read_scopes[0]
+            expected_write_promotions.add((workflow_id, job_id, scope))
+            mutated = copy.deepcopy(workflow)
+            mutated["jobs"][job_id]["permissions"][scope] = "write"
+            _expect_property_failure(
+                lambda workflow_id=workflow_id, mutated=mutated: automation_leases.validate_policy(
+                    workflow_id, mutated
+                ),
+                f"lease-unbound-write/{workflow_id}/{job_id}/{scope}",
+                "boundJobs must equal the complete write-capable job set",
+            )
+            observed_write_promotions.add((workflow_id, job_id, scope))
+
+    require(
+        observed_bound == expected_bound,
+        "automation safety property lease bound-job coverage changed",
+    )
+    require(
+        observed_reserve == expected_reserve,
+        "automation safety property lease reserve coverage changed",
+    )
+    require(
+        observed_write_promotions == expected_write_promotions,
+        "automation safety property lease write-promotion coverage changed",
+    )
+    require(
+        expected_bound and expected_reserve and expected_write_promotions,
+        "automation safety property model generated no lease cases",
+    )
+    return len(observed_bound), len(observed_reserve), len(observed_write_promotions)
+
+
+def validate_automation_safety_property_model() -> None:
+    """Exhaustively generate finite control-plane safety cases from canonical inventories."""
+    policy = automation_policy.load_policy()
+    permission_cases, dependency_cases = _validate_capability_state_space_properties()
+    path_cases, bypass_cases = _validate_transaction_state_space_properties(policy)
+    bound_cases, reserve_cases, promotion_cases = _validate_lease_state_space_properties(policy)
+    print(
+        "Automation safety property model passed: "
+        f"{permission_cases} permission expansions, "
+        f"{dependency_cases} dependency removals, "
+        f"{path_cases} transaction paths, "
+        f"{bypass_cases} transaction bypass mutations, "
+        f"{bound_cases} lease-bound removals, "
+        f"{reserve_cases} lease-reserve weakenings, "
+        f"{promotion_cases} unbound write promotions."
+    )
+
 def self_test() -> None:
     v21.self_test()
     self_test_spotlight_same_base_supersession()
     validate_integrated_failure_injection_matrix()
+    validate_automation_safety_property_model()
 
     bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
     spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
