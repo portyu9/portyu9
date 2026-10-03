@@ -2,7 +2,12 @@
 """Recompile and validate the canonical Workflow Capability BOM snapshot."""
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 import capability_admission_workflow_contract
@@ -79,9 +84,80 @@ def validate_snapshot() -> tuple[int, int]:
     return len(workflows), jobs
 
 
+
+def autonomous_control_plane_pluscal_measurement_diagnostic_v1() -> None:
+    """Disposable carrier: measure frozen #1554 from exact accepted main."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    base_sha = "cba7f9f9544a54f7921b2dda5d1aa4b98b074fdf"
+    source_sha = "a693ef4a377c3725f5432c9c8118e36fc4bbb507"
+    expected_tree = "fb09bf9b1520bf6d95a6767b1e5673a9441e572c"
+    expected_blobs = {
+        ".github/workflow-capability-bom-v1.json": "de27d8a41d9520e605f35c7b9ca8f03936088039",
+        ".github/workflows/profile-quality.yml": "b7396cc5ef7fb7a7a6a61fdaa4537ead457df66e",
+        "formal/automation-control-plane/AutomationControlPlane.cfg": "98c83684756ec348c6725258a8a0989bc2cd6d25",
+        "formal/automation-control-plane/AutomationControlPlane.negative.cfg": "69360ba0d59da62734d7572379b28370df2bb114",
+        "formal/automation-control-plane/AutomationControlPlane.tla": "269587904b076ea23d308de4cc576a88eae9e423",
+        "scripts/validate-privileged-workflow-identity.py": "185c2e921a1f938db7d52c57895fbb3d3b7f3fa0",
+    }
+
+    subprocess.run(["git", "fetch", "--no-tags", "--depth=128", "origin", base_sha, source_sha], check=True)
+    merge_base = subprocess.check_output(["git", "merge-base", base_sha, source_sha], text=True).strip()
+    require(merge_base == base_sha, f"diagnostic candidate no longer descends from exact accepted main: {merge_base}")
+    observed_paths = subprocess.check_output(["git", "diff", "--name-only", base_sha, source_sha], text=True).splitlines()
+    require(observed_paths == sorted(expected_blobs), f"diagnostic candidate path set changed: {observed_paths!r}")
+    for changed_path, expected_blob in expected_blobs.items():
+        observed_blob = subprocess.check_output(
+            ["git", "rev-parse", f"{source_sha}:{changed_path}"], text=True
+        ).strip()
+        require(observed_blob == expected_blob, f"diagnostic candidate blob changed for {changed_path}: {observed_blob}")
+    observed_tree = subprocess.check_output(["git", "rev-parse", f"{source_sha}^{{tree}}"], text=True).strip()
+    require(observed_tree == expected_tree, f"diagnostic candidate tree changed: {observed_tree}")
+
+    with tempfile.TemporaryDirectory(prefix="autonomous-control-plane-pluscal-measurement-v1-") as temporary:
+        root = Path(temporary)
+        trusted = root / "trusted"
+        candidate = root / "candidate"
+        subprocess.run(["git", "worktree", "add", "--detach", str(trusted), base_sha], check=True)
+        subprocess.run(["git", "worktree", "add", "--detach", str(candidate), source_sha], check=True)
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(trusted / "scripts/workflow_capability_admission.py"),
+                    str(candidate),
+                    "--candidate-tree-sha",
+                    observed_tree,
+                    "--measure",
+                ],
+                text=True,
+                capture_output=True,
+            )
+            if result.stderr:
+                print(result.stderr, file=sys.stderr, end="")
+            require(result.returncode == 0, f"accepted-main production --measure failed: {result.returncode}")
+            payload = json.loads(result.stdout)
+            require(
+                isinstance(payload, dict)
+                and set(payload) == {"measurement"}
+                and isinstance(payload["measurement"], dict),
+                "production --measure output shape changed",
+            )
+            print(
+                "CAPABILITY-MEASUREMENT-DIAGNOSTIC:"
+                + json.dumps(payload, sort_keys=True, separators=(",", ":")),
+                flush=True,
+            )
+        finally:
+            subprocess.run(["git", "worktree", "remove", "--force", str(candidate)], check=False)
+            subprocess.run(["git", "worktree", "remove", "--force", str(trusted)], check=False)
+
+
 def main() -> int:
     try:
         workflows, jobs = validate_snapshot()
+        autonomous_control_plane_pluscal_measurement_diagnostic_v1()
         print(
             f"Workflow Capability BOM validation passed: {workflows} workflows, {jobs} jobs; "
             "semantic diff, trusted alternate-tree compiler, exact expansion authorization, "
