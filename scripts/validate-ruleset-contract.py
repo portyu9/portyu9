@@ -403,8 +403,10 @@ def validate_recovery_reproof_response_evidence(text: str) -> None:
             "check-run collection completeness",
         ),
         (
-            'elif ((.merged | type) != "boolean") or (.merged != true) then',
-            'elif .merged != true then',
+            '              elif ((.merged | type) != "boolean") or (.merged != true) then\\n'
+            '                error("recovery merge response did not prove merged=true")',
+            '              elif .merged != true then\\n'
+            '                error("recovery merge response did not prove merged=true")',
             "merge-response boolean typing",
         ),
         (
