@@ -1,0 +1,63 @@
+name: Temporary hero optimization evidence
+
+on:
+  push:
+    branches:
+      - fix-unbounded-streak-optimize-hero-v1
+    paths:
+      - ".github/workflows/temporary-hero-optimization.yml"
+      - "assets/profile-badges/quality-engineering-automation-systems.png"
+
+permissions:
+  contents: read
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Produce bounded hero candidates and quality evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          input="assets/profile-badges/quality-engineering-automation-systems.png"
+          test -f "$input"
+          command -v identify
+          command -v convert
+          command -v compare
+
+          mkdir -p hero-optimization-evidence
+          identify -verbose "$input" > hero-optimization-evidence/original-identify.txt
+          original_bytes="$(wc -c < "$input" | tr -d ' ')"
+          test "$original_bytes" = "2947658"
+
+          for width in 1400 1320 1280 1240 1200 1152; do
+            output="hero-optimization-evidence/hero-${width}.png"
+            convert "$input" -strip -filter Lanczos -resize "${width}x>"               -define png:compression-level=9               -define png:compression-filter=5               "$output"
+            test -s "$output"
+            identify "$output" >> hero-optimization-evidence/candidates.txt
+            printf '%s %s\n' "$width" "$(wc -c < "$output" | tr -d ' ')" >> hero-optimization-evidence/sizes.txt
+
+            restored="hero-optimization-evidence/restored-${width}.png"
+            convert "$output" -filter Lanczos -resize "1535x1024!" "$restored"
+            set +e
+            compare -metric SSIM "$input" "$restored" null: 2> "hero-optimization-evidence/ssim-${width}.txt"
+            compare_rc=$?
+            set -e
+            test "$compare_rc" -eq 0 || test "$compare_rc" -eq 1
+            rm -f "$restored"
+          done
+
+          sha256sum "$input" hero-optimization-evidence/hero-*.png > hero-optimization-evidence/sha256.txt
+          cp "$input" hero-optimization-evidence/original.png
+
+      - name: Upload optimization evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hero-optimization-evidence
+          path: hero-optimization-evidence/
+          if-no-files-found: error
+          retention-days: 1
