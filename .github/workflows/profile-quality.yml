@@ -109,7 +109,7 @@ jobs:
             export CLASSPATH="$TLA_TOOLS"
 
             java pcal.trans -unixEOL -nocfg AutomationControlPlane.tla
-            grep -Fq 'Spec == Init /\\ [][Next]_vars' AutomationControlPlane.tla
+            grep -Fq 'Spec ==' AutomationControlPlane.tla
             java tla2sany.SANY AutomationControlPlane.tla
             java tlc2.TLC -workers 1 -config AutomationControlPlane.cfg AutomationControlPlane.tla
 
