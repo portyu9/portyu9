@@ -20,6 +20,7 @@ import sys
 from typing import Any
 
 VERSION = "spotlight-profile-links-v1"
+PUBLICATION_EPOCH_VERSION = "generated-publication-epoch-v1"
 OWNER = "portyu9"
 PROFILE_REPOSITORY = "portyu9/portyu9"
 SPOTLIGHT_VERSION = "engineering-spotlight-v2.1"
@@ -29,6 +30,11 @@ START = "<!-- spotlight-direct-links:start -->"
 END = "<!-- spotlight-direct-links:end -->"
 SLOT_COUNT = 3
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
+PUBLICATION_EPOCH_MARKER = re.compile(
+    r"^<!-- generated-publication-epoch:v1 sequence=(0|[1-9][0-9]*) "
+    r"generated=([0-9a-f]{40}) tree=([0-9a-f]{40}) -->$",
+    re.MULTILINE,
+)
 REPOSITORY = re.compile(r"^portyu9/[A-Za-z0-9_.-]+$")
 RUN_URL = re.compile(r"^https://github\.com/portyu9/([A-Za-z0-9_.-]+)/actions/runs/([0-9]+)$")
 EXPECTED_LABELS = ("CI", "SECURITY")
@@ -95,11 +101,39 @@ def validate_manifest(manifest: dict[str, Any]) -> list[tuple[str, dict[str, dic
     return [slot_projection(raw, i) for i, raw in enumerate(slots, start=1) if isinstance(raw, dict)]
 
 
-def render_block(manifest: dict[str, Any], generated_sha: str) -> tuple[str, list[dict[str, str]]]:
+def publication_high_water(readme: str) -> tuple[int, str, str] | None:
+    matches = list(PUBLICATION_EPOCH_MARKER.finditer(readme))
+    require(readme.count("<!-- generated-publication-epoch:") == len(matches),
+            "README contains a malformed generated publication epoch marker")
+    require(len(matches) <= 1, "README contains multiple generated publication epoch markers")
+    if not matches:
+        return None
+    match = matches[0]
+    start = readme.find(START)
+    end = readme.find(END, start + len(START))
+    require(start >= 0 and end > start and start < match.start() < end,
+            "generated publication epoch marker must be inside the guarded Spotlight block")
+    return int(match.group(1)), match.group(2), match.group(3)
+
+
+def render_block(
+    manifest: dict[str, Any],
+    generated_sha: str,
+    publication_sequence: int,
+    generated_tree_sha: str,
+) -> tuple[str, list[dict[str, str]]]:
     require(SHA40.fullmatch(generated_sha) is not None, "generated commit must be a lowercase 40-character SHA")
+    require(type(publication_sequence) is int and publication_sequence >= 0,
+            "publication sequence must be one non-negative integer")
+    require(SHA40.fullmatch(generated_tree_sha) is not None,
+            "generated tree must be a lowercase 40-character SHA")
     projections = validate_manifest(manifest)
     require(len(projections) == SLOT_COUNT, "Spotlight link projection lost a slot")
-    lines = [START]
+    lines = [
+        START,
+        f"<!-- generated-publication-epoch:v1 sequence={publication_sequence} "
+        f"generated={generated_sha} tree={generated_tree_sha} -->",
+    ]
     targets: list[dict[str, str]] = []
     for slot, (repository, signals) in enumerate(projections, start=1):
         repo_url = f"https://github.com/{repository}"
@@ -131,14 +165,33 @@ def replace_block(readme: str, block: str) -> str:
     return readme[:start] + block + readme[end:]
 
 
-def render_plan(manifest: dict[str, Any], readme: str, generated_sha: str, base_sha: str) -> tuple[str, dict[str, Any]]:
+def render_plan(
+    manifest: dict[str, Any],
+    readme: str,
+    generated_sha: str,
+    base_sha: str,
+    publication_sequence: int,
+    generated_tree_sha: str,
+) -> tuple[str, dict[str, Any]]:
     require(SHA40.fullmatch(base_sha) is not None, "base main commit must be a lowercase 40-character SHA")
-    block, targets = render_block(manifest, generated_sha)
+    high_water = publication_high_water(readme)
+    if high_water is not None:
+        previous_sequence, previous_generated, previous_tree = high_water
+        require(publication_sequence >= previous_sequence,
+                "generated publication epoch rollback is forbidden")
+        if publication_sequence == previous_sequence:
+            require(generated_sha == previous_generated and generated_tree_sha == previous_tree,
+                    "same generated publication epoch must preserve exact commit and tree identity")
+    block, targets = render_block(manifest, generated_sha, publication_sequence, generated_tree_sha)
     proposed = replace_block(readme, block)
     plan = {
         "version": VERSION,
+        "publication_epoch_version": PUBLICATION_EPOCH_VERSION,
+        "publication_sequence": publication_sequence,
+        "previous_publication_sequence": high_water[0] if high_water is not None else None,
         "base_sha": base_sha,
         "generated_sha": generated_sha,
+        "generated_tree_sha": generated_tree_sha,
         "selection_date_utc": manifest["selection_date_utc"],
         "readme_sha256_before": sha256_text(readme),
         "readme_sha256_after": sha256_text(proposed),
@@ -185,7 +238,9 @@ def fixture_manifest() -> dict[str, Any]:
 
 def self_test() -> None:
     readme = f"before\n{START}\nold\n{END}\nafter\n"
-    proposed, plan = render_plan(fixture_manifest(), readme, "a" * 40, "b" * 40)
+    proposed, plan = render_plan(
+        fixture_manifest(), readme, "a" * 40, "b" * 40, 7, "c" * 40
+    )
     require(plan["changed"] is True and len(plan["targets"]) == 3, "self-test lost direct link targets")
     require("issues/122" not in proposed, "self-test retained the obsolete issue navigator")
     require("https://github.com/portyu9/qa-automation-fixture-2/actions/workflows/security.yml" in proposed,
@@ -194,8 +249,33 @@ def self_test() -> None:
             "self-test lost live workflow-status badges")
     require("/" + "a" * 40 + "/engineering-spotlight/spotlight-3-dark.svg" in proposed,
             "self-test did not pin the visual snapshot to one generated commit")
-    again, second_plan = render_plan(fixture_manifest(), proposed, "a" * 40, "b" * 40)
+    require(
+        "<!-- generated-publication-epoch:v1 sequence=7 generated=" + "a" * 40
+        + " tree=" + "c" * 40 + " -->" in proposed,
+        "self-test lost the protected publication high-water marker",
+    )
+    again, second_plan = render_plan(
+        fixture_manifest(), proposed, "a" * 40, "b" * 40, 7, "c" * 40
+    )
     require(again == proposed and second_plan["changed"] is False, "direct-link rendering is not idempotent")
+    try:
+        render_plan(fixture_manifest(), proposed, "d" * 40, "b" * 40, 6, "e" * 40)
+    except ValueError as exc:
+        require("rollback" in str(exc), f"publication rollback self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("publication rollback self-test accepted a lower epoch")
+    try:
+        render_plan(fixture_manifest(), proposed, "d" * 40, "b" * 40, 7, "e" * 40)
+    except ValueError as exc:
+        require("same generated publication epoch" in str(exc),
+                f"same-epoch identity self-test failed for wrong reason: {exc}")
+    else:
+        raise ValueError("same-epoch identity self-test accepted different generated evidence")
+    advanced, advanced_plan = render_plan(
+        fixture_manifest(), proposed, "d" * 40, "b" * 40, 8, "e" * 40
+    )
+    require(advanced_plan["changed"] is True and "sequence=8" in advanced,
+            "publication high-water self-test rejected a monotonic advance")
     print(f"Spotlight profile link self-test passed: {VERSION} · direct repo/workflow targets · immutable visual snapshot")
 
 
@@ -205,6 +285,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--readme", type=Path)
     parser.add_argument("--generated-sha")
     parser.add_argument("--base-sha")
+    parser.add_argument("--publication-sequence", type=int)
+    parser.add_argument("--generated-tree-sha")
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
@@ -214,17 +296,30 @@ def main() -> int:
     args = parse_args()
     try:
         if args.self_test:
-            require(all(value is None for value in (args.manifest, args.readme, args.generated_sha, args.base_sha, args.output_dir)),
+            require(all(value is None for value in (
+                        args.manifest, args.readme, args.generated_sha, args.base_sha,
+                        args.publication_sequence, args.generated_tree_sha, args.output_dir,
+                    )),
                     "--self-test cannot be combined with render arguments")
             self_test()
             return 0
-        require(all(value is not None for value in (args.manifest, args.readme, args.generated_sha, args.base_sha, args.output_dir)),
-                "render mode requires manifest, README, generated/base SHAs, and output directory")
+        require(all(value is not None for value in (
+                    args.manifest, args.readme, args.generated_sha, args.base_sha,
+                    args.publication_sequence, args.generated_tree_sha, args.output_dir,
+                )),
+                "render mode requires manifest, README, generated/base SHAs, publication sequence/tree, and output directory")
         real_file(args.manifest, "Spotlight manifest")
         real_file(args.readme, "profile README")
         manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
         require(isinstance(manifest, dict), "Spotlight manifest root must be an object")
-        proposed, plan = render_plan(manifest, args.readme.read_text(encoding="utf-8"), str(args.generated_sha), str(args.base_sha))
+        proposed, plan = render_plan(
+            manifest,
+            args.readme.read_text(encoding="utf-8"),
+            str(args.generated_sha),
+            str(args.base_sha),
+            int(args.publication_sequence),
+            str(args.generated_tree_sha),
+        )
         write_outputs(args.output_dir, proposed, plan)
         print(f"Spotlight profile links rendered: {VERSION} · changed={str(plan['changed']).lower()} · generated={args.generated_sha}")
         return 0

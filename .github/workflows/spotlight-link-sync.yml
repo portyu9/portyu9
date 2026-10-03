@@ -42,6 +42,8 @@ jobs:
       changed: ${{ steps.render.outputs.changed }}
       base_sha: ${{ steps.render.outputs.base_sha }}
       generated_sha: ${{ steps.render.outputs.generated_sha }}
+      generated_tree_sha: ${{ steps.epoch.outputs.publication_tree_sha }}
+      publication_sequence: ${{ steps.epoch.outputs.publication_sequence }}
       readme_sha256_after: ${{ steps.render.outputs.readme_sha256_after }}
 
     steps:
@@ -56,7 +58,7 @@ jobs:
         with:
           ref: generated
           path: published
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Python
@@ -66,6 +68,29 @@ jobs:
 
       - name: Verify resolved Python runtime
         run: python3 source/scripts/verify-python-runtime.py
+
+      - name: Derive exact generated publication epoch
+        id: epoch
+        run: |
+          set -euo pipefail
+          GENERATED_SHA="$(git -C published rev-parse HEAD)"
+          PUBLICATION_BOOTSTRAP_SHA="ade981fd4fe114dde8bcacfde28236e4f0407ba1"
+          PUBLICATION_BOOTSTRAP_TREE="$(git -C published rev-parse "${PUBLICATION_BOOTSTRAP_SHA}^{tree}")"
+          [[ "$PUBLICATION_BOOTSTRAP_TREE" =~ ^[0-9a-f]{40}$ ]]
+          PUBLICATION_EPOCH="$(git -C published log --first-parent --reverse \
+            --format='%H%x09%P%x09%T%x09%s%x09%an%x09%ae%x09%cn%x09%ce' \
+            "${PUBLICATION_BOOTSTRAP_SHA}..${GENERATED_SHA}" | \
+            python3 source/scripts/generated_publication_epoch.py \
+              --head "$GENERATED_SHA" --bootstrap-tree "$PUBLICATION_BOOTSTRAP_TREE")"
+          test "$(jq -r .bootstrapSha <<<"$PUBLICATION_EPOCH")" = "$PUBLICATION_BOOTSTRAP_SHA"
+          test "$(jq -r .commitSha <<<"$PUBLICATION_EPOCH")" = "$GENERATED_SHA"
+          PUBLICATION_SEQUENCE="$(jq -r .sequence <<<"$PUBLICATION_EPOCH")"
+          PUBLICATION_TREE_SHA="$(jq -r .treeSha <<<"$PUBLICATION_EPOCH")"
+          [[ "$PUBLICATION_SEQUENCE" =~ ^[0-9]+$ ]]
+          [[ "$PUBLICATION_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$PUBLICATION_TREE_SHA" = "$(git -C published rev-parse "${GENERATED_SHA}^{tree}")"
+          echo "publication_sequence=$PUBLICATION_SEQUENCE" >> "$GITHUB_OUTPUT"
+          echo "publication_tree_sha=$PUBLICATION_TREE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Verify optional shared publication epoch
         env:
@@ -103,14 +128,22 @@ jobs:
 
       - name: Render atomic direct-link README proposal
         id: render
+        env:
+          PUBLICATION_SEQUENCE: ${{ steps.epoch.outputs.publication_sequence }}
+          GENERATED_TREE_SHA: ${{ steps.epoch.outputs.publication_tree_sha }}
         run: |
           set -euo pipefail
           GENERATED_SHA="$(git -C published rev-parse HEAD)"
+          [[ "$PUBLICATION_SEQUENCE" =~ ^[0-9]+$ ]]
+          [[ "$GENERATED_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GENERATED_TREE_SHA" = "$(git -C published rev-parse "${GENERATED_SHA}^{tree}")"
           python3 source/scripts/spotlight_profile_links.py \
             --manifest projected-spotlight/spotlight-manifest.json \
             --readme source/README.md \
             --generated-sha "$GENERATED_SHA" \
             --base-sha "$GITHUB_SHA" \
+            --publication-sequence "$PUBLICATION_SEQUENCE" \
+            --generated-tree-sha "$GENERATED_TREE_SHA" \
             --output-dir spotlight-link-plan
           CHANGED="$(jq -r .changed spotlight-link-plan/plan.json)"
           README_SHA256_AFTER="$(jq -r .readme_sha256_after spotlight-link-plan/plan.json)"

@@ -13,15 +13,17 @@ import workflow_capability_admission
 import workflow_capability_authorization
 import workflow_capability_diff
 import workflow_capability_snapshot
+import generated_publication_epoch
+import spotlight_profile_links
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v159"
+VERSION = "governed-workflow-byte-identity-v160"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "be42a02457df9b7f2a4a10b16c0f2c22f61e3b88",
     ".github/workflows/profile-quality.yml": "b7396cc5ef7fb7a7a6a61fdaa4537ead457df66e",
-    ".github/workflows/profile-stats.yml": "2f2c8a6f0741f7120c194cf624b59b387adec55d",
-    ".github/workflows/spotlight-link-sync.yml": "e1e3321e193b71390eb9cb2a59e5067f9fc7cac5",
+    ".github/workflows/profile-stats.yml": "3d5b3b5cc4e278b2b71e37f6e4fa9fdb170ed925",
+    ".github/workflows/spotlight-link-sync.yml": "71e2df299a52d4c6f93f1c54697ea9f6e008601d",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -93,6 +95,98 @@ def job_block(text: str, job: str, next_job: str | None) -> str:
     require(text.count(end_marker) == 1, f"governed workflow must contain exactly one {next_job} job")
     end = text.index(end_marker, start)
     return text[start:end]
+
+
+def project_item25_profile_receipt_to_v21(profile: str) -> str:
+    current = (
+        "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/"
+        ".github/attestation/generated-publication-receipt-v2.schema.json"
+    )
+    legacy = (
+        "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/"
+        ".github/attestation/generated-publication-receipt-v1.schema.json"
+    )
+    require(profile.count(current) == 1,
+            "Profile Stats item-25 projection lost the active v2 publication receipt")
+    require(legacy not in profile,
+            "Profile Stats item-25 projection found the retired v1 active receipt signer")
+    return profile.replace(current, legacy, 1)
+
+
+def validate_monotonic_publication_epoch(profile: str, spotlight: str) -> None:
+    require(generated_publication_epoch.VERSION == "generated-publication-epoch-v1",
+            "generated publication epoch version changed")
+    require(generated_publication_epoch.ALGORITHM == "first-parent-distance-tree-novelty-v1",
+            "generated publication epoch algorithm changed")
+    require(
+        generated_publication_epoch.BOOTSTRAP_SHA
+        == "ade981fd4fe114dde8bcacfde28236e4f0407ba1",
+        "generated publication epoch bootstrap changed",
+    )
+
+    stage = job_block(profile, "stage", "publish")
+    receipt = job_block(profile, "receipt", "receipt_attest")
+    receipt_attest = job_block(profile, "receipt_attest", "dispatch_plan")
+    plan = job_block(spotlight, "plan", "lease")
+
+    for fragment in (
+        "publication_bootstrap_sha: ${{ steps.seal.outputs.publication_bootstrap_sha }}",
+        "publication_parent_sequence: ${{ steps.seal.outputs.publication_parent_sequence }}",
+        "publication_sequence: ${{ steps.seal.outputs.publication_sequence }}",
+        "publication_tree_sha: ${{ steps.seal.outputs.publication_tree_sha }}",
+        "PUBLICATION_BOOTSTRAP_SHA=\"ade981fd4fe114dde8bcacfde28236e4f0407ba1\"",
+        "git -C artifacts log --first-parent --reverse \\",
+        "--format='%H%x09%P%x09%T%x09%s%x09%an%x09%ae%x09%cn%x09%ce' \\",
+        'python3 source/scripts/generated_publication_epoch.py \\',
+        '--head "$candidate_sha" --parent "$base_sha" --bootstrap-tree "$PUBLICATION_BOOTSTRAP_TREE"',
+        'test "$PUBLICATION_SEQUENCE" -eq $((PUBLICATION_PARENT_SEQUENCE + 1))',
+        'test "$PUBLICATION_TREE_SHA" = "$candidate_tree_sha"',
+    ):
+        require(fragment in stage, f"Profile Stats monotonic staging proof is missing: {fragment}")
+    require(stage.count("python3 source/scripts/generated_publication_epoch.py") == 1,
+            "Profile Stats staging must derive exactly one publication epoch")
+
+    for fragment in (
+        "publication_bootstrap_sha: ${{ steps.receipt.outputs.publication_bootstrap_sha }}",
+        "publication_parent_sequence: ${{ steps.receipt.outputs.publication_parent_sequence }}",
+        "publication_sequence: ${{ steps.receipt.outputs.publication_sequence }}",
+        "publication_tree_sha: ${{ steps.receipt.outputs.publication_tree_sha }}",
+        "fetch-depth: 0",
+        "git -C published log --first-parent --reverse \\",
+        'python3 source/scripts/generated_publication_epoch.py \\',
+        '--head "$PUBLISHED_SHA" --parent "$PUBLISHED_PARENT_SHA" \\',
+        '--bootstrap-tree "$PUBLICATION_BOOTSTRAP_TREE"',
+        'test "$PUBLICATION_SEQUENCE" = "$EXPECTED_PUBLICATION_SEQUENCE"',
+        'test "$PUBLISHED_TREE_SHA" = "$EXPECTED_PUBLICATION_TREE_SHA"',
+        "python3 source/scripts/build-generated-publication-receipt.py",
+    ):
+        require(fragment in receipt, f"Profile Stats receipt epoch reproof is missing: {fragment}")
+    require(receipt.count("python3 source/scripts/generated_publication_epoch.py") == 1,
+            "Profile Stats receipt must independently derive exactly one publication epoch")
+    require(
+        "predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/"
+        ".github/attestation/generated-publication-receipt-v2.schema.json" in receipt_attest,
+        "Profile Stats publication signer is not bound to receipt v2",
+    )
+
+    for fragment in (
+        "generated_tree_sha: ${{ steps.epoch.outputs.publication_tree_sha }}",
+        "publication_sequence: ${{ steps.epoch.outputs.publication_sequence }}",
+        "fetch-depth: 0",
+        "- name: Derive exact generated publication epoch",
+        "git -C published log --first-parent --reverse \\",
+        'python3 source/scripts/generated_publication_epoch.py \\',
+        '--head "$GENERATED_SHA" --bootstrap-tree "$PUBLICATION_BOOTSTRAP_TREE"',
+        'echo "publication_sequence=$PUBLICATION_SEQUENCE" >> "$GITHUB_OUTPUT"',
+        'echo "publication_tree_sha=$PUBLICATION_TREE_SHA" >> "$GITHUB_OUTPUT"',
+        '--publication-sequence "$PUBLICATION_SEQUENCE"',
+        '--generated-tree-sha "$GENERATED_TREE_SHA"',
+    ):
+        require(fragment in plan, f"Spotlight monotonic epoch/high-water proof is missing: {fragment}")
+    require(plan.count("python3 source/scripts/generated_publication_epoch.py") == 1,
+            "Spotlight planner must independently derive exactly one publication epoch")
+    require(profile.count("generated-publication-receipt-v1.schema.json") == 0,
+            "Profile Stats active workflow still references retired publication receipt v1")
 
 
 def validate_spotlight_budget_artifact_history(spotlight: str) -> None:
@@ -7529,6 +7623,8 @@ def validate_profile_quality_portfolio_liveness_boundary(
 def main() -> int:
     try:
         self_test()
+        generated_publication_epoch.self_test()
+        spotlight_profile_links.self_test()
         automation_decision_lease.self_test()
         observed: dict[str, str] = {}
         for relative, expected in EXPECTED.items():
@@ -7583,7 +7679,8 @@ def main() -> int:
         v21.validate_profile_stats_freshness(profile)
         v21.validate_profile_stats_lease_binding(profile)
         v21.validate_profile_stats_commit_topology(profile)
-        v21.validate_profile_stats_receipt(profile)
+        validate_monotonic_publication_epoch(profile, spotlight)
+        v21.validate_profile_stats_receipt(project_item25_profile_receipt_to_v21(profile))
         v21.validate_shared_control_plane_epoch(profile, spotlight)
         validate_profile_stats_spotlight_dispatch_evidence(profile)
 
@@ -7594,7 +7691,7 @@ def main() -> int:
 
         print(
             f"Governed workflow byte identity passed: {VERSION} · {len(observed)} exact reviewed workflow blobs · "
-            "v21 profile/publication, shared Profile-Stats→Spotlight control-plane epoch, and Spotlight reconciliation/immutable-candidate invariants preserved · "
+            "v21 profile/publication plus item-25 monotonic generated epoch/tree-replay/high-water proofs, shared Profile-Stats→Spotlight control-plane epoch, and Spotlight reconciliation/immutable-candidate invariants preserved · "
             "native PR required-check accepted-base trust bootstrap plus staged next-evaluator byte identity and classified read-only transient retry locked · CodeQL Autofix constructive mutation-response schema plus exact HTTP-200/202/201 transport ordering locked · bot-review credential/ref response schema ordering, exact workflow-dispatch HTTP 204 validation, and exact review-creation HTTP 200 validation locked · bot-review lane-specific liveness, stale-wake collapse, bounded Spotlight readiness retry, canonical Profile-Quality quiescence exemption, fresh post-wait thread/review evidence, idempotent recovery wake, and immutable base/head marker proof locked · event-driven Spotlight main-push reconciliation plus exact-201 reviewer-request, exact-204 admission/reviewer dispatch, and exact-201 protected-run approval status validation, pre-convergence reviewer wake, proof/live-reproof and jq-only protected workflow evidence locked · post-review native governed-bot required gate consumption byte-locked · item-10 MAC ordering and terminal proof guards retained · "
             "item-11 ADR recovery/preparation/signing boundaries byte-locked with exact lease closure and no signer-side authored execution surface · Spotlight proposal/terminal README Contents evidence typed before content consumption · Spotlight terminal required-check collection and protected workflow-run certificate provenance typed before merge/MAC consumption · Profile Stats mutation-lease current-run evidence uses the canonical retrying GET client and is typed before scalar consumption/generated-ref reproof/lease issuance · Profile Stats Spotlight workflow/run evidence is isolated in a canonical-read-only plan before high-water/write consumption · Spotlight terminal trusted-admission workflow/run/check evidence is typed before live-reproof consumption · Spotlight lease current-run status permits only queued/in-progress with null conclusion before lease issuance · Spotlight mutation-budget canonical retrying GET transport, trusted-main helper identity, artifact-history envelope schema and pre-admission ordering locked · Profile Quality external Portfolio/Spotlight liveness is excluded from protected merge authority through the canonical validation boundary's explicit offline mode while Profile Stats retains both strict-live boundary executions · Profile Quality executable jq runtime fixture step and exact runtime-test script bytes locked."
         )

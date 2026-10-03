@@ -17,7 +17,8 @@ STATS = ROOT / ".github/workflows/profile-stats.yml"
 V1_SCHEMA = ROOT / ".github/attestation/profile-evidence-v1.schema.json"
 V2_SCHEMA = ROOT / ".github/attestation/profile-evidence-v2.schema.json"
 CURRENT_SCHEMA = ROOT / ".github/attestation/profile-evidence-v3.schema.json"
-RECEIPT_SCHEMA = ROOT / ".github/attestation/generated-publication-receipt-v1.schema.json"
+RECEIPT_V1_SCHEMA = ROOT / ".github/attestation/generated-publication-receipt-v1.schema.json"
+RECEIPT_SCHEMA = ROOT / ".github/attestation/generated-publication-receipt-v2.schema.json"
 DOC = ROOT / ".github/ATTESTATION.md"
 BUILDER = ROOT / "scripts/build-profile-evidence-attestation.py"
 RECEIPT_BUILDER = ROOT / "scripts/build-generated-publication-receipt.py"
@@ -29,6 +30,7 @@ VALIDATION_RUNNER = ROOT / "scripts/validate-profile-evidence-boundary.py"
 V1_GIT_BLOB_SHA = "075fc17c817fe689702bc96c9875a0eb0a934375"
 V2_GIT_BLOB_SHA = "66a1486e565b89759812ff00dd33edc44a64cfa6"
 V3_GIT_BLOB_SHA = "9f9ef42b4861fd3130568197f0592353c0acad9c"
+RECEIPT_V1_GIT_BLOB_SHA = "c15a3a7f86ea24c8db7a7165bec4af8a177c8b4b"
 ATTEST_SHA = "1e69f48acb82d1966a394da916b4c1698aa569d6"  # actions/attest v4.2.2
 CHECKOUT_SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 SETUP_PYTHON_SHA = "5fda3b95a4ea91299a34e894583c3862153e4b97"
@@ -37,7 +39,8 @@ UPLOAD_SHA = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
 V1_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v1.schema.json"
 V2_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v2.schema.json"
 PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/profile-evidence-v3.schema.json"
-RECEIPT_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json"
+RECEIPT_V1_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json"
+RECEIPT_PREDICATE_TYPE = "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v2.schema.json"
 EVIDENCE_SEMANTICS = "execution-result-subject-binding-freshness-v1"
 VALIDATOR_CONTRACT = validation_contract.predicate_validators()
 SIGNAL_VALIDATORS = list(VALIDATOR_CONTRACT["signalField"])
@@ -58,6 +61,20 @@ def require(condition: bool, message: str) -> None:
 def git_blob_sha(path: Path) -> str:
     payload = path.read_bytes()
     return hashlib.sha1(f"blob {len(payload)}\0".encode("ascii") + payload).hexdigest()
+
+
+def validate_frozen_receipt_v1() -> None:
+    require(RECEIPT_V1_SCHEMA.is_file(), "frozen generated publication receipt v1 schema is missing")
+    require(
+        git_blob_sha(RECEIPT_V1_SCHEMA) == RECEIPT_V1_GIT_BLOB_SHA,
+        "published generated-publication-receipt-v1 schema bytes changed; issued receipt schemas are immutable",
+    )
+    payload = json.loads(RECEIPT_V1_SCHEMA.read_text(encoding="utf-8"))
+    require(isinstance(payload, dict), "frozen generated publication receipt v1 schema root changed")
+    require(payload.get("$id") == RECEIPT_V1_PREDICATE_TYPE,
+            "frozen generated publication receipt v1 predicate identity changed")
+    require(payload.get("properties", {}).get("schemaVersion", {}).get("const") == 1,
+            "frozen generated publication receipt v1 schema version changed")
 
 
 def job_block(workflow: str, key: str, next_key: str | None) -> str:
@@ -161,7 +178,7 @@ def validate_receipt_schema_payload(schema: dict[str, object]) -> None:
         require(key in required, f"publication receipt predicate must require {key}")
     properties = schema.get("properties")
     require(isinstance(properties, dict), "publication receipt predicate properties are missing")
-    require(properties.get("schemaVersion", {}).get("const") == 1,
+    require(properties.get("schemaVersion", {}).get("const") == 2,
             "publication receipt schemaVersion changed")
     require(properties.get("kind", {}).get("const") == "generated-publication-receipt",
             "publication receipt kind changed")
@@ -207,11 +224,38 @@ def validate_receipt_schema_payload(schema: dict[str, object]) -> None:
             "publication receipt publication block must fail closed")
     require(publication_props.get("branch", {}).get("const") == "generated",
             "publication receipt branch changed")
-    for key in ("commitSha", "parentSha"):
+    for key in ("commitSha", "parentSha", "treeSha"):
         require(publication_props.get(key, {}).get("pattern") == "^[0-9a-f]{40}$",
                 f"publication receipt {key} format changed")
     require(publication_props.get("gitObjectSha256", {}).get("pattern") == "^[0-9a-f]{64}$",
             "publication receipt canonical Git-object digest format changed")
+    publication_epoch = publication_props.get("epoch", {})
+    publication_epoch_props = (
+        publication_epoch.get("properties", {}) if isinstance(publication_epoch, dict) else {}
+    )
+    require(publication_epoch.get("additionalProperties") is False,
+            "publication receipt monotonic epoch block must fail closed")
+    require(
+        publication_epoch.get("required")
+        == ["version", "algorithm", "bootstrapSha", "parentSequence", "sequence"],
+        "publication receipt monotonic epoch required set changed",
+    )
+    require(publication_epoch_props.get("version", {}).get("const") == "generated-publication-epoch-v1",
+            "publication receipt monotonic epoch version changed")
+    require(
+        publication_epoch_props.get("algorithm", {}).get("const")
+        == "first-parent-distance-tree-novelty-v1",
+        "publication receipt monotonic epoch algorithm changed",
+    )
+    require(
+        publication_epoch_props.get("bootstrapSha", {}).get("const")
+        == "ade981fd4fe114dde8bcacfde28236e4f0407ba1",
+        "publication receipt monotonic epoch bootstrap changed",
+    )
+    require(publication_epoch_props.get("parentSequence", {}).get("minimum") == 0,
+            "publication receipt parent-sequence floor changed")
+    require(publication_epoch_props.get("sequence", {}).get("minimum") == 1,
+            "publication receipt sequence floor changed")
 
     evidence = properties.get("evidence", {})
     evidence_props = evidence.get("properties", {}) if isinstance(evidence, dict) else {}
@@ -245,7 +289,9 @@ def validate_receipt_schema_payload(schema: dict[str, object]) -> None:
             "publication receipt subjects must equal canonical published subject order")
 
     claim = properties.get("claim", {}).get("const")
-    require(isinstance(claim, str) and "actual published generated Git commit and parent" in claim
+    require(isinstance(claim, str)
+            and "actual published generated Git commit, parent, semantic tree" in claim
+            and "monotonic publication epoch" in claim
             and "leased transaction" in claim,
             "publication receipt claim boundary changed")
 
@@ -263,6 +309,16 @@ def validate_receipt_schema() -> None:
                 f"publication receipt schema negative test failed for wrong reason: {exc}")
     else:
         fail("publication receipt schema negative test accepted branch drift")
+
+    mutated_epoch = copy.deepcopy(schema)
+    mutated_epoch["properties"]["publication"]["properties"]["epoch"]["properties"]["bootstrapSha"]["const"] = "0" * 40
+    try:
+        validate_receipt_schema_payload(mutated_epoch)
+    except ValueError as exc:
+        require("bootstrap changed" in str(exc),
+                f"publication receipt epoch negative test failed for wrong reason: {exc}")
+    else:
+        fail("publication receipt schema negative test accepted bootstrap drift")
 
 
 def validate_builder() -> None:
@@ -300,9 +356,10 @@ def validate_builder() -> None:
 def validate_receipt_builder() -> None:
     text = RECEIPT_BUILDER.read_text(encoding="utf-8")
     for phrase in (
-        "SCHEMA_VERSION = 1",
+        "SCHEMA_VERSION = 2",
         'KIND = "generated-publication-receipt"',
-        "generated-publication-receipt-v1.schema.json",
+        "generated-publication-receipt-v2.schema.json",
+        "import generated_publication_epoch as publication_epoch",
         'SOURCE_EPOCH_VERSION = "profile-stats-source-epoch-v1"',
         'SOURCE_EPOCH_ALGORITHM = "sha256-sorted-path-nul-git-blob-oid-lf-v1"',
         "import profile_evidence_subjects as subjects",
@@ -312,7 +369,14 @@ def validate_receipt_builder() -> None:
         '"leaseId": lease_id, "candidateId": candidate_id',
         '"commitSha": published_sha',
         '"parentSha": parent_sha',
+        '"treeSha": tree_sha',
         '"gitObjectSha256": git_object_sha256',
+        '"version": publication_epoch.VERSION',
+        '"algorithm": publication_epoch.ALGORITHM',
+        '"bootstrapSha": publication_bootstrap_sha',
+        '"parentSequence": publication_parent_sequence',
+        '"sequence": publication_sequence',
+        "publication_sequence == publication_parent_sequence + 1",
         '"profileEvidencePredicateSha256": profile_digest',
         '"subjects": evidence_subjects(published_root)',
         "publication receipt candidate identity is not the exact leased Profile Stats candidate",
@@ -416,12 +480,16 @@ def validate_workflow() -> None:
             "publication receipt preparation must not checkout a dynamic published SHA")
     for fragment in (
         "ref: generated",
-        "fetch-depth: 2",
+        "fetch-depth: 0",
         'PUBLISHED_SHA: ${{ needs.publish.outputs.published_sha }}',
         'PUBLISHED_PARENT_SHA: ${{ needs.publish.outputs.parent_sha }}',
         'SOURCE_SHA: ${{ needs.publish.outputs.source_sha }}',
         'LEASE_ID: ${{ needs.lease.outputs.lease_id }}',
         'CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}',
+        'EXPECTED_PUBLICATION_BOOTSTRAP_SHA: ${{ needs.stage.outputs.publication_bootstrap_sha }}',
+        'EXPECTED_PUBLICATION_PARENT_SEQUENCE: ${{ needs.stage.outputs.publication_parent_sequence }}',
+        'EXPECTED_PUBLICATION_SEQUENCE: ${{ needs.stage.outputs.publication_sequence }}',
+        'EXPECTED_PUBLICATION_TREE_SHA: ${{ needs.stage.outputs.publication_tree_sha }}',
         'test "$(git -C published rev-parse HEAD)" = "$PUBLISHED_SHA"',
         'test "$(git -C published rev-parse HEAD^)" = "$PUBLISHED_PARENT_SHA"',
         'test "$(git -C published rev-list --parents -n 1 HEAD | awk \'{print NF}\')" -eq 2',
@@ -434,6 +502,15 @@ def validate_workflow() -> None:
         "{ printf 'commit %s\\0' \"$PAYLOAD_SIZE\"; cat published-commit.payload; } > published-commit.object",
         'test "$(sha1sum published-commit.object | cut -d\' \' -f1)" = "$PUBLISHED_SHA"',
         'GIT_OBJECT_SHA256="$(sha256sum published-commit.object | cut -d\' \' -f1)"',
+        "git -C published log --first-parent --reverse \\",
+        "--format='%H%x09%P%x09%T%x09%s%x09%an%x09%ae%x09%cn%x09%ce' \\",
+        'python3 source/scripts/generated_publication_epoch.py \\',
+        '--head "$PUBLISHED_SHA" --parent "$PUBLISHED_PARENT_SHA" \\',
+        '--bootstrap-tree "$PUBLICATION_BOOTSTRAP_TREE"',
+        'test "$PUBLICATION_BOOTSTRAP_SHA" = "$EXPECTED_PUBLICATION_BOOTSTRAP_SHA"',
+        'test "$PUBLICATION_PARENT_SEQUENCE" = "$EXPECTED_PUBLICATION_PARENT_SEQUENCE"',
+        'test "$PUBLICATION_SEQUENCE" = "$EXPECTED_PUBLICATION_SEQUENCE"',
+        'test "$PUBLISHED_TREE_SHA" = "$EXPECTED_PUBLICATION_TREE_SHA"',
         "python3 source/scripts/build-generated-publication-receipt.py",
         "name: generated-publication-receipt-predicate",
         "path: generated-publication-receipt.json",
@@ -592,6 +669,10 @@ def validate_doc() -> None:
         "profile-evidence-v3.schema.json",
         "profile-evidence-v2.schema.json",
         "profile-evidence-v1.schema.json",
+        "generated-publication-receipt-v2.schema.json",
+        "generated-publication-epoch-v1",
+        "first-parent distance",
+        "semantic evidence tree",
         "frozen",
         "predicateSchema.digest",
         "Portfolio Evidence Ledger v2",
@@ -618,13 +699,14 @@ def main() -> int:
         subjects.load_manifest()
         validation_contract.load_manifest()
         for path in (
-            STATS, V1_SCHEMA, V2_SCHEMA, CURRENT_SCHEMA, RECEIPT_SCHEMA, DOC, BUILDER,
+            STATS, V1_SCHEMA, V2_SCHEMA, CURRENT_SCHEMA, RECEIPT_V1_SCHEMA, RECEIPT_SCHEMA, DOC, BUILDER,
             RECEIPT_BUILDER, SUBJECT_VALIDATOR, STAGER, VALIDATION_MANIFEST, VALIDATION_RUNNER,
         ):
             require(path.is_file(), f"attestation contract input is missing: {path.relative_to(ROOT)}")
         validate_frozen_schema(V1_SCHEMA, V1_GIT_BLOB_SHA, V1_PREDICATE_TYPE, 1)
         validate_frozen_schema(V2_SCHEMA, V2_GIT_BLOB_SHA, V2_PREDICATE_TYPE, 2)
         validate_frozen_schema(CURRENT_SCHEMA, V3_GIT_BLOB_SHA, PREDICATE_TYPE, 3)
+        validate_frozen_receipt_v1()
         validate_current_schema()
         validate_receipt_schema()
         validate_builder()
@@ -632,7 +714,7 @@ def main() -> int:
         validate_workflow()
         validate_doc()
         print(
-            "Engineering attestation validation passed: predicate v1/v2/v3 bytes are frozen; read-only preparation owns validation/predicate construction; "
+            "Engineering attestation validation passed: predicate v1/v2/v3 and generated-publication receipt v1 bytes are frozen; active receipt v2 binds monotonic epoch/tree identity; read-only preparation owns validation/predicate construction; "
             "terminal evidence attestation and post-publication receipt signing each retain isolated OIDC/attestation authority with reviewed proof shells and pinned actions/attest; "
             "terminal contents-write publication remains separate; the actual published generated Git commit object is SHA-256 receipted before Spotlight dispatch; "
             "the eleven-subject contract remains closed and the evidence claim remains provenance/contract conformance rather than certification."
