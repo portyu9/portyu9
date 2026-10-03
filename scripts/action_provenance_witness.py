@@ -15,8 +15,12 @@ import copy
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
+import platform
 import re
+import shutil
+import subprocess
 import sys
 from typing import Any, Mapping
 
@@ -62,9 +66,23 @@ AUTHORITY_SEPARATION = (
 CLAIM = (
     "This witness proves that the exact action-lock v2 release set matched public "
     "upstream repository/release/tag-ref/commit identity during its bounded validity "
-    "interval. It does not authorize a different lock or provenance-policy epoch and "
-    "does not replace local workflow/lock closure, branch protection, or trusted "
-    "capability admission."
+    "interval and records the hosted-runner/toolchain fingerprint observed by the "
+    "read-only producer. It does not authorize a different lock, provenance-policy "
+    "epoch, runner image, or toolchain and does not replace local workflow/lock "
+    "closure, branch protection, or trusted capability admission."
+)
+RUNTIME_FINGERPRINT_VERSION = "github-hosted-runtime-fingerprint-v1"
+RUNNER_LABEL = "ubuntu-24.04"
+RUNNER_OS = "Linux"
+RUNNER_ARCH = "X64"
+PINNED_PYTHON_VERSION = "Python 3.13.16"
+RUNTIME_TOOL_SPECS = (
+    ("bash", ("bash", "--version")),
+    ("git", ("git", "--version")),
+    ("gh", ("gh", "--version")),
+    ("jq", ("jq", "--version")),
+    ("openssl", ("openssl", "version")),
+    ("python", ("python", "--version")),
 )
 
 # Closed-world provenance-policy epoch. These bytes jointly determine whether an old
@@ -102,6 +120,7 @@ TOP_LEVEL_KEYS = (
     "predicateSchema",
     "actionLock",
     "policyEpoch",
+    "runtimeFingerprint",
     "releases",
     "authority",
     "claim",
@@ -199,6 +218,16 @@ def validate_schema_contract() -> None:
         ("properties", "validity", "properties", "ttlSeconds", "const"): TTL_SECONDS,
         ("properties", "predicateSchema", "properties", "id", "const"): PREDICATE_TYPE,
         ("properties", "actionLock", "properties", "version", "const"): ACTION_LOCK_VERSION,
+        ("properties", "runtimeFingerprint", "properties", "version", "const"):
+            RUNTIME_FINGERPRINT_VERSION,
+        ("properties", "runtimeFingerprint", "properties", "runner", "properties", "label", "const"):
+            RUNNER_LABEL,
+        ("properties", "runtimeFingerprint", "properties", "runner", "properties", "os", "const"):
+            RUNNER_OS,
+        ("properties", "runtimeFingerprint", "properties", "runner", "properties", "arch", "const"):
+            RUNNER_ARCH,
+        ("properties", "runtimeFingerprint", "properties", "tools", "properties", "python",
+         "properties", "version", "const"): PINNED_PYTHON_VERSION,
         ("properties", "authority", "properties", "preparation", "const"): "contents:read",
         ("properties", "authority", "properties", "attestation", "const"):
             "contents:read,id-token:write,attestations:write",
@@ -262,6 +291,242 @@ def policy_files_from_root(root: Path) -> dict[str, bytes]:
                 f"provenance policy epoch input is missing or aliased: {relative}")
         result[relative] = path.read_bytes()
     return result
+
+
+def _bounded_printable(value: Any, label: str, *, maximum: int = 256) -> str:
+    require(isinstance(value, str) and 1 <= len(value) <= maximum,
+            f"{label} must be one non-empty bounded string")
+    require(all(0x20 <= ord(char) <= 0x7E for char in value),
+            f"{label} must contain printable ASCII only")
+    return value
+
+
+def _file_digest(path: Path, label: str) -> str:
+    require(path.is_file(), f"{label} executable/file is missing")
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(block)
+    except OSError as exc:
+        raise ValueError(f"{label} executable/file could not be hashed: {exc}") from exc
+    return "sha256:" + digest.hexdigest()
+
+
+def _runtime_digest(
+    *, version: str, runner: Mapping[str, Any], tools: Mapping[str, Any],
+) -> str:
+    return digest_bytes(canonical_json({
+        "version": version,
+        "runner": dict(runner),
+        "tools": {name: dict(tools[name]) for name, _ in RUNTIME_TOOL_SPECS},
+    }).encode("utf-8"))
+
+
+def normalize_runtime_fingerprint(value: Any) -> dict[str, Any]:
+    require(isinstance(value, Mapping)
+            and list(value) == ["version", "runner", "tools", "digest"],
+            "runtimeFingerprint object shape/order changed")
+    require(value.get("version") == RUNTIME_FINGERPRINT_VERSION,
+            "runtimeFingerprint version changed")
+
+    runner = value.get("runner")
+    require(isinstance(runner, Mapping)
+            and list(runner) == [
+                "label", "os", "arch", "imageOS", "imageVersion",
+                "kernelRelease", "osReleaseDigest",
+            ],
+            "runtimeFingerprint runner shape/order changed")
+    require(runner.get("label") == RUNNER_LABEL,
+            "runtimeFingerprint runner label changed")
+    require(runner.get("os") == RUNNER_OS,
+            "runtimeFingerprint runner OS changed")
+    require(runner.get("arch") == RUNNER_ARCH,
+            "runtimeFingerprint runner architecture changed")
+    image_os = _bounded_printable(runner.get("imageOS"), "runtimeFingerprint runner imageOS", maximum=64)
+    image_version = _bounded_printable(
+        runner.get("imageVersion"), "runtimeFingerprint runner imageVersion", maximum=128
+    )
+    require(re.fullmatch(r"[A-Za-z0-9._-]+", image_os) is not None,
+            "runtimeFingerprint runner imageOS is not canonical")
+    require(re.fullmatch(r"[A-Za-z0-9._-]+", image_version) is not None,
+            "runtimeFingerprint runner imageVersion is not canonical")
+    _bounded_printable(
+        runner.get("kernelRelease"), "runtimeFingerprint runner kernelRelease", maximum=128
+    )
+    _digest(runner.get("osReleaseDigest"), "runtimeFingerprint runner osReleaseDigest")
+
+    tools = value.get("tools")
+    require(isinstance(tools, Mapping)
+            and list(tools) == [name for name, _ in RUNTIME_TOOL_SPECS],
+            "runtimeFingerprint tool inventory changed")
+    normalized_tools: dict[str, dict[str, str]] = {}
+    for name, _ in RUNTIME_TOOL_SPECS:
+        identity = tools.get(name)
+        require(isinstance(identity, Mapping)
+                and list(identity) == ["version", "path", "executableDigest"],
+                f"runtimeFingerprint tool identity changed: {name}")
+        version = _bounded_printable(
+            identity.get("version"), f"runtimeFingerprint {name} version", maximum=256
+        )
+        path = _bounded_printable(
+            identity.get("path"), f"runtimeFingerprint {name} path", maximum=512
+        )
+        require(path.startswith("/") and "//" not in path,
+                f"runtimeFingerprint {name} path must be one canonical absolute path")
+        executable_digest = _digest(
+            identity.get("executableDigest"), f"runtimeFingerprint {name} executableDigest"
+        )
+        if name == "python":
+            require(version == PINNED_PYTHON_VERSION,
+                    "runtimeFingerprint Python version differs from the reviewed runtime pin")
+        normalized_tools[name] = {
+            "version": version,
+            "path": path,
+            "executableDigest": executable_digest,
+        }
+
+    expected_digest = _runtime_digest(
+        version=RUNTIME_FINGERPRINT_VERSION,
+        runner=runner,
+        tools=normalized_tools,
+    )
+    require(value.get("digest") == expected_digest,
+            "runtimeFingerprint aggregate digest does not match exact runner/tool inventory")
+    return {
+        "version": RUNTIME_FINGERPRINT_VERSION,
+        "runner": dict(runner),
+        "tools": normalized_tools,
+        "digest": expected_digest,
+    }
+
+
+def _tool_identity(name: str, command: tuple[str, ...]) -> dict[str, str]:
+    executable_name = command[0]
+    executable = Path(sys.executable) if name == "python" else None
+    if executable is None:
+        located = shutil.which(executable_name)
+        require(located is not None, f"runtimeFingerprint required tool is unavailable: {name}")
+        executable = Path(located)
+    try:
+        resolved = executable.resolve(strict=True)
+    except OSError as exc:
+        raise ValueError(f"runtimeFingerprint {name} executable cannot be resolved: {exc}") from exc
+    require(resolved.is_file(), f"runtimeFingerprint {name} executable is not a regular file")
+    args = [str(resolved), *command[1:]]
+    try:
+        completed = subprocess.run(
+            args,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError(f"runtimeFingerprint {name} version probe failed: {exc}") from exc
+    lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    require(lines, f"runtimeFingerprint {name} version probe returned no output")
+    version = _bounded_printable(lines[0], f"runtimeFingerprint {name} version", maximum=256)
+    return {
+        "version": version,
+        "path": str(resolved),
+        "executableDigest": _file_digest(resolved, f"runtimeFingerprint {name}"),
+    }
+
+
+def collect_runtime_fingerprint() -> dict[str, Any]:
+    runner_os = os.environ.get("RUNNER_OS")
+    runner_arch = os.environ.get("RUNNER_ARCH")
+    image_os = os.environ.get("ImageOS")
+    image_version = os.environ.get("ImageVersion")
+    require(runner_os == RUNNER_OS,
+            "runtimeFingerprint producer is not running on the reviewed runner OS")
+    require(runner_arch == RUNNER_ARCH,
+            "runtimeFingerprint producer is not running on the reviewed runner architecture")
+    require(image_os is not None and image_version is not None,
+            "runtimeFingerprint hosted image metadata is unavailable")
+
+    os_release = Path("/etc/os-release")
+    require(os_release.is_file(), "runtimeFingerprint /etc/os-release is unavailable")
+    runner = {
+        "label": RUNNER_LABEL,
+        "os": runner_os,
+        "arch": runner_arch,
+        "imageOS": image_os,
+        "imageVersion": image_version,
+        "kernelRelease": platform.release(),
+        "osReleaseDigest": _file_digest(os_release, "runtimeFingerprint /etc/os-release"),
+    }
+    tools = {
+        name: _tool_identity(name, command)
+        for name, command in RUNTIME_TOOL_SPECS
+    }
+    value = {
+        "version": RUNTIME_FINGERPRINT_VERSION,
+        "runner": runner,
+        "tools": tools,
+        "digest": _runtime_digest(
+            version=RUNTIME_FINGERPRINT_VERSION,
+            runner=runner,
+            tools=tools,
+        ),
+    }
+    return normalize_runtime_fingerprint(value)
+
+
+def _fixture_runtime_fingerprint() -> dict[str, Any]:
+    runner = {
+        "label": RUNNER_LABEL,
+        "os": RUNNER_OS,
+        "arch": RUNNER_ARCH,
+        "imageOS": "ubuntu24",
+        "imageVersion": "20260928.1.0",
+        "kernelRelease": "6.11.0-1018-azure",
+        "osReleaseDigest": "sha256:" + "1" * 64,
+    }
+    tools = {
+        "bash": {
+            "version": "GNU bash, version 5.2.21(1)-release",
+            "path": "/usr/bin/bash",
+            "executableDigest": "sha256:" + "2" * 64,
+        },
+        "git": {
+            "version": "git version 2.51.0",
+            "path": "/usr/bin/git",
+            "executableDigest": "sha256:" + "3" * 64,
+        },
+        "gh": {
+            "version": "gh version 2.80.0 (2026-09-17)",
+            "path": "/usr/bin/gh",
+            "executableDigest": "sha256:" + "4" * 64,
+        },
+        "jq": {
+            "version": "jq-1.7",
+            "path": "/usr/bin/jq",
+            "executableDigest": "sha256:" + "5" * 64,
+        },
+        "openssl": {
+            "version": "OpenSSL 3.0.13 30 Jan 2024",
+            "path": "/usr/bin/openssl",
+            "executableDigest": "sha256:" + "6" * 64,
+        },
+        "python": {
+            "version": PINNED_PYTHON_VERSION,
+            "path": "/opt/hostedtoolcache/Python/3.13.16/x64/bin/python3.13",
+            "executableDigest": "sha256:" + "7" * 64,
+        },
+    }
+    return normalize_runtime_fingerprint({
+        "version": RUNTIME_FINGERPRINT_VERSION,
+        "runner": runner,
+        "tools": tools,
+        "digest": _runtime_digest(
+            version=RUNTIME_FINGERPRINT_VERSION,
+            runner=runner,
+            tools=tools,
+        ),
+    })
 
 
 def normalize_retry_history(
@@ -331,6 +596,7 @@ def build_predicate(
     issued_at_epoch: int,
     lock_bytes: bytes,
     policy_files: Mapping[str, bytes],
+    runtime_fingerprint: Mapping[str, Any],
 ) -> dict[str, Any]:
     _sha(source_sha, "source SHA")
     run_id = _positive_int(run_id, "run ID")
@@ -369,6 +635,7 @@ def build_predicate(
             "actions": {action: dict(actions[action]) for action in sorted(actions)},
         },
         "policyEpoch": policy_epoch(policy_files),
+        "runtimeFingerprint": normalize_runtime_fingerprint(runtime_fingerprint),
         "releases": release_inventory(actions),
         "authority": {
             "preparation": "contents:read",
@@ -478,6 +745,7 @@ def validate_predicate(predicate: Any) -> dict[str, Any]:
             "Action provenance witness action inventory is not canonical")
 
     _validate_policy_epoch(predicate.get("policyEpoch"))
+    normalize_runtime_fingerprint(predicate.get("runtimeFingerprint"))
     expected_releases = release_inventory(normalized)
     require(predicate.get("releases") == expected_releases,
             "Action provenance witness release inventory differs from exact locked identities")
@@ -1031,6 +1299,7 @@ def self_test() -> None:
         issued_at_epoch=1700000000,
         lock_bytes=lock_bytes,
         policy_files=policy_files,
+        runtime_fingerprint=_fixture_runtime_fingerprint(),
     )
     validate_predicate(predicate)
     subject = build_subject(predicate)
@@ -1283,6 +1552,39 @@ def self_test() -> None:
     wrong_epoch["policyEpoch"]["files"][0]["digest"] = "sha256:" + "f" * 64
     _expect_failure(lambda: validate_predicate(wrong_epoch), "aggregate digest")
 
+    wrong_runtime_digest = copy.deepcopy(predicate)
+    wrong_runtime_digest["runtimeFingerprint"]["digest"] = "sha256:" + "e" * 64
+    _expect_failure(
+        lambda: validate_predicate(wrong_runtime_digest),
+        "runtimeFingerprint aggregate digest",
+    )
+
+    wrong_runtime_python = copy.deepcopy(predicate)
+    wrong_runtime_python["runtimeFingerprint"]["tools"]["python"]["version"] = "Python 3.13.15"
+    wrong_runtime_python["runtimeFingerprint"]["digest"] = _runtime_digest(
+        version=RUNTIME_FINGERPRINT_VERSION,
+        runner=wrong_runtime_python["runtimeFingerprint"]["runner"],
+        tools=wrong_runtime_python["runtimeFingerprint"]["tools"],
+    )
+    _expect_failure(
+        lambda: validate_predicate(wrong_runtime_python),
+        "Python version differs",
+    )
+
+    wrong_runtime_tool_digest = copy.deepcopy(predicate)
+    wrong_runtime_tool_digest["runtimeFingerprint"]["tools"]["git"]["executableDigest"] = "bad"
+    _expect_failure(
+        lambda: validate_predicate(wrong_runtime_tool_digest),
+        "git executableDigest",
+    )
+
+    wrong_runtime_shape = copy.deepcopy(predicate)
+    wrong_runtime_shape["runtimeFingerprint"]["runner"]["unexpected"] = "value"
+    _expect_failure(
+        lambda: validate_predicate(wrong_runtime_shape),
+        "runner shape/order changed",
+    )
+
     wrong_subject = copy.deepcopy(subject)
     wrong_subject["predicateDigest"] = "sha256:" + "e" * 64
     _expect_failure(
@@ -1413,7 +1715,8 @@ def main() -> int:
             print(
                 "Action provenance witness v1 self-test passed: exact lock/policy epoch, "
                 "fixed TTL, run-attempt identity, deterministic release inventory, "
-                "subject binding, freshness, bounded consumer selection, exact attestation matching, and mismatch rejection are fail-closed."
+                "hosted-runner/toolchain fingerprinting, subject binding, freshness, "
+                "bounded consumer selection, exact attestation matching, and mismatch rejection are fail-closed."
             )
             return 0
 
@@ -1427,6 +1730,7 @@ def main() -> int:
                 issued_at_epoch=args.issued_at,
                 lock_bytes=lock_bytes,
                 policy_files=policy_files_from_root(args.policy_root),
+                runtime_fingerprint=collect_runtime_fingerprint(),
             )
             _write(args.predicate_out, predicate)
             _write(args.subject_out, build_subject(predicate))

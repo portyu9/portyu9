@@ -4,7 +4,7 @@
   "title": "Action Provenance Witness v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion","kind","repository","repositoryId","source","retryHistory","validity","predicateSchema","actionLock","policyEpoch","releases","authority","claim"],
+  "required": ["schemaVersion","kind","repository","repositoryId","source","retryHistory","validity","predicateSchema","actionLock","policyEpoch","runtimeFingerprint","releases","authority","claim"],
   "properties": {
     "schemaVersion": {"const": 1},
     "kind": {"const": "action-provenance-witness"},
@@ -90,6 +90,51 @@
         }
       }
     },
+    "runtimeFingerprint": {
+      "type":"object",
+      "additionalProperties":false,
+      "required":["version","runner","tools","digest"],
+      "properties":{
+        "version":{"const":"github-hosted-runtime-fingerprint-v1"},
+        "runner":{
+          "type":"object",
+          "additionalProperties":false,
+          "required":["label","os","arch","imageOS","imageVersion","kernelRelease","osReleaseDigest"],
+          "properties":{
+            "label":{"const":"ubuntu-24.04"},
+            "os":{"const":"Linux"},
+            "arch":{"const":"X64"},
+            "imageOS":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9._-]+$"},
+            "imageVersion":{"type":"string","minLength":1,"maxLength":128,"pattern":"^[A-Za-z0-9._-]+$"},
+            "kernelRelease":{"type":"string","minLength":1,"maxLength":128,"pattern":"^[ -~]+$"},
+            "osReleaseDigest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+          }
+        },
+        "tools":{
+          "type":"object",
+          "additionalProperties":false,
+          "required":["bash","git","gh","jq","openssl","python"],
+          "properties":{
+            "bash":{"$ref":"#/$defs/runtimeToolIdentity"},
+            "git":{"$ref":"#/$defs/runtimeToolIdentity"},
+            "gh":{"$ref":"#/$defs/runtimeToolIdentity"},
+            "jq":{"$ref":"#/$defs/runtimeToolIdentity"},
+            "openssl":{"$ref":"#/$defs/runtimeToolIdentity"},
+            "python":{
+              "type":"object",
+              "additionalProperties":false,
+              "required":["version","path","executableDigest"],
+              "properties":{
+                "version":{"const":"Python 3.13.16"},
+                "path":{"type":"string","minLength":2,"maxLength":512,"pattern":"^/[ -~]+$"},
+                "executableDigest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+              }
+            }
+          }
+        },
+        "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+      }
+    },
     "releases": {
       "type":"array",
       "minItems":1,
@@ -118,9 +163,19 @@
         "separation":{"const":"Live provenance preparation is read-only and separate from the OIDC attestation writer; neither grants repository mutation authority."}
       }
     },
-    "claim":{"const":"This witness proves that the exact action-lock v2 release set matched public upstream repository/release/tag-ref/commit identity during its bounded validity interval. It does not authorize a different lock or provenance-policy epoch and does not replace local workflow/lock closure, branch protection, or trusted capability admission."}
+    "claim":{"const":"This witness proves that the exact action-lock v2 release set matched public upstream repository/release/tag-ref/commit identity during its bounded validity interval and records the hosted-runner/toolchain fingerprint observed by the read-only producer. It does not authorize a different lock, provenance-policy epoch, runner image, or toolchain and does not replace local workflow/lock closure, branch protection, or trusted capability admission."}
   },
   "$defs":{
+    "runtimeToolIdentity":{
+      "type":"object",
+      "additionalProperties":false,
+      "required":["version","path","executableDigest"],
+      "properties":{
+        "version":{"type":"string","minLength":1,"maxLength":256,"pattern":"^[ -~]+$"},
+        "path":{"type":"string","minLength":2,"maxLength":512,"pattern":"^/[ -~]+$"},
+        "executableDigest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}
+      }
+    },
     "releaseIdentity":{
       "type":"object",
       "additionalProperties":false,
