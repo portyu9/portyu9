@@ -427,11 +427,16 @@ def validate_recovery_reproof_response_evidence(text: str) -> None:
         'HEAD_REF_JSON="$(python3 scripts/automation_github_read.py '
         '"repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"'
     )
-    mutated = text.replace(
-        head_capture,
-        head_capture
-        + '\n          PRE_SCHEMA_HEAD_SHA="$(jq -r .object.sha <<<"$HEAD_REF_JSON")"',
-        1,
+    recovery_open_start = text.index("  recovery_open:\n")
+    head_capture_position = text.index(head_capture, recovery_open_start)
+    mutated = (
+        text[:head_capture_position]
+        + text[head_capture_position:].replace(
+            head_capture,
+            head_capture
+            + '\n          PRE_SCHEMA_HEAD_SHA="$(jq -r .object.sha <<<"$HEAD_REF_JSON")"',
+            1,
+        )
     )
     try:
         validate_recovery_reproof_response_evidence_fixture(mutated)
