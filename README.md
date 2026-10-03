@@ -137,6 +137,7 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <p align="center"><sub>3 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
 <!-- spotlight-direct-links:start -->
+<!-- generated-publication-epoch:v1 sequence=0 generated=ade981fd4fe114dde8bcacfde28236e4f0407ba1 tree=f755b6825e9eaaf63d9816172585cbdd0053451c -->
 <p align="center">
 <a href="https://github.com/portyu9/qa-automation-java-restassured"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/ade981fd4fe114dde8bcacfde28236e4f0407ba1/engineering-spotlight/spotlight-1-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/ade981fd4fe114dde8bcacfde28236e4f0407ba1/engineering-spotlight/spotlight-1-light.svg" width="620"></picture></a><br>
 <a href="https://github.com/portyu9/qa-automation-java-restassured/actions/workflows/ci.yml"><img alt="Spotlight slot 1 CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-java-restassured/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-java-restassured/actions/workflows/security.yml"><img alt="Spotlight slot 1 security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-java-restassured/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
