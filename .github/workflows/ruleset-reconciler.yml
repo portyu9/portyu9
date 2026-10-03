@@ -947,6 +947,13 @@ jobs:
           else
             OBSERVED="$(python3 scripts/automation_github_read.py \
               "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+            jq -e '
+              (type == "object") and
+              (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+              (.check_runs | type == "array" and length <= 100) and
+              (.total_count == (.check_runs | length)) and
+              (([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))
+            ' <<<"$OBSERVED" >/dev/null
             MATCHES="$(jq -c --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" --arg details "$DETAILS_URL" '
               [.check_runs[] | select(
                 .name == $name and .head_sha == $head and .external_id == $external and
@@ -970,8 +977,14 @@ jobs:
           CHECK_ID="$(jq -r .id <<<"$CHECK")"
           EXACT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
           jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
-            .id == $id and .name == $name and .head_sha == $head and .external_id == $external and
-            .status == "queued" and .conclusion == null and .app.id == 15368 and .app.slug == "github-actions"
+            (type == "object") and
+            (.id | type == "number" and . == floor and . == $id) and
+            (.name | type == "string" and . == $name) and
+            (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+            (.external_id | type == "string" and . == $external) and
+            (.status | type == "string" and . == "queued") and
+            (.conclusion == null) and
+            (.app | type == "object" and .id == 15368 and .slug == "github-actions")
           ' <<<"$EXACT" >/dev/null
           echo "check_id=$CHECK_ID" >> "$GITHUB_OUTPUT"
           echo "external_id=$EXTERNAL_ID" >> "$GITHUB_OUTPUT"
@@ -1052,14 +1065,43 @@ jobs:
           ' <<<"$MAIN")"
           test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"
           PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-          jq -e --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
-            .state == "open" and .draft == false and .base.ref == "main" and .base.sha == $base and
-            .head.sha == $head and .head.ref == $ref and .head.repo.full_name == $repo
+          jq -e --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
+            (type == "object") and
+            (.number | type == "number" and . == floor and . > 0 and . == $pr) and
+            (.state | type == "string" and . == "open") and
+            (.draft | type == "boolean" and . == false) and
+            (.base |
+              (type == "object") and
+              (.ref | type == "string" and . == "main") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and
+              (.repo | type == "object" and (.full_name | type == "string" and . == $repo))) and
+            (.head |
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.repo | type == "object" and (.full_name | type == "string" and . == $repo)))
           ' <<<"$PR" >/dev/null
           HEAD_REF_JSON="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
-          test "$(jq -r .object.sha <<<"$HEAD_REF_JSON")" = "$HEAD_SHA"
+          jq -e --arg head "$HEAD_SHA" --arg ref "refs/heads/${HEAD_REF}" '
+            (type == "object") and
+            (.ref | type == "string" and . == $ref) and
+            (.node_id | type == "string" and length > 0) and
+            (.url | type == "string" and length > 0) and
+            (.object |
+              (type == "object") and
+              (.type | type == "string" and . == "commit") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.url | type == "string" and length > 0))
+          ' <<<"$HEAD_REF_JSON" >/dev/null
           COMMIT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
-          test "$(jq -r .tree.sha <<<"$COMMIT")" = "$TREE_SHA"
+          jq -e --arg head "$HEAD_SHA" --arg tree "$TREE_SHA" '
+            (type == "object") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+            (.tree |
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $tree)) and
+            (.parents | type == "array" and length >= 1)
+          ' <<<"$COMMIT" >/dev/null
           python3 scripts/automation_github_review_threads_read.py \
             --repository "$TARGET_REPOSITORY" --pr-number "$PR_NUMBER" > recovery-open-threads.json
           jq -e '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false and
@@ -1068,19 +1110,40 @@ jobs:
 
           EXACT_CHECK="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
           jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
-            .id == $id and .name == $name and .head_sha == $head and .external_id == $external and
-            .status == "queued" and .conclusion == null and .app.id == 15368 and .app.slug == "github-actions"
+            (type == "object") and
+            (.id | type == "number" and . == floor and . == $id) and
+            (.name | type == "string" and . == $name) and
+            (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+            (.external_id | type == "string" and . == $external) and
+            (.status | type == "string" and . == "queued") and
+            (.conclusion == null) and
+            (.app | type == "object" and .id == 15368 and .slug == "github-actions")
           ' <<<"$EXACT_CHECK" >/dev/null
 
           CHECKS="$(python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          jq -e '
+            (type == "object") and
+            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+            (.check_runs | type == "array" and length <= 100) and
+            (.total_count == (.check_runs | length)) and
+            (([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))
+          ' <<<"$CHECKS" >/dev/null
           for REQUIRED in validate-contracts trusted-governed-bot-review integration-pinned-upstream dependency-review analyze-actions analyze-python; do
             LATEST="$(jq -c --arg name "$REQUIRED" \
               '[.check_runs[] | select(.name == $name and .app.id == 15368)] | sort_by(.id) | last' <<<"$CHECKS")"
-            test "$LATEST" != "null"
-            test "$(jq -r .status <<<"$LATEST")" = "completed"
-            test "$(jq -r .conclusion <<<"$LATEST")" = "success"
-            test "$(jq -r .head_sha <<<"$LATEST")" = "$HEAD_SHA"
+            jq -e --arg name "$REQUIRED" --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.id | type == "number" and . == floor and . > 0) and
+              (.name | type == "string" and . == $name) and
+              (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.status | type == "string" and . == "completed") and
+              (.conclusion | type == "string" and . == "success") and
+              (.app |
+                (type == "object") and
+                (.id | type == "number" and . == floor and . == 15368) and
+                (.slug | type == "string" and . == "github-actions"))
+            ' <<<"$LATEST" >/dev/null
           done
 
           python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-open-observable.json
@@ -1245,14 +1308,43 @@ jobs:
           ' <<<"$MAIN")"
           test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"
           PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-          jq -e --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
-            .state == "open" and .draft == false and .base.sha == $base and .base.ref == "main" and
-            .head.sha == $head and .head.ref == $ref and .head.repo.full_name == $repo
+          jq -e --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
+            (type == "object") and
+            (.number | type == "number" and . == floor and . > 0 and . == $pr) and
+            (.state | type == "string" and . == "open") and
+            (.draft | type == "boolean" and . == false) and
+            (.base |
+              (type == "object") and
+              (.ref | type == "string" and . == "main") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and
+              (.repo | type == "object" and (.full_name | type == "string" and . == $repo))) and
+            (.head |
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.repo | type == "object" and (.full_name | type == "string" and . == $repo)))
           ' <<<"$PR" >/dev/null
           HEAD_REF_JSON="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"
-          test "$(jq -r .object.sha <<<"$HEAD_REF_JSON")" = "$HEAD_SHA"
+          jq -e --arg head "$HEAD_SHA" --arg ref "refs/heads/${HEAD_REF}" '
+            (type == "object") and
+            (.ref | type == "string" and . == $ref) and
+            (.node_id | type == "string" and length > 0) and
+            (.url | type == "string" and length > 0) and
+            (.object |
+              (type == "object") and
+              (.type | type == "string" and . == "commit") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.url | type == "string" and length > 0))
+          ' <<<"$HEAD_REF_JSON" >/dev/null
           COMMIT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"
-          test "$(jq -r .tree.sha <<<"$COMMIT")" = "$TREE_SHA"
+          jq -e --arg head "$HEAD_SHA" --arg tree "$TREE_SHA" '
+            (type == "object") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+            (.tree |
+              (type == "object") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $tree)) and
+            (.parents | type == "array" and length >= 1)
+          ' <<<"$COMMIT" >/dev/null
           python3 scripts/automation_github_review_threads_read.py \
             --repository "$TARGET_REPOSITORY" --pr-number "$PR_NUMBER" > recovery-complete-threads.json
           jq -e '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage == false and
@@ -1260,13 +1352,28 @@ jobs:
             recovery-complete-threads.json >/dev/null
           CHECKS="$(python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          jq -e '
+            (type == "object") and
+            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+            (.check_runs | type == "array" and length <= 100) and
+            (.total_count == (.check_runs | length)) and
+            (([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))
+          ' <<<"$CHECKS" >/dev/null
           for REQUIRED in validate-contracts trusted-governed-bot-review integration-pinned-upstream dependency-review analyze-actions analyze-python; do
             LATEST="$(jq -c --arg name "$REQUIRED" \
               '[.check_runs[] | select(.name == $name and .app.id == 15368)] | sort_by(.id) | last' <<<"$CHECKS")"
-            test "$LATEST" != "null"
-            test "$(jq -r .status <<<"$LATEST")" = "completed"
-            test "$(jq -r .conclusion <<<"$LATEST")" = "success"
-            test "$(jq -r .head_sha <<<"$LATEST")" = "$HEAD_SHA"
+            jq -e --arg name "$REQUIRED" --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.id | type == "number" and . == floor and . > 0) and
+              (.name | type == "string" and . == $name) and
+              (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.status | type == "string" and . == "completed") and
+              (.conclusion | type == "string" and . == "success") and
+              (.app |
+                (type == "object") and
+                (.id | type == "number" and . == floor and . == 15368) and
+                (.slug | type == "string" and . == "github-actions"))
+            ' <<<"$LATEST" >/dev/null
           done
 
           python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/rulesets/22148161" > live-recovery-before-complete.json
@@ -1278,8 +1385,14 @@ jobs:
 
           EXACT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
           jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
-            .id == $id and .name == $name and .head_sha == $head and .external_id == $external and
-            .status == "queued" and .conclusion == null and .app.id == 15368 and .app.slug == "github-actions"
+            (type == "object") and
+            (.id | type == "number" and . == floor and . == $id) and
+            (.name | type == "string" and . == $name) and
+            (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+            (.external_id | type == "string" and . == $external) and
+            (.status | type == "string" and . == "queued") and
+            (.conclusion == null) and
+            (.app | type == "object" and .id == 15368 and .slug == "github-actions")
           ' <<<"$EXACT" >/dev/null
 
           set +e
@@ -1295,16 +1408,36 @@ jobs:
 
           AFTER="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
           jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" --arg external "$EXTERNAL_ID" '
-            .id == $id and .name == $name and .head_sha == $head and .external_id == $external and
-            .status == "completed" and .conclusion == "success" and
-            .app.id == 15368 and .app.slug == "github-actions"
+            (type == "object") and
+            (.id | type == "number" and . == floor and . == $id) and
+            (.name | type == "string" and . == $name) and
+            (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+            (.external_id | type == "string" and . == $external) and
+            (.status | type == "string" and . == "completed") and
+            (.conclusion | type == "string" and . == "success") and
+            (.app | type == "object" and .id == 15368 and .slug == "github-actions")
           ' <<<"$AFTER" >/dev/null
           LATEST_CHECKS="$(python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          jq -e '
+            (type == "object") and
+            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+            (.check_runs | type == "array" and length <= 100) and
+            (.total_count == (.check_runs | length)) and
+            (([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))
+          ' <<<"$LATEST_CHECKS" >/dev/null
           MATCHES="$(jq -c --arg name "$CONTEXT" --arg head "$HEAD_SHA" \
             '[.check_runs[] | select(.name == $name and .head_sha == $head and .app.id == 15368)]' <<<"$LATEST_CHECKS")"
           test "$(jq 'length' <<<"$MATCHES")" = "1"
-          test "$(jq -r '.[0].id' <<<"$MATCHES")" = "$CHECK_ID"
+          jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" '
+            (.[0] | type == "object") and
+            (.[0].id | type == "number" and . == floor and . == $id) and
+            (.[0].name | type == "string" and . == $name) and
+            (.[0].head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+            (.[0].status | type == "string" and . == "completed") and
+            (.[0].conclusion | type == "string" and . == "success") and
+            (.[0].app | type == "object" and .id == 15368 and .slug == "github-actions")
+          ' <<<"$MATCHES" >/dev/null
           echo "completed=true" >> "$GITHUB_OUTPUT"
 
   recovery_merge:
@@ -1366,9 +1499,21 @@ jobs:
           ' <<<"$MAIN")"
           test "$MAIN_SHA" = "$TRUSTED_MAIN_SHA"
           PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-          jq -e --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
-            .state == "open" and .draft == false and .base.sha == $base and
-            .head.sha == $head and .head.ref == $ref and .head.repo.full_name == $repo
+          jq -e --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" --arg base "$TRUSTED_MAIN_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
+            (type == "object") and
+            (.number | type == "number" and . == floor and . > 0 and . == $pr) and
+            (.state | type == "string" and . == "open") and
+            (.draft | type == "boolean" and . == false) and
+            (.base |
+              (type == "object") and
+              (.ref | type == "string" and . == "main") and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and
+              (.repo | type == "object" and (.full_name | type == "string" and . == $repo))) and
+            (.head |
+              (type == "object") and
+              (.ref | type == "string" and . == $ref) and
+              (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.repo | type == "object" and (.full_name | type == "string" and . == $repo)))
           ' <<<"$PR" >/dev/null
           python3 scripts/automation_github_review_threads_read.py \
             --repository "$TARGET_REPOSITORY" --pr-number "$PR_NUMBER" > recovery-merge-threads.json
@@ -1384,17 +1529,38 @@ jobs:
           test "$(jq -r .transactionContext <<<"$STATE")" = "$CONTEXT"
           EXACT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"
           jq -e --argjson id "$CHECK_ID" --arg name "$CONTEXT" --arg head "$HEAD_SHA" '
-            .id == $id and .name == $name and .head_sha == $head and
-            .status == "completed" and .conclusion == "success" and .app.id == 15368
+            (type == "object") and
+            (.id | type == "number" and . == floor and . == $id) and
+            (.name | type == "string" and . == $name) and
+            (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+            (.status | type == "string" and . == "completed") and
+            (.conclusion | type == "string" and . == "success") and
+            (.app | type == "object" and .id == 15368 and .slug == "github-actions")
           ' <<<"$EXACT" >/dev/null
           CHECKS="$(python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/commits/${HEAD_SHA}/check-runs?filter=latest&per_page=100")"
+          jq -e '
+            (type == "object") and
+            (.total_count | type == "number" and . == floor and . >= 0 and . <= 100) and
+            (.check_runs | type == "array" and length <= 100) and
+            (.total_count == (.check_runs | length)) and
+            (([.check_runs[].id] | length) == ([.check_runs[].id] | unique | length))
+          ' <<<"$CHECKS" >/dev/null
           for REQUIRED in validate-contracts trusted-governed-bot-review integration-pinned-upstream dependency-review analyze-actions analyze-python; do
             LATEST="$(jq -c --arg name "$REQUIRED" \
               '[.check_runs[] | select(.name == $name and .app.id == 15368)] | sort_by(.id) | last' <<<"$CHECKS")"
-            test "$LATEST" != "null"
-            test "$(jq -r .conclusion <<<"$LATEST")" = "success"
-            test "$(jq -r .head_sha <<<"$LATEST")" = "$HEAD_SHA"
+            jq -e --arg name "$REQUIRED" --arg head "$HEAD_SHA" '
+              (type == "object") and
+              (.id | type == "number" and . == floor and . > 0) and
+              (.name | type == "string" and . == $name) and
+              (.head_sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and
+              (.status | type == "string" and . == "completed") and
+              (.conclusion | type == "string" and . == "success") and
+              (.app |
+                (type == "object") and
+                (.id | type == "number" and . == floor and . == 15368) and
+                (.slug | type == "string" and . == "github-actions"))
+            ' <<<"$LATEST" >/dev/null
           done
 
           set +e
@@ -1406,14 +1572,42 @@ jobs:
           if [ "$MERGE_STATUS" -eq 0 ]; then
             [[ "$(head -n 1 <<<"$MERGE_RESPONSE" | tr -d '\r')" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]]
             BODY="$(sed '1,/^[[:space:]]*$/d' <<<"$MERGE_RESPONSE")"
-            test "$(jq -r .merged <<<"$BODY")" = "true"
-            MERGE_SHA="$(jq -r .sha <<<"$BODY")"
+            MERGE_SHA="$(jq -er '
+              if type != "object" then
+                error("recovery merge response must be an object")
+              elif ((.merged | type) != "boolean") or (.merged != true) then
+                error("recovery merge response did not prove merged=true")
+              elif ((.sha | type) != "string") or ((.sha | test("^[0-9a-f]{40}$")) | not) then
+                error("recovery merge response SHA is invalid")
+              elif ((.message | type) != "string") or ((.message | length) == 0) then
+                error("recovery merge response message is invalid")
+              else
+                .sha
+              end
+            ' <<<"$BODY")"
           else
             AFTER_PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"
-            test "$(jq -r .state <<<"$AFTER_PR")" = "closed"
-            test "$(jq -r .merged <<<"$AFTER_PR")" = "true"
-            test "$(jq -r .head.sha <<<"$AFTER_PR")" = "$HEAD_SHA"
-            MERGE_SHA="$(jq -r .merge_commit_sha <<<"$AFTER_PR")"
+            MERGE_SHA="$(jq -er --argjson pr "$PR_NUMBER" --arg head "$HEAD_SHA" --arg ref "$HEAD_REF" --arg repo "$TARGET_REPOSITORY" '
+              if type != "object" then
+                error("post-merge recovery PR response must be an object")
+              elif ((.number | type) != "number") or (.number != floor) or (.number != $pr) then
+                error("post-merge recovery PR number is invalid")
+              elif ((.state | type) != "string") or (.state != "closed") then
+                error("post-merge recovery PR state is invalid")
+              elif ((.merged | type) != "boolean") or (.merged != true) then
+                error("post-merge recovery PR did not prove merged=true")
+              elif ((.head | type) != "object") or (.head.sha != $head) or (.head.ref != $ref) or
+                   ((.head.repo | type) != "object") or (.head.repo.full_name != $repo) then
+                error("post-merge recovery PR head identity changed")
+              elif ((.base | type) != "object") or (.base.ref != "main") or
+                   ((.base.repo | type) != "object") or (.base.repo.full_name != $repo) then
+                error("post-merge recovery PR base identity changed")
+              elif ((.merge_commit_sha | type) != "string") or ((.merge_commit_sha | test("^[0-9a-f]{40}$")) | not) then
+                error("post-merge recovery PR merge SHA is invalid")
+              else
+                .merge_commit_sha
+              end
+            ' <<<"$AFTER_PR")"
           fi
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
           AFTER_MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"
@@ -1518,7 +1712,14 @@ jobs:
           LIVE_WORKFLOW="$(python3 scripts/automation_github_read.py \
             "repos/${TARGET_REPOSITORY}/contents/.github/workflows/ruleset-reconciler.yml?ref=${LIVE_MAIN_SHA}")"
           SOURCE_BLOB="$(git rev-parse HEAD:.github/workflows/ruleset-reconciler.yml)"
-          test "$(jq -r .sha <<<"$LIVE_WORKFLOW")" = "$SOURCE_BLOB"
+          jq -e --arg sha "$SOURCE_BLOB" '
+            (type == "object") and
+            (.type | type == "string" and . == "file") and
+            (.name | type == "string" and . == "ruleset-reconciler.yml") and
+            (.path | type == "string" and . == ".github/workflows/ruleset-reconciler.yml") and
+            (.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $sha) and
+            (.encoding | type == "string" and . == "base64")
+          ' <<<"$LIVE_WORKFLOW" >/dev/null
 
           ISSUED_AT="$(date +%s)"
           EXPIRES_AT="$((ISSUED_AT + 600))"

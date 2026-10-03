@@ -386,6 +386,365 @@ def validate_recovery_autonomy_contract(text: str) -> None:
     )
 
 
+def validate_recovery_reproof_response_evidence(text: str) -> None:
+    validate_recovery_reproof_response_evidence_fixture(text)
+
+    # Negative fixtures prove that type/cardinality weakening and scalar
+    # consumption before schema validation remain fail-closed.
+    for original, weakened, label in (
+        (
+            '(.number | type == "number" and . == floor and . > 0 and . == $pr) and',
+            '(.number == $pr) and',
+            "fresh PR singleton typing",
+        ),
+        (
+            '(.total_count == (.check_runs | length)) and',
+            '(.total_count >= (.check_runs | length)) and',
+            "check-run collection completeness",
+        ),
+        (
+            '              elif ((.merged | type) != "boolean") or (.merged != true) then\n'
+            '                error("recovery merge response did not prove merged=true")',
+            '              elif .merged != true then\n'
+            '                error("recovery merge response did not prove merged=true")',
+            "merge-response boolean typing",
+        ),
+        (
+            '(.path | type == "string" and . == ".github/workflows/ruleset-reconciler.yml") and',
+            '(.path == ".github/workflows/ruleset-reconciler.yml") and',
+            "live workflow contents path typing",
+        ),
+    ):
+        mutated = text.replace(original, weakened, 1)
+        try:
+            validate_recovery_reproof_response_evidence_fixture(mutated)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"Ruleset recovery reproof self-test accepted weakened {label}")
+
+    head_capture = (
+        'HEAD_REF_JSON="$(python3 scripts/automation_github_read.py '
+        '"repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"'
+    )
+    recovery_open_start = text.index("  recovery_open:\n")
+    head_capture_position = text.index(head_capture, recovery_open_start)
+    mutated = (
+        text[:head_capture_position]
+        + text[head_capture_position:].replace(
+            head_capture,
+            head_capture
+            + '\n          PRE_SCHEMA_HEAD_SHA="$(jq -r .object.sha <<<"$HEAD_REF_JSON")"',
+            1,
+        )
+    )
+    try:
+        validate_recovery_reproof_response_evidence_fixture(mutated)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Ruleset recovery reproof self-test accepted head SHA consumption before schema")
+
+    merge_body = 'BODY="$(sed \'1,/^[[:space:]]*$/d\' <<<"$MERGE_RESPONSE")"'
+    mutated = text.replace(
+        merge_body,
+        merge_body + '\n            PRE_SCHEMA_MERGE_SHA="$(jq -r .sha <<<"$BODY")"',
+        1,
+    )
+    try:
+        validate_recovery_reproof_response_evidence_fixture(mutated)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Ruleset recovery reproof self-test accepted merge SHA consumption before schema")
+
+    workflow_capture = (
+        'LIVE_WORKFLOW="$(python3 scripts/automation_github_read.py \\\n'
+        '            "repos/${TARGET_REPOSITORY}/contents/.github/workflows/ruleset-reconciler.yml?ref=${LIVE_MAIN_SHA}")"'
+    )
+    mutated = text.replace(
+        workflow_capture,
+        workflow_capture
+        + '\n          PRE_SCHEMA_WORKFLOW_SHA="$(jq -r .sha <<<"$LIVE_WORKFLOW")"',
+        1,
+    )
+    try:
+        validate_recovery_reproof_response_evidence_fixture(mutated)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Ruleset recovery reproof self-test accepted workflow SHA consumption before schema")
+
+
+def validate_recovery_reproof_response_evidence_fixture(text: str) -> None:
+    create = reconciler_job_slice(text, "recovery_create_certificate", "recovery_open")
+    recovery_open = reconciler_job_slice(text, "recovery_open", "recovery_complete_certificate")
+    complete = reconciler_job_slice(text, "recovery_complete_certificate", "recovery_merge")
+    merge = reconciler_job_slice(text, "recovery_merge", "recovery_restore")
+    restore = reconciler_job_slice(text, "recovery_restore", "recovery_attest")
+
+    expected_read_counts = (
+        (create, 2, "certificate creation"),
+        (recovery_open, 9, "recovery open"),
+        (complete, 9, "certificate completion"),
+        (merge, 7, "recovery merge"),
+        (restore, 4, "recovery restore"),
+    )
+    for block, expected, label in expected_read_counts:
+        require(
+            block.count("scripts/automation_github_read.py") == expected,
+            f"Ruleset {label} governed GET inventory changed",
+        )
+
+    strict_pr = '(.number | type == "number" and . == floor and . > 0 and . == $pr) and'
+    for block, label in (
+        (recovery_open, "recovery open"),
+        (complete, "certificate completion"),
+        (merge, "recovery merge"),
+    ):
+        require(
+            block.count(strict_pr) == 1,
+            f"Ruleset {label} fresh PR response lost strict singleton typing",
+        )
+
+    head_ref_schema = (
+        '(.node_id | type == "string" and length > 0) and\n'
+        '            (.url | type == "string" and length > 0) and\n'
+        '            (.object |'
+    )
+    commit_schema = 'jq -e --arg head "$HEAD_SHA" --arg tree "$TREE_SHA"'
+    for block, label in (
+        (recovery_open, "recovery open"),
+        (complete, "certificate completion"),
+    ):
+        require(
+            block.count(head_ref_schema) == 1
+            and block.count(commit_schema) == 1
+            and '(.parents | type == "array" and length >= 1)' in block,
+            f"Ruleset {label} ref/commit reproof schema changed",
+        )
+        require(
+            'jq -r .object.sha <<<"$HEAD_REF_JSON"' not in block
+            and 'jq -r .tree.sha <<<"$COMMIT"' not in block,
+            f"Ruleset {label} regained direct ref/commit scalar consumption",
+        )
+
+    collection_schema = '(.total_count == (.check_runs | length)) and'
+    require(
+        create.count(collection_schema) == 1,
+        "Ruleset recovery check-create reconciliation lost complete collection schema",
+    )
+    require(
+        recovery_open.count(collection_schema) == 1,
+        "Ruleset recovery-open required-check snapshot lost complete collection schema",
+    )
+    require(
+        complete.count(collection_schema) == 2,
+        "Ruleset recovery-complete check snapshots lost complete collection schemas",
+    )
+    require(
+        merge.count(collection_schema) == 1,
+        "Ruleset recovery-merge required-check snapshot lost complete collection schema",
+    )
+
+    selected_check_schema = (
+        '(.status | type == "string" and . == "completed") and\n'
+        '              (.conclusion | type == "string" and . == "success") and'
+    )
+    require(
+        recovery_open.count(selected_check_schema) == 1
+        and complete.count(selected_check_schema) == 1
+        and merge.count(selected_check_schema) == 1,
+        "Ruleset required-check fresh reproof lost typed selected-check schema",
+    )
+    for block, label in (
+        (recovery_open, "recovery open"),
+        (complete, "certificate completion"),
+        (merge, "recovery merge"),
+    ):
+        require(
+            'jq -r .status <<<"$LATEST"' not in block
+            and 'jq -r .conclusion <<<"$LATEST"' not in block
+            and 'jq -r .head_sha <<<"$LATEST"' not in block,
+            f"Ruleset {label} regained direct selected-check scalar consumption",
+        )
+
+    create_fetch = create.index('OBSERVED="$(python3 scripts/automation_github_read.py')
+    create_schema = create.index(collection_schema, create_fetch)
+    create_select = create.index('MATCHES="$(jq -c', create_schema)
+    create_check_schema = create.index(
+        '(type == "object") and (.id | type == "number" and floor == . and . > 0)',
+        create_select,
+    )
+    create_check_id = create.index('CHECK_ID="$(jq -r .id <<<"$CHECK")"', create_check_schema)
+    create_exact = create.index(
+        'EXACT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"',
+        create_check_id,
+    )
+    create_exact_schema = create.index(
+        '(.external_id | type == "string" and . == $external) and',
+        create_exact,
+    )
+    require(
+        create_fetch < create_schema < create_select < create_check_schema
+        < create_check_id < create_exact < create_exact_schema,
+        "Ruleset recovery check-create evidence is not schema-first",
+    )
+
+    for block, label in (
+        (recovery_open, "recovery open"),
+        (complete, "certificate completion"),
+    ):
+        pr_fetch = block.index(
+            'PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"'
+        )
+        pr_schema = block.index(strict_pr, pr_fetch)
+        ref_fetch = block.index(
+            'HEAD_REF_JSON="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/${HEAD_REF}")"',
+            pr_schema,
+        )
+        ref_schema = block.index(head_ref_schema, ref_fetch)
+        commit_fetch = block.index(
+            'COMMIT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/commits/${HEAD_SHA}")"',
+            ref_schema,
+        )
+        commit_validate = block.index(commit_schema, commit_fetch)
+        check_fetch = block.index('CHECKS="$(python3 scripts/automation_github_read.py', commit_validate)
+        check_schema = block.index(collection_schema, check_fetch)
+        check_select = block.index('LATEST="$(jq -c', check_schema)
+        selected_schema = block.index(selected_check_schema, check_select)
+        require(
+            pr_fetch < pr_schema < ref_fetch < ref_schema < commit_fetch
+            < commit_validate < check_fetch < check_schema < check_select < selected_schema,
+            f"Ruleset {label} fresh evidence order is not fetch -> schema -> selection",
+        )
+
+    complete_exact = complete.index(
+        'EXACT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"'
+    )
+    complete_exact_schema = complete.index(
+        '(.external_id | type == "string" and . == $external) and',
+        complete_exact,
+    )
+    patch = complete.index('PATCH_RESPONSE="$(gh api --include --method PATCH', complete_exact_schema)
+    after_fetch = complete.index(
+        'AFTER="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"',
+        patch,
+    )
+    after_schema = complete.index(
+        '(.status | type == "string" and . == "completed") and',
+        after_fetch,
+    )
+    latest_fetch = complete.index(
+        'LATEST_CHECKS="$(python3 scripts/automation_github_read.py',
+        after_schema,
+    )
+    latest_schema = complete.index(collection_schema, latest_fetch)
+    latest_select = complete.index('MATCHES="$(jq -c', latest_schema)
+    latest_selected_schema = complete.index('(.[0].id | type == "number"', latest_select)
+    require(
+        complete_exact < complete_exact_schema < patch < after_fetch < after_schema
+        < latest_fetch < latest_schema < latest_select < latest_selected_schema,
+        "Ruleset recovery certificate completion evidence is not schema-first",
+    )
+
+    merge_pr_fetch = merge.index(
+        'PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"'
+    )
+    merge_pr_schema = merge.index(strict_pr, merge_pr_fetch)
+    merge_exact = merge.index(
+        'EXACT="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/check-runs/${CHECK_ID}")"',
+        merge_pr_schema,
+    )
+    merge_exact_schema = merge.index(
+        '(.status | type == "string" and . == "completed") and',
+        merge_exact,
+    )
+    merge_checks = merge.index('CHECKS="$(python3 scripts/automation_github_read.py', merge_exact_schema)
+    merge_collection_schema = merge.index(collection_schema, merge_checks)
+    merge_select = merge.index('LATEST="$(jq -c', merge_collection_schema)
+    merge_selected_schema = merge.index(selected_check_schema, merge_select)
+    merge_write = merge.index('MERGE_RESPONSE="$(gh api --include --method PUT', merge_selected_schema)
+    merge_body = merge.index('BODY="$(sed ', merge_write)
+    merge_body_schema = merge.index('error("recovery merge response must be an object")', merge_body)
+    after_pr_fetch = merge.index(
+        'AFTER_PR="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/pulls/${PR_NUMBER}")"',
+        merge_body_schema,
+    )
+    after_pr_schema = merge.index(
+        'error("post-merge recovery PR response must be an object")',
+        after_pr_fetch,
+    )
+    after_main = merge.index(
+        'AFTER_MAIN="$(python3 scripts/automation_github_read.py "repos/${TARGET_REPOSITORY}/git/ref/heads/main")"',
+        after_pr_schema,
+    )
+    require(
+        merge_pr_fetch < merge_pr_schema < merge_exact < merge_exact_schema
+        < merge_checks < merge_collection_schema < merge_select < merge_selected_schema
+        < merge_write < merge_body < merge_body_schema < after_pr_fetch
+        < after_pr_schema < after_main,
+        "Ruleset recovery merge evidence is not schema-first",
+    )
+    require(
+        'elif ((.merged | type) != "boolean") or (.merged != true) then\n'
+        '                error("recovery merge response did not prove merged=true")'
+        in merge,
+        "Ruleset nominal merge response lost exact boolean typing",
+    )
+    require(
+        'elif ((.merged | type) != "boolean") or (.merged != true) then\n'
+        '                error("post-merge recovery PR did not prove merged=true")'
+        in merge,
+        "Ruleset ambiguous post-merge PR response lost exact boolean typing",
+    )
+    for fragment in (
+        'elif ((.sha | type) != "string") or ((.sha | test("^[0-9a-f]{40}$")) | not) then',
+        'elif ((.message | type) != "string") or ((.message | length) == 0) then',
+        'elif ((.merge_commit_sha | type) != "string") or ((.merge_commit_sha | test("^[0-9a-f]{40}$")) | not) then',
+    ):
+        require(fragment in merge, f"Ruleset recovery merge response schema changed: {fragment}")
+    for forbidden in (
+        'jq -r .sha <<<"$BODY"',
+        'jq -r .state <<<"$AFTER_PR"',
+        'jq -r .merged <<<"$AFTER_PR"',
+        'jq -r .head.sha <<<"$AFTER_PR"',
+        'jq -r .merge_commit_sha <<<"$AFTER_PR"',
+    ):
+        require(forbidden not in merge, f"Ruleset recovery merge regained direct scalar consumption: {forbidden}")
+
+    workflow_fetch = restore.index('LIVE_WORKFLOW="$(python3 scripts/automation_github_read.py')
+    source_blob = restore.index(
+        'SOURCE_BLOB="$(git rev-parse HEAD:.github/workflows/ruleset-reconciler.yml)"',
+        workflow_fetch,
+    )
+    workflow_schema = restore.index(
+        '(.path | type == "string" and . == ".github/workflows/ruleset-reconciler.yml") and',
+        source_blob,
+    )
+    admin_identity = restore.index('JWT_UNSIGNED="', workflow_schema)
+    require(
+        workflow_fetch < source_blob < workflow_schema < admin_identity,
+        "Ruleset recovery restore workflow identity is not schema-first",
+    )
+    for fragment in (
+        '(type == "object") and',
+        '(.type | type == "string" and . == "file") and',
+        '(.name | type == "string" and . == "ruleset-reconciler.yml") and',
+        '(.path | type == "string" and . == ".github/workflows/ruleset-reconciler.yml") and',
+        '(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $sha) and',
+        '(.encoding | type == "string" and . == "base64")',
+    ):
+        require(
+            fragment in restore[workflow_fetch:admin_identity],
+            f"Ruleset recovery live-workflow contents schema changed: {fragment}",
+        )
+    require(
+        'jq -r .sha <<<"$LIVE_WORKFLOW"' not in restore,
+        "Ruleset recovery restore regained direct live-workflow SHA consumption",
+    )
+
+
 def validate_reconciler_main_ref_evidence(text: str) -> None:
     validate_reconciler_main_ref_evidence_fixture(text)
 
@@ -485,12 +844,6 @@ def validate_reconciler_main_ref_evidence_fixture(text: str) -> None:
             direct not in text,
             f"Ruleset reconciler main-ref reads must not regain direct transport: {direct}",
         )
-    for fragment in schema_fragments:
-        require(
-            text.count(fragment) == 14,
-            f"Ruleset main-ref singleton schema must appear at all fourteen call sites: {fragment}",
-        )
-
     fetch_positions: list[int] = []
     for endpoint in (hardcoded_endpoint, recovery_endpoint):
         cursor = 0
@@ -551,13 +904,20 @@ def validate_reconciler_main_ref_evidence_fixture(text: str) -> None:
         block = text[fetch_pos:next_fetch]
         normalizer_pos = block.find(normalizer)
         schema_start = block.find('if type != "object" then')
-        schema_end = block.find('\n              .object.sha\n            end', schema_start + 1)
+        schema_end_fragment = '\n              .object.sha\n            end'
+        schema_end = block.find(schema_end_fragment, schema_start + 1)
         require(
             normalizer_pos >= 0
             and schema_start > normalizer_pos
             and schema_end > schema_start,
             f"Ruleset main-ref call {index} must normalize through the complete singleton schema",
         )
+        schema = block[schema_start : schema_end + len(schema_end_fragment)]
+        for fragment in schema_fragments:
+            require(
+                fragment in schema,
+                f"Ruleset main-ref call {index} lost singleton schema fragment: {fragment}",
+            )
         require(
             ".object.sha" not in block[:schema_start],
             f"Ruleset main-ref call {index} consumed SHA before schema validation",
@@ -1798,6 +2158,7 @@ def main() -> int:
         reconciler = RECONCILER.read_text(encoding="utf-8")
         validate_reconciler_wake_contract(reconciler)
         validate_recovery_autonomy_contract(reconciler)
+        validate_recovery_reproof_response_evidence(reconciler)
         validate_reconciler_main_ref_evidence(reconciler)
         historical_reconcile = reconciler_job_slice(reconciler, "reconcile", "attest")
         validate_reconciler_admin_response_evidence(historical_reconcile)
@@ -1814,7 +2175,7 @@ def main() -> int:
         print(
             f"Repository ruleset contract passed: source-controlled target{suffix} is internally consistent; "
             f"seven required contexts are bound to integration_id {EXPECTED_INTEGRATION_ID}; exact JSON primitive identity, "
-            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all fourteen reconciler main-ref reads plus the read-only drift-sentinel main-ref read are typed before SHA consumption, every historical/recovery Administration token and ruleset writer proves exact HTTP 201/200 on nominal success under one non-cancellable serialization group, and observable drift fails closed."
+            f"superseded trusted workflow-run wakes reduce to read-only no-ops, all fourteen reconciler main-ref reads plus the read-only drift-sentinel main-ref read are typed before SHA consumption, recovery fresh-reproof PR/ref/commit/check/merge/live-workflow responses are schema-first, every historical/recovery Administration token and ruleset writer proves exact HTTP 201/200 on nominal success under one non-cancellable serialization group, and observable drift fails closed."
         )
         if unobservable:
             print(
