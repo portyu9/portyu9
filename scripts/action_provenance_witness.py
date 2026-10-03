@@ -1655,6 +1655,10 @@ def self_test() -> None:
         "forbidden surface: python3 ",
     )
 
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        observed_runtime = collect_runtime_fingerprint()
+        normalize_runtime_fingerprint(observed_runtime)
+
 
 def _write(path: Path, value: Any) -> None:
     path.write_text(canonical_json(value), encoding="utf-8")
