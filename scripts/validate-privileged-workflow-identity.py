@@ -9,7 +9,7 @@ import automation_decision_lease
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v156"
+VERSION = "governed-workflow-byte-identity-v157"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "be42a02457df9b7f2a4a10b16c0f2c22f61e3b88",
     ".github/workflows/profile-quality.yml": "85a96766d3cf69a67a9b3affeb139029ae32eed1",
@@ -6079,9 +6079,249 @@ def validate_spotlight_workflow_run_approval_status(spotlight: str) -> None:
     )
 
 
+
+FAILURE_INJECTION_SCENARIO_IDS = frozenset(
+    {
+        "race-source-epoch-superseded",
+        "cancellation-terminal-mutation",
+        "stale-head-compare-binding",
+        "extra-files-candidate-topology",
+        "wrong-check-provenance",
+        "approval-api-status-failure",
+        "merge-api-status-failure",
+        "dispatch-api-status-failure",
+        "interrupted-cleanup-readback",
+    }
+)
+
+
+def _expect_failure_injection(
+    scenario_id: str,
+    observed: set[str],
+    validator,
+    expected_error_fragments: tuple[str, ...],
+) -> None:
+    require(
+        scenario_id in FAILURE_INJECTION_SCENARIO_IDS,
+        f"failure-injection matrix contains undeclared scenario: {scenario_id}",
+    )
+    require(
+        scenario_id not in observed,
+        f"failure-injection matrix executed duplicate scenario: {scenario_id}",
+    )
+    try:
+        validator()
+    except ValueError as exc:
+        message = str(exc)
+        require(
+            any(fragment in message for fragment in expected_error_fragments),
+            f"failure-injection scenario {scenario_id} failed for wrong reason: {exc}",
+        )
+    else:
+        raise ValueError(
+            f"failure-injection scenario {scenario_id} accepted injected unsafe behavior"
+        )
+    observed.add(scenario_id)
+
+
+def validate_integrated_failure_injection_matrix() -> None:
+    """Compile item-22 failure classes into one exact, deterministic fail-closed matrix."""
+    profile = (ROOT / ".github/workflows/profile-stats.yml").read_text(encoding="utf-8")
+    spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
+    bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
+    observed: set[str] = set()
+
+    source_epoch_guard = 'if [ "$CURRENT_MAIN_SHA" != "$SOURCE_SHA" ]; then'
+    require(
+        profile.count(source_epoch_guard) == 1,
+        "failure-injection race fixture source-epoch guard changed",
+    )
+    raced_profile = profile.replace(
+        source_epoch_guard,
+        'if [ "$CURRENT_MAIN_SHA" = "$SOURCE_SHA" ]; then',
+        1,
+    )
+    _expect_failure_injection(
+        "race-source-epoch-superseded",
+        observed,
+        lambda: v21.validate_profile_stats_freshness(raced_profile),
+        ("profile-stats source-freshness contract",),
+    )
+
+    terminal_concurrency = (
+        "    concurrency:\n"
+        "      group: spotlight-link-sync-terminal\n"
+        "      cancel-in-progress: false\n"
+        "      queue: max\n"
+    )
+    require(
+        spotlight.count(terminal_concurrency) == 9,
+        "failure-injection cancellation fixture terminal concurrency inventory changed",
+    )
+    cancellable_spotlight = spotlight.replace(
+        terminal_concurrency,
+        terminal_concurrency.replace("cancel-in-progress: false", "cancel-in-progress: true"),
+        1,
+    )
+    _expect_failure_injection(
+        "cancellation-terminal-mutation",
+        observed,
+        lambda: validate_main_check_cancellation_isolation(bot_review, cancellable_spotlight),
+        ("terminal jobs must remain non-cancellable and serialized",),
+    )
+
+    approve_start = spotlight.index("  approve:\n")
+    approve_end = spotlight.index("  authorize:\n", approve_start)
+    approve = spotlight[approve_start:approve_end]
+
+    head_binding = '(.[0] | type == "object" and .sha == $head)) and'
+    require(
+        approve.count(head_binding) == 1,
+        "failure-injection stale-head fixture anchor changed",
+    )
+    stale_head_approve = approve.replace(
+        head_binding,
+        '(.[0] | type == "object")) and',
+        1,
+    )
+    stale_head_spotlight = spotlight[:approve_start] + stale_head_approve + spotlight[approve_end:]
+    _expect_failure_injection(
+        "stale-head-compare-binding",
+        observed,
+        lambda: validate_spotlight_initial_compare_evidence(
+            stale_head_spotlight, run_self_test=False
+        ),
+        ("Spotlight initial compare schema changed",),
+    )
+
+    file_cardinality = '(.files | type == "array" and length == 1 and'
+    require(
+        approve.count(file_cardinality) == 1,
+        "failure-injection extra-files fixture anchor changed",
+    )
+    extra_files_approve = approve.replace(
+        file_cardinality,
+        '(.files | type == "array" and length >= 1 and',
+        1,
+    )
+    extra_files_spotlight = (
+        spotlight[:approve_start] + extra_files_approve + spotlight[approve_end:]
+    )
+    _expect_failure_injection(
+        "extra-files-candidate-topology",
+        observed,
+        lambda: validate_spotlight_initial_compare_evidence(
+            extra_files_spotlight, run_self_test=False
+        ),
+        ("Spotlight initial compare schema changed",),
+    )
+
+    provenance_equality = 'test "$OBSERVED_CHECKS" = "$EXPECTED_CHECKS"'
+    require(
+        spotlight.count(provenance_equality) == 1,
+        "failure-injection check-provenance fixture anchor changed",
+    )
+    wrong_provenance = spotlight.replace(
+        provenance_equality,
+        'test -n "$OBSERVED_CHECKS"',
+        1,
+    )
+    _expect_failure_injection(
+        "wrong-check-provenance",
+        observed,
+        lambda: validate_spotlight_terminal_required_check_collection(
+            wrong_provenance, run_self_test=False
+        ),
+        ("exact required-check provenance equality changed",),
+    )
+
+    approval_guard = (
+        '[[ "$APPROVAL_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+201([[:space:]]|$) ]] || {'
+    )
+    require(
+        spotlight.count(approval_guard) == 1,
+        "failure-injection approval-status fixture anchor changed",
+    )
+    approval_failure = spotlight.replace(
+        approval_guard,
+        approval_guard.replace("+201(", "+200("),
+        1,
+    )
+    _expect_failure_injection(
+        "approval-api-status-failure",
+        observed,
+        lambda: validate_spotlight_workflow_run_approval_status(approval_failure),
+        ("exact HTTP 201",),
+    )
+
+    merge_guard = (
+        '[[ "$MERGE_STATUS_LINE" =~ ^HTTP/[0-9.]+[[:space:]]+200([[:space:]]|$) ]] || {'
+    )
+    require(
+        spotlight.count(merge_guard) == 1,
+        "failure-injection merge-status fixture anchor changed",
+    )
+    merge_failure = spotlight.replace(
+        merge_guard,
+        merge_guard.replace("+200(", "+201("),
+        1,
+    )
+    _expect_failure_injection(
+        "merge-api-status-failure",
+        observed,
+        lambda: validate_item10_mac(merge_failure),
+        ("Spotlight terminal MAC verification contract is missing",),
+    )
+
+    dispatch_guard = (
+        '[[ "$wake_status_line" =~ ^HTTP/[0-9.]+[[:space:]]+204([[:space:]]|$) ]] || {'
+    )
+    require(
+        bot_review.count(dispatch_guard) == 1,
+        "failure-injection dispatch-status fixture anchor changed",
+    )
+    dispatch_failure = bot_review.replace(
+        dispatch_guard,
+        dispatch_guard.replace("+204(", "+200("),
+        1,
+    )
+    _expect_failure_injection(
+        "dispatch-api-status-failure",
+        observed,
+        lambda: validate_bot_review_dispatch_status_contract(dispatch_failure),
+        ("exact HTTP 204 status guard",),
+    )
+
+    cleanup_readback = (
+        'jq -e \'(type == "array") and (length == 0)\' <<<"$REMAINING_REFS" >/dev/null'
+    )
+    require(
+        spotlight.count(cleanup_readback) == 1,
+        "failure-injection interrupted-cleanup fixture anchor changed",
+    )
+    interrupted_cleanup = spotlight.replace(
+        cleanup_readback,
+        'jq -e \'(type == "array") and (length >= 0)\' <<<"$REMAINING_REFS" >/dev/null',
+        1,
+    )
+    _expect_failure_injection(
+        "interrupted-cleanup-readback",
+        observed,
+        lambda: validate_v21_spotlight_invariants(interrupted_cleanup),
+        ("stale-delete readback contract anchor is missing or ambiguous",),
+    )
+
+    require(
+        observed == FAILURE_INJECTION_SCENARIO_IDS,
+        "failure-injection matrix scenario closure changed: "
+        f"expected={sorted(FAILURE_INJECTION_SCENARIO_IDS)} observed={sorted(observed)}",
+    )
+
+
 def self_test() -> None:
     v21.self_test()
     self_test_spotlight_same_base_supersession()
+    validate_integrated_failure_injection_matrix()
 
     bot_review = (ROOT / ".github/workflows/bot-pr-user-approval.yml").read_text(encoding="utf-8")
     spotlight = (ROOT / ".github/workflows/spotlight-link-sync.yml").read_text(encoding="utf-8")
