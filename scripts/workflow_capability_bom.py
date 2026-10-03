@@ -32,6 +32,38 @@ ARTIFACT_RETENTION_LIMITS = {
     "evidence": 30,
 }
 MAX_REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS = 7
+
+AUTHORITY_ARTIFACT_ANTI_REPLAY_MODES = frozenset({
+    "same-run-container-bound",
+    "cross-run-attested-explicit-ttl",
+    "cross-run-current-main-expiry",
+})
+REVIEWED_AUTHORITY_ARTIFACT_ANTI_REPLAY: dict[tuple[str, str, str], str] = {
+    (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"): "cross-run-attested-explicit-ttl",
+    (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): "cross-run-current-main-expiry",
+    (".github/workflows/profile-generator-compatibility-witness.yml", "prepare", "Upload unsigned reviewed compatibility witness bundle"): "cross-run-attested-explicit-ttl",
+    (".github/workflows/profile-stats.yml", "attest", "Upload reviewed attestation predicate"): "same-run-container-bound",
+    (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Engineering Spotlight"): "same-run-container-bound",
+    (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Portfolio Evidence Ledger"): "same-run-container-bound",
+    (".github/workflows/profile-stats.yml", "generate", "Upload immutable validated Signal Field"): "same-run-container-bound",
+    (".github/workflows/profile-stats.yml", "stage", "Upload sealed generated publication candidate"): "same-run-container-bound",
+    (".github/workflows/spotlight-link-sync.yml", "authorize", "Upload exact merge authorization artifact"): "same-run-container-bound",
+    (".github/workflows/spotlight-link-sync.yml", "plan", "Upload reviewed direct-link proposal"): "same-run-container-bound",
+}
+REVIEWED_CROSS_RUN_AUTHORITY_DOWNLOADS: dict[tuple[str, str, str], dict[str, Any]] = {
+    (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"): {
+        "consumer": (".github/workflows/profile-quality.yml", "validate", "Download exact fresh signed Action provenance witness"),
+        "runId": "${{ steps.action_provenance_witness_discovery.outputs.run_id }}",
+        "githubToken": "${{ github.token }}",
+        "repository": "",
+    },
+    (".github/workflows/profile-generator-compatibility-witness.yml", "prepare", "Upload unsigned reviewed compatibility witness bundle"): {
+        "consumer": (".github/workflows/profile-quality.yml", "integration", "Download exact fresh signed Profile Generator Compatibility Witness"),
+        "runId": "${{ steps.profile_generator_witness_discovery.outputs.run_id }}",
+        "githubToken": "${{ github.token }}",
+        "repository": "",
+    },
+}
 REVIEWED_ARTIFACT_RETENTION_CLASSIFICATIONS: dict[tuple[str, str, str], dict[str, str]] = {
     (".github/workflows/action-provenance-witness.yml", "prepare", "Upload unsigned reviewed witness bundle"): {"classification": "authority", "consumerMode": "cross-run-attested-authority"},
     (".github/workflows/codeql-autofix.yml", "controller", "Upload immutable controller provenance receipt"): {"classification": "authority", "consumerMode": "cross-run-custom-api-authority"},
@@ -714,6 +746,18 @@ def compile_steps(text: str, workflow: str, jobs: list[str]) -> dict[str, dict[s
                         artifact["name"] = name
                     else:
                         artifact["artifactIds"] = artifact_ids
+                if operation == "download":
+                    for source_key, compiled_key in (
+                        ("repository", "repository"),
+                        ("run-id", "runId"),
+                        ("github-token", "githubToken"),
+                    ):
+                        if source_key in with_values:
+                            artifact[compiled_key] = with_values[source_key]
+                    require(
+                        ("runId" in artifact) == ("githubToken" in artifact),
+                        f"{workflow}/{current_job}/{current_step}: cross-run artifact download must provide both run-id and github-token",
+                    )
                 for key in ("path", "retention-days", "if-no-files-found", "digest-mismatch"):
                     if key in with_values:
                         artifact[key] = with_values[key]
@@ -804,6 +848,8 @@ def _compile_artifact_retention_policy(
     classifications: dict[tuple[str, str, str], dict[str, str]] | None = None,
     long_lived_authority: dict[tuple[str, str, str], int] | None = None,
     download_bindings: dict[tuple[str, str, str], dict[str, Any]] | None = None,
+    anti_replay: dict[tuple[str, str, str], str] | None = None,
+    cross_run_downloads: dict[tuple[str, str, str], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     reviewed = classifications if classifications is not None else REVIEWED_ARTIFACT_RETENTION_CLASSIFICATIONS
     long_lived = (
@@ -812,6 +858,16 @@ def _compile_artifact_retention_policy(
         else REVIEWED_LONG_LIVED_AUTHORITY_RETENTION_DAYS
     )
     bindings = download_bindings if download_bindings is not None else REVIEWED_ARTIFACT_DOWNLOAD_BINDINGS
+    anti_replay_modes = (
+        anti_replay
+        if anti_replay is not None
+        else REVIEWED_AUTHORITY_ARTIFACT_ANTI_REPLAY
+    )
+    cross_run_specs = (
+        cross_run_downloads
+        if cross_run_downloads is not None
+        else REVIEWED_CROSS_RUN_AUTHORITY_DOWNLOADS
+    )
     require(len(long_lived) <= 1, "reviewed long-lived authority artifact exception budget exceeded")
 
     producer_lookup: dict[tuple[str, str, str], tuple[dict[str, Any], dict[str, Any]]] = {}
@@ -925,6 +981,9 @@ def _compile_artifact_retention_policy(
             "selectorMode": selector_mode,
             "selector": selector,
             "selectorValue": observed_selector,
+            "runId": consumer.get("runId", ""),
+            "githubToken": consumer.get("githubToken", ""),
+            "repository": consumer.get("repository", ""),
         })
 
     entries: list[dict[str, Any]] = []
@@ -1033,6 +1092,169 @@ def _compile_artifact_retention_policy(
             in contract,
             "CodeQL Autofix provenance artifact expiry guard changed",
         )
+
+    authority_identities = {
+        identity
+        for identity, spec in reviewed.items()
+        if spec["classification"] == "authority"
+    }
+    require(
+        set(anti_replay_modes) == authority_identities,
+        "authority artifact anti-replay classification coverage changed",
+    )
+    require(
+        set(anti_replay_modes.values()) <= AUTHORITY_ARTIFACT_ANTI_REPLAY_MODES,
+        "authority artifact anti-replay mode is invalid",
+    )
+    reviewed_cross_run = {
+        identity
+        for identity, mode in anti_replay_modes.items()
+        if mode == "cross-run-attested-explicit-ttl"
+    }
+    require(
+        set(cross_run_specs) == reviewed_cross_run,
+        "cross-run authority artifact selector inventory changed",
+    )
+
+    for identity in sorted(authority_identities):
+        mode = anti_replay_modes[identity]
+        consumers = consumers_by_producer[identity]
+        consumer_mode = reviewed[identity]["consumerMode"]
+        if mode == "same-run-container-bound":
+            require(
+                consumer_mode in {
+                    "same-run-attestation-authority",
+                    "same-run-publication-authority",
+                    "same-run-terminal-merge-authority",
+                    "same-run-proposal-authority",
+                },
+                f"same-run authority artifact mode changed: {identity}",
+            )
+            require(
+                consumers
+                and all(
+                    consumer["workflow"] == identity[0]
+                    and consumer["runId"] == ""
+                    and consumer["githubToken"] == ""
+                    and consumer["repository"] == ""
+                    for consumer in consumers
+                ),
+                f"same-run authority artifact gained cross-run selector or escaped its workflow: {identity}",
+            )
+        elif mode == "cross-run-attested-explicit-ttl":
+            require(
+                consumer_mode == "cross-run-attested-authority",
+                f"cross-run attested authority artifact mode changed: {identity}",
+            )
+            external = [consumer for consumer in consumers if consumer["workflow"] != identity[0]]
+            internal = [consumer for consumer in consumers if consumer["workflow"] == identity[0]]
+            require(
+                len(external) == 1 and internal
+                and all(
+                    consumer["runId"] == ""
+                    and consumer["githubToken"] == ""
+                    and consumer["repository"] == ""
+                    for consumer in internal
+                ),
+                f"cross-run attested authority artifact consumer topology changed: {identity}",
+            )
+            expected = cross_run_specs[identity]
+            require(
+                set(expected) == {"consumer", "runId", "githubToken", "repository"},
+                f"cross-run authority artifact selector contract shape changed: {identity}",
+            )
+            selected = external[0]
+            require(
+                (selected["workflow"], selected["job"], selected["step"]) == tuple(expected["consumer"])
+                and selected["runId"] == expected["runId"]
+                and selected["githubToken"] == expected["githubToken"]
+                and selected["repository"] == expected["repository"],
+                f"cross-run authority artifact selector drifted: {identity}",
+            )
+
+            if identity[0] == ".github/workflows/action-provenance-witness.yml":
+                source_path = ROOT / "scripts" / "action_provenance_witness.py"
+                schema_path = ROOT / ".github" / "attestation" / "action-provenance-witness-v1.schema.json"
+                source_fragments = (
+                    "TTL_SECONDS = 21600",
+                    'return validity["issuedAtEpoch"] <= now_epoch < validity["expiresAtEpoch"]',
+                    'require(artifact["expired"] is False, "witness artifact is expired")',
+                    'require(source["runId"] == selected["id"],',
+                    'require(source["runAttempt"] == selected["runAttempt"],',
+                )
+            else:
+                require(
+                    identity[0] == ".github/workflows/profile-generator-compatibility-witness.yml",
+                    f"unreviewed explicit-TTL authority artifact entered policy: {identity}",
+                )
+                source_path = ROOT / "scripts" / "profile_generator_compatibility_witness.py"
+                schema_path = ROOT / ".github" / "attestation" / "profile-generator-compatibility-witness-v1.schema.json"
+                source_fragments = (
+                    "TTL_SECONDS = 21600",
+                    'require(value["validity"]["issuedAtEpoch"] <= now_epoch < value["validity"]["expiresAtEpoch"],',
+                    'require(artifact["expired"] is False, "compatibility witness artifact is expired")',
+                    'require(source["runId"] == selected["id"],',
+                    'require(source["runAttempt"] == selected["runAttempt"],',
+                )
+            source_text = source_path.read_text(encoding="utf-8")
+            schema_text = schema_path.read_text(encoding="utf-8")
+            for fragment in source_fragments:
+                require(
+                    fragment in source_text,
+                    f"cross-run explicit-TTL authority freshness guard changed: {identity}",
+                )
+            for fragment in ('"runId"', '"runAttempt"', '"issuedAtEpoch"', '"expiresAtEpoch"', '"ttlSeconds"'):
+                require(
+                    fragment in schema_text,
+                    f"cross-run explicit-TTL authority schema binding changed: {identity}",
+                )
+        elif mode == "cross-run-current-main-expiry":
+            require(
+                identity == (
+                    ".github/workflows/codeql-autofix.yml",
+                    "controller",
+                    "Upload immutable controller provenance receipt",
+                )
+                and consumer_mode == "cross-run-custom-api-authority"
+                and identity in long_lived
+                and not consumers,
+                f"cross-run current-main/expiry authority boundary changed: {identity}",
+            )
+        else:
+            raise ValueError(f"unclassified authority artifact anti-replay mode: {mode}")
+
+    spotlight_authorization = (
+        ".github/workflows/spotlight-link-sync.yml",
+        "authorize",
+        "Upload exact merge authorization artifact",
+    )
+    require(
+        anti_replay_modes.get(spotlight_authorization) == "same-run-container-bound",
+        "Spotlight merge authorization anti-replay mode changed",
+    )
+    spotlight_source = (ROOT / "scripts" / "spotlight_merge_authorization.py").read_text(encoding="utf-8")
+    spotlight_schema = (
+        ROOT / ".github" / "attestation" / "spotlight-merge-authorization-v1.schema.json"
+    ).read_text(encoding="utf-8")
+    for fragment in (
+        'issued = env_value(env, "LEASE_ISSUED_AT", POSITIVE)',
+        'expires = env_value(env, "LEASE_EXPIRES_AT", POSITIVE)',
+        "require(int(expires) == int(issued) + 1800,",
+        'run_id = env_value(env, "GITHUB_RUN_ID", POSITIVE)',
+        'run_attempt = env_value(env, "GITHUB_RUN_ATTEMPT", POSITIVE)',
+    ):
+        require(fragment in spotlight_source, "Spotlight merge authorization issuance/lease guard changed")
+    for fragment in (
+        '"required": ["leaseId", "candidateId", "issuedAt", "expiresAt"]',
+        "cannot authorize merge without independent terminal live revalidation",
+        "an unexpired matching mutation lease",
+    ):
+        require(fragment in spotlight_schema, "Spotlight merge authorization schema freshness guard changed")
+
+    for entry in entries:
+        identity = (entry["workflow"], entry["job"], entry["step"])
+        if identity in authority_identities:
+            entry["antiReplayMode"] = anti_replay_modes[identity]
 
     return {
         "schemaVersion": ARTIFACT_RETENTION_POLICY_SCHEMA_VERSION,
@@ -1287,6 +1509,46 @@ def self_test() -> None:
         }],
         f"artifact-id selector self-test drifted: {artifact_id_compiled!r}",
     )
+
+    cross_run_artifact_fixture = (
+        "jobs:\n"
+        "  job:\n"
+        "    name: job\n"
+        "    steps:\n"
+        "      - name: Cross-run artifact download\n"
+        "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c\n"
+        "        with:\n"
+        "          name: witness\n"
+        "          path: witness-out\n"
+        "          github-token: ${{ github.token }}\n"
+        "          run-id: ${{ steps.discovery.outputs.run_id }}\n"
+        "          digest-mismatch: error\n"
+    )
+    cross_run_artifact_compiled = compile_steps(
+        cross_run_artifact_fixture, "fixture.yml", ["job"]
+    )
+    require(
+        cross_run_artifact_compiled["job"]["artifacts"] == [{
+            "digest-mismatch": "error",
+            "githubToken": "${{ github.token }}",
+            "name": "witness",
+            "operation": "download",
+            "path": "witness-out",
+            "runId": "${{ steps.discovery.outputs.run_id }}",
+            "step": "Cross-run artifact download",
+        }],
+        f"cross-run artifact selector self-test drifted: {cross_run_artifact_compiled!r}",
+    )
+    expect_failure(
+        lambda: compile_steps(
+            cross_run_artifact_fixture.replace(
+                "          github-token: ${{ github.token }}\n", "", 1
+            ),
+            "fixture.yml",
+            ["job"],
+        ),
+        "cross-run artifact download must provide both run-id and github-token",
+    )
     conflicting_artifact_selector = artifact_id_fixture.replace(
         "          artifact-ids: ${{ steps.upload.outputs.artifact-id }}\n",
         "          name: fixture\n          artifact-ids: ${{ steps.upload.outputs.artifact-id }}\n",
@@ -1399,8 +1661,12 @@ def self_test() -> None:
     live_retention = compile_artifact_retention_policy(live_workflows, live_bom["repository"])
     require(
         live_retention["uploadProducerCount"] == 20
-        and live_retention["downloadConsumerCount"] == 28,
-        "artifact retention live inventory cardinality changed",
+        and live_retention["downloadConsumerCount"] == 28
+        and sum(
+            1 for entry in live_retention["entries"]
+            if entry.get("antiReplayMode") in AUTHORITY_ARTIFACT_ANTI_REPLAY_MODES
+        ) == 10,
+        "artifact retention/anti-replay live inventory cardinality changed",
     )
 
     def mutated_workflows() -> list[dict[str, Any]]:
@@ -1509,6 +1775,73 @@ def self_test() -> None:
             classifications=evidence_as_authority,
         ),
         "retention exceeds reviewed class maximum",
+    )
+
+    same_run_escape = mutated_workflows()
+    same_run_consumer = next(
+        artifact
+        for workflow in same_run_escape
+        if workflow["path"] == ".github/workflows/profile-stats.yml"
+        for job in workflow["jobs"]
+        if job["id"] == "publish"
+        for artifact in job["artifacts"]
+        if artifact["step"] == "Download sealed generated publication candidate"
+    )
+    same_run_consumer["runId"] = "${{ github.run_id }}"
+    same_run_consumer["githubToken"] = "${{ github.token }}"
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(
+            same_run_escape, live_bom["repository"]
+        ),
+        "same-run authority artifact gained cross-run selector or escaped its workflow",
+    )
+
+    cross_run_selector_drift = mutated_workflows()
+    cross_run_consumer = next(
+        artifact
+        for workflow in cross_run_selector_drift
+        if workflow["path"] == ".github/workflows/profile-quality.yml"
+        for job in workflow["jobs"]
+        if job["id"] == "validate"
+        for artifact in job["artifacts"]
+        if artifact["step"] == "Download exact fresh signed Action provenance witness"
+    )
+    cross_run_consumer["runId"] = "${{ steps.wrong.outputs.run_id }}"
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(
+            cross_run_selector_drift, live_bom["repository"]
+        ),
+        "cross-run authority artifact selector drifted",
+    )
+
+    missing_anti_replay = dict(REVIEWED_AUTHORITY_ARTIFACT_ANTI_REPLAY)
+    missing_anti_replay.pop((
+        ".github/workflows/profile-stats.yml",
+        "stage",
+        "Upload sealed generated publication candidate",
+    ))
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(
+            live_workflows,
+            live_bom["repository"],
+            anti_replay=missing_anti_replay,
+        ),
+        "authority artifact anti-replay classification coverage changed",
+    )
+
+    stale_anti_replay = dict(REVIEWED_AUTHORITY_ARTIFACT_ANTI_REPLAY)
+    stale_anti_replay[(
+        ".github/workflows/ruleset-reconciler.yml",
+        "reconcile",
+        "Preserve exact non-secret reconciliation receipt",
+    )] = "same-run-container-bound"
+    expect_failure(
+        lambda: _compile_artifact_retention_policy(
+            live_workflows,
+            live_bom["repository"],
+            anti_replay=stale_anti_replay,
+        ),
+        "authority artifact anti-replay classification coverage changed",
     )
 
     authority_as_evidence = {
