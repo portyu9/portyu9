@@ -493,18 +493,20 @@ def _parse_streak_window(
                     f"current-streak contribution date is malformed: {raw_day!r}"
                 ) from exc
             count = normalize_contribution_count(entry.get("contributionCount"))
-            if window_from <= day <= window_to:
+            effective_from = max(window_from, created_at)
+            if effective_from <= day <= window_to:
                 require(day not in observed, f"current-streak contribution date duplicated: {day}")
                 observed[day] = count
 
     expected_days: list[date] = []
-    cursor = window_from
+    cursor = max(window_from, created_at)
     while cursor <= window_to:
         expected_days.append(cursor)
         cursor += timedelta(days=1)
     require(
         sorted(observed) == expected_days,
-        "current-streak GraphQL window must contain one exact contribution count per UTC day",
+        "current-streak GraphQL window must contain one exact contribution count per UTC day "
+        "from the account-creation boundary through the requested end date",
     )
     return created_at, [(day, observed[day]) for day in expected_days]
 
