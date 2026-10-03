@@ -1,6 +1,6 @@
 # Profile asset policy
 
-My profile hero fallback is stored at `quality-engineering-automation-systems.png` with reviewed, size-bounded bytes.
+My profile hero is intentionally stored at `quality-engineering-automation-systems.png` as a reviewed, size-bounded PNG fallback.
 
 ## Current optimized fallback
 
