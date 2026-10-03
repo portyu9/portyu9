@@ -844,12 +844,6 @@ def validate_reconciler_main_ref_evidence_fixture(text: str) -> None:
             direct not in text,
             f"Ruleset reconciler main-ref reads must not regain direct transport: {direct}",
         )
-    for fragment in schema_fragments:
-        require(
-            text.count(fragment) == 14,
-            f"Ruleset main-ref singleton schema must appear at all fourteen call sites: {fragment}",
-        )
-
     fetch_positions: list[int] = []
     for endpoint in (hardcoded_endpoint, recovery_endpoint):
         cursor = 0
@@ -910,13 +904,20 @@ def validate_reconciler_main_ref_evidence_fixture(text: str) -> None:
         block = text[fetch_pos:next_fetch]
         normalizer_pos = block.find(normalizer)
         schema_start = block.find('if type != "object" then')
-        schema_end = block.find('\n              .object.sha\n            end', schema_start + 1)
+        schema_end_fragment = '\n              .object.sha\n            end'
+        schema_end = block.find(schema_end_fragment, schema_start + 1)
         require(
             normalizer_pos >= 0
             and schema_start > normalizer_pos
             and schema_end > schema_start,
             f"Ruleset main-ref call {index} must normalize through the complete singleton schema",
         )
+        schema = block[schema_start : schema_end + len(schema_end_fragment)]
+        for fragment in schema_fragments:
+            require(
+                fragment in schema,
+                f"Ruleset main-ref call {index} lost singleton schema fragment: {fragment}",
+            )
         require(
             ".object.sha" not in block[:schema_start],
             f"Ruleset main-ref call {index} consumed SHA before schema validation",
