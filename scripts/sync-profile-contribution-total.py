@@ -1012,7 +1012,7 @@ def self_test() -> None:
 
         return opener, calls
 
-    for expected_streak in (0, 47, 130):
+    for expected_streak in (0, 47, 130, 420):
         opener, calls = streak_fixture_open(expected_streak)
         observed_streak = fetch_current_streak(
             "fixture-token",
