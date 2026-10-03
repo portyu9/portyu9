@@ -54,7 +54,7 @@
       "candidateBomSha256": "e52705bb5ff54c53735bde50471ff28451df77a41ce3956c8f748a146b6a09bf",
       "expansionSha256": "97b6a9475ec29e5ba31aae7b70ed7a2156e4627234b392562bdfb8a4c7815c7b",
       "id": "cap-authority-artifact-antireplay-v1",
-      "rationale": "Authorize frozen #1562 measured by closed #1563: compile download-artifact repository/run-id/GitHub-token selectors and close the 10-producer authority-artifact anti-replay inventory over same-run containment, explicit 6-hour attested witness TTLs, CodeQL current-main/expiry binding, and Spotlight lease/live revalidation. Base/candidate semantic Workflow Capability BOM hashes are identical; exact tuple is 2 protected-source expansions / 0 reductions. Adds no workflow runtime byte, trigger, permission, endpoint, mutation, artifact payload, secret/OIDC, required-check reduction, ruleset/merge/direct-main authority, candidate execution, or bypass."
+      "rationale": "Authorize frozen #1562 measured by closed #1563: compile download-artifact cross-run selectors and close all 10 authority-artifact anti-replay classes: same-run containment, 6-hour witness TTLs, CodeQL current-main/expiry, and Spotlight lease/live revalidation. Semantic BOM unchanged; measurement is 2 protected-source expansions / 0 reductions. Adds no workflow runtime, permission, trigger, mutation, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, or bypass."
     },
     {
       "baseBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
