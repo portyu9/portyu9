@@ -49,7 +49,7 @@ jobs:
             restored="hero-optimization-evidence/restored-${width}.png"
             convert "$output" -filter Lanczos -resize "1535x1024!" "$restored"
             set +e
-            compare -metric SSIM "$input" "$restored" null: 2> "hero-optimization-evidence/ssim-${width}.txt"
+            compare -metric PSNR "$input" "$restored" null: 2> "hero-optimization-evidence/psnr-${width}.txt"
             compare_rc=$?
             set -e
             test "$compare_rc" -eq 0 || test "$compare_rc" -eq 1
