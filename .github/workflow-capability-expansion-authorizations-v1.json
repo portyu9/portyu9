@@ -1009,6 +1009,13 @@
       "rationale": "Authorize #606's frozen Spotlight race hardening. Merge authorization ignores scheduled admission proofs unless the embedded producer re-proves the exact trusted workflow_dispatch/main/base/bot/run identity. The existing post-check approval job bounded-waits for the exact marker-bound portyu9 review before authorization. Terminal merge remains non-polling, attested, lease-bound, required-check protected, and exact-head fail-closed."
     },
     {
+      "baseBomSha256": "e52705bb5ff54c53735bde50471ff28451df77a41ce3956c8f748a146b6a09bf",
+      "candidateBomSha256": "e52705bb5ff54c53735bde50471ff28451df77a41ce3956c8f748a146b6a09bf",
+      "expansionSha256": "9f8ec68586045856a1edb7ee8d958b564af7da31f91aa18856a7e298d4342642",
+      "id": "cap-generated-publication-epoch-high-water-v1",
+      "rationale": "Authorize frozen #1558 measured by closed #1559: exact protected-source expansion for generated publication epoch, semantic replay rejection, receipt-v2 proof, and protected-main high-water validation. Semantic Workflow Capability is unchanged. No trigger, permission, endpoint, mutation class, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority, candidate execution, or bypass is added."
+    },
+    {
       "baseBomSha256": "f66b8d275cc9ffd26d348d1a5b4db50febd455d30d7043e1f376766c5854ed35",
       "candidateBomSha256": "7e4d61592ffa9988ab0d70ab74cfb7bd0ac12e20e4c54c3f4ee9395a083da16a",
       "expansionSha256": "e62af7526df95c79367e55c793b74b20835afcb4aaa942adf8d8eca09ced8b3b",
