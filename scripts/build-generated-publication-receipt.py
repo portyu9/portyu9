@@ -11,31 +11,33 @@ import sys
 import tempfile
 from typing import Any
 
+import generated_publication_epoch as publication_epoch
 import profile_evidence_subjects as subjects
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "portyu9/portyu9"
 WORKFLOW_REF = f"{REPOSITORY}/.github/workflows/profile-stats.yml@refs/heads/main"
 KIND = "generated-publication-receipt"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 PREDICATE_TYPE = (
     "https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/"
-    "generated-publication-receipt-v1.schema.json"
+    "generated-publication-receipt-v2.schema.json"
 )
-PREDICATE_SCHEMA = ROOT / ".github/attestation/generated-publication-receipt-v1.schema.json"
+PREDICATE_SCHEMA = ROOT / ".github/attestation/generated-publication-receipt-v2.schema.json"
 SOURCE_EPOCH = ROOT / "scripts/profile-stats-source-epoch-v1.json"
 SOURCE_EPOCH_VERSION = "profile-stats-source-epoch-v1"
 SOURCE_EPOCH_ALGORITHM = "sha256-sorted-path-nul-git-blob-oid-lf-v1"
 PROFILE_PREDICATE_KIND = "profile-evidence-attestation"
 PROFILE_PREDICATE_SCHEMA_VERSION = 3
 CLAIM = (
-    "This receipt binds the actual published generated Git commit and parent to the exact "
-    "validated evidence bytes, production source epoch, workflow run, and leased transaction "
-    "that produced the publication."
+    "This receipt binds the actual published generated Git commit, parent, semantic tree, and "
+    "monotonic publication epoch to the exact validated evidence bytes, production source epoch, "
+    "workflow run, and leased transaction that produced the publication."
 )
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 SHA64 = re.compile(r"^[0-9a-f]{64}$")
 POSITIVE_DECIMAL = re.compile(r"^[1-9][0-9]*$")
+NONNEGATIVE_DECIMAL = re.compile(r"^(0|[1-9][0-9]*)$")
 
 
 def require(condition: bool, message: str) -> None:
@@ -71,6 +73,12 @@ def canonical_positive_decimal(name: str, value: str) -> str:
     require(POSITIVE_DECIMAL.fullmatch(value) is not None,
             f"{name} must be one canonical positive decimal string")
     return value
+
+
+def canonical_nonnegative_integer(name: str, value: str) -> int:
+    require(NONNEGATIVE_DECIMAL.fullmatch(value) is not None,
+            f"{name} must be one canonical non-negative decimal string")
+    return int(value)
 
 
 def schema_identity() -> dict[str, str]:
@@ -153,7 +161,15 @@ def build_receipt(env: dict[str, str], published_root: Path, profile_predicate: 
     server = required_env("GITHUB_SERVER_URL", env).rstrip("/")
     published_sha = required_env("PUBLISHED_SHA", env)
     parent_sha = required_env("PUBLISHED_PARENT_SHA", env)
+    tree_sha = required_env("PUBLISHED_TREE_SHA", env)
     git_object_sha256 = required_env("GIT_OBJECT_SHA256", env)
+    publication_bootstrap_sha = required_env("PUBLICATION_BOOTSTRAP_SHA", env)
+    publication_parent_sequence = canonical_nonnegative_integer(
+        "PUBLICATION_PARENT_SEQUENCE", required_env("PUBLICATION_PARENT_SEQUENCE", env)
+    )
+    publication_sequence = int(canonical_positive_decimal(
+        "PUBLICATION_SEQUENCE", required_env("PUBLICATION_SEQUENCE", env)
+    ))
     lease_id = required_env("LEASE_ID", env)
     candidate_id = required_env("CANDIDATE_ID", env)
 
@@ -161,9 +177,14 @@ def build_receipt(env: dict[str, str], published_root: Path, profile_predicate: 
     require(workflow_ref == WORKFLOW_REF, f"unexpected receipt workflow identity: {workflow_ref!r}")
     require(server == "https://github.com", f"unexpected GitHub server URL: {server!r}")
     for label, value in (("GITHUB_SHA", source_sha), ("PUBLISHED_SHA", published_sha),
-                         ("PUBLISHED_PARENT_SHA", parent_sha)):
+                         ("PUBLISHED_PARENT_SHA", parent_sha), ("PUBLISHED_TREE_SHA", tree_sha),
+                         ("PUBLICATION_BOOTSTRAP_SHA", publication_bootstrap_sha)):
         require(SHA40.fullmatch(value) is not None, f"{label} must be one lowercase 40-character Git SHA")
     require(published_sha != parent_sha, "published commit must differ from its parent")
+    require(publication_bootstrap_sha == publication_epoch.BOOTSTRAP_SHA,
+            "publication receipt bootstrap differs from the frozen generated epoch bootstrap")
+    require(publication_sequence == publication_parent_sequence + 1,
+            "publication receipt sequence is not exactly parent sequence plus one")
     for label, value in (("GIT_OBJECT_SHA256", git_object_sha256), ("LEASE_ID", lease_id),
                          ("CANDIDATE_ID", candidate_id)):
         require(SHA64.fullmatch(value) is not None, f"{label} must be one lowercase SHA-256 hex digest")
@@ -192,7 +213,15 @@ def build_receipt(env: dict[str, str], published_root: Path, profile_predicate: 
             "branch": "generated",
             "commitSha": published_sha,
             "parentSha": parent_sha,
+            "treeSha": tree_sha,
             "gitObjectSha256": git_object_sha256,
+            "epoch": {
+                "version": publication_epoch.VERSION,
+                "algorithm": publication_epoch.ALGORITHM,
+                "bootstrapSha": publication_bootstrap_sha,
+                "parentSequence": publication_parent_sequence,
+                "sequence": publication_sequence,
+            },
         },
         "evidence": {
             "profileEvidencePredicateSha256": profile_digest,
@@ -240,17 +269,32 @@ def validate_receipt(receipt: dict[str, Any]) -> None:
 
     publication = receipt["publication"]
     require(isinstance(publication, dict) and set(publication) == {
-        "branch", "commitSha", "parentSha", "gitObjectSha256",
+        "branch", "commitSha", "parentSha", "treeSha", "gitObjectSha256", "epoch",
     }, "publication receipt publication block changed")
     require(publication["branch"] == "generated", "publication receipt branch changed")
     require(all(isinstance(publication[key], str) and SHA40.fullmatch(publication[key]) is not None
-                for key in ("commitSha", "parentSha")),
+                for key in ("commitSha", "parentSha", "treeSha")),
             "publication receipt Git identity is malformed")
     require(publication["commitSha"] != publication["parentSha"],
             "publication receipt commit cannot equal parent")
     require(isinstance(publication["gitObjectSha256"], str)
             and SHA64.fullmatch(publication["gitObjectSha256"]) is not None,
             "publication receipt Git object SHA-256 is malformed")
+    epoch = publication["epoch"]
+    require(isinstance(epoch, dict) and set(epoch) == {
+        "version", "algorithm", "bootstrapSha", "parentSequence", "sequence",
+    }, "publication receipt monotonic epoch block changed")
+    require(epoch["version"] == publication_epoch.VERSION
+            and epoch["algorithm"] == publication_epoch.ALGORITHM,
+            "publication receipt monotonic epoch identity changed")
+    require(epoch["bootstrapSha"] == publication_epoch.BOOTSTRAP_SHA,
+            "publication receipt monotonic epoch bootstrap changed")
+    require(type(epoch["parentSequence"]) is int and epoch["parentSequence"] >= 0,
+            "publication receipt parent sequence is malformed")
+    require(type(epoch["sequence"]) is int and epoch["sequence"] >= 1,
+            "publication receipt sequence is malformed")
+    require(epoch["sequence"] == epoch["parentSequence"] + 1,
+            "publication receipt sequence is not exactly parent sequence plus one")
 
     evidence = receipt["evidence"]
     require(isinstance(evidence, dict) and set(evidence) == {
@@ -288,7 +332,11 @@ def fixture_env() -> dict[str, str]:
         "GITHUB_SERVER_URL": "https://github.com",
         "PUBLISHED_SHA": "c" * 40,
         "PUBLISHED_PARENT_SHA": parent_sha,
+        "PUBLISHED_TREE_SHA": "1" * 40,
         "GIT_OBJECT_SHA256": "d" * 64,
+        "PUBLICATION_BOOTSTRAP_SHA": publication_epoch.BOOTSTRAP_SHA,
+        "PUBLICATION_PARENT_SEQUENCE": "7",
+        "PUBLICATION_SEQUENCE": "8",
         "LEASE_ID": "e" * 64,
         "CANDIDATE_ID": hashlib.sha256(
             f"{source_sha}\n{parent_sha}\n{predicate_digest}\n".encode("ascii")
@@ -350,6 +398,10 @@ def self_test() -> None:
         validate_receipt(drifted)
         require(drifted["evidence"]["subjects"][0]["sha256"] != receipt["evidence"]["subjects"][0]["sha256"],
                 "publication receipt self-test did not bind evidence bytes")
+
+        wrong_sequence = dict(env)
+        wrong_sequence["PUBLICATION_SEQUENCE"] = "9"
+        expect_failure(wrong_sequence, published, predicate, "parent sequence plus one")
 
         malformed = dict(receipt)
         malformed["publication"] = dict(receipt["publication"])

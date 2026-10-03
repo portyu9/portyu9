@@ -466,6 +466,10 @@ jobs:
       candidate_sha: ${{ steps.seal.outputs.candidate_sha }}
       candidate_tree_sha: ${{ steps.seal.outputs.candidate_tree_sha }}
       source_sha: ${{ steps.seal.outputs.source_sha }}
+      publication_bootstrap_sha: ${{ steps.seal.outputs.publication_bootstrap_sha }}
+      publication_parent_sequence: ${{ steps.seal.outputs.publication_parent_sequence }}
+      publication_sequence: ${{ steps.seal.outputs.publication_sequence }}
+      publication_tree_sha: ${{ steps.seal.outputs.publication_tree_sha }}
 
     steps:
       - name: Checkout trusted source without credentials
@@ -570,6 +574,28 @@ jobs:
           test "$(git -C artifacts log -1 --format='%an <%ae>' "$candidate_sha")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
           test "$(git -C artifacts log -1 --format='%cn <%ce>' "$candidate_sha")" = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
           test -z "$(git -C artifacts status --porcelain)"
+          PUBLICATION_BOOTSTRAP_SHA="ade981fd4fe114dde8bcacfde28236e4f0407ba1"
+          PUBLICATION_BOOTSTRAP_TREE="$(git -C artifacts rev-parse "${PUBLICATION_BOOTSTRAP_SHA}^{tree}")"
+          [[ "$PUBLICATION_BOOTSTRAP_TREE" =~ ^[0-9a-f]{40}$ ]]
+          PUBLICATION_EPOCH="$(git -C artifacts log --first-parent --reverse \
+            --format='%H%x09%P%x09%T%x09%s%x09%an%x09%ae%x09%cn%x09%ce' \
+            "${PUBLICATION_BOOTSTRAP_SHA}..${candidate_sha}" | \
+            python3 source/scripts/generated_publication_epoch.py \
+              --head "$candidate_sha" --parent "$base_sha" --bootstrap-tree "$PUBLICATION_BOOTSTRAP_TREE")"
+          test "$(jq -r .bootstrapSha <<<"$PUBLICATION_EPOCH")" = "$PUBLICATION_BOOTSTRAP_SHA"
+          PUBLICATION_PARENT_SEQUENCE="$(jq -r .parentSequence <<<"$PUBLICATION_EPOCH")"
+          PUBLICATION_SEQUENCE="$(jq -r .sequence <<<"$PUBLICATION_EPOCH")"
+          PUBLICATION_TREE_SHA="$(jq -r .treeSha <<<"$PUBLICATION_EPOCH")"
+          [[ "$PUBLICATION_BOOTSTRAP_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$PUBLICATION_PARENT_SEQUENCE" =~ ^[0-9]+$ ]]
+          [[ "$PUBLICATION_SEQUENCE" =~ ^[1-9][0-9]*$ ]]
+          [[ "$PUBLICATION_TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$PUBLICATION_SEQUENCE" -eq $((PUBLICATION_PARENT_SEQUENCE + 1))
+          test "$PUBLICATION_TREE_SHA" = "$candidate_tree_sha"
+          echo "publication_bootstrap_sha=$PUBLICATION_BOOTSTRAP_SHA" >> "$GITHUB_OUTPUT"
+          echo "publication_parent_sequence=$PUBLICATION_PARENT_SEQUENCE" >> "$GITHUB_OUTPUT"
+          echo "publication_sequence=$PUBLICATION_SEQUENCE" >> "$GITHUB_OUTPUT"
+          echo "publication_tree_sha=$PUBLICATION_TREE_SHA" >> "$GITHUB_OUTPUT"
           git -C artifacts bundle create ../generated-publication.bundle generated
           git -C artifacts bundle verify ../generated-publication.bundle
           test "$(git bundle list-heads generated-publication.bundle)" = "$candidate_sha refs/heads/generated"
@@ -759,6 +785,10 @@ jobs:
       source_sha: ${{ steps.receipt.outputs.source_sha }}
       git_object_sha256: ${{ steps.receipt.outputs.git_object_sha256 }}
       predicate_sha256: ${{ steps.receipt.outputs.predicate_sha256 }}
+      publication_bootstrap_sha: ${{ steps.receipt.outputs.publication_bootstrap_sha }}
+      publication_parent_sequence: ${{ steps.receipt.outputs.publication_parent_sequence }}
+      publication_sequence: ${{ steps.receipt.outputs.publication_sequence }}
+      publication_tree_sha: ${{ steps.receipt.outputs.publication_tree_sha }}
 
     steps:
       - name: Checkout trusted source without credentials
@@ -772,7 +802,7 @@ jobs:
         with:
           ref: generated
           path: published
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Python
@@ -799,6 +829,10 @@ jobs:
           LEASE_ID: ${{ needs.lease.outputs.lease_id }}
           LEASE_RUN_ATTEMPT: ${{ needs.lease.outputs.run_attempt }}
           CANDIDATE_ID: ${{ needs.attest.outputs.candidate_id }}
+          EXPECTED_PUBLICATION_BOOTSTRAP_SHA: ${{ needs.stage.outputs.publication_bootstrap_sha }}
+          EXPECTED_PUBLICATION_PARENT_SEQUENCE: ${{ needs.stage.outputs.publication_parent_sequence }}
+          EXPECTED_PUBLICATION_SEQUENCE: ${{ needs.stage.outputs.publication_sequence }}
+          EXPECTED_PUBLICATION_TREE_SHA: ${{ needs.stage.outputs.publication_tree_sha }}
         run: |
           set -euo pipefail
           [[ "$PUBLISHED_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -824,7 +858,26 @@ jobs:
           test "$(sha1sum published-commit.object | cut -d' ' -f1)" = "$PUBLISHED_SHA"
           GIT_OBJECT_SHA256="$(sha256sum published-commit.object | cut -d' ' -f1)"
           [[ "$GIT_OBJECT_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          export GIT_OBJECT_SHA256
+          PUBLICATION_BOOTSTRAP_SHA="$EXPECTED_PUBLICATION_BOOTSTRAP_SHA"
+          PUBLICATION_BOOTSTRAP_TREE="$(git -C published rev-parse "${PUBLICATION_BOOTSTRAP_SHA}^{tree}")"
+          [[ "$PUBLICATION_BOOTSTRAP_TREE" =~ ^[0-9a-f]{40}$ ]]
+          PUBLICATION_EPOCH="$(git -C published log --first-parent --reverse \
+            --format='%H%x09%P%x09%T%x09%s%x09%an%x09%ae%x09%cn%x09%ce' \
+            "${PUBLICATION_BOOTSTRAP_SHA}..${PUBLISHED_SHA}" | \
+            python3 source/scripts/generated_publication_epoch.py \
+              --head "$PUBLISHED_SHA" --parent "$PUBLISHED_PARENT_SHA" \
+              --bootstrap-tree "$PUBLICATION_BOOTSTRAP_TREE")"
+          test "$(jq -r .bootstrapSha <<<"$PUBLICATION_EPOCH")" = "$PUBLICATION_BOOTSTRAP_SHA"
+          PUBLICATION_PARENT_SEQUENCE="$(jq -r .parentSequence <<<"$PUBLICATION_EPOCH")"
+          PUBLICATION_SEQUENCE="$(jq -r .sequence <<<"$PUBLICATION_EPOCH")"
+          PUBLISHED_TREE_SHA="$(jq -r .treeSha <<<"$PUBLICATION_EPOCH")"
+          test "$PUBLICATION_BOOTSTRAP_SHA" = "$EXPECTED_PUBLICATION_BOOTSTRAP_SHA"
+          test "$PUBLICATION_PARENT_SEQUENCE" = "$EXPECTED_PUBLICATION_PARENT_SEQUENCE"
+          test "$PUBLICATION_SEQUENCE" = "$EXPECTED_PUBLICATION_SEQUENCE"
+          test "$PUBLISHED_TREE_SHA" = "$EXPECTED_PUBLICATION_TREE_SHA"
+          test "$PUBLISHED_TREE_SHA" = "$(git -C published rev-parse "${PUBLISHED_SHA}^{tree}")"
+          export GIT_OBJECT_SHA256 PUBLISHED_TREE_SHA
+          export PUBLICATION_BOOTSTRAP_SHA PUBLICATION_PARENT_SEQUENCE PUBLICATION_SEQUENCE
           export PUBLISHED_SHA PUBLISHED_PARENT_SHA LEASE_ID CANDIDATE_ID
           python3 source/scripts/build-generated-publication-receipt.py \
             published \
@@ -837,6 +890,10 @@ jobs:
           echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "git_object_sha256=$GIT_OBJECT_SHA256" >> "$GITHUB_OUTPUT"
           echo "predicate_sha256=$PREDICATE_SHA256" >> "$GITHUB_OUTPUT"
+          echo "publication_bootstrap_sha=$PUBLICATION_BOOTSTRAP_SHA" >> "$GITHUB_OUTPUT"
+          echo "publication_parent_sequence=$PUBLICATION_PARENT_SEQUENCE" >> "$GITHUB_OUTPUT"
+          echo "publication_sequence=$PUBLICATION_SEQUENCE" >> "$GITHUB_OUTPUT"
+          echo "publication_tree_sha=$PUBLISHED_TREE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Upload exact post-publication receipt predicate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -921,7 +978,7 @@ jobs:
         with:
           subject-name: portyu9/portyu9:generated@${{ needs.receipt.outputs.published_sha }}
           subject-digest: sha256:${{ needs.receipt.outputs.git_object_sha256 }}
-          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v1.schema.json
+          predicate-type: https://raw.githubusercontent.com/portyu9/portyu9/main/.github/attestation/generated-publication-receipt-v2.schema.json
           predicate-path: receipt-attestation-input/generated-publication-receipt.json
           show-summary: true
 
