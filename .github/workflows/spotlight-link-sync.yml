@@ -1461,7 +1461,7 @@ jobs:
               (all(.requested_reviewers[];
                 (type == "object") and
                 (.id | (type == "number") and (. == floor) and (. > 0)) and
-                (.login | (type == "string") and (length > 0))) and
+                (.login | (type == "string") and (length > 0)))) and
               (([.requested_reviewers[].id] | unique | length) == (.requested_reviewers | length)) and
               (([.requested_reviewers[].login] | unique | length) == (.requested_reviewers | length)) and
               (.url | type == "string" and length > 0) and

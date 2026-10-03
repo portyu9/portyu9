@@ -18,12 +18,12 @@ import spotlight_profile_links
 import privileged_workflow_identity_v21_core as v21
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "governed-workflow-byte-identity-v160"
+VERSION = "governed-workflow-byte-identity-v161"
 EXPECTED = {
     ".github/workflows/bot-pr-user-approval.yml": "be42a02457df9b7f2a4a10b16c0f2c22f61e3b88",
     ".github/workflows/profile-quality.yml": "b7396cc5ef7fb7a7a6a61fdaa4537ead457df66e",
     ".github/workflows/profile-stats.yml": "3d5b3b5cc4e278b2b71e37f6e4fa9fdb170ed925",
-    ".github/workflows/spotlight-link-sync.yml": "71e2df299a52d4c6f93f1c54697ea9f6e008601d",
+    ".github/workflows/spotlight-link-sync.yml": "fc8d6b4bd0936e03df49868b8dc8caa8b594be86",
 }
 
 TRUSTED_GOVERNED_BOT_REVIEW_GATE = "5fc05a5f66d4c8f3df702faa607199f4f4f8b6a3"
@@ -1414,6 +1414,32 @@ def validate_spotlight_initial_compare_evidence(
             raise ValueError("Spotlight initial compare self-test accepted schema-after-consumption ordering")
 
 
+def require_balanced_jq_delimiters(program: str, label: str) -> None:
+    """Reject malformed composed jq filters without executing candidate-controlled code."""
+    stack: list[str] = []
+    pairs = {")": "(", "]": "[", "}": "{"}
+    in_string = False
+    escaped = False
+    for char in program:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "([{":
+            stack.append(char)
+        elif char in pairs:
+            require(bool(stack) and stack[-1] == pairs[char],
+                    f"{label} has mismatched jq delimiters")
+            stack.pop()
+    require(not in_string and not stack, f"{label} has unbalanced jq delimiters")
+
+
 def validate_spotlight_proposer_pr_list_evidence(
     spotlight: str, *, run_self_test: bool = True
 ) -> None:
@@ -1442,7 +1468,7 @@ def validate_spotlight_proposer_pr_list_evidence(
         '(.requested_reviewers | type == "array" and length <= 100) and',
         '(all(.requested_reviewers[];',
         '(.id | (type == "number") and (. == floor) and (. > 0)) and',
-        '(.login | (type == "string") and (length > 0))) and',
+        '(.login | (type == "string") and (length > 0))',
         '(([.requested_reviewers[].id] | unique | length) == (.requested_reviewers | length)) and',
         '(([.requested_reviewers[].login] | unique | length) == (.requested_reviewers | length)) and',
         '(.url | type == "string" and length > 0) and',
@@ -1452,6 +1478,11 @@ def validate_spotlight_proposer_pr_list_evidence(
             "Spotlight proposer PR-list fetch/schema/consume cardinality changed")
     for fragment in required:
         require(fragment in boundary, f"Spotlight proposer PR-list schema changed: {fragment}")
+    jq_start = boundary.index('(type == "array") and')
+    jq_end = boundary.rindex("\n          ' <<<\"$PRS\" >/dev/null")
+    require_balanced_jq_delimiters(
+        boundary[jq_start:jq_end], "Spotlight proposer PR-list jq filter"
+    )
     require(boundary.count('(.full_name | type == "string" and . == $repo))) and') == 2,
             "Spotlight proposer PR-list must bind both base/head repository identity")
     require(fetch_pos < schema_pos < consume_pos,
@@ -1467,6 +1498,7 @@ def validate_spotlight_proposer_pr_list_evidence(
         ('(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and', '(.user | type == "object") and'),
         ('(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $head) and', '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and'),
         ('(.requested_reviewers | type == "array" and length <= 100) and', '(.requested_reviewers | type == "array") and'),
+        ('(.login | (type == "string") and (length > 0)))) and', '(.login | (type == "string") and (length > 0))) and'),
     )
     for old, new in mutations:
         require(boundary.count(old) == 1, f"Spotlight proposer PR-list self-test anchor changed: {old}")

@@ -2217,6 +2217,32 @@ def self_test_spotlight_source_epoch_ref_schema(spotlight: str) -> None:
         raise ValueError("Spotlight source-epoch schema self-test accepted schema-after-SHA-consumption ordering")
 
 
+def require_balanced_jq_delimiters(program: str, label: str) -> None:
+    """Reject malformed composed jq filters without executing repository workflow code."""
+    stack: list[str] = []
+    pairs = {")": "(", "]": "[", "}": "{"}
+    in_string = False
+    escaped = False
+    for char in program:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "([{":
+            stack.append(char)
+        elif char in pairs:
+            require(bool(stack) and stack[-1] == pairs[char],
+                    f"{label} has mismatched jq delimiters")
+            stack.pop()
+    require(not in_string and not stack, f"{label} has unbalanced jq delimiters")
+
+
 def validate_proposer_pr_list_schema_overlay(sync: str) -> None:
     propose = core.job_block(sync, "propose", "approve")
     fetch = 'PRS="$(spotlight_propose_get open-prs)"'
@@ -2243,7 +2269,7 @@ def validate_proposer_pr_list_schema_overlay(sync: str) -> None:
         '(.requested_reviewers | type == "array" and length <= 100) and',
         '(all(.requested_reviewers[];',
         '(.id | (type == "number") and (. == floor) and (. > 0)) and',
-        '(.login | (type == "string") and (length > 0))) and',
+        '(.login | (type == "string") and (length > 0))',
         '(([.requested_reviewers[].id] | unique | length) == (.requested_reviewers | length)) and',
         '(([.requested_reviewers[].login] | unique | length) == (.requested_reviewers | length)) and',
         '(.url | type == "string" and length > 0) and',
@@ -2253,6 +2279,11 @@ def validate_proposer_pr_list_schema_overlay(sync: str) -> None:
             "Spotlight proposer PR-list fetch/schema/consume cardinality changed")
     for fragment in required:
         require(fragment in boundary, f"Spotlight proposer PR-list schema changed: {fragment}")
+    jq_start = boundary.index('(type == "array") and')
+    jq_end = boundary.rindex("\n          ' <<<\"$PRS\" >/dev/null")
+    require_balanced_jq_delimiters(
+        boundary[jq_start:jq_end], "Spotlight proposer PR-list jq filter"
+    )
     require(boundary.count('(.full_name | type == "string" and . == $repo))) and') == 2,
             "Spotlight proposer PR-list must bind both base/head repository identity")
     require(fetch_pos < schema_pos < consume_pos,
@@ -2277,6 +2308,7 @@ def self_test_proposer_pr_list_schema_overlay(sync: str) -> None:
         ('(.user | type == "object" and (.login | type == "string" and . == "github-actions[bot]")) and', '(.user | type == "object") and'),
         ('(.sha | type == "string" and test("^[0-9a-f]{40}$") and . == $base) and', '(.sha | type == "string" and test("^[0-9a-f]{40}$")) and'),
         ('(.requested_reviewers | type == "array" and length <= 100) and', '(.requested_reviewers | type == "array") and'),
+        ('(.login | (type == "string") and (length > 0)))) and', '(.login | (type == "string") and (length > 0))) and'),
     )
     for old, new in mutations:
         require(boundary.count(old) == 1, f"Spotlight proposer PR-list self-test anchor ambiguous: {old}")
