@@ -183,8 +183,16 @@ def graphql_request(
     if not token:
         raise ValueError("GITHUB_TOKEN is required for GitHub GraphQL contribution sync")
     require(
-        query_document.lstrip().startswith("query ") and "mutation" not in query_document.lower(),
+        QUERY.lstrip().startswith("query ") and "mutation" not in QUERY.lower(),
         "profile contribution GraphQL document must remain query-only",
+    )
+    require(
+        STREAK_QUERY.lstrip().startswith("query ") and "mutation" not in STREAK_QUERY.lower(),
+        "current-streak GraphQL document must remain query-only",
+    )
+    require(
+        query_document.lstrip().startswith("query ") and "mutation" not in query_document.lower(),
+        "selected profile GraphQL document must remain query-only",
     )
     request = urllib.request.Request(
         validate_graphql_url(GRAPHQL_URL),
