@@ -21,6 +21,7 @@ on:
       - ".github/action-lock.json"
       - ".github/automation-policy-v1.json"
       - ".github/workflow-capability-bom-v1.json"
+      - "formal/automation-control-plane/**"
       - ".github/workflows/**"
 
 permissions:
@@ -59,6 +60,67 @@ jobs:
 
       - name: Verify resolved Python runtime
         run: python3 scripts/verify-python-runtime.py
+
+      - name: Verify autonomous control-plane PlusCal/TLC model
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          TLA_TOOLS="$RUNNER_TEMP/tla2tools-v1.7.4.jar"
+          MODEL_DIR="$RUNNER_TEMP/automation-control-plane-formal"
+          EXPECTED_SHA256="936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
+          EXPECTED_SHA1="bee4a54f3ee3d4afc347c3240ec2d9e93b075104"
+          EXPECTED_SIZE="2274532"
+
+          JAVA_VERSION="$(java -version 2>&1)"
+          JAVA_MAJOR="$(sed -nE '1s/.*version "([0-9]+)(\.[^"]*)?".*/\1/p' <<<"$JAVA_VERSION")"
+          [[ "$JAVA_MAJOR" =~ ^[0-9]+$ ]]
+          (( JAVA_MAJOR >= 11 ))
+
+          downloaded=false
+          for attempt in 1 2 3; do
+            if gh api \
+              -H 'Accept: application/octet-stream' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              repos/tlaplus/tlaplus/releases/assets/184694200 \
+              > "$TLA_TOOLS"; then
+              downloaded=true
+              break
+            fi
+            rm -f "$TLA_TOOLS"
+            if [ "$attempt" -lt 3 ]; then
+              sleep "$attempt"
+            fi
+          done
+          test "$downloaded" = true
+          test "$(stat -c '%s' "$TLA_TOOLS")" = "$EXPECTED_SIZE"
+          printf '%s  %s\n' "$EXPECTED_SHA256" "$TLA_TOOLS" | sha256sum --check --strict -
+          printf '%s  %s\n' "$EXPECTED_SHA1" "$TLA_TOOLS" | sha1sum --check --strict -
+
+          rm -rf "$MODEL_DIR"
+          mkdir -p "$MODEL_DIR"
+          cp formal/automation-control-plane/AutomationControlPlane.tla "$MODEL_DIR/"
+          cp formal/automation-control-plane/AutomationControlPlane.cfg "$MODEL_DIR/"
+          cp formal/automation-control-plane/AutomationControlPlane.negative.cfg "$MODEL_DIR/"
+
+          (
+            cd "$MODEL_DIR"
+            export CLASSPATH="$TLA_TOOLS"
+
+            java pcal.trans -unixEOL -nocfg AutomationControlPlane.tla
+            grep -Fq 'Spec ==' AutomationControlPlane.tla
+            java tla2sany.SANY AutomationControlPlane.tla
+            java tlc2.TLC -workers 1 -config AutomationControlPlane.cfg AutomationControlPlane.tla
+
+            set +e
+            java tlc2.TLC -workers 1 -config AutomationControlPlane.negative.cfg AutomationControlPlane.tla > negative-control.log 2>&1
+            negative_status="$?"
+            set -e
+            cat negative-control.log
+            test "$negative_status" -eq 12
+            grep -Fq 'NegativeControl' negative-control.log
+          )
 
       - name: Execute Spotlight mutation-budget jq schema fixtures
         run: python3 scripts/spotlight_budget_jq_schema_runtime_test.py
