@@ -19,8 +19,10 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 HERO_REFERENCE = "assets/profile-badges/quality-engineering-automation-systems.png"
 HERO_IMAGE = ROOT / HERO_REFERENCE
-HERO_SIZE = 2_947_658
-HERO_SHA256 = "f99901f3da31c68441d471a92dcf9c7829681c8ec390286159b78eea97a5bcd0"
+HERO_SIZE = 1_472_916
+HERO_WIDTH = 1_280
+HERO_HEIGHT = 854
+HERO_SHA256 = "d840734c78ec59f3c53644330bc2166c51e1bb5eb8e768595035a37767eb5452"
 HEADER_ASSET_COMMIT = "44471c9ba38958e601bc602557dfa0642633f897"
 
 SELF_HOSTED_BADGES = (
@@ -226,7 +228,15 @@ def main() -> int:
     require(HERO_IMAGE.is_file(), f"Profile hero image is missing: {HERO_REFERENCE}")
     hero_bytes = HERO_IMAGE.read_bytes()
     require(len(hero_bytes) == HERO_SIZE, f"Profile hero image size changed: expected {HERO_SIZE}, got {len(hero_bytes)}")
-    require(hashlib.sha256(hero_bytes).hexdigest() == HERO_SHA256, "Profile hero image bytes differ from the reviewed original")
+    require(hashlib.sha256(hero_bytes).hexdigest() == HERO_SHA256, "Profile hero image bytes differ from the reviewed optimized fallback")
+    require(hero_bytes[:8] == b"\x89PNG\r\n\x1a\n", "Profile hero must remain a PNG")
+    require(len(hero_bytes) >= 24 and hero_bytes[12:16] == b"IHDR", "Profile hero PNG IHDR is missing")
+    hero_width = int.from_bytes(hero_bytes[16:20], "big")
+    hero_height = int.from_bytes(hero_bytes[20:24], "big")
+    require(
+        (hero_width, hero_height) == (HERO_WIDTH, HERO_HEIGHT),
+        f"Profile hero dimensions changed: expected {HERO_WIDTH}x{HERO_HEIGHT}, got {hero_width}x{hero_height}",
+    )
     require(readme.find(HERO_REFERENCE) < readme.find("Ƴunior Ƥortal"), "Hero image must appear before the profile name")
 
     engineering_heading = re.compile(r'<h2\s+align="center">\s*✦ Engineering Thesis\s*</h2>', re.I)

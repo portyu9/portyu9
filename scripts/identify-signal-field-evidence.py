@@ -8,7 +8,8 @@ while presentation-only differences do not create false evidence changes.
 Canonical evidence covers:
 - exact profile contribution period and total,
 - headline contributions/stars/pull requests/authored-public Issues values,
-- exact 30-day activity window, active/streak/peak telemetry,
+- exact 30-day activity window with active/peak telemetry,
+- account-history current streak value, through-date, and source authority,
 - all 30 measured date/count/GitHub-level tuples,
 - source/timezone/intensity semantics.
 
@@ -124,6 +125,8 @@ def canonical_evidence(text: str) -> dict[str, object]:
         "data-activity-to",
         "data-active-days",
         "data-current-streak",
+        "data-current-streak-source",
+        "data-current-streak-through",
         "data-peak-count",
         "data-peak-date",
         "data-source",
@@ -145,6 +148,8 @@ def canonical_evidence(text: str) -> dict[str, object]:
     days = measured_days(text)
     if days[0]["date"] != attrs["data-activity-from"] or days[-1]["date"] != attrs["data-activity-to"]:
         raise ValueError("measured tile dates diverge from activity-window provenance")
+    if attrs["data-current-streak-through"] != attrs["data-activity-to"]:
+        raise ValueError("current-streak through-date diverges from activity snapshot")
 
     return {
         "schema": SCHEMA,
@@ -164,12 +169,14 @@ def canonical_evidence(text: str) -> dict[str, object]:
             "to": attrs["data-activity-to"],
             "activeDays": int(attrs["data-active-days"]),
             "currentStreak": int(attrs["data-current-streak"]),
+            "currentStreakThrough": attrs["data-current-streak-through"],
             "peakCount": int(attrs["data-peak-count"]),
             "peakDate": attrs["data-peak-date"],
             "days": days,
         },
         "sources": {
             "activity": attrs["data-source"],
+            "currentStreak": attrs["data-current-streak-source"],
             "headlines": attrs["data-metric-sources"],
             "issues": attrs["data-issues-metric-source"],
             "intensity": attrs["data-intensity-scale"],
@@ -341,6 +348,8 @@ def fixture(layout: str, scheme: str) -> str:
         'data-profile-visible-contributions="5728" data-profile-period-from="2025-08-31" '
         'data-profile-period-to="2026-09-04" data-activity-from="2026-08-06" '
         f'data-activity-to="{end}" data-active-days="{active}" data-current-streak="{streak}" '
+        'data-current-streak-source="github-graphql-account-history" '
+        f'data-current-streak-through="{end}" '
         f'data-peak-count="{counts[peak_index]}" data-peak-date="{peak_date}" '
         'data-source="github-graphql-contribution-calendar" data-metric-sources="github-graphql+rest" '
         'data-issues-metric-source="github-rest-search-authored-public-issues" '
