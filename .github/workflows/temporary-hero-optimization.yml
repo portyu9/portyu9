@@ -41,7 +41,7 @@ jobs:
 
           for width in 1400 1320 1280 1240 1200 1152; do
             output="hero-optimization-evidence/hero-${width}.png"
-            convert "$input" -strip -filter Lanczos -resize "${width}x>"               -define png:compression-level=9               -define png:compression-filter=5               "$output"
+            convert "$input" -strip -filter Lanczos -resize "${width}x>"               -define png:compression-level=9               "$output"
             test -s "$output"
             identify "$output" >> hero-optimization-evidence/candidates.txt
             printf '%s %s\n' "$width" "$(wc -c < "$output" | tr -d ' ')" >> hero-optimization-evidence/sizes.txt
