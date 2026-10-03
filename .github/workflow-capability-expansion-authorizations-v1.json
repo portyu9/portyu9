@@ -1408,6 +1408,13 @@
       "rationale": "Authorize frozen #1540 measured by closed #1541: extend the accepted full singleton main-ref response schema from 5 historical Ruleset reads to all 9 later recovery/control-plane reads before SHA consumption. Equal BOM hashes prove no semantic Workflow Capability change; 1 protected-TCB expansion / 0 reductions. No trigger, permission, endpoint/method/call count, retry, mutation, secret/OIDC, required-check, merge/ruleset authority, direct-main write, or bypass change."
     },
     {
+      "baseBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
+      "expansionSha256": "2349aa3ed1c550db1459ec0d83f3c301bf610010eeb22db20dee0674bc3fc1c8",
+      "id": "cap-ruleset-recovery-reproof-schema-hardening-v1",
+      "rationale": "Authorize frozen #1544 measured by closed #1545: make existing Ruleset recovery fresh PR/ref/commit/check/merge/live-workflow reproofs schema-first before authority-bearing scalar use. Equal BOM hashes prove no semantic Workflow Capability change; 1 protected-TCB expansion / 0 reductions. No trigger, permission, endpoint/method/call count, retry, mutation, secret/OIDC, required-check, merge/ruleset authority, direct-main write, or bypass change."
+    },
+    {
       "baseBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "candidateBomSha256": "acb30eac40b59e9675deb4830a4c752416cea94aee8b36061f552052e54ce0e3",
       "expansionSha256": "faf57bff751e000a37c4471f07e3a028b32e4f7aace6e41693bffafefea28fba",
