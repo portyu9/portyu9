@@ -681,8 +681,19 @@ def validate_recovery_reproof_response_evidence_fixture(text: str) -> None:
         < after_pr_schema < after_main,
         "Ruleset recovery merge evidence is not schema-first",
     )
+    require(
+        'elif ((.merged | type) != "boolean") or (.merged != true) then\n'
+        '                error("recovery merge response did not prove merged=true")'
+        in merge,
+        "Ruleset nominal merge response lost exact boolean typing",
+    )
+    require(
+        'elif ((.merged | type) != "boolean") or (.merged != true) then\n'
+        '                error("post-merge recovery PR did not prove merged=true")'
+        in merge,
+        "Ruleset ambiguous post-merge PR response lost exact boolean typing",
+    )
     for fragment in (
-        'elif ((.merged | type) != "boolean") or (.merged != true) then',
         'elif ((.sha | type) != "string") or ((.sha | test("^[0-9a-f]{40}$")) | not) then',
         'elif ((.message | type) != "string") or ((.message | length) == 0) then',
         'elif ((.merge_commit_sha | type) != "string") or ((.merge_commit_sha | test("^[0-9a-f]{40}$")) | not) then',
