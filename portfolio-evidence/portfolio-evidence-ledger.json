@@ -4,13 +4,13 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:981b4dc27285a17786cd52e3e4352e90541ae3a72dd3d12611be6574388c6e08",
-  "evidence_id": "PL2-981B4DC27285A177",
+  "evidence_digest": "sha256:29661e5e434506f44406d429bb1473059c0a72757467c0ebbd2f1e8f0c47fa77",
+  "evidence_id": "PL2-29661E5E434506F4",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 24,
-    "SAME_DAY": 1
+    "AGED": 22,
+    "SAME_DAY": 3
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -39,21 +39,21 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-04T00:03:38Z",
+          "completed_at_utc": "2026-10-04T03:38:34Z",
           "freshness": "SAME_DAY",
-          "head_sha": "5a28b118865f0d296068916636f29ad2bedcd433",
+          "head_sha": "6103c9b1b828b503369c1e98c44e2421c1a38495",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 37163450611,
-          "run_number": 3350,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/37163450611",
+          "run_id": 37174403452,
+          "run_number": 3357,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/37174403452",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "5a28b118865f0d296068916636f29ad2bedcd433",
+      "subject_revision": "6103c9b1b828b503369c1e98c44e2421c1a38495",
       "title": "AI QA CONTROL PLANE"
     },
     {
@@ -441,43 +441,43 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 1,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/qa-automation-python-pytest",
       "signals": [
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-03T23:17:41Z",
-          "freshness": "AGED",
-          "head_sha": "9261c85c8dcb5694792d128eb9aff8ea644be837",
+          "completed_at_utc": "2026-10-04T03:34:01Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "96c2b5db42fcd5572cebc370403d5c07126a980c",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 37161246070,
-          "run_number": 359,
-          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37161246070",
+          "run_id": 37174383782,
+          "run_number": 423,
+          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37174383782",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 1,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-03T23:17:56Z",
-          "freshness": "AGED",
-          "head_sha": "9261c85c8dcb5694792d128eb9aff8ea644be837",
+          "completed_at_utc": "2026-10-04T03:35:07Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "96c2b5db42fcd5572cebc370403d5c07126a980c",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 37161246076,
-          "run_number": 270,
-          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37161246076",
+          "run_id": 37174385562,
+          "run_number": 334,
+          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37174385562",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "9261c85c8dcb5694792d128eb9aff8ea644be837",
+      "subject_revision": "96c2b5db42fcd5572cebc370403d5c07126a980c",
       "title": "PYTHON + PYTEST QE"
     },
     {
