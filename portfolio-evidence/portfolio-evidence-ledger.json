@@ -4,13 +4,13 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:2c42034035ec5d19167b0c75367bd00db182f47889da3bd02a82daf1e87a4203",
-  "evidence_id": "PL2-2C42034035EC5D19",
+  "evidence_digest": "sha256:d1f0338b95acb1fb558dd619bed5fcc543b57697616d096a3781620112f44352",
+  "evidence_id": "PL2-D1F0338B95ACB1FB",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
-    "AGED": 22,
-    "SAME_DAY": 3
+    "AGED": 20,
+    "SAME_DAY": 5
   },
   "kind": "portfolio-evidence-ledger",
   "owner": "portyu9",
@@ -19,8 +19,7 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "FAILING": 1,
-    "PASSING": 24
+    "PASSING": 25
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -40,21 +39,21 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-04T12:45:14Z",
+          "completed_at_utc": "2026-10-04T16:45:23Z",
           "freshness": "SAME_DAY",
-          "head_sha": "d4bf2a6070dcb38aa65f228194be8f3eca333320",
+          "head_sha": "e882e29eebca1b86f73f0b90bf98c75574d74bdb",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "FAILING",
-          "run_id": 37203192511,
-          "run_number": 3360,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/37203192511",
+          "result": "PASSING",
+          "run_id": 37217650511,
+          "run_number": 3370,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/37217650511",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "d4bf2a6070dcb38aa65f228194be8f3eca333320",
+      "subject_revision": "e882e29eebca1b86f73f0b90bf98c75574d74bdb",
       "title": "AI QA CONTROL PLANE"
     },
     {
@@ -283,43 +282,43 @@
           "workflow": "security.yml"
         }
       ],
-      "evidence_max_age_days": 18,
+      "evidence_max_age_days": 0,
       "repository": "portyu9/qa-automation-api-postman-newman",
       "signals": [
         {
-          "age_days": 18,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-16T03:58:50Z",
-          "freshness": "AGED",
-          "head_sha": "6a42a69802940666b317f321e8b9db700a30effe",
+          "completed_at_utc": "2026-10-04T15:32:13Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "301511eb90a31ef1b8eb2f3abe5eb88b596b25bb",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 35053808040,
-          "run_number": 128,
-          "run_url": "https://github.com/portyu9/qa-automation-api-postman-newman/actions/runs/35053808040",
+          "run_id": 37213341225,
+          "run_number": 144,
+          "run_url": "https://github.com/portyu9/qa-automation-api-postman-newman/actions/runs/37213341225",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
-          "age_days": 18,
+          "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-09-16T03:59:46Z",
-          "freshness": "AGED",
-          "head_sha": "6a42a69802940666b317f321e8b9db700a30effe",
+          "completed_at_utc": "2026-10-04T15:33:45Z",
+          "freshness": "SAME_DAY",
+          "head_sha": "301511eb90a31ef1b8eb2f3abe5eb88b596b25bb",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 35053808053,
-          "run_number": 105,
-          "run_url": "https://github.com/portyu9/qa-automation-api-postman-newman/actions/runs/35053808053",
+          "run_id": 37213341115,
+          "run_number": 123,
+          "run_url": "https://github.com/portyu9/qa-automation-api-postman-newman/actions/runs/37213341115",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "6a42a69802940666b317f321e8b9db700a30effe",
+      "subject_revision": "301511eb90a31ef1b8eb2f3abe5eb88b596b25bb",
       "title": "POSTMAN + NEWMAN API QE"
     },
     {
@@ -448,37 +447,37 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-04T12:38:59Z",
+          "completed_at_utc": "2026-10-04T14:24:04Z",
           "freshness": "SAME_DAY",
-          "head_sha": "1410c2d72262eea2e4589d184e52f6f1d9d828b8",
+          "head_sha": "e978750b481df6d2548d63a8102c9d5a4c62c4e3",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 37202771278,
-          "run_number": 448,
-          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37202771278",
+          "run_id": 37209039182,
+          "run_number": 457,
+          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37209039182",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-04T12:39:26Z",
+          "completed_at_utc": "2026-10-04T14:24:24Z",
           "freshness": "SAME_DAY",
-          "head_sha": "1410c2d72262eea2e4589d184e52f6f1d9d828b8",
+          "head_sha": "e978750b481df6d2548d63a8102c9d5a4c62c4e3",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 37202773868,
-          "run_number": 359,
-          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37202773868",
+          "run_id": 37209039209,
+          "run_number": 368,
+          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37209039209",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "1410c2d72262eea2e4589d184e52f6f1d9d828b8",
+      "subject_revision": "e978750b481df6d2548d63a8102c9d5a4c62c4e3",
       "title": "PYTHON + PYTEST QE"
     },
     {
