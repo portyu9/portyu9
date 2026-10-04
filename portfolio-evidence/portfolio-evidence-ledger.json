@@ -4,8 +4,8 @@
     "CURRENT_SUBJECT": 25
   },
   "classification_policy": "four permanent profile systems plus nine rotating Spotlight systems",
-  "evidence_digest": "sha256:29661e5e434506f44406d429bb1473059c0a72757467c0ebbd2f1e8f0c47fa77",
-  "evidence_id": "PL2-29661E5E434506F4",
+  "evidence_digest": "sha256:2c42034035ec5d19167b0c75367bd00db182f47889da3bd02a82daf1e87a4203",
+  "evidence_id": "PL2-2C42034035EC5D19",
   "evidence_semantics": "execution-result-subject-binding-freshness-v1",
   "freshness_basis": "UTC whole-day age from workflow evidence timestamp",
   "freshness_summary": {
@@ -19,7 +19,8 @@
     "version": "portfolio-systems-v1"
   },
   "result_summary": {
-    "PASSING": 25
+    "FAILING": 1,
+    "PASSING": 24
   },
   "subject_policy": "current-main-revision-per-system",
   "system_count": 13,
@@ -39,21 +40,21 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-04T03:38:34Z",
+          "completed_at_utc": "2026-10-04T12:45:14Z",
           "freshness": "SAME_DAY",
-          "head_sha": "6103c9b1b828b503369c1e98c44e2421c1a38495",
+          "head_sha": "d4bf2a6070dcb38aa65f228194be8f3eca333320",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
-          "result": "PASSING",
-          "run_id": 37174403452,
-          "run_number": 3357,
-          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/37174403452",
+          "result": "FAILING",
+          "run_id": 37203192511,
+          "run_number": 3360,
+          "run_url": "https://github.com/portyu9/ai-qa-automation/actions/runs/37203192511",
           "scope": "workflow",
           "workflow": "ci.yml"
         }
       ],
-      "subject_revision": "6103c9b1b828b503369c1e98c44e2421c1a38495",
+      "subject_revision": "d4bf2a6070dcb38aa65f228194be8f3eca333320",
       "title": "AI QA CONTROL PLANE"
     },
     {
@@ -447,37 +448,37 @@
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-04T03:34:01Z",
+          "completed_at_utc": "2026-10-04T12:38:59Z",
           "freshness": "SAME_DAY",
-          "head_sha": "96c2b5db42fcd5572cebc370403d5c07126a980c",
+          "head_sha": "1410c2d72262eea2e4589d184e52f6f1d9d828b8",
           "label": "CI",
           "offline": false,
           "ordinal": 1,
           "result": "PASSING",
-          "run_id": 37174383782,
-          "run_number": 423,
-          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37174383782",
+          "run_id": 37202771278,
+          "run_number": 448,
+          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37202771278",
           "scope": "workflow",
           "workflow": "ci.yml"
         },
         {
           "age_days": 0,
           "binding": "CURRENT_SUBJECT",
-          "completed_at_utc": "2026-10-04T03:35:07Z",
+          "completed_at_utc": "2026-10-04T12:39:26Z",
           "freshness": "SAME_DAY",
-          "head_sha": "96c2b5db42fcd5572cebc370403d5c07126a980c",
+          "head_sha": "1410c2d72262eea2e4589d184e52f6f1d9d828b8",
           "label": "SECURITY",
           "offline": false,
           "ordinal": 2,
           "result": "PASSING",
-          "run_id": 37174385562,
-          "run_number": 334,
-          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37174385562",
+          "run_id": 37202773868,
+          "run_number": 359,
+          "run_url": "https://github.com/portyu9/qa-automation-python-pytest/actions/runs/37202773868",
           "scope": "workflow",
           "workflow": "security.yml"
         }
       ],
-      "subject_revision": "96c2b5db42fcd5572cebc370403d5c07126a980c",
+      "subject_revision": "1410c2d72262eea2e4589d184e52f6f1d9d828b8",
       "title": "PYTHON + PYTEST QE"
     },
     {
