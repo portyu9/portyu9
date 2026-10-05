@@ -1492,6 +1492,13 @@
       "rationale": "Authorize frozen #1311 measured by closed #1312: move the Spotlight mutation-budget artifact-history GET to the accepted bounded authenticated GET helper. Add contents:read only for literal-main checkout, sealed BASE_SHA and exact-helper proof before pinned Python. Preserve endpoint, typed completeness/duplicate/current-run/MAX_ATTEMPTS=2/quarantine ordering. No write authority, trigger, mutation replay, secret/OIDC, check reduction, direct-main, merge/ruleset authority, or bypass."
     },
     {
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "268fb2bd114a49c6ec06e1530900661a583ff6e259031c780030c3ac2d65ef74",
+      "id": "cap-spotlight-check-badge-projection-v1",
+      "rationale": "Authorize frozen #1581 measured by closed #1582: replace the rotating Spotlight third-party workflow-status badge projection with stable main-branch ci-gate/security-gate Check Runs badges while preserving direct workflow click targets. Semantic Workflow Capability is unchanged; one protected renderer source expands and there are zero reductions. Adds no workflow, trigger, permission, endpoint/method used by repository automation, mutation, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, candidate execution, generated-evidence change, or bypass."
+    },
+    {
       "baseBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
       "candidateBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
       "expansionSha256": "39c877e6cafa9e75edf2e229664c1e67d10abad79e5ab5aa160b73ecf7ebd8b3",
