@@ -39,6 +39,7 @@ REPOSITORY = re.compile(r"^portyu9/[A-Za-z0-9_.-]+$")
 RUN_URL = re.compile(r"^https://github\.com/portyu9/([A-Za-z0-9_.-]+)/actions/runs/([0-9]+)$")
 EXPECTED_LABELS = ("CI", "SECURITY")
 EXPECTED_WORKFLOWS = {"CI": "ci.yml", "SECURITY": "security.yml"}
+CHECK_GATES = {"CI": "ci-gate", "SECURITY": "security-gate"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -141,8 +142,14 @@ def render_block(
         security_workflow = str(signals["SECURITY"]["workflow"])
         ci_url = f"{repo_url}/actions/workflows/{ci_workflow}"
         security_url = f"{repo_url}/actions/workflows/{security_workflow}"
-        ci_badge = f"https://img.shields.io/github/actions/workflow/status/{repository}/{ci_workflow}?branch=main&style=flat-square&label=CI"
-        security_badge = f"https://img.shields.io/github/actions/workflow/status/{repository}/{security_workflow}?branch=main&style=flat-square&label=SECURITY"
+        ci_badge = (
+            f"https://img.shields.io/github/check-runs/{repository}/main"
+            f"?nameFilter={CHECK_GATES['CI']}&style=flat-square&label=CI"
+        )
+        security_badge = (
+            f"https://img.shields.io/github/check-runs/{repository}/main"
+            f"?nameFilter={CHECK_GATES['SECURITY']}&style=flat-square&label=SECURITY"
+        )
         dark = f"https://raw.githubusercontent.com/{PROFILE_REPOSITORY}/{generated_sha}/engineering-spotlight/spotlight-{slot}-dark.svg"
         light = f"https://raw.githubusercontent.com/{PROFILE_REPOSITORY}/{generated_sha}/engineering-spotlight/spotlight-{slot}-light.svg"
         lines.extend([
@@ -245,8 +252,12 @@ def self_test() -> None:
     require("issues/122" not in proposed, "self-test retained the obsolete issue navigator")
     require("https://github.com/portyu9/qa-automation-fixture-2/actions/workflows/security.yml" in proposed,
             "self-test lost direct workflow navigation")
-    require("img.shields.io/github/actions/workflow/status/portyu9/qa-automation-fixture-1/ci.yml" in proposed,
-            "self-test lost live workflow-status badges")
+    require("img.shields.io/github/check-runs/portyu9/qa-automation-fixture-1/main?nameFilter=ci-gate" in proposed,
+            "self-test lost stable main CI gate badge")
+    require("img.shields.io/github/check-runs/portyu9/qa-automation-fixture-1/main?nameFilter=security-gate" in proposed,
+            "self-test lost stable main SECURITY gate badge")
+    require("img.shields.io/github/actions/workflow/status/" not in proposed,
+            "self-test retained workflow-status badges instead of exact stable check gates")
     require("/" + "a" * 40 + "/engineering-spotlight/spotlight-3-dark.svg" in proposed,
             "self-test did not pin the visual snapshot to one generated commit")
     require(
@@ -276,7 +287,7 @@ def self_test() -> None:
     )
     require(advanced_plan["changed"] is True and "sequence=8" in advanced,
             "publication high-water self-test rejected a monotonic advance")
-    print(f"Spotlight profile link self-test passed: {VERSION} · direct repo/workflow targets · immutable visual snapshot")
+    print(f"Spotlight profile link self-test passed: {VERSION} · direct workflow targets · stable main check gates · immutable visual snapshot")
 
 
 def parse_args() -> argparse.Namespace:
