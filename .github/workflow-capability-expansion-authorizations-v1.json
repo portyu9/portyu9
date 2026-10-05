@@ -1496,7 +1496,7 @@
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "268fb2bd114a49c6ec06e1530900661a583ff6e259031c780030c3ac2d65ef74",
       "id": "cap-spotlight-check-badge-projection-v1",
-      "rationale": "Authorize frozen #1581 measured by closed #1582: replace the rotating Spotlight third-party workflow-status badge projection with stable main-branch ci-gate/security-gate Check Runs badges while preserving direct workflow click targets. Semantic Workflow Capability is unchanged; one protected renderer source expands and there are zero reductions. Adds no workflow, trigger, permission, endpoint/method used by repository automation, mutation, secret/OIDC, required-check reduction, direct-main/ruleset/merge authority, candidate execution, generated-evidence change, or bypass."
+      "rationale": "Authorize frozen #1581 measured by closed #1582: replace rotating Spotlight workflow-status badges with stable main ci-gate/security-gate Check Runs badges while preserving direct workflow links. Semantic Workflow Capability is unchanged; one protected renderer source expands, zero reductions. Adds no workflow, trigger, permission, mutation, secret/OIDC, required-check reduction, generated evidence, merge/ruleset/direct-main authority, candidate execution, or bypass."
     },
     {
       "baseBomSha256": "409277a37943941126d3b9ec709080f17bba3a4b930051cdb71bc811fe9f8e9c",
