@@ -254,9 +254,9 @@ def self_test() -> None:
                 "evidence_id": "PL2-0123456789ABCDEF",
                 "evidence_digest": f"sha256:{'b' * 64}",
                 "system_count": 13,
-                "result_summary": {"PASSING": 25},
-                "binding_summary": {"CURRENT_SUBJECT": 25},
-                "freshness_summary": {"SAME_DAY": 25},
+                "result_summary": {"PASSING": 27},
+                "binding_summary": {"CURRENT_SUBJECT": 27},
+                "freshness_summary": {"SAME_DAY": 27},
             }), encoding="utf-8"
         )
         (spotlight / "spotlight-manifest.json").write_text(

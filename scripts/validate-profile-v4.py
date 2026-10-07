@@ -260,8 +260,8 @@ def validate_flagships(readme: str) -> None:
         "BASELINE GOVERNANCE",
     ):
         require(any(phrase in (ROOT/path).read_text(encoding="utf-8") for path in FLAGSHIP_SVGS), f"Reviewed flagship language missing: {phrase}")
-    require(readme.count('ai-qa-automation/ci.yml?branch=main')==1, "AI flagship must expose exactly one scoped CI badge")
-    require(readme.count('qa-automation-ai-agent-evals/ci.yml?branch=main')==1, "Agent Evaluation / TEVV flagship must expose exactly one scoped CI badge")
+    require(readme.count('ai-qa-automation/ci.yml?branch=main')==1 and readme.count('ai-qa-automation/security.yml?branch=main')==1, "AI flagship must expose CI + Security")
+    require(readme.count('qa-automation-ai-agent-evals/ci.yml?branch=main')==1 and readme.count('qa-automation-ai-agent-evals/security.yml?branch=main')==1, "Agent Evaluation / TEVV flagship must expose CI + Security")
     require(readme.count('qa-automation-graphql/ci.yml?branch=main')==1 and readme.count('qa-automation-graphql/security.yml?branch=main')==1, "GraphQL flagship must expose CI + Security")
     require(readme.count('qa-automation-visual-and-accessibility-playwright-axe/ci.yml?branch=main')==1 and readme.count('qa-automation-visual-and-accessibility-playwright-axe/security.yml?branch=main')==1, "Visual/accessibility flagship must expose CI + Security")
 

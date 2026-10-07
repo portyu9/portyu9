@@ -8,7 +8,8 @@
       "title": "AI QA CONTROL PLANE",
       "classification": "permanent",
       "evidence": [
-        {"label": "CI", "workflow": "ci.yml"}
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ]
     },
     {
@@ -32,7 +33,8 @@
             "MCP OAuth flow / separated AS-RS",
             "Package integrity"
           ]
-        }
+        },
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
       "spotlight": {
         "domain": "AGENTIC QA · TEVV / ASSURANCE",
