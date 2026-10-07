@@ -21,7 +21,7 @@
           "label": "QUALITY+SEC",
           "workflow": "ci.yml",
           "job_prefixes": ["Quality / Python "],
-          "required_steps": ["Tests", "Bandit", "Dependency audit"]
+          "required_steps": ["Tests and trust-class coverage gates", "Bandit", "Dependency audit"]
         },
         {
           "label": "AGENT LABS",
