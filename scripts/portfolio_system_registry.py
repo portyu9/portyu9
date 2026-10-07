@@ -187,7 +187,7 @@ def load_registry() -> dict[str, Any]:
         [item["workflow"] for item in agent_evidence] == ["ci.yml", "ci.yml", "security.yml"],
         "Agent Evaluation evidence workflow contract changed",
     )
-    require(agent_evidence[0].get("required_steps") == ["Tests", "Bandit", "Dependency audit"], "Agent Evaluation required-step contract changed")
+    require(agent_evidence[0].get("required_steps") == ["Tests and trust-class coverage gates", "Bandit", "Dependency audit"], "Agent Evaluation required-step contract changed")
     require(len(agent_evidence[1].get("jobs") or []) == 5, "Agent Evaluation lab-job contract changed")
     return data
 
