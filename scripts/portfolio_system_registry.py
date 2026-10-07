@@ -166,11 +166,27 @@ def load_registry() -> dict[str, Any]:
     validate_rotating_accent_palette(rotating_accents)
 
     by_repo = {str(entry["repo"]): entry for entry in systems}
+
+    ai = by_repo.get("ai-qa-automation")
+    require(isinstance(ai, dict), "AI QA Control Plane system is missing")
+    ai_evidence = ai["evidence"]
+    require(
+        [(item["label"], item["workflow"]) for item in ai_evidence]
+        == [("CI", "ci.yml"), ("SECURITY", "security.yml")],
+        "AI QA Control Plane evidence contract changed",
+    )
+
     agent = by_repo.get("qa-automation-ai-agent-evals")
     require(isinstance(agent, dict), "Agent Evaluation system is missing")
     agent_evidence = agent["evidence"]
-    require([item["label"] for item in agent_evidence] == ["QUALITY+SEC", "AGENT LABS"], "Agent Evaluation evidence labels changed")
-    require(all(item["workflow"] == "ci.yml" for item in agent_evidence), "Agent Evaluation evidence must remain scoped to ci.yml")
+    require(
+        [item["label"] for item in agent_evidence] == ["QUALITY+SEC", "AGENT LABS", "SECURITY"],
+        "Agent Evaluation evidence labels changed",
+    )
+    require(
+        [item["workflow"] for item in agent_evidence] == ["ci.yml", "ci.yml", "security.yml"],
+        "Agent Evaluation evidence workflow contract changed",
+    )
     require(agent_evidence[0].get("required_steps") == ["Tests", "Bandit", "Dependency audit"], "Agent Evaluation required-step contract changed")
     require(len(agent_evidence[1].get("jobs") or []) == 5, "Agent Evaluation lab-job contract changed")
     return data
@@ -209,7 +225,18 @@ def rotating_spotlight_pool() -> tuple[dict[str, Any], ...]:
 
 
 def legacy_spotlight_pool() -> tuple[dict[str, Any], ...]:
-    return tuple(spotlight_system(item) for item in systems() if item.get("spotlight") is not None)
+    # v2 is retained only for historical compatibility and was defined around exactly
+    # two evidence signals per card. Preserve that old Agent Evaluation projection while
+    # the canonical registry/Portfolio Ledger can expose its new dedicated SECURITY signal.
+    projected: list[dict[str, Any]] = []
+    for item in systems():
+        if item.get("spotlight") is None:
+            continue
+        candidate = dict(item)
+        if candidate["repo"] == "qa-automation-ai-agent-evals":
+            candidate["evidence"] = [dict(spec) for spec in item["evidence"][:2]]
+        projected.append(spotlight_system(candidate))
+    return tuple(projected)
 
 
 def expect_evidence_failure(spec: dict[str, Any], expected: str) -> None:
@@ -235,7 +262,14 @@ def self_test() -> None:
     require(len(permanent_systems()) == 4, "permanent registry projection changed")
     require(len(rotating_systems()) == 9, "rotating registry projection changed")
     require(len(rotating_spotlight_pool()) == 9, "rotating Spotlight projection changed")
-    require(len(legacy_spotlight_pool()) == 10, "legacy Spotlight projection changed")
+    legacy = legacy_spotlight_pool()
+    require(len(legacy) == 10, "legacy Spotlight projection changed")
+    legacy_agent = next(item for item in legacy if item["repo"] == "qa-automation-ai-agent-evals")
+    require(
+        [(item["label"], item["workflow"]) for item in legacy_agent["evidence"]]
+        == [("QUALITY+SEC", "ci.yml"), ("AGENT LABS", "ci.yml")],
+        "legacy Agent Evaluation two-signal compatibility projection changed",
+    )
 
     expect_evidence_failure(
         {"label": "LAB", "workflow": "ci.yml", "jobs": ["one", "one"]},
