@@ -8,14 +8,8 @@
       "title": "AI QA CONTROL PLANE",
       "classification": "permanent",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ]
     },
     {
@@ -26,14 +20,8 @@
         {
           "label": "QUALITY+SEC",
           "workflow": "ci.yml",
-          "job_prefixes": [
-            "Quality / Python "
-          ],
-          "required_steps": [
-            "Tests",
-            "Bandit",
-            "Dependency audit"
-          ]
+          "job_prefixes": ["Quality / Python "],
+          "required_steps": ["Tests", "Bandit", "Dependency audit"]
         },
         {
           "label": "AGENT LABS",
@@ -46,10 +34,7 @@
             "Package integrity"
           ]
         },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
       "spotlight": {
         "domain": "AGENTIC QA · TEVV / ASSURANCE",
@@ -66,14 +51,8 @@
       "title": "GRAPHQL QE",
       "classification": "permanent",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ]
     },
     {
@@ -81,14 +60,8 @@
       "title": "VISUAL + ACCESSIBILITY QE",
       "classification": "permanent",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ]
     },
     {
@@ -96,216 +69,90 @@
       "title": ".NET + SELENIUM QE",
       "classification": "rotating",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
-      "spotlight": {
-        "domain": "WEB / UI · SELENIUM + XUNIT",
-        "signature": "Browser lifecycle · owned fixtures · bounded evidence",
-        "accent": "#148A28",
-        "accent2": "#28D7FF",
-        "accent3": "#8C7CFF",
-        "glyph": "browser-frame",
-        "topology": "session-rails"
-      }
+      "spotlight": {"domain":"WEB / UI · SELENIUM + XUNIT","signature":"Browser lifecycle · owned fixtures · bounded evidence","accent":"#148A28","accent2":"#28D7FF","accent3":"#8C7CFF","glyph":"browser-frame","topology":"session-rails"}
     },
     {
       "repo": "qa-automation-api-postman-newman",
       "title": "POSTMAN + NEWMAN API QE",
       "classification": "rotating",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
-      "spotlight": {
-        "domain": "API · POSTMAN + NEWMAN",
-        "signature": "Collection contracts · target ownership · execution evidence",
-        "accent": "#DF4020",
-        "accent2": "#FF2BD6",
-        "accent3": "#28D7FF",
-        "glyph": "request-arrow",
-        "topology": "request-route"
-      }
+      "spotlight": {"domain":"API · POSTMAN + NEWMAN","signature":"Collection contracts · target ownership · execution evidence","accent":"#DF4020","accent2":"#FF2BD6","accent3":"#28D7FF","glyph":"request-arrow","topology":"request-route"}
     },
     {
       "repo": "qa-automation-mobile-appium",
       "title": "APPIUM MOBILE QE",
       "classification": "rotating",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
-      "spotlight": {
-        "domain": "MOBILE · APPIUM + WEBDRIVERIO",
-        "signature": "Capability policy · session lifecycle · device evidence",
-        "accent": "#C32DE1",
-        "accent2": "#FF2BD6",
-        "accent3": "#28D7FF",
-        "glyph": "device-frame",
-        "topology": "device-bus"
-      }
+      "spotlight": {"domain":"MOBILE · APPIUM + WEBDRIVERIO","signature":"Capability policy · session lifecycle · device evidence","accent":"#C32DE1","accent2":"#FF2BD6","accent3":"#28D7FF","glyph":"device-frame","topology":"device-bus"}
     },
     {
       "repo": "qa-automation-ui-cypress",
       "title": "CYPRESS UI QE",
       "classification": "rotating",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
-      "spotlight": {
-        "domain": "WEB / UI · CYPRESS",
-        "signature": "Retryability · isolation · deterministic target ownership",
-        "accent": "#148A77",
-        "accent2": "#28D7FF",
-        "accent3": "#8C7CFF",
-        "glyph": "retry-loop",
-        "topology": "retry-circuit"
-      }
+      "spotlight": {"domain":"WEB / UI · CYPRESS","signature":"Retryability · isolation · deterministic target ownership","accent":"#148A77","accent2":"#28D7FF","accent3":"#8C7CFF","glyph":"retry-loop","topology":"retry-circuit"}
     },
     {
       "repo": "qa-automation-python-pytest",
       "title": "PYTHON + PYTEST QE",
       "classification": "rotating",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
-      "spotlight": {
-        "domain": "LAYERED QE · PYTEST",
-        "signature": "Failure attribution · persistence · browser · security",
-        "accent": "#1F7AD6",
-        "accent2": "#28D7FF",
-        "accent3": "#8C7CFF",
-        "glyph": "bracket-check",
-        "topology": "layered-ladder"
-      }
+      "spotlight": {"domain":"LAYERED QE · PYTEST","signature":"Failure attribution · persistence · browser · security","accent":"#1F7AD6","accent2":"#28D7FF","accent3":"#8C7CFF","glyph":"bracket-check","topology":"layered-ladder"}
     },
     {
       "repo": "qa-automation-node-supertest",
       "title": "SUPERTEST API QE",
       "classification": "rotating",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
-      "spotlight": {
-        "domain": "API / CONTRACT · SUPERTEST + PACT",
-        "signature": "Component · transport · contract · listener boundaries",
-        "accent": "#E02985",
-        "accent2": "#28D7FF",
-        "accent3": "#FF2BD6",
-        "glyph": "endpoint-link",
-        "topology": "contract-bridge"
-      }
+      "spotlight": {"domain":"API / CONTRACT · SUPERTEST + PACT","signature":"Component · transport · contract · listener boundaries","accent":"#E02985","accent2":"#28D7FF","accent3":"#FF2BD6","glyph":"endpoint-link","topology":"contract-bridge"}
     },
     {
       "repo": "qa-automation-java-restassured",
       "title": "REST ASSURED QE",
       "classification": "rotating",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
-      "spotlight": {
-        "domain": "API / PERSISTENCE · REST ASSURED",
-        "signature": "Protocol · schema · PostgreSQL · attributable evidence",
-        "accent": "#8A7714",
-        "accent2": "#FF6C37",
-        "accent3": "#8C7CFF",
-        "glyph": "shield-route",
-        "topology": "protocol-chain"
-      }
+      "spotlight": {"domain":"API / PERSISTENCE · REST ASSURED","signature":"Protocol · schema · PostgreSQL · attributable evidence","accent":"#8A7714","accent2":"#FF6C37","accent3":"#8C7CFF","glyph":"shield-route","topology":"protocol-chain"}
     },
     {
       "repo": "qa-automation-node-playwright",
       "title": "PLAYWRIGHT QE",
       "classification": "rotating",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
-      "spotlight": {
-        "domain": "E2E / BROWSER · PLAYWRIGHT",
-        "signature": "Context isolation · traces · attributable browser evidence",
-        "accent": "#4D8613",
-        "accent2": "#28D7FF",
-        "accent3": "#8C7CFF",
-        "glyph": "trace-frame",
-        "topology": "trace-fan"
-      }
+      "spotlight": {"domain":"E2E / BROWSER · PLAYWRIGHT","signature":"Context isolation · traces · attributable browser evidence","accent":"#4D8613","accent2":"#28D7FF","accent3":"#8C7CFF","glyph":"trace-frame","topology":"trace-fan"}
     },
     {
       "repo": "k6-performance-testing-framework",
       "title": "K6 PERFORMANCE QE",
       "classification": "rotating",
       "evidence": [
-        {
-          "label": "CI",
-          "workflow": "ci.yml"
-        },
-        {
-          "label": "SECURITY",
-          "workflow": "security.yml"
-        }
+        {"label": "CI", "workflow": "ci.yml"},
+        {"label": "SECURITY", "workflow": "security.yml"}
       ],
-      "spotlight": {
-        "domain": "PERFORMANCE · K6",
-        "signature": "Explicit workloads · target authorization · zero-traffic safety",
-        "accent": "#7963E9",
-        "accent2": "#FF2BD6",
-        "accent3": "#28D7FF",
-        "glyph": "gauge-needle",
-        "topology": "load-wave"
-      }
+      "spotlight": {"domain":"PERFORMANCE · K6","signature":"Explicit workloads · target authorization · zero-traffic safety","accent":"#7963E9","accent2":"#FF2BD6","accent3":"#28D7FF","glyph":"gauge-needle","topology":"load-wave"}
     }
   ]
 }
