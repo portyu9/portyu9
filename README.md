@@ -114,12 +114,12 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <a href="https://github.com/portyu9/ai-qa-automation"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-ai-qa-control-plane-dark.svg"><img alt="AI QA Control Plane engineering system card" src="assets/profile-systems/qualification-ai-qa-control-plane-light.svg"></picture></a><br>
-<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml"><img alt="AI QA CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/ci.yml?branch=main&style=flat-square&label=CI"></a>
+<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/ci.yml"><img alt="AI QA CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/ai-qa-automation/actions/workflows/security.yml"><img alt="AI QA security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/ai-qa-automation/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center">
 <a href="https://github.com/portyu9/qa-automation-ai-agent-evals"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/profile-systems/qualification-agent-evaluation-tevv-dark.svg"><img alt="Agent Evaluation and TEVV engineering system card" src="assets/profile-systems/qualification-agent-evaluation-tevv-light.svg"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-ai-agent-evals/actions/workflows/ci.yml"><img alt="Agent Evaluation TEVV CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-ai-agent-evals/ci.yml?branch=main&style=flat-square&label=CI"></a>
+<a href="https://github.com/portyu9/qa-automation-ai-agent-evals/actions/workflows/ci.yml"><img alt="Agent Evaluation TEVV CI" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-ai-agent-evals/ci.yml?branch=main&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-ai-agent-evals/actions/workflows/security.yml"><img alt="Agent Evaluation TEVV security" height="24" src="https://img.shields.io/github/actions/workflow/status/portyu9/qa-automation-ai-agent-evals/security.yml?branch=main&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center">
