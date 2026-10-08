@@ -69,7 +69,7 @@ def main() -> int:
         linked_repos: set[str] = set()
         for label, href in EVIDENCE_LINKS.items():
             pattern = re.compile(
-                rf'<a\s+href="{re.escape(href)}"\s+target="_blank"\s+rel="noopener noreferrer">\s*'
+                rf'<a\s+href="{re.escape(href)}">\s*'
                 rf'<picture>(?:(?!</picture>).)*?'
                 rf'<img\s+alt="{re.escape(label)}"(?:(?!</picture>).)*?'
                 rf'</picture>\s*</a>',
@@ -77,7 +77,7 @@ def main() -> int:
             )
             matches = pattern.findall(text)
             if len(matches) != 1:
-                fail(f"capability badge must have exactly one reviewed new-window evidence link: {label} -> {href}")
+                fail(f"capability badge must have exactly one reviewed evidence link: {label} -> {href}")
             linked_repos.add(href)
 
         missing_repos = sorted(SUBSTANTIVE_PUBLIC_QE_REPOS - linked_repos)
@@ -85,7 +85,7 @@ def main() -> int:
             fail("substantive public QE repositories are not represented by badge evidence links: " + ", ".join(missing_repos))
 
         print(
-            "Capability evidence validation passed: all 17 reviewed badges are evidence-linked with explicit new-window semantics and the link set "
+            "Capability evidence validation passed: all 17 reviewed badges are evidence-linked and the link set "
             "covers all 13 substantive public QE framework repositories."
         )
         return 0
