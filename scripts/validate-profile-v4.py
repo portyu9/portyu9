@@ -249,6 +249,17 @@ def validate_thesis_scale(readme: str) -> None:
                 f"Phone portrait principle source changed: {alt}")
         require(readme.count(landscape_source) == 1,
                 f"Phone landscape principle source changed: {alt}")
+        desktop_path = next(item[1] for item in DESKTOP_PRINCIPLES if item[0] == alt)
+        desktop_source = f'<source media="(min-width: 1025px)" srcset="{desktop_path}"'
+        fallback = f'<img alt="{alt}"'
+        portrait_index = readme.find(portrait_source)
+        landscape_index = readme.find(landscape_source)
+        desktop_index = readme.find(desktop_source)
+        fallback_index = readme.find(fallback, desktop_index)
+        require(
+            0 <= portrait_index < landscape_index < desktop_index < fallback_index,
+            f"Phone principle source ordering changed: {alt}",
+        )
 
     for alt, desktop_path, width, height, mobile_path, mobile_height in DESKTOP_PRINCIPLES:
         content=legacy.safe_svg(ROOT/desktop_path, desktop_path)
@@ -260,8 +271,6 @@ def validate_thesis_scale(readme: str) -> None:
         fallback = f'<img alt="{alt}" height="{mobile_height}" src="{mobile_path}">'
         require(readme.count(source) == 1, f"Desktop-only principle source changed: {alt}")
         require(readme.count(fallback) == 1, f"Mobile principle fallback changed: {alt}")
-        require(readme.find('media="(max-width: 640px)"', readme.find(fallback) - 800) < readme.find(f'media="(min-width: 1025px)" srcset="{desktop_path}"'),
-                f"Phone principle source must precede desktop source: {alt}")
 
 
 def validate_flagships(readme: str) -> None:
