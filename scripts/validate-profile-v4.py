@@ -223,7 +223,7 @@ def validate_thesis_scale(readme: str) -> None:
                 f"Mobile Engineering Contract header canvas changed: {relative}")
 
     phone_portrait = 'media="(max-width: 640px)"'
-    phone_landscape = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape)"'
+    phone_landscape = 'media="(orientation: landscape) and (min-width: 641px) and (max-width: 1024px)"'
     for alt, mobile_path, canvas_width, canvas_height, render_width, render_height, lines, y_positions in MOBILE_PHONE_PRINCIPLES:
         content = legacy.safe_svg(ROOT / mobile_path, mobile_path)
         require(
