@@ -91,6 +91,14 @@ DESKTOP_PRINCIPLES = (
     ("Safety by / Architecture", "assets/profile-badges/principle-safety-architecture-desktop.svg", 152, 79, "assets/profile-badges/principle-safety-architecture.svg?fit=20260903-font23r-f", 84),
 )
 DESKTOP_PRINCIPLE_SVGS = tuple(item[1] for item in DESKTOP_PRINCIPLES)
+MOBILE_PHONE_PRINCIPLES = (
+    ("Evidence before / Confidence", "assets/profile-badges/principle-evidence-confidence-mobile-v2.svg", 210, 104, 170, 84, ["Evidence","before","Confidence"], [20,52,84]),
+    ("Reasoning without / Self-authorization", "assets/profile-badges/principle-reasoning-authorization-mobile-v2.svg", 232, 104, 187, 84, ["Reasoning","without","Self-authorization"], [20,52,84]),
+    ("Attribution before / Abstraction", "assets/profile-badges/principle-attribution-abstraction-mobile-v2.svg", 214, 104, 173, 84, ["Attribution","before","Abstraction"], [20,52,84]),
+    ("Oracle Discipline", "assets/profile-badges/principle-oracle-discipline-mobile-v2.svg", 210, 104, 170, 84, ["Oracle","Discipline"], [34,70]),
+    ("Reproducibility over Optics", "assets/profile-badges/principle-reproducibility-optics-mobile-v2.svg", 206, 104, 166, 84, ["Reproducibility","over","Optics"], [20,52,84]),
+    ("Safety by / Architecture", "assets/profile-badges/principle-safety-architecture-mobile-v2.svg", 188, 104, 152, 84, ["Safety","by","Architecture"], [20,52,84]),
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -214,6 +222,34 @@ def validate_thesis_scale(readme: str) -> None:
         require('width="276" height="40" viewBox="0 0 276 40"' in content and 'x="138"' in content,
                 f"Mobile Engineering Contract header canvas changed: {relative}")
 
+    phone_portrait = 'media="(max-width: 640px)"'
+    phone_landscape = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape)"'
+    for alt, mobile_path, canvas_width, canvas_height, render_width, render_height, lines, y_positions in MOBILE_PHONE_PRINCIPLES:
+        content = legacy.safe_svg(ROOT / mobile_path, mobile_path)
+        require(
+            f'width="{canvas_width}" height="{canvas_height}" viewBox="0 0 {canvas_width} {canvas_height}"' in content,
+            f"Phone principle dimensions changed: {mobile_path}",
+        )
+        require('font-size="23"' in content and 'font-size="24"' not in content,
+                f"Phone principle typography changed: {mobile_path}")
+        require(content.count("<text ") == len(lines),
+                f"Phone principle line count changed: {mobile_path}")
+        for line, y_position in zip(lines, y_positions, strict=True):
+            require(f'y="{y_position}"' in content and f'>{line}</text>' in content,
+                    f"Phone principle line layout changed: {mobile_path}: {line}")
+        portrait_source = (
+            f'<source {phone_portrait} srcset="{mobile_path}" '
+            f'width="{render_width}" height="{render_height}">'
+        )
+        landscape_source = (
+            f'<source {phone_landscape} srcset="{mobile_path}" '
+            f'width="{render_width}" height="{render_height}">'
+        )
+        require(readme.count(portrait_source) == 1,
+                f"Phone portrait principle source changed: {alt}")
+        require(readme.count(landscape_source) == 1,
+                f"Phone landscape principle source changed: {alt}")
+
     for alt, desktop_path, width, height, mobile_path, mobile_height in DESKTOP_PRINCIPLES:
         content=legacy.safe_svg(ROOT/desktop_path, desktop_path)
         require(f'width="{width}" height="{height}" viewBox="0 0 {width} {height}"' in content,
@@ -224,6 +260,8 @@ def validate_thesis_scale(readme: str) -> None:
         fallback = f'<img alt="{alt}" height="{mobile_height}" src="{mobile_path}">'
         require(readme.count(source) == 1, f"Desktop-only principle source changed: {alt}")
         require(readme.count(fallback) == 1, f"Mobile principle fallback changed: {alt}")
+        require(readme.find('media="(max-width: 640px)"', readme.find(fallback) - 800) < readme.find(f'media="(min-width: 1025px)" srcset="{desktop_path}"'),
+                f"Phone principle source must precede desktop source: {alt}")
 
 
 def validate_flagships(readme: str) -> None:
