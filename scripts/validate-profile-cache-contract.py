@@ -21,6 +21,7 @@ README = ROOT / "README.md"
 
 SPOTLIGHT_TOKEN = "engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"
 SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-v219-compact-eid-bug-found-current-red-v1-profile-refresh-v2"
+SIGNAL_FIELD_COMPACT_MAX_WIDTH = 480
 
 STALE_SPOTLIGHT_TOKENS = (
     "engineering-spotlight-v21-three-slots-20260905",
@@ -40,8 +41,8 @@ LEDGER_REVIEW_URL = "https://github.com/portyu9/portyu9/blob/generated/portfolio
 ATTESTATION_REVIEW_URL = "https://github.com/portyu9/portyu9/blob/main/.github/ATTESTATION.md"
 REVIEW_NAVIGATION = (
     '<p align="center"><sub><strong>Evidence review</strong> · '
-    f'<a href="{LEDGER_REVIEW_URL}" target="_blank" rel="noopener noreferrer">Portfolio Evidence Ledger</a> · '
-    f'<a href="{ATTESTATION_REVIEW_URL}" target="_blank" rel="noopener noreferrer">Attestation Contract</a></sub></p>'
+    f'<a href="{LEDGER_REVIEW_URL}">Portfolio Evidence Ledger</a> · '
+    f'<a href="{ATTESTATION_REVIEW_URL}">Attestation Contract</a></sub></p>'
 )
 SELECTED_HEADING = '<h2 align="center">◇ Selected Engineering Systems</h2>'
 SPOTLIGHT_END = "<!-- spotlight-direct-links:end -->"
@@ -51,6 +52,22 @@ SPOTLIGHT_FOOTER = (
 )
 ACTIVITY_HEADING = '<h2 align="center">◉ Activity Metrics</h2>'
 SECTION_BREAK = "\n\n---\n\n"
+SIGNAL_FIELD_RESPONSIVE_BLOCK = (
+    '<picture>\n'
+    f'  <source media="(max-width: {SIGNAL_FIELD_COMPACT_MAX_WIDTH}px) and (prefers-color-scheme: dark)" '
+    f'srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/'
+    f'signal-field-compact-dark.svg?v={SIGNAL_FIELD_TOKEN}">\n'
+    f'  <source media="(max-width: {SIGNAL_FIELD_COMPACT_MAX_WIDTH}px)" '
+    f'srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/'
+    f'signal-field-compact-light.svg?v={SIGNAL_FIELD_TOKEN}">\n'
+    '  <source media="(prefers-color-scheme: dark)" '
+    f'srcset="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/'
+    f'signal-field-wide-dark.svg?v={SIGNAL_FIELD_TOKEN}">\n'
+    '  <img alt="GitHub activity signal field" '
+    f'src="https://raw.githubusercontent.com/portyu9/portyu9/generated/profile-stats/profile/'
+    f'signal-field-wide-light.svg?v={SIGNAL_FIELD_TOKEN}" width="100%">\n'
+    '</picture>'
+)
 
 SPOTLIGHT_IMMUTABLE = re.compile(
     r"https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/engineering-spotlight/"
@@ -259,6 +276,10 @@ def validate_readme(expected_signal: str = SIGNAL_FIELD_TOKEN) -> None:
             "mutable generated profile asset inventory must contain only four Signal Field URLs")
     require(all("?v=" in url for url in mutable_urls),
             "mutable generated profile asset lacks an explicit cache identity")
+    require(text.count(SIGNAL_FIELD_RESPONSIVE_BLOCK) == 1,
+            "README Signal Field responsive source contract changed")
+    require(SIGNAL_FIELD_COMPACT_MAX_WIDTH == 480,
+            "Signal Field compact breakpoint must remain phone-scoped at 480px")
     validate_reviewer_navigation(text)
 
 
@@ -274,6 +295,8 @@ def validate_candidate(signal_field_dir: Path, spotlight_dir: Path, ledger_dir: 
 
 
 def self_test() -> None:
+    require(SIGNAL_FIELD_COMPACT_MAX_WIDTH == 480,
+            "Signal Field compact breakpoint contract changed")
     require("-".join((
         compact_spotlight_version("engineering-spotlight-v2.1"),
         compact_ledger_version("portfolio-evidence-ledger-v2"),
