@@ -40,8 +40,8 @@ LEDGER_REVIEW_URL = "https://github.com/portyu9/portyu9/blob/generated/portfolio
 ATTESTATION_REVIEW_URL = "https://github.com/portyu9/portyu9/blob/main/.github/ATTESTATION.md"
 REVIEW_NAVIGATION = (
     '<p align="center"><sub><strong>Evidence review</strong> · '
-    f'<a href="{LEDGER_REVIEW_URL}">Portfolio Evidence Ledger</a> · '
-    f'<a href="{ATTESTATION_REVIEW_URL}">Attestation Contract</a></sub></p>'
+    f'<a href="{LEDGER_REVIEW_URL}" target="_blank" rel="noopener noreferrer">Portfolio Evidence Ledger</a> · '
+    f'<a href="{ATTESTATION_REVIEW_URL}" target="_blank" rel="noopener noreferrer">Attestation Contract</a></sub></p>'
 )
 SELECTED_HEADING = '<h2 align="center">◇ Selected Engineering Systems</h2>'
 SPOTLIGHT_END = "<!-- spotlight-direct-links:end -->"
