@@ -83,6 +83,12 @@ IDENTITY_AND_PRINCIPLE_SVGS = (
     "assets/profile-badges/principle-oracle-discipline.svg",
     "assets/profile-badges/principle-reproducibility-optics.svg",
     "assets/profile-badges/principle-safety-architecture.svg",
+    "assets/profile-badges/principle-evidence-confidence-mobile-v2.svg",
+    "assets/profile-badges/principle-reasoning-authorization-mobile-v2.svg",
+    "assets/profile-badges/principle-attribution-abstraction-mobile-v2.svg",
+    "assets/profile-badges/principle-oracle-discipline-mobile-v2.svg",
+    "assets/profile-badges/principle-reproducibility-optics-mobile-v2.svg",
+    "assets/profile-badges/principle-safety-architecture-mobile-v2.svg",
 )
 PRINCIPLE_BADGES = tuple(path for path in IDENTITY_AND_PRINCIPLE_SVGS if "/principle-" in path)
 
