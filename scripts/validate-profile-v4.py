@@ -7,6 +7,8 @@ light/dark flagship cards and generated daily Evidence Spotlight references. It 
 owns the current responsive QE taxonomy scale and desktop-only thesis scale contracts.
 """
 from __future__ import annotations
+import base64
+import binascii
 import hashlib
 import importlib.util
 import re
@@ -46,11 +48,22 @@ FLAGSHIP_SVGS = (
     "assets/profile-systems/qualification-visual-accessibility-qe-light.svg",
     "assets/profile-systems/qualification-visual-accessibility-qe-dark.svg",
 )
+ANIMATED_HERO_SVG = "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2-optimized.svg"
+RETIRED_ANIMATED_HERO_SVG = "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg"
+ANIMATED_HERO_SVG_SIZE = 524_447
+ANIMATED_HERO_SVG_SHA256 = "b7a6bb60e85e6304a2e561849174bd305ed73d25848e886ea83df753baa7a5d3"
+ANIMATED_HERO_WIDTH = 2_560
+ANIMATED_HERO_HEIGHT = 1_708
+ANIMATED_HERO_WEBP_SIZE = 372_702
+ANIMATED_HERO_WEBP_SHA256 = "fcb9d112ff3447ef1671e58be169051ddde0dd83016b88386cf4a3f2e39c7824"
+ANIMATED_HERO_ANIMATION_COUNTS = (86, 22, 14)
+ANIMATED_HERO_NORMALIZED_SHELL_SHA256 = "e5cfe5f0ccfbaf11d5d09ccfb2fed6696edaed60f0c6c88367bbf2fb87b85314"
+
 PROFILE_BANNER_SVGS = (
     "assets/profile-banners/quantum-apex-signal-crown-hero.svg",
     "assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg",
     "assets/profile-banners/elite-evidence-horizon-bottom.svg",
-    "assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg",
+    ANIMATED_HERO_SVG,
 )
 BOTTOM_HORIZON_BLOCK = (
     '<p align="center">\n'
@@ -333,6 +346,85 @@ def validate_flagships(readme: str) -> None:
             "Agent Evaluation light phosphorescent-red treatment changed")
 
 
+def validate_animated_hero(readme: str) -> None:
+    """Pin the cache-safe, payload-bounded animated hero without weakening its motion contract."""
+    path = ROOT / ANIMATED_HERO_SVG
+    require(path.is_file(), f"Optimized animated hero is missing: {ANIMATED_HERO_SVG}")
+    require(not (ROOT / RETIRED_ANIMATED_HERO_SVG).exists(),
+            "Retired oversized animated hero must remain removed")
+    require(readme.count(ANIMATED_HERO_SVG) == 1,
+            "README must reference the optimized animated hero exactly once")
+    require(RETIRED_ANIMATED_HERO_SVG not in readme,
+            "README must not reference the retired oversized animated hero")
+
+    svg_bytes = path.read_bytes()
+    require(len(svg_bytes) == ANIMATED_HERO_SVG_SIZE,
+            f"Optimized animated hero size changed: {len(svg_bytes)}")
+    require(hashlib.sha256(svg_bytes).hexdigest() == ANIMATED_HERO_SVG_SHA256,
+            "Optimized animated hero bytes changed")
+    try:
+        text = svg_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        legacy.fail("Optimized animated hero must remain UTF-8 SVG")
+
+    require(
+        f'width="{ANIMATED_HERO_WIDTH}" height="{ANIMATED_HERO_HEIGHT}" viewBox="0 0 1535 1024"' in text,
+        "Optimized animated hero intrinsic dimensions changed",
+    )
+    payload_matches = re.findall(r'data:image/webp;base64,([^"\'<>]+)', text)
+    require(len(payload_matches) == 1,
+            "Optimized animated hero must contain exactly one embedded WebP base")
+    try:
+        payload = base64.b64decode(payload_matches[0], validate=True)
+    except (ValueError, binascii.Error):
+        legacy.fail("Optimized animated hero contains invalid base64 WebP data")
+
+    require(len(payload) == ANIMATED_HERO_WEBP_SIZE,
+            f"Optimized animated hero WebP size changed: {len(payload)}")
+    require(hashlib.sha256(payload).hexdigest() == ANIMATED_HERO_WEBP_SHA256,
+            "Optimized animated hero embedded WebP bytes changed")
+    require(payload[:4] == b"RIFF" and payload[8:12] == b"WEBP" and payload[12:16] == b"VP8X",
+            "Optimized animated hero embedded payload is not the reviewed extended WebP")
+    require(len(payload) >= 30 and int.from_bytes(payload[16:20], "little") == 10,
+            "Optimized animated hero VP8X header changed")
+    width = int.from_bytes(payload[24:27], "little") + 1
+    height = int.from_bytes(payload[27:30], "little") + 1
+    require((width, height) == (ANIMATED_HERO_WIDTH, ANIMATED_HERO_HEIGHT),
+            "Optimized animated hero embedded WebP dimensions changed")
+
+    counts = (
+        len(re.findall(r"<animate\b", text)),
+        len(re.findall(r"<animateTransform\b", text)),
+        len(re.findall(r"<animateMotion\b", text)),
+    )
+    require(counts == ANIMATED_HERO_ANIMATION_COUNTS,
+            f"Animated hero motion inventory changed: {counts}")
+    require(text.count("<filter ") == 6 and text.count("<feGaussianBlur ") == 6,
+            "Animated hero reviewed glow/filter inventory changed")
+    require(text.count("<feTurbulence ") == 1 and text.count("<feDisplacementMap ") == 1,
+            "Animated hero reviewed atmospheric filter inventory changed")
+    require(text.count("@media (prefers-reduced-motion: reduce)") == 1,
+            "Animated hero reduced-motion contract changed")
+
+    normalized = re.sub(
+        r'data:image/webp;base64,[^"\'<>]+',
+        "data:image/webp;base64,<EMBEDDED_WEBP>",
+        text,
+        count=1,
+    )
+    normalized, dimension_count = re.subn(
+        r'width="\d+" height="\d+" viewBox="0 0 1535 1024"',
+        'width="<WIDTH>" height="<HEIGHT>" viewBox="0 0 1535 1024"',
+        normalized,
+        count=1,
+    )
+    require(dimension_count == 1, "Animated hero normalized dimension contract changed")
+    require(
+        hashlib.sha256(normalized.encode("utf-8")).hexdigest() == ANIMATED_HERO_NORMALIZED_SHELL_SHA256,
+        "Animated hero vector/animation shell changed independently of the reviewed payload optimization",
+    )
+
+
 def main() -> int:
     readme=README.read_text(encoding="utf-8")
     for retired in legacy.RETIRED_ASSETS:
@@ -340,6 +432,7 @@ def main() -> int:
         require(retired not in readme, f"README references retired asset: {retired}")
     for relative in PROFILE_BANNER_SVGS:
         require((ROOT / relative).is_file(), f"Approved profile banner is missing: {relative}")
+    validate_animated_hero(readme)
     require(readme.count(BOTTOM_HORIZON_BLOCK) == 1,
             "Bottom evidence horizon must remain visible exactly once in non-linked picture markup")
     require(BOTTOM_HORIZON_ANCHOR.search(readme) is None,

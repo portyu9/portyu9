@@ -41,7 +41,7 @@
 
 <p align="center">
 <picture>
-  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2.svg">
+  <source type="image/svg+xml" srcset="assets/profile-badges/quality-engineering-automation-systems-nebula-portal-animated-v2-optimized.svg">
   <img alt="Quality Engineering Automation Systems" src="assets/profile-badges/quality-engineering-automation-systems.png">
 </picture>
 </p>
