@@ -24,8 +24,8 @@ GENERATION_SCHEDULE = "1-hour"
 DESCRIPTION = "every hour"
 CURRENT_DAY_HIGHLIGHT = "phosphorescent-red-v1"
 CURRENT_DAY_RED = "#FF335F"
-CONTRIBUTION_HEADLINE_SIZES = {"wide": ("64", "45"), "compact": ("54", "35")}
-CONTRIBUTION_BALANCE = "responsive-v2"
+CONTRIBUTION_HEADLINE_SIZES = {"wide": ("64", "37"), "compact": ("54", "31")}
+CONTRIBUTION_BALANCE = "responsive-v3"
 EXPECTED_FILES = tuple(
     f"signal-field-{layout}-{theme}.svg"
     for layout in ("wide", "compact")
