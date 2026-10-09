@@ -260,7 +260,7 @@ def validate_file(path: Path) -> None:
             fail(f"{path.name}: expected {vector} vector glyph is missing or duplicated")
 
     contribution_value = tag_attrs_for_metric(text, "contributions")
-    expected_contribution_size = "45" if "wide" in path.name else "35"
+    expected_contribution_size = "37" if "wide" in path.name else "31"
     if contribution_value.get("font-size") != expected_contribution_size:
         fail(f"{path.name}: contributions headline must be {expected_contribution_size}px")
 
