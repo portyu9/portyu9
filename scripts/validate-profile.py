@@ -180,10 +180,27 @@ def validate_thesis_headers(readme: str) -> None:
     require(readme.count(landscape_dark) == 2, "Both thesis headers must retain the dark mobile-landscape override")
     require(readme.count(landscape_light) == 2, "Both thesis headers must retain the light mobile-landscape override")
 
-    for family in ("principle", "engineering-contract"):
-        landscape_marker = f"thesis-header-{family}-mobile-dark.svg"
-        desktop_marker = f"thesis-header-{family}-desktop-dark.svg"
-        require(readme.find(landscape_marker) < readme.find(desktop_marker), f"{family} landscape source must precede desktop source")
+    # The desktop SVGs already use 18px, but laptop-size desktop viewports
+    # previously fell through to the larger 23/25px mobile-landscape assets.
+    # Fine-pointer desktops win before the touch/mobile-landscape sources.
+    pointer_media = "(min-width: 641px) and (max-width: 1024px) and (hover: hover) and (pointer: fine)"
+    pointer_dark = f'media="{pointer_media} and (prefers-color-scheme: dark)"'
+    pointer_light = f'media="{pointer_media}"'
+    require(readme.count(pointer_dark) == 2 and readme.count(pointer_light) == 2,
+            "Both headers must use the fine-pointer desktop scale within the intermediate viewport")
+
+    for width, family in (("45", "principle"), ("55", "engineering-contract")):
+        prefix = f"https://raw.githubusercontent.com/portyu9/portyu9/{HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}"
+        desktop_dark = f'<source {pointer_dark} srcset="{prefix}-desktop-dark.svg">'
+        desktop_light = f'<source {pointer_light} srcset="{prefix}-desktop-light.svg">'
+        mobile_landscape_dark = f'<source {landscape_dark} srcset="{prefix}-mobile-dark.svg">'
+        mobile_landscape_light = f'<source {landscape_light} srcset="{prefix}-mobile-light.svg">'
+        expected = (
+            f'<th width="{width}%" align="center"><picture>'
+            + desktop_dark + desktop_light + mobile_landscape_dark + mobile_landscape_light
+        )
+        require(readme.count(expected) == 1,
+                f"{family}: 18px desktop sources must precede unchanged touch/mobile-landscape sources")
 
     for relative in HEADER_SVGS:
         content = safe_svg(ROOT / relative, relative)
