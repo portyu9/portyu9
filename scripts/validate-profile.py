@@ -23,7 +23,7 @@ HERO_SIZE = 1_472_916
 HERO_WIDTH = 1_280
 HERO_HEIGHT = 854
 HERO_SHA256 = "d840734c78ec59f3c53644330bc2166c51e1bb5eb8e768595035a37767eb5452"
-HEADER_ASSET_COMMIT = "e7d77b4bfc3100f7777f0c2602e3f745237b5fd4"
+HEADER_ASSET_COMMIT = "825ca413dbff50cff8559c46b1b395b6a485bb6e"
 
 SELF_HOSTED_BADGES = (
     "assets/profile-badges/badge-ai-enabled-qe.svg",
@@ -193,21 +193,33 @@ def validate_thesis_headers(readme: str) -> None:
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
         if "engineering-contract" in relative:
             expected_label = "Engineering Contract" if "desktop" in relative else "Eng. Contract"
-            require(f'aria-label="{expected_label}"' in content and f'<title>{expected_label}</title>' in content and f'>▤ {expected_label}</text>' in content,
-                    f"Responsive Engineering Contract header wording changed: {relative}")
+            require(f'aria-label="{expected_label}"' in content and f'<title>{expected_label}</title>' in content,
+                    f"Responsive Engineering Contract accessibility wording changed: {relative}")
+            if "desktop" in relative:
+                require('>▤ Engineering Contract</text>' in content,
+                        f"Desktop Engineering Contract header wording changed: {relative}")
+            else:
+                require(content.count("<text ") == 2 and '>▤</text>' in content and '>Eng. Contract</text>' in content,
+                        f"Mobile Eng. Contract optical composition changed: {relative}")
 
     for relative in (
         "assets/profile-badges/thesis-header-principle-mobile-light.svg",
         "assets/profile-badges/thesis-header-principle-mobile-dark.svg",
     ):
         content = (ROOT / relative).read_text(encoding="utf-8")
-        require('width="136" height="40" viewBox="0 0 136 40"' in content and 'x="68"' in content, f"Mobile Principle header canvas changed: {relative}")
+        require('width="147" height="40" viewBox="0 0 147 40"' in content,
+                f"Mobile Principle header canvas changed: {relative}")
+        require(content.count("<text ") == 2 and 'x="23"' in content and 'x="36"' in content and '>◆</text>' in content and '>Principle</text>' in content,
+                f"Mobile Principle header optical composition changed: {relative}")
     for relative in (
         "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
     ):
         content = (ROOT / relative).read_text(encoding="utf-8")
-        require('width="190" height="40" viewBox="0 0 190 40"' in content and 'x="95"' in content, f"Mobile Eng. Contract header canvas changed: {relative}")
+        require('width="180" height="40" viewBox="0 0 180 40"' in content,
+                f"Mobile Eng. Contract header canvas changed: {relative}")
+        require(content.count("<text ") == 2 and 'x="12"' in content and 'x="26"' in content and '>▤</text>' in content and '>Eng. Contract</text>' in content,
+                f"Mobile Eng. Contract header optical composition changed: {relative}")
 
 
 def validate_references(readme: str) -> None:
