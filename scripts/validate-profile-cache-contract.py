@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 
 SPOTLIGHT_TOKEN = "engineering-spotlight-v21-ledger-v2-result-binding-freshness-v1"
-SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-v219-compact-eid-bug-found-current-red-v1-profile-refresh-v2-balanced-contributions-v1"
+SIGNAL_FIELD_TOKEN = "signal-field-v218-wide-v219-compact-eid-bug-found-current-red-v1-profile-refresh-v2-balanced-contributions-v2"
 SIGNAL_FIELD_COMPACT_MAX_WIDTH = 480
 
 STALE_SPOTLIGHT_TOKENS = (
@@ -35,6 +35,7 @@ STALE_SIGNAL_FIELD_TOKENS = (
     "signal-field-v218-wide-alignment-profile-refresh-v1",
     "signal-field-v218-wide-alignment-current-red-v1-profile-refresh-v2",
     "signal-field-v218-wide-v219-compact-eid-current-red-v1-profile-refresh-v2",
+    "signal-field-v218-wide-v219-compact-eid-bug-found-current-red-v1-profile-refresh-v2-balanced-contributions-v1",
 )
 
 LEDGER_REVIEW_URL = "https://github.com/portyu9/portyu9/blob/generated/portfolio-evidence/portfolio-evidence-ledger.json"
@@ -198,7 +199,7 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
     require(schedule == "1-hour", f"candidate Signal Field generation schedule changed: {schedule}")
     require(cadence == "profile-refresh-v2", f"unexpected Signal Field refresh contract: {cadence}")
     require(current_day == "phosphorescent-red-v1", f"candidate current-day highlight changed: {current_day}")
-    require(balance == "responsive-v1", f"candidate contribution headline balance changed: {balance}")
+    require(balance == "responsive-v2", f"candidate contribution headline balance changed: {balance}")
 
     wide_attrs = [item for name, item in attrs_by_name.items() if "-wide-" in name]
     compact_attrs = [item for name, item in attrs_by_name.items() if "-compact-" in name]
@@ -218,7 +219,7 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
             "compact-only Signal Field EID provenance leaked into wide artifacts")
     return (
         f"{compact_signal_field_version(wide_alignment)}-wide-"
-        f"{compact_signal_field_component(compact_eid)}-compact-eid-bug-found-current-red-v1-{cadence}-balanced-contributions-v1"
+        f"{compact_signal_field_component(compact_eid)}-compact-eid-bug-found-current-red-v1-{cadence}-balanced-contributions-v2"
     )
 
 
@@ -306,7 +307,7 @@ def self_test() -> None:
     )) == SPOTLIGHT_TOKEN, "Spotlight semantic-token derivation changed")
     require(
         f"{compact_signal_field_version('signal-field-v2.18')}-wide-"
-        f"{compact_signal_field_component('signal-field-v2.19')}-compact-eid-bug-found-current-red-v1-profile-refresh-v2-balanced-contributions-v1"
+        f"{compact_signal_field_component('signal-field-v2.19')}-compact-eid-bug-found-current-red-v1-profile-refresh-v2-balanced-contributions-v2"
         == SIGNAL_FIELD_TOKEN,
         "Signal Field cache-token derivation changed",
     )
