@@ -197,6 +197,12 @@ def validate_thesis_scale(readme: str) -> None:
     require(readme.count(landscape_dark) == 2, "Both thesis headers must retain the dark mobile-landscape override")
     require(readme.count(landscape_light) == 2, "Both thesis headers must retain the light mobile-landscape override")
 
+    pointer_media = "(min-width: 641px) and (max-width: 1024px) and (hover: hover) and (pointer: fine)"
+    pointer_dark = f'media="{pointer_media} and (prefers-color-scheme: dark)"'
+    pointer_light = f'media="{pointer_media}"'
+    require(readme.count(pointer_dark) == 2 and readme.count(pointer_light) == 2,
+            "The 18px desktop scale must apply to narrow fine-pointer desktops, not touch/mobile layouts")
+
     for family in ("principle", "engineering-contract"):
         mobile_dark = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-mobile-dark.svg"
         mobile_light = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-mobile-light.svg"
@@ -210,8 +216,17 @@ def validate_thesis_scale(readme: str) -> None:
                 f"{family} dark mobile fallback changed")
         require(readme.count(f'src="{mobile_light}"') == 1,
                 f"{family} light mobile fallback changed")
-        require(readme.find(f"thesis-header-{family}-mobile-dark.svg") < readme.find(f"thesis-header-{family}-desktop-dark.svg"),
-                f"{family} mobile-landscape source must precede desktop source")
+        width = "45" if family == "principle" else "55"
+        desktop_pointer_dark = f'<source {pointer_dark} srcset="{desktop_dark}">'
+        desktop_pointer_light = f'<source {pointer_light} srcset="{desktop_light}">'
+        touch_landscape_dark = f'<source {landscape_dark} srcset="{mobile_dark}">'
+        touch_landscape_light = f'<source {landscape_light} srcset="{mobile_light}">'
+        prefix = (
+            f'<th width="{width}%" align="center"><picture>'
+            + desktop_pointer_dark + desktop_pointer_light + touch_landscape_dark + touch_landscape_light
+        )
+        require(readme.count(prefix) == 1,
+                f"{family}: desktop 18px overrides must precede unchanged mobile-landscape presentation")
 
     for relative in legacy.HEADER_SVGS:
         content = legacy.safe_svg(ROOT / relative, relative)
