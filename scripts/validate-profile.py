@@ -310,7 +310,7 @@ def main() -> int:
 
     print(
         "Profile validation passed: the exact reviewed Shields badge contract is restored at 24px desktop / 20px "
-        "mobile with its original font metrics; the regressed self-hosted badge assets remain absent; hero, 37/63 "
+        "mobile with its original font metrics; the regressed self-hosted badge assets remain absent; hero, 45/55 "
         "thesis layout, mobile-landscape headers, centered headings, engineering wording, qualification topology cards, "
         "footer separator, copyright posture, immutable header refs, and approved SVG safety contracts remain locked."
     )
