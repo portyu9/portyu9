@@ -90,7 +90,7 @@ SPOTLIGHT_REF = re.compile(
     r"^https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/"
     r"(engineering-spotlight/spotlight-[123]-(?:light|dark)\.svg)$"
 )
-THESIS_HEADER_ASSET_COMMIT = "5880d7c4bef54ff262aa1c2574b9630a487c90ad"
+THESIS_HEADER_ASSET_COMMIT = "3849d500a7a09960e1b2ec562c7f3f9339a3b6d6"
 THESIS_HEADER_REFS = tuple(
     f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
     for path in legacy.HEADER_SVGS
