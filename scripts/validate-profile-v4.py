@@ -90,7 +90,7 @@ SPOTLIGHT_REF = re.compile(
     r"^https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/"
     r"(engineering-spotlight/spotlight-[123]-(?:light|dark)\.svg)$"
 )
-THESIS_HEADER_ASSET_COMMIT = "d27b6e940c36bb381feefbc348872dd70040f1e0"
+THESIS_HEADER_ASSET_COMMIT = "5880d7c4bef54ff262aa1c2574b9630a487c90ad"
 THESIS_HEADER_REFS = tuple(
     f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
     for path in legacy.HEADER_SVGS
@@ -197,11 +197,16 @@ def validate_thesis_scale(readme: str) -> None:
     require(readme.count(landscape_dark) == 2, "Both thesis headers must retain the dark mobile-landscape override")
     require(readme.count(landscape_light) == 2, "Both thesis headers must retain the light mobile-landscape override")
 
+    phone_device_dark = 'media="(max-device-width: 640px) and (prefers-color-scheme: dark)"'
+    phone_device_light = 'media="(max-device-width: 640px)"'
+    require(readme.count(phone_device_dark) == 2 and readme.count(phone_device_light) == 2,
+            "Both thesis headers must prioritize phone-device mobile sources")
+
     pointer_media = "(min-width: 641px) and (max-width: 1024px) and (hover: hover) and (pointer: fine)"
     pointer_dark = f'media="{pointer_media} and (prefers-color-scheme: dark)"'
     pointer_light = f'media="{pointer_media}"'
     require(readme.count(pointer_dark) == 2 and readme.count(pointer_light) == 2,
-            "The 18px desktop scale must apply to narrow fine-pointer desktops, not touch/mobile layouts")
+            "The 18px desktop scale must remain active on narrow fine-pointer desktops")
 
     for family in ("principle", "engineering-contract"):
         mobile_dark = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-mobile-dark.svg"
@@ -217,16 +222,18 @@ def validate_thesis_scale(readme: str) -> None:
         require(readme.count(f'src="{mobile_light}"') == 1,
                 f"{family} light mobile fallback changed")
         width = "45" if family == "principle" else "55"
+        phone_dark = f'<source {phone_device_dark} srcset="{mobile_dark}">'
+        phone_light = f'<source {phone_device_light} srcset="{mobile_light}">'
         desktop_pointer_dark = f'<source {pointer_dark} srcset="{desktop_dark}">'
         desktop_pointer_light = f'<source {pointer_light} srcset="{desktop_light}">'
         touch_landscape_dark = f'<source {landscape_dark} srcset="{mobile_dark}">'
         touch_landscape_light = f'<source {landscape_light} srcset="{mobile_light}">'
         prefix = (
             f'<th width="{width}%" align="center"><picture>'
-            + desktop_pointer_dark + desktop_pointer_light + touch_landscape_dark + touch_landscape_light
+            + phone_dark + phone_light + desktop_pointer_dark + desktop_pointer_light + touch_landscape_dark + touch_landscape_light
         )
         require(readme.count(prefix) == 1,
-                f"{family}: desktop 18px overrides must precede unchanged mobile-landscape presentation")
+                f"{family}: phone mobile sources must precede narrow-desktop overrides")
 
     for relative in legacy.HEADER_SVGS:
         content = legacy.safe_svg(ROOT / relative, relative)
@@ -254,8 +261,8 @@ def validate_thesis_scale(readme: str) -> None:
                 f"Mobile Principle header canvas changed: {relative}")
         require(content.count("<text ") == 2 and 'x="23"' in content and 'x="36"' in content and '>◆</text>' in content and '>Principle</text>' in content,
                 f"Mobile Principle header optical composition changed: {relative}")
-        require('font-size="23"' in content and 'font-size="25"' in content,
-                f"Mobile Principle header must retain 23px icon / 25px label optical scale: {relative}")
+        require(content.count('font-size="23"') == 2 and 'font-size="25"' not in content,
+                f"Mobile Principle icon and label must share the 23px scale: {relative}")
     for relative in (
         "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
@@ -283,10 +290,8 @@ def validate_thesis_scale(readme: str) -> None:
         )
         for size in re.findall(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8"))
     }
-    require(mobile_principle_sizes == {"23", "25"},
-            "Mobile Principle header must retain a 23px icon and 25px label")
-    require(mobile_contract_sizes == {"23"},
-            "Mobile Eng. Contract header must retain the 23px label scale")
+    require(mobile_principle_sizes == mobile_contract_sizes == {"23"},
+            "Mobile Principle and Eng. Contract headers must share one 23px text scale")
     require(abs((180 / 147) - (55 / 45)) < 0.003,
             "Mobile thesis header intrinsic widths must track the 45/55 table-column ratio")
 
