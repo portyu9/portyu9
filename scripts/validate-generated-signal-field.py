@@ -51,7 +51,7 @@ REQUIRED_ROOT_ATTRS = {
     "data-issues-label-scale": "peer-metric-label",
     "data-generation-cadence-contract": "profile-refresh-v2",
     "data-current-day-highlight": "phosphorescent-red-v1",
-    "data-contribution-headline-balance": "responsive-v2",
+    "data-contribution-headline-balance": "responsive-v3",
     "data-contribution-total-source": "github-default-contribution-calendar",
     "data-metric-sources": "github-graphql+rest",
     "data-generation-schedule": "1-hour",
