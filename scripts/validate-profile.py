@@ -23,7 +23,7 @@ HERO_SIZE = 1_472_916
 HERO_WIDTH = 1_280
 HERO_HEIGHT = 854
 HERO_SHA256 = "d840734c78ec59f3c53644330bc2166c51e1bb5eb8e768595035a37767eb5452"
-HEADER_ASSET_COMMIT = "d27b6e940c36bb381feefbc348872dd70040f1e0"
+HEADER_ASSET_COMMIT = "5880d7c4bef54ff262aa1c2574b9630a487c90ad"
 
 SELF_HOSTED_BADGES = (
     "assets/profile-badges/badge-ai-enabled-qe.svg",
@@ -180,27 +180,34 @@ def validate_thesis_headers(readme: str) -> None:
     require(readme.count(landscape_dark) == 2, "Both thesis headers must retain the dark mobile-landscape override")
     require(readme.count(landscape_light) == 2, "Both thesis headers must retain the light mobile-landscape override")
 
-    # The desktop SVGs already use 18px, but laptop-size desktop viewports
-    # previously fell through to the larger 23/25px mobile-landscape assets.
-    # Fine-pointer desktops win before the touch/mobile-landscape sources.
+    # Phone-sized devices must select the mobile assets before any narrow-desktop
+    # fine-pointer override. This keeps mobile wording/scale deterministic even when
+    # a browser reports a wide layout viewport or surprising pointer capabilities.
+    phone_device_dark = 'media="(max-device-width: 640px) and (prefers-color-scheme: dark)"'
+    phone_device_light = 'media="(max-device-width: 640px)"'
+    require(readme.count(phone_device_dark) == 2 and readme.count(phone_device_light) == 2,
+            "Both thesis headers must prioritize explicit phone-device mobile sources")
+
     pointer_media = "(min-width: 641px) and (max-width: 1024px) and (hover: hover) and (pointer: fine)"
     pointer_dark = f'media="{pointer_media} and (prefers-color-scheme: dark)"'
     pointer_light = f'media="{pointer_media}"'
     require(readme.count(pointer_dark) == 2 and readme.count(pointer_light) == 2,
-            "Both headers must use the fine-pointer desktop scale within the intermediate viewport")
+            "Both headers must retain the fine-pointer desktop scale within the intermediate viewport")
 
     for width, family in (("45", "principle"), ("55", "engineering-contract")):
         prefix = f"https://raw.githubusercontent.com/portyu9/portyu9/{HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}"
+        phone_dark = f'<source {phone_device_dark} srcset="{prefix}-mobile-dark.svg">'
+        phone_light = f'<source {phone_device_light} srcset="{prefix}-mobile-light.svg">'
         desktop_dark = f'<source {pointer_dark} srcset="{prefix}-desktop-dark.svg">'
         desktop_light = f'<source {pointer_light} srcset="{prefix}-desktop-light.svg">'
         mobile_landscape_dark = f'<source {landscape_dark} srcset="{prefix}-mobile-dark.svg">'
         mobile_landscape_light = f'<source {landscape_light} srcset="{prefix}-mobile-light.svg">'
         expected = (
             f'<th width="{width}%" align="center"><picture>'
-            + desktop_dark + desktop_light + mobile_landscape_dark + mobile_landscape_light
+            + phone_dark + phone_light + desktop_dark + desktop_light + mobile_landscape_dark + mobile_landscape_light
         )
         require(readme.count(expected) == 1,
-                f"{family}: 18px desktop sources must precede unchanged touch/mobile-landscape sources")
+                f"{family}: phone sources must precede desktop overrides while preserving laptop desktop scale")
 
     for relative in HEADER_SVGS:
         content = safe_svg(ROOT / relative, relative)
@@ -228,8 +235,8 @@ def validate_thesis_headers(readme: str) -> None:
                 f"Mobile Principle header canvas changed: {relative}")
         require(content.count("<text ") == 2 and 'x="23"' in content and 'x="36"' in content and '>◆</text>' in content and '>Principle</text>' in content,
                 f"Mobile Principle header optical composition changed: {relative}")
-        require('font-size="23"' in content and 'font-size="25"' in content,
-                f"Mobile Principle header must retain 23px icon / 25px label optical scale: {relative}")
+        require(content.count('font-size="23"') == 2 and 'font-size="25"' not in content,
+                f"Mobile Principle icon and label must share the 23px scale: {relative}")
     for relative in (
         "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
