@@ -51,6 +51,7 @@ REQUIRED_ROOT_ATTRS = {
     "data-issues-label-scale": "peer-metric-label",
     "data-generation-cadence-contract": "profile-refresh-v2",
     "data-current-day-highlight": "phosphorescent-red-v1",
+    "data-contribution-headline-balance": "responsive-v1",
     "data-contribution-total-source": "github-default-contribution-calendar",
     "data-metric-sources": "github-graphql+rest",
     "data-generation-schedule": "1-hour",
@@ -257,6 +258,11 @@ def validate_file(path: Path) -> None:
     for vector in ("star", "pull-request", "bug"):
         if text.count(f'data-glyph-vector="{vector}"') != 1:
             fail(f"{path.name}: expected {vector} vector glyph is missing or duplicated")
+
+    contribution_value = tag_attrs_for_metric(text, "contributions")
+    expected_contribution_size = "52" if "wide" in path.name else "44"
+    if contribution_value.get("font-size") != expected_contribution_size:
+        fail(f"{path.name}: contributions headline must be {expected_contribution_size}px")
 
     star_label = tag_attrs_for_label(text, "STARS")
     pull_value = tag_attrs_for_metric(text, "pull_requests")
