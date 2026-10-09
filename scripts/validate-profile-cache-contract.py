@@ -200,7 +200,7 @@ def derive_signal_field_token(signal_field_dir: Path) -> str:
     require(schedule == "1-hour", f"candidate Signal Field generation schedule changed: {schedule}")
     require(cadence == "profile-refresh-v2", f"unexpected Signal Field refresh contract: {cadence}")
     require(current_day == "phosphorescent-red-v1", f"candidate current-day highlight changed: {current_day}")
-    require(balance == "responsive-v2", f"candidate contribution headline balance changed: {balance}")
+    require(balance == "responsive-v3", f"candidate contribution headline balance changed: {balance}")
 
     wide_attrs = [item for name, item in attrs_by_name.items() if "-wide-" in name]
     compact_attrs = [item for name, item in attrs_by_name.items() if "-compact-" in name]
