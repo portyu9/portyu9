@@ -24,6 +24,8 @@ GENERATION_SCHEDULE = "1-hour"
 DESCRIPTION = "every hour"
 CURRENT_DAY_HIGHLIGHT = "phosphorescent-red-v1"
 CURRENT_DAY_RED = "#FF335F"
+CONTRIBUTION_HEADLINE_SIZES = {"wide": ("64", "52"), "compact": ("54", "44")}
+CONTRIBUTION_BALANCE = "responsive-v1"
 EXPECTED_FILES = tuple(
     f"signal-field-{layout}-{theme}.svg"
     for layout in ("wide", "compact")
@@ -33,6 +35,11 @@ SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.I)
 ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
 LATEST_OUTLINE = re.compile(
     r'(?P<tag><rect\b(?=[^>]*\bdata-latest-outline="outer")[^>]*/>)', re.I
+)
+
+CONTRIBUTION_VALUE = re.compile(
+    r'(?P<tag><text\b(?=[^>]*\bdata-metric-phosphor="contributions")[^>]*>)(?P<value>[\d,]+)</text>',
+    re.I,
 )
 
 PROVENANCE = f'data-generation-cadence-contract="{VERSION}"'
@@ -101,6 +108,7 @@ def set_root_contract(text: str) -> str:
     root = set_attr(root, "data-generation-schedule", GENERATION_SCHEDULE)
     root = set_attr(root, "data-generation-cadence-contract", VERSION)
     root = set_attr(root, "data-current-day-highlight", CURRENT_DAY_HIGHLIGHT)
+    root = set_attr(root, "data-contribution-headline-balance", CONTRIBUTION_BALANCE)
     return text[: match.start()] + root + text[match.end() :]
 
 
@@ -125,6 +133,23 @@ def set_current_day_outline(text: str) -> str:
     return text[: match.start()] + outline + text[match.end() :]
 
 
+def balance_contribution_headline(text: str, path: Path) -> str:
+    """Resize only the counted headline without changing its content or geometry."""
+    layout = "wide" if "-wide-" in path.name else "compact" if "-compact-" in path.name else None
+    require(layout is not None, f"unsupported contribution headline layout: {path.name}")
+    original_size, target_size = CONTRIBUTION_HEADLINE_SIZES[layout]
+    matches = list(CONTRIBUTION_VALUE.finditer(text))
+    require(len(matches) == 1, f"{path.name}: expected one contributions headline, found {len(matches)}")
+    match = matches[0]
+    tag = match.group("tag")
+    require(
+        attrs_of(tag).get("font-size") in {original_size, target_size},
+        f"{path.name}: unexpected contribution headline font size",
+    )
+    updated = set_attr(tag, "font-size", target_size)
+    return text[:match.start()] + updated + match.group("value") + "</text>" + text[match.end():]
+
+
 def transform(text: str, path: Path) -> str:
     text = set_root_contract(text)
     text = replace_reviewed_value(text, LEGACY_DESCRIPTIONS, NEW_DESCRIPTION, "accessible refresh description")
@@ -143,6 +168,7 @@ def transform(text: str, path: Path) -> str:
     else:
         raise ValueError(f"unsupported Signal Field layout: {path.name}")
     text = set_current_day_outline(text)
+    text = balance_contribution_headline(text, path)
     validate(text, path)
     return text
 
@@ -152,6 +178,13 @@ def validate(text: str, path: Path) -> None:
     require(attrs.get("data-generation-schedule") == GENERATION_SCHEDULE, f"{path.name}: generation refresh is not hourly")
     require(attrs.get("data-generation-cadence-contract") == VERSION, f"{path.name}: refresh contract provenance is missing")
     require(attrs.get("data-current-day-highlight") == CURRENT_DAY_HIGHLIGHT, f"{path.name}: current-day highlight provenance is missing")
+    require(attrs.get("data-contribution-headline-balance") == CONTRIBUTION_BALANCE, f"{path.name}: headline balance provenance is missing")
+    matches = list(CONTRIBUTION_VALUE.finditer(text))
+    require(len(matches) == 1, f"{path.name}: contributions headline is missing or duplicated")
+    headline = attrs_of(matches[0].group("tag"))
+    layout = "wide" if "-wide-" in path.name else "compact" if "-compact-" in path.name else None
+    require(layout is not None, f"unsupported headline validation layout: {path.name}")
+    require(headline.get("font-size") == CONTRIBUTION_HEADLINE_SIZES[layout][1], f"{path.name}: contribution headline is not balanced")
     require(text.count(NEW_DESCRIPTION) == 1, f"{path.name}: accessible hourly refresh description is missing")
     require(not any(value in text for value in LEGACY_DESCRIPTIONS), f"{path.name}: stale schedule description remains")
     expected = NEW_WIDE if "wide" in path.name else NEW_COMPACT
@@ -187,9 +220,11 @@ def self_test() -> None:
         for filename in EXPECTED_FILES:
             path = root / filename
             footer = WIDE_FOOTERS[0] if "wide" in filename else COMPACT_FOOTERS[0]
+            original_size = CONTRIBUTION_HEADLINE_SIZES["wide" if "-wide-" in filename else "compact"][0]
+            headline = f'<text font-size="{original_size}" data-metric-phosphor="contributions">22,386</text>'
             path.write_text(
                 '<svg data-generation-schedule="5-minutes" data-evidence-id="SF1-0123456789ABCDEF">'
-                f'<desc>{LEGACY_DESCRIPTIONS[0]}</desc><text>{footer}</text>'
+                f'<desc>{LEGACY_DESCRIPTIONS[0]}</desc><text>{footer}</text>' + headline +
                 '<rect data-latest-outline="outer" stroke="#00AEEF" stroke-width="1.4" opacity="0.92"/>'
                 '</svg>',
                 encoding="utf-8",
@@ -199,6 +234,18 @@ def self_test() -> None:
         apply(root)
         second = {path.name: path.read_text(encoding="utf-8") for path in root.iterdir()}
         require(first == second, "refresh presentation finalizer must be idempotent")
+        for filename, svg in second.items():
+            layout = "wide" if "-wide-" in filename else "compact"
+            headline = CONTRIBUTION_VALUE.search(svg)
+            require(headline is not None and headline.group("value") == "22,386", "headline value changed")
+            require(attrs_of(headline.group("tag")).get("font-size") == CONTRIBUTION_HEADLINE_SIZES[layout][1], "headline scale changed")
+        tampered = second[EXPECTED_FILES[0]].replace('font-size="52"', 'font-size="53"', 1)
+        try:
+            balance_contribution_headline(tampered, Path(EXPECTED_FILES[0]))
+        except ValueError as exc:
+            require("unexpected contribution headline font size" in str(exc), "wrong rejection reason")
+        else:
+            raise AssertionError("unreviewed contribution headline font size was accepted")
     load_wide_alignment().self_test()
     print("Signal Field refresh self-test passed: best-effort hourly generation + phosphorescent-red current day")
 
