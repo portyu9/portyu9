@@ -261,8 +261,8 @@ def validate_thesis_scale(readme: str) -> None:
                 f"Mobile Principle header canvas changed: {relative}")
         require(content.count("<text ") == 2 and 'x="23"' in content and 'x="36"' in content and '>◆</text>' in content and '>Principle</text>' in content,
                 f"Mobile Principle header optical composition changed: {relative}")
-        require(content.count('font-size="23"') == 2 and 'font-size="25"' not in content,
-                f"Mobile Principle icon and label must share the 23px scale: {relative}")
+        require(content.count('font-size="23"') == 1 and content.count('font-size="24"') == 1 and 'font-size="25"' not in content,
+                f"Mobile Principle icon must remain 23px while its label uses the reviewed 24px optical scale: {relative}")
     for relative in (
         "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
