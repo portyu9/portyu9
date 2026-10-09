@@ -90,7 +90,7 @@ SPOTLIGHT_REF = re.compile(
     r"^https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/"
     r"(engineering-spotlight/spotlight-[123]-(?:light|dark)\.svg)$"
 )
-THESIS_HEADER_ASSET_COMMIT = "ffb10a392846678bd79c223ca399dcadcd0d6434"
+THESIS_HEADER_ASSET_COMMIT = "e7d77b4bfc3100f7777f0c2602e3f745237b5fd4"
 THESIS_HEADER_REFS = tuple(
     f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
     for path in legacy.HEADER_SVGS
@@ -189,8 +189,8 @@ def validate_taxonomy_scale(readme: str) -> None:
 def validate_thesis_scale(readme: str) -> None:
     """Lock the reviewed desktop thesis scale while preserving mobile assets."""
     require(readme.count('<table width="100%">') == 1, "Principle table must render at 100% README width")
-    require(readme.count('<th width="37%" align="center"><picture>') == 1, "Principle column must remain 37%")
-    require(readme.count('<th width="63%" align="center"><picture>') == 1, "Engineering Contract column must remain 63%")
+    require(readme.count('<th width="45%" align="center"><picture>') == 1, "Principle column must remain 45%")
+    require(readme.count('<th width="55%" align="center"><picture>') == 1, "Engineering Contract column must remain 55%")
 
     landscape_dark = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape) and (prefers-color-scheme: dark)"'
     landscape_light = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape)"'
@@ -220,8 +220,9 @@ def validate_thesis_scale(readme: str) -> None:
         expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
         if "engineering-contract" in relative:
-            require('aria-label="Eng. Contract"' in content and '<title>Eng. Contract</title>' in content and '>▤ Eng. Contract</text>' in content,
-                    f"Eng. Contract header wording changed: {relative}")
+            expected_label = "Engineering Contract" if "desktop" in relative else "Eng. Contract"
+            require(f'aria-label="{expected_label}"' in content and f'<title>{expected_label}</title>' in content and f'>▤ {expected_label}</text>' in content,
+                    f"Responsive Engineering Contract header wording changed: {relative}")
 
     for relative in (
         "assets/profile-badges/thesis-header-principle-mobile-light.svg",
@@ -235,10 +236,26 @@ def validate_thesis_scale(readme: str) -> None:
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
     ):
         content=(ROOT/relative).read_text(encoding="utf-8")
-        require('width="276" height="40" viewBox="0 0 276 40"' in content and 'x="138"' in content,
-                f"Mobile Engineering Contract header canvas changed: {relative}")
+        require('width="190" height="40" viewBox="0 0 190 40"' in content and 'x="95"' in content,
+                f"Mobile Eng. Contract header canvas changed: {relative}")
         require('font-size="23"' in content,
                 f"Mobile Eng. Contract must match the 23px Principle header scale: {relative}")
+    mobile_principle_sizes = {
+        re.search(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8")).group(1)
+        for relative in (
+            "assets/profile-badges/thesis-header-principle-mobile-light.svg",
+            "assets/profile-badges/thesis-header-principle-mobile-dark.svg",
+        )
+    }
+    mobile_contract_sizes = {
+        re.search(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8")).group(1)
+        for relative in (
+            "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
+            "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
+        )
+    }
+    require(mobile_principle_sizes == mobile_contract_sizes == {"23"},
+            "Mobile Principle and Eng. Contract headers must share the same 23px text scale")
 
     phone_portrait = 'media="(max-width: 640px)"'
     phone_landscape = 'media="(orientation: landscape) and (min-width: 641px) and (max-width: 1024px)"'
