@@ -90,7 +90,7 @@ SPOTLIGHT_REF = re.compile(
     r"^https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/"
     r"(engineering-spotlight/spotlight-[123]-(?:light|dark)\.svg)$"
 )
-THESIS_HEADER_ASSET_COMMIT = "825ca413dbff50cff8559c46b1b395b6a485bb6e"
+THESIS_HEADER_ASSET_COMMIT = "d27b6e940c36bb381feefbc348872dd70040f1e0"
 THESIS_HEADER_REFS = tuple(
     f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
     for path in legacy.HEADER_SVGS
@@ -106,7 +106,7 @@ DESKTOP_PRINCIPLES = (
 DESKTOP_PRINCIPLE_SVGS = tuple(item[1] for item in DESKTOP_PRINCIPLES)
 MOBILE_PHONE_PRINCIPLES = (
     ("Evidence before / Confidence", "assets/profile-badges/principle-evidence-confidence-mobile-v2.svg", 214, 104, 173, 84, ["Evidence","before","Confidence"], [20,52,84]),
-    ("Reasoning without / Self-authorization", "assets/profile-badges/principle-reasoning-authorization-mobile-v2.svg", 214, 104, 173, 84, ["Reasoning","without","Self-authorization"], [20,52,84]),
+    ("Reasoning without / Self-authorization", "assets/profile-badges/principle-reasoning-authorization-mobile-v2.svg", 232, 104, 173, 84, ["Reasoning","without","Self-authorization"], [20,52,84]),
     ("Attribution before / Abstraction", "assets/profile-badges/principle-attribution-abstraction-mobile-v2.svg", 214, 104, 173, 84, ["Attribution","before","Abstraction"], [20,52,84]),
     ("Oracle Discipline", "assets/profile-badges/principle-oracle-discipline-mobile-v2.svg", 214, 104, 173, 84, ["Oracle","Discipline"], [34,70]),
     ("Reproducibility over Optics", "assets/profile-badges/principle-reproducibility-optics-mobile-v2.svg", 214, 104, 173, 84, ["Reproducibility","over","Optics"], [20,52,84]),
@@ -239,6 +239,8 @@ def validate_thesis_scale(readme: str) -> None:
                 f"Mobile Principle header canvas changed: {relative}")
         require(content.count("<text ") == 2 and 'x="23"' in content and 'x="36"' in content and '>◆</text>' in content and '>Principle</text>' in content,
                 f"Mobile Principle header optical composition changed: {relative}")
+        require('font-size="23"' in content and 'font-size="25"' in content,
+                f"Mobile Principle header must retain 23px icon / 25px label optical scale: {relative}")
     for relative in (
         "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
@@ -266,15 +268,29 @@ def validate_thesis_scale(readme: str) -> None:
         )
         for size in re.findall(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8"))
     }
-    require(mobile_principle_sizes == mobile_contract_sizes == {"23"},
-            "Mobile Principle and Eng. Contract headers must share the same 23px text scale")
+    require(mobile_principle_sizes == {"23", "25"},
+            "Mobile Principle header must retain a 23px icon and 25px label")
+    require(mobile_contract_sizes == {"23"},
+            "Mobile Eng. Contract header must retain the 23px label scale")
     require(abs((180 / 147) - (55 / 45)) < 0.003,
             "Mobile thesis header intrinsic widths must track the 45/55 table-column ratio")
 
     phone_portrait = 'media="(max-width: 640px)"'
     phone_landscape = 'media="(orientation: landscape) and (min-width: 641px) and (max-width: 1024px)"'
-    require({item[2:6] for item in MOBILE_PHONE_PRINCIPLES} == {(214, 104, 173, 84)},
-            "All mobile principle cards must share one intrinsic/render geometry")
+    standard_geometries = {
+        item[2:6]
+        for item in MOBILE_PHONE_PRINCIPLES
+        if "reasoning-authorization" not in item[1]
+    }
+    reasoning_geometry = next(
+        item[2:6]
+        for item in MOBILE_PHONE_PRINCIPLES
+        if "reasoning-authorization" in item[1]
+    )
+    require(standard_geometries == {(214, 104, 173, 84)},
+            "Five standard mobile principle cards must share one intrinsic/render geometry")
+    require(reasoning_geometry == (232, 104, 173, 84),
+            "Reasoning/Self-authorization may be the sole wider intrinsic canvas for long-label fit")
     for alt, mobile_path, canvas_width, canvas_height, render_width, render_height, lines, y_positions in MOBILE_PHONE_PRINCIPLES:
         content = legacy.safe_svg(ROOT / mobile_path, mobile_path)
         require(
@@ -283,8 +299,12 @@ def validate_thesis_scale(readme: str) -> None:
         )
         require('font-size="24"' in content and 'font-size="23"' not in content,
                 f"Phone principle typography must retain the shared 24px optical scale: {mobile_path}")
-        require(content.count('x="107"') == len(lines) and '<rect x="4" y="1" width="206" height="102"' in content,
-                f"Phone principle shared optical geometry changed: {mobile_path}")
+        if "reasoning-authorization" in mobile_path:
+            require(content.count('x="116"') == len(lines) and '<rect x="4" y="1" width="224" height="102"' in content,
+                    f"Reasoning/Self-authorization optical-fit geometry changed: {mobile_path}")
+        else:
+            require(content.count('x="107"') == len(lines) and '<rect x="4" y="1" width="206" height="102"' in content,
+                    f"Phone principle shared optical geometry changed: {mobile_path}")
         require(content.count("<text ") == len(lines),
                 f"Phone principle line count changed: {mobile_path}")
         for line, y_position in zip(lines, y_positions, strict=True):
