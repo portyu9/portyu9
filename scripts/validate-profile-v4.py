@@ -90,7 +90,7 @@ SPOTLIGHT_REF = re.compile(
     r"^https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/"
     r"(engineering-spotlight/spotlight-[123]-(?:light|dark)\.svg)$"
 )
-THESIS_HEADER_ASSET_COMMIT = "4c6b83d2b1d04c9735c14492da3e0a03f0bb4ce7"
+THESIS_HEADER_ASSET_COMMIT = "ffb10a392846678bd79c223ca399dcadcd0d6434"
 THESIS_HEADER_REFS = tuple(
     f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
     for path in legacy.HEADER_SVGS
@@ -219,6 +219,9 @@ def validate_thesis_scale(readme: str) -> None:
         require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
         expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
+        if "engineering-contract" in relative:
+            require('aria-label="Eng. Contract"' in content and '<title>Eng. Contract</title>' in content and '>▤ Eng. Contract</text>' in content,
+                    f"Eng. Contract header wording changed: {relative}")
 
     for relative in (
         "assets/profile-badges/thesis-header-principle-mobile-light.svg",
@@ -234,6 +237,8 @@ def validate_thesis_scale(readme: str) -> None:
         content=(ROOT/relative).read_text(encoding="utf-8")
         require('width="276" height="40" viewBox="0 0 276 40"' in content and 'x="138"' in content,
                 f"Mobile Engineering Contract header canvas changed: {relative}")
+        require('font-size="23"' in content,
+                f"Mobile Eng. Contract must match the 23px Principle header scale: {relative}")
 
     phone_portrait = 'media="(max-width: 640px)"'
     phone_landscape = 'media="(orientation: landscape) and (min-width: 641px) and (max-width: 1024px)"'
