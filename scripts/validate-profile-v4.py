@@ -90,7 +90,7 @@ SPOTLIGHT_REF = re.compile(
     r"^https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/"
     r"(engineering-spotlight/spotlight-[123]-(?:light|dark)\.svg)$"
 )
-THESIS_HEADER_ASSET_COMMIT = "5880d7c4bef54ff262aa1c2574b9630a487c90ad"
+THESIS_HEADER_ASSET_COMMIT = "3849d500a7a09960e1b2ec562c7f3f9339a3b6d6"
 THESIS_HEADER_REFS = tuple(
     f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
     for path in legacy.HEADER_SVGS
@@ -261,8 +261,8 @@ def validate_thesis_scale(readme: str) -> None:
                 f"Mobile Principle header canvas changed: {relative}")
         require(content.count("<text ") == 2 and 'x="23"' in content and 'x="36"' in content and '>◆</text>' in content and '>Principle</text>' in content,
                 f"Mobile Principle header optical composition changed: {relative}")
-        require(content.count('font-size="23"') == 2 and 'font-size="25"' not in content,
-                f"Mobile Principle icon and label must share the 23px scale: {relative}")
+        require(content.count('font-size="23"') == 1 and content.count('font-size="24"') == 1 and 'font-size="25"' not in content,
+                f"Mobile Principle icon must remain 23px while its label uses the reviewed 24px optical scale: {relative}")
     for relative in (
         "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
@@ -290,8 +290,10 @@ def validate_thesis_scale(readme: str) -> None:
         )
         for size in re.findall(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8"))
     }
-    require(mobile_principle_sizes == mobile_contract_sizes == {"23"},
-            "Mobile Principle and Eng. Contract headers must share one 23px text scale")
+    require(mobile_principle_sizes == {"23", "24"},
+            "Mobile Principle header must retain a 23px icon and reviewed 24px optical label")
+    require(mobile_contract_sizes == {"23"},
+            "Mobile Eng. Contract header must retain the 23px label scale")
     require(abs((180 / 147) - (55 / 45)) < 0.003,
             "Mobile thesis header intrinsic widths must track the 45/55 table-column ratio")
 

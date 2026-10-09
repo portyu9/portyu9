@@ -52,6 +52,8 @@ Final publishable Signal Field artifacts must encode all of the following:
 - `data-generation-schedule="1-hour"`
 - `data-generation-cadence-contract="profile-refresh-v2"`
 - `data-current-day-highlight="phosphorescent-red-v1"`
+- `data-contribution-headline-balance="responsive-v3"`
+- contribution headline type at **37px wide / 31px compact**
 - visible footer copy using `REFRESH · 1 HR`
 - accessible copy stating `Generation refresh: every hour; execution and README cache propagation are best-effort.`
 - one phosphorescent-red `#FF335F` outer ring marking the current/latest day while the tile fill remains the contribution-intensity color

@@ -51,7 +51,7 @@ REQUIRED_ROOT_ATTRS = {
     "data-issues-label-scale": "peer-metric-label",
     "data-generation-cadence-contract": "profile-refresh-v2",
     "data-current-day-highlight": "phosphorescent-red-v1",
-    "data-contribution-headline-balance": "responsive-v2",
+    "data-contribution-headline-balance": "responsive-v3",
     "data-contribution-total-source": "github-default-contribution-calendar",
     "data-metric-sources": "github-graphql+rest",
     "data-generation-schedule": "1-hour",
@@ -260,7 +260,7 @@ def validate_file(path: Path) -> None:
             fail(f"{path.name}: expected {vector} vector glyph is missing or duplicated")
 
     contribution_value = tag_attrs_for_metric(text, "contributions")
-    expected_contribution_size = "45" if "wide" in path.name else "35"
+    expected_contribution_size = "37" if "wide" in path.name else "31"
     if contribution_value.get("font-size") != expected_contribution_size:
         fail(f"{path.name}: contributions headline must be {expected_contribution_size}px")
 

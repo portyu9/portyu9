@@ -23,7 +23,7 @@ HERO_SIZE = 1_472_916
 HERO_WIDTH = 1_280
 HERO_HEIGHT = 854
 HERO_SHA256 = "d840734c78ec59f3c53644330bc2166c51e1bb5eb8e768595035a37767eb5452"
-HEADER_ASSET_COMMIT = "5880d7c4bef54ff262aa1c2574b9630a487c90ad"
+HEADER_ASSET_COMMIT = "3849d500a7a09960e1b2ec562c7f3f9339a3b6d6"
 
 SELF_HOSTED_BADGES = (
     "assets/profile-badges/badge-ai-enabled-qe.svg",
@@ -235,8 +235,8 @@ def validate_thesis_headers(readme: str) -> None:
                 f"Mobile Principle header canvas changed: {relative}")
         require(content.count("<text ") == 2 and 'x="23"' in content and 'x="36"' in content and '>◆</text>' in content and '>Principle</text>' in content,
                 f"Mobile Principle header optical composition changed: {relative}")
-        require(content.count('font-size="23"') == 2 and 'font-size="25"' not in content,
-                f"Mobile Principle icon and label must share the 23px scale: {relative}")
+        require(content.count('font-size="23"') == 1 and content.count('font-size="24"') == 1 and 'font-size="25"' not in content,
+                f"Mobile Principle icon must remain 23px while its label uses the reviewed 24px optical scale: {relative}")
     for relative in (
         "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",

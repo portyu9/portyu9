@@ -24,8 +24,8 @@ GENERATION_SCHEDULE = "1-hour"
 DESCRIPTION = "every hour"
 CURRENT_DAY_HIGHLIGHT = "phosphorescent-red-v1"
 CURRENT_DAY_RED = "#FF335F"
-CONTRIBUTION_HEADLINE_SIZES = {"wide": ("64", "45"), "compact": ("54", "35")}
-CONTRIBUTION_BALANCE = "responsive-v2"
+CONTRIBUTION_HEADLINE_SIZES = {"wide": ("64", "37"), "compact": ("54", "31")}
+CONTRIBUTION_BALANCE = "responsive-v3"
 EXPECTED_FILES = tuple(
     f"signal-field-{layout}-{theme}.svg"
     for layout in ("wide", "compact")
@@ -239,7 +239,7 @@ def self_test() -> None:
             headline = CONTRIBUTION_VALUE.search(svg)
             require(headline is not None and headline.group("value") == "22,386", "headline value changed")
             require(attrs_of(headline.group("tag")).get("font-size") == CONTRIBUTION_HEADLINE_SIZES[layout][1], "headline scale changed")
-        tampered = second[EXPECTED_FILES[0]].replace('font-size="45"', 'font-size="46"', 1)
+        tampered = second[EXPECTED_FILES[0]].replace('font-size="37"', 'font-size="38"', 1)
         try:
             balance_contribution_headline(tampered, Path(EXPECTED_FILES[0]))
         except ValueError as exc:
