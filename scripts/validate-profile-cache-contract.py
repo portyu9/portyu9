@@ -308,7 +308,7 @@ def self_test() -> None:
     )) == SPOTLIGHT_TOKEN, "Spotlight semantic-token derivation changed")
     require(
         f"{compact_signal_field_version('signal-field-v2.18')}-wide-"
-        f"{compact_signal_field_component('signal-field-v2.19')}-compact-eid-bug-found-current-red-v1-profile-refresh-v2-balanced-contributions-v2"
+        f"{compact_signal_field_component('signal-field-v2.19')}-compact-eid-bug-found-current-red-v1-profile-refresh-v2-balanced-contributions-v3"
         == SIGNAL_FIELD_TOKEN,
         "Signal Field cache-token derivation changed",
     )
