@@ -290,8 +290,10 @@ def validate_thesis_scale(readme: str) -> None:
         )
         for size in re.findall(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8"))
     }
-    require(mobile_principle_sizes == mobile_contract_sizes == {"23"},
-            "Mobile Principle and Eng. Contract headers must share one 23px text scale")
+    require(mobile_principle_sizes == {"23", "24"},
+            "Mobile Principle header must retain a 23px icon and reviewed 24px optical label")
+    require(mobile_contract_sizes == {"23"},
+            "Mobile Eng. Contract header must retain the 23px label scale")
     require(abs((180 / 147) - (55 / 45)) < 0.003,
             "Mobile thesis header intrinsic widths must track the 45/55 table-column ratio")
 
