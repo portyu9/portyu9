@@ -224,7 +224,7 @@ def self_test() -> None:
             headline = f'<text font-size="{original_size}" data-metric-phosphor="contributions">22,386</text>'
             path.write_text(
                 '<svg data-generation-schedule="5-minutes" data-evidence-id="SF1-0123456789ABCDEF">'
-                f'<desc>{LEGACY_DESCRIPTIONS[0]}</desc><text>{footer}</text>' + headline
+                f'<desc>{LEGACY_DESCRIPTIONS[0]}</desc><text>{footer}</text>' + headline +
                 '<rect data-latest-outline="outer" stroke="#00AEEF" stroke-width="1.4" opacity="0.92"/>'
                 '</svg>',
                 encoding="utf-8",
