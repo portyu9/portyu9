@@ -90,7 +90,7 @@ SPOTLIGHT_REF = re.compile(
     r"^https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/"
     r"(engineering-spotlight/spotlight-[123]-(?:light|dark)\.svg)$"
 )
-THESIS_HEADER_ASSET_COMMIT = "e7d77b4bfc3100f7777f0c2602e3f745237b5fd4"
+THESIS_HEADER_ASSET_COMMIT = "825ca413dbff50cff8559c46b1b395b6a485bb6e"
 THESIS_HEADER_REFS = tuple(
     f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
     for path in legacy.HEADER_SVGS
@@ -105,12 +105,12 @@ DESKTOP_PRINCIPLES = (
 )
 DESKTOP_PRINCIPLE_SVGS = tuple(item[1] for item in DESKTOP_PRINCIPLES)
 MOBILE_PHONE_PRINCIPLES = (
-    ("Evidence before / Confidence", "assets/profile-badges/principle-evidence-confidence-mobile-v2.svg", 210, 104, 170, 84, ["Evidence","before","Confidence"], [20,52,84]),
-    ("Reasoning without / Self-authorization", "assets/profile-badges/principle-reasoning-authorization-mobile-v2.svg", 232, 104, 187, 84, ["Reasoning","without","Self-authorization"], [20,52,84]),
+    ("Evidence before / Confidence", "assets/profile-badges/principle-evidence-confidence-mobile-v2.svg", 214, 104, 173, 84, ["Evidence","before","Confidence"], [20,52,84]),
+    ("Reasoning without / Self-authorization", "assets/profile-badges/principle-reasoning-authorization-mobile-v2.svg", 214, 104, 173, 84, ["Reasoning","without","Self-authorization"], [20,52,84]),
     ("Attribution before / Abstraction", "assets/profile-badges/principle-attribution-abstraction-mobile-v2.svg", 214, 104, 173, 84, ["Attribution","before","Abstraction"], [20,52,84]),
-    ("Oracle Discipline", "assets/profile-badges/principle-oracle-discipline-mobile-v2.svg", 210, 104, 170, 84, ["Oracle","Discipline"], [34,70]),
-    ("Reproducibility over Optics", "assets/profile-badges/principle-reproducibility-optics-mobile-v2.svg", 206, 104, 166, 84, ["Reproducibility","over","Optics"], [20,52,84]),
-    ("Safety by / Architecture", "assets/profile-badges/principle-safety-architecture-mobile-v2.svg", 188, 104, 152, 84, ["Safety","by","Architecture"], [20,52,84]),
+    ("Oracle Discipline", "assets/profile-badges/principle-oracle-discipline-mobile-v2.svg", 214, 104, 173, 84, ["Oracle","Discipline"], [34,70]),
+    ("Reproducibility over Optics", "assets/profile-badges/principle-reproducibility-optics-mobile-v2.svg", 214, 104, 173, 84, ["Reproducibility","over","Optics"], [20,52,84]),
+    ("Safety by / Architecture", "assets/profile-badges/principle-safety-architecture-mobile-v2.svg", 214, 104, 173, 84, ["Safety","by","Architecture"], [20,52,84]),
 )
 
 
@@ -221,52 +221,70 @@ def validate_thesis_scale(readme: str) -> None:
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
         if "engineering-contract" in relative:
             expected_label = "Engineering Contract" if "desktop" in relative else "Eng. Contract"
-            require(f'aria-label="{expected_label}"' in content and f'<title>{expected_label}</title>' in content and f'>▤ {expected_label}</text>' in content,
-                    f"Responsive Engineering Contract header wording changed: {relative}")
+            require(f'aria-label="{expected_label}"' in content and f'<title>{expected_label}</title>' in content,
+                    f"Responsive Engineering Contract accessibility wording changed: {relative}")
+            if "desktop" in relative:
+                require('>▤ Engineering Contract</text>' in content,
+                        f"Desktop Engineering Contract header wording changed: {relative}")
+            else:
+                require(content.count("<text ") == 2 and '>▤</text>' in content and '>Eng. Contract</text>' in content,
+                        f"Mobile Eng. Contract optical composition changed: {relative}")
 
     for relative in (
         "assets/profile-badges/thesis-header-principle-mobile-light.svg",
         "assets/profile-badges/thesis-header-principle-mobile-dark.svg",
     ):
         content=(ROOT/relative).read_text(encoding="utf-8")
-        require('width="136" height="40" viewBox="0 0 136 40"' in content and 'x="68"' in content,
+        require('width="147" height="40" viewBox="0 0 147 40"' in content,
                 f"Mobile Principle header canvas changed: {relative}")
+        require(content.count("<text ") == 2 and 'x="23"' in content and 'x="36"' in content and '>◆</text>' in content and '>Principle</text>' in content,
+                f"Mobile Principle header optical composition changed: {relative}")
     for relative in (
         "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
     ):
         content=(ROOT/relative).read_text(encoding="utf-8")
-        require('width="190" height="40" viewBox="0 0 190 40"' in content and 'x="95"' in content,
+        require('width="180" height="40" viewBox="0 0 180 40"' in content,
                 f"Mobile Eng. Contract header canvas changed: {relative}")
+        require(content.count("<text ") == 2 and 'x="12"' in content and 'x="26"' in content and '>▤</text>' in content and '>Eng. Contract</text>' in content,
+                f"Mobile Eng. Contract header optical composition changed: {relative}")
         require('font-size="23"' in content,
                 f"Mobile Eng. Contract must match the 23px Principle header scale: {relative}")
     mobile_principle_sizes = {
-        re.search(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8")).group(1)
+        size
         for relative in (
             "assets/profile-badges/thesis-header-principle-mobile-light.svg",
             "assets/profile-badges/thesis-header-principle-mobile-dark.svg",
         )
+        for size in re.findall(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8"))
     }
     mobile_contract_sizes = {
-        re.search(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8")).group(1)
+        size
         for relative in (
             "assets/profile-badges/thesis-header-engineering-contract-mobile-light.svg",
             "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
         )
+        for size in re.findall(r'font-size="(\d+)"', (ROOT / relative).read_text(encoding="utf-8"))
     }
     require(mobile_principle_sizes == mobile_contract_sizes == {"23"},
             "Mobile Principle and Eng. Contract headers must share the same 23px text scale")
+    require(abs((180 / 147) - (55 / 45)) < 0.003,
+            "Mobile thesis header intrinsic widths must track the 45/55 table-column ratio")
 
     phone_portrait = 'media="(max-width: 640px)"'
     phone_landscape = 'media="(orientation: landscape) and (min-width: 641px) and (max-width: 1024px)"'
+    require({item[2:6] for item in MOBILE_PHONE_PRINCIPLES} == {(214, 104, 173, 84)},
+            "All mobile principle cards must share one intrinsic/render geometry")
     for alt, mobile_path, canvas_width, canvas_height, render_width, render_height, lines, y_positions in MOBILE_PHONE_PRINCIPLES:
         content = legacy.safe_svg(ROOT / mobile_path, mobile_path)
         require(
             f'width="{canvas_width}" height="{canvas_height}" viewBox="0 0 {canvas_width} {canvas_height}"' in content,
             f"Phone principle dimensions changed: {mobile_path}",
         )
-        require('font-size="23"' in content and 'font-size="24"' not in content,
-                f"Phone principle typography changed: {mobile_path}")
+        require('font-size="24"' in content and 'font-size="23"' not in content,
+                f"Phone principle typography must retain the shared 24px optical scale: {mobile_path}")
+        require(content.count('x="107"') == len(lines) and '<rect x="4" y="1" width="206" height="102"' in content,
+                f"Phone principle shared optical geometry changed: {mobile_path}")
         require(content.count("<text ") == len(lines),
                 f"Phone principle line count changed: {mobile_path}")
         for line, y_position in zip(lines, y_positions, strict=True):
