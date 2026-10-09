@@ -23,7 +23,7 @@ HERO_SIZE = 1_472_916
 HERO_WIDTH = 1_280
 HERO_HEIGHT = 854
 HERO_SHA256 = "d840734c78ec59f3c53644330bc2166c51e1bb5eb8e768595035a37767eb5452"
-HEADER_ASSET_COMMIT = "44471c9ba38958e601bc602557dfa0642633f897"
+HEADER_ASSET_COMMIT = "e7d77b4bfc3100f7777f0c2602e3f745237b5fd4"
 
 SELF_HOSTED_BADGES = (
     "assets/profile-badges/badge-ai-enabled-qe.svg",
@@ -172,8 +172,8 @@ def validate_badges(readme: str) -> None:
 
 def validate_thesis_headers(readme: str) -> None:
     require(readme.count('<table width="100%">') == 1, "Principle table must render at 100% README width")
-    require(readme.count('<th width="37%" align="center"><picture>') == 1, "Principle column must remain 37%")
-    require(readme.count('<th width="63%" align="center"><picture>') == 1, "Engineering Contract column must remain 63%")
+    require(readme.count('<th width="45%" align="center"><picture>') == 1, "Principle column must remain 45%")
+    require(readme.count('<th width="55%" align="center"><picture>') == 1, "Engineering Contract column must remain 55%")
 
     landscape_dark = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape) and (prefers-color-scheme: dark)"'
     landscape_light = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape)"'
@@ -187,10 +187,14 @@ def validate_thesis_headers(readme: str) -> None:
 
     for relative in HEADER_SVGS:
         content = safe_svg(ROOT / relative, relative)
-        expected_size = 'font-size="21"' if "desktop" in relative else 'font-size="23"'
+        expected_size = 'font-size="18"' if "desktop" in relative else 'font-size="23"'
         require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
         expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
+        if "engineering-contract" in relative:
+            expected_label = "Engineering Contract" if "desktop" in relative else "Eng. Contract"
+            require(f'aria-label="{expected_label}"' in content and f'<title>{expected_label}</title>' in content and f'>▤ {expected_label}</text>' in content,
+                    f"Responsive Engineering Contract header wording changed: {relative}")
 
     for relative in (
         "assets/profile-badges/thesis-header-principle-mobile-light.svg",
@@ -203,7 +207,7 @@ def validate_thesis_headers(readme: str) -> None:
         "assets/profile-badges/thesis-header-engineering-contract-mobile-dark.svg",
     ):
         content = (ROOT / relative).read_text(encoding="utf-8")
-        require('width="276" height="40" viewBox="0 0 276 40"' in content and 'x="138"' in content, f"Mobile Engineering Contract header canvas changed: {relative}")
+        require('width="190" height="40" viewBox="0 0 190 40"' in content and 'x="95"' in content, f"Mobile Eng. Contract header canvas changed: {relative}")
 
 
 def validate_references(readme: str) -> None:
