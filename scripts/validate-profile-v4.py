@@ -504,7 +504,12 @@ def main() -> int:
     for relative in legacy.IDENTITY_AND_PRINCIPLE_SVGS: legacy.safe_svg(ROOT/relative, relative)
     for relative in legacy.PRINCIPLE_BADGES:
         content=(ROOT/relative).read_text(encoding="utf-8")
-        require('font-size="23"' in content and 'font-size="24"' not in content, f"Mobile principle badge typography changed: {relative}")
+        if relative.endswith("-mobile-v2.svg"):
+            require('font-size="24"' in content and 'font-size="23"' not in content,
+                    f"Reviewed mobile principle typography changed: {relative}")
+        else:
+            require('font-size="23"' in content and 'font-size="24"' not in content,
+                    f"Legacy principle fallback typography changed: {relative}")
     oracle=(ROOT/"assets/profile-badges/principle-oracle-discipline.svg").read_text(encoding="utf-8")
     require('width="210" height="54" viewBox="0 0 210 54"' in oracle, "Mobile Oracle Discipline must retain its 210px canvas")
     repro=(ROOT/"assets/profile-badges/principle-reproducibility-optics.svg").read_text(encoding="utf-8")
