@@ -24,6 +24,8 @@ ASSET_ROOT = ROOT / "assets/profile-banners/daily"
 EPOCH = date(1970, 1, 1)
 NS = "{http://www.w3.org/2000/svg}"
 PALETTE = ("#00E6FF", "#E328FC", "#00FBCC")
+BANNER_MARKER = re.compile(r"^<!-- banner-rotation:v1 utc-day=(\d{4}-\d{2}-\d{2}) slug=(0[1-7]-[a-z-]+) -->$", re.MULTILINE)
+BANNER_MARKER_PREFIX = "<!-- banner-rotation:v1 "
 SURFACES = ("top", "top-compact", "bottom")
 SCENE_RE = re.compile(r"0[1-7]-[a-z]+(?:-[a-z]+)*\Z")
 ASSET_RE = re.compile(r"assets/profile-banners/daily/0[1-7]-[a-z-]+-(?:top|top-compact|bottom)\.svg\Z")
@@ -154,13 +156,37 @@ def referenced(readme: str) -> dict[str, str]:
 
 
 def propose(readme: str, selection: dict[str, Any]) -> str:
-    referenced(readme)
-    output = readme
+    """Build a replay-safe three-surface candidate without mutating source."""
+    existing = referenced(readme)
+    matches = list(BANNER_MARKER.finditer(readme))
+    require(readme.count(BANNER_MARKER_PREFIX) == len(matches) and len(matches) <= 1,
+            "README banner high-water marker is ambiguous or malformed")
+    next_marker = f"<!-- banner-rotation:v1 utc-day={selection['utc_day']} slug={selection['slug']} -->"
+    if matches:
+        prior = matches[0]
+        prior_day = date.fromisoformat(prior.group(1))
+        require(prior_day >= EPOCH, "README banner marker predates UTC epoch")
+        require((prior_day-EPOCH).days <= selection["unix_day"], "banner UTC-day rotation rollback forbidden")
+        prior_slug = prior.group(2)
+        require(all(existing[surface] == f"assets/profile-banners/daily/{prior_slug}-{surface}.svg"
+                    for surface in SURFACES), "README banner marker and three current artwork references disagree")
+        prior_slot = int(prior_slug[:2])
+        require(prior_slot == ((prior_day-EPOCH).days % 7) + 1,
+                "README banner high-water scene does not match historical UTC date")
+        output = readme[:prior.start()] + next_marker + readme[prior.end():]
+    else:
+        require(all(existing[s] == ORIGINAL[s] for s in SURFACES),
+                "unmarked README banner must be the canonical original triplet")
+        top = '<p align="center">\n<picture>\n  <source media="(max-width: 640px)" '
+        require(readme.count(top) == 1, "README original hero location must be unambiguous")
+        output = readme.replace(top, next_marker + "\n" + top, 1)
+
     for surface, pattern in BANNER_REFERENCE.items():
         output, replacements = pattern.subn(lambda m: m.group(1)+selection[surface], output)
         require(replacements == 1, f"README banner proposal failed to replace {surface}")
-    require(referenced(output) == {s: selection[s] for s in SURFACES},
-            "README banner proposal must bind top/mobile/bottom to one selected scene")
+    require(referenced(output) == {s: selection[s] for s in SURFACES} and
+            output.count(next_marker) == 1,
+            "README banner proposal must bind one epoch and all three surfaces")
     return output
 
 
@@ -174,6 +200,7 @@ def test_rotation(scenes: list[dict[str, str]]) -> None:
             chosen(date(2027,1,1),scenes)["unix_day"], "year boundary rotation broke")
     sel = chosen(date(2026,10,12),scenes)
     fixture = (
+        '<br>\n\n<p align="center">\n<picture>\n'
         '<source media="(max-width: 640px)" srcset="'+ORIGINAL["top-compact"]+'">\n'
         '<img alt="Animated quantum apex signal crown" src="'+ORIGINAL["top"]+'" width="100%">\n'
         '<img alt="Animated evidence horizon" src="'+ORIGINAL["bottom"]+'" width="100%">'
@@ -181,7 +208,20 @@ def test_rotation(scenes: list[dict[str, str]]) -> None:
     updated = propose(fixture,sel)
     require(updated != fixture and propose(updated,sel) == updated, "selector cannot update safely/idempotently")
     another = chosen(date(2026,10,13),scenes)
-    require(propose(updated,another) != updated, "next day's banner must change")
+    advanced = propose(updated, another)
+    require(advanced != updated, "next day's banner must change")
+    try:
+        propose(advanced,sel)
+    except ValueError as exc:
+        require("rollback" in str(exc), "stale-day proposal rejected for wrong reason")
+    else:
+        raise ValueError("stale-day banner rollback accepted")
+    try:
+        propose(updated.replace(sel["top"], another["top"]), another)
+    except ValueError as exc:
+        require("disagree" in str(exc), "unbound banner reference rejected for wrong reason")
+    else:
+        raise ValueError("inconsistent top/mobile/footer banner accepted")
     try:
         propose(fixture + fixture,sel)
     except ValueError as exc:
