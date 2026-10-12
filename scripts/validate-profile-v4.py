@@ -234,7 +234,7 @@ def validate_thesis_scale(readme: str) -> None:
             + f'<img alt="{'◆ Principle' if family == 'principle' else '▤ Engineering Contract'}" src="{desktop_l}"></picture></th>'
         )
         require(readme.count(expected) == 1,
-                f"{family}: responsive source order must preserve mobile phones and 16px desktop")
+                f"{family}: responsive source order must preserve mobile phones and 17px desktop")
         require(readme.count(desktop_d) == 2 and readme.count(desktop_l) == 2,
                 f"{family}: desktop headers must be in media selection and HTML fallback")
         require(readme.count(mobile_d) == 2 and readme.count(mobile_l) == 2,
@@ -242,7 +242,7 @@ def validate_thesis_scale(readme: str) -> None:
 
     for relative in legacy.HEADER_SVGS:
         content = legacy.safe_svg(ROOT / relative, relative)
-        expected_size = 'font-size="16"' if "desktop" in relative else 'font-size="23"'
+        expected_size = 'font-size="17"' if "desktop" in relative else 'font-size="23"'
         require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
         expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
@@ -365,7 +365,7 @@ def validate_thesis_scale(readme: str) -> None:
         content=legacy.safe_svg(ROOT/desktop_path, desktop_path)
         require(f'width="{width}" height="{height}" viewBox="0 0 {width} {height}"' in content,
                 f"Desktop principle dimensions changed: {desktop_path}")
-        require('font-size="16"' in content,
+        require('font-size="17"' in content,
                 f"Desktop principle typography must retain the reviewed 16px label scale: {desktop_path}")
         source = f'<source media="(min-width: 1025px)" srcset="{desktop_path}" width="{width}" height="{height}">'
         fallback = f'<img alt="{alt}" height="{mobile_height}" src="{mobile_path}">'
