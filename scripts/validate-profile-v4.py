@@ -90,9 +90,10 @@ SPOTLIGHT_REF = re.compile(
     r"^https://raw\.githubusercontent\.com/portyu9/portyu9/([0-9a-f]{40})/"
     r"(engineering-spotlight/spotlight-[123]-(?:light|dark)\.svg)$"
 )
-THESIS_HEADER_ASSET_COMMIT = "3849d500a7a09960e1b2ec562c7f3f9339a3b6d6"
+THESIS_HEADER_ASSET_COMMIT = legacy.HEADER_ASSET_COMMIT
+DESKTOP_THESIS_HEADER_ASSET_COMMIT = legacy.DESKTOP_HEADER_ASSET_COMMIT
 THESIS_HEADER_REFS = tuple(
-    f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/{path}"
+    f"https://raw.githubusercontent.com/portyu9/portyu9/{DESKTOP_THESIS_HEADER_ASSET_COMMIT if '-desktop-' in path else THESIS_HEADER_ASSET_COMMIT}/{path}"
     for path in legacy.HEADER_SVGS
 )
 DESKTOP_PRINCIPLES = (
@@ -206,13 +207,13 @@ def validate_thesis_scale(readme: str) -> None:
     pointer_dark = f'media="{pointer_media} and (prefers-color-scheme: dark)"'
     pointer_light = f'media="{pointer_media}"'
     require(readme.count(pointer_dark) == 2 and readme.count(pointer_light) == 2,
-            "The 18px desktop scale must remain active on narrow fine-pointer desktops")
+            "The 15px desktop scale must remain active on narrow fine-pointer desktops")
 
     for family in ("principle", "engineering-contract"):
         mobile_dark = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-mobile-dark.svg"
         mobile_light = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-mobile-light.svg"
-        desktop_dark = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-desktop-dark.svg"
-        desktop_light = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-desktop-light.svg"
+        desktop_dark = f"https://raw.githubusercontent.com/portyu9/portyu9/{DESKTOP_THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-desktop-dark.svg"
+        desktop_light = f"https://raw.githubusercontent.com/portyu9/portyu9/{DESKTOP_THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-desktop-light.svg"
         require(readme.count(f'media="(min-width: 1025px) and (prefers-color-scheme: dark)" srcset="{desktop_dark}"') == 1,
                 f"{family} dark desktop header must start at 1025px")
         require(readme.count(f'media="(min-width: 1025px)" srcset="{desktop_light}"') == 1,
@@ -237,7 +238,7 @@ def validate_thesis_scale(readme: str) -> None:
 
     for relative in legacy.HEADER_SVGS:
         content = legacy.safe_svg(ROOT / relative, relative)
-        expected_size = 'font-size="18"' if "desktop" in relative else 'font-size="23"'
+        expected_size = 'font-size="15"' if "desktop" in relative else 'font-size="23"'
         require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
         expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
