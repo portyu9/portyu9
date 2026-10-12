@@ -1,0 +1,42 @@
+name: Banner capability authorization measurement (read only)
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/banner-capability-measurement.yml"
+permissions:
+  contents: read
+jobs:
+  measure:
+    name: measure-immutable-banner-candidate-read-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout accepted main as trusted executable
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 83704c5f000a66d4759ac69ba3a9b5dc7b99cef3
+          path: trusted
+          persist-credentials: false
+      - name: Checkout fixed candidate exclusively as untrusted data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 2be6ad6096e6a348b0650cb554d63de322370496
+          path: candidate
+          persist-credentials: false
+      - name: Set up pinned reviewed Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Verify immutable inputs and measure only with trusted evaluator
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted rev-parse HEAD)" = "83704c5f000a66d4759ac69ba3a9b5dc7b99cef3"
+          test "$(git -C candidate rev-parse HEAD)" = "2be6ad6096e6a348b0650cb554d63de322370496"
+          python3 trusted/scripts/verify-python-runtime.py
+          TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "Source branch #1632 frozen at 2be6ad6096e6a348b0650cb554d63de322370496; tree=$TREE_SHA"
+          python3 trusted/scripts/workflow_capability_admission.py \
+            candidate --candidate-tree-sha "$TREE_SHA" --measure
