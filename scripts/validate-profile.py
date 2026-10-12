@@ -187,8 +187,9 @@ def validate_thesis_headers(readme: str) -> None:
     landscape_light = 'media="(min-width: 641px) and (max-width: 1024px) and (max-device-height: 640px) and (orientation: landscape)"'
     desktop_dark = 'media="(min-width: 641px) and (prefers-color-scheme: dark)"'
     desktop_light = 'media="(min-width: 641px)"'
+    header_section = readme.split('<table width="100%">', 1)[1].split('</thead>', 1)[0]
     for media in (phone_dark, phone_light, landscape_dark, landscape_light, desktop_dark, desktop_light):
-        require(readme.count(media) == 2, f"Responsive thesis header media rule must appear twice: {media}")
+        require(header_section.count(media) == 2, f"Responsive thesis header media rule must appear twice: {media}")
     # Explicitly reject the previous rules that sent a 949px desktop viewport
     # to the 23/24px mobile image when hover/pointer did not match.
     require('(hover: hover) and (pointer: fine)' not in readme,
