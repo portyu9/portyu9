@@ -24,7 +24,7 @@ HERO_WIDTH = 1_280
 HERO_HEIGHT = 854
 HERO_SHA256 = "d840734c78ec59f3c53644330bc2166c51e1bb5eb8e768595035a37767eb5452"
 HEADER_ASSET_COMMIT = "3849d500a7a09960e1b2ec562c7f3f9339a3b6d6"
-DESKTOP_HEADER_ASSET_COMMIT = "179a1d6ff3ba3d303ff92a5b2baf7e01cb3ce709"
+DESKTOP_HEADER_ASSET_COMMIT = "8c8a8de73839de2ffd5fda28cc5904b51ed4ec6d"
 
 SELF_HOSTED_BADGES = (
     "assets/profile-badges/badge-ai-enabled-qe.svg",
@@ -217,7 +217,7 @@ def validate_thesis_headers(readme: str) -> None:
             + f'<img alt="{'◆ Principle' if family == 'principle' else '▤ Engineering Contract'}" src="{desktop_l}"></picture></th>'
         )
         require(readme.count(expected) == 1,
-                f"{family}: responsive source order must preserve mobile phones and 13px desktop")
+                f"{family}: responsive source order must preserve mobile phones and 16px desktop")
         require(readme.count(desktop_d) == 2 and readme.count(desktop_l) == 2,
                 f"{family}: desktop headers must be in media selection and HTML fallback")
         require(readme.count(mobile_d) == 2 and readme.count(mobile_l) == 2,
@@ -225,7 +225,7 @@ def validate_thesis_headers(readme: str) -> None:
 
     for relative in HEADER_SVGS:
         content = safe_svg(ROOT / relative, relative)
-        expected_size = 'font-size="13"' if "desktop" in relative else 'font-size="23"'
+        expected_size = 'font-size="16"' if "desktop" in relative else 'font-size="23"'
         require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
         expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
