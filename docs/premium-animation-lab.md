@@ -1,42 +1,36 @@
-# Premium Animation Lab · 01 / Aether Flux
+# Aether Flux · Frame-rendered cinematic plasma animation
 
-> **Review-only experimental artwork.** This branch is not deployed. The original Quantum Apex / Evidence Horizon SVGs, the seven live rotating themes, `README.md`, the eight-theme selection catalog, and the protected publishing pipeline stay unchanged.
+> **Review only — no deployment or merge.** The previous weak SVG with moving stroke dashes was rejected and superseded. This is a new render system committed on the **same** feature branch.
 
-This is **actual animated repository SVG**, not an AI concept illustration. The composition uses hundreds of individually controlled organic neon plasma streamlines, independently flowing dash highlights, a dark optical iris, halo bloom, drifting orbit fragments, luminous peripheral waves, and pulsing dust. Scroll down for all **three matching surfaces**.
+Each GIF shows an evolving per-pixel plasma field. Every frame resynthesizes the full optical structure: a dark center, pink corona, cyan/teal filament field, turbulent petals, and changing illumination. There are no SVG dash animations. All three GIFs are directly embedded **as actual animations** below.
 
-## Desktop top · 1280 × 258
+## Desktop animation · 448 × 90 · 20 frames
 
-![Actual Aether Flux desktop top SVG animation](../assets/profile-banners/premium-lab/01-aether-plasma-iris-top.svg)
+![Desktop full-field plasma animation](../assets/profile-banners/premium-lab/01-aether-plasma-iris-top.gif)
 
-[Open desktop animated SVG directly](../assets/profile-banners/premium-lab/01-aether-plasma-iris-top.svg)
+[Open actual desktop animation](../assets/profile-banners/premium-lab/01-aether-plasma-iris-top.gif)
 
-## Mobile top · 640 × 196
+## Mobile animation · 420 × 128 · 20 frames
 
-![Actual Aether Flux mobile top SVG animation](../assets/profile-banners/premium-lab/01-aether-plasma-iris-top-compact.svg)
+![Mobile full-field plasma animation](../assets/profile-banners/premium-lab/01-aether-plasma-iris-top-compact.gif)
 
-[Open mobile animated SVG directly](../assets/profile-banners/premium-lab/01-aether-plasma-iris-top-compact.svg)
+[Open actual mobile animation](../assets/profile-banners/premium-lab/01-aether-plasma-iris-top-compact.gif)
 
-## Bottom horizon · 1280 × 150
+## Bottom animation · 448 × 52 · 20 frames
 
-![Actual Aether Flux bottom SVG animation](../assets/profile-banners/premium-lab/01-aether-plasma-iris-bottom.svg)
+![Bottom full-field plasma animation](../assets/profile-banners/premium-lab/01-aether-plasma-iris-bottom.gif)
 
-[Open footer animated SVG directly](../assets/profile-banners/premium-lab/01-aether-plasma-iris-bottom.svg)
+[Open actual footer animation](../assets/profile-banners/premium-lab/01-aether-plasma-iris-bottom.gif)
 
-## Motion, constraints, review gate
+### What changed
 
-The real motion is SVG SMIL path-offset animation, orbit phase variation, and spark luminosity changes—not a static image, JavaScript trick, raster GIF, or illustrative mockup. No external resources, scripts, fonts, CDN requests, or text labels embedded into the artwork. Accessible SVG `title` and `desc` included. Motion should stop/reduce under `prefers-reduced-motion`; the complete luminous static illustration remains.
+The previous collection animated moving bright sections along **static SVG lines**. This version animates the image contents across full raster frames, with deterministic evolving turbulence, moving pink/cyan field boundaries, changing filament curvature and a transformed volumetric field. A color-limited GIF still has visual limitations: it cannot reproduce HDR bloom or GPU-fluid realism. This is a visual experiment, not a claimed production-ready masterpiece.
 
-**Quality gate still needed:** review real animations in browser at profile width and on mobile Safari, Safari, Chrome and LibreWolf/Firefox. Automated contract checks do **not** prove visual equivalence or accessibility rendering in every browser. **Do not merge this PR until approved.** Production change would need separate governed rotation/catalog/publisher work.
+- Source: [deterministic GIF renderer](../scripts/render-cinematic-plasma.cjs).
+- Reproduction: `node scripts/render-cinematic-plasma.cjs --write`; verify with `--check`.
+- No external assets or embedded scripts in GIFs.
+- The old failed lab SVG triplet and its generator were deleted **only from this feature branch**, not from the live rotation.
+- The live original Quantum Apex desktop/mobile SVGs and Evidence Horizon bottom SVG, 21 legacy SVG assets, eight-theme catalog, and `README.md` are preserved on `main`.
+- Frame-based raster animation may be larger than acceptable for production; review movement and aesthetics first, then compress and provide reduced-motion handling before any rollout.
 
-To regenerate locally with Node: `node scripts/generate-premium-plasma-lab.cjs --write`; to verify without mutations: `node scripts/generate-premium-plasma-lab.cjs --check`.
-
-### Assets intentionally not changed
-- `assets/profile-banners/quantum-apex-signal-crown-hero.svg`
-- `assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg`
-- `assets/profile-banners/elite-evidence-horizon-bottom.svg`
-- `assets/profile-banners/daily/` (21 legacy theme assets)
-- `scripts/banner-rotation-v2.json` and `README.md`
-
-### Production promise
-
-No live rotation change, no title overlaid on live README, no external dependency. Visual approval first. If this first flagship fails the aesthetic review, revise **this** artwork rather than generating six equally weak copies.
+**DO NOT MERGE.** Owner visual approval is mandatory before further artwork or production integration.
