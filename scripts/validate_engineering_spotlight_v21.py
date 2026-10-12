@@ -304,6 +304,10 @@ def validate_svgs(root: Path, slot_by_number: dict[int, dict[str, Any]]) -> None
                 f"Spotlight media rule must be mobile-only and preserve explicit light/dark sources: {name}")
         require(content.count('<g class="desktop-card">') == 1 and content.count('<g class="mobile-card">') == 1,
                 f"Spotlight requires unmodified desktop art plus an independent mobile evidence view: {name}")
+        mobile = content.split('<g class="mobile-card">', 1)[1]
+        require(mobile.count('data-mobile-corner-decoration="topology-restored-v1"') == 1 and
+                mobile.count("<circle") >= 5 and mobile.count("<path") >= 3,
+                f"Spotlight mobile topology paths/nodes are missing: {name}")
         require('font-size="22"' in content and 'font-size="21"' in content and 'font-size="18"' in content,
                 f"Spotlight status, freshness and run metadata must be legible at phone scale: {name}")
         require('data-status-presentation="external-clickable-only"' in content, f"Spotlight visible status presentation regressed: {name}")
