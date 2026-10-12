@@ -1153,7 +1153,7 @@
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "a04f1f293f5060b4247ed3cf48fcf44d3a3b0d5c66dfc86ea3919cc5b25c03a4",
-      "rationale": "Authorize frozen PR #1638 exact trusted Spotlight renderer expansion measured read-only from accepted main by closed diagnostic #1639: 1 protected source expansion / 0 reductions, unchanged semantic BOM. Restore original immutable Quantum Apex desktop/mobile plus Evidence Horizon footer as eighth daily scene with V1-to-V2 marker migration and atomic three-surface publication. No added workflow trigger, permission, API read/write, secret/OIDC, required-check reduction, merge/ruleset/direct-main authority or bypass."
+      "rationale": "Authorize frozen #1638 via trusted-main read-only measurement in closed #1639: 1 protected-source expansion, 0 reductions, unchanged BOM. Restore pinned original Quantum Apex desktop/mobile and Evidence Horizon footer as eighth UTC-day scene; migrate V1 markers to V2 and atomically publish all three surfaces. No new triggers, permissions, APIs, secrets/OIDC, direct-main/ruleset/merge authority, check reductions or bypass."
     },
     {
       "baseBomSha256": "ee872d9f20887185967c1ef60ad5d0dee26e8091147adcb6d9d45140a25429b4",
