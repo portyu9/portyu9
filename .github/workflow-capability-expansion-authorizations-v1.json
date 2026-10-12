@@ -85,6 +85,13 @@
       "rationale": "Authorize #595's exact frozen Spotlight convergence fix: Capability Admission hydrates the unique discovered PR before trusting full-PR metadata, and Spotlight verifies the complete multiline approval comment by exact JSON equality. Bot/current-main/head/title/body proofs remain fail-closed. No trigger, write permission, mutation class, secret, OIDC authority, required-check reduction, merge bypass, or candidate execution is added."
     },
     {
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "f1cda1f96963ef7115f0af98515fe03f18d2c9363c30af9d094af78ecb9c2879",
+      "id": "cap-banner-seven-day-governed-readme-rotation-v1",
+      "rationale": "Prior-authorize #1632's measured one-file protected Spotlight renderer change (frozen candidate tree e573a8e2917cfa79c92b97e44e86101fca5d3b46). Select one deterministic UTC day and update exactly top desktop, top mobile and bottom SVG references through existing attested README-only Spotlight bot PRs. Verify delegated helper/catalog exact Git blob identities before import. No new workflow permissions, trigger, API mutation, secret, direct-main write, generated subject, reduced checks or bypass."
+    },
+    {
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "14fae0e37c39df7314307f0fb35fd2df61bfa9a91d3c39f4b0f2765e320c60ba",
       "expansionSha256": "6db23ce18e02f69ede4693ef6d84b4e738d2c67498cb01804b6d5d0f66d03e48",
