@@ -24,7 +24,7 @@ jobs:
       - name: Checkout fixed candidate exclusively as untrusted data
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 2be6ad6096e6a348b0650cb554d63de322370496
+          ref: bb02a9c55caf8657e6cb1a20b596f92463f43db8
           path: candidate
           persist-credentials: false
       - name: Set up pinned reviewed Python
@@ -35,10 +35,10 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git -C trusted rev-parse HEAD)" = "83704c5f000a66d4759ac69ba3a9b5dc7b99cef3"
-          test "$(git -C candidate rev-parse HEAD)" = "2be6ad6096e6a348b0650cb554d63de322370496"
+          test "$(git -C candidate rev-parse HEAD)" = "bb02a9c55caf8657e6cb1a20b596f92463f43db8"
           python3 trusted/scripts/verify-python-runtime.py
           TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
           [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          echo "Source branch #1632 frozen at 2be6ad6096e6a348b0650cb554d63de322370496; tree=$TREE_SHA"
+          echo "Source branch #1632 frozen at bb02a9c55caf8657e6cb1a20b596f92463f43db8; tree=$TREE_SHA"
           python3 trusted/scripts/workflow_capability_admission.py \
             candidate --candidate-tree-sha "$TREE_SHA" --measure
