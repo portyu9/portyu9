@@ -193,48 +193,49 @@ def validate_thesis_scale(readme: str) -> None:
     require(readme.count('<th width="45%" align="center"><picture>') == 1, "Principle column must remain 45%")
     require(readme.count('<th width="55%" align="center"><picture>') == 1, "Engineering Contract column must remain 55%")
 
-    landscape_dark = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape) and (prefers-color-scheme: dark)"'
-    landscape_light = 'media="(min-width: 641px) and (max-width: 1024px) and (orientation: landscape)"'
-    require(readme.count(landscape_dark) == 2, "Both thesis headers must retain the dark mobile-landscape override")
-    require(readme.count(landscape_light) == 2, "Both thesis headers must retain the light mobile-landscape override")
+    # Mobile phone device sources remain first, including landscape phones whose
+    # short device side is at most 640px. Desktop selection at CSS widths >= 641px
+    # must not require hover/fine-pointer support (privacy browsers and touchscreen
+    # desktops can misreport it). The broad desktop sources must follow the two
+    # phone-device predicates, but precede the remaining mobile fallback.
+    phone_dark = 'media="(max-device-width: 640px) and (prefers-color-scheme: dark)"'
+    phone_light = 'media="(max-device-width: 640px)"'
+    landscape_dark = 'media="(min-width: 641px) and (max-width: 1024px) and (max-device-height: 640px) and (orientation: landscape) and (prefers-color-scheme: dark)"'
+    landscape_light = 'media="(min-width: 641px) and (max-width: 1024px) and (max-device-height: 640px) and (orientation: landscape)"'
+    desktop_dark = 'media="(min-width: 641px) and (prefers-color-scheme: dark)"'
+    desktop_light = 'media="(min-width: 641px)"'
+    header_section = readme.split('<table width="100%">', 1)[1].split('</thead>', 1)[0]
+    for media in (phone_dark, phone_light, landscape_dark, landscape_light, desktop_dark, desktop_light):
+        require(header_section.count(media) == 2, f"Responsive thesis header media rule must appear twice: {media}")
+    # Explicitly reject the previous rules that sent a 949px desktop viewport
+    # to the 23/24px mobile image when hover/pointer did not match.
+    require('(hover: hover) and (pointer: fine)' not in readme,
+            "Desktop thesis images must not require a fine-pointer browser")
 
-    phone_device_dark = 'media="(max-device-width: 640px) and (prefers-color-scheme: dark)"'
-    phone_device_light = 'media="(max-device-width: 640px)"'
-    require(readme.count(phone_device_dark) == 2 and readme.count(phone_device_light) == 2,
-            "Both thesis headers must prioritize phone-device mobile sources")
-
-    pointer_media = "(min-width: 641px) and (max-width: 1024px) and (hover: hover) and (pointer: fine)"
-    pointer_dark = f'media="{pointer_media} and (prefers-color-scheme: dark)"'
-    pointer_light = f'media="{pointer_media}"'
-    require(readme.count(pointer_dark) == 2 and readme.count(pointer_light) == 2,
-            "The 15px desktop scale must remain active on narrow fine-pointer desktops")
-
-    for family in ("principle", "engineering-contract"):
-        mobile_dark = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-mobile-dark.svg"
-        mobile_light = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-mobile-light.svg"
-        desktop_dark = f"https://raw.githubusercontent.com/portyu9/portyu9/{DESKTOP_THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-desktop-dark.svg"
-        desktop_light = f"https://raw.githubusercontent.com/portyu9/portyu9/{DESKTOP_THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}-desktop-light.svg"
-        require(readme.count(f'media="(min-width: 1025px) and (prefers-color-scheme: dark)" srcset="{desktop_dark}"') == 1,
-                f"{family} dark desktop header must start at 1025px")
-        require(readme.count(f'media="(min-width: 1025px)" srcset="{desktop_light}"') == 1,
-                f"{family} light desktop header must start at 1025px")
-        require(readme.count(f'media="(prefers-color-scheme: dark)" srcset="{mobile_dark}"') == 1,
-                f"{family} dark mobile fallback changed")
-        require(readme.count(f'src="{mobile_light}"') == 1,
-                f"{family} light mobile fallback changed")
-        width = "45" if family == "principle" else "55"
-        phone_dark = f'<source {phone_device_dark} srcset="{mobile_dark}">'
-        phone_light = f'<source {phone_device_light} srcset="{mobile_light}">'
-        desktop_pointer_dark = f'<source {pointer_dark} srcset="{desktop_dark}">'
-        desktop_pointer_light = f'<source {pointer_light} srcset="{desktop_light}">'
-        touch_landscape_dark = f'<source {landscape_dark} srcset="{mobile_dark}">'
-        touch_landscape_light = f'<source {landscape_light} srcset="{mobile_light}">'
-        prefix = (
+    for width, family in (("45", "principle"), ("55", "engineering-contract")):
+        mobile_prefix = f"https://raw.githubusercontent.com/portyu9/portyu9/{THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}"
+        desktop_prefix = f"https://raw.githubusercontent.com/portyu9/portyu9/{DESKTOP_THESIS_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}"
+        mobile_d = mobile_prefix + "-mobile-dark.svg"
+        mobile_l = mobile_prefix + "-mobile-light.svg"
+        desktop_d = desktop_prefix + "-desktop-dark.svg"
+        desktop_l = desktop_prefix + "-desktop-light.svg"
+        expected = (
             f'<th width="{width}%" align="center"><picture>'
-            + phone_dark + phone_light + desktop_pointer_dark + desktop_pointer_light + touch_landscape_dark + touch_landscape_light
+            + f'<source {phone_dark} srcset="{mobile_d}">'
+            + f'<source {phone_light} srcset="{mobile_l}">'
+            + f'<source {landscape_dark} srcset="{mobile_d}">'
+            + f'<source {landscape_light} srcset="{mobile_l}">'
+            + f'<source {desktop_dark} srcset="{desktop_d}">'
+            + f'<source {desktop_light} srcset="{desktop_l}">'
+            + f'<source media="(prefers-color-scheme: dark)" srcset="{mobile_d}">'
+            + f'<img alt="{'◆ Principle' if family == 'principle' else '▤ Engineering Contract'}" src="{mobile_l}"></picture></th>'
         )
-        require(readme.count(prefix) == 1,
-                f"{family}: phone mobile sources must precede narrow-desktop overrides")
+        require(readme.count(expected) == 1,
+                f"{family}: responsive source order must preserve mobile phones and 15px desktop")
+        require(readme.count(desktop_d) == 1 and readme.count(desktop_l) == 1,
+                f"{family}: desktop headers must use precisely one immutable image per theme")
+        require(readme.count(mobile_d) == 3 and readme.count(mobile_l) == 3,
+                f"{family}: mobile headers must be preserved in both phone orientations and fallback")
 
     for relative in legacy.HEADER_SVGS:
         content = legacy.safe_svg(ROOT / relative, relative)
