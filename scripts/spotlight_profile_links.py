@@ -21,8 +21,8 @@ import sys
 from typing import Any
 
 VERSION = "spotlight-profile-links-v1"
-BANNER_HELPER_GIT_BLOB = "266b466b54cd1ec113e919e3cc03cb9223732b8c"
-BANNER_CATALOG_GIT_BLOB = "9cccc9f894565f85fb7bac6c698bc894883bbe90"
+BANNER_HELPER_GIT_BLOB = "03a7876b3daacc26583719bb560db26a493e3e8f"
+BANNER_CATALOG_GIT_BLOB = "bda417d339852145a42712375b6b5bc01b2b87a4"
 
 
 def reviewed_banner_helper():
@@ -30,7 +30,7 @@ def reviewed_banner_helper():
     source_dir = Path(__file__).resolve(strict=True).parent
     inputs = (
         ("banner_rotation.py", BANNER_HELPER_GIT_BLOB),
-        ("banner-rotation-v1.json", BANNER_CATALOG_GIT_BLOB),
+        ("banner-rotation-v2.json", BANNER_CATALOG_GIT_BLOB),
     )
     for relative, expected in inputs:
         path = source_dir / relative

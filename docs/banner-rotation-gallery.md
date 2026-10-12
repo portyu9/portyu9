@@ -1,12 +1,28 @@
-# Seven-day kinetic crown + evidence-horizon gallery
+# Eight-day crown + evidence-horizon gallery (seven new themes plus the original)
 
 **Implementation branch:** `feature/seven-day-animated-banner-cycle-20261012` · **Source PR:** [#1632](https://github.com/portyu9/portyu9/pull/1632). This gallery is a permanently reviewable catalog; production selection is governed by the accepted main-branch Spotlight image publisher.
 
-Each of the seven themes is a designed **triplet**, not a recoloring: wide desktop crown (`1280×258` viewBox), simplified compact mobile crown (`640×196`), and matching closing horizon (`1280×150`). All artworks are self-contained vector XML with SMIL motion, `prefers-reduced-motion` static fallbacks, low-kilobyte payloads, and the established aqua / magenta / green brand family.
+Each of the seven newly authored themes is a designed **triplet**, not a recoloring: wide desktop crown (`1280×258` viewBox), simplified compact mobile crown (`640×196`), and matching closing horizon (`1280×150`). All artworks are self-contained vector XML with SMIL motion, `prefers-reduced-motion` static fallbacks, low-kilobyte payloads, and the established aqua / magenta / green brand family.
 
-**Selection invariant:** `floor(UTC unix seconds / 86400) modulo 7`. One UTC day chooses **one** scene for all three images. No per-visitor JavaScript, randomized selection, mutable index state, or local timezone assumptions.
+**Selection invariant:** `floor(UTC unix seconds / 86400) modulo 8`. The untouched original Quantum Apex / Evidence Horizon triplet is slot 3 on the eight-day calendar and therefore restores immediately on 2026-10-12. One UTC day chooses **one** scene for all three images. No per-visitor JavaScript, randomized selection, mutable index state, or local timezone assumptions.
 
 **Publishing safety:** GitHub README rendering cannot inspect the date from embedded SVGs. The read-only `scripts/banner_rotation.py` computes bounded, replay-safe README changes. The protected `scripts/spotlight_profile_links.py` renderer pins the helper and catalog to exact Git blob identities **before importing executable helper source**. It uses the verified published Spotlight manifest's `selection_date_utc` and proposes one atomic README-only update; the existing `spotlight-link-sync.yml` approval, attestation, PR and merge transaction publishes it. The independent signed `generated` evidence branch is **not** modified by banner rotation.
+
+## 08 · Original Quantum Apex / Elite Evidence Horizon (restored)
+
+The original SVG assets remain at their **original paths**, not copies or replacements. They rotate as one atomic set: desktop, mobile, and non-clickable bottom.
+
+**Original wide crown**
+
+![Original wide crown](../assets/profile-banners/quantum-apex-signal-crown-hero.svg)
+
+**Original mobile crown**
+
+![Original compact crown](../assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg)
+
+**Original closing horizon**
+
+![Original horizon](../assets/profile-banners/elite-evidence-horizon-bottom.svg)
 
 ## 01 · Orbital Relay
 
@@ -138,5 +154,7 @@ python3 scripts/banner_rotation.py --select --date 2026-10-12
 python3 scripts/banner_rotation.py --propose --date 2026-10-12 > /tmp/banner-readme-proposal.md
 python3 scripts/validate-profile-v4.py
 ```
+
+The pre-existing seven-day catalog remains archived as `scripts/banner-rotation-v1.json`. The active eight-day catalog is `scripts/banner-rotation-v2.json`, with verified migration of any existing V1 README marker to a monotonic V2 marker. The original source blobs are verified by Git blob SHA.
 
 The `--propose` command emits a candidate to stdout, **never writes README.md**. The emitted proposal is not an authorization to bypass protected review.

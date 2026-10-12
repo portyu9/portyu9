@@ -1,0 +1,59 @@
+{
+  "version": "banner-rotation-v2",
+  "epoch": "1970-01-01",
+  "timezone": "UTC",
+  "period_seconds": 86400,
+  "selection": "floor(unix_utc_seconds/86400)%8",
+  "surfaces": [
+    "top",
+    "top-compact",
+    "bottom"
+  ],
+  "palette": [
+    "#00E6FF",
+    "#E328FC",
+    "#00FBCC"
+  ],
+  "scenes": [
+    {
+      "slug": "01-orbital-relay",
+      "title": "Orbital Relay",
+      "kind": "orbit"
+    },
+    {
+      "slug": "02-prism-vault",
+      "title": "Prism Vault",
+      "kind": "prism"
+    },
+    {
+      "slug": "08-original-quantum-apex",
+      "title": "Original Quantum Apex + Evidence Horizon",
+      "kind": "original"
+    },
+    {
+      "slug": "03-neural-weave",
+      "title": "Neural Weave",
+      "kind": "neural"
+    },
+    {
+      "slug": "04-spectral-tides",
+      "title": "Spectral Tides",
+      "kind": "wave"
+    },
+    {
+      "slug": "05-fractal-iris",
+      "title": "Fractal Iris",
+      "kind": "iris"
+    },
+    {
+      "slug": "06-circuit-basilica",
+      "title": "Circuit Basilica",
+      "kind": "circuit"
+    },
+    {
+      "slug": "07-singularity-mesh",
+      "title": "Singularity Mesh",
+      "kind": "singularity"
+    }
+  ]
+}
