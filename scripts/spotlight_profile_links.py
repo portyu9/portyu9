@@ -81,9 +81,6 @@ def slot_projection(slot: dict[str, Any], number: int) -> tuple[str, dict[str, d
         require(workflow == EXPECTED_WORKFLOWS[str(label)], f"slot {number} {label}: workflow identity changed")
         require(record.get("binding") == "CURRENT_SUBJECT", f"slot {number} {label}: current-subject binding is required")
         require(record.get("freshness") in {"SAME_DAY", "AGED"}, f"slot {number} {label}: freshness is unavailable")
-        require(record.get("result") in {"PASSING", "FAILING"}, f"slot {number} {label}: result is unavailable")
-        require(type(record.get("age_days")) is int and record["age_days"] >= 0,
-                f"slot {number} {label}: evidence age must be an exact non-negative integer")
         require(isinstance(run_id, int) and run_id > 0 and isinstance(run_url, str),
                 f"slot {number} {label}: run identity is invalid")
         match = RUN_URL.fullmatch(run_url)
@@ -155,16 +152,9 @@ def render_block(
         )
         dark = f"https://raw.githubusercontent.com/{PROFILE_REPOSITORY}/{generated_sha}/engineering-spotlight/spotlight-{slot}-dark.svg"
         light = f"https://raw.githubusercontent.com/{PROFILE_REPOSITORY}/{generated_sha}/engineering-spotlight/spotlight-{slot}-light.svg"
-        max_age = max(signals[label]["age_days"] for label in EXPECTED_LABELS)
-        freshness = "AGED" if any(signals[label]["freshness"] == "AGED" for label in EXPECTED_LABELS) else "SAME DAY"
-        evidence_alt = (
-            f"Engineering Spotlight: {repository}. CI {signals['CI']['result']}; "
-            f"security {signals['SECURITY']['result']}; evidence {freshness.lower()} {max_age}d UTC "
-            "for current main."
-        )
         lines.extend([
             '<p align="center">',
-            f'<a href="{repo_url}"><picture><source media="(prefers-color-scheme: dark)" srcset="{dark}"><img alt="{evidence_alt}" src="{light}" width="620"></picture></a><br>',
+            f'<a href="{repo_url}"><picture><source media="(prefers-color-scheme: dark)" srcset="{dark}"><img alt="Daily engineering Evidence Spotlight slot {slot}" src="{light}" width="620"></picture></a><br>',
             f'<a href="{ci_url}"><img alt="Spotlight slot {slot} CI" height="24" src="{ci_badge}"></a>&nbsp;<a href="{security_url}"><img alt="Spotlight slot {slot} security" height="24" src="{security_badge}"></a>',
             '</p>',
             '',
@@ -238,10 +228,10 @@ def fixture_manifest() -> dict[str, Any]:
             "signals": [
                 {"label": "CI", "workflow": "ci.yml", "run_id": 1000 + slot,
                  "run_url": f"https://github.com/{repo}/actions/runs/{1000 + slot}",
-                 "binding": "CURRENT_SUBJECT", "freshness": "SAME_DAY", "age_days": 0, "result": "PASSING"},
+                 "binding": "CURRENT_SUBJECT", "freshness": "SAME_DAY"},
                 {"label": "SECURITY", "workflow": "security.yml", "run_id": 2000 + slot,
                  "run_url": f"https://github.com/{repo}/actions/runs/{2000 + slot}",
-                 "binding": "CURRENT_SUBJECT", "freshness": "AGED", "age_days": 5, "result": "PASSING"},
+                 "binding": "CURRENT_SUBJECT", "freshness": "AGED"},
             ],
         })
     return {
@@ -266,8 +256,6 @@ def self_test() -> None:
             "self-test lost stable main CI gate badge")
     require("img.shields.io/github/check-runs/portyu9/qa-automation-fixture-1/main?nameFilter=security-gate" in proposed,
             "self-test lost stable main SECURITY gate badge")
-    require("Engineering Spotlight: portyu9/qa-automation-fixture-1. CI PASSING; security PASSING; evidence aged 5d UTC for current main." in proposed,
-            "self-test lost the source-bound accessible Spotlight evidence summary")
     require("img.shields.io/github/actions/workflow/status/" not in proposed,
             "self-test retained workflow-status badges instead of exact stable check gates")
     require("/" + "a" * 40 + "/engineering-spotlight/spotlight-3-dark.svg" in proposed,
