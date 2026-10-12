@@ -193,18 +193,19 @@ def validate_thesis_scale(readme: str) -> None:
     require(readme.count('<th width="45%" align="center"><picture>') == 1, "Principle column must remain 45%")
     require(readme.count('<th width="55%" align="center"><picture>') == 1, "Engineering Contract column must remain 55%")
 
-    # Mobile phone device sources remain first, including landscape phones whose
-    # short device side is at most 640px. Desktop selection at CSS widths >= 641px
-    # must not require hover/fine-pointer support (privacy browsers and touchscreen
-    # desktops can misreport it). The broad desktop sources must follow the two
-    # phone-device predicates, but precede the remaining mobile fallback.
-    phone_dark = 'media="(max-device-width: 640px) and (prefers-color-scheme: dark)"'
-    phone_light = 'media="(max-device-width: 640px)"'
+    # Select portrait phones by CSS viewport width, not device/screen width:
+    # privacy/emulation may expose a <=640px device while a desktop viewport
+    # is >=641px. Keep the separately gated mobile-landscape sources and the
+    # unqualified desktop fallback; neither tier depends on hover/fine-pointer.
+    phone_dark = 'media="(max-width: 640px) and (prefers-color-scheme: dark)"'
+    phone_light = 'media="(max-width: 640px)"'
     landscape_dark = 'media="(min-width: 641px) and (max-width: 1024px) and (max-device-height: 640px) and (orientation: landscape) and (prefers-color-scheme: dark)"'
     landscape_light = 'media="(min-width: 641px) and (max-width: 1024px) and (max-device-height: 640px) and (orientation: landscape)"'
     desktop_dark = 'media="(min-width: 641px) and (prefers-color-scheme: dark)"'
     desktop_light = 'media="(min-width: 641px)"'
     header_section = readme.split('<table width="100%">', 1)[1].split('</thead>', 1)[0]
+    require('(max-device-width: 640px)' not in header_section,
+            "Thesis headers must select phones by viewport, not device/screen width")
     for media in (phone_dark, phone_light, landscape_dark, landscape_light, desktop_dark, desktop_light):
         require(header_section.count(media) == 2, f"Responsive thesis header media rule must appear twice: {media}")
     # Explicitly reject the previous rules that sent a 949px desktop viewport
