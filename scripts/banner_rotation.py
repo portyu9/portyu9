@@ -201,7 +201,7 @@ def test_rotation(scenes: list[dict[str, str]]) -> None:
     sel = chosen(date(2026,10,12),scenes)
     fixture = (
         '<br>\n\n<p align="center">\n<picture>\n'
-        '<source media="(max-width: 640px)" srcset="'+ORIGINAL["top-compact"]+'">\n'
+        '  <source media="(max-width: 640px)" srcset="'+ORIGINAL["top-compact"]+'">\n'
         '<img alt="Animated quantum apex signal crown" src="'+ORIGINAL["top"]+'" width="100%">\n'
         '<img alt="Animated evidence horizon" src="'+ORIGINAL["bottom"]+'" width="100%">'
     )
