@@ -85,6 +85,13 @@
       "rationale": "Authorize #595's exact frozen Spotlight convergence fix: Capability Admission hydrates the unique discovered PR before trusting full-PR metadata, and Spotlight verifies the complete multiline approval comment by exact JSON equality. Bot/current-main/head/title/body proofs remain fail-closed. No trigger, write permission, mutation class, secret, OIDC authority, required-check reduction, merge bypass, or candidate execution is added."
     },
     {
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "f1cda1f96963ef7115f0af98515fe03f18d2c9363c30af9d094af78ecb9c2879",
+      "id": "cap-banner-seven-day-governed-readme-rotation-v1",
+      "rationale": "Prior-authorize the exact single trusted-control-source change in frozen banner feature #1632 (tree e573a8e2917cfa79c92b97e44e86101fca5d3b46), measured by trusted-main read-only job 38300965668. Allow spotlight_profile_links.py to include one UTC calendar-day modulo-seven selection of the three existing README banner positions, reusing the existing attested Spotlight README-only PR reviewer/merge lane. The delegated Python banner renderer and seven-scene catalog are each locked by exact Git blob identity and verified BEFORE dynamic import. No workflow capability/permission/trigger/API endpoint/secret change, generated-subject change, direct-main write, unauthenticated mutation, merged-check reduction, attestation weakening, rollback, or bypass. Existing evidence link snapshot and source identity binding remain intact. This is a source-only 1-expansion 0-reduction authorization; the code change must not merge before this ledger-only authorization is accepted on main."
+    },
+    {
       "baseBomSha256": "6f6731995ec3f42922a2f8030fe7db5c76f6aba3bb377aa6fd5a0c71ce6adaff",
       "candidateBomSha256": "14fae0e37c39df7314307f0fb35fd2df61bfa9a91d3c39f4b0f2765e320c60ba",
       "expansionSha256": "6db23ce18e02f69ede4693ef6d84b4e738d2c67498cb01804b6d5d0f66d03e48",
