@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" role="img" aria-labelledby="title desc" width="3840" height="450" viewBox="0 0 1280 150" fill="none" shape-rendering="geometricPrecision" data-banner-art="rotating-collection-v1" data-scene="05-fractal-iris" data-surface="bottom">
+<title id="title">Fractal Iris / Evidence Horizon</title>
+<desc id="desc">Futuristic kinetic iris architecture with luminous telemetry and evidence flows in aqua, magenta, and green. Animation stops when reduced motion is preferred.</desc>
+<defs>
+ <linearGradient id="chromatic" x1="0" x2="1280" y1="0" y2="0" gradientUnits="userSpaceOnUse"><stop stop-color="#E328FC"/><stop offset=".48" stop-color="#00E6FF"/><stop offset=".78" stop-color="#00FBCC"/><stop offset="1" stop-color="#E328FC"/></linearGradient>
+ <radialGradient id="core" cx="50%" cy="50%" r="50%"><stop stop-color="#00FBCC" stop-opacity=".4"/><stop offset=".55" stop-color="#00E6FF" stop-opacity=".12"/><stop offset="1" stop-color="#E328FC" stop-opacity="0"/></radialGradient>
+ <filter id="glow" x="-40%" y="-70%" width="180%" height="240%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+ <style>.skeleton{opacity:.93}.ambient{opacity:.33}.motion{opacity:.85}@media (prefers-color-scheme:light){.skeleton{opacity:.66}.ambient{opacity:.21}.motion{opacity:.62}}@media (prefers-reduced-motion:reduce){.motion{display:none}.skeleton{opacity:1}}</style>
+</defs>
+<ellipse class="ambient" cx="640" cy="79" rx="169" ry="72.4" fill="url(#core)"/>
+<g class="skeleton"><g opacity=".40"><path d="M0 36L430 36L460 53" fill="none" stroke="#E328FC" stroke-width="1" stroke-opacity="0.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M1280 117L860 117L823 102" fill="none" stroke="#00FBCC" stroke-width="1" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/></g>
+<polygon points="664.8,79 702.1,87.3 690.9,103.1 657.9,93.5" fill="none" stroke="#00E6FF" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="663.6,86.7 705.1,108.9 688,119.9 652.5,98.3" fill="none" stroke="#E328FC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="660.1,93.6 699.8,132.7 678.9,137.1 645.9,101.2" fill="none" stroke="#00FBCC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="654.6,99.1 685.6,155.9 663.4,152.2 638.8,102" fill="none" stroke="#00E6FF" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="647.7,102.6 651.3,140.6 632.8,134.9 631.7,100.5" fill="none" stroke="#00FBCC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="640,103.8 631.7,150.1 615.9,137.3 625.5,96.9" fill="none" stroke="#E328FC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="632.3,102.6 607.4,152.5 596.8,133.9 620.7,91.5" fill="none" stroke="#00E6FF" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="625.4,99.1 581,146.1 577.6,123.9 617.8,84.9" fill="none" stroke="#E328FC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="619.9,93.6 584.9,108.8 584.6,89.4 617,77.8" fill="none" stroke="#00FBCC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="616.4,86.7 569.8,93.1 577.1,74.1 618.5,70.7" fill="none" stroke="#00E6FF" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="615.2,79 560,70.7 574.4,54.9 622.1,64.5" fill="none" stroke="#00FBCC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="616.4,71.3 557.9,43.6 578,33.5 627.5,59.7" fill="none" stroke="#E328FC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="619.9,64.4 594.6,35.8 613,29.6 634.1,56.8" fill="none" stroke="#00E6FF" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="625.4,58.9 604.9,16.6 625.2,17.7 641.2,56" fill="none" stroke="#E328FC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="632.3,55.4 623.2,0.4 642.6,9.2 648.3,57.5" fill="none" stroke="#00FBCC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="640,54.2 648.3,-10 664.1,6 654.5,61.1" fill="none" stroke="#00E6FF" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="647.7,55.4 667.1,22.5 678.7,38 659.3,66.5" fill="none" stroke="#00FBCC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="654.6,58.9 688.5,26.4 693.8,46 662.2,73.1" fill="none" stroke="#E328FC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="660.1,64.4 709.6,38.7 707.2,59.9 663,80.2" fill="none" stroke="#00E6FF" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<polygon points="663.6,71.3 727.2,59.4 716.9,79.4 661.5,87.3" fill="none" stroke="#E328FC" stroke-width="1.2" stroke-opacity="0.5" stroke-linejoin="round"/>
+<circle cx="640" cy="79" r="20" fill="url(#core)" stroke="#00E6FF" stroke-width="2"/>
+<path d="M76.8 129H345.6M934.4 129H1203.2" fill="none" stroke="url(#chromatic)" stroke-opacity=".38"/>
+<circle cx="64" cy="139" r="1.8" fill="#00E6FF" opacity="0.22"/>
+<circle cx="128" cy="16" r="0.8" fill="#E328FC" opacity="0.33999999999999997"/>
+<circle cx="192" cy="139" r="0.8" fill="#E328FC" opacity="0.45999999999999996"/>
+<circle cx="256" cy="16" r="0.8" fill="#E328FC" opacity="0.22"/>
+<circle cx="320" cy="139" r="0.8" fill="#00E6FF" opacity="0.33999999999999997"/>
+<circle cx="384" cy="16" r="1.8" fill="#E328FC" opacity="0.45999999999999996"/>
+<circle cx="448" cy="139" r="0.8" fill="#E328FC" opacity="0.22"/>
+<circle cx="512" cy="16" r="0.8" fill="#E328FC" opacity="0.33999999999999997"/>
+<circle cx="576" cy="139" r="0.8" fill="#00E6FF" opacity="0.45999999999999996"/>
+<circle cx="640" cy="16" r="0.8" fill="#E328FC" opacity="0.22"/>
+<circle cx="704" cy="139" r="1.8" fill="#E328FC" opacity="0.33999999999999997"/>
+<circle cx="768" cy="16" r="0.8" fill="#E328FC" opacity="0.45999999999999996"/>
+<circle cx="832" cy="139" r="0.8" fill="#00E6FF" opacity="0.22"/>
+<circle cx="896" cy="16" r="0.8" fill="#E328FC" opacity="0.33999999999999997"/>
+<circle cx="960" cy="139" r="0.8" fill="#E328FC" opacity="0.45999999999999996"/>
+<circle cx="1024" cy="16" r="1.8" fill="#E328FC" opacity="0.22"/>
+<circle cx="1088" cy="139" r="0.8" fill="#00E6FF" opacity="0.33999999999999997"/>
+<circle cx="1152" cy="16" r="0.8" fill="#E328FC" opacity="0.45999999999999996"/>
+<circle cx="1216" cy="139" r="0.8" fill="#E328FC" opacity="0.22"/></g>
+<g class="motion" filter="url(#glow)"><g transform="translate(640 79)"><path d="M0 -69.7A69.7 69.7 0 1 1 0 69.7" fill="none" stroke="#00FBCC" stroke-width="2.1" stroke-dasharray="12 44"/><animateTransform attributeName="transform" type="rotate" from="0 640 79" to="-360 640 79" dur="24s" repeatCount="indefinite"/></g>
+<circle r="3" fill="#E328FC"><animateMotion path="M57.6 61.1Q416 40.4 640 79" dur="11s" begin="-2s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.75;1" dur="11s" begin="-2s" repeatCount="indefinite"/></circle>
+<circle r="2.4" fill="#00FBCC"><animateMotion path="M1222.4 96.9Q864 117.6 640 79" dur="13s" begin="-8s" repeatCount="indefinite"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.75;1" dur="13s" begin="-8s" repeatCount="indefinite"/></circle></g>
+</svg>

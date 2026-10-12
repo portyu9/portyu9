@@ -15,6 +15,8 @@ import re
 import sys
 from pathlib import Path
 
+import banner_rotation as daily_banners
+
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 LEGACY_PATH = ROOT / "scripts/validate-profile.py"
@@ -73,7 +75,7 @@ BOTTOM_HORIZON_BLOCK = (
     '</p>'
 )
 BOTTOM_HORIZON_ANCHOR = re.compile(
-    r'<a\b[^>]*>(?:(?!</a>).)*elite-evidence-horizon-bottom\.svg(?:(?!</a>).)*</a>',
+    r'<a\b[^>]*>(?:(?!</a>).)*<img alt="Animated evidence horizon"(?:(?!</a>).)*</a>',
     re.I | re.S,
 )
 RETIRED_FLAGSHIP_SVGS = (
@@ -135,7 +137,10 @@ def validate_references(readme: str) -> None:
             spotlight_refs.append((spotlight.group(1), spotlight.group(2)))
         else:
             references.append(cleaned)
-    allowed = set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(DESKTOP_PRINCIPLE_SVGS) | set(THESIS_HEADER_REFS) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS) | set(PROFILE_BANNER_SVGS)
+    selected_banner = daily_banners.validate_readme_state(readme, daily_banners.load_catalog())
+    allowed = (set(legacy.IDENTITY_AND_PRINCIPLE_SVGS) | set(DESKTOP_PRINCIPLE_SVGS) |
+               set(THESIS_HEADER_REFS) | set(legacy.GENERATED_SVG_REFERENCES) | set(FLAGSHIP_SVGS) |
+               set(selected_banner.values()) | {ANIMATED_HERO_SVG})
     unexpected=sorted(set(references)-allowed); missing=sorted(allowed-set(references))
     require(not unexpected, "README contains unapproved SVG references: " + ", ".join(unexpected))
     require(not missing, "README is missing approved SVG references: " + ", ".join(missing))
@@ -527,7 +532,13 @@ def main() -> int:
     for relative in PROFILE_BANNER_SVGS:
         require((ROOT / relative).is_file(), f"Approved profile banner is missing: {relative}")
     validate_animated_hero(readme)
-    require(readme.count(BOTTOM_HORIZON_BLOCK) == 1,
+    banner_scenes = daily_banners.load_catalog()
+    daily_banners.validate_assets(banner_scenes)
+    daily_banners.test_rotation(banner_scenes)
+    current_banners = daily_banners.validate_readme_state(readme, banner_scenes)
+    expected_bottom_block = BOTTOM_HORIZON_BLOCK.replace(
+        "assets/profile-banners/elite-evidence-horizon-bottom.svg", current_banners["bottom"])
+    require(readme.count(expected_bottom_block) == 1,
             "Bottom evidence horizon must remain visible exactly once in non-linked picture markup")
     require(BOTTOM_HORIZON_ANCHOR.search(readme) is None,
             "Bottom evidence horizon must never be wrapped by a clickable anchor")

@@ -11,6 +11,7 @@ switch atomically when the reviewed README change lands on main.
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import hashlib
 import json
 from pathlib import Path
@@ -20,6 +21,29 @@ import sys
 from typing import Any
 
 VERSION = "spotlight-profile-links-v1"
+BANNER_HELPER_GIT_BLOB = "266b466b54cd1ec113e919e3cc03cb9223732b8c"
+BANNER_CATALOG_GIT_BLOB = "9cccc9f894565f85fb7bac6c698bc894883bbe90"
+
+
+def reviewed_banner_helper():
+    """Verify delegate source identities before importing executable helper code."""
+    source_dir = Path(__file__).resolve(strict=True).parent
+    inputs = (
+        ("banner_rotation.py", BANNER_HELPER_GIT_BLOB),
+        ("banner-rotation-v1.json", BANNER_CATALOG_GIT_BLOB),
+    )
+    for relative, expected in inputs:
+        path = source_dir / relative
+        require(path.is_file() and not path.is_symlink() and path.absolute() == path.resolve(strict=True),
+                f"Spotlight banner delegate is missing or aliased: {relative}")
+        data = path.read_bytes()
+        actual = hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data,
+                              usedforsecurity=False).hexdigest()
+        require(actual == expected,
+                f"Spotlight banner delegate changed without protected renderer authorization: {relative}")
+    import banner_rotation
+    return banner_rotation
+
 PUBLICATION_EPOCH_VERSION = "generated-publication-epoch-v1"
 OWNER = "portyu9"
 PROFILE_REPOSITORY = "portyu9/portyu9"
@@ -191,6 +215,12 @@ def render_plan(
                     "same generated publication epoch must preserve exact commit and tree identity")
     block, targets = render_block(manifest, generated_sha, publication_sequence, generated_tree_sha)
     proposed = replace_block(readme, block)
+    banner_cycle = reviewed_banner_helper()
+    banner_scenes = banner_cycle.load_catalog()
+    banner_cycle.validate_readme_state(readme, banner_scenes)
+    selected_banner = banner_cycle.chosen(date.fromisoformat(manifest["selection_date_utc"]), banner_scenes)
+    proposed = banner_cycle.propose(proposed, selected_banner)
+    banner_cycle.validate_readme_state(proposed, banner_scenes)
     plan = {
         "version": VERSION,
         "publication_epoch_version": PUBLICATION_EPOCH_VERSION,
@@ -244,7 +274,14 @@ def fixture_manifest() -> dict[str, Any]:
 
 
 def self_test() -> None:
-    readme = f"before\n{START}\nold\n{END}\nafter\n"
+    hero = ('<p align="center">\n<picture>\n'
+            '  <source media="(max-width: 640px)" srcset="assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg">\n'
+            '  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/quantum-apex-signal-crown-hero.svg" width="100%">\n'
+            '</picture>\n</p>')
+    footer = ('<p align="center">\n<picture>\n'
+              '  <img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">\n'
+              '</picture>\n</p>')
+    readme = f"before\n{hero}\n{START}\nold\n{END}\n{footer}\nafter\n"
     proposed, plan = render_plan(
         fixture_manifest(), readme, "a" * 40, "b" * 40, 7, "c" * 40
     )
