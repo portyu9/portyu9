@@ -24,7 +24,7 @@ HERO_WIDTH = 1_280
 HERO_HEIGHT = 854
 HERO_SHA256 = "d840734c78ec59f3c53644330bc2166c51e1bb5eb8e768595035a37767eb5452"
 HEADER_ASSET_COMMIT = "3849d500a7a09960e1b2ec562c7f3f9339a3b6d6"
-DESKTOP_HEADER_ASSET_COMMIT = "74c746b702cf708ee15b1c274f4d6e7077d18bd4"
+DESKTOP_HEADER_ASSET_COMMIT = "179a1d6ff3ba3d303ff92a5b2baf7e01cb3ce709"
 
 SELF_HOSTED_BADGES = (
     "assets/profile-badges/badge-ai-enabled-qe.svg",
@@ -210,19 +210,19 @@ def validate_thesis_headers(readme: str) -> None:
             + f'<source {landscape_light} srcset="{mobile_l}">'
             + f'<source {desktop_dark} srcset="{desktop_d}">'
             + f'<source {desktop_light} srcset="{desktop_l}">'
-            + f'<source media="(prefers-color-scheme: dark)" srcset="{mobile_d}">'
-            + f'<img alt="{'◆ Principle' if family == 'principle' else '▤ Engineering Contract'}" src="{mobile_l}"></picture></th>'
+            + f'<source media="(prefers-color-scheme: dark)" srcset="{desktop_d}">'
+            + f'<img alt="{'◆ Principle' if family == 'principle' else '▤ Engineering Contract'}" src="{desktop_l}"></picture></th>'
         )
         require(readme.count(expected) == 1,
-                f"{family}: responsive source order must preserve mobile phones and 15px desktop")
-        require(readme.count(desktop_d) == 1 and readme.count(desktop_l) == 1,
-                f"{family}: desktop headers must use precisely one immutable image per theme")
-        require(readme.count(mobile_d) == 3 and readme.count(mobile_l) == 3,
-                f"{family}: mobile headers must be preserved in both phone orientations and fallback")
+                f"{family}: responsive source order must preserve mobile phones and 13px desktop")
+        require(readme.count(desktop_d) == 2 and readme.count(desktop_l) == 2,
+                f"{family}: desktop headers must be in media selection and HTML fallback")
+        require(readme.count(mobile_d) == 2 and readme.count(mobile_l) == 2,
+                f"{family}: mobile sources must be preserved in both phone orientations")
 
     for relative in HEADER_SVGS:
         content = safe_svg(ROOT / relative, relative)
-        expected_size = 'font-size="15"' if "desktop" in relative else 'font-size="23"'
+        expected_size = 'font-size="13"' if "desktop" in relative else 'font-size="23"'
         require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
         expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
