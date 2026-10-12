@@ -82,13 +82,26 @@ def render_card(
     glyph = glyph_markup(str(system["glyph"]), str(accent))
     topology = topology_markup(str(system["topology"]), p["node"], str(accent), str(accent2), str(accent3))
     title_size = fit_font(str(system["title"]))
-    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="620" height="198" viewBox="0 0 620 198" role="img" aria-labelledby="title desc" data-spotlight="{version}" data-layout="evidence-v2" data-slot="{slot}" data-date="{day.isoformat()}" data-repository="{owner}/{repo}" data-subject-revision="{subject}" data-evidence-age-days="{max_age}" data-evidence-runs="{html.escape(run_attr)}" data-evidence-workflows="{html.escape(workflow_attr)}" data-status-presentation="external-clickable-only" data-glyph="{system["glyph"]}" data-topology="{system["topology"]}">
+    # Mobile layout is a distinct visual presentation of the exact same evidence.
+    # Keep the desktop artwork untouched; the embedded SVG viewport is the switch.
+    mobile_title_size = min(title_size + 5, 31)
+    mobile_result = html.escape(" · ".join(f"{item['label']} {item['signal']}" for item in evidence))
+    mobile_run_ids = html.escape(" / ".join(f"{item['label']}#{item['run_id']}" for item in evidence))
+    freshnesses = {str(item["freshness"]) for item in evidence}
+    mobile_freshness = "AGED" if "AGED" in freshnesses else (
+        "SAME DAY" if freshnesses == {"SAME_DAY"} else "UNAVAILABLE"
+    )
+    mobile_binding = "CURRENT MAIN" if all(item["binding"] == "CURRENT_SUBJECT" for item in evidence) else "STALE SUBJECT"
+    age_ink = "#FBBF24" if theme == "dark" else "#92400E"
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="620" height="198" viewBox="0 0 620 198" role="img" aria-labelledby="title desc" data-spotlight="{version}" data-layout="evidence-v2" data-slot="{slot}" data-date="{day.isoformat()}" data-repository="{owner}/{repo}" data-subject-revision="{subject}" data-evidence-age-days="{max_age}" data-evidence-runs="{html.escape(run_attr)}" data-evidence-workflows="{html.escape(workflow_attr)}" data-status-presentation="external-clickable-only" data-glyph="{system["glyph"]}" data-topology="{system["topology"]}" data-mobile-evidence="spotlight-mobile-clarity-v1">
   <title id="title">{title}</title>
   <desc id="desc">Daily deterministic Evidence Spotlight for {owner}/{repo} at main revision {subject}. {signature}. {html.escape(evidence_desc)}. Freshness is UTC whole-day age from the named workflow evidence timestamp.</desc>
   <defs>
     <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{accent}"/><stop offset=".54" stop-color="{accent2}"/><stop offset="1" stop-color="{accent3}"/></linearGradient>
     <linearGradient id="wash" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="{accent}" stop-opacity=".055"/><stop offset=".54" stop-color="{accent2}" stop-opacity=".026"/><stop offset="1" stop-color="{accent3}" stop-opacity=".045"/></linearGradient>
   </defs>
+  <style>.desktop-card{{display:inline}}.mobile-card{{display:none}}@media (max-width:500px){{.desktop-card{{display:none}}.mobile-card{{display:inline}}}}</style>
+  <g class="desktop-card">
   <rect x="1" y="1" width="618" height="196" rx="15" fill="{p['surface']}" stroke="{p['stroke']}"/><rect x="2" y="2" width="616" height="194" rx="14" fill="url(#wash)"/>
   {topology}
   <rect x="20" y="18" width="4" height="162" rx="2" fill="url(#edge)"/>
@@ -101,5 +114,17 @@ def render_card(
   <text x="590" y="131" text-anchor="end" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.8" font-weight="700">FRESHNESS · {max_age}d UTC</text>
   <text x="40" y="166" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.2">RUNS · {html.escape(" / ".join(f"{item['workflow']}#{item['run_id']}" for item in evidence))}</text>
   <text x="590" y="166" text-anchor="end" fill="{p['muted']}" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.2">repo · {repo}</text>
+  </g>
+  <g class="mobile-card">
+    <rect x="1" y="1" width="618" height="196" rx="15" fill="{p['surface']}" stroke="{p['stroke']}"/>
+    <rect x="2" y="2" width="616" height="194" rx="14" fill="url(#wash)"/>
+    <rect x="18" y="18" width="5" height="162" rx="2" fill="url(#edge)"/>
+    <text x="38" y="28" fill="{p['muted']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="20" font-weight="700">EVIDENCE SPOTLIGHT · {slot:02d}</text>
+    <text x="38" y="66" fill="{accent}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="{mobile_title_size}" font-weight="800">{title}</text>
+    <text x="38" y="96" fill="{p['ink']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="19" font-weight="600">{domain}</text>
+    <text x="38" y="128" fill="{p['ink']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="22" font-weight="700">{mobile_result}</text>
+    <text x="38" y="156" fill="{age_ink}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS {mobile_freshness} · {max_age}d UTC · {mobile_binding}</text>
+    <text x="38" y="185" fill="{p['muted']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN {subject[:12]} · RUNS {mobile_run_ids}</text>
+  </g>
 </svg>
 """
