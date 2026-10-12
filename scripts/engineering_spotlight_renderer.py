@@ -81,6 +81,11 @@ def render_card(
     )
     glyph = glyph_markup(str(system["glyph"]), str(accent))
     topology = topology_markup(str(system["topology"]), p["node"], str(accent), str(accent2), str(accent3))
+    # Mobile reuses the desktop motif with legible but subdued line/node contrast.
+    mobile_topology = (topology.replace('stroke-opacity=".11"', 'stroke-opacity=".20"')
+                       .replace('stroke-opacity=".08"', 'stroke-opacity=".16"')
+                       .replace('r="3.4"', 'r="4.5"')
+                       .replace('stroke-width="1.5"', 'stroke-width="2"'))
     title_size = fit_font(str(system["title"]))
     # Mobile layout is a distinct visual presentation of the exact same evidence.
     # Keep the desktop artwork untouched; the embedded SVG viewport is the switch.
@@ -118,6 +123,7 @@ def render_card(
   <g class="mobile-card">
     <rect x="1" y="1" width="618" height="196" rx="15" fill="{p['surface']}" stroke="{p['stroke']}"/>
     <rect x="2" y="2" width="616" height="194" rx="14" fill="url(#wash)"/>
+    <g data-mobile-corner-decoration="topology-restored-v1" aria-hidden="true">{mobile_topology}</g>
     <rect x="18" y="18" width="5" height="162" rx="2" fill="url(#edge)"/>
     <text x="38" y="28" fill="{p['muted']}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="20" font-weight="700">EVIDENCE SPOTLIGHT · {slot:02d}</text>
     <text x="38" y="66" fill="{accent}" font-family="ui-sans-serif,system-ui,sans-serif" font-size="{mobile_title_size}" font-weight="800">{title}</text>

@@ -17,6 +17,13 @@
   </g>
   <g class="mobile-card">
     <rect x="1" y="1" width="618" height="196" rx="16" fill="#FFFFFF" stroke="#D0D7DE"/><rect x="2" y="2" width="616" height="194" rx="15" fill="url(#wash)"/>
+    <g data-mobile-corner-decoration="topology-restored-v1" aria-hidden="true">
+      <path d="M454 26h34l14 14h34l16-16h38l16 16" fill="none" stroke="#FF5C5C" stroke-opacity="0.23" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M466 158h34l16-18h34l16 14h36" fill="none" stroke="#FF8A5B" stroke-opacity="0.22" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M520 28v30l18 14v34l-18 16v34" fill="none" stroke="#FF3131" stroke-opacity="0.18" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M570 42l18 16v28l-18 16 18 18" fill="none" stroke="#FF5C5C" stroke-opacity="0.14" stroke-linecap="round" stroke-linejoin="round"/>
+      <g stroke-width="2"><circle cx="502" cy="40" r="4.5" fill="#FFFFFF" stroke="#FF5C5C"/><circle cx="552" cy="24" r="4.5" fill="#FFFFFF" stroke="#FF3131"/><circle cx="516" cy="140" r="4.5" fill="#FFFFFF" stroke="#FF8A5B"/><circle cx="588" cy="86" r="4.5" fill="#FFFFFF" stroke="#FF5C5C"/><circle cx="568" cy="154" r="4.5" fill="#FFFFFF" stroke="#FF3131"/></g>
+    </g>
     <rect x="18" y="18" width="5" height="162" rx="2" fill="url(#edge)"/>
     <text x="38" y="38" fill="#3D444D" font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="20" font-weight="700">ENGINEERING SYSTEM · 02</text>
     <text x="38" y="77" fill="#C81D25" font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="30" font-weight="800">AGENT EVALUATION + TEVV</text>

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+from xml.etree import ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 FLAGSHIP_SVGS = (
@@ -42,9 +43,33 @@ def read_svg(path: Path, label: str) -> str:
     return content
 
 
+def validate_mobile_corner(content: str, label: str) -> None:
+    """All card themes retain the original corner topology in their mobile-only SVG layer."""
+    root = ET.fromstring(content)
+    namespace = "{http://www.w3.org/2000/svg}"
+    mobile_groups = [
+        group for group in root.findall(f"{namespace}g")
+        if group.get("class") == "mobile-card"
+    ]
+    require(len(mobile_groups) == 1, f"{label} must have one mobile SVG group")
+    decoration = [
+        child for child in mobile_groups[0]
+        if child.get("data-mobile-corner-decoration") == "topology-restored-v1"
+    ]
+    require(len(decoration) == 1, f"{label} is missing the restored mobile corner design")
+    paths = decoration[0].findall(f".//{namespace}path")
+    nodes = decoration[0].findall(f".//{namespace}circle")
+    require(len(paths) >= 2 and len(nodes) >= 4,
+            f"{label} must have the original corner paths and topology nodes on mobile")
+    require(all(440 <= float(node.get("cx", "0")) <= 620 and
+                15 <= float(node.get("cy", "0")) <= 170 for node in nodes),
+            f"{label} mobile decorations must stay within the right-side corner region")
+
+
 def validate_flagships() -> None:
     for relative in FLAGSHIP_SVGS:
         content = read_svg(ROOT / relative, "flagship engineering card")
+        validate_mobile_corner(content, relative)
         require('data-system-card="selected-engineering-systems-v4"' in content,
                 f"flagship system-card identity changed: {relative}")
         require(FLAGSHIP_OUTER in content, f"flagship outer surface no longer fills 620×198 canvas: {relative}")
@@ -60,6 +85,7 @@ def validate_spotlights(directory: Path) -> None:
     require(directory.is_dir(), f"generated Spotlight directory is missing: {directory}")
     for basename in SPOTLIGHT_SVGS:
         content = read_svg(directory / basename, "generated Spotlight card")
+        validate_mobile_corner(content, basename)
         require('data-spotlight="engineering-spotlight-v2.1"' in content,
                 f"generated Spotlight identity changed: {basename}")
         require('data-status-presentation="external-clickable-only"' in content,
