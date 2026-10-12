@@ -5,6 +5,8 @@ on:
       - ".github/workflows/original-banner-rotation-capability-measurement.yml"
 permissions:
   contents: read
+env:
+  PYTHON_VERSION: "3.13.16"
 jobs:
   measure:
     name: measure-immutable-eight-day-banner-candidate-read-only
