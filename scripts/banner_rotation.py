@@ -155,6 +155,25 @@ def referenced(readme: str) -> dict[str, str]:
     return current
 
 
+def validate_readme_state(readme: str, scenes: list[dict[str, str]]) -> dict[str, str]:
+    """Validate a canonical, date-bound triplet or the untouched legacy bootstrap."""
+    observed = referenced(readme)
+    markers = list(BANNER_MARKER.finditer(readme))
+    require(readme.count(BANNER_MARKER_PREFIX) == len(markers) and len(markers) <= 1,
+            "README banner high-water marker is ambiguous or malformed")
+    if not markers:
+        require(observed == ORIGINAL, "unmarked README must use the approved original banner triplet")
+        return observed
+    marker = markers[0]
+    prior_day = date.fromisoformat(marker.group(1))
+    require(prior_day >= EPOCH, "README banner marker predates UTC epoch")
+    expected = chosen(prior_day, scenes)
+    require(marker.group(2) == expected["slug"], "README banner date/scene marker is inconsistent")
+    require(observed == {s: expected[s] for s in SURFACES},
+            "README banner artwork is not bound to its UTC-day marker")
+    return observed
+
+
 def propose(readme: str, selection: dict[str, Any]) -> str:
     """Build a replay-safe three-surface candidate without mutating source."""
     existing = referenced(readme)
