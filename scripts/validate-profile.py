@@ -24,6 +24,7 @@ HERO_WIDTH = 1_280
 HERO_HEIGHT = 854
 HERO_SHA256 = "d840734c78ec59f3c53644330bc2166c51e1bb5eb8e768595035a37767eb5452"
 HEADER_ASSET_COMMIT = "3849d500a7a09960e1b2ec562c7f3f9339a3b6d6"
+DESKTOP_HEADER_ASSET_COMMIT = "74c746b702cf708ee15b1c274f4d6e7077d18bd4"
 
 SELF_HOSTED_BADGES = (
     "assets/profile-badges/badge-ai-enabled-qe.svg",
@@ -103,7 +104,7 @@ HEADER_SVGS = (
     "assets/profile-badges/thesis-header-engineering-contract-desktop-dark.svg",
 )
 HEADER_REFERENCES = tuple(
-    f"https://raw.githubusercontent.com/portyu9/portyu9/{HEADER_ASSET_COMMIT}/{path}"
+    f"https://raw.githubusercontent.com/portyu9/portyu9/{DESKTOP_HEADER_ASSET_COMMIT if '-desktop-' in path else HEADER_ASSET_COMMIT}/{path}"
     for path in HEADER_SVGS
 )
 GENERATED_SVG_REFERENCES = (
@@ -195,13 +196,14 @@ def validate_thesis_headers(readme: str) -> None:
             "Both headers must retain the fine-pointer desktop scale within the intermediate viewport")
 
     for width, family in (("45", "principle"), ("55", "engineering-contract")):
-        prefix = f"https://raw.githubusercontent.com/portyu9/portyu9/{HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}"
-        phone_dark = f'<source {phone_device_dark} srcset="{prefix}-mobile-dark.svg">'
-        phone_light = f'<source {phone_device_light} srcset="{prefix}-mobile-light.svg">'
-        desktop_dark = f'<source {pointer_dark} srcset="{prefix}-desktop-dark.svg">'
-        desktop_light = f'<source {pointer_light} srcset="{prefix}-desktop-light.svg">'
-        mobile_landscape_dark = f'<source {landscape_dark} srcset="{prefix}-mobile-dark.svg">'
-        mobile_landscape_light = f'<source {landscape_light} srcset="{prefix}-mobile-light.svg">'
+        mobile_prefix = f"https://raw.githubusercontent.com/portyu9/portyu9/{HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}"
+        desktop_prefix = f"https://raw.githubusercontent.com/portyu9/portyu9/{DESKTOP_HEADER_ASSET_COMMIT}/assets/profile-badges/thesis-header-{family}"
+        phone_dark = f'<source {phone_device_dark} srcset="{mobile_prefix}-mobile-dark.svg">'
+        phone_light = f'<source {phone_device_light} srcset="{mobile_prefix}-mobile-light.svg">'
+        desktop_dark = f'<source {pointer_dark} srcset="{desktop_prefix}-desktop-dark.svg">'
+        desktop_light = f'<source {pointer_light} srcset="{desktop_prefix}-desktop-light.svg">'
+        mobile_landscape_dark = f'<source {landscape_dark} srcset="{mobile_prefix}-mobile-dark.svg">'
+        mobile_landscape_light = f'<source {landscape_light} srcset="{mobile_prefix}-mobile-light.svg">'
         expected = (
             f'<th width="{width}%" align="center"><picture>'
             + phone_dark + phone_light + desktop_dark + desktop_light + mobile_landscape_dark + mobile_landscape_light
@@ -211,7 +213,7 @@ def validate_thesis_headers(readme: str) -> None:
 
     for relative in HEADER_SVGS:
         content = safe_svg(ROOT / relative, relative)
-        expected_size = 'font-size="18"' if "desktop" in relative else 'font-size="23"'
+        expected_size = 'font-size="15"' if "desktop" in relative else 'font-size="23"'
         require(expected_size in content, f"Responsive thesis header type size changed: {relative}")
         expected_fill = '#F0F6FC' if "dark" in relative else '#1F2328'
         require(f'fill="{expected_fill}"' in content, f"Responsive thesis header theme fill changed: {relative}")
