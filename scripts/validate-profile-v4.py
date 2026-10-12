@@ -15,6 +15,8 @@ import re
 import sys
 from pathlib import Path
 
+import banner_rotation as daily_banners
+
 ROOT = Path(__file__).resolve().parents[1]
 README = ROOT / "README.md"
 LEGACY_PATH = ROOT / "scripts/validate-profile.py"
@@ -527,6 +529,9 @@ def main() -> int:
     for relative in PROFILE_BANNER_SVGS:
         require((ROOT / relative).is_file(), f"Approved profile banner is missing: {relative}")
     validate_animated_hero(readme)
+    banner_scenes = daily_banners.load_catalog()
+    daily_banners.validate_assets(banner_scenes)
+    daily_banners.test_rotation(banner_scenes)
     require(readme.count(BOTTOM_HORIZON_BLOCK) == 1,
             "Bottom evidence horizon must remain visible exactly once in non-linked picture markup")
     require(BOTTOM_HORIZON_ANCHOR.search(readme) is None,

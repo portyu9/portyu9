@@ -112,7 +112,7 @@ def validate_assets(scenes: list[dict[str, str]]) -> None:
             require(2400 <= len(data.encode("utf-8")) < 30000, f"banner payload bound violated: {relative}")
             lower = data.lower()
             # XML namespace declarations are not network resource loads.
-            checked = re.sub(r'\\s+xmlns(?::[a-z]+)?="https?://www\\.w3\\.org/[^"]+"', "", lower)
+            checked = re.sub(r'\s+xmlns(?::[a-z]+)?="https?://www\.w3\.org/[^"]+"', "", lower)
             require(not any(token in checked for token in ("<script", "<image", "<foreignobject", "javascript:", "data:image", "http://", "https://")),
                     f"banner art must not load external payloads or scripts: {relative}")
             svg = ET.fromstring(data)
