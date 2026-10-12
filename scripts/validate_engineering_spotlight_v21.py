@@ -298,6 +298,14 @@ def validate_svgs(root: Path, slot_by_number: dict[int, dict[str, Any]]) -> None
         require_well_formed_svg(content, name)
         require(f'data-spotlight="{VERSION}"' in content, f"Spotlight provenance missing: {name}")
         require('data-layout="evidence-v2"' in content, f"Spotlight layout provenance missing: {name}")
+        require('data-mobile-evidence="spotlight-mobile-clarity-v1"' in content,
+                f"Spotlight mobile evidence presentation provenance is missing: {name}")
+        require('@media (max-width:500px)' in content and 'prefers-color-scheme' not in content,
+                f"Spotlight media rule must be mobile-only and preserve explicit light/dark sources: {name}")
+        require(content.count('<g class="desktop-card">') == 1 and content.count('<g class="mobile-card">') == 1,
+                f"Spotlight requires unmodified desktop art plus an independent mobile evidence view: {name}")
+        require('font-size="22"' in content and 'font-size="21"' in content and 'font-size="18"' in content,
+                f"Spotlight status, freshness and run metadata must be legible at phone scale: {name}")
         require('data-status-presentation="external-clickable-only"' in content, f"Spotlight visible status presentation regressed: {name}")
         require(f'data-evidence-semantics="{EVIDENCE_SEMANTICS}"' in content, f"Spotlight evidence semantics missing: {name}")
         require('width="620" height="198" viewBox="0 0 620 198"' in content, f"Spotlight reviewed geometry changed: {name}")
@@ -333,12 +341,22 @@ def validate_svgs(root: Path, slot_by_number: dict[int, dict[str, Any]]) -> None
         records = slot["signals"]
         require(subject_match.group(1) == slot["subject_revision"], f"SVG/manifest subject revision diverged for slot {slot_match.group(1)}")
         require(f"SUBJECT · {slot['subject_revision']} · MAIN" in content, f"Full visible subject revision missing for slot {slot_match.group(1)}")
+        require(f"MAIN {slot['subject_revision'][:12]} · RUNS " in content,
+                f"Mobile Spotlight subject/run provenance missing for slot {slot_match.group(1)}")
+        age = max(record['age_days'] for record in records)
+        states = {record['freshness'] for record in records}
+        freshness = "AGED" if "AGED" in states else ("SAME DAY" if states == {"SAME_DAY"} else "UNAVAILABLE")
+        binding = "CURRENT MAIN" if all(record['binding'] == "CURRENT_SUBJECT" for record in records) else "STALE SUBJECT"
+        require(f"FRESHNESS {freshness} · {age}d UTC · {binding}" in content,
+                f"Mobile Spotlight freshness display diverged from live evidence: {name}")
         require(str(slot["repository"]) not in STATIC_REPOSITORIES, f"Permanent flagship rendered in slot {slot_match.group(1)}")
         require(attr_value(content, "data-evidence-results") == expected_dimension_attr(records, "result"), f"SVG execution-result projection diverged: {name}")
         require(attr_value(content, "data-evidence-bindings") == expected_dimension_attr(records, "binding"), f"SVG subject-binding projection diverged: {name}")
         require(attr_value(content, "data-evidence-freshness") == expected_dimension_attr(records, "freshness"), f"SVG freshness projection diverged: {name}")
         for record in records:
             require(f"{record['label']} result {record['result']}" in content, f"Execution result missing from accessible evidence description: {name}: {record['label']}")
+            require(f"{record['label']} {record['result']}" in content,
+                    f"Mobile Spotlight result label must be derived from source evidence: {name}: {record['label']}")
             require(f"{record['workflow']}#{record['run_id']}" in content, f"Exact workflow/run provenance missing from {name}: {record['label']}")
             require(f"binding {record['binding']}" in content, f"Subject binding missing from SVG description: {name}")
             require(f"freshness {record['freshness']}" in content, f"Freshness state missing from SVG description: {name}")
