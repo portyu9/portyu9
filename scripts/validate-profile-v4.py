@@ -378,7 +378,14 @@ def validate_flagships(readme: str) -> None:
         require('data-system-card="selected-engineering-systems-v4"' in content, f"System-card v4 provenance missing: {relative}")
         expected_theme="dark" if relative.endswith("-dark.svg") else "light"
         require(f'data-theme="{expected_theme}"' in content, f"Explicit theme marker changed: {relative}")
-        require("@media" not in content, f"System card must not depend on internal theme media queries: {relative}")
+        require('@media (max-width:500px)' in content and 'prefers-color-scheme' not in content,
+                f"System card must use only the explicitly scoped mobile layout breakpoint: {relative}")
+        require(content.count('<g class="desktop-card">') == 1 and content.count('<g class="mobile-card">') == 1,
+                f"System card must retain separate, deterministic desktop and mobile visuals: {relative}")
+        require('font-size="22"' in content and 'font-size="20"' in content,
+                f"System card mobile explanation has regressed to sub-readable text: {relative}")
+        require('width="620" height="198" viewBox="0 0 620 198"' in content,
+                f"System-card desktop canvas geometry changed: {relative}")
         require('<linearGradient id="edge"' in content and '<linearGradient id="wash"' in content and 'fill="url(#edge)"' in content and 'fill="url(#wash)"' in content, f"Rich gradient visual system regressed: {relative}")
         require(content.count("<circle") >= 4, f"Flagship topology nodes regressed: {relative}")
         require(readme.count(relative)==1, f"System card variant must be referenced exactly once: {relative}")
