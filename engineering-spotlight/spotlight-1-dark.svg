@@ -1,10 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="620" height="198" viewBox="0 0 620 198" role="img" aria-labelledby="title desc" data-spotlight="engineering-spotlight-v2.1" data-layout="evidence-v2" data-slot="1" data-date="2026-10-12" data-repository="portyu9/qa-automation-java-restassured" data-subject-revision="15c56d18a386b04c7d704ff240658c7d467e3ef6" data-evidence-age-days="8" data-evidence-runs="CI:37244041678;SECURITY:37244044497" data-evidence-workflows="CI:ci.yml;SECURITY:security.yml" data-status-presentation="external-clickable-only" data-evidence-semantics="execution-result-subject-binding-freshness-v1" data-evidence-results="CI:PASSING;SECURITY:PASSING" data-evidence-bindings="CI:CURRENT_SUBJECT;SECURITY:CURRENT_SUBJECT" data-evidence-freshness="CI:AGED;SECURITY:AGED" data-glyph="shield-route" data-topology="protocol-chain">
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="198" viewBox="0 0 620 198" role="img" aria-labelledby="title desc" data-spotlight="engineering-spotlight-v2.1" data-layout="evidence-v2" data-slot="1" data-date="2026-10-12" data-repository="portyu9/qa-automation-java-restassured" data-subject-revision="15c56d18a386b04c7d704ff240658c7d467e3ef6" data-evidence-age-days="8" data-evidence-runs="CI:37244041678;SECURITY:37244044497" data-evidence-workflows="CI:ci.yml;SECURITY:security.yml" data-status-presentation="external-clickable-only" data-evidence-semantics="execution-result-subject-binding-freshness-v1" data-evidence-results="CI:PASSING;SECURITY:PASSING" data-evidence-bindings="CI:CURRENT_SUBJECT;SECURITY:CURRENT_SUBJECT" data-evidence-freshness="CI:AGED;SECURITY:AGED" data-glyph="shield-route" data-topology="protocol-chain" data-mobile-evidence="spotlight-mobile-clarity-v1">
   <title id="title">REST ASSURED QE</title>
   <desc id="desc">Daily deterministic Evidence Spotlight for portyu9/qa-automation-java-restassured at main revision 15c56d18a386b04c7d704ff240658c7d467e3ef6. Protocol · schema · PostgreSQL · attributable evidence. CI via ci.yml run 37244041678 is PASSING; SECURITY via security.yml run 37244044497 is PASSING. Evidence dimensions: CI result PASSING, binding CURRENT_SUBJECT, freshness AGED (8d); SECURITY result PASSING, binding CURRENT_SUBJECT, freshness AGED (8d). Freshness is UTC whole-day age from the named workflow evidence timestamp.</desc>
   <defs>
     <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A7714"/><stop offset=".54" stop-color="#FF6C37"/><stop offset="1" stop-color="#8C7CFF"/></linearGradient>
     <linearGradient id="wash" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8A7714" stop-opacity=".055"/><stop offset=".54" stop-color="#FF6C37" stop-opacity=".026"/><stop offset="1" stop-color="#8C7CFF" stop-opacity=".045"/></linearGradient>
   </defs>
+  <style>.desktop-card{display:inline}.mobile-card{display:none}@media (max-width:500px){.desktop-card{display:none}.mobile-card{display:inline}}</style>
+  <g class="desktop-card">
   <rect x="1" y="1" width="618" height="196" rx="15" fill="#0D1117" stroke="#30363D"/><rect x="2" y="2" width="616" height="194" rx="14" fill="url(#wash)"/>
   <path d="M594 49L482 37L519 89" fill="none" stroke="#8A7714" stroke-opacity=".11" stroke-linecap="round" stroke-linejoin="round"/><path d="M482 37L506 99L565 33" fill="none" stroke="#FF6C37" stroke-opacity=".11" stroke-linecap="round" stroke-linejoin="round"/><path d="M594 49L506 99" fill="none" stroke="#8C7CFF" stroke-opacity=".08" stroke-linecap="round"/><circle cx="594" cy="49" r="3.4" fill="#0D1117" stroke="#8A7714" stroke-width="1.5"/><circle cx="482" cy="37" r="3.4" fill="#0D1117" stroke="#FF6C37" stroke-width="1.5"/><circle cx="519" cy="89" r="3.4" fill="#0D1117" stroke="#8C7CFF" stroke-width="1.5"/><circle cx="506" cy="99" r="3.4" fill="#0D1117" stroke="#8A7714" stroke-width="1.5"/><circle cx="565" cy="33" r="3.4" fill="#0D1117" stroke="#FF6C37" stroke-width="1.5"/>
   <rect x="20" y="18" width="4" height="162" rx="2" fill="url(#edge)"/>
@@ -17,4 +19,16 @@
   <text x="590" y="131" text-anchor="end" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.8" font-weight="700">FRESHNESS · 8d UTC</text>
   <text x="40" y="166" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.2">RUNS · ci.yml#37244041678 / security.yml#37244044497</text>
   <text x="590" y="166" text-anchor="end" fill="#8B949E" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="8.2">repo · qa-automation-java-restassured</text>
+  </g>
+  <g class="mobile-card">
+    <rect x="1" y="1" width="618" height="196" rx="15" fill="#0D1117" stroke="#30363D"/>
+    <rect x="2" y="2" width="616" height="194" rx="14" fill="url(#wash)"/>
+    <rect x="18" y="18" width="5" height="162" rx="2" fill="url(#edge)"/>
+    <text x="38" y="28" fill="#8B949E" font-family="ui-sans-serif,system-ui,sans-serif" font-size="20" font-weight="700">EVIDENCE SPOTLIGHT · 01</text>
+    <text x="38" y="66" fill="#8A7714" font-family="ui-sans-serif,system-ui,sans-serif" font-size="29" font-weight="800">REST ASSURED QE</text>
+    <text x="38" y="96" fill="#F0F6FC" font-family="ui-sans-serif,system-ui,sans-serif" font-size="19" font-weight="600">API / PERSISTENCE · REST ASSURED</text>
+    <text x="38" y="128" fill="#F0F6FC" font-family="ui-sans-serif,system-ui,sans-serif" font-size="22" font-weight="700">CI PASSING · SECURITY PASSING</text>
+    <text x="38" y="156" fill="#FBBF24" font-family="ui-sans-serif,system-ui,sans-serif" font-size="21" font-weight="800">FRESHNESS AGED · 8d UTC · CURRENT MAIN</text>
+    <text x="38" y="185" fill="#8B949E" font-family="ui-sans-serif,system-ui,sans-serif" font-size="18" font-weight="600">MAIN 15c56d18a386 · RUNS CI#37244041678 / SECURITY#37244044497</text>
+  </g>
 </svg>
