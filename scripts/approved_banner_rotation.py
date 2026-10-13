@@ -277,6 +277,17 @@ def self_test(slots: list[dict[str, Any]]) -> None:
         pass
     else:
         raise ValueError("archived unapproved banner escaped approved-only guard")
+    # Read-only trusted-source measurement for prior authorization review.
+    # This does not admit capabilities or write any repository state. It prints
+    # a non-sensitive digest binding for an independently reviewed ledger PR.
+    import workflow_capability_tcb as trust_source
+    import workflow_capability_snapshot as trust_snapshot
+    import workflow_capability_diff as trust_diff
+    tcb_digest = trust_source.protected_digest(trust_source.protected_files(ROOT))
+    trusted_base_bom = trust_diff.digest(trust_snapshot.load_combined())
+    print("Approved banner prior-review measurement: "
+          f"candidateTcbSha256={tcb_digest} baseBomSha256={trusted_base_bom}")
+
 
 
 def main() -> int:
