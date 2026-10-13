@@ -70,8 +70,8 @@ def check() -> None:
         require(not any(token.lower() in lower for token in BAD),
                 f"Chronohedron {surface}: unsafe or repaint-heavy payload")
         require("prefers-reduced-motion:reduce" in source and
-                ".kinetic,.alive-motion,.contact-motion,.theme-motion,.theme-optic-motion{display:none}" in source and
-                ".still,.alive-still,.contact-still,.theme-still,.theme-optic-still{display:inline}" in source,
+                ".kinetic,.alive-motion,.contact-motion,.theme-motion,.theme-optic-motion,.reactive-motion{display:none}" in source and
+                ".still,.alive-still,.contact-still,.theme-still,.theme-optic-still,.reactive-still{display:inline}" in source,
                 f"Chronohedron {surface}: reduced-motion selector missing")
         require("Not approved for production" in source,
                 f"Chronohedron {surface}: preview must remain review-only")
@@ -173,7 +173,7 @@ def check() -> None:
                 {node.get("data-life-still") for node in frozen
                  if node.get("data-life-still")},
                 "living light group IDs and static fallback IDs diverged")
-        require(len(root.findall(f".//{NS}animateTransform")) == 42,
+        require(len(root.findall(f".//{NS}animateTransform")) == 46,
                 "Chronohedron motion/perspective groups changed")
         feed = next(node for node in nodes
                     if node.get("id") == "alive-photonic-transit")
@@ -206,7 +206,7 @@ def check() -> None:
                         "traveling waveguide light must have mathematically closed motion")
                 require(static_path.find(NS + "animate") is None,
                         "reduced-motion fallback contains a moving light channel")
-        require(len(root.findall(f".//{NS}animate")) == 90,
+        require(len(root.findall(f".//{NS}animate")) == 94,
                 "optical pulse or dynamic feed channel lost")
         contact_motion = [node for node in nodes
                           if node.get("class") == "contact-motion"]
@@ -364,6 +364,65 @@ def check() -> None:
             require(not list(still.iter(NS + "animate")) and
                     not list(still.iter(NS + "animateTransform")),
                     "reduced-motion static glass should contain no SMIL animations")
+        # The original black center read as a hollow void with meaningless
+        # faint stripes. Exactly four source-coupled active glass membranes
+        # now make all canonical profile colors illuminate the crystal cavity.
+        cavity = root.find(f".//{NS}g[@id='inner-energy-cavity']")
+        chamber = root.find(f".//{NS}g[@id='reactor-spectral-chamber']")
+        require(cavity is not None and chamber is not None and
+                len(chamber) == 8 and
+                len(cavity.findall(NS + "polygon")) == 2 and
+                cavity.find(NS + "polygon").get("fill") ==
+                "url(#reactor-cavity-light)",
+                "reactor chamber reverted to opaque black empty cutout")
+        require('fill="black" opacity=".8"' not in source and
+                'M621.0 99.0 Q640 95.0' not in source,
+                "old black center or meaningless curved stripes returned")
+        theme = ("green", "cyan", "violet", "magenta")
+        for i, tone in enumerate(theme):
+            live, still = chamber[2 * i], chamber[2 * i + 1]
+            require(live.get("class") == "reactive-motion" and
+                    still.get("class") == "reactive-still" and
+                    live.get("data-reactive") ==
+                    still.get("data-reactive-still") == tone,
+                    "reactive membrane identity / reduced-motion parity missing")
+            require(displayed_art(live) == displayed_art(still),
+                    "reduced-motion glass membrane geometry differs")
+            require(len(live.findall(NS + "path")) == 2 and
+                    live.findall(NS + "path")[1].get("stroke") ==
+                    spectral[i].find(NS + "path").get("stroke"),
+                    "color of incoming light is not reflected in its glass")
+            injection = spectral[i].find(f"{NS}path/{NS}animate")
+            motion = live.find(NS + "animateTransform")
+            glow = live.find(NS + "animate")
+            require(injection is not None and motion is not None and
+                    glow is not None and
+                    injection.get("dur") == motion.get("dur") ==
+                    glow.get("dur") and injection.get("begin") ==
+                    motion.get("begin") == glow.get("begin"),
+                    "color-specific light response drifted from actual energy")
+            require(motion.get("type") == "translate" and
+                    motion.get("keyTimes") == glow.get("keyTimes") ==
+                    "0;.5;1" and
+                    motion.get("keySplines") == glow.get("keySplines") ==
+                    ".42 0 .58 1;.42 0 .58 1" and
+                    motion.get("calcMode") == glow.get("calcMode") == "spline",
+                    "glowing geometry lost smooth, non-discontinuous motion")
+            shifts = motion.get("values", "").split(";")
+            alphas = glow.get("values", "").split(";")
+            require(len(shifts) == len(alphas) == 3 and
+                    shifts[0] == shifts[-1] and shifts[0] != shifts[1] and
+                    alphas[0] == alphas[-1] and
+                    float(alphas[0]) <= .3 < .9 <= float(alphas[1]) and
+                    glow.get("repeatCount") ==
+                    motion.get("repeatCount") == "indefinite",
+                    "living glass flashes too weakly or snaps on repeat")
+        rings = [node for node in root.iter(NS + "ellipse") if
+                 node.get("fill") in ("url(#haloIce)", "url(#haloMagenta)")]
+        require(len(rings) == 2 and
+                sorted(float(node.get("rx")) for node in rings) == [215, 248]
+                and all(float(node.get("opacity", "1")) <= .30 for node in rings),
+                "oversized pale oval smothered the crystal again")
         # Physical surface grain is a fixed bounded noise kernel, never a
         # time-varying turbulence or blur operation on the moving artwork.
         glass = root.find(f".//{NS}g[@id='alive-dielectric-material-depth']")
@@ -406,10 +465,11 @@ def check() -> None:
                                  normalized_text, count=1)
         normalized.add(hashlib.sha256(normalized_text.encode("utf-8")).hexdigest())
     require(len(normalized) == 1, "Chronohedron responsive variants diverged")
-    print("Chronohedron optics proof: 3 responsive studies, 42 smooth vector "
+    print("Chronohedron optics proof: 3 responsive studies, 46 smooth vector "
           "transforms, 14 closed-loop transported cyan/magenta channels, "
           "25 reduced-motion optical-layer mirrors, 14 light-bound " 
           "transport endpoints with static counterparts, 108+ grain points, "
+          "four profile-color source-coupled reactor glass membranes, "
           "bright breathing reactor, independently moving gaseous environment, "
           "phase-linked glass caustics, no animated noise or blurs, "
           "four exact profile phosphors, no amber/yellow center swirl, "
