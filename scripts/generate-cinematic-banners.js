@@ -70,7 +70,7 @@ function make(i,surface){
    for(let k=0;k<13;k++){const f=k/13,rx=w*(.47-f*.39),ry=h*(.8-f*.66);art+=path(`M${q(x-rx,y-ry)}V${n(y+ry)}H${n(x+rx)}V${n(y-ry)}`,"url(#neon)",1,.24+k*.025);}
    for(let k=0;k<49;k++)art+=dot(R()*w,R()*h,R()*1.6+.5,colors[k%3],.21+R()*.57);
    art+=`<rect x="${n(x-w*.065)}" y="${n(y-h*.25)}" width="${n(w*.13)}" height="${n(h*.5)}" rx="${n(h*.05)}" fill="url(#ambient)" stroke="#00E6FF" stroke-opacity=".81"/>`+path(`M${q(x,y-h*.39)}V${n(y+h*.39)} M${q(x-w*.14,y)}H${n(x+w*.14)}`,"url(#neon)",2.2,.85);
-   for(let k=0;k<3;k++)moving+=`<path class="motion" d="${wires[k].slice(0,1280)}" fill="none" stroke="${colors[k]}" stroke-width="2" stroke-dasharray="11 75"><animate attributeName="stroke-dashoffset" values="0;${k%2?160:-160}" dur="${5+k*2}s" repeatCount="indefinite"/></path>`;
+   for(let k=0;k<3;k++)moving+=`<path class="motion" d="${wires[k]}" fill="none" stroke="${colors[k]}" stroke-width="2" stroke-dasharray="11 75"><animate attributeName="stroke-dashoffset" values="0;${k%2?160:-160}" dur="${5+k*2}s" repeatCount="indefinite"/></path>`;
  }else{
    for(let k=0;k<25;k++){let off=(k-12)/12,pts=[];for(let j=0;j<=18;j++){let xx=w*j/18,u=(xx-x)/(w*.5);pts.push([xx,y+off*h*.75+Math.sign(off||1)*h*.14*Math.exp(-u*u*11)/(Math.abs(off)+.43)]);}
      art+=path("M"+pts.map(p=>q(...p)).join("L"),k%4===0?"url(#neon)":colors[k%3],k%5===0?1.3:.75,.33);}
