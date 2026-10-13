@@ -525,12 +525,30 @@ def check() -> None:
         require(not any(tag in source for tag in
                         ("vivid-crystal-helix", "helical-flow", "#ffd", "#ffe")),
                 "old yellow center vortex or off-profile yellow returned")
-        rings = [node for node in root.iter(NS + "ellipse") if
-                 node.get("fill") in ("url(#haloIce)", "url(#haloMagenta)")]
-        require(len(rings) == 2 and
-                sorted(float(node.get("rx")) for node in rings) == [215, 248]
-                and all(float(node.get("opacity", "1")) <= .30 for node in rings),
-                "oversized pale oval smothered the crystal again")
+        # Solid black is a required render surface, including both extreme
+        # edges of the wide and compact-cropped profile banner. No discarded
+        # translucent "glow ring" may reveal the GitHub checkerboard.
+        require(root.get("style") == "background-color:black",
+                "black SVG-root fallback was removed")
+        backgrounds = list(root.findall(NS + "rect"))
+        require(bool(backgrounds) and backgrounds[0].attrib == {
+                    "x": "0", "y": "0", "width": "1280", "height": "258",
+                    "fill": "black", "data-opaque-banner-backdrop": "true"},
+                "full SVG canvas must be painted opaque with literal black")
+        root_children = list(root)
+        require(root_children.index(backgrounds[0]) <
+                min(index for index, node in enumerate(root_children)
+                    if node.tag in (NS + "g", NS + "ellipse", NS + "path")),
+                "black backdrop must precede every light/translucent effect")
+        require(not any(fragment in source for fragment in (
+                    'id="night"', 'id="haloIce"', 'id="haloMagenta"',
+                    'url(#night)', 'url(#haloIce)', 'url(#haloMagenta)')),
+                "rejected oversized washed-out ellipse/gradient came back")
+        require(not any(ell.get("rx") and ell.get("ry") and
+                        float(ell.get("rx")) >= 230 and
+                        float(ell.get("ry")) >= 105
+                        for ell in root.iter(NS + "ellipse")),
+                "large pale oval reintroduced over black profile edges")
         # Physical surface grain is a fixed bounded noise kernel, never a
         # time-varying turbulence or blur operation on the moving artwork.
         glass = root.find(f".//{NS}g[@id='alive-dielectric-material-depth']")
@@ -580,7 +598,7 @@ def check() -> None:
           "four profile-color source-coupled reactor glass membranes, "
           "bright breathing reactor, independently moving gaseous environment, "
           "phase-linked glass caustics, no animated noise or blurs, "
-          "four exact profile phosphors, no amber/yellow center swirl, "
+          "four exact profile phosphors, opaque black backing without pale halo, no amber/yellow center swirl, "
           "four closed spectral energy routes, four corresponding optical caustics, "
           "four external-to-crystal phase-linked charge bundles and reduced-motion mirrors; "
           "no production enrollment.")
