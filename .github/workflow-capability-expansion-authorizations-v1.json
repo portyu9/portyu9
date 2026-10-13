@@ -43,6 +43,20 @@
       "rationale": "Authorize #1230's exact one-file trusted TCB selector preparation measured on accepted post-recovery main. Capability Admission will protect the reviewed future AI QA owner-certifier manifest, BOM shard, workflow, and verifier script. Semantic Workflow Capability is unchanged; no permission, trigger, secret, mutation, required-check reduction, ruleset/merge authority, direct-main write, AWS authority, or bypass is added."
     },
     {
+      "id": "cap-approved-iris-slot2-publisher-no-diagnostic-v1",
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "7528003fd507cdc9f5389185218320c40fba6e11c285b2430d3154f676649e55",
+      "rationale": "Prior-review exact trusted-source cleanup for Fractal Iris #1648 after CodeQL flagged an unnecessary temporary CI diagnostic that logged internal digests. The candidate removes logging from its approved-only banner helper and repins the immutable Spotlight publisher source to that corrected helper. The eight-slot original/Fractal Iris selection remains governed by the existing README-only bot transaction, with no workflow, secret, token, API mutation, bypass or permission expansion."
+    },
+    {
+      "id": "cap-approved-iris-slot2-publisher-v1",
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "377577778c3e4c263ee991615bcd63c01fb41285fdba45e7a8ec8708ba90b14d",
+      "rationale": "Prior authorization for exact Spotlight trusted-source update in Fractal Iris PR #1648. The reviewed publisher content-pins approved-only eight-slot selector and maintains the existing README-only governed Spotlight merge path. Only original slot 1 and Fractal Iris slot 2 are active; reserved slots fall back to original. No workflow, token, endpoint, permission, direct-main write or bypass authority changes."
+    },
+    {
       "baseBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
       "candidateBomSha256": "3aeaf008213bfce79b3ad9efa6459a36a8f03d1db65100e00c38d8c83100d9dd",
       "expansionSha256": "dfcce01f75de2002fb2863d2285e369157c21adcfb666acfea6419085b9ee439",
