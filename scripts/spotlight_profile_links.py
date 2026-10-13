@@ -59,7 +59,7 @@ def reviewed_approved_banner_helper():
                 path.absolute() == path.resolve(strict=True),
                 f"approved banner delegate is missing or aliased: {relative}")
         data = path.read_bytes()
-        actual = hashlib.sha1(f"blob {len(data)}\\0".encode("ascii") + data,
+        actual = hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data,
                               usedforsecurity=False).hexdigest()
         require(actual == expected,
                 f"unreviewed approved-banner delegate mutation: {relative}")
