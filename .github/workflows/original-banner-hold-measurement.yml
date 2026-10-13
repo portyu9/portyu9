@@ -1,0 +1,42 @@
+name: Measure original-only banner hold capability (read only)
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/original-banner-hold-measurement.yml"
+permissions:
+  contents: read
+jobs:
+  measure:
+    name: measure-immutable-original-only-hold
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout accepted main as trusted executable
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 03f4ebd47d15e6000df68b412211e2ee2363696a
+          path: trusted
+          persist-credentials: false
+      - name: Checkout immutable restoration candidate as inert data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 78910bfb56b0eb43eb568d2633160de43523933f
+          path: candidate
+          persist-credentials: false
+      - name: Set up pinned Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13.16"
+      - name: Verify immutable inputs and report only sanitized measurement
+        run: |
+          set -euo pipefail
+          test "$(git -C trusted rev-parse HEAD)" = "03f4ebd47d15e6000df68b412211e2ee2363696a"
+          test "$(git -C candidate rev-parse HEAD)" = "78910bfb56b0eb43eb568d2633160de43523933f"
+          python3 trusted/scripts/verify-python-runtime.py
+          TREE_SHA="$(git -C candidate rev-parse 'HEAD^{tree}')"
+          [[ "$TREE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "Frozen restoration candidate: 78910bfb56b0eb43eb568d2633160de43523933f"
+          echo "Frozen tree: $TREE_SHA"
+          python3 trusted/scripts/workflow_capability_admission.py candidate --candidate-tree-sha "$TREE_SHA" --measure
