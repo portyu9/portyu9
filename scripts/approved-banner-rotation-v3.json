@@ -36,9 +36,18 @@
     },
     {
       "slot": 3,
-      "slug": "03-reserved",
-      "state": "reserved",
-      "fallback_slot": 1
+      "slug": "03-chronohedron",
+      "state": "approved",
+      "assets": {
+        "top": "assets/profile-banners/approved/03-chronohedron-top.svg",
+        "top-compact": "assets/profile-banners/approved/03-chronohedron-top-compact.svg",
+        "bottom": "assets/profile-banners/approved/03-chronohedron-bottom.svg"
+      },
+      "blobs": {
+        "top": "947f3cf4057058163c689ff097286a2b3370e520",
+        "top-compact": "16012155edd7848bcea8c82fea65caeea0c85695",
+        "bottom": "54209231d92a65cbc56f01c652321e36aca6786b"
+      }
     },
     {
       "slot": 4,

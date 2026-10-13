@@ -1,7 +1,7 @@
 # Profile banner rotation — reviewed artwork gate (2026-10-13)
 
 This updates the historical October 13 **original-only suspension** to a
-content-addressed, explicitly approved **eight-slot** UTC rotation. The
+content-addressed, explicitly approved **eight-slot** UTC rotation with three approved design triplets. The
 original-only hold remains the fallback for unapproved work.
 
 ## Slot map and source of truth
@@ -16,14 +16,14 @@ README markers and any unapproved asset path.
 | --- | --- | --- |
 | 1 | Approved | Original Quantum Apex desktop/mobile and Evidence Horizon footer |
 | 2 | Approved | Fractal Iris desktop/mobile/closing horizon, **without under-iris shadow** |
-| 3–8 | Reserved | Original triplet only, until reviewed artwork is approved per slot |
+| 3 | Approved | Chronohedron: desktop/mobile/footer, with breathing four-phosphor crystalline edges |\n| 4–8 | Reserved | Original triplet only, until reviewed artwork is approved per slot |
 
 Slot 1 begins **2026-10-12 UTC**, slot 2 is **2026-10-13 UTC**, and each
 subsequent UTC day advances one slot (modulo eight). This makes slot 2 a
 fixed, predictable eight-day recurrence. Reserved slots deliberately fall
 back to the original artwork and cannot use archived experimental themes.
 
-The approved Fractal Iris is rendered as **three self-contained SVGs**
+The approved Chronohedron occupies slot 3 on the following UTC day (2026-10-14) and reappears every eight days; its three self-contained source assets are `assets/profile-banners/approved/03-chronohedron-{top,top-compact,bottom}.svg`. They are pinned individually by exact Git blob identities and preserve the user-approved original silhouette. The approved Fractal Iris is rendered as **three self-contained SVGs**
 under `assets/profile-banners/approved/`, each with the exact same real
 motion and light-response system, with viewports adapted to its destination:
 

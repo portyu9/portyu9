@@ -1,0 +1,82 @@
+# Chronohedron — concept 3 · living four-phosphor optical reactor
+
+**Status: experimental owner visual review only.** This artwork is not approved for production and is not part of the eight-slot profile rotation. Slot 3 still falls back to the original artwork. This page documents the **current** design, not obsolete intermediate halo compositions.
+
+## Review the real animated SVGs
+
+| Surface | Viewport | Animation |
+| --- | --- | --- |
+| Wide desktop hero | 1280 × 258 | [Open actual SVG](https://raw.githubusercontent.com/portyu9/portyu9/feature/chronohedron-crystal-reactor-study-20261013/experiments/previews/chronohedron-top.svg) |
+| Mobile hero | 640 × 196 center-crop | [Open actual SVG](https://raw.githubusercontent.com/portyu9/portyu9/feature/chronohedron-crystal-reactor-study-20261013/experiments/previews/chronohedron-top-compact.svg) |
+| Footer horizon | 1280 × 150 | [Open actual SVG](https://raw.githubusercontent.com/portyu9/portyu9/feature/chronohedron-crystal-reactor-study-20261013/experiments/previews/chronohedron-bottom.svg) |
+
+### Desktop reference
+
+![Real Chronohedron wide SVG](previews/chronohedron-top.svg)
+
+### Mobile crop
+
+![Real Chronohedron compact SVG](previews/chronohedron-top-compact.svg)
+
+### Footer crop
+
+![Real Chronohedron footer SVG](previews/chronohedron-bottom.svg)
+
+GitHub PR diff thumbnails are static and can show an earlier commit or stale cached frame. Use the immutable GitHub commit or current raw SVG links to review the current geometry and live motion in a browser. Source verification is not a measured-browser-FPS claim.
+
+## Precise fixes following the user's screenshot
+
+**The broad pale elliptical halo is removed—not merely faded.** The original huge rings were first reduced, but the screenshot showed they remained visually unacceptable. The current files remove both root-wide ovals, both internal decorative halo ovals, and their unused `night`, `haloIce` and `haloMagenta` gradient definitions. This retains the independent moving atmospheric plasma banks and active reactor without a giant translucent donut.
+
+**All four sides of every banner are solid black, never transparent.** The outermost SVG declares `style="background-color:black"` and contains a literal opaque `<rect x="0" y="0" width="1280" height="258" fill="black" data-opaque-banner-backdrop="true"/>` underneath every visual group. It covers the complete native wide canvas; the cropped mobile and footer viewboxes fall within the same rect. No transparent gradient is used as a substitute for the background. A regression checker pins both the backing color and the paint order.
+
+**The unnecessary yellow fading vertical swirl has been deleted**, along with the older purposeless set of fifteen center stripes. Instead, the four prism-cut reactor membranes brighten and subtly move on the exact phase and duration of the arriving profile-colored light. This replaces the hollow black central cutout with an energy-responsive cavity.
+
+## The canonical four-color profile contract
+
+The sole profile color source is `scripts/phosphor-lines-signal-field-v2.py` → `HEADER_COLORS["dark"]`. The scene must use **exactly**:
+
+| Color | Canonical hex |
+| --- | --- |
+| Green | `#00FBCC` |
+| Magenta | `#FF4DE1` |
+| Violet | `#8C7CFF` |
+| Cyan | `#28D7FF` |
+
+Pure black is allowed **only** as the unlit canvas/neutral material negative space. No yellow, gold, orange, warm white, or other chromatic pigment. The validator reads the production Python theme definition via AST literal parsing and checks every SVG paint literal against that source—no duplicated hardcoded palette list in the artwork checker.
+
+## The physics-inspired animation systems
+
+- **Atmosphere:** Six independent, softly feathered plasma banks breathe and shift in a staggered, smooth, closed trajectory. These clouds survive the removal of the oversized halos.
+- **Photonic delivery:** Fourteen traveling light-route highlights enter the reactor through actual Bézier guide geometry. Each tip and its supporting bloom follow the same normalized `pathLength="1000"` and seamless full-period `stroke-dashoffset` loop, not hard positional resets.
+- **Beam-to-glass response:** Fourteen individual contact sites on the receptor facets illuminate as their corresponding supply lanes arrive, matching the exact incoming line period and phase.
+- **Profile spectrum:** The four canonical phosphors each have moving routes along prismatic facet boundaries. Their color-specific impact caustics, incoming charge bundles and the four central glass membranes are linked to the same light routes rather than independently blinking.
+- **Optical material:** The crystal contains clipped moving face sheens, static bounded dielectric microfracture, fine specular grain, mild chromatic separation, nested mechanical cages and localized moving contact glints. Filter definitions are static; blur/noise parameters do **not** animate.
+- **Accessibility:** Every moving architecture, atmosphere, optical reflection and glass-impact group has a static counterpart for `prefers-reduced-motion: reduce`.
+
+The three current SVGs have the **same actual art geometry**, with only viewbox, accessible title and surface metadata differing. Each is approximately 175 KB and contains 48 unique internal identifiers, 408 resolved paint references, 50 transform animations, and 118 other vector/brightness animations. High animation counts are structural facts, not proof of attractive or smooth playback.
+
+## Regression assurance and release gate
+
+Run `python3 experiments/validate_chronohedron_svg.py` to check responsive source parity, exact profile-only paint values, unique SVG IDs and reference validity, the exact timing of the four-phase reactor membranes, closed movement loops, matched reduced-motion fallbacks, bounded static noise, and the explicit **opaque black background/no pale halo** contract.
+
+The source audit verifies structural SVG contracts but **does not establish native Firefox/LibreWolf/Safari/browser frame pacing**. To accept concept 3, the user must visually approve the actual desktop, mobile and footer animations first. **Do not merge this PR or enroll it in slot 3 yet.** The production profile, the approved Fractal Iris in slot 2, original banners, publisher and generated evidence branch are outside this experimental PR.
+
+
+## Chronohedron VI — crystalline optics only (post-owner rejection of metal claws)
+
+On the same non-draft, unmerged PR branch, the prior metallic/exoskeleton layer was entirely reverted first, with all five files restored to the exact original pre-hybrid Git blob SHAs from `baf74920431ebf336c9835aae36e33579d14ac07`. This alternative builds *inside* the original 188px-wide crystal silhouette: subdued polarized silica-glass planes, narrow beveled caustic reflections, internal fracture seams and four phase-matched internal illumination routes. All added visible geometry is clipped to the existing crystal outline. The luminous core, existing live membranes and 14 external feed/impact mechanisms remain unchanged; no new outer gimbals, bolts, clamps, giant ovals, or silhouette growth. The internal routes use the original four-phosphor source periods and phases with identical static counterparts. The under-185KB source budget and identical-scene, viewport-specific crop contract remain. Browser-rendered mobile/desktop/footer visual acceptance and live FPS measurements are outstanding. **No merge, no production rotation changes, no original Quantum Apex / Fractal Iris changes.**
+
+## Chronohedron VII — perimeter light treatment (owner preview only)
+
+This tranche keeps the visually accepted Chronohedron VI crystal and surrounding waveguide scene, preserves its exact original six silhouette coordinates, and adds **permanently smooth outer crystalline edges** using the same rounded linecaps and diffuse bloom technique as the 14 flying photon feeds. Two always-on concentric-but-coincident perimeter strokes (not extra exterior shapes) sit behind the crystal's native edge: a lightly blurred 5-unit halo and restrained thin edge light. The approved original two-unit polygon outline remains, now with geometrically precise rounded joins.
+
+A gentle 9-second perimeter luminance breath shares the active core's 9-second timing and phase; two small travelling highlights move over the exact perimeter and follow the existing green 8.6s/-1.8s and magenta 15.2s/-6.2s feed circuits. These use matched narrow bright cores and soft optical halos, with only faint vertex contact reflections. All motion components have matching visually static reduced-motion siblings. No thick solid neon outlines, giant ovals, clamps, extra bounding geometry or off-theme pigments.
+
+All current crystal optics, photon routing, 14 input channels, black background and existing 24-hour eight-slot production rotation stay unchanged. The new high-value SVG optical layers increase each experimental uncompressed SVG above the prior 185000-source-byte limit by only a few thousand bytes, so the hard structural ceiling is raised modestly to 190000 **for this preview study only**; actual size is checked per file. **No merge or production enrollment before owner visual approval.**
+
+## Chronohedron VIII — four-phosphor perimeter / approved slot-3 asset candidate
+
+Following owner review, retain the refined original Chronohedron silhouette, now with perceptibly stronger but bounded soft light around **all four colored outer sections** (green, cyan, violet, magenta). Each section has an always-on diffuse halo, a narrow rounded optical edge, and a source-phase synchronized pulse. Two new traveling cyan and violet edge packets complement the existing green and magenta packets. Every animated overlay has the same still geometry in reduced-motion mode. No bulky side housings, foreign paints, geometric expansion, scripts or broad translucent ellipse. The experimental payload ceiling for these richer SVGs is 200KB, still with self-contained browser animation.
+
+**Approved deployment intent:** enroll the resulting three separate content-addressed SVGs as slot `03-chronohedron` in the existing eight-slot UTC/day production manifest. The approved original (slot 1) and Fractal Iris (slot 2) remain bit-identical; slots 4–8 remain original-only fallback. The protected Spotlight publisher must explicitly pin the revised approved selector and manifest hashes. No manual README write or direct main mutation is permitted; publisher runs only through its governed PR path. Safeguard prior capability expansion authorization for protected publisher-source changes.
