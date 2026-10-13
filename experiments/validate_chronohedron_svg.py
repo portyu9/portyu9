@@ -64,7 +64,7 @@ def check() -> None:
         require(path.is_file() and not path.is_symlink(),
                 f"Chronohedron {surface} must be a regular file")
         source = path.read_text(encoding="utf-8")
-        require(150000 < len(source.encode("utf-8")) < 185000,
+        require(150000 < len(source.encode("utf-8")) < 190000,
                 f"Chronohedron {surface}: artwork density or payload bound regressed")
         lower = source.lower()
         require(not any(token.lower() in lower for token in BAD),
@@ -208,7 +208,7 @@ def check() -> None:
                         "traveling waveguide light must have mathematically closed motion")
                 require(static_path.find(NS + "animate") is None,
                         "reduced-motion fallback contains a moving light channel")
-        require(len(root.findall(f".//{NS}animate")) == 122,
+        require(len(root.findall(f".//{NS}animate")) == 125,
                 "optical pulse or dynamic feed channel lost")
         contact_motion = [node for node in nodes
                           if node.get("class") == "contact-motion"]
@@ -618,6 +618,78 @@ def check() -> None:
             require(not list(static.iter(NS + "animate")) and
                     not list(static.iter(NS + "animateTransform")),
                     "reduced-motion optical response must remain still")
+        # Edge-life optics never introduce external geometry: the historic six
+        # vertices are unchanged, while the permanent perimeter glow is rounded
+        # and optically softened just like incoming traveling photon strokes.
+        outline = "M640 11 L734 74 L720 172 L640 247 L560 172 L546 74Z"
+        perimeter = root.find(f".//{NS}g[@id='chronohedron-perimeter-underlight']")
+        edge = root.find(f".//{NS}g[@id='chronohedron-edge-life']")
+        crystal = root.find(f".//{NS}g[@id='chronohedron-core']")
+        require(perimeter is not None and edge is not None and crystal is not None,
+                "permanent smooth crystal perimeter or edge-life layer missing")
+        outer_paths = perimeter.findall(NS + "path")
+        require(len(outer_paths) == 2 and
+                all(p.get("d") == outline and p.get("fill") == "none"
+                    and p.get("stroke-linecap") == "round"
+                    and p.get("stroke-linejoin") == "round" for p in outer_paths)
+                and outer_paths[0].get("filter") == "url(#microGlow)",
+                "crystal rim lost continuously smooth layered beam-like glow")
+        silhouette = next(n for n in crystal if n.tag == NS + "path")
+        require(silhouette.get("d") == outline and
+                silhouette.get("stroke-linejoin") == "round" and
+                silhouette.get("stroke-linecap") == "round",
+                "approved outer crystal silhouette was altered or sharp-cornered")
+        require(".edge-motion{display:none}.edge-still{display:inline}" in source,
+                "edge-life reduced-motion fallback missing")
+        require(len(edge) == 3, "edge breathing and two circulating paths required")
+        channel_periods = {"green": ("8.6s", "-1.8s"),
+                           "magenta": ("15.2s", "-6.2s")}
+        seen_channels = set()
+        for group in edge:
+            require(len(group) == 2, "edge motion/static pair missing")
+            moving, static = list(group)
+            name = moving.get("data-edge-motion")
+            require(static.get("data-edge-still") == name
+                    and moving.get("class") == "edge-motion"
+                    and static.get("class") == "edge-still",
+                    "edge still image differs from moving image")
+            if name == "whole-crystal":
+                effect = moving.find(NS + "animate")
+                require(effect is not None and effect.get("attributeName") == "opacity"
+                        and effect.get("dur") == "9s" and effect.get("begin") == "-2s"
+                        and displayed_art(moving) == displayed_art(static),
+                        "whole rim breathing must match reactor cycle and static art")
+            else:
+                require(name in channel_periods and name not in seen_channels
+                        and group.get("data-edge-channel") == name,
+                        "traveling rim color lane not unique")
+                seen_channels.add(name)
+                effect = moving.find(NS + "animate")
+                require(effect is not None and
+                        effect.get("attributeName") == "stroke-dashoffset" and
+                        effect.get("from") == "0" and effect.get("to") == "-1000"
+                        and effect.get("dur") == channel_periods[name][0]
+                        and effect.get("begin") == channel_periods[name][1]
+                        and effect.get("calcMode") == "linear",
+                        "edge photon route must loop seamlessly and share feed phase")
+                live_paths = moving.findall(NS + "path")
+                still_paths = static.findall(NS + "path")
+                require(len(live_paths) == len(still_paths) == 2 and
+                        all(a.attrib == b.attrib and
+                            a.get("pathLength") == "1000" and
+                            a.get("stroke-dasharray") == "18 982" and
+                            a.get("stroke-linejoin") == "round" and
+                            a.get("stroke-linecap") == "round"
+                            for a, b in zip(live_paths, still_paths)),
+                        "edge photons lost soft halo/core matching still geometry")
+            require(effect.get("repeatCount") == "indefinite",
+                    "edge life must not stop after initial cycle")
+        require(seen_channels == set(channel_periods),
+                "both green and magenta crystal-edge routes are required")
+        require(not any(tag in source for tag in
+                        ("hybrid-front-containment", "hybrid-rear-containment")),
+                "owner-rejected mechanical claws returned")
+
         # The same art must be used in all three responsive shapes: only
         # cropping metadata / title may vary.
         normalized_text = re.sub(
