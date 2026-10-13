@@ -32,6 +32,18 @@ The glow centered around the existing iris gains three phase-staggered, broad, s
 
 Use `python3 experiments/validate_iris_svg.py` for static checks: original geometry hashes, 11 original moving groups, strong optical/nebula opacity variation, 3 core glow layers, smooth closed loops, and 3 corresponding static corona fallbacks. It **does not measure browser frame cadence** or establish a guarantee about GitHub's inline SVG animation behavior. Artistic review and browser-level playback remain required before any merge or production activation.
 
+## Final optical interaction study — nebula-driven lens caustics
+
+[**View current animated SVG in GitHub**](previews/fractal-iris-animated.svg) · [**Play the actual SVG in a browser**](https://raw.githubusercontent.com/portyu9/portyu9/feature/volumetric-iris-render-study-20261013/experiments/previews/fractal-iris-animated.svg). GitHub's inline SVG preview may appear static; use the raw link for motion.
+
+**Why this matters:** The current nebula and iris each animate correctly, but without shared light interaction they can look like stacked graphics. This revision makes the **existing magenta, cyan and violet atmospheric pulses illuminate three separate curved sectors of the actual iris rim**. Each localized caustic consists of an understated broad scattering fringe, a narrow bright contact reflection, fine secondary diffraction, a small plasma-to-rim contact streak and a tight specular glint. The highlighted locations subtly rotate through a few degrees instead of spinning entire rings. Two deliberately static, soft shadow crescents behind the iris create occlusion at its contact with the surrounding nebula.
+
+**Coupling, not more arbitrary animation:** The chromatic highlight for each color copies its corresponding *existing corona* opacity envelope, duration and negative phase offset **exactly**: magenta `8s/-3s`, cyan `11s/-5s`, violet `13s/-7s`. Its minor angular excursion shares the same period and phase. Each cycle uses matched start/end positions and spline easing. The underlying 165 original spaghetti paths, four original nebula contour paths, two moving turbulence fields, nine prior atmospheric pulses and complete 16-blade/18-facet iris assembly are unchanged.
+
+**Safety, depth and accessibility:** Only small, unfiltered vectors and static linear/radial gradients were added, plus two *static* blurred occlusion crescents. There are no additional animated turbulence, displacement, blur, or giant filtered paint groups. The three optical highlight groups each have a geometry-identical static counterpart selected by `prefers-reduced-motion`. The original accepted iris section is pinned to source fingerprint `f95760d1`, and `python3 experiments/validate_iris_svg.py` checks exact pulse-to-corona phase linkage, geometry identity, static shadow ordering, closed movements and reference integrity. Verification is source-level, not proof of smooth GPU/browser playback.
+
+**PR must remain open and unmerged until visual approval.** Production README, original Quantum Apex and Evidence Horizon assets, and the publisher's original-only guard have not changed.
+
 ## Frame renderer
 
 Requires Python 3.11+ plus Pillow, NumPy and OpenCV (headless). Run after installing these packages in a local isolated environment:
