@@ -1,10 +1,10 @@
 <br>
 
-<!-- banner-rotation:v2 utc-day=2026-10-12 slug=08-original-quantum-apex -->
+<!-- banner-rotation:v2 utc-day=2026-10-13 slug=03-neural-weave -->
 <p align="center">
 <picture>
-  <source media="(max-width: 640px)" srcset="assets/profile-banners/quantum-apex-signal-crown-hero-compact.svg">
-  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/quantum-apex-signal-crown-hero.svg" width="100%">
+  <source media="(max-width: 640px)" srcset="assets/profile-banners/daily/03-neural-weave-top-compact.svg">
+  <img alt="Animated quantum apex signal crown" src="assets/profile-banners/daily/03-neural-weave-top.svg" width="100%">
 </picture>
 </p>
 
@@ -138,20 +138,20 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 <p align="center"><sub>3 systems · deterministic daily rotation · scoped live <code>main</code>-branch evidence</sub></p>
 
 <!-- spotlight-direct-links:start -->
-<!-- generated-publication-epoch:v1 sequence=35 generated=dd5f2a8290371998475e26b3d099adf3b7f7e1ec tree=24c6ac4a2f94b98701a8add1a6bd33a49ae101c6 -->
+<!-- generated-publication-epoch:v1 sequence=36 generated=6472901ec402be28e59b3d0aa2eafa84d21bd51c tree=78242c5c669ade6a14989f5c851a575057e57211 -->
 <p align="center">
-<a href="https://github.com/portyu9/qa-automation-java-restassured"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/dd5f2a8290371998475e26b3d099adf3b7f7e1ec/engineering-spotlight/spotlight-1-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/dd5f2a8290371998475e26b3d099adf3b7f7e1ec/engineering-spotlight/spotlight-1-light.svg" width="620"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-java-restassured/actions/workflows/ci.yml"><img alt="Spotlight slot 1 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-java-restassured/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-java-restassured/actions/workflows/security.yml"><img alt="Spotlight slot 1 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-java-restassured/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-node-playwright"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/6472901ec402be28e59b3d0aa2eafa84d21bd51c/engineering-spotlight/spotlight-1-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 1" src="https://raw.githubusercontent.com/portyu9/portyu9/6472901ec402be28e59b3d0aa2eafa84d21bd51c/engineering-spotlight/spotlight-1-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-node-playwright/actions/workflows/ci.yml"><img alt="Spotlight slot 1 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-node-playwright/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-node-playwright/actions/workflows/security.yml"><img alt="Spotlight slot 1 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-node-playwright/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center">
-<a href="https://github.com/portyu9/qa-automation-api-postman-newman"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/dd5f2a8290371998475e26b3d099adf3b7f7e1ec/engineering-spotlight/spotlight-2-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/dd5f2a8290371998475e26b3d099adf3b7f7e1ec/engineering-spotlight/spotlight-2-light.svg" width="620"></picture></a><br>
-<a href="https://github.com/portyu9/qa-automation-api-postman-newman/actions/workflows/ci.yml"><img alt="Spotlight slot 2 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-api-postman-newman/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-api-postman-newman/actions/workflows/security.yml"><img alt="Spotlight slot 2 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-api-postman-newman/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-mobile-appium"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/6472901ec402be28e59b3d0aa2eafa84d21bd51c/engineering-spotlight/spotlight-2-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 2" src="https://raw.githubusercontent.com/portyu9/portyu9/6472901ec402be28e59b3d0aa2eafa84d21bd51c/engineering-spotlight/spotlight-2-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/ci.yml"><img alt="Spotlight slot 2 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-mobile-appium/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-mobile-appium/actions/workflows/security.yml"><img alt="Spotlight slot 2 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-mobile-appium/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
 </p>
 
 <p align="center">
-<a href="https://github.com/portyu9/k6-performance-testing-framework"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/dd5f2a8290371998475e26b3d099adf3b7f7e1ec/engineering-spotlight/spotlight-3-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 3" src="https://raw.githubusercontent.com/portyu9/portyu9/dd5f2a8290371998475e26b3d099adf3b7f7e1ec/engineering-spotlight/spotlight-3-light.svg" width="620"></picture></a><br>
-<a href="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/ci.yml"><img alt="Spotlight slot 3 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/k6-performance-testing-framework/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/k6-performance-testing-framework/actions/workflows/security.yml"><img alt="Spotlight slot 3 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/k6-performance-testing-framework/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
+<a href="https://github.com/portyu9/qa-automation-java-restassured"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portyu9/portyu9/6472901ec402be28e59b3d0aa2eafa84d21bd51c/engineering-spotlight/spotlight-3-dark.svg"><img alt="Daily engineering Evidence Spotlight slot 3" src="https://raw.githubusercontent.com/portyu9/portyu9/6472901ec402be28e59b3d0aa2eafa84d21bd51c/engineering-spotlight/spotlight-3-light.svg" width="620"></picture></a><br>
+<a href="https://github.com/portyu9/qa-automation-java-restassured/actions/workflows/ci.yml"><img alt="Spotlight slot 3 CI" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-java-restassured/main?nameFilter=ci-gate&style=flat-square&label=CI"></a>&nbsp;<a href="https://github.com/portyu9/qa-automation-java-restassured/actions/workflows/security.yml"><img alt="Spotlight slot 3 security" height="24" src="https://img.shields.io/github/check-runs/portyu9/qa-automation-java-restassured/main?nameFilter=security-gate&style=flat-square&label=SECURITY"></a>
 </p>
 
 <!-- spotlight-direct-links:end -->
@@ -184,6 +184,6 @@ I treat quality engineering as the discipline of <strong>reducing uncertainty ab
 
 <p align="center">
 <picture>
-  <img alt="Animated evidence horizon" src="assets/profile-banners/elite-evidence-horizon-bottom.svg" width="100%">
+  <img alt="Animated evidence horizon" src="assets/profile-banners/daily/03-neural-weave-bottom.svg" width="100%">
 </picture>
 </p>
