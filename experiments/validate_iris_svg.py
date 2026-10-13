@@ -142,7 +142,7 @@ def check() -> None:
         NS + "animate", NS + "animateTransform", NS + "animateMotion")]
     transforms = [n for n in animations if n.tag == NS + "animateTransform"]
     fades = [n for n in animations if n.tag == NS + "animate"]
-    assert len(animations) == 26 and len(transforms) == 17 and len(fades) == 9
+    assert len(animations) == 32 and len(transforms) == 20 and len(fades) == 12
     assert all(x.get("attributeName") == "opacity" for x in fades)
     assert not any(n.tag == NS + "animateMotion" for n in animations)
     for filt in root.iter(NS + "filter"):
@@ -192,7 +192,7 @@ def check() -> None:
     assert len(static_corona) == 3
     assert {node.get("data-corona-still") for node in static_corona} == {
         "magenta", "cyan", "violet"}
-    assert len(cloud_fades) + len(halos) == len(fades) == 9
+    assert len(cloud_fades) + len(halos) == len(fades) - 3 == 9
 
     for fade in fades:
         assert fade.get("attributeName") == "opacity"
@@ -213,6 +213,77 @@ def check() -> None:
     assert len(set(f.get("begin") for f in fades)) >= 5, (
         "all nine glows animate in lockstep, rather than a living atmosphere")
 
+    # Light response is intentionally *slaved* to the pre-existing colored
+    # corona envelopes, not another independently timed decorative animation.
+    # Each visible caustic arc tracks its own nebula's pulse duration, start
+    # phase, and opacity envelope exactly. The actual approved iris is intact.
+    coupling = next(node for node in elements
+                    if node.get("id") == "nebula-iris-optical-coupling")
+    moving_light = [node for node in coupling
+                    if node.get("class") == "light-coupling-motion"]
+    still_light = [node for node in coupling
+                   if node.get("class") == "light-coupling-still"]
+    assert len(moving_light) == len(still_light) == 3
+    assert {node.get("data-light-color") for node in moving_light} == {
+        "magenta", "cyan", "violet"}
+    assert {node.get("data-light-still") for node in still_light} == {
+        "magenta", "cyan", "violet"}
+    for color in ("magenta", "cyan", "violet"):
+        live = next(n for n in moving_light if n.get("data-light-color") == color)
+        still = next(n for n in still_light if n.get("data-light-still") == color)
+        plasma = next(n for n in halos if n.get("data-color") == color)
+        assert live.get("data-couples-to") == "corona-" + color
+        light_rotor = live.find(NS + "animateTransform")
+        light_intensity = live.find(NS + "animate")
+        plasma_intensity = plasma.find(NS + "animate")
+        assert light_rotor is not None and light_intensity is not None
+        assert plasma_intensity is not None
+        assert light_rotor.get("type") == "rotate"
+        assert light_rotor.get("attributeName") == "transform"
+        assert light_rotor.get("calcMode") == "spline"
+        assert light_rotor.get("keyTimes") == "0;.5;1"
+        assert light_rotor.get("keySplines") == ".42 0 .58 1;.42 0 .58 1"
+        assert light_rotor.get("repeatCount") == "indefinite"
+        rotations = light_rotor.get("values", "").split(";")
+        assert len(rotations) == 3
+        assert rotations[0] == rotations[2] and rotations[0] != rotations[1]
+        for field in ("dur", "begin", "values", "calcMode", "keyTimes",
+                      "keySplines", "repeatCount"):
+            if field == "values":
+                # The synchronized reflection has the same brightness envelope.
+                assert light_intensity.get(field) == plasma_intensity.get(field)
+            else:
+                assert light_intensity.get(field) == plasma_intensity.get(field)
+        assert light_rotor.get("dur") == light_intensity.get("dur")
+        assert light_rotor.get("begin") == light_intensity.get("begin")
+        assert light_intensity.get("attributeName") == "opacity"
+        a = live.find(NS + "g")
+        b = still.find(NS + "g")
+        assert a is not None and b is not None
+        assert a.get("data-light-geometry") == b.get("data-light-geometry") == color
+        assert [node.attrib for node in a] == [node.attrib for node in b], (
+            "reduced-motion user must see the same rim/filament geometry")
+        assert len(a.findall(NS + "path")) == 4, "localized caustic art disappeared"
+        assert len(a.findall(NS + "ellipse")) == 1
+        assert len(a.findall(NS + "circle")) == 1
+        assert not any("filter" in node.attrib for node in live.iter()), (
+            "moving caustic may not animate a raster-heavy filter")
+        assert still.get("opacity") == plasma_intensity.get("values").split(";")[1]
+
+    shadow = next(node for node in elements
+                  if node.get("id") == "iris-directional-occlusion")
+    assert len(shadow.findall(NS + "path")) == 2, (
+        "directional optical shadow missing")
+    assert not list(shadow.iter(NS + "animateTransform"))
+    assert not list(shadow.iter(NS + "animate"))
+    assert {"rim-caustic-magenta", "rim-caustic-cyan", "rim-caustic-violet",
+            "rim-light-spark"} <= known
+    assert ".light-coupling-motion {display:none}" in source
+    assert ".light-coupling-still {display:inline}" in source
+    assert not any(node.get("attributeName") in
+                   ("baseFrequency", "stdDeviation", "scale", "stroke-dashoffset")
+                   for node in animations), "filter/raster animation regression"
+
     assert source.count("data-role=\"original-spaghetti-body\"") == 5
     assert "filament-flow" not in source and "ion-flow-magenta" not in source
     assert ".ambient-motion {display:none}" in source
@@ -222,7 +293,8 @@ def check() -> None:
     print("Fractal Iris motion contract PASS: original 165 spaghetti paths, "
           "four actual cloud contours, two noise textures restored to motion; "
           "11 closed original-body transforms, six breathing cloud layers; "
-          "three independently breathing coronas, three original iris rotors; "
+          "three breathing coronas plus three phase-coupled luminous rim caustics; "
+          "static directional occlusion; unchanged iris and spaghetti motion; "
           "full reduced-motion fallback; no filter-parameter animation.")
 
 
