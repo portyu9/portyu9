@@ -2,6 +2,14 @@
 
 This is the first **isolated, deliberately unshipped** attempt to replace geometric SVG animation with evolving volumetric raster texture. It is neither a claim of physical accuracy nor a finished state-of-the-art treatment. Production remains pinned to original Quantum Apex/Evidence Horizon. The seven daily SVG triplets are preserved unchanged.
 
+## GitHub-hosted animated SVG preview
+
+**[Open the actual Fractal Iris animated SVG in GitHub](previews/fractal-iris-animated.svg)** · **[Open the raw SVG animation](https://raw.githubusercontent.com/portyu9/portyu9/feature/volumetric-iris-render-study-20261013/experiments/previews/fractal-iris-animated.svg)**
+
+![Fractal Iris animation review — evolving procedural plasma texture and glow](previews/fractal-iris-animated.svg)
+
+The preview above is the **actual committed animated SVG**, not a sandbox link or a mockup. If GitHub's Markdown image proxy shows a static frame, open the raw link in your browser to review motion. This is a separate **SVG-native filter and turbulence study**, not an exact conversion of the Python WebP renderer below. Visual/performance approval is outstanding; SVG turbulence can be expensive on slower browsers. **This preview is not included in README.md and cannot enter the production rotation.**
+
 ## Frame renderer
 
 Requires Python 3.11+ plus Pillow, NumPy and OpenCV (headless). Run after installing these packages in a local isolated environment:
