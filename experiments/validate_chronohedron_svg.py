@@ -7,6 +7,7 @@ production. It does not establish physical realism or browser frame timing.
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 from pathlib import Path
 import re
@@ -35,21 +36,42 @@ def displayed_art(node: ET.Element) -> list[bytes]:
             if child.tag not in (NS + "animate", NS + "animateTransform")]
 
 
+def canonical_profile_colors() -> frozenset[str]:
+    """Read the four actual profile theme colors without executing production code."""
+    palette_source = (ROOT.parent / "scripts/phosphor-lines-signal-field-v2.py")
+    module = ast.parse(palette_source.read_text(encoding="utf-8"))
+    assignments = [
+        node.value for node in module.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "HEADER_COLORS"
+                for target in node.targets)
+    ]
+    require(len(assignments) == 1, "profile canonical theme declaration changed")
+    theme = ast.literal_eval(assignments[0])["dark"]
+    require(set(theme) == {"green", "magenta", "violet", "cyan"}
+            and len(set(theme.values())) == 4
+            and all(re.fullmatch(r"#[0-9A-F]{6}", color)
+                    for color in theme.values()),
+            "profile theme palette changed or lost one of four phosphors")
+    return frozenset(theme.values())
+
+
 def check() -> None:
+    canonical = canonical_profile_colors()
     normalized: set[str] = set()
     for surface, viewport in SURFACES.items():
         path = PREVIEWS / f"chronohedron-{surface}.svg"
         require(path.is_file() and not path.is_symlink(),
                 f"Chronohedron {surface} must be a regular file")
         source = path.read_text(encoding="utf-8")
-        require(120000 < len(source.encode("utf-8")) < 150000,
+        require(130000 < len(source.encode("utf-8")) < 160000,
                 f"Chronohedron {surface}: artwork density or payload bound regressed")
         lower = source.lower()
         require(not any(token.lower() in lower for token in BAD),
                 f"Chronohedron {surface}: unsafe or repaint-heavy payload")
         require("prefers-reduced-motion:reduce" in source and
-                ".kinetic,.alive-motion,.contact-motion{display:none}" in source and
-                ".still,.alive-still,.contact-still{display:inline}" in source,
+                ".kinetic,.alive-motion,.contact-motion,.theme-motion{display:none}" in source and
+                ".still,.alive-still,.contact-still,.theme-still{display:inline}" in source,
                 f"Chronohedron {surface}: reduced-motion selector missing")
         require("Not approved for production" in source,
                 f"Chronohedron {surface}: preview must remain review-only")
@@ -57,13 +79,35 @@ def check() -> None:
         require(root.tag == NS + "svg" and root.get("role") == "img"
                 and root.get("aria-labelledby") == "title desc"
                 and root.get("data-art-study") == "chronohedron-v1"
-                and root.get("data-surface") == surface,
+                and root.get("data-surface") == surface
+                and root.get("data-theme-palette") == "profile-phosphor-lines-v2.8-dark",
                 f"Chronohedron {surface}: role/source identity invalid")
         require((root.get("width"), root.get("height"), root.get("viewBox")) == viewport,
                 f"Chronohedron {surface}: responsive crop changed")
         require(root.find(NS + "title") is not None and
                 root.find(NS + "desc") is not None,
                 f"Chronohedron {surface}: accessible name missing")
+        # The ONLY chromatic paints allowed are the four dark profile
+        # HEADER_COLORS. Pure black is unlit negative space, not a theme hue.
+        # Enforce this on the actual source literals, including defs and CSS,
+        # so a later yellow/amber/gold gradient cannot silently sneak in.
+        chromatic = set(re.findall(r"#[0-9a-fA-F]{3,8}\\b", source))
+        require(chromatic == set(canonical),
+                f"Chronohedron {surface}: non-profile paint introduced or one "
+                f"of the four canonical colors missing: "
+                f"{sorted(chromatic.symmetric_difference(canonical))}")
+        allowed_paints = set(canonical) | {"black", "none"}
+        for node in root.iter():
+            for attr in ("fill", "stroke", "stop-color", "flood-color", "color"):
+                paint = node.get(attr)
+                if paint is not None:
+                    require(paint in allowed_paints or
+                            re.fullmatch(r"url\\(#[a-zA-Z0-9_-]+\\)", paint),
+                            f"off-profile color in {surface} <{node.tag}> {attr}: {paint}")
+        require('M641 79 Q661 108 648 132 T635 176' not in source,
+                "rejected central yellow fading swirl returned")
+        require("amber" not in source.lower() and "gold" not in source.lower(),
+                "legacy warm optical channels returned instead of profile phosphors")
         nodes = list(root.iter())
         ids = [node.get("id") for node in nodes if node.get("id")]
         require(len(ids) == len(set(ids)), f"Chronohedron {surface}: duplicate SVG IDs")
@@ -138,7 +182,7 @@ def check() -> None:
         live_channels = list(feed)
         still_channels = list(no_motion_feed)
         require(len(live_channels) == len(still_channels) == 14,
-                "both cyan and amber waveguide banks require seven light pulses")
+                "both cyan and magenta waveguide banks require seven light pulses")
         for active, static in zip(live_channels, still_channels):
             require(active.get("data-feed") and
                     active.get("data-feed") == static.get("data-feed-still"),
@@ -162,7 +206,7 @@ def check() -> None:
                         "traveling waveguide light must have mathematically closed motion")
                 require(static_path.find(NS + "animate") is None,
                         "reduced-motion fallback contains a moving light channel")
-        require(len(root.findall(f".//{NS}animate")) == 78,
+        require(len(root.findall(f".//{NS}animate")) == 86,
                 "optical pulse or dynamic feed channel lost")
         contact_motion = [node for node in nodes
                           if node.get("class") == "contact-motion"]
@@ -236,6 +280,43 @@ def check() -> None:
                         intensity.get("values", "").split(";")[0] ==
                         intensity.get("values", "").split(";")[-1],
                         "moving light and luminous pulse are no longer phase coupled")
+        # Four routed spectral facet circuits visibly move THROUGH crystal
+        # edges rather than leaving only ambient external motion. They are
+        # strictly restricted to four canonical colors, each with a matched
+        # static reduced-motion circuit.
+        spectral = root.find(f".//{NS}g[@id='theme-facet-energy']")
+        static_spectral = root.find(f".//{NS}g[@id='theme-facet-energy-still']")
+        require(spectral is not None and static_spectral is not None
+                and spectral.get("class") == "theme-motion"
+                and static_spectral.get("class") == "theme-still",
+                "moving in-glass theme circuits or reduced motion missing")
+        require(len(spectral) == len(static_spectral) == 4,
+                "expected exactly one travelling facet network per profile hue")
+        routing_colors: set[str] = set()
+        for dynamic_route, static_route in zip(spectral, static_spectral):
+            require(dynamic_route.get("data-spectral-channel")
+                    == static_route.get("data-spectral-still"),
+                    "spectral geometry and static routing identities diverged")
+            paths = dynamic_route.findall(NS + "path")
+            still_paths = static_route.findall(NS + "path")
+            require(len(paths) == len(still_paths) == 2,
+                    "spectral transit must retain both bloom and sharp energized face")
+            for active_path, still_path in zip(paths, still_paths):
+                routing_colors.add(active_path.get("stroke", ""))
+                require(active_path.attrib == still_path.attrib and
+                        active_path.get("pathLength") == "1000" and
+                        active_path.get("stroke-dasharray") == "52 948",
+                        "static and active optical path geometry must match")
+                sweep = active_path.find(NS + "animate")
+                require(sweep is not None and sweep.get("attributeName") ==
+                        "stroke-dashoffset" and sweep.get("from") == "0" and
+                        sweep.get("to") == "-1000" and
+                        sweep.get("calcMode") == "linear" and
+                        sweep.get("repeatCount") == "indefinite" and
+                        still_path.find(NS + "animate") is None,
+                        "faceted energy streak must traverse a closed, smooth route")
+        require(routing_colors == set(canonical),
+                "one of the four profile theme colors has no animated facet channel")
         # Physical surface grain is a fixed bounded noise kernel, never a
         # time-varying turbulence or blur operation on the moving artwork.
         glass = root.find(f".//{NS}g[@id='alive-dielectric-material-depth']")
@@ -249,6 +330,12 @@ def check() -> None:
                 turbulence.get("seed") == "19" and
                 turbulence.get("stitchTiles") == "stitch",
                 "crystal texture kernel is not static and bounded")
+        chromatic_matrix = noise.find(NS + "feColorMatrix")
+        require(chromatic_matrix is not None and
+                chromatic_matrix.get("values") ==
+                "0 0 0 0 .156862745 0 0 0 0 .843137255 "
+                "0 0 0 0 1 .11 .22 .27 0 -.22",
+                "dielectric microtexture must emit only canonical cyan, not off-theme blue")
         require(not list(noise.iter(NS + "animate")) and
                 not list(noise.iter(NS + "animateTransform")) and
                 not list(glass.iter(NS + "animate")) and
@@ -273,12 +360,13 @@ def check() -> None:
         normalized.add(hashlib.sha256(normalized_text.encode("utf-8")).hexdigest())
     require(len(normalized) == 1, "Chronohedron responsive variants diverged")
     print("Chronohedron optics proof: 3 responsive studies, 38 smooth vector "
-          "transforms, 14 closed-loop transported cyan/amber channels, "
+          "transforms, 14 closed-loop transported cyan/magenta channels, "
           "25 reduced-motion optical-layer mirrors, 14 light-bound " 
           "transport endpoints with static counterparts, 108+ grain points, "
           "bright breathing reactor, independently moving gaseous environment, "
           "phase-linked glass caustics, no animated noise or blurs, "
-          "no production enrollment.")
+          "four exact profile phosphors, no amber/yellow center swirl, "
+          "four additional closed spectral energy routes; no production enrollment.")
 
 
 if __name__ == "__main__":
