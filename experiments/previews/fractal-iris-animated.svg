@@ -97,6 +97,35 @@
     <stop offset=".92" stop-color="#140a35" stop-opacity=".05"/>
     <stop offset="1" stop-color="#000514" stop-opacity="0"/>
   </radialGradient>
+
+  <!-- Reflective caustic lighting: no filters or noise parameters animate. -->
+  <linearGradient id="rim-caustic-magenta" gradientUnits="userSpaceOnUse" x1="-128" y1="-95" x2="-11" y2="-106">
+    <stop offset="0" stop-color="#9d3cfc" stop-opacity=".05"/>
+    <stop offset=".24" stop-color="#ff79ff" stop-opacity=".64"/>
+    <stop offset=".53" stop-color="#fff0ff" stop-opacity="1"/>
+    <stop offset=".72" stop-color="#e470ff" stop-opacity=".78"/>
+    <stop offset="1" stop-color="#8e4aff" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="rim-caustic-cyan" gradientUnits="userSpaceOnUse" x1="106" y1="-62" x2="119" y2="94">
+    <stop offset="0" stop-color="#1475cf" stop-opacity="0"/>
+    <stop offset=".22" stop-color="#5ce9ff" stop-opacity=".77"/>
+    <stop offset=".44" stop-color="#f1ffff" stop-opacity="1"/>
+    <stop offset=".67" stop-color="#72f7ff" stop-opacity=".86"/>
+    <stop offset="1" stop-color="#279eff" stop-opacity=".05"/>
+  </linearGradient>
+  <linearGradient id="rim-caustic-violet" gradientUnits="userSpaceOnUse" x1="-17" y1="121" x2="-120" y2="65">
+    <stop offset="0" stop-color="#913fff" stop-opacity="0"/>
+    <stop offset=".24" stop-color="#c38eff" stop-opacity=".58"/>
+    <stop offset=".51" stop-color="#fff1ff" stop-opacity=".98"/>
+    <stop offset=".75" stop-color="#dc78fc" stop-opacity=".69"/>
+    <stop offset="1" stop-color="#8e55ff" stop-opacity="0"/>
+  </linearGradient>
+  <radialGradient id="rim-light-spark">
+    <stop offset="0" stop-color="#fff" stop-opacity="1"/>
+    <stop offset=".15" stop-color="#f9ffff" stop-opacity=".94"/>
+    <stop offset=".42" stop-color="#a5ddff" stop-opacity=".43"/>
+    <stop offset="1" stop-color="#a1cfff" stop-opacity="0"/>
+  </radialGradient>
   <!-- Optical aperture materials: bloom/noise deliberately immutable during animation. -->
   <linearGradient id="bladeMetal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#030b1f"/><stop offset=".22" stop-color="#112543"/><stop offset=".45" stop-color="#523380"/><stop offset=".65" stop-color="#141027"/><stop offset=".85" stop-color="#070b20"/><stop offset="1" stop-color="#7651a3"/></linearGradient>
   <linearGradient id="bladeBevel" x1="0" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#70f7ff" stop-opacity=".07"/><stop offset=".45" stop-color="#aeccff" stop-opacity=".5"/><stop offset=".70" stop-color="#ffc0ff" stop-opacity=".96"/><stop offset="1" stop-color="#5fdfff" stop-opacity=".02"/></linearGradient>
@@ -110,11 +139,15 @@
     .motion-still {display:none}
     .ambient-motion {display:inline}
     .ambient-still {display:none}
+    .light-coupling-motion {display:inline}
+    .light-coupling-still {display:none}
     @media (prefers-reduced-motion: reduce) {
       .motion {display:none}
       .motion-still {display:inline}
       .ambient-motion {display:none}
       .ambient-still {display:inline}
+      .light-coupling-motion {display:none}
+      .light-coupling-still {display:inline}
     }
   </style>
 </defs>
@@ -215,6 +248,11 @@
   </g>
   <g class="ambient-still" data-corona-still="violet" opacity=".80"><ellipse rx="240" ry="150" fill="url(#corona-violet)"/></g>
 </g>
+<!-- The dark lens interrupts plasma behind it: static, directional optical occlusion. -->
+<g id="iris-directional-occlusion" transform="translate(640 129) scale(1 .74)" pointer-events="none">
+  <path d="M-150 -39 A156 156 0 0 0 -38 149" fill="none" stroke="#01030c" stroke-width="29" opacity=".31" filter="url(#soft)"/>
+  <path d="M155 13 A156 156 0 0 1 91 124" fill="none" stroke="#010919" stroke-width="21" opacity=".27" filter="url(#soft)"/>
+</g>
 <!-- Lens-inspired optical architecture. Animation is limited to small transform-only vectors. -->
 <g transform="translate(640 129) scale(1 .74)">
   <circle r="166" fill="url(#opticalMist)" opacity=".82"/>
@@ -243,5 +281,86 @@
   </g>
 </g>
 <path d="M519 111 Q553 49 642 42 Q737 49 763 109" fill="none" stroke="#ffd3ff" stroke-width="1.1" opacity=".24" filter="url(#micro)"/>
+<!-- Directional chromatic light-response follows existing nebula/corona pulse timelines. -->
+<g id="nebula-iris-optical-coupling" transform="translate(640 129) scale(1 .74)" pointer-events="none">
+  <g class="light-coupling-motion" data-light-color="magenta" data-couples-to="corona-magenta">
+    <animateTransform attributeName="transform" type="rotate" values="-5;4;-5" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="8s" begin="-3s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values=".31;.92;.31" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="8s" begin="-3s" repeatCount="indefinite"/>
+    <g data-light-geometry="magenta" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Soft halo and narrow intensely reflective contact caustic share one path. -->
+  <path d="M-119 -28 A122 122 0 0 1 -13 -121" stroke="url(#rim-caustic-magenta)" stroke-width="10" opacity=".26"/>
+  <path d="M-119 -28 A122 122 0 0 1 -13 -121" stroke="url(#rim-caustic-magenta)" stroke-width="3.1" opacity=".90"/>
+  <path d="M-112 -26 A115 115 0 0 1 -41 -107" stroke="url(#rim-caustic-magenta)" stroke-width="1.1" opacity=".57"/>
+  <!-- Tiny plasma contact filament: not a replacement for original spaghetti. -->
+  <path d="M-183 -101 Q-156 -96 -132 -71" stroke="url(#rim-caustic-magenta)" stroke-width="1.6" opacity=".61"/>
+  <ellipse cx="-77" cy="-92" rx="9.5" ry="3.1" fill="url(#rim-light-spark)" stroke="none" transform="rotate(-28 -77 -92)" opacity=".72"/>
+  <circle cx="-77" cy="-92" r="1.15" fill="#f6ffff" stroke="none" opacity=".91"/>
+</g>
+  </g>
+  <g class="light-coupling-still" data-light-still="magenta" opacity=".92">
+    <g data-light-geometry="magenta" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Soft halo and narrow intensely reflective contact caustic share one path. -->
+  <path d="M-119 -28 A122 122 0 0 1 -13 -121" stroke="url(#rim-caustic-magenta)" stroke-width="10" opacity=".26"/>
+  <path d="M-119 -28 A122 122 0 0 1 -13 -121" stroke="url(#rim-caustic-magenta)" stroke-width="3.1" opacity=".90"/>
+  <path d="M-112 -26 A115 115 0 0 1 -41 -107" stroke="url(#rim-caustic-magenta)" stroke-width="1.1" opacity=".57"/>
+  <!-- Tiny plasma contact filament: not a replacement for original spaghetti. -->
+  <path d="M-183 -101 Q-156 -96 -132 -71" stroke="url(#rim-caustic-magenta)" stroke-width="1.6" opacity=".61"/>
+  <ellipse cx="-77" cy="-92" rx="9.5" ry="3.1" fill="url(#rim-light-spark)" stroke="none" transform="rotate(-28 -77 -92)" opacity=".72"/>
+  <circle cx="-77" cy="-92" r="1.15" fill="#f6ffff" stroke="none" opacity=".91"/>
+</g>
+  </g>
+  <g class="light-coupling-motion" data-light-color="cyan" data-couples-to="corona-cyan">
+    <animateTransform attributeName="transform" type="rotate" values="4;-5;4" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="11s" begin="-5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values=".27;.86;.27" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="11s" begin="-5s" repeatCount="indefinite"/>
+    <g data-light-geometry="cyan" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Soft halo and narrow intensely reflective contact caustic share one path. -->
+  <path d="M116 -35 A122 122 0 0 1 97 73" stroke="url(#rim-caustic-cyan)" stroke-width="10" opacity=".26"/>
+  <path d="M116 -35 A122 122 0 0 1 97 73" stroke="url(#rim-caustic-cyan)" stroke-width="3.1" opacity=".90"/>
+  <path d="M110 -23 A114 114 0 0 1 107 40" stroke="url(#rim-caustic-cyan)" stroke-width="1.1" opacity=".57"/>
+  <!-- Tiny plasma contact filament: not a replacement for original spaghetti. -->
+  <path d="M180 -89 Q149 -76 132 -48" stroke="url(#rim-caustic-cyan)" stroke-width="1.6" opacity=".61"/>
+  <ellipse cx="121" cy="0" rx="9.5" ry="3.1" fill="url(#rim-light-spark)" stroke="none" transform="rotate(80 121 0)" opacity=".72"/>
+  <circle cx="121" cy="0" r="1.15" fill="#f6ffff" stroke="none" opacity=".91"/>
+</g>
+  </g>
+  <g class="light-coupling-still" data-light-still="cyan" opacity=".86">
+    <g data-light-geometry="cyan" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Soft halo and narrow intensely reflective contact caustic share one path. -->
+  <path d="M116 -35 A122 122 0 0 1 97 73" stroke="url(#rim-caustic-cyan)" stroke-width="10" opacity=".26"/>
+  <path d="M116 -35 A122 122 0 0 1 97 73" stroke="url(#rim-caustic-cyan)" stroke-width="3.1" opacity=".90"/>
+  <path d="M110 -23 A114 114 0 0 1 107 40" stroke="url(#rim-caustic-cyan)" stroke-width="1.1" opacity=".57"/>
+  <!-- Tiny plasma contact filament: not a replacement for original spaghetti. -->
+  <path d="M180 -89 Q149 -76 132 -48" stroke="url(#rim-caustic-cyan)" stroke-width="1.6" opacity=".61"/>
+  <ellipse cx="121" cy="0" rx="9.5" ry="3.1" fill="url(#rim-light-spark)" stroke="none" transform="rotate(80 121 0)" opacity=".72"/>
+  <circle cx="121" cy="0" r="1.15" fill="#f6ffff" stroke="none" opacity=".91"/>
+</g>
+  </g>
+  <g class="light-coupling-motion" data-light-color="violet" data-couples-to="corona-violet">
+    <animateTransform attributeName="transform" type="rotate" values="-4;5;-4" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="13s" begin="-7s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values=".24;.80;.24" keyTimes="0;.5;1" calcMode="spline" keySplines=".42 0 .58 1;.42 0 .58 1" dur="13s" begin="-7s" repeatCount="indefinite"/>
+    <g data-light-geometry="violet" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Soft halo and narrow intensely reflective contact caustic share one path. -->
+  <path d="M-22 120 A122 122 0 0 1 -110 52" stroke="url(#rim-caustic-violet)" stroke-width="10" opacity=".26"/>
+  <path d="M-22 120 A122 122 0 0 1 -110 52" stroke="url(#rim-caustic-violet)" stroke-width="3.1" opacity=".90"/>
+  <path d="M-39 107 A114 114 0 0 1 -103 47" stroke="url(#rim-caustic-violet)" stroke-width="1.1" opacity=".57"/>
+  <!-- Tiny plasma contact filament: not a replacement for original spaghetti. -->
+  <path d="M-181 114 Q-158 110 -122 77" stroke="url(#rim-caustic-violet)" stroke-width="1.6" opacity=".61"/>
+  <ellipse cx="-83" cy="88" rx="9.5" ry="3.1" fill="url(#rim-light-spark)" stroke="none" transform="rotate(45 -83 88)" opacity=".72"/>
+  <circle cx="-83" cy="88" r="1.15" fill="#f6ffff" stroke="none" opacity=".91"/>
+</g>
+  </g>
+  <g class="light-coupling-still" data-light-still="violet" opacity=".80">
+    <g data-light-geometry="violet" fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Soft halo and narrow intensely reflective contact caustic share one path. -->
+  <path d="M-22 120 A122 122 0 0 1 -110 52" stroke="url(#rim-caustic-violet)" stroke-width="10" opacity=".26"/>
+  <path d="M-22 120 A122 122 0 0 1 -110 52" stroke="url(#rim-caustic-violet)" stroke-width="3.1" opacity=".90"/>
+  <path d="M-39 107 A114 114 0 0 1 -103 47" stroke="url(#rim-caustic-violet)" stroke-width="1.1" opacity=".57"/>
+  <!-- Tiny plasma contact filament: not a replacement for original spaghetti. -->
+  <path d="M-181 114 Q-158 110 -122 77" stroke="url(#rim-caustic-violet)" stroke-width="1.6" opacity=".61"/>
+  <ellipse cx="-83" cy="88" rx="9.5" ry="3.1" fill="url(#rim-light-spark)" stroke="none" transform="rotate(45 -83 88)" opacity=".72"/>
+  <circle cx="-83" cy="88" r="1.15" fill="#f6ffff" stroke="none" opacity=".91"/>
+</g>
+  </g>
+</g>
 <rect x="0" y="0" width="1280" height="258" fill="none" stroke="#33165d" stroke-opacity=".25"/>
 </svg>
