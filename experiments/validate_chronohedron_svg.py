@@ -64,14 +64,16 @@ def check() -> None:
         require(path.is_file() and not path.is_symlink(),
                 f"Chronohedron {surface} must be a regular file")
         source = path.read_text(encoding="utf-8")
-        require(130000 < len(source.encode("utf-8")) < 160000,
+        require(150000 < len(source.encode("utf-8")) < 185000,
                 f"Chronohedron {surface}: artwork density or payload bound regressed")
         lower = source.lower()
         require(not any(token.lower() in lower for token in BAD),
                 f"Chronohedron {surface}: unsafe or repaint-heavy payload")
         require("prefers-reduced-motion:reduce" in source and
                 ".kinetic,.alive-motion,.contact-motion,.theme-motion,.theme-optic-motion,.reactive-motion{display:none}" in source and
-                ".still,.alive-still,.contact-still,.theme-still,.theme-optic-still,.reactive-still{display:inline}" in source,
+                ".still,.alive-still,.contact-still,.theme-still,.theme-optic-still,.reactive-still{display:inline}" in source and
+                ".charge-motion,.charge-contact-motion,.charge-interior-motion{display:none}" in source and
+                ".charge-still,.charge-contact-still,.charge-interior-still{display:inline}" in source,
                 f"Chronohedron {surface}: reduced-motion selector missing")
         require("Not approved for production" in source,
                 f"Chronohedron {surface}: preview must remain review-only")
@@ -173,7 +175,7 @@ def check() -> None:
                 {node.get("data-life-still") for node in frozen
                  if node.get("data-life-still")},
                 "living light group IDs and static fallback IDs diverged")
-        require(len(root.findall(f".//{NS}animateTransform")) == 46,
+        require(len(root.findall(f".//{NS}animateTransform")) == 50,
                 "Chronohedron motion/perspective groups changed")
         feed = next(node for node in nodes
                     if node.get("id") == "alive-photonic-transit")
@@ -206,7 +208,7 @@ def check() -> None:
                         "traveling waveguide light must have mathematically closed motion")
                 require(static_path.find(NS + "animate") is None,
                         "reduced-motion fallback contains a moving light channel")
-        require(len(root.findall(f".//{NS}animate")) == 94,
+        require(len(root.findall(f".//{NS}animate")) == 118,
                 "optical pulse or dynamic feed channel lost")
         contact_motion = [node for node in nodes
                           if node.get("class") == "contact-motion"]
@@ -417,6 +419,112 @@ def check() -> None:
                     glow.get("repeatCount") ==
                     motion.get("repeatCount") == "indefinite",
                     "living glass flashes too weakly or snaps on repeat")
+        # The four exact profile phosphors now carry energy all the way
+        # from far-field terminals to the physical crystal, and on into the
+        # spectral chamber. This is phase-coupled motion, not ornamental
+        # spinning or a reintroduced yellow helix.
+        network = root.find(f".//{NS}g[@id='chronohedron-four-color-charge-network']")
+        require(network is not None and
+                network.get("pointer-events") == "none" and len(network) == 4,
+                "four-color feed/interior linkage has been removed")
+        names = ("green", "cyan", "violet", "magenta")
+        phase = {"green": ("8.6s", "-1.8s"),
+                 "cyan": ("12.6s", "-4.6s"),
+                 "violet": ("10.4s", "-3.1s"),
+                 "magenta": ("15.2s", "-6.2s")}
+        colors: set[str] = set()
+        chamber = root.find(f".//{NS}g[@id='reactor-spectral-chamber']")
+        require(chamber is not None,
+                "reactive four-profile-color crystal chamber missing")
+        for index, name in enumerate(names):
+            cluster = network[index]
+            require(cluster.get("data-charge-color") == name and
+                    cluster.get("data-connects") == "perimeter-to-reactor" and
+                    len(cluster) == 6, "missing powered glass charge route " + name)
+            flow, static_flow, contact, static_contact, inner, static_inner = cluster
+            require(flow.get("class") == "charge-motion" and
+                    static_flow.get("class") == "charge-still" and
+                    contact.get("class") == "charge-contact-motion" and
+                    static_contact.get("class") == "charge-contact-still" and
+                    inner.get("class") == "charge-interior-motion" and
+                    static_inner.get("class") == "charge-interior-still",
+                    "every live feed/contact/glass group needs static counterpart")
+            require(flow.get("data-charge-flow") ==
+                    static_flow.get("data-charge-flow-still") ==
+                    contact.get("data-charge-contact") ==
+                    static_contact.get("data-charge-contact-still") ==
+                    inner.get("data-charge-interior") ==
+                    static_inner.get("data-charge-interior-still") == name,
+                    "same phosphor must power corresponding outer/inner glass")
+            paths = flow.findall(NS + "path")
+            still_paths = static_flow.findall(NS + "path")
+            require(len(paths) == len(still_paths) == 4,
+                    "paired charge streams lost their luminous body+halo")
+            colors.update(p.get("stroke") for p in paths)
+            duration, offset = phase[name]
+            for active, frozen in zip(paths, still_paths):
+                require(active.attrib == frozen.attrib and
+                        active.get("pathLength") == "1000" and
+                        active.get("stroke-dasharray") in ("28 972", "14 986"),
+                        "charged path and reduced-motion geometry diverged")
+                animation = active.find(NS + "animate")
+                require(animation is not None and
+                        animation.get("attributeName") == "stroke-dashoffset" and
+                        animation.get("from") == "0" and
+                        animation.get("to") == "-1000" and
+                        animation.get("dur") == duration and
+                        animation.get("begin") == offset and
+                        animation.get("repeatCount") == "indefinite" and
+                        animation.get("calcMode") == "linear",
+                        "charge transport has a dash seam or is not phase-locked")
+                require(frozen.find(NS + "animate") is None,
+                        "reduced-motion feed must not move")
+            require(displayed_art(contact) == displayed_art(static_contact),
+                    "impact flare differs between moving and still views")
+            beam_end = contact.find(NS + "animate")
+            internal_trans = inner.find(NS + "animateTransform")
+            internal_pulse = inner.find(NS + "animate")
+            require(beam_end is not None and internal_trans is not None and
+                    internal_pulse is not None,
+                    "energy never enters crystal in animated scene")
+            for active in (beam_end, internal_trans, internal_pulse):
+                require(active.get("begin") == offset and
+                        active.get("dur") == duration and
+                        active.get("repeatCount") == "indefinite",
+                        "outer energy, facet arrival and inner response desynchronized")
+            require(internal_trans.get("attributeName") == "transform" and
+                    internal_trans.get("type") == "translate" and
+                    internal_trans.get("calcMode") == "spline" and
+                    internal_trans.get("keyTimes") == "0;.5;1" and
+                    internal_trans.get("keySplines") ==
+                    ".42 0 .58 1;.42 0 .58 1",
+                    "internal refraction is not smoothly accelerated")
+            turns = internal_trans.get("values", "").split(";")
+            require(len(turns) == 3 and turns[0] == turns[-1] and
+                    turns[0] != turns[1], "new internal reflector has frame jump")
+            require(displayed_art(inner) == displayed_art(static_inner),
+                    "accessibility fallback for crystal illumination missing")
+            require(not list(static_inner.iter(NS + "animate")) and
+                    not list(static_inner.iter(NS + "animateTransform")),
+                    "reduced-motion counterpart still has dynamic light")
+            require(len(inner.findall(f".//{NS}path")) == 2 and
+                    inner.find(NS + "g").get("clip-path") ==
+                    "url(#alive-glass-clip)",
+                    "inner electric path not physically clipped to glass")
+            chamber_group = next((item for item in chamber
+                                  if item.get("data-reactive") == name), None)
+            require(chamber_group is not None and
+                    chamber_group.find(NS + "animate").get("dur") == duration and
+                    chamber_group.find(NS + "animate").get("begin") == offset,
+                    "new four-color charge route broke existing chamber rhythm")
+        require(colors == set(canonical),
+                "off-theme chromatic lightning added to external feeds")
+        require(source.count("data-charge-color=") == 4 and
+                source.count('id="chronohedron-four-color-charge-network"') == 1,
+                "charge network duplicated or lost")
+        require(not any(tag in source for tag in
+                        ("vivid-crystal-helix", "helical-flow", "#ffd", "#ffe")),
+                "old yellow center vortex or off-profile yellow returned")
         rings = [node for node in root.iter(NS + "ellipse") if
                  node.get("fill") in ("url(#haloIce)", "url(#haloMagenta)")]
         require(len(rings) == 2 and
@@ -465,7 +573,7 @@ def check() -> None:
                                  normalized_text, count=1)
         normalized.add(hashlib.sha256(normalized_text.encode("utf-8")).hexdigest())
     require(len(normalized) == 1, "Chronohedron responsive variants diverged")
-    print("Chronohedron optics proof: 3 responsive studies, 46 smooth vector "
+    print("Chronohedron optics proof: 3 responsive studies, 50 smooth vector "
           "transforms, 14 closed-loop transported cyan/magenta channels, "
           "25 reduced-motion optical-layer mirrors, 14 light-bound " 
           "transport endpoints with static counterparts, 108+ grain points, "
@@ -473,7 +581,8 @@ def check() -> None:
           "bright breathing reactor, independently moving gaseous environment, "
           "phase-linked glass caustics, no animated noise or blurs, "
           "four exact profile phosphors, no amber/yellow center swirl, "
-          "four closed spectral energy routes, four corresponding optical caustics; "
+          "four closed spectral energy routes, four corresponding optical caustics, "
+          "four external-to-crystal phase-linked charge bundles and reduced-motion mirrors; "
           "no production enrollment.")
 
 
