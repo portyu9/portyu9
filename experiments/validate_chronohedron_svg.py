@@ -236,6 +236,25 @@ def check() -> None:
                         intensity.get("values", "").split(";")[0] ==
                         intensity.get("values", "").split(";")[-1],
                         "moving light and luminous pulse are no longer phase coupled")
+        # Physical surface grain is a fixed bounded noise kernel, never a
+        # time-varying turbulence or blur operation on the moving artwork.
+        glass = root.find(f".//{NS}g[@id='alive-dielectric-material-depth']")
+        noise = root.find(f".//{NS}filter[@id='alive-fixed-dielectric-texture']")
+        require(glass is not None and noise is not None,
+                "detailed dielectric glass microstructure disappeared")
+        turbulence = noise.find(NS + "feTurbulence")
+        require(turbulence is not None and
+                turbulence.get("baseFrequency") == ".058 .12" and
+                turbulence.get("numOctaves") == "2" and
+                turbulence.get("seed") == "19" and
+                turbulence.get("stitchTiles") == "stitch",
+                "crystal texture kernel is not static and bounded")
+        require(not list(noise.iter(NS + "animate")) and
+                not list(noise.iter(NS + "animateTransform")) and
+                not list(glass.iter(NS + "animate")) and
+                not list(glass.iter(NS + "animateTransform")),
+                "animated raster-heavy microfracture optics forbidden")
+
         require(all(root.find(f".//{NS}g[@id='{part}']") is not None
                     for part in ("alive-reactor-heart", "alive-volumetric-plasma",
                                  "alive-refractive-facets", "alive-chromatic-grazing-caustics",
