@@ -26,6 +26,27 @@ This visual is not a recolor, clone or reskin of the Fractal Iris. Its main silh
 
 GitHub's Markdown image proxy may freeze an SVG's SMIL animation. Open the raw link in an ordinary browser to assess real motion, lighting, device behavior and perceived depth.
 
+## Chronohedron V — four visible power feeds and a responsive crystal chamber
+
+**Owner feedback:** the earlier scene lacked an understandable source-to-reactor mechanism, and the yellow vertical swirl was visually distracting. The yellow swirl had already been deleted in the preceding four-color redesign. This iteration goes further: **four actively transported power feeds connect the wider atmosphere to the crystal's four theme-color faces and their internal membranes**.
+
+The exact, verified profile phosphors are loaded in the regression checker from `scripts/phosphor-lines-signal-field-v2.py`, `HEADER_COLORS["dark"]`: **green `#00FBCC`**, **cyan `#28D7FF`**, **violet `#8C7CFF`**, **magenta `#FF4DE1`**. Those are the **only four chromatic SVG paints**. Black is neutral unlit background, not an additional profile highlight.
+
+### How motion becomes causal
+
+- Four separate two-track power conduits move across the **outer scene** toward the actual crystal at different heights. Every conduit has a soft scattering stroke and narrow, intensely colored luminous center. All 16 animated vector strokes complete an exact normalized `pathLength=1000` cycle, with zero position jump at the loop seam.
+- Each of the four facets has a visibly pulsing **arrival contact**. Rather than introducing random timing, its light intensity uses the same exact existing reactor membrane's period and phase: green `8.6s/-1.8s`, cyan `12.6s/-4.6s`, violet `10.4s/-3.1s`, magenta `15.2s/-6.2s`.
+- Four slender, angular refractive paths continue **inside** the transparent glass to the common reactor chamber. Their translations and intensity use the same existing color-specific period and offset. These are open electrical conduits rather than another rotating circle, yellow spiral, or ornamental line drawn at the absolute center.
+- The original atmospheric plasma, 14 waveguides, 14 receiving lights, 4 existing perimeter currents, 4 animated inner phosphor membranes and phase-synchronized caustics are all retained.
+
+### Source assurance and constraints
+
+The three checked-in SVG variants have **identical normalized artwork**; responsive variants only adjust viewport/crop and accessible titles. Current files are around **175 KB per view**, with **48 unique IDs, 408 valid paint references, 50 closed transform animations, 118 other vector/pulse animations and 52 flowing dash-offset strokes** each. The dark canvas is an explicitly opaque black rectangle; the screenshot's old washed-out oval has been removed, not replaced by another large pale halo. No external image/script resources or animated turbulence/blur parameters have been introduced.
+
+The `experiments/validate_chronohedron_svg.py` source contract now requires all four canonical theme feeds, their matched static reduced-motion geometry, synchronized glass arrival and inner refraction, exact per-color timing, closed transform continuity and the absence of the removed yellow helical center. An independent SVG source audit against the actual GitHub blobs passed for XML nesting, four-color paint inventory, internal reference resolution and 3-view geometry parity. **Browser-level frame-time and perceived depth remain unverified.**
+
+**This remains an OPEN, UNMERGED review-only concept.** Production slot 3 stays reserved with the original artwork fallback; the approved Fractal Iris slot 2 is untouched.
+
 ## Volumetric light-response revision (2026-10-13)
 
 The first Chronohedron pilot looked **static, low-contrast and synthetic**, despite using many geometry paths. The original 14 motion groups moved by only a few pixels, light did not physically traverse any circuitry, the glass did not brighten in response to its energy source, and there was almost no atmospheric depth. This PR now contains an actual **second-pass experimental animation**, rather than an aesthetic adjective applied to the original pilot.
