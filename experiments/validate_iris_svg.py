@@ -20,7 +20,8 @@ def test() -> None:
     assert root.tag == SVG_NS + "svg"
     assert root.get("viewBox") == "0 0 1280 258"
     assert root.get("width") == "1280" and root.get("height") == "258"
-    assert not any(name in data for name in ("<script", "<foreignObject", "http://", "https://"))
+    assert "<script" not in data and "<foreignObject" not in data
+    assert not any(snippet in data for snippet in ('href="http:', 'href="https:', 'xlink:href="http:', 'xlink:href="https:')), "external resource load"
     assert len(data.encode("utf-8")) < 160_000, "review asset payload grew unexpectedly"
 
     ids = {item.attrib["id"] for item in root.iter() if "id" in item.attrib}
