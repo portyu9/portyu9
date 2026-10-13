@@ -137,6 +137,15 @@ def check() -> None:
         assert rotor.get("repeatCount") == "indefinite"
         assert not any("filter" in x.attrib for x in group.iter())
     assert source.count('fill="url(#bladeMetal)"') == 32
+    # Pin the user-approved optical assembly exactly. New light response must
+    # wrap around it without silently changing blades, facets, or its motion.
+    core_start = source.index("<!-- Lens-inspired optical architecture.")
+    core_end = source.index("<!-- Directional chromatic light-response")
+    core = source[core_start:core_end]
+    assert geometry_fingerprint([core]) == "f95760d1", (
+        "approved iris assembly, optics or original glint changed")
+    assert source.index('id="iris-directional-occlusion"') < core_start < core_end, (
+        "occlusion must be behind core; highlights must overlay the rim")
 
     animations = [x for x in elements if x.tag in (
         NS + "animate", NS + "animateTransform", NS + "animateMotion")]
@@ -247,13 +256,11 @@ def check() -> None:
         rotations = light_rotor.get("values", "").split(";")
         assert len(rotations) == 3
         assert rotations[0] == rotations[2] and rotations[0] != rotations[1]
+        # A single shared timing contract makes rim response physical rather
+        # than a separate random flicker.
         for field in ("dur", "begin", "values", "calcMode", "keyTimes",
                       "keySplines", "repeatCount"):
-            if field == "values":
-                # The synchronized reflection has the same brightness envelope.
-                assert light_intensity.get(field) == plasma_intensity.get(field)
-            else:
-                assert light_intensity.get(field) == plasma_intensity.get(field)
+            assert light_intensity.get(field) == plasma_intensity.get(field)
         assert light_rotor.get("dur") == light_intensity.get("dur")
         assert light_rotor.get("begin") == light_intensity.get("begin")
         assert light_intensity.get("attributeName") == "opacity"
