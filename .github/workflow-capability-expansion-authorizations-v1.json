@@ -239,6 +239,13 @@
       "rationale": "Authorize frozen #922's exact Capability Admission Spotlight topology schema hardening. Existing Git commit/compare GETs, triggers, permissions, candidate identity, publisher, mutations, merge authority and consumers are unchanged. Candidate/base topology, bot identity, compare counts, commit identity and README primitives must validate before scalar use. Workflow Capability unchanged; no new endpoint, method, secret, OIDC, check reduction, direct-main write, ruleset change or bypass."
     },
     {
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "5dac1073c7f17e1a590d92854703468ddbea366e1e8fcdea996aaec6312efab4",
+      "id": "cap-chronohedron-slot-three-protected-rotation-v1",
+      "rationale": "Authorize frozen Chronohedron slot-3 #1652 Spotlight publisher source-pin update (candidate tree 76d7bc00caeabb76cc0a3ac14b6f7cca80e0055e). Exact hash-checked delegates retained. Slot 1 Quantum Apex, slot 2 Fractal Iris, eight-slot UTC schedule and slots 4-8 original fallback preserved. No workflows, permissions, triggers, secrets, API mutations, required-check reductions, direct-main write, bypass or new merge authority."
+    },
+    {
       "baseBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "candidateBomSha256": "873fa413b3e1c10413861441c69c7bdd1d35e0617c880587fb7bee3eaddcb01d",
       "expansionSha256": "e3297194c6592e785860dce2094f86c339e54c59e9a3990282700d6fde3639f5",
