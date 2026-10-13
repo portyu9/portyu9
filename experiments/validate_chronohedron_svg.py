@@ -175,7 +175,7 @@ def check() -> None:
                 {node.get("data-life-still") for node in frozen
                  if node.get("data-life-still")},
                 "living light group IDs and static fallback IDs diverged")
-        require(len(root.findall(f".//{NS}animateTransform")) == 50,
+        require(len(root.findall(f".//{NS}animateTransform")) == 54,
                 "Chronohedron motion/perspective groups changed")
         feed = next(node for node in nodes
                     if node.get("id") == "alive-photonic-transit")
@@ -208,7 +208,7 @@ def check() -> None:
                         "traveling waveguide light must have mathematically closed motion")
                 require(static_path.find(NS + "animate") is None,
                         "reduced-motion fallback contains a moving light channel")
-        require(len(root.findall(f".//{NS}animate")) == 118,
+        require(len(root.findall(f".//{NS}animate")) == 122,
                 "optical pulse or dynamic feed channel lost")
         contact_motion = [node for node in nodes
                           if node.get("class") == "contact-motion"]
@@ -579,6 +579,45 @@ def check() -> None:
                                  "alive-refractive-facets", "alive-chromatic-grazing-caustics",
                                  "alive-dielectric-grain", "alive-photonic-transit")),
                 "volumetric/optical system was reduced to a basic flat polygon")
+        # Crystal-only revision: four incoming photon routes illuminate the actual
+        # inner silica, with matching static fallbacks and no exterior metal shells.
+        require(not any(tag in source for tag in
+                        ("hybrid-rear-containment", "hybrid-front-containment")),
+                "rejected bulky side housings returned")
+        skin = root.find(f".//{NS}g[@id='chronohedron-optical-skin']")
+        response = root.find(f".//{NS}g[@id='chronohedron-internal-light-routing']")
+        require(skin is not None and response is not None
+                and skin.get("clip-path") == "url(#alive-glass-clip)",
+                "new refractive surface is not limited to the original crystal")
+        require(".optical-motion{display:none}.optical-still{display:inline}"
+                in source, "crystal optical accessible still fallback missing")
+        phases = {"green": ("8.6s", "-1.8s"), "cyan": ("12.6s", "-4.6s"),
+                  "violet": ("10.4s", "-3.1s"), "magenta": ("15.2s", "-6.2s")}
+        groups = [node for node in response if node.get("data-crystal-response")]
+        require(len(groups) == 4 and
+                {node.get("data-crystal-response") for node in groups}
+                == set(phases), "phase-locked internal glass channels incomplete")
+        for channel in groups:
+            name = channel.get("data-crystal-response")
+            require(len(channel) == 2, "missing optical reduced-motion mirror")
+            live, static = list(channel)
+            require(live.get("data-optical-motion") == name
+                    and static.get("data-optical-still") == name
+                    and displayed_art(live) == displayed_art(static),
+                    "optical moving/still geometry must match")
+            movement = live.find(NS + "animateTransform")
+            light = live.find(NS + "animate")
+            require(movement is not None and light is not None
+                    and movement.get("values", "").split(";")[0]
+                    == movement.get("values", "").split(";")[-1]
+                    and all(a.get("dur") == phases[name][0]
+                            and a.get("begin") == phases[name][1]
+                            and a.get("repeatCount") == "indefinite"
+                            for a in (movement, light)),
+                    "internal photon response not tied to actual incoming pulse")
+            require(not list(static.iter(NS + "animate")) and
+                    not list(static.iter(NS + "animateTransform")),
+                    "reduced-motion optical response must remain still")
         # The same art must be used in all three responsive shapes: only
         # cropping metadata / title may vary.
         normalized_text = re.sub(
@@ -591,7 +630,7 @@ def check() -> None:
                                  normalized_text, count=1)
         normalized.add(hashlib.sha256(normalized_text.encode("utf-8")).hexdigest())
     require(len(normalized) == 1, "Chronohedron responsive variants diverged")
-    print("Chronohedron optics proof: 3 responsive studies, 50 smooth vector "
+    print("Chronohedron optics proof: 3 responsive studies, 54 smooth vector "
           "transforms, 14 closed-loop transported cyan/magenta channels, "
           "25 reduced-motion optical-layer mirrors, 14 light-bound " 
           "transport endpoints with static counterparts, 108+ grain points, "
