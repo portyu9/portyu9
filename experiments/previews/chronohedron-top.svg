@@ -31,7 +31,7 @@
 <!-- Bounded static microstructure: cannot cause temporal turbulence skipping. -->
 <filter id="alive-fixed-dielectric-texture" x="-5%" y="-5%" width="110%" height="110%">
 <feTurbulence type="fractalNoise" baseFrequency=".058 .12" numOctaves="2" seed="19" stitchTiles="stitch" result="microscopic-impurities"/>
-<feColorMatrix in="microscopic-impurities" type="matrix" values="0 0 0 0 .56 0 0 0 0 .82 0 0 0 0 .98 .11 .22 .27 0 -.22"/>
+<feColorMatrix in="microscopic-impurities" type="matrix" values="0 0 0 0 .156862745 0 0 0 0 .843137255 0 0 0 0 1 .11 .22 .27 0 -.22"/>
 </filter>
 </defs>
 <style>.kinetic,.alive-motion,.contact-motion,.theme-motion{display:inline}.still,.alive-still,.contact-still,.theme-still{display:none}@media(prefers-reduced-motion:reduce){.kinetic,.alive-motion,.contact-motion,.theme-motion{display:none}.still,.alive-still,.contact-still,.theme-still{display:inline}}</style>
