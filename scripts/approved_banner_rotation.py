@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Fail-closed approved-only eight-slot UTC profile banner rotation.
 
-Only slots one (original) and two (Fractal Iris) are approved. Slots 3-8 are
-reserved with exact original fallback and may not publish archived experiments.
+Slots one (original), two (Fractal Iris), and three (Chronohedron) are approved.
+Slots 4-8 retain exact original fallback and may not publish archived experiments.
 CLI is read-only: it never directly pushes README or alters branches.
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ MARKER = re.compile(
 PREFIX = "<!-- banner-rotation:"
 HEADER_ANCHOR = '<p align="center">\n<picture>\n  <source media="(max-width: 640px)" '
 EXPECTED_SLUGS = (
-    "01-original-quantum-apex", "02-fractal-iris", "03-reserved",
+    "01-original-quantum-apex", "02-fractal-iris", "03-chronohedron",
     "04-reserved", "05-reserved", "06-reserved", "07-reserved", "08-reserved",
 )
 
@@ -79,17 +79,17 @@ def load_catalog() -> list[dict[str, Any]]:
         require(isinstance(slot, dict) and
                 slot.get("slot") == n and type(slot.get("slot")) is int and
                 slot.get("slug") == EXPECTED_SLUGS[n - 1], f"slot {n} identity changed")
-        if n <= 2:
+        if n <= 3:
             require(set(slot) == {"slot", "slug", "state", "assets", "blobs"}
                     and slot["state"] == "approved", f"approved slot {n} changed")
             require(isinstance(slot["assets"], dict) and
                     isinstance(slot["blobs"], dict) and
                     set(slot["assets"]) == set(slot["blobs"]) == set(SURFACES),
                     f"slot {n}: incomplete responsive triplet")
-            expected = historical.ORIGINAL if n == 1 else {
-                key: f"assets/profile-banners/approved/02-fractal-iris-{key}.svg"
+            expected = (historical.ORIGINAL if n == 1 else {
+                key: f"assets/profile-banners/approved/{slot['slug']}-{key}.svg"
                 for key in SURFACES
-            }
+            })
             require(slot["assets"] == expected, f"slot {n} assets not reviewed")
             if n == 1:
                 require(slot["blobs"] == historical.ORIGINAL_BLOBS,
@@ -105,26 +105,28 @@ def load_catalog() -> list[dict[str, Any]]:
 
 
 def validate_assets(slots: list[dict[str, Any]]) -> None:
-    for slot in slots[:2]:
+    for slot in slots[:3]:
         for surface, path in slot["assets"].items():
             data = read_file(ROOT / path)
             require(git_blob(data) == slot["blobs"][surface],
                     f"approved art blob changed: {path}")
             if slot["slot"] == 1:
                 continue
-            require(100000 <= len(data.encode("utf-8")) < 160000,
-                    f"iris source unexpectedly truncated or inflated: {path}")
+            bounds = ((100000, 160000) if slot["slot"] == 2
+                      else (150000, 200000))
+            require(bounds[0] <= len(data.encode("utf-8")) < bounds[1],
+                    f"approved animation source unexpectedly sized: {path}")
             lower = re.sub(r'\s+xmlns(?::[a-z]+)?="https?://www\.w3\.org/[^"]+"',
                            "", data.lower())
             require(not any(v in lower for v in
                             ("<script", "<image", "<foreignobject", "javascript:",
                              "data:image", "http://", "https://")),
-                    f"iris source includes external payload: {path}")
+                    f"approved banner source includes external payload: {path}")
             root = ET.fromstring(data)
             ns = historical.NS
             require(root.tag == ns + "svg" and root.get("role") == "img"
                     and root.get("data-banner-art") == "approved-banner-v3"
-                    and root.get("data-scene") == "02-fractal-iris"
+                    and root.get("data-scene") == slot["slug"]
                     and root.get("data-surface") == surface
                     and root.get("aria-labelledby") == "title desc",
                     f"approved SVG metadata invalid: {path}")
@@ -138,14 +140,39 @@ def validate_assets(slots: list[dict[str, Any]]) -> None:
             require(root.find(ns + "title") is not None and
                     root.find(ns + "desc") is not None and
                     len(list(root.iter(ns + "animateTransform"))) >= 15,
-                    f"iris animation/a11y missing: {path}")
+                    f"approved animation/a11y missing: {path}")
             style = root.find(f".//{ns}style")
             require(style is not None and "prefers-reduced-motion" in (style.text or ""),
                     f"reduced-motion fallback missing: {path}")
             require(not any(a.get("attributeName") in
-                            {"baseFrequency", "scale", "stdDeviation", "stroke-dashoffset"}
+                            ({"baseFrequency", "scale", "stdDeviation"} |
+                             ({"stroke-dashoffset"} if slot["slot"] == 2 else set()))
                             for a in root.iter(ns + "animate")),
                     f"frame-heavy animation regressed: {path}")
+            if slot["slot"] == 3:
+                # Chronohedron's closed dash loops deliberately match its photon
+                # transport. Never allow scripts, off-palette colors or big halos.
+                colors = set(re.findall(r"#[0-9a-fA-F]{6}\b", data))
+                require(colors == {"#00FBCC", "#28D7FF", "#8C7CFF", "#FF4DE1"},
+                        f"Chronohedron profile colors drifted: {path}")
+                require(root.get("style") == "background-color:black" and
+                        root.find(f".//{ns}g[@id='chronohedron-spectrum-perimeter']") is not None and
+                        root.find(f".//{ns}g[@id='chronohedron-perimeter-underlight']") is not None and
+                        root.find(f".//{ns}g[@id='chronohedron-core']") is not None,
+                        f"Chronohedron opaque canvas, crystal, or rim lost: {path}")
+                require(not any(tag in data for tag in (
+                            "hybrid-front-containment", "hybrid-rear-containment")),
+                        f"rejected side-claw geometry returned: {path}")
+                ids = [node.get("id") for node in root.iter() if node.get("id")]
+                require(len(ids) == len(set(ids)) and
+                        set(re.findall(r"url\(#([^)]+)\)", data)) <= set(ids),
+                        f"Chronohedron internal refs or IDs invalid: {path}")
+                require(len(root.findall(f".//{ns}animateTransform")) == 54 and
+                        len(root.findall(f".//{ns}animate")) == 131,
+                        f"Chronohedron synchronized energy layers incomplete: {path}")
+                require(".spectrum-motion{display:none}.spectrum-still{display:inline}"
+                        in (style.text or ""),
+                        f"Chronohedron reduced-motion spectral rim missing: {path}")
 
 
 def chosen(day: date, slots: list[dict[str, Any]]) -> dict[str, Any]:
@@ -164,7 +191,7 @@ def chosen(day: date, slots: list[dict[str, Any]]) -> dict[str, Any]:
 
 def referenced(readme: str, slots: list[dict[str, Any]]) -> dict[str, str]:
     approved = {slot["assets"][surface]
-                for slot in slots[:2] for surface in SURFACES}
+                for slot in slots[:3] for surface in SURFACES}
     observed: dict[str, str] = {}
     for surface, pattern in historical.BANNER_REFERENCE.items():
         found = pattern.findall(readme)
@@ -245,11 +272,13 @@ def self_test(slots: list[dict[str, Any]]) -> None:
     require([v["slot"] for v in orders] == list(range(1,9))*2+[1],
             "eight-slot UTC timeline lost a position")
     require([v["active_slug"] for v in orders[:8]] ==
-            ["01-original-quantum-apex","02-fractal-iris"] +
-            ["01-original-quantum-apex"]*6,
-            "unapproved slots are no longer pinned to original")
-    require(chosen(date(2026, 10, 13), slots)["slot"] == 2,
+            ["01-original-quantum-apex", "02-fractal-iris", "03-chronohedron"] +
+            ["01-original-quantum-apex"]*5,
+            "approved slots or original-only fallbacks diverged")
+    require(chosen(date(2026, 10, 13), slots)["active_slug"] == "02-fractal-iris",
             "Fractal Iris was not assigned slot 2 on first cycle day")
+    require(chosen(date(2026, 10, 14), slots)["active_slug"] == "03-chronohedron",
+            "Chronohedron is not the third active UTC-day triplet")
     require(chosen(date(2027, 1, 1), slots)["slot"] ==
             (date(2027, 1, 1)-EPOCH).days%8+1, "year rollover broken")
     cur = initial
@@ -289,7 +318,7 @@ def main() -> int:
         slots = load_catalog()
         if args.check:
             validate_assets(slots)
-            print("Approved banner assets verified: original + Fractal Iris, slot 2 of 8")
+            print("Approved banner assets verified: original + Fractal Iris + Chronohedron, slots 1–3 of 8")
         elif args.self_test:
             validate_assets(slots)
             self_test(slots)

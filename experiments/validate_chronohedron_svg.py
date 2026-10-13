@@ -64,7 +64,7 @@ def check() -> None:
         require(path.is_file() and not path.is_symlink(),
                 f"Chronohedron {surface} must be a regular file")
         source = path.read_text(encoding="utf-8")
-        require(150000 < len(source.encode("utf-8")) < 190000,
+        require(150000 < len(source.encode("utf-8")) < 200000,
                 f"Chronohedron {surface}: artwork density or payload bound regressed")
         lower = source.lower()
         require(not any(token.lower() in lower for token in BAD),
@@ -208,7 +208,7 @@ def check() -> None:
                         "traveling waveguide light must have mathematically closed motion")
                 require(static_path.find(NS + "animate") is None,
                         "reduced-motion fallback contains a moving light channel")
-        require(len(root.findall(f".//{NS}animate")) == 125,
+        require(len(root.findall(f".//{NS}animate")) == 131,
                 "optical pulse or dynamic feed channel lost")
         contact_motion = [node for node in nodes
                           if node.get("class") == "contact-motion"]
@@ -689,6 +689,68 @@ def check() -> None:
         require(not any(tag in source for tag in
                         ("hybrid-front-containment", "hybrid-rear-containment")),
                 "owner-rejected mechanical claws returned")
+
+        # Production candidate: four color-specific permanent perimeter arcs,
+        # each independently breathing on its existing supply-line period.
+        rim = root.find(f".//{NS}g[@id='chronohedron-spectrum-perimeter']")
+        require(rim is not None and rim.get("pointer-events") == "none"
+                and len(rim) == 6, "four-color edge rim incomplete")
+        expected = {"green": ("8.6s", "-1.8s"),
+                    "cyan": ("12.6s", "-4.6s"),
+                    "violet": ("10.4s", "-3.1s"),
+                    "magenta": ("15.2s", "-6.2s")}
+        pulses = [g for g in rim if g.get("data-spectrum-channel")]
+        routes = [g for g in rim if g.get("data-spectrum-photon")]
+        require(len(pulses) == 4 and
+                {g.get("data-spectrum-channel") for g in pulses} == set(expected)
+                and len(routes) == 2 and
+                {g.get("data-spectrum-photon") for g in routes} == {"cyan", "violet"},
+                "all four rim phosphors and traveling paths must be present")
+        require(".spectrum-motion{display:none}.spectrum-still{display:inline}"
+                in source, "reduced-motion spectrum art missing")
+        for group in pulses + routes:
+            name = (group.get("data-spectrum-channel") or
+                    group.get("data-spectrum-photon"))
+            moving = next((g for g in group if g.get("data-spectrum-motion") == name), None)
+            static = next((g for g in group if g.get("data-spectrum-still") == name), None)
+            require(moving is not None and static is not None and
+                    displayed_art(moving) == displayed_art(static),
+                    "spectral perimeter still twin diverges from moving art")
+            pulse = moving.find(NS + "animate")
+            require(pulse is not None and
+                    pulse.get("dur") == expected[name][0] and
+                    pulse.get("begin") == expected[name][1] and
+                    pulse.get("repeatCount") == "indefinite",
+                    "rim optical cycle no longer follows its incoming photon lane")
+            require(not list(static.iter(NS + "animate")) and
+                    not list(static.iter(NS + "animateTransform")),
+                    "static spectrum art must never animate")
+            if group in routes:
+                require(pulse.get("attributeName") == "stroke-dashoffset" and
+                        pulse.get("from") == "0" and pulse.get("to") == "-1000" and
+                        pulse.get("calcMode") == "linear",
+                        "supplemental rim photons lost closed-loop motion")
+                segments = moving.findall(NS + "path")
+                require(len(segments) == 2 and all(
+                    p.get("pathLength") == "1000" and
+                    p.get("stroke-dasharray") == "18 982" and
+                    p.get("stroke-linejoin") == "round"
+                    for p in segments),
+                    "supplemental rim photons should stay softly layered")
+            else:
+                segments = group.findall(NS + "path")
+                require(len(segments) == 2 and
+                        segments[0].get("filter") == "url(#microGlow)" and
+                        all(p.get("stroke-linecap") == "round" and
+                            p.get("stroke-linejoin") == "round"
+                            for p in segments) and
+                        pulse.get("attributeName") == "opacity" and
+                        pulse.get("values", "").split(";")[0] ==
+                        pulse.get("values", "").split(";")[-1],
+                        "spectrum edges must stay smooth, glowing and seam-free")
+        require("hybrid-front-containment" not in source and
+                "hybrid-rear-containment" not in source,
+                "rejected side clamping geometry returned")
 
         # The same art must be used in all three responsive shapes: only
         # cropping metadata / title may vary.
