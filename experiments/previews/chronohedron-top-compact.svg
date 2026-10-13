@@ -4,9 +4,9 @@
 <defs>
 <radialGradient id="theme-electric-green"><stop stop-color="#00FBCC" stop-opacity=".96"/><stop offset=".35" stop-color="#00FBCC" stop-opacity=".56"/><stop offset="1" stop-color="#00FBCC" stop-opacity="0"/></radialGradient>
 <radialGradient id="theme-electric-violet"><stop stop-color="#8C7CFF" stop-opacity=".96"/><stop offset=".35" stop-color="#8C7CFF" stop-opacity=".55"/><stop offset="1" stop-color="#8C7CFF" stop-opacity="0"/></radialGradient>
-<radialGradient id="night"><stop stop-color="black"/><stop offset=".42" stop-color="black"/><stop offset=".75" stop-color="#8C7CFF" stop-opacity=".065"/><stop offset="1" stop-color="black"/></radialGradient>
-<radialGradient id="haloIce"><stop stop-color="#00FBCC" stop-opacity=".28"/><stop offset=".34" stop-color="#28D7FF" stop-opacity=".12"/><stop offset="1" stop-color="black" stop-opacity="0"/></radialGradient>
-<radialGradient id="haloMagenta"><stop stop-color="#FF4DE1" stop-opacity=".24"/><stop offset=".34" stop-color="#FF4DE1" stop-opacity=".12"/><stop offset="1" stop-color="black" stop-opacity="0"/></radialGradient>
+
+
+
 <linearGradient id="facetedGlass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#00FBCC" stop-opacity=".72"/><stop offset=".16" stop-color="#00FBCC" stop-opacity=".24"/><stop offset=".43" stop-color="#00FBCC" stop-opacity=".12"/><stop offset=".73" stop-color="#00FBCC" stop-opacity=".19"/><stop offset="1" stop-color="black" stop-opacity=".68"/></linearGradient>
 <linearGradient id="deepFacet" x1="0" y1="0" x2=".9" y2="1"><stop stop-color="#00FBCC" stop-opacity=".28"/><stop offset=".48" stop-color="black" stop-opacity=".42"/><stop offset="1" stop-color="#8C7CFF" stop-opacity=".18"/></linearGradient>
 <linearGradient id="magentaFacet" x1="0" y1="0" x2="1" y2=".7"><stop stop-color="#FF4DE1" stop-opacity=".4"/><stop offset=".38" stop-color="#FF4DE1" stop-opacity=".18"/><stop offset="1" stop-color="#FF4DE1" stop-opacity=".07"/></linearGradient>
