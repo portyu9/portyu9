@@ -539,6 +539,11 @@ def main() -> int:
     approved_slots = approved_banners.load_catalog()
     approved_banners.validate_assets(approved_slots)
     approved_banners.self_test(approved_slots)
+    approved_helper_source = (ROOT / "scripts/approved_banner_rotation.py").read_text(encoding="utf-8")
+    require("candidateTcbSha256" not in approved_helper_source and
+            "workflow_capability_tcb" not in approved_helper_source and
+            "Approved banner prior-review measurement:" not in approved_helper_source,
+            "temporary internal digest logging must not return to approved banner source")
     current_banners = approved_banners.validate_readme_state(readme, approved_slots)
     expected_bottom_block = BOTTOM_HORIZON_BLOCK.replace(
         "assets/profile-banners/elite-evidence-horizon-bottom.svg", current_banners["bottom"])
