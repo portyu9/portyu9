@@ -22,6 +22,16 @@ The previous iterations incorrectly substituted motionless original elements wit
 
 **Assurance:** `python3 experiments/validate_iris_svg.py` pins the original path inventory with source fingerprints, checks that all 11 original nebula/filament groups actually move, verifies closed position/velocity easing, keeps the multi-layer iris, and blocks animated filters and synthetic dash-highlight replacements. This is a **source-structure and mathematical continuity test**, not a measured frame-rate test. Browser-renderer performance and artistic signoff remain unverified; keep this study outside the README and outside the production rotation until reviewed.
 
+## Nebula luminosity and corona pulse — second visual review
+
+**Watch the actual [review SVG in GitHub](previews/fractal-iris-animated.svg)** or [play the raw animated SVG](https://raw.githubusercontent.com/portyu9/portyu9/feature/volumetric-iris-render-study-20261013/experiments/previews/fractal-iris-animated.svg).
+
+The cloud contours were previously moving too slowly and at nearly constant brightness to read as alive. This revision preserves the original geometry and enhances all six **real nebula bodies** rather than substituting overlay bands. The four original filtered cloud contours now make larger, more legible 13/17/19/23-second closed drifts and independently breathe from 26–42% opacity to 94–100%, with 7/8/9/11-second illumination cycles. The two original noise-texture layers drift over 18/21 seconds and breathe over 10/12-second cycles. Their spectral texture, turbulent displacements and blur parameters are **not animated**.
+
+The glow centered around the existing iris gains three broad, soft radial-gradient plasma coronas (magenta, cyan, violet), independently expanding/contracting and visibly fading/pulsing over 8/11/13 seconds. Corona shapes have no costly SVG filters and all animations use matched-start/end cubic eased loops; the iris's 16 original blades, 18 petals and all 165 moving spaghetti paths remain unchanged. Each corona also has a still version for reduced-motion preferences. The superseded surrogate filament-highlight and neon-band assets are absent.
+
+Use `python3 experiments/validate_iris_svg.py` for static checks: original geometry hashes, 11 original moving groups, strong optical/nebula opacity variation, 3 core glow layers, smooth closed loops, and 3 corresponding static corona fallbacks. It **does not measure browser frame cadence** or establish a guarantee about GitHub's inline SVG animation behavior. Artistic review and browser-level playback remain required before any merge or production activation.
+
 ## Frame renderer
 
 Requires Python 3.11+ plus Pillow, NumPy and OpenCV (headless). Run after installing these packages in a local isolated environment:
