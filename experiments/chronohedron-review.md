@@ -26,17 +26,27 @@ This visual is not a recolor, clone or reskin of the Fractal Iris. Its main silh
 
 GitHub's Markdown image proxy may freeze an SVG's SMIL animation. Open the raw link in an ordinary browser to assess real motion, lighting, device behavior and perceived depth.
 
-## Original art systems and material recipe
+## Volumetric light-response revision (2026-10-13)
 
-- **Crystal architecture:** More than 100 actual SVG polygons form prismatic membranes, diffuse cyan glass, warm amber internal refraction, specular facets and nested energy cells. The external optical cages are geometric 3D-style wireframes, not smooth iris rings.
-- **Energy pathways:** Two banks of physical cubic Bézier glass waveguides descend from the edges toward the reactor. Four motion zones per bank sway by a few pixels with independent 16–31 second rhythms. Dense ghost perspective lines suggest architecture vanishing into the structure, rather than another field of cosmic noodles.
-- **Counter-phase parallax:** Fourteen transformed groups include the waveguide banks, inner facets, orthogonal cage structure, crystal hull, moving glass caustics and core energy. Each movement closes on the original pose through a smooth cubic spline. Twelve energy/illumination envelopes follow their parent transforms.
-- **Refraction and depth:** The central reactor contains thin high-frequency ice-blue and champagne-gold edge caustics; luminous internal slivers shift and brighten behind separate glass facets. A pair of small static Gaussian filters provides selective softness; **no filter parameters animate**.
-- **Motion/accessibility:** All 14 moving groups have geometry-identical static fallbacks under `prefers-reduced-motion: reduce`. There is no JavaScript, embedded image, external resource, animated SVG noise, or dynamic blur.
-- **Responsive parity:** Exactly the same scene geometry is used for desktop, compact and footer. Only viewport/crop and accessible title differ. Visual crop and actual browser frame pacing remain review criteria, not proven facts.
+The first Chronohedron pilot looked **static, low-contrast and synthetic**, despite using many geometry paths. The original 14 motion groups moved by only a few pixels, light did not physically traverse any circuitry, the glass did not brighten in response to its energy source, and there was almost no atmospheric depth. This PR now contains an actual **second-pass experimental animation**, rather than an aesthetic adjective applied to the original pilot.
+
+**The main observable improvements:**
+
+- **Living plasma volumes:** six large but feathered, independently breathing cyan and champagne-amber vapor banks, each moving on an asymmetric 22–37-second loop; their gradients are static, while only vector opacity and translation change.
+- **Physically directional energy transport:** **14 optical supply routes** entering the reactor from the left and right, each with a soft aura stroke and bright core. Both components traverse the same Bézier path with a shared phase using a normalized `pathLength="1000"`, `stroke-dasharray="12 988"`, and the exact closed 0→−1000 linear dash offset. The path is continuous; the source is not flickered on/off randomly.
+- **A luminous central reactor:** dual cyan and amber heartbeats illuminate the cavity with distinct 9- and 11-second optical rhythms. There is real glowing radial structure instead of a single dark flat polygon.
+- **True glass behavior:** six shifting, clipped color-dispersing facet sheens, added dielectric grain inside the transparent body, and ten tiny independently phased grazing caustics tracing the outer facets. Their motion does not spin the entire artwork.
+- **Subtle engineering depth:** preserves the original 104 crystal facets, 14 existing eased mechanical/waveguide loops, original environmental perspective, orthogonal cage and lens anatomy. Rather than deleting those details, the new layers make them meaningfully visible.
+- **No heavy animated filter:** two new **static** local bloom kernels and static optical gradients are reused. No animated turbulence frequency, blur radius or displacement values, no Javascript, no network dependencies. The beam paths do animate vector dash offset; browser/device frame pacing still requires genuine playback evaluation.
+
+This revision has **38 closed transform loops** (14 pilot + 24 new moving groups), **14 continuously transporting energy routes** (28 synchronized core/bloom stroke-dash-offset animations), and **25 new geometry-mirrored reduced-motion fallbacks**. On `prefers-reduced-motion: reduce`, all new motion is hidden and substituted by its static counterpart without losing the glass detail. The SVG source is about **132 KB per view**, with identical artwork in all three responsive viewports. The accepted original Fractal Iris is a separate production artifact and is not modified here.
+
+### What was verified, and what was not
+
+A direct source audit of the **actual committed** desktop/mobile/footer SVGs passed: 36 unique internal identifiers, 332 resolved paint references, correct nested SVG tags, closed 38 spline transforms, normalized 14 periodic light circuits, identical normalized scene content across three crops, and motion/still group counts. The Python checker `python3 experiments/validate_chronohedron_svg.py` has been expanded to assert all these structural contracts, including phase coupling and no malformed or unapproved payloads. Independent browser-level 30/60 FPS measurements and your visual acceptance have **not** been performed or claimed.
 
 ## Assurance and isolation
 
-Run `python3 experiments/validate_chronohedron_svg.py` to validate unique SVG IDs, balanced XML, matching geometry among all three crops, density thresholds, accessible titles and descriptions, 14 seamlessly closed motion loops, 14 paired static fallbacks, zero external payloads and constrained geometry size.
+Run `python3 experiments/validate_chronohedron_svg.py` to validate unique SVG IDs, balanced XML, matching geometry among all three crops, density thresholds, accessible titles and descriptions, 38 seamlessly closed transform loops, 14 traveling light circuits, 25 additional paired static fallbacks, zero external payloads and constrained geometry size.
 
 **Approval gate:** This PR must stay open and unmerged until you approve the actual visual. No changes to the already approved Fractal Iris files, original Quantum Apex/Evidence Horizon assets, the eight-day selector, the generated evidence branch or the production README are permitted from this lane.
