@@ -178,6 +178,8 @@ def check() -> None:
         assert zoom.get("keySplines") == ".42 0 .58 1;.42 0 .58 1"
         assert zoom.get("repeatCount") == "indefinite"
         assert zoom.get("dur") == alpha[0].get("dur")
+        assert zoom.get("begin") == alpha[0].get("begin"), (
+            "corona size and brightness pulses must remain phase synchronized")
         assert zoom.get("dur") in ("8s", "11s", "13s")
         phases = zoom.get("values", "").split(";")
         assert len(phases) == 3 and phases[0] == phases[2] and phases[0] != phases[1]
@@ -205,7 +207,11 @@ def check() -> None:
         assert 0 <= low < high <= 1 and high - low >= .45, (
             "nebula brightness contrast is too subtle to notice")
         assert int(fade.get("dur", "0s")[:-1]) in (7, 8, 9, 10, 11, 12, 13)
+        assert fade.get("begin", "").startswith("-"), (
+            "each glow must begin in mid-cycle rather than all opening dark")
     assert all(x.tag == NS + "animateTransform" for x in transforms)
+    assert len(set(f.get("begin") for f in fades)) >= 5, (
+        "all nine glows animate in lockstep, rather than a living atmosphere")
 
     assert source.count("data-role=\"original-spaghetti-body\"") == 5
     assert "filament-flow" not in source and "ion-flow-magenta" not in source
