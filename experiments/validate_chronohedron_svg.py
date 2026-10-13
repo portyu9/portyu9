@@ -324,7 +324,8 @@ def check() -> None:
         require(impact is not None and len(impact) == 8,
                 "four optical caustic actions and their static copies required")
         impact_groups = list(impact)
-        intended = ("#00FBCC", "#28D7FF", "#8C7CFF", "#FF4DE1")
+        intended = tuple(list(spectral)[index].find(NS + "path").get("stroke")
+                         for index in range(4))
         for index, color in enumerate(intended):
             live = impact_groups[index * 2]
             still = impact_groups[index * 2 + 1]
