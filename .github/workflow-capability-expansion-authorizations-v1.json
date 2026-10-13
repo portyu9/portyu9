@@ -87,6 +87,13 @@
     {
       "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "expansionSha256": "1c44d1abf42c3bb918db41beeb57cb27a005c7c09d2cad61c6713376d3fa8a0e",
+      "id": "cap-banner-original-only-production-hold-v1",
+      "rationale": "Authorize frozen original-only banner hold PR #1645 (`78910bfb56b0eb43eb568d2633160de43523933f`) measured by trusted read-only diagnostic #1646 (run 38393139490). One protected Spotlight publisher source change, zero reductions, unchanged semantic BOM, TCB SHA256 9cf062b80a1f3777dc9a482f6960889ee572bdbbd59af143eeb87162f16c3099. Disables publication of unapproved seven-theme artwork; no new trigger, permission, API, mutation, secret, check reduction, direct-main write or bypass."
+    },
+    {
+      "baseBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
+      "candidateBomSha256": "d557409a119667e5b2319a8dd150e2ade7a96a7ce4bc9ed5a6a1e49b2c4df78f",
       "expansionSha256": "f1cda1f96963ef7115f0af98515fe03f18d2c9363c30af9d094af78ecb9c2879",
       "id": "cap-banner-seven-day-governed-readme-rotation-v1",
       "rationale": "Prior-authorize #1632's measured one-file protected Spotlight renderer change (frozen candidate tree e573a8e2917cfa79c92b97e44e86101fca5d3b46). Select one deterministic UTC day and update exactly top desktop, top mobile and bottom SVG references through existing attested README-only Spotlight bot PRs. Verify delegated helper/catalog exact Git blob identities before import. No new workflow permissions, trigger, API mutation, secret, direct-main write, generated subject, reduced checks or bypass."
