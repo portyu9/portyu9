@@ -48,8 +48,8 @@ def check() -> None:
         require(not any(token.lower() in lower for token in BAD),
                 f"Chronohedron {surface}: unsafe or repaint-heavy payload")
         require("prefers-reduced-motion:reduce" in source and
-                ".alive-motion{display:none}" in source and
-                ".alive-still{display:inline}" in source,
+                ".kinetic,.alive-motion,.contact-motion{display:none}" in source and
+                ".still,.alive-still,.contact-still{display:inline}" in source,
                 f"Chronohedron {surface}: reduced-motion selector missing")
         require("Not approved for production" in source,
                 f"Chronohedron {surface}: preview must remain review-only")
@@ -162,8 +162,46 @@ def check() -> None:
                         "traveling waveguide light must have mathematically closed motion")
                 require(static_path.find(NS + "animate") is None,
                         "reduced-motion fallback contains a moving light channel")
-        require(len(root.findall(f".//{NS}animate")) == 64,
+        require(len(root.findall(f".//{NS}animate")) == 78,
                 "optical pulse or dynamic feed channel lost")
+        contact_motion = [node for node in nodes
+                          if node.get("class") == "contact-motion"]
+        contact_still = [node for node in nodes
+                         if node.get("class") == "contact-still"]
+        require(len(contact_motion) == len(contact_still) == 14,
+                "each travelling beam needs exactly one endpoint light response")
+        contact_names = {node.get("data-contact") for node in contact_motion}
+        require(contact_names ==
+                {node.get("data-contact-still") for node in contact_still} ==
+                {node.get("data-feed") for node in live_channels},
+                "contact flash must exist for precisely the input guide colors")
+        for live_contact, still_contact, channel in zip(
+                contact_motion, contact_still, live_channels):
+            name = live_contact.get("data-contact")
+            require(name == live_contact.get("data-feed-match") ==
+                    still_contact.get("data-contact-still") ==
+                    channel.get("data-feed"),
+                    "the light response is wired to the wrong supply lane")
+            require(displayed_art(live_contact) == displayed_art(still_contact),
+                    "reduced-motion contact reflection differs in geometry")
+            incident = channel.find(f"{NS}path/{NS}animate")
+            light = live_contact.find(NS + "animate")
+            require(incident is not None and light is not None,
+                    "source energy stream or its contact reaction disappeared")
+            require(light.get("attributeName") == "opacity" and
+                    light.get("dur") == incident.get("dur") and
+                    light.get("begin") == incident.get("begin") and
+                    light.get("repeatCount") == "indefinite",
+                    "contact light isn't locked to actual travelling energy phase")
+            require(light.get("values") == ".09;.14;.94;.09" and
+                    light.get("keyTimes") == "0;.7;.88;1" and
+                    light.get("calcMode") == "spline" and
+                    light.get("keySplines") ==
+                    ".42 0 .58 1;.25 .45 .55 1;.42 0 .58 1",
+                    "contact flash changed from smooth delayed arrival response")
+            require(still_contact.find(NS + "animate") is None,
+                    "reduced-motion glass contact must never flash")
+
         parents = {child: parent for parent in nodes for child in parent}
         for live in life:
             parent = parents[live]
@@ -217,7 +255,8 @@ def check() -> None:
     require(len(normalized) == 1, "Chronohedron responsive variants diverged")
     print("Chronohedron optics proof: 3 responsive studies, 38 smooth vector "
           "transforms, 14 closed-loop transported cyan/amber channels, "
-          "25 reduced-motion optical-layer mirrors, 108+ grain points, "
+          "25 reduced-motion optical-layer mirrors, 14 light-bound " 
+          "transport endpoints with static counterparts, 108+ grain points, "
           "bright breathing reactor, independently moving gaseous environment, "
           "phase-linked glass caustics, no animated noise or blurs, "
           "no production enrollment.")
