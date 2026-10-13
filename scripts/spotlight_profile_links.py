@@ -215,12 +215,17 @@ def render_plan(
                     "same generated publication epoch must preserve exact commit and tree identity")
     block, targets = render_block(manifest, generated_sha, publication_sequence, generated_tree_sha)
     proposed = replace_block(readme, block)
+    # Original-only production hold: preserve the reviewed legacy gallery, but
+    # never publish one of the seven pending cinematic replacements. The banner
+    # triplet is fixed until an explicit, separately reviewed reactivation PR.
     banner_cycle = reviewed_banner_helper()
     banner_scenes = banner_cycle.load_catalog()
     banner_cycle.validate_readme_state(readme, banner_scenes)
-    selected_banner = banner_cycle.chosen(date.fromisoformat(manifest["selection_date_utc"]), banner_scenes)
-    proposed = banner_cycle.propose(proposed, selected_banner)
+    require(banner_cycle.referenced(readme) == banner_cycle.ORIGINAL,
+            "banner publication is paused: README must use the original Quantum Apex/Evidence Horizon triplet")
     banner_cycle.validate_readme_state(proposed, banner_scenes)
+    require(banner_cycle.referenced(proposed) == banner_cycle.ORIGINAL,
+            "Spotlight proposal attempted to replace the frozen original banner triplet")
     plan = {
         "version": VERSION,
         "publication_epoch_version": PUBLICATION_EPOCH_VERSION,
@@ -306,6 +311,20 @@ def self_test() -> None:
         fixture_manifest(), proposed, "a" * 40, "b" * 40, 7, "c" * 40
     )
     require(again == proposed and second_plan["changed"] is False, "direct-link rendering is not idempotent")
+    # A Spotlight publication must never change the original three banner assets.
+    banner_cycle = reviewed_banner_helper()
+    require(banner_cycle.referenced(proposed) == banner_cycle.ORIGINAL,
+            "Spotlight self-test activated unfinished banner artwork")
+    corrupted = proposed.replace(banner_cycle.ORIGINAL["top"],
+                                 "assets/profile-banners/daily/01-orbital-relay-top.svg", 1)
+    require(corrupted != proposed, "banner suspension fixture did not mutate the header")
+    try:
+        render_plan(fixture_manifest(), corrupted, "a" * 40, "b" * 40, 7, "c" * 40)
+    except ValueError as exc:
+        require("unmarked README" in str(exc) or "original" in str(exc),
+                f"unapproved banner did not fail closed: {exc}")
+    else:
+        raise ValueError("Spotlight self-test allowed an unapproved banner to publish")
     try:
         render_plan(fixture_manifest(), proposed, "d" * 40, "b" * 40, 6, "e" * 40)
     except ValueError as exc:
