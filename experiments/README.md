@@ -10,6 +10,18 @@ This is the first **isolated, deliberately unshipped** attempt to replace geomet
 
 The preview above is the **actual committed animated SVG**, not a sandbox link or a mockup. If GitHub's Markdown image proxy shows a static frame, open the raw link in your browser to review motion. This is a separate **SVG-native filter and turbulence study**, not an exact conversion of the Python WebP renderer below. Visual/performance approval is outstanding; SVG turbulence can be expensive on slower browsers. **This preview is not included in README.md and cannot enter the production rotation.**
 
+## Motion + central-aperture revision (October 13)
+
+This is the **actual committed [revision of the animated SVG](previews/fractal-iris-animated.svg)**. Use [the raw SVG in a browser](https://raw.githubusercontent.com/portyu9/portyu9/feature/volumetric-iris-render-study-20261013/experiments/previews/fractal-iris-animated.svg) if GitHub's image proxy shows only a still frame.
+
+The first SVG had four animation changes to turbulence/displacement filters, a large rotating group containing roughly 165 long, detailed filament paths, and oversized native raster dimensions of 3840 × 774 for a 1280 × 258 composition. These are plausible sources of visible timing discontinuities and costly repaint, and have been removed. The turbulence/displacement now supply **static texture**; the filament paths stay stationary. Only three small optical groups use uninterrupted, linear SVG transform rotation (periods 53, 71 and 96 seconds), with matching static fallback geometry under `prefers-reduced-motion`. The intrinsic SVG dimensions are now 1280 × 258, a **9× lower raster-pixel request**.
+
+The central focal point is no longer a single black oval: it is a dimensional iris of sixteen refractive aperture blades, 18 inner shutter petals, graduated dielectric rings, static grain, iridescent bevels, optical glints and a deeply recessed black center. All new content is **outside the production rotation**.
+
+### Regression contract
+
+Run `python3 experiments/validate_iris_svg.py` to verify no animated SVG filter parameters, only bounded lightweight linear transforms, self-contained references, a reduced-motion optical fallback and a bounded asset payload. The script verifies **structure, not frame rate or artistic quality**. Browser-based moving-frame and memory tests, particularly Firefox/LibreWolf and mobile browsers, remain required before approving motion quality. Do not describe this as proven 60 FPS until it has been observed and measured.
+
 ## Frame renderer
 
 Requires Python 3.11+ plus Pillow, NumPy and OpenCV (headless). Run after installing these packages in a local isolated environment:
